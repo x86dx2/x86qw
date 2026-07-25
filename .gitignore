@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 .cache/
 .artifacts/
+.wrangler/
 dist/
 quake-world/
 id1/
