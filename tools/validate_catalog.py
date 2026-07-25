@@ -7,8 +7,8 @@ import hashlib
 import json
 import re
 import sys
-from pathlib import Path
-from urllib.parse import urlsplit
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +18,8 @@ PLATFORMS = {"macos", "linux", "windows"}
 CHANNELS = {"stable", "nightly"}
 REQUIRED = {
     "component", "version", "channel", "platform", "architecture",
-    "filename", "size", "sha256", "urls", "origin_url", "license",
+    "filename", "size", "sha256", "urls", "origin_url", "license", "license_url",
+    "source_urls",
     "redistribution_reviewed",
 }
 
@@ -61,10 +62,18 @@ def validate_catalog(catalog: object) -> int:
             raise ValueError(f"{label}.urls must contain only strings")
         if len(urls) != len(set(urls)):
             raise ValueError(f"{label}.urls contains duplicates")
-        for url in [package["origin_url"], *urls]:
+        source_urls = package["source_urls"]
+        if not isinstance(source_urls, list) or not source_urls:
+            raise ValueError(f"{label}.source_urls must contain at least one source")
+        if not all(isinstance(url, str) for url in source_urls) or len(source_urls) != len(set(source_urls)):
+            raise ValueError(f"{label}.source_urls must contain unique strings")
+        for url in [package["origin_url"], package["license_url"], *source_urls, *urls]:
             parsed = urlsplit(url) if isinstance(url, str) else None
             if parsed is None or parsed.scheme != "https" or not parsed.netloc:
                 raise ValueError(f"{label} accepts only absolute HTTPS URLs")
+        for url in [package["origin_url"], *urls]:
+            if PurePosixPath(unquote(urlsplit(url).path)).name != filename:
+                raise ValueError(f"{label} artifact URLs must end with filename")
 
         identity = tuple(str(package[key]) for key in (
             "component", "version", "channel", "platform", "architecture"

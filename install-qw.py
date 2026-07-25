@@ -882,6 +882,17 @@ class Installer:
             validate_hex(digest, HEX64, f"SHA-256 de packages[{index}]")
             if not isinstance(package.get("license"), str) or not package["license"].strip():
                 raise InstallerError(f"Licença ausente no catálogo x86QW: packages[{index}].")
+            validate_https_url(package.get("license_url"), f"licença de packages[{index}]")
+            source_urls = package.get("source_urls")
+            if (
+                not isinstance(source_urls, list)
+                or not source_urls
+                or not all(isinstance(url, str) for url in source_urls)
+                or len(source_urls) != len(set(source_urls))
+            ):
+                raise InstallerError(f"Fontes inválidas no catálogo x86QW: packages[{index}].")
+            for source_url in source_urls:
+                validate_https_url(source_url, f"fonte de packages[{index}]")
             if package.get("redistribution_reviewed") is not True:
                 raise InstallerError(f"Redistribuição não revisada no catálogo x86QW: packages[{index}].")
             https_url_filename(package.get("origin_url"), f"origem de packages[{index}]")

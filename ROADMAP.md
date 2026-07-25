@@ -12,6 +12,7 @@
 - [ ] confirmar licença e redistribuição de cada componente;
 - [ ] criar receitas fixadas por versão, origem e checksum;
 - [ ] baixar em uma área temporária e validar formatos;
+- [x] registrar artefatos revisados de forma atômica no catálogo;
 - [ ] gerar pacotes x86QW idênticos a partir das mesmas entradas.
 
 ## 2. Distribuição

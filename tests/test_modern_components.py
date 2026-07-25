@@ -148,7 +148,9 @@ class ModernComponentTests(unittest.TestCase):
                 "platform": "macos", "architecture": "arm64", "filename": name,
                 "size": 42, "sha256": "a" * 64,
                 "origin_url": f"https://github.com/classicq/classicq/releases/download/v3.5.0/{name}",
-                "license": "GPL-2.0", "redistribution_reviewed": True, "urls": [url],
+                "license": "GPL-2.0", "license_url": "https://github.com/classicq/classicq/blob/master/LICENSE",
+                "source_urls": ["https://github.com/classicq/classicq/archive/refs/tags/v3.5.0.tar.gz"],
+                "redistribution_reviewed": True, "urls": [url],
             }
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):

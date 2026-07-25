@@ -28,6 +28,7 @@ docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
 docs/installer.md       manual completo do instalador migrado
 install-qw.py           instalador macOS, Linux e Windows
+tools/add_package.py    registro atômico de artefatos revisados
 tools/validate_catalog.py
 tests/test_catalog.py
 ```
@@ -38,6 +39,7 @@ tests/test_catalog.py
 python3 tools/validate_catalog.py
 python3 -m unittest discover -s tests -v
 ./install-qw.py --help
+python3 tools/add_package.py --help
 ```
 
 Nenhum binário ou conteúdo de terceiros é publicado nesta fase.

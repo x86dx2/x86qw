@@ -89,7 +89,9 @@ class InstallerTests(unittest.TestCase):
                 "platform": "macos", "architecture": "universal", "filename": filename,
                 "size": 42, "sha256": "a" * 64,
                 "origin_url": f"https://example.invalid/original/{filename}",
-                "license": "GPL-2.0", "redistribution_reviewed": True,
+                "license": "GPL-2.0", "license_url": "https://example.invalid/LICENSE",
+                "source_urls": ["https://example.invalid/source.tar.gz"],
+                "redistribution_reviewed": True,
                 "urls": [f"https://downloads.x86.com.br/x86qw/{filename}"],
             }
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}

@@ -26,8 +26,8 @@ acontecer por artefato, e não apenas pelo nome do projeto.
 
 - componente, versão, canal, sistema e arquitetura;
 - URL original imutável, projeto e autor;
-- licença declarada e arquivo de licença preservado;
-- obrigações de atribuição ou oferta de código-fonte;
+- licença declarada e URL do texto de licença preservado;
+- URLs das fontes correspondentes e obrigações de atribuição;
 - nome, tamanho e SHA-256 do arquivo recebido;
 - data de ingestão e ferramenta usada;
 - URLs e SHA-256 do pacote publicado pelo x86QW.
