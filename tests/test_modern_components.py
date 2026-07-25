@@ -136,26 +136,24 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue((target / "qw/maps/dm6.loc").is_file())
             self.assertTrue((cache / "maps/dm6.bsp").is_file())
 
-    def test_client_catalog_uses_only_releases_with_published_sha256(self):
+    def test_client_catalog_uses_the_reviewed_x86qw_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.client = install_qw.CLIENTS["classicq"]
             installer.spec = install_qw.PLATFORMS["macos"]
             name = "classicQ-3.5.0-macos-arm64.zip"
-            url = f"https://github.com/classicq/classicq/releases/download/v3.5.0/{name}"
-            releases = [
-                {"tag_name": "v3.5.0", "draft": False, "prerelease": False, "assets": [
-                    {"name": name, "state": "uploaded", "browser_download_url": url, "digest": "sha256:" + "a" * 64}
-                ]},
-                {"tag_name": "v3.4.0", "draft": False, "prerelease": False, "assets": [
-                    {"name": "classicQ-3.4.0-macos-arm64.zip", "state": "uploaded",
-                     "browser_download_url": "https://github.com/classicq/classicq/releases/download/v3.4.0/classicQ-3.4.0-macos-arm64.zip",
-                     "digest": None}
-                ]},
-            ]
+            url = f"https://downloads.x86.com.br/x86qw/{name}"
+            package = {
+                "component": "classicq", "version": "v3.5.0", "channel": "stable",
+                "platform": "macos", "architecture": "arm64", "filename": name,
+                "size": 42, "sha256": "a" * 64,
+                "origin_url": f"https://github.com/classicq/classicq/releases/download/v3.5.0/{name}",
+                "license": "GPL-2.0", "redistribution_reviewed": True, "urls": [url],
+            }
+            catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(releases).encode()):
-                    self.assertEqual([("v3.5.0", url, "a" * 64)], installer.client_catalog())
+                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
+                    self.assertEqual([("v3.5.0", (url,), "a" * 64)], installer.client_catalog())
 
     def test_thin_arm64_client_bundle_is_accepted(self):
         with tempfile.TemporaryDirectory() as temporary:

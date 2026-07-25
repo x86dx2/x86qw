@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import struct
 import sys
@@ -65,22 +66,77 @@ class InstallerTests(unittest.TestCase):
             for day in range(20, 5, -1):
                 version = f"202607{day:02d}-120000_abcdef0"
                 name = version + installer.spec.nightly_suffix
-                catalog.append((version, f"{installer.spec.nightly_root}/{name}", "-"))
-
-            def fake_http_get(url, destination=None, headers=None):
-                del url, destination, headers
-                return ("0" * 32 + f"  {installer.app_archive_name}\n").encode()
+                url = f"https://downloads.x86.com.br/x86qw/{name}"
+                catalog.append((version, (url,), "a" * 64))
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 with mock.patch.object(installer, "nightly_catalog", return_value=catalog):
-                    with mock.patch.object(installer, "http_get", side_effect=fake_http_get):
-                        with mock.patch("builtins.input", side_effect=["t", "13"]):
-                            installer.choose_release()
+                    with mock.patch("builtins.input", side_effect=["t", "13"]):
+                        installer.choose_release()
             rendered = output.getvalue()
             self.assertIn("... mais 3 versões. Digite t para mostrar todas.", rendered)
             self.assertGreaterEqual(rendered.count(catalog[12][0]), 1)
             self.assertIn(f"Versão selecionada: {catalog[12][0]}", rendered)
+
+    def test_x86qw_catalog_is_filtered_and_requires_redistribution_review(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            filename = installer.spec.stable_archive
+            package = {
+                "component": "ezquake", "version": "3.6.9", "channel": "stable",
+                "platform": "macos", "architecture": "universal", "filename": filename,
+                "size": 42, "sha256": "a" * 64,
+                "origin_url": f"https://example.invalid/original/{filename}",
+                "license": "GPL-2.0", "redistribution_reviewed": True,
+                "urls": [f"https://downloads.x86.com.br/x86qw/{filename}"],
+            }
+            catalog = {"format": 1, "project": "x86qw", "packages": [package]}
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
+                    self.assertEqual(
+                        [("3.6.9", tuple(package["urls"]), "a" * 64)],
+                        installer.stable_catalog(),
+                    )
+            package["redistribution_reviewed"] = False
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
+                    with self.assertRaises(install_qw.InstallerError):
+                        installer.stable_catalog()
+
+    def test_download_falls_back_to_the_next_catalog_mirror(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            installer.prepare_cache()
+            payload = b"verified archive"
+            filename = installer.spec.stable_archive
+            installer.selected_version = "3.6.9"
+            installer.channel = "stable"
+            installer.app_archive_name = filename
+            installer.app_checksum_kind = "sha256"
+            installer.app_expected_checksum = install_qw.hashlib.sha256(payload).hexdigest()
+            installer.app_urls = (
+                f"https://first.invalid/{filename}",
+                f"https://second.invalid/{filename}",
+            )
+            installer.app_url = installer.app_urls[0]
+
+            def fake_http_get(url, destination=None, headers=None):
+                del headers
+                if url == installer.app_urls[0]:
+                    raise install_qw.InstallerError("first mirror unavailable")
+                destination.write_bytes(payload)
+                return b""
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", side_effect=fake_http_get):
+                    archive = installer.ensure_archive()
+            self.assertEqual(payload, archive.read_bytes())
+            self.assertEqual(installer.app_urls[1], installer.app_url)
 
     def test_nquake_confirmation_defaults_to_no_and_reprompts_invalid_answer(self):
         with tempfile.TemporaryDirectory() as temporary:

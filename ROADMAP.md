@@ -25,7 +25,8 @@
 
 - [x] estabilizar e testar o instalador existente em `../quake`;
 - [x] migrar a base funcional e suas duas suítes de regressão;
-- [ ] substituir consultas diretas a terceiros pelo catálogo x86QW;
+- [x] usar o catálogo x86QW para ezQuake e clientes alternativos;
+- [ ] criar pacotes próprios para dados nQuake, mapas e LOCs aprovados;
 - [ ] manter stable e nightly coexistentes em macOS, Linux e Windows.
 
 ## 4. Site

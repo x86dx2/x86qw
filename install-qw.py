@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
@@ -30,8 +31,7 @@ from pathlib import Path, PurePosixPath
 
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
 ID1_PAK1_SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
-STABLE_RELEASES_API = "https://api.github.com/repos/QW-Group/ezquake-source/releases?per_page=100&page=1"
-STABLE_DOWNLOAD_ROOT = "https://github.com/QW-Group/ezquake-source/releases/download"
+CATALOG_URL = "https://x86qw.x86.com.br/api/v1/catalog.json"
 DISTFILES_REPOSITORY = "https://github.com/nQuake/distfiles.git"
 DISTFILES_REF = "master"
 METADATA_DIR = ".install"
@@ -48,7 +48,6 @@ MAP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
 MAP_FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*\.(?:bsp|ent|txt|loc)$", re.IGNORECASE)
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-HEX32 = re.compile(r"^[0-9a-f]{32}$")
 MAPS_ROOT = "https://maps.quakeworld.nu"
 HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
 BUILTIN_MAP_STEMS = frozenset(
@@ -61,6 +60,7 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 CLASSICQ_RECEIPT = ".install/classicq.receipt"
 CLASSICQ_INVENTORY = ".install/classicq.inventory"
+ReleaseRecord = tuple[str, tuple[str, ...], str]
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,6 @@ class PlatformSpec:
     label: str
     architecture: str
     stable_archive: str
-    nightly_root: str
     nightly_suffix: str
     archive_binary: str
     stable_runtime: str
@@ -102,10 +101,6 @@ class ClientSpec:
     description: str
     platforms: dict[str, ClientPlatformSpec]
 
-    @property
-    def releases_api(self) -> str:
-        return f"https://api.github.com/repos/{self.repository}/releases?per_page=100&page=1"
-
     def receipt(self, platform: str) -> str:
         return f".install/client-{self.key}-{platform}.receipt"
 
@@ -113,21 +108,18 @@ class ClientSpec:
 PLATFORMS = {
     "macos": PlatformSpec(
         "macos", "macOS", "universal", "ezQuake-macOS-universal.zip",
-        "https://builds.quakeworld.nu/ezquake/snapshots/macOS/universal",
         "_ezQuake-macOS-universal.zip", "ezQuake.app",
         "ezQuake Stable.app", "ezQuake Nightly.app",
         ".install/ezquake-macos-stable.receipt", ".install/ezquake-macos-nightly.receipt",
     ),
     "linux": PlatformSpec(
         "linux", "Linux x86_64", "x86_64", "ezQuake-linux-x86_64.zip",
-        "https://builds.quakeworld.nu/ezquake/snapshots/linux/x86_64",
         "_ezQuake-x86_64.AppImage", "ezQuake-x86_64.AppImage",
         "ezquake-stable-x86_64.AppImage", "ezquake-nightly-x86_64.AppImage",
         ".install/ezquake-linux-stable.receipt", ".install/ezquake-linux-nightly.receipt",
     ),
     "windows": PlatformSpec(
         "windows", "Windows x64", "x64", "ezQuake-windows-x64.zip",
-        "https://builds.quakeworld.nu/ezquake/snapshots/windows/x64",
         "_ezquake.exe", "ezquake.exe",
         "ezquake-stable.exe", "ezquake-nightly.exe",
         ".install/ezquake-windows-stable.receipt", ".install/ezquake-windows-nightly.receipt",
@@ -349,6 +341,23 @@ def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
         raise InstallerError(f"invalid {label}")
 
 
+def validate_https_url(url: object, label: str) -> urllib.parse.SplitResult:
+    if not isinstance(url, str):
+        raise InstallerError(f"{label} não é uma URL válida")
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise InstallerError(f"{label} deve ser uma URL HTTPS absoluta")
+    return parsed
+
+
+def https_url_filename(url: object, label: str) -> str:
+    parsed = validate_https_url(url, label)
+    filename = PurePosixPath(urllib.parse.unquote(parsed.path)).name
+    if not filename or filename in (".", ".."):
+        raise InstallerError(f"{label} não identifica um arquivo")
+    return filename
+
+
 def ensure_no_symlink(path: Path, label: str) -> None:
     if path.is_symlink():
         raise InstallerError(f"{label} must not be a symlink: {path}")
@@ -496,6 +505,7 @@ class Installer:
         self.channel = ""
         self.selected_version = ""
         self.app_url = ""
+        self.app_urls: tuple[str, ...] = ()
         self.app_archive_name = ""
         self.app_expected_checksum = ""
         self.app_checksum_kind = ""
@@ -717,7 +727,7 @@ class Installer:
                 return self.client
             console.warning("Opção inválida. Digite 1 para classicQ ou 2 para unezQuake.")
 
-    def prompt_catalog(self, label: str, catalog: list[tuple[str, str, str]]) -> tuple[str, str, str]:
+    def prompt_catalog(self, label: str, catalog: list[ReleaseRecord]) -> ReleaseRecord:
         preview_size = 12
 
         def show_catalog(show_all: bool = False) -> None:
@@ -784,20 +794,15 @@ class Installer:
             console.warning("Resposta inválida. Digite s para sim ou n para não.")
 
     def http_get(self, url: str, destination: Path | None = None, headers: dict[str, str] | None = None) -> bytes:
-        if not url.startswith("https://"):
-            raise InstallerError(f"refusing non-HTTPS URL: {url}")
+        validate_https_url(url, "URL de download")
         request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
-        github_token = os.environ.get("GITHUB_TOKEN")
-        if urllib.parse.urlsplit(url).hostname == "api.github.com" and github_token:
-            request_headers["Authorization"] = f"Bearer {github_token}"
         request = urllib.request.Request(url, headers=request_headers)
         console.detail(f"GET {url}")
         last_error: Exception | None = None
         for attempt in range(1, 4):
             try:
                 with urllib.request.urlopen(request, timeout=60) as response:
-                    if not response.geturl().startswith("https://"):
-                        raise InstallerError(f"refusing non-HTTPS redirect: {response.geturl()}")
+                    validate_https_url(response.geturl(), "redirecionamento de download")
                     if destination is None:
                         return response.read()
                     total_header = response.headers.get("Content-Length")
@@ -831,71 +836,109 @@ class Installer:
                     console.warning(f"Falha temporária no download. Tentando novamente ({attempt + 1}/3)...")
         raise InstallerError(f"Não foi possível baixar {url}: {last_error}")
 
-    def stable_catalog(self) -> list[tuple[str, str, str]]:
+    def catalog_records(
+        self,
+        component: str,
+        channel: str,
+        version_pattern: re.Pattern[str],
+        expected_filename: Callable[[str], str],
+        architecture: str,
+    ) -> list[ReleaseRecord]:
         assert self.spec is not None
-        console.info("Consultando releases estáveis oficiais...")
+        catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
+        console.info("Consultando o catálogo oficial x86QW...")
         try:
-            releases = json.loads(self.http_get(
-                STABLE_RELEASES_API,
-                headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-            ))
-        except (json.JSONDecodeError, TypeError) as error:
-            raise InstallerError("invalid stable release catalog") from error
-        catalog: list[tuple[str, str, str]] = []
-        if not isinstance(releases, list):
-            raise InstallerError("invalid stable release catalog")
-        for release in releases:
-            tag = release.get("tag_name", "")
-            if release.get("draft") or release.get("prerelease") or not STABLE_VERSION.fullmatch(tag):
-                continue
-            assets = [asset for asset in release.get("assets", []) if asset.get("name") == self.spec.stable_archive]
-            if len(assets) > 1:
-                raise InstallerError(f"duplicate {self.spec.label} asset for stable {tag}")
-            if not assets:
-                continue
-            asset = assets[0]
-            expected_url = f"{STABLE_DOWNLOAD_ROOT}/{tag}/{self.spec.stable_archive}"
-            if asset.get("state") != "uploaded" or asset.get("browser_download_url") != expected_url:
-                raise InstallerError(f"invalid stable asset for {tag}")
-            digest = asset.get("digest") or "-"
-            if digest != "-":
-                if not digest.startswith("sha256:"):
-                    raise InstallerError(f"unsupported stable asset digest for {tag}")
-                digest = digest.removeprefix("sha256:")
-                validate_hex(digest, HEX64, f"stable archive SHA-256 for {tag}")
-            catalog.append((tag, expected_url, digest))
-        if not catalog:
-            raise InstallerError(f"no stable releases were found for {self.spec.label}")
-        return catalog
+            catalog = json.loads(self.http_get(catalog_url))
+        except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+            raise InstallerError("O catálogo x86QW recebido é inválido.") from error
+        if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
+            raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
+        packages = catalog.get("packages")
+        if not isinstance(packages, list):
+            raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
 
-    def nightly_catalog(self) -> list[tuple[str, str, str]]:
+        records: list[ReleaseRecord] = []
+        for index, package in enumerate(packages):
+            if not isinstance(package, dict):
+                raise InstallerError(f"Entrada inválida no catálogo x86QW: packages[{index}].")
+            if (
+                package.get("component") != component
+                or package.get("channel") != channel
+                or package.get("platform") != self.spec.key
+                or package.get("architecture") != architecture
+            ):
+                continue
+            version = package.get("version")
+            if not isinstance(version, str) or not version_pattern.fullmatch(version):
+                raise InstallerError(f"Versão inválida no catálogo x86QW: packages[{index}].")
+            filename = package.get("filename")
+            if filename != expected_filename(version):
+                raise InstallerError(f"Nome de artefato inválido no catálogo x86QW: packages[{index}].")
+            if not isinstance(package.get("size"), int) or package["size"] <= 0:
+                raise InstallerError(f"Tamanho inválido no catálogo x86QW: packages[{index}].")
+            digest = package.get("sha256")
+            if not isinstance(digest, str):
+                raise InstallerError(f"SHA-256 ausente no catálogo x86QW: packages[{index}].")
+            validate_hex(digest, HEX64, f"SHA-256 de packages[{index}]")
+            if not isinstance(package.get("license"), str) or not package["license"].strip():
+                raise InstallerError(f"Licença ausente no catálogo x86QW: packages[{index}].")
+            if package.get("redistribution_reviewed") is not True:
+                raise InstallerError(f"Redistribuição não revisada no catálogo x86QW: packages[{index}].")
+            https_url_filename(package.get("origin_url"), f"origem de packages[{index}]")
+            urls = package.get("urls")
+            if (
+                not isinstance(urls, list)
+                or not urls
+                or not all(isinstance(url, str) for url in urls)
+                or len(urls) != len(set(urls))
+            ):
+                raise InstallerError(f"Mirrors inválidos no catálogo x86QW: packages[{index}].")
+            for url in urls:
+                if https_url_filename(url, f"mirror de packages[{index}]") != filename:
+                    raise InstallerError(f"Mirror com nome inesperado no catálogo x86QW: packages[{index}].")
+            records.append((version, tuple(urls), digest))
+
+        if not records:
+            raise InstallerError(f"Nenhuma versão {channel} de {component} está disponível para {self.spec.label}.")
+        if len(records) != len({record[0] for record in records}):
+            raise InstallerError(f"O catálogo x86QW contém versões duplicadas de {component} para {self.spec.label}.")
+        if channel == "nightly":
+            records.sort(key=lambda record: record[0], reverse=True)
+        else:
+            records.sort(
+                key=lambda record: tuple(int(part) for part in record[0].removeprefix("v").split(".")),
+                reverse=True,
+            )
+        return records
+
+    def stable_catalog(self) -> list[ReleaseRecord]:
         assert self.spec is not None
-        console.info("Consultando snapshots nightly oficiais...")
-        html = self.http_get(self.spec.nightly_root + "/").decode("utf-8", "replace")
-        file_pattern = rf"[0-9]{{8}}-[0-9]{{6}}_[0-9a-f]{{7}}{re.escape(self.spec.nightly_suffix)}"
-        names = sorted(set(re.findall(file_pattern, html)), reverse=True)
-        if not names:
-            raise InstallerError(f"no nightly snapshots were found for {self.spec.label}")
-        return [(name.removesuffix(self.spec.nightly_suffix), f"{self.spec.nightly_root}/{name}", "-") for name in names]
+        return self.catalog_records(
+            "ezquake", "stable", STABLE_VERSION,
+            lambda version: self.spec.stable_archive,
+            self.spec.architecture,
+        )
+
+    def nightly_catalog(self) -> list[ReleaseRecord]:
+        assert self.spec is not None
+        return self.catalog_records(
+            "ezquake", "nightly", NIGHTLY_VERSION,
+            lambda version: version + self.spec.nightly_suffix,
+            self.spec.architecture,
+        )
 
     def choose_release(self) -> None:
         assert self.spec is not None
         catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
         selected = self.prompt_catalog(self.channel, catalog)
-        self.selected_version, self.app_url, self.app_expected_checksum = selected
-        self.app_archive_name = self.app_url.rsplit("/", 1)[-1]
+        self.selected_version, self.app_urls, self.app_expected_checksum = selected
+        self.app_url = self.app_urls[0]
+        self.app_archive_name = https_url_filename(self.app_url, "mirror selecionado")
         console.success(f"Versão selecionada: {self.selected_version}")
         console.detail(f"Artefato: {self.app_url}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
                 raise InstallerError("invalid stable archive name")
-            if self.app_expected_checksum == "-":
-                checksum_url = f"{STABLE_DOWNLOAD_ROOT}/{self.selected_version}/checksums.txt"
-                lines = self.http_get(checksum_url).decode("utf-8", "strict").splitlines()
-                matches = [fields[0] for line in lines if len(fields := line.split()) == 2 and fields[1] in (self.spec.stable_archive, f"./{self.spec.stable_archive}")]
-                if len(matches) != 1:
-                    raise InstallerError(f"no unique checksum for {self.spec.stable_archive} in stable {self.selected_version}")
-                self.app_expected_checksum = matches[0]
             validate_hex(self.app_expected_checksum, HEX64, f"stable archive SHA-256 for {self.selected_version}")
             self.app_checksum_kind = "sha256"
         else:
@@ -904,58 +947,25 @@ class Installer:
             expected_name = self.selected_version + self.spec.nightly_suffix
             if self.app_archive_name != expected_name:
                 raise InstallerError("invalid nightly archive name")
-            sidecar = self.http_get(self.app_url + ".md5").decode("utf-8", "strict").splitlines()
-            matches = [fields[0] for line in sidecar if len(fields := line.split()) == 2 and fields[1] in (self.app_archive_name, f"./{self.app_archive_name}")]
-            if len(matches) != 1:
-                raise InstallerError(f"no unique MD5 checksum for nightly {self.selected_version}")
-            self.app_expected_checksum = matches[0]
-            validate_hex(self.app_expected_checksum, HEX32, f"nightly archive MD5 for {self.selected_version}")
-            self.app_checksum_kind = "md5"
+            validate_hex(self.app_expected_checksum, HEX64, f"nightly archive SHA-256 for {self.selected_version}")
+            self.app_checksum_kind = "sha256"
         console.detail(f"Checksum publicado ({self.app_checksum_kind}): {self.app_expected_checksum}")
 
-    def client_catalog(self) -> list[tuple[str, str, str]]:
+    def client_catalog(self) -> list[ReleaseRecord]:
         assert self.client is not None and self.spec is not None
         client_platform = self.client.platforms[self.spec.key]
-        console.info(f"Consultando releases oficiais do {self.client.label}...")
-        try:
-            releases = json.loads(self.http_get(
-                self.client.releases_api,
-                headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-            ))
-        except (json.JSONDecodeError, TypeError) as error:
-            raise InstallerError(f"Catálogo de releases inválido para {self.client.label}.") from error
-        if not isinstance(releases, list):
-            raise InstallerError(f"Catálogo de releases inválido para {self.client.label}.")
-        catalog: list[tuple[str, str, str]] = []
-        for release in releases:
-            tag = release.get("tag_name", "")
-            if release.get("draft") or release.get("prerelease") or not CLIENT_VERSION.fullmatch(tag):
-                continue
-            version = tag.removeprefix("v")
-            asset_name = client_platform.asset_name.format(version=version)
-            assets = [asset for asset in release.get("assets", []) if asset.get("name") == asset_name]
-            if len(assets) != 1:
-                continue
-            expected_url = f"https://github.com/{self.client.repository}/releases/download/{tag}/{asset_name}"
-            asset = assets[0]
-            digest = asset.get("digest") or ""
-            if asset.get("state") != "uploaded" or asset.get("browser_download_url") != expected_url:
-                raise InstallerError(f"Artefato inválido do {self.client.label} {tag}.")
-            if not digest.startswith("sha256:"):
-                console.detail(f"Release ignorada sem SHA-256 publicado: {self.client.label} {tag}.")
-                continue
-            digest = digest.removeprefix("sha256:")
-            validate_hex(digest, HEX64, f"SHA-256 do {self.client.label} {tag}")
-            catalog.append((tag, expected_url, digest))
-        if not catalog:
-            raise InstallerError(f"Nenhuma release compatível do {self.client.label} foi encontrada para {self.spec.label}.")
-        return catalog
+        return self.catalog_records(
+            self.client.key, "stable", CLIENT_VERSION,
+            lambda version: client_platform.asset_name.format(version=version.removeprefix("v")),
+            client_platform.architecture,
+        )
 
     def choose_client_release(self) -> None:
         assert self.client is not None and self.spec is not None
         selected = self.prompt_catalog(self.client.label, self.client_catalog())
-        self.selected_version, self.app_url, self.app_expected_checksum = selected
-        self.app_archive_name = self.app_url.rsplit("/", 1)[-1]
+        self.selected_version, self.app_urls, self.app_expected_checksum = selected
+        self.app_url = self.app_urls[0]
+        self.app_archive_name = https_url_filename(self.app_url, "mirror selecionado")
         self.app_checksum_kind = "sha256"
         self.cache_prefix = f"client-{self.client.key}-{self.selected_version}"
         console.success(f"Versão selecionada: {self.selected_version}")
@@ -980,9 +990,26 @@ class Installer:
         else:
             download = self.stage / f"{self.app_archive_name}.download"
             console.info(f"Baixando {self.app_archive_name}...")
-            self.http_get(self.app_url, download)
-            if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
-                raise InstallerError(f"O arquivo baixado falhou na verificação: {self.app_url}")
+            last_error: InstallerError | None = None
+            for index, mirror_url in enumerate(self.app_urls or (self.app_url,)):
+                if lexists(download):
+                    remove_path(download)
+                try:
+                    self.http_get(mirror_url, download)
+                    if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
+                        raise InstallerError(f"O arquivo baixado falhou na verificação: {mirror_url}")
+                except InstallerError as error:
+                    last_error = error
+                    console.detail(str(error))
+                    if index + 1 < len(self.app_urls):
+                        console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
+                    continue
+                self.app_url = mirror_url
+                break
+            else:
+                if lexists(download):
+                    remove_path(download)
+                raise InstallerError(f"Nenhum mirror entregou um pacote válido: {last_error}")
             download.replace(archive)
             console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
         self.app_archive_sha256 = file_hash(archive)
@@ -1171,10 +1198,11 @@ class Installer:
         if not CLIENT_VERSION.fullmatch(receipt["selection"]):
             raise InstallerError(f"Versão inválida no recibo: {path}")
         version = receipt["selection"].removeprefix("v")
-        tag = receipt["selection"]
         expected_name = client_platform.asset_name.format(version=version)
-        expected_url = f"https://github.com/{client.repository}/releases/download/{tag}/{expected_name}"
-        if receipt["artifact_name"] != expected_name or receipt["artifact_url"] != expected_url:
+        if (
+            receipt["artifact_name"] != expected_name
+            or https_url_filename(receipt["artifact_url"], "URL do artefato no recibo") != expected_name
+        ):
             raise InstallerError(f"Origem inesperada no recibo: {path}")
         if receipt["bundle_version"] != version:
             raise InstallerError(f"Versão do binário divergente no recibo: {path}")
@@ -1268,7 +1296,6 @@ class Installer:
             if not STABLE_VERSION.fullmatch(selection) or receipt["bundle_version"] != selection:
                 raise InstallerError(f"invalid stable selection in ezQuake receipt: {selection}")
             expected_name = spec.stable_archive
-            expected_url = f"{STABLE_DOWNLOAD_ROOT}/{selection}/{expected_name}"
         else:
             if not NIGHTLY_VERSION.fullmatch(selection):
                 raise InstallerError(f"invalid nightly selection in ezQuake receipt: {selection}")
@@ -1278,8 +1305,10 @@ class Installer:
             elif receipt["bundle_version"] != selection:
                 raise InstallerError("nightly version differs from ezQuake selection")
             expected_name = selection + spec.nightly_suffix
-            expected_url = f"{spec.nightly_root}/{expected_name}"
-        if receipt["artifact_name"] != expected_name or receipt["artifact_url"] != expected_url:
+        if (
+            receipt["artifact_name"] != expected_name
+            or https_url_filename(receipt["artifact_url"], "URL do artefato no recibo") != expected_name
+        ):
             raise InstallerError(f"unexpected artifact in ezQuake receipt: {path}")
         return receipt
 

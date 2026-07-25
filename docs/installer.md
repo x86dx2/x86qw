@@ -91,8 +91,13 @@ Deseja instalar/atualizar também os dados nQuake? [s/N]
 
 O padrão é `N`. A Fase 2 precisa ser instalada somente uma vez no mesmo `quake-world`; executá-la novamente atualiza seus arquivos gerenciados sem substituir configurações pessoais. O executável Windows antigo presente nos distfiles não faz parte do overlay.
 
-- `stable`: releases oficiais de [QW-Group/ezquake-source](https://github.com/QW-Group/ezquake-source/releases), validadas por SHA-256 publicado.
-- `nightly`: snapshots oficiais de [macOS](https://builds.quakeworld.nu/ezquake/snapshots/macOS/universal/), [Linux](https://builds.quakeworld.nu/ezquake/snapshots/linux/x86_64/) e [Windows](https://builds.quakeworld.nu/ezquake/snapshots/windows/x64/), validados pelo sidecar MD5 oficial e registrados também com SHA-256.
+- `stable`: releases estáveis aprovadas e espelhadas pelo x86QW;
+- `nightly`: snapshots de desenvolvimento aprovados e espelhados pelo x86QW.
+
+As duas listas vêm de `https://x86qw.x86.com.br/api/v1/catalog.json`.
+Cada entrada registra origem, licença revisada, tamanho, SHA-256 e uma lista
+ordenada de mirrors. Se uma cópia estiver indisponível ou entregar um hash
+incorreto, o instalador tenta a próxima automaticamente.
 
 O instalador grava o commit exato de `nQuake/distfiles` usado. Servidores e shareware ficam de fora. Em uma instalação nova, também cria `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro start; um preset existente nunca é substituído.
 
@@ -114,7 +119,11 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 - [classicQ](https://github.com/classicq/classicq): cliente de aparência clássica com SDL3 e renderizador Metal nativo no Apple Silicon. No macOS é instalado como `classicQ.app`; Linux e Windows recebem `classicq-x86_64` e `classicq.exe`;
 - [unezQuake](https://github.com/dusty-qw/unezquake): fork experimental com antilag, predição, HUD e crosshair vetorial. É instalado como `unezQuake.app`, `unezquake-x86_64.AppImage` ou `unezquake.exe`.
 
-As duas famílias coexistem com todos os ezQuake instalados. O catálogo mostra somente releases cujo artefato exato possui SHA-256 publicado pelo GitHub. Como os três pacotes do classicQ compartilham `classicq/classicq.pak`, eles precisam permanecer na mesma versão dentro de um `quake-world` transportável.
+As duas famílias coexistem com todos os ezQuake instalados. O catálogo mostra
+somente pacotes cuja licença e redistribuição foram revisadas pelo x86QW e cujo
+SHA-256 foi registrado. Como os três pacotes do classicQ compartilham
+`classicq/classicq.pak`, eles precisam permanecer na mesma versão dentro de um
+`quake-world` transportável.
 
 ### Mapas e LOCs
 
@@ -221,7 +230,9 @@ Para investigar uma falha ou auditar exatamente o que será usado, ative o modo 
 
 Esse modo acrescenta host e versão do Python, URLs consultadas, comandos externos, caminho do cache e checksums. Ele não instala ferramentas nem bibliotecas extras. Para desativar cores explicitamente, use `--no-color`; a variável padrão `NO_COLOR` também é respeitada.
 
-Os catálogos de releases usam a API pública do GitHub. Se o limite anônimo temporário for atingido, o instalador explica o problema; aguarde a renovação ou forneça um `GITHUB_TOKEN` no ambiente para ampliar esse limite. O valor do token nunca é exibido nem gravado nos recibos.
+O instalador consulta somente o catálogo público x86QW para ezQuake e clientes
+alternativos. Para desenvolvimento, `X86_QW_CATALOG_URL` permite apontar para
+outro endpoint HTTPS compatível; a variável não é gravada nos recibos.
 
 Use `./install-qw.py --help` para consultar ações e opções sem iniciar nenhuma operação.
 

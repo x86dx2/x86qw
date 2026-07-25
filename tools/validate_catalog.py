@@ -57,6 +57,8 @@ def validate_catalog(catalog: object) -> int:
         urls = package["urls"]
         if not isinstance(urls, list) or not urls:
             raise ValueError(f"{label}.urls must contain at least one mirror")
+        if not all(isinstance(url, str) for url in urls):
+            raise ValueError(f"{label}.urls must contain only strings")
         if len(urls) != len(set(urls)):
             raise ValueError(f"{label}.urls contains duplicates")
         for url in [package["origin_url"], *urls]:
