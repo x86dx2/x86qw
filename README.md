@@ -22,15 +22,16 @@ este catálogo.
 ## Estrutura inicial
 
 ```text
-catalog/v1/index.json   catálogo canônico em desenvolvimento
 docs/architecture.md    serviços, repositórios e fluxo de publicação
 docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
 docs/installer.md       manual completo do instalador migrado
 install-qw.py           instalador macOS, Linux e Windows
+site/public/            arquivos publicados pelo Cloudflare Worker
 tools/add_package.py    registro atômico de artefatos revisados
 tools/validate_catalog.py
 tests/test_catalog.py
+wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```
 
 ## Validar

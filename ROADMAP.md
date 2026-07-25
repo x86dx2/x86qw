@@ -32,7 +32,7 @@
 
 ## 4. Site
 
-- [ ] criar o repositório separado `x86dx2/x86qw-site`;
+- [x] configurar Workers Static Assets no monorepo;
 - [ ] publicar o site com Cloudflare Workers Static Assets;
-- [ ] servir o catálogo em `/api/v1/catalog.json`;
+- [x] expor o catálogo canônico em `/api/v1/catalog.json`;
 - [ ] redirecionar `x86.com.br/x86qw` para `x86qw.x86.com.br`.

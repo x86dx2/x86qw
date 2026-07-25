@@ -1,0 +1,16 @@
+{
+  "name": "x86qw-site",
+  "compatibility_date": "2026-07-25",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "x86qw.x86.com.br",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./site/public",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}

@@ -15,7 +15,7 @@ from validate_catalog import validate_catalog  # noqa: E402
 
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
-        catalog = json.loads((ROOT / "catalog/v1/index.json").read_text())
+        catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
         self.assertEqual(validate_catalog(catalog), 0)
 
         package = {

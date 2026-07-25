@@ -18,13 +18,14 @@ sem publicar uma nova versão do instalador.
 
 ## Repositórios
 
-- `x86dx2/x86qw`: catálogo, receitas, instalador e validações;
-- `x86dx2/x86qw-site`: Worker e arquivos estáticos do site;
+- `x86dx2/x86qw`: catálogo, receitas, instalador, site e validações;
 - `x86dx2/x86qw-dist`: será criado somente se os binários e pipelines de
   publicação tornarem o repositório principal pesado ou difícil de manter.
 
-Começamos com dois repositórios necessários. A separação de `x86qw-dist` fica
-adiada até existir uma distribuição real, evitando estrutura sem uso.
+O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
+servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
+permite que uma única validação cubra publicação e consumo. A separação de
+`x86qw-dist` fica adiada até existir uma distribuição real.
 
 ## Fluxo de publicação
 

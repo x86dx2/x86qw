@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CATALOG = ROOT / "catalog/v1/index.json"
+DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PLATFORMS = {"macos", "linux", "windows"}
 CHANNELS = {"stable", "nightly"}
