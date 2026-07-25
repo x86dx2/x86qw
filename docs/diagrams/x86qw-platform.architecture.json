@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "x86QW Platform",
+    "subtitle": "Public edge, reproducible catalog and local installation",
+    "output": "x86qw-platform.html",
+    "viewBox": [1280, 760]
+  },
+  "components": [
+    { "id": "upstreams", "type": "external", "label": "Upstream projects", "sublabel": "versioned sources", "pos": [40, 110], "size": [150, 64] },
+    { "id": "ingest", "type": "backend", "label": "x86QW ingest", "sublabel": "license + format + hash", "pos": [250, 110], "size": [150, 64], "tag": "reproducible" },
+    { "id": "mirrors", "type": "cloud", "label": "Artifact mirrors", "sublabel": "GitHub · GitLab · R2", "pos": [460, 110], "size": [160, 64], "tag": "immutable" },
+    { "id": "players", "type": "external", "label": "Players", "sublabel": "browser", "pos": [40, 330], "size": [150, 64] },
+    { "id": "portal", "type": "frontend", "label": "x86.com.br", "sublabel": "portal Worker", "pos": [250, 330], "size": [150, 64] },
+    { "id": "site", "type": "frontend", "label": "x86qw.x86.com.br", "sublabel": "Worker Static Assets", "pos": [460, 330], "size": [160, 64] },
+    { "id": "catalog", "type": "backend", "label": "Catalog v1", "sublabel": "/api/v1/catalog.json", "pos": [680, 330], "size": [150, 64], "tag": "public contract" },
+    { "id": "installer", "type": "frontend", "label": "x86QW installer", "sublabel": "Python standard library", "pos": [890, 330], "size": [150, 64] },
+    { "id": "runtime", "type": "frontend", "label": "quake-world", "sublabel": "stable + nightly", "pos": [1100, 330], "size": [140, 64] },
+    { "id": "id1", "type": "security", "label": "User PAKs", "sublabel": "local id1 only", "pos": [1100, 500], "size": [140, 64], "tag": "never mirrored" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "x86QW release pipeline", "wraps": ["ingest", "mirrors"] },
+    { "kind": "region", "label": "Cloudflare edge", "wraps": ["portal", "site", "catalog"] },
+    { "kind": "security-group", "label": "Player machine", "wraps": ["installer", "runtime", "id1"] }
+  ],
+  "connections": [
+    { "from": "upstreams", "to": "ingest", "variant": "emphasis" },
+    { "from": "ingest", "to": "mirrors", "variant": "emphasis" },
+    { "from": "ingest", "to": "catalog", "label": "publish metadata", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[325, 240], [755, 240]] },
+    { "from": "players", "to": "portal", "label": "/x86qw" },
+    { "from": "portal", "to": "site", "label": "308 redirect", "labelAt": [430, 408] },
+    { "from": "site", "to": "catalog" },
+    { "from": "catalog", "to": "installer", "label": "versions + SHA-256", "variant": "emphasis", "labelAt": [860, 408] },
+    { "from": "mirrors", "to": "installer", "label": "package", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[540, 240], [965, 240]] },
+    { "from": "installer", "to": "runtime", "variant": "emphasis" },
+    { "from": "id1", "to": "runtime", "label": "local only", "variant": "security", "fromSide": "top", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
+    { "dot": "emerald", "title": "Reproducible delivery", "items": ["Every artifact records origin, license, size and SHA-256", "GitHub is canonical; GitLab and R2 provide independent copies"] },
+    { "dot": "rose", "title": "Commercial boundary", "items": ["id1 PAKs are supplied by the player", "They never enter Git, CI, Cloudflare or any mirror"] }
+  ]
+}

@@ -1,5 +1,9 @@
 # Arquitetura
 
+O mapa interativo da plataforma está em
+[`diagrams/x86qw-platform.html`](diagrams/x86qw-platform.html). Sua fonte
+versionada fica ao lado, em `x86qw-platform.architecture.json`.
+
 ## Contratos públicos
 
 ```text

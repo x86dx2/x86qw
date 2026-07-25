@@ -24,6 +24,7 @@ consumir exclusivamente o catálogo x86QW.
 catalog/v1/index.json   catálogo canônico em desenvolvimento
 docs/architecture.md    serviços, repositórios e fluxo de publicação
 docs/provenance.md      política e inventário das fontes
+docs/diagrams/          arquitetura interativa e fonte Archify
 tools/validate_catalog.py
 tests/test_catalog.py
 ```
