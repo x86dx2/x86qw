@@ -1,0 +1,11 @@
+.DS_Store
+.env
+__pycache__/
+*.py[cod]
+.cache/
+.artifacts/
+dist/
+quake-world/
+id1/
+*.pak
+*.PAK
