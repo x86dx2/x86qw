@@ -23,8 +23,8 @@
 
 ## 3. Instalador
 
-- [ ] estabilizar e testar o instalador existente em `../quake`;
-- [ ] migrá-lo para este repositório preservando o histórico relevante;
+- [x] estabilizar e testar o instalador existente em `../quake`;
+- [x] migrar a base funcional e suas duas suítes de regressão;
 - [ ] substituir consultas diretas a terceiros pelo catálogo x86QW;
 - [ ] manter stable e nightly coexistentes em macOS, Linux e Windows.
 

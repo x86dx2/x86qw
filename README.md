@@ -5,8 +5,9 @@ x86QW será uma distribuição moderna e reproduzível de QuakeWorld, mantida po
 
 Este repositório começa pela parte que precisa permanecer sob nosso controle:
 o catálogo público, as regras de proveniência e as ferramentas de validação.
-O instalador atual em `../quake` permanece como referência até ser migrado para
-consumir exclusivamente o catálogo x86QW.
+O instalador multiplataforma já foi migrado de `../quake`, que permanece intacto
+como referência histórica. A próxima mudança troca suas consultas diretas por
+este catálogo.
 
 ## Princípios
 
@@ -25,6 +26,8 @@ catalog/v1/index.json   catálogo canônico em desenvolvimento
 docs/architecture.md    serviços, repositórios e fluxo de publicação
 docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
+docs/installer.md       manual completo do instalador migrado
+install-qw.py           instalador macOS, Linux e Windows
 tools/validate_catalog.py
 tests/test_catalog.py
 ```
@@ -34,6 +37,7 @@ tests/test_catalog.py
 ```sh
 python3 tools/validate_catalog.py
 python3 -m unittest discover -s tests -v
+./install-qw.py --help
 ```
 
 Nenhum binário ou conteúdo de terceiros é publicado nesta fase.

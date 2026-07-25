@@ -1,0 +1,2446 @@
+#!/usr/bin/env python3
+"""Cross-platform ezQuake + nQuake installer."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import platform as host_platform
+import plistlib
+import re
+import shutil
+import stat
+import struct
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+from dataclasses import dataclass
+from html.parser import HTMLParser
+from pathlib import Path, PurePosixPath
+
+
+ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
+ID1_PAK1_SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
+STABLE_RELEASES_API = "https://api.github.com/repos/QW-Group/ezquake-source/releases?per_page=100&page=1"
+STABLE_DOWNLOAD_ROOT = "https://github.com/QW-Group/ezquake-source/releases/download"
+DISTFILES_REPOSITORY = "https://github.com/nQuake/distfiles.git"
+DISTFILES_REF = "master"
+METADATA_DIR = ".install"
+NQUAKE_RECEIPT = ".install/nquake.receipt"
+NQUAKE_INVENTORY = ".install/nquake.inventory"
+CACHE_DIR_NAME = "x86-qw"
+CACHE_MARKER_NAME = ".x86-qw-cache"
+CACHE_MARKER_VALUE = "x86-qw-cache-v1"
+DEFAULT_PRESET = 's_raw_volume "0.2"\n'
+STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
+CLIENT_VERSION = re.compile(r"^v?[0-9]+\.[0-9]+(?:\.[0-9]+)?$")
+MAP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
+MAP_FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*\.(?:bsp|ent|txt|loc)$", re.IGNORECASE)
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX32 = re.compile(r"^[0-9a-f]{32}$")
+MAPS_ROOT = "https://maps.quakeworld.nu"
+HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
+BUILTIN_MAP_STEMS = frozenset(
+    {"start", "end", *(f"dm{number}" for number in range(1, 7))}
+    | {f"e{episode}m{map_number}" for episode, last in ((1, 8), (2, 7), (3, 7), (4, 8)) for map_number in range(1, last + 1)}
+)
+MAPS_RECEIPT = ".install/maps.receipt"
+MAPS_INVENTORY = ".install/maps.inventory"
+PRESETS_RECEIPT = ".install/presets.receipt"
+PRESETS_INVENTORY = ".install/presets.inventory"
+CLASSICQ_RECEIPT = ".install/classicq.receipt"
+CLASSICQ_INVENTORY = ".install/classicq.inventory"
+
+
+@dataclass(frozen=True)
+class PlatformSpec:
+    key: str
+    label: str
+    architecture: str
+    stable_archive: str
+    nightly_root: str
+    nightly_suffix: str
+    archive_binary: str
+    stable_runtime: str
+    nightly_runtime: str
+    stable_receipt: str
+    nightly_receipt: str
+
+    def runtime(self, channel: str) -> str:
+        return self.stable_runtime if channel == "stable" else self.nightly_runtime
+
+    def receipt(self, channel: str) -> str:
+        return self.stable_receipt if channel == "stable" else self.nightly_receipt
+
+
+@dataclass(frozen=True)
+class ClientPlatformSpec:
+    asset_name: str
+    archive_runtime: str
+    runtime: str
+    architecture: str
+    executable: str
+    nested_archive: bool = False
+
+
+@dataclass(frozen=True)
+class ClientSpec:
+    key: str
+    label: str
+    repository: str
+    description: str
+    platforms: dict[str, ClientPlatformSpec]
+
+    @property
+    def releases_api(self) -> str:
+        return f"https://api.github.com/repos/{self.repository}/releases?per_page=100&page=1"
+
+    def receipt(self, platform: str) -> str:
+        return f".install/client-{self.key}-{platform}.receipt"
+
+
+PLATFORMS = {
+    "macos": PlatformSpec(
+        "macos", "macOS", "universal", "ezQuake-macOS-universal.zip",
+        "https://builds.quakeworld.nu/ezquake/snapshots/macOS/universal",
+        "_ezQuake-macOS-universal.zip", "ezQuake.app",
+        "ezQuake Stable.app", "ezQuake Nightly.app",
+        ".install/ezquake-macos-stable.receipt", ".install/ezquake-macos-nightly.receipt",
+    ),
+    "linux": PlatformSpec(
+        "linux", "Linux x86_64", "x86_64", "ezQuake-linux-x86_64.zip",
+        "https://builds.quakeworld.nu/ezquake/snapshots/linux/x86_64",
+        "_ezQuake-x86_64.AppImage", "ezQuake-x86_64.AppImage",
+        "ezquake-stable-x86_64.AppImage", "ezquake-nightly-x86_64.AppImage",
+        ".install/ezquake-linux-stable.receipt", ".install/ezquake-linux-nightly.receipt",
+    ),
+    "windows": PlatformSpec(
+        "windows", "Windows x64", "x64", "ezQuake-windows-x64.zip",
+        "https://builds.quakeworld.nu/ezquake/snapshots/windows/x64",
+        "_ezquake.exe", "ezquake.exe",
+        "ezquake-stable.exe", "ezquake-nightly.exe",
+        ".install/ezquake-windows-stable.receipt", ".install/ezquake-windows-nightly.receipt",
+    ),
+}
+
+CLIENTS = {
+    "classicq": ClientSpec(
+        "classicq", "classicQ", "classicq/classicq",
+        "visual clássico, SDL3 e Metal nativo no Apple Silicon",
+        {
+            "macos": ClientPlatformSpec(
+                "classicQ-{version}-macos-arm64.zip", "classicq-macos-arm64.app",
+                "classicQ.app", "arm64", "classicq-macos-arm64",
+            ),
+            "linux": ClientPlatformSpec(
+                "classicQ-{version}-linux-amd64.zip", "classicq-linux-amd64",
+                "classicq-x86_64", "x86_64", "classicq-linux-amd64",
+            ),
+            "windows": ClientPlatformSpec(
+                "classicQ-{version}-windows-amd64.zip", "classicq-windows-amd64.exe",
+                "classicq.exe", "x64", "classicq-windows-amd64.exe",
+            ),
+        },
+    ),
+    "unezquake": ClientSpec(
+        "unezquake", "unezQuake", "dusty-qw/unezquake",
+        "fork experimental com antilag, predição, HUD e crosshair vetorial",
+        {
+            "macos": ClientPlatformSpec(
+                "unezQuake-macOS-universal.zip", "unezQuake.app",
+                "unezQuake.app", "universal", "unezQuake", nested_archive=True,
+            ),
+            "linux": ClientPlatformSpec(
+                "unezQuake-linux-x86_64.zip", "unezQuake-x86_64.AppImage",
+                "unezquake-x86_64.AppImage", "x86_64", "unezQuake-x86_64.AppImage",
+            ),
+            "windows": ClientPlatformSpec(
+                "unezQuake-windows-x64.zip", "unezquake.exe",
+                "unezquake.exe", "x64", "unezquake.exe",
+            ),
+        },
+    ),
+}
+
+PRESETS = {
+    "x86-qw-modern.cfg": """// x86-qw: visual moderno, carregamento manual com cfg_load x86-qw-modern
+s_khz \"48\"
+s_linearresample \"1\"
+vid_renderer \"1\"
+vid_framebuffer \"1\"
+vid_framebuffer_hdr \"1\"
+vid_framebuffer_hdr_tonemap \"1\"
+vid_framebuffer_fxaa \"1\"
+gl_anisotropy \"16\"
+gl_part_explosions \"1\"
+gl_part_trails \"1\"
+gl_part_spikes \"1\"
+gl_part_gunshots \"1\"
+gl_part_blood \"1\"
+gl_part_telesplash \"1\"
+gl_part_blobs \"1\"
+""",
+    "x86-qw-competitive.cfg": """// x86-qw: máxima clareza, sem alterar rede, binds ou sensibilidade
+s_khz \"48\"
+s_linearresample \"1\"
+vid_vsync \"0\"
+r_drawviewmodel \"0\"
+r_fastsky \"1\"
+r_fastturb \"1\"
+r_drawflame \"0\"
+gl_part_explosions \"0\"
+gl_part_trails \"0\"
+gl_part_spikes \"0\"
+gl_part_gunshots \"0\"
+gl_part_blood \"0\"
+""",
+    "x86-qw-classic.cfg": """// x86-qw: aparência próxima ao Quake original
+vid_framebuffer_hdr \"0\"
+vid_framebuffer_hdr_tonemap \"0\"
+vid_framebuffer_fxaa \"0\"
+gl_texturemode \"GL_NEAREST_MIPMAP_NEAREST\"
+r_drawviewmodel \"1\"
+r_fastsky \"0\"
+r_fastturb \"0\"
+gl_part_explosions \"0\"
+gl_part_trails \"0\"
+gl_part_spikes \"0\"
+gl_part_gunshots \"0\"
+gl_part_blood \"0\"
+""",
+    "x86-qw-stream.cfg": """// x86-qw: imagem legível para transmissão e gravação
+s_khz \"48\"
+s_linearresample \"1\"
+vid_renderer \"1\"
+vid_framebuffer \"1\"
+vid_framebuffer_hdr \"1\"
+vid_framebuffer_hdr_tonemap \"1\"
+vid_framebuffer_fxaa \"1\"
+r_drawviewmodel \"1\"
+gl_part_explosions \"1\"
+gl_part_trails \"1\"
+gl_part_gunshots \"1\"
+""",
+}
+
+NQUAKE_PATHS = (
+    "gpl/ezquake", "gpl/qw", "gpl/LICENSE", "non-gpl/qw", "non-gpl/readme.txt",
+    "textures/qw", "addon-textures/qw", "addon-clanarena/arena",
+    "addon-clanarena/prox", "addon-fortress/fortress",
+)
+
+REQUIRED_NQUAKE_PATHS = (
+    "ezquake/ezquake.pk3", "ezquake/configs/config.cfg", "ezquake/configs/preset.cfg",
+    "qw/nquake.pk3", "qw/nquake_default.cfg", "qw/textures.pk3",
+    "qw/qrp_maps_textures_1.pk3", "arena/arena.pk3", "prox/prox.pk3",
+    "fortress/pak0.pak", "fortress/pak1.pak",
+)
+
+
+class InstallerError(RuntimeError):
+    pass
+
+
+class LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        for name, value in attrs:
+            if name.lower() == "href" and value is not None:
+                self.links.append(value)
+
+
+class Console:
+    def __init__(self) -> None:
+        self.verbose = False
+        self.color = False
+
+    def configure(self, *, verbose: bool, no_color: bool) -> None:
+        self.verbose = verbose
+        self.color = sys.stdout.isatty() and not no_color and "NO_COLOR" not in os.environ
+
+    def paint(self, text: str, code: str) -> str:
+        return f"\033[{code}m{text}\033[0m" if self.color else text
+
+    def banner(self, action: str, target: Path) -> None:
+        title = self.paint("x86-qw", "1;36")
+        print(f"\n{title} · instalador QuakeWorld", flush=True)
+        print(f"Ação: {action}  |  Destino: {target}", flush=True)
+
+    def section(self, title: str) -> None:
+        print(f"\n{self.paint(title, '1;36')}", flush=True)
+
+    def info(self, message: str) -> None:
+        print(f"{self.paint('[INFO]', '36')} {message}", flush=True)
+
+    def success(self, message: str) -> None:
+        print(f"{self.paint('[OK]', '32')} {message}", flush=True)
+
+    def warning(self, message: str) -> None:
+        print(f"{self.paint('[ATENÇÃO]', '33')} {message}", flush=True)
+
+    def detail(self, message: str) -> None:
+        if self.verbose:
+            print(self.paint(f"       {message}", "2"), flush=True)
+
+    def error(self, message: str) -> None:
+        label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
+        print(f"{label} {message}", file=sys.stderr, flush=True)
+
+    def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
+        if not sys.stdout.isatty():
+            return
+        if total:
+            width = 24
+            ratio = min(received / total, 1)
+            filled = int(width * ratio)
+            bar = "#" * filled + "-" * (width - filled)
+            status = f"[{bar}] {ratio:6.1%}  {format_bytes(received)} / {format_bytes(total)}"
+        else:
+            status = f"Recebidos {format_bytes(received)}"
+        print(f"\r       {status}", end="\n" if done else "", flush=True)
+
+
+console = Console()
+
+
+def format_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GiB"
+
+
+def file_count(count: int) -> str:
+    return f"{count} {'arquivo' if count == 1 else 'arquivos'}"
+
+
+def lexists(path: Path) -> bool:
+    return os.path.lexists(path)
+
+
+def file_hash(path: Path, algorithm: str = "sha256") -> str:
+    digest = hashlib.new(algorithm)
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
+    if not pattern.fullmatch(value):
+        raise InstallerError(f"invalid {label}")
+
+
+def ensure_no_symlink(path: Path, label: str) -> None:
+    if path.is_symlink():
+        raise InstallerError(f"{label} must not be a symlink: {path}")
+
+
+def remove_path(path: Path, root_device: int | None = None) -> None:
+    """Delete without following symlinks or crossing filesystem boundaries."""
+    if not lexists(path):
+        return
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        path.unlink()
+        return
+    device = info.st_dev if root_device is None else root_device
+    if info.st_dev != device:
+        raise InstallerError(f"refusing to cross filesystem boundary: {path}")
+    with os.scandir(path) as entries:
+        for entry in entries:
+            child = Path(entry.path)
+            child_info = child.lstat()
+            if not stat.S_ISLNK(child_info.st_mode) and child_info.st_dev != device:
+                raise InstallerError(f"refusing to cross filesystem boundary: {child}")
+            remove_path(child, device)
+    path.rmdir()
+
+
+def remove_empty_directories(root: Path) -> None:
+    if not root.is_dir() or root.is_symlink():
+        return
+    for current, directories, _ in os.walk(root, topdown=False, followlinks=False):
+        for name in directories:
+            candidate = Path(current, name)
+            if not candidate.is_symlink():
+                try:
+                    candidate.rmdir()
+                except OSError:
+                    pass
+    try:
+        root.rmdir()
+    except OSError:
+        pass
+
+
+def reject_tree_symlinks(root: Path, label: str) -> None:
+    if not root.is_dir():
+        return
+    for current, directories, files in os.walk(root, followlinks=False):
+        for name in directories + files:
+            candidate = Path(current, name)
+            if candidate.is_symlink():
+                raise InstallerError(f"{label} contains a symlink: {candidate}")
+
+
+def archive_relative_path(name: str) -> PurePosixPath:
+    if not name or "\\" in name or ":" in name or name.startswith("/"):
+        raise InstallerError(f"unsafe archive path: {name}")
+    path = PurePosixPath(name)
+    if any(part in ("", ".", "..") for part in path.parts):
+        raise InstallerError(f"unsafe archive path: {name}")
+    return path
+
+
+def safe_extract_zip(archive: Path, destination: Path) -> None:
+    with zipfile.ZipFile(archive) as package:
+        for member in package.infolist():
+            relative = archive_relative_path(member.filename.rstrip("/"))
+            mode = member.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                raise InstallerError(f"archive contains an unsupported symlink: {member.filename}")
+            output = destination.joinpath(*relative.parts)
+            if member.is_dir():
+                output.mkdir(parents=True, exist_ok=True)
+                continue
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with package.open(member) as source, output.open("wb") as target:
+                shutil.copyfileobj(source, target)
+            permissions = stat.S_IMODE(mode)
+            if permissions and os.name != "nt":
+                output.chmod(permissions)
+
+
+def safe_extract_tar(archive: Path, destination: Path) -> None:
+    with tarfile.open(archive) as package:
+        for member in package:
+            relative = archive_relative_path(member.name.rstrip("/"))
+            output = destination.joinpath(*relative.parts)
+            if member.isdir():
+                output.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                raise InstallerError(f"archive contains an unsupported entry: {member.name}")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            source = package.extractfile(member)
+            if source is None:
+                raise InstallerError(f"could not read archive entry: {member.name}")
+            with source, output.open("wb") as target:
+                shutil.copyfileobj(source, target)
+            if os.name != "nt":
+                output.chmod(stat.S_IMODE(member.mode))
+
+
+def copy_overlay(source: Path, destination: Path) -> None:
+    if not lexists(source):
+        raise InstallerError(f"missing distribution component: {source}")
+    if source.is_symlink():
+        raise InstallerError(f"distribution component must not be a symlink: {source}")
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True, copy_function=shutil.copy2)
+    else:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def read_table(path: Path, keys: set[str], label: str) -> dict[str, str]:
+    if not path.is_file() or path.is_symlink():
+        raise InstallerError(f"invalid {label}: {path}")
+    result: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        fields = raw_line.split("\t")
+        if len(fields) != 2 or fields[0] not in keys or fields[0] in result:
+            raise InstallerError(f"invalid {label}: {path}")
+        result[fields[0]] = fields[1]
+    if set(result) != keys:
+        raise InstallerError(f"invalid {label}: {path}")
+    return result
+
+
+def write_table(path: Path, rows: list[tuple[str, str]]) -> None:
+    path.write_text("".join(f"{key}\t{value}\n" for key, value in rows), encoding="utf-8")
+    if os.name != "nt":
+        path.chmod(0o644)
+
+
+class Installer:
+    def __init__(self, project_root: Path, target: Path, cache_root: Path | None = None):
+        self.project_root = project_root.resolve()
+        self.target = target
+        self._cache_root = cache_root
+        self.cache_root: Path | None = None
+        self.cache_bin: Path | None = None
+        self.distfiles_dir: Path | None = None
+        self.stage: Path | None = None
+        self.spec: PlatformSpec | None = None
+        self.client: ClientSpec | None = None
+        self.channel = ""
+        self.selected_version = ""
+        self.app_url = ""
+        self.app_archive_name = ""
+        self.app_expected_checksum = ""
+        self.app_checksum_kind = ""
+        self.app_archive_sha256 = ""
+        self.app_bundle_version = ""
+        self.app_binary_sha256 = ""
+        self.distfiles_commit = ""
+        self.cache_prefix = ""
+
+    def run_command(self, arguments: list[str], *, capture: bool = False) -> str:
+        console.detail("$ " + " ".join(arguments))
+        quiet = capture or not console.verbose
+        try:
+            result = subprocess.run(
+                arguments, check=True, text=True,
+                stdout=subprocess.PIPE if quiet else None,
+                stderr=subprocess.PIPE if quiet else None,
+            )
+        except FileNotFoundError as error:
+            raise InstallerError(f"Comando obrigatório não encontrado: {arguments[0]}") from error
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or error.stdout or "").strip()
+            suffix = f": {detail}" if detail else ""
+            raise InstallerError(f"O comando {arguments[0]} falhou{suffix}") from error
+        return (result.stdout or "").strip()
+
+    def validate_target(self, action: str) -> None:
+        if not self.target.is_dir():
+            raise InstallerError(f"O diretório de destino não existe: {self.target}")
+        if action == "purge" and self.target.is_symlink():
+            raise InstallerError(f"O destino do purge não pode ser um link simbólico: {self.target}")
+        self.target = self.target.resolve()
+        if self.target == Path(self.target.anchor):
+            raise InstallerError("A raiz do sistema de arquivos não pode ser usada como destino.")
+        if self.target == self.project_root:
+            raise InstallerError("A raiz do projeto não pode ser usada como destino; use quake-world.")
+
+    def reject_target_symlinks(self) -> None:
+        managed_roots = ("id1", "ezquake", "qw", "arena", "prox", "fortress", "classicq", METADATA_DIR)
+        for name in managed_roots:
+            candidate = self.target / name
+            ensure_no_symlink(candidate, "managed path")
+            reject_tree_symlinks(candidate, "managed tree")
+        for spec in PLATFORMS.values():
+            for relative in (spec.stable_runtime, spec.nightly_runtime, spec.stable_receipt, spec.nightly_receipt):
+                ensure_no_symlink(self.target / relative, "managed path")
+        for client in CLIENTS.values():
+            for platform_key, client_platform in client.platforms.items():
+                ensure_no_symlink(self.target / client_platform.runtime, "managed path")
+                ensure_no_symlink(self.target / client.receipt(platform_key), "managed path")
+        for relative in (
+            "LICENSE", "readme.txt", NQUAKE_RECEIPT, NQUAKE_INVENTORY,
+            MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
+            CLASSICQ_RECEIPT, CLASSICQ_INVENTORY,
+        ):
+            ensure_no_symlink(self.target / relative, "managed path")
+
+    def resolve_cache_root(self) -> Path:
+        if self._cache_root is not None:
+            root = self._cache_root.absolute()
+        else:
+            system = host_platform.system()
+            if system == "Darwin":
+                base = self.run_command(["getconf", "DARWIN_USER_CACHE_DIR"], capture=True)
+                if not base:
+                    raise InstallerError("could not resolve the native macOS user cache directory")
+                root = Path(base) / CACHE_DIR_NAME
+            elif system == "Windows":
+                base = os.environ.get("LOCALAPPDATA")
+                if not base:
+                    raise InstallerError("LOCALAPPDATA is not defined")
+                root = Path(base) / CACHE_DIR_NAME
+            else:
+                base = os.environ.get("XDG_CACHE_HOME")
+                root = (Path(base) if base else Path.home() / ".cache") / CACHE_DIR_NAME
+        if not root.is_absolute() or root == Path(root.anchor):
+            raise InstallerError(f"unsafe cache path: {root}")
+        parent = root.parent
+        if not parent.is_dir():
+            parent.mkdir(parents=True, exist_ok=True)
+        parent = parent.resolve()
+        root = parent / root.name
+        try:
+            root.relative_to(self.project_root)
+        except ValueError:
+            pass
+        else:
+            raise InstallerError("cache must be outside the project")
+        self.cache_root = root
+        self.cache_bin = root / "bin"
+        self.distfiles_dir = root / "distfiles"
+        return root
+
+    def validate_cache_marker(self) -> None:
+        assert self.cache_root is not None
+        marker = self.cache_root / CACHE_MARKER_NAME
+        if not marker.is_file() or marker.is_symlink():
+            raise InstallerError(f"O diretório de cache não pertence a este instalador e foi preservado: {self.cache_root}")
+        first_line = marker.read_text(encoding="utf-8").splitlines()[:1]
+        if first_line != [CACHE_MARKER_VALUE]:
+            raise InstallerError(f"O marcador de propriedade do cache é inválido: {marker}")
+
+    def prepare_cache(self) -> None:
+        root = self.resolve_cache_root()
+        console.detail(f"Cache: {root}")
+        try:
+            self.target.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            raise InstallerError("O destino da instalação não pode ficar dentro do cache do instalador.")
+        try:
+            root.relative_to(self.target)
+        except ValueError:
+            pass
+        else:
+            raise InstallerError("O cache do instalador não pode ficar dentro do destino da instalação.")
+        ensure_no_symlink(root, "cache root")
+        if lexists(root):
+            if not root.is_dir():
+                raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
+            marker = root / CACHE_MARKER_NAME
+            if lexists(marker):
+                self.validate_cache_marker()
+            elif any(root.iterdir()):
+                raise InstallerError(f"O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: {root}")
+        else:
+            root.mkdir()
+        (root / CACHE_MARKER_NAME).write_text(CACHE_MARKER_VALUE + "\n", encoding="utf-8")
+        assert self.cache_bin is not None and self.distfiles_dir is not None
+        ensure_no_symlink(self.cache_bin, "cache directory")
+        ensure_no_symlink(self.distfiles_dir, "cache directory")
+
+    def cache_is_present(self) -> bool:
+        root = self.resolve_cache_root()
+        if not lexists(root):
+            return False
+        ensure_no_symlink(root, "cache root")
+        if not root.is_dir():
+            raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
+        self.validate_cache_marker()
+        return True
+
+    def cleanup_cache(self) -> None:
+        if not self.cache_is_present():
+            console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
+            return
+        assert self.cache_root is not None
+        remove_path(self.cache_root)
+        console.success(f"Cache removido: {self.cache_root}")
+
+    def check_pak(self, relative: str, expected: str) -> None:
+        pak = self.target / relative
+        if not pak.is_file() or pak.is_symlink():
+            raise InstallerError(f"PAK obrigatório não encontrado: {pak}")
+        with pak.open("rb") as source:
+            if source.read(4) != b"PACK":
+                raise InstallerError(f"O arquivo não possui um cabeçalho PAK válido: {pak}")
+        if file_hash(pak) != expected:
+            raise InstallerError(f"O PAK não corresponde à versão registrada original: {pak}")
+
+    def check_paks(self) -> None:
+        self.check_pak("id1/pak0.pak", ID1_PAK0_SHA256)
+        self.check_pak("id1/pak1.pak", ID1_PAK1_SHA256)
+        console.detail("PAKs registrados validados por SHA-256.")
+
+    def ensure_metadata_directory(self) -> None:
+        metadata = self.target / METADATA_DIR
+        ensure_no_symlink(metadata, "metadata directory")
+        if lexists(metadata) and not metadata.is_dir():
+            raise InstallerError(f"metadata path is not a directory: {metadata}")
+        metadata.mkdir(exist_ok=True)
+        if os.name != "nt":
+            metadata.chmod(0o755)
+
+    def choose_platform(self, product: str = "ezQuake") -> PlatformSpec:
+        host = host_platform.system() or "desconhecido"
+        machine = host_platform.machine() or "arquitetura desconhecida"
+        console.detail(f"Host detectado: {host} {machine}; Python {host_platform.python_version()}")
+        print(f"\nPara qual sistema operacional deseja preparar o {product}?")
+        print("  1) macOS         - universal arm64 + x86_64 (padrão)")
+        print("  2) Linux x86_64  - AppImage")
+        print("  3) Windows x64   - executável .exe")
+        aliases = {
+            "": "macos", "1": "macos", "mac": "macos", "macos": "macos",
+            "2": "linux", "linux": "linux", "3": "windows", "windows": "windows", "win": "windows",
+        }
+        while True:
+            try:
+                answer = input("Escolha [1/2/3] (padrão: 1): ").strip()
+            except EOFError:
+                answer = ""
+            key = aliases.get(answer.lower())
+            if key is not None:
+                self.spec = PLATFORMS[key]
+                console.success(f"Sistema selecionado: {self.spec.label}")
+                return self.spec
+            console.warning("Opção inválida. Digite 1, 2 ou 3.")
+
+    def choose_client(self) -> ClientSpec:
+        print("\nQual cliente opcional deseja instalar?")
+        print("  1) classicQ   - Metal no macOS e visual clássico moderno")
+        print("  2) unezQuake  - antilag e recursos experimentais")
+        aliases = {
+            "1": "classicq", "classicq": "classicq", "classic": "classicq",
+            "2": "unezquake", "unezquake": "unezquake", "unez": "unezquake",
+        }
+        while True:
+            try:
+                answer = input("Escolha [1/2]: ").strip().lower()
+            except EOFError as error:
+                raise InstallerError("Nenhum cliente foi selecionado.") from error
+            key = aliases.get(answer)
+            if key is not None:
+                self.client = CLIENTS[key]
+                console.success(f"Cliente selecionado: {self.client.label}")
+                if key == "unezquake":
+                    console.warning("unezQuake é experimental e pode não ser aceito em todos os torneios.")
+                return self.client
+            console.warning("Opção inválida. Digite 1 para classicQ ou 2 para unezQuake.")
+
+    def prompt_catalog(self, label: str, catalog: list[tuple[str, str, str]]) -> tuple[str, str, str]:
+        preview_size = 12
+
+        def show_catalog(show_all: bool = False) -> None:
+            visible = catalog if show_all else catalog[:preview_size]
+            print(f"\nVersões {label} disponíveis (mais recente primeiro):")
+            for index, record in enumerate(visible, 1):
+                print(f"  {index:3d}) {record[0]}")
+            hidden = len(catalog) - len(visible)
+            if hidden:
+                print(f"       ... mais {hidden} versões. Digite t para mostrar todas.")
+
+        show_catalog()
+        expanded = len(catalog) <= preview_size
+        while True:
+            try:
+                prompt = "Escolha o número ou a versão exata"
+                if not expanded:
+                    prompt += ", ou t para listar todas"
+                answer = input(prompt + ": ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhuma versão foi selecionada.") from error
+            if not expanded and answer.lower() in ("t", "todas", "all"):
+                show_catalog(show_all=True)
+                expanded = True
+                continue
+            if answer.isdigit():
+                index = int(answer)
+                if 1 <= index <= len(catalog):
+                    return catalog[index - 1]
+                console.warning(f"Número inválido. Escolha um valor entre 1 e {len(catalog)}.")
+                continue
+            matches = [record for record in catalog if record[0] == answer]
+            if len(matches) == 1:
+                return matches[0]
+            console.warning("Versão não encontrada. Use um número da lista ou informe o identificador completo.")
+
+    def choose_channel(self) -> str:
+        print("\nQual canal deseja instalar?")
+        print("  1) stable  - releases oficiais")
+        print("  2) nightly - snapshots de desenvolvimento")
+        aliases = {"1": "stable", "stable": "stable", "s": "stable", "2": "nightly", "nightly": "nightly", "n": "nightly"}
+        while True:
+            try:
+                answer = input("Escolha [1/2]: ").strip().lower()
+            except EOFError as error:
+                raise InstallerError("Nenhum canal foi selecionado.") from error
+            channel = aliases.get(answer)
+            if channel is not None:
+                self.channel = channel
+                console.success(f"Canal selecionado: {channel}")
+                return channel
+            console.warning("Opção inválida. Digite 1 para stable ou 2 para nightly.")
+
+    def confirm_nquake(self) -> bool:
+        while True:
+            try:
+                answer = input("\nDeseja instalar/atualizar também os dados nQuake? [s/N]: ").strip().lower()
+            except EOFError:
+                answer = ""
+            if answer in ("s", "sim", "y", "yes"):
+                return True
+            if answer in ("", "n", "nao", "não", "no"):
+                return False
+            console.warning("Resposta inválida. Digite s para sim ou n para não.")
+
+    def http_get(self, url: str, destination: Path | None = None, headers: dict[str, str] | None = None) -> bytes:
+        if not url.startswith("https://"):
+            raise InstallerError(f"refusing non-HTTPS URL: {url}")
+        request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if urllib.parse.urlsplit(url).hostname == "api.github.com" and github_token:
+            request_headers["Authorization"] = f"Bearer {github_token}"
+        request = urllib.request.Request(url, headers=request_headers)
+        console.detail(f"GET {url}")
+        last_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    if not response.geturl().startswith("https://"):
+                        raise InstallerError(f"refusing non-HTTPS redirect: {response.geturl()}")
+                    if destination is None:
+                        return response.read()
+                    total_header = response.headers.get("Content-Length")
+                    total = int(total_header) if total_header and total_header.isdigit() else None
+                    received = 0
+                    last_update = 0.0
+                    with destination.open("wb") as target:
+                        while block := response.read(1024 * 1024):
+                            target.write(block)
+                            received += len(block)
+                            now = time.monotonic()
+                            if now - last_update >= 0.1:
+                                console.download_progress(received, total)
+                                last_update = now
+                    console.download_progress(received, total, done=True)
+                    return b""
+            except urllib.error.HTTPError as error:
+                if error.code == 403 and error.headers.get("X-RateLimit-Remaining") == "0":
+                    raise InstallerError(
+                        "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
+                        "ou defina GITHUB_TOKEN para ampliar o limite."
+                    ) from error
+                last_error = error
+                console.detail(f"Tentativa de download falhou: {last_error}")
+                if attempt < 3:
+                    console.warning(f"Falha temporária no download. Tentando novamente ({attempt + 1}/3)...")
+            except (OSError, urllib.error.URLError) as error:
+                last_error = error
+                console.detail(f"Tentativa de download falhou: {last_error}")
+                if attempt < 3:
+                    console.warning(f"Falha temporária no download. Tentando novamente ({attempt + 1}/3)...")
+        raise InstallerError(f"Não foi possível baixar {url}: {last_error}")
+
+    def stable_catalog(self) -> list[tuple[str, str, str]]:
+        assert self.spec is not None
+        console.info("Consultando releases estáveis oficiais...")
+        try:
+            releases = json.loads(self.http_get(
+                STABLE_RELEASES_API,
+                headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+            ))
+        except (json.JSONDecodeError, TypeError) as error:
+            raise InstallerError("invalid stable release catalog") from error
+        catalog: list[tuple[str, str, str]] = []
+        if not isinstance(releases, list):
+            raise InstallerError("invalid stable release catalog")
+        for release in releases:
+            tag = release.get("tag_name", "")
+            if release.get("draft") or release.get("prerelease") or not STABLE_VERSION.fullmatch(tag):
+                continue
+            assets = [asset for asset in release.get("assets", []) if asset.get("name") == self.spec.stable_archive]
+            if len(assets) > 1:
+                raise InstallerError(f"duplicate {self.spec.label} asset for stable {tag}")
+            if not assets:
+                continue
+            asset = assets[0]
+            expected_url = f"{STABLE_DOWNLOAD_ROOT}/{tag}/{self.spec.stable_archive}"
+            if asset.get("state") != "uploaded" or asset.get("browser_download_url") != expected_url:
+                raise InstallerError(f"invalid stable asset for {tag}")
+            digest = asset.get("digest") or "-"
+            if digest != "-":
+                if not digest.startswith("sha256:"):
+                    raise InstallerError(f"unsupported stable asset digest for {tag}")
+                digest = digest.removeprefix("sha256:")
+                validate_hex(digest, HEX64, f"stable archive SHA-256 for {tag}")
+            catalog.append((tag, expected_url, digest))
+        if not catalog:
+            raise InstallerError(f"no stable releases were found for {self.spec.label}")
+        return catalog
+
+    def nightly_catalog(self) -> list[tuple[str, str, str]]:
+        assert self.spec is not None
+        console.info("Consultando snapshots nightly oficiais...")
+        html = self.http_get(self.spec.nightly_root + "/").decode("utf-8", "replace")
+        file_pattern = rf"[0-9]{{8}}-[0-9]{{6}}_[0-9a-f]{{7}}{re.escape(self.spec.nightly_suffix)}"
+        names = sorted(set(re.findall(file_pattern, html)), reverse=True)
+        if not names:
+            raise InstallerError(f"no nightly snapshots were found for {self.spec.label}")
+        return [(name.removesuffix(self.spec.nightly_suffix), f"{self.spec.nightly_root}/{name}", "-") for name in names]
+
+    def choose_release(self) -> None:
+        assert self.spec is not None
+        catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
+        selected = self.prompt_catalog(self.channel, catalog)
+        self.selected_version, self.app_url, self.app_expected_checksum = selected
+        self.app_archive_name = self.app_url.rsplit("/", 1)[-1]
+        console.success(f"Versão selecionada: {self.selected_version}")
+        console.detail(f"Artefato: {self.app_url}")
+        if self.channel == "stable":
+            if self.app_archive_name != self.spec.stable_archive:
+                raise InstallerError("invalid stable archive name")
+            if self.app_expected_checksum == "-":
+                checksum_url = f"{STABLE_DOWNLOAD_ROOT}/{self.selected_version}/checksums.txt"
+                lines = self.http_get(checksum_url).decode("utf-8", "strict").splitlines()
+                matches = [fields[0] for line in lines if len(fields := line.split()) == 2 and fields[1] in (self.spec.stable_archive, f"./{self.spec.stable_archive}")]
+                if len(matches) != 1:
+                    raise InstallerError(f"no unique checksum for {self.spec.stable_archive} in stable {self.selected_version}")
+                self.app_expected_checksum = matches[0]
+            validate_hex(self.app_expected_checksum, HEX64, f"stable archive SHA-256 for {self.selected_version}")
+            self.app_checksum_kind = "sha256"
+        else:
+            if not NIGHTLY_VERSION.fullmatch(self.selected_version):
+                raise InstallerError("invalid nightly selection")
+            expected_name = self.selected_version + self.spec.nightly_suffix
+            if self.app_archive_name != expected_name:
+                raise InstallerError("invalid nightly archive name")
+            sidecar = self.http_get(self.app_url + ".md5").decode("utf-8", "strict").splitlines()
+            matches = [fields[0] for line in sidecar if len(fields := line.split()) == 2 and fields[1] in (self.app_archive_name, f"./{self.app_archive_name}")]
+            if len(matches) != 1:
+                raise InstallerError(f"no unique MD5 checksum for nightly {self.selected_version}")
+            self.app_expected_checksum = matches[0]
+            validate_hex(self.app_expected_checksum, HEX32, f"nightly archive MD5 for {self.selected_version}")
+            self.app_checksum_kind = "md5"
+        console.detail(f"Checksum publicado ({self.app_checksum_kind}): {self.app_expected_checksum}")
+
+    def client_catalog(self) -> list[tuple[str, str, str]]:
+        assert self.client is not None and self.spec is not None
+        client_platform = self.client.platforms[self.spec.key]
+        console.info(f"Consultando releases oficiais do {self.client.label}...")
+        try:
+            releases = json.loads(self.http_get(
+                self.client.releases_api,
+                headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+            ))
+        except (json.JSONDecodeError, TypeError) as error:
+            raise InstallerError(f"Catálogo de releases inválido para {self.client.label}.") from error
+        if not isinstance(releases, list):
+            raise InstallerError(f"Catálogo de releases inválido para {self.client.label}.")
+        catalog: list[tuple[str, str, str]] = []
+        for release in releases:
+            tag = release.get("tag_name", "")
+            if release.get("draft") or release.get("prerelease") or not CLIENT_VERSION.fullmatch(tag):
+                continue
+            version = tag.removeprefix("v")
+            asset_name = client_platform.asset_name.format(version=version)
+            assets = [asset for asset in release.get("assets", []) if asset.get("name") == asset_name]
+            if len(assets) != 1:
+                continue
+            expected_url = f"https://github.com/{self.client.repository}/releases/download/{tag}/{asset_name}"
+            asset = assets[0]
+            digest = asset.get("digest") or ""
+            if asset.get("state") != "uploaded" or asset.get("browser_download_url") != expected_url:
+                raise InstallerError(f"Artefato inválido do {self.client.label} {tag}.")
+            if not digest.startswith("sha256:"):
+                console.detail(f"Release ignorada sem SHA-256 publicado: {self.client.label} {tag}.")
+                continue
+            digest = digest.removeprefix("sha256:")
+            validate_hex(digest, HEX64, f"SHA-256 do {self.client.label} {tag}")
+            catalog.append((tag, expected_url, digest))
+        if not catalog:
+            raise InstallerError(f"Nenhuma release compatível do {self.client.label} foi encontrada para {self.spec.label}.")
+        return catalog
+
+    def choose_client_release(self) -> None:
+        assert self.client is not None and self.spec is not None
+        selected = self.prompt_catalog(self.client.label, self.client_catalog())
+        self.selected_version, self.app_url, self.app_expected_checksum = selected
+        self.app_archive_name = self.app_url.rsplit("/", 1)[-1]
+        self.app_checksum_kind = "sha256"
+        self.cache_prefix = f"client-{self.client.key}-{self.selected_version}"
+        console.success(f"Versão selecionada: {self.selected_version}")
+        console.detail(f"Artefato: {self.app_url}")
+        console.detail(f"SHA-256 publicado: {self.app_expected_checksum}")
+
+    def ensure_archive(self) -> Path:
+        assert self.cache_bin is not None and self.stage is not None and self.spec is not None
+        self.cache_bin.mkdir(parents=True, exist_ok=True)
+        cache_name = self.app_archive_name
+        if self.channel == "stable":
+            cache_name = f"stable-{self.selected_version}-{cache_name}"
+        elif self.cache_prefix:
+            cache_name = f"{self.cache_prefix}-{cache_name}"
+        archive = self.cache_bin / cache_name
+        ensure_no_symlink(archive, "cached archive")
+        if archive.is_file():
+            console.info(f"Usando arquivo já disponível no cache: {self.app_archive_name}")
+            if file_hash(archive, self.app_checksum_kind) != self.app_expected_checksum:
+                raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
+            console.success("Arquivo do cache validado.")
+        else:
+            download = self.stage / f"{self.app_archive_name}.download"
+            console.info(f"Baixando {self.app_archive_name}...")
+            self.http_get(self.app_url, download)
+            if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
+                raise InstallerError(f"O arquivo baixado falhou na verificação: {self.app_url}")
+            download.replace(archive)
+            console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
+        self.app_archive_sha256 = file_hash(archive)
+        console.detail(f"SHA-256 local: {self.app_archive_sha256}")
+        return archive
+
+    def inspect_macos_app(self, app: Path) -> tuple[str, str]:
+        binary = app / "Contents/MacOS/ezQuake"
+        plist = app / "Contents/Info.plist"
+        code_resources = app / "Contents/_CodeSignature/CodeResources"
+        if not app.is_dir() or not binary.is_file() or binary.is_symlink() or not plist.is_file():
+            raise InstallerError(f"invalid ezQuake app bundle: {app}")
+        if not code_resources.is_file():
+            raise InstallerError(f"missing app code signature resources: {app}")
+        with plist.open("rb") as source:
+            metadata = plistlib.load(source)
+        version = metadata.get("CFBundleShortVersionString")
+        if not isinstance(version, str) or version != metadata.get("CFBundleVersion"):
+            raise InstallerError(f"bundle version fields disagree in {app}")
+        data = binary.read_bytes()[:4096]
+        if len(data) < 8:
+            raise InstallerError(f"invalid Mach-O executable: {binary}")
+        magic, count = struct.unpack_from(">II", data)
+        if magic not in (0xCAFEBABE, 0xCAFEBABF) or count < 2 or count > 32:
+            raise InstallerError(f"expected universal Mach-O executable: {binary}")
+        entry_size = 20 if magic == 0xCAFEBABE else 32
+        if len(data) < 8 + count * entry_size:
+            raise InstallerError(f"invalid universal Mach-O header: {binary}")
+        architectures = set()
+        for index in range(count):
+            cpu_type = struct.unpack_from(">I", data, 8 + index * entry_size)[0]
+            architectures.add(cpu_type)
+        if 0x01000007 not in architectures or 0x0100000C not in architectures:
+            raise InstallerError(f"{app} does not contain arm64 and x86_64")
+        if host_platform.system() == "Darwin":
+            self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
+        return version, file_hash(binary)
+
+    def inspect_macos_client(self, app: Path, executable: str, architecture: str) -> tuple[str, str]:
+        binary = app / "Contents/MacOS" / executable
+        plist = app / "Contents/Info.plist"
+        if not app.is_dir() or app.is_symlink() or not binary.is_file() or binary.is_symlink() or not plist.is_file():
+            raise InstallerError(f"Bundle macOS inválido: {app}")
+        with plist.open("rb") as source:
+            metadata = plistlib.load(source)
+        version = metadata.get("CFBundleShortVersionString")
+        if not isinstance(version, str) or metadata.get("CFBundleExecutable") != executable:
+            raise InstallerError(f"Metadados inválidos no bundle: {app}")
+        data = binary.read_bytes()[:4096]
+        if len(data) < 8:
+            raise InstallerError(f"Executável Mach-O inválido: {binary}")
+        architectures: set[int] = set()
+        if data[:4] in (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf"):
+            magic, count = struct.unpack_from(">II", data)
+            entry_size = 20 if magic == 0xCAFEBABE else 32
+            if count < 1 or count > 32 or len(data) < 8 + count * entry_size:
+                raise InstallerError(f"Cabeçalho Mach-O universal inválido: {binary}")
+            for index in range(count):
+                architectures.add(struct.unpack_from(">I", data, 8 + index * entry_size)[0])
+        elif data[:4] == b"\xcf\xfa\xed\xfe":
+            architectures.add(struct.unpack_from("<I", data, 4)[0])
+        elif data[:4] == b"\xfe\xed\xfa\xcf":
+            architectures.add(struct.unpack_from(">I", data, 4)[0])
+        else:
+            raise InstallerError(f"Executável Mach-O 64-bit inválido: {binary}")
+        expected = {0x0100000C} if architecture == "arm64" else {0x01000007, 0x0100000C}
+        if not expected.issubset(architectures):
+            raise InstallerError(f"Arquiteturas inesperadas em {app}")
+        code_resources = app / "Contents/_CodeSignature/CodeResources"
+        if host_platform.system() == "Darwin" and code_resources.is_file():
+            self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
+        return version, file_hash(binary)
+
+    def inspect_portable_binary(self, spec: PlatformSpec, binary: Path) -> str:
+        if not binary.is_file() or binary.is_symlink() or binary.stat().st_size == 0:
+            raise InstallerError(f"invalid ezQuake binary: {binary}")
+        with binary.open("rb") as source:
+            header = source.read(512)
+        if spec.key == "linux":
+            if len(header) < 20 or header[:5] != b"\x7fELF\x02" or struct.unpack_from("<H", header, 18)[0] != 62:
+                raise InstallerError(f"unexpected Linux binary format: {binary}")
+            if os.name != "nt" and not os.access(binary, os.X_OK):
+                raise InstallerError(f"Linux AppImage is not executable: {binary}")
+        elif spec.key == "windows":
+            if len(header) < 64 or header[:2] != b"MZ":
+                raise InstallerError(f"unexpected Windows binary format: {binary}")
+            pe_offset = struct.unpack_from("<I", header, 0x3C)[0]
+            with binary.open("rb") as source:
+                source.seek(pe_offset)
+                pe = source.read(26)
+            if len(pe) < 26 or pe[:4] != b"PE\0\0" or struct.unpack_from("<H", pe, 4)[0] != 0x8664 or struct.unpack_from("<H", pe, 24)[0] != 0x20B:
+                raise InstallerError(f"unexpected Windows binary format: {binary}")
+        else:
+            raise InstallerError(f"unsupported portable binary platform: {spec.key}")
+        return file_hash(binary)
+
+    def prepare_runtime(self, archive: Path) -> Path:
+        assert self.stage is not None and self.spec is not None
+        prepared = self.stage / "prepared-runtime"
+        if self.spec.key == "macos":
+            extract = self.stage / "app"
+            extract.mkdir()
+            safe_extract_zip(archive, extract)
+            source = extract / self.spec.archive_binary
+            version, binary_hash = self.inspect_macos_app(source)
+            if self.channel == "stable" and version != self.selected_version:
+                raise InstallerError(f"stable bundle version is {version}, expected {self.selected_version}")
+            if self.channel == "nightly" and f"-g{self.selected_version.rsplit('_', 1)[-1]}" not in version:
+                raise InstallerError(f"nightly bundle {version} does not match {self.selected_version}")
+            source.replace(prepared)
+            self.app_bundle_version = version
+            self.app_binary_sha256 = binary_hash
+        else:
+            if self.channel == "stable":
+                extract = self.stage / "runtime"
+                extract.mkdir()
+                safe_extract_zip(archive, extract)
+                source = extract / self.spec.archive_binary
+            else:
+                source = archive
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(f"artifact is missing {self.spec.archive_binary}")
+            shutil.copy2(source, prepared)
+            if self.spec.key == "linux" and os.name != "nt":
+                prepared.chmod(0o755)
+            self.app_binary_sha256 = self.inspect_portable_binary(self.spec, prepared)
+            self.app_bundle_version = self.selected_version
+        return prepared
+
+    def find_extracted(self, root: Path, name: str, *, directory: bool) -> Path:
+        candidates = [path for path in root.rglob(name) if path.is_dir() == directory and not path.is_symlink()]
+        if len(candidates) != 1:
+            raise InstallerError(f"O artefato deveria conter exatamente um {name}; encontrados: {len(candidates)}.")
+        return candidates[0]
+
+    def prepare_client_runtime(self, archive: Path) -> tuple[Path, Path | None]:
+        assert self.stage is not None and self.spec is not None and self.client is not None
+        client_platform = self.client.platforms[self.spec.key]
+        extract = self.stage / "client-extract"
+        extract.mkdir()
+        safe_extract_zip(archive, extract)
+        if client_platform.nested_archive:
+            nested = self.find_extracted(extract, client_platform.asset_name.format(version=self.selected_version.removeprefix("v")), directory=False)
+            nested_extract = self.stage / "client-nested"
+            nested_extract.mkdir()
+            safe_extract_zip(nested, nested_extract)
+            extract = nested_extract
+        source = self.find_extracted(extract, client_platform.archive_runtime, directory=self.spec.key == "macos")
+        prepared = self.stage / "prepared-client-runtime"
+        if self.spec.key == "macos":
+            version, binary_hash = self.inspect_macos_client(
+                source, client_platform.executable, client_platform.architecture,
+            )
+            source.replace(prepared)
+        else:
+            shutil.copy2(source, prepared)
+            if self.spec.key == "linux" and os.name != "nt":
+                prepared.chmod(0o755)
+            binary_hash = self.inspect_portable_binary(self.spec, prepared)
+            version = self.selected_version.removeprefix("v")
+        expected_version = self.selected_version.removeprefix("v")
+        if version != expected_version:
+            raise InstallerError(f"O binário informa a versão {version}, mas foi selecionada {expected_version}.")
+        self.app_bundle_version = version
+        self.app_binary_sha256 = binary_hash
+        content: Path | None = None
+        if self.client.key == "classicq":
+            source_content = self.find_extracted(extract, "classicq", directory=True)
+            if not (source_content / "classicq.pak").is_file():
+                raise InstallerError("O pacote classicQ não contém classicq/classicq.pak.")
+            content = self.stage / "prepared-classicq"
+            shutil.copytree(source_content, content)
+        return prepared, content
+
+    def validate_client_receipt(self, path: Path, client: ClientSpec, platform_key: str) -> dict[str, str]:
+        client_platform = client.platforms[platform_key]
+        keys = {
+            "format", "client", "platform", "architecture", "selection", "install_name",
+            "bundle_version", "artifact_name", "artifact_url", "artifact_sha256", "binary_sha256",
+        }
+        receipt = read_table(path, keys, f"recibo do {client.label}")
+        if receipt["format"] != "1" or receipt["client"] != client.key or receipt["platform"] != platform_key:
+            raise InstallerError(f"Metadados inválidos no recibo: {path}")
+        if receipt["architecture"] != client_platform.architecture or receipt["install_name"] != client_platform.runtime:
+            raise InstallerError(f"Destino inválido no recibo: {path}")
+        if not CLIENT_VERSION.fullmatch(receipt["selection"]):
+            raise InstallerError(f"Versão inválida no recibo: {path}")
+        version = receipt["selection"].removeprefix("v")
+        tag = receipt["selection"]
+        expected_name = client_platform.asset_name.format(version=version)
+        expected_url = f"https://github.com/{client.repository}/releases/download/{tag}/{expected_name}"
+        if receipt["artifact_name"] != expected_name or receipt["artifact_url"] != expected_url:
+            raise InstallerError(f"Origem inesperada no recibo: {path}")
+        if receipt["bundle_version"] != version:
+            raise InstallerError(f"Versão do binário divergente no recibo: {path}")
+        validate_hex(receipt["artifact_sha256"], HEX64, "SHA-256 do artefato")
+        validate_hex(receipt["binary_sha256"], HEX64, "SHA-256 do binário")
+        return receipt
+
+    def write_client_receipt(self, path: Path) -> None:
+        assert self.client is not None and self.spec is not None
+        client_platform = self.client.platforms[self.spec.key]
+        write_table(path, [
+            ("format", "1"), ("client", self.client.key), ("platform", self.spec.key),
+            ("architecture", client_platform.architecture), ("selection", self.selected_version),
+            ("install_name", client_platform.runtime), ("bundle_version", self.app_bundle_version),
+            ("artifact_name", self.app_archive_name), ("artifact_url", self.app_url),
+            ("artifact_sha256", self.app_archive_sha256), ("binary_sha256", self.app_binary_sha256),
+        ])
+        self.validate_client_receipt(path, self.client, self.spec.key)
+
+    def check_client_runtime(self, client: ClientSpec, platform_key: str, receipt: dict[str, str]) -> None:
+        platform = PLATFORMS[platform_key]
+        client_platform = client.platforms[platform_key]
+        runtime = self.target / client_platform.runtime
+        if platform_key == "macos":
+            version, binary_hash = self.inspect_macos_client(runtime, client_platform.executable, client_platform.architecture)
+            if version != receipt["bundle_version"]:
+                raise InstallerError(f"Versão inesperada em {runtime}: {version}")
+        else:
+            binary_hash = self.inspect_portable_binary(platform, runtime)
+        if binary_hash != receipt["binary_sha256"]:
+            raise InstallerError(f"O executável do {client.label} foi alterado: {runtime}")
+
+    def check_client_destination_ownership(self) -> None:
+        assert self.client is not None and self.spec is not None
+        client_platform = self.client.platforms[self.spec.key]
+        runtime = self.target / client_platform.runtime
+        receipt_path = self.target / self.client.receipt(self.spec.key)
+        if lexists(runtime):
+            expected_type = runtime.is_dir() if self.spec.key == "macos" else runtime.is_file()
+            if not expected_type or not receipt_path.is_file():
+                raise InstallerError(f"Recusando substituir um runtime não gerenciado: {runtime}")
+            receipt = self.validate_client_receipt(receipt_path, self.client, self.spec.key)
+            self.check_client_runtime(self.client, self.spec.key, receipt)
+        elif receipt_path.is_file():
+            self.validate_client_receipt(receipt_path, self.client, self.spec.key)
+
+    def commit_client_runtime(self, prepared: Path, staged_receipt: Path) -> None:
+        assert self.client is not None and self.spec is not None and self.stage is not None
+        client_platform = self.client.platforms[self.spec.key]
+        runtime = self.target / client_platform.runtime
+        receipt = self.target / self.client.receipt(self.spec.key)
+        previous_runtime = self.stage / "previous-client-runtime"
+        previous_receipt = self.stage / "previous-client-receipt"
+        moved_runtime = moved_receipt = installed_runtime = installed_receipt = False
+        try:
+            if lexists(runtime):
+                runtime.replace(previous_runtime)
+                moved_runtime = True
+            if lexists(receipt):
+                receipt.replace(previous_receipt)
+                moved_receipt = True
+            prepared.replace(runtime)
+            installed_runtime = True
+            shutil.copy2(staged_receipt, receipt)
+            installed_receipt = True
+        except Exception as error:
+            try:
+                if installed_receipt and lexists(receipt):
+                    remove_path(receipt)
+                if installed_runtime and lexists(runtime):
+                    remove_path(runtime)
+                if moved_runtime:
+                    previous_runtime.replace(runtime)
+                if moved_receipt:
+                    previous_receipt.replace(receipt)
+            except Exception as rollback_error:
+                raise InstallerError(f"Rollback automático falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
+            raise InstallerError(f"Não foi possível instalar {runtime} e seu recibo.") from error
+
+    def validate_ezquake_receipt(self, path: Path, spec: PlatformSpec, channel: str) -> dict[str, str]:
+        keys = {"format", "platform", "architecture", "channel", "selection", "install_name", "bundle_version", "artifact_name", "artifact_url", "artifact_sha256", "binary_sha256"}
+        receipt = read_table(path, keys, "ezQuake receipt")
+        if receipt["format"] != "1" or receipt["platform"] != spec.key or receipt["architecture"] != spec.architecture:
+            raise InstallerError(f"invalid platform metadata in ezQuake receipt: {path}")
+        if receipt["channel"] != channel or receipt["install_name"] != spec.runtime(channel):
+            raise InstallerError(f"invalid target metadata in ezQuake receipt: {path}")
+        validate_hex(receipt["artifact_sha256"], HEX64, "artifact SHA-256 in ezQuake receipt")
+        validate_hex(receipt["binary_sha256"], HEX64, "binary SHA-256 in ezQuake receipt")
+        selection = receipt["selection"]
+        if channel == "stable":
+            if not STABLE_VERSION.fullmatch(selection) or receipt["bundle_version"] != selection:
+                raise InstallerError(f"invalid stable selection in ezQuake receipt: {selection}")
+            expected_name = spec.stable_archive
+            expected_url = f"{STABLE_DOWNLOAD_ROOT}/{selection}/{expected_name}"
+        else:
+            if not NIGHTLY_VERSION.fullmatch(selection):
+                raise InstallerError(f"invalid nightly selection in ezQuake receipt: {selection}")
+            if spec.key == "macos":
+                if f"-g{selection.rsplit('_', 1)[-1]}" not in receipt["bundle_version"]:
+                    raise InstallerError("nightly bundle version differs from ezQuake selection")
+            elif receipt["bundle_version"] != selection:
+                raise InstallerError("nightly version differs from ezQuake selection")
+            expected_name = selection + spec.nightly_suffix
+            expected_url = f"{spec.nightly_root}/{expected_name}"
+        if receipt["artifact_name"] != expected_name or receipt["artifact_url"] != expected_url:
+            raise InstallerError(f"unexpected artifact in ezQuake receipt: {path}")
+        return receipt
+
+    def write_ezquake_receipt(self, path: Path) -> None:
+        assert self.spec is not None
+        write_table(path, [
+            ("format", "1"), ("platform", self.spec.key), ("architecture", self.spec.architecture),
+            ("channel", self.channel), ("selection", self.selected_version),
+            ("install_name", self.spec.runtime(self.channel)), ("bundle_version", self.app_bundle_version),
+            ("artifact_name", self.app_archive_name), ("artifact_url", self.app_url),
+            ("artifact_sha256", self.app_archive_sha256), ("binary_sha256", self.app_binary_sha256),
+        ])
+        self.validate_ezquake_receipt(path, self.spec, self.channel)
+
+    def check_runtime(self, spec: PlatformSpec, channel: str, receipt: dict[str, str]) -> None:
+        runtime = self.target / spec.runtime(channel)
+        if spec.key == "macos":
+            version, binary_hash = self.inspect_macos_app(runtime)
+            if version != receipt["bundle_version"]:
+                raise InstallerError(f"unexpected version in {runtime}: {version}")
+        else:
+            binary_hash = self.inspect_portable_binary(spec, runtime)
+        if binary_hash != receipt["binary_sha256"]:
+            raise InstallerError(f"unexpected ezQuake executable hash: {runtime}")
+
+    def check_runtime_destination_ownership(self) -> None:
+        assert self.spec is not None
+        runtime = self.target / self.spec.runtime(self.channel)
+        receipt_path = self.target / self.spec.receipt(self.channel)
+        if lexists(receipt_path) and not receipt_path.is_file():
+            raise InstallerError(f"ezQuake receipt is not a regular file: {receipt_path}")
+        if lexists(runtime):
+            expected_type = runtime.is_dir() if self.spec.key == "macos" else runtime.is_file()
+            if not expected_type:
+                raise InstallerError(f"invalid managed runtime path: {runtime}")
+            if not receipt_path.is_file():
+                raise InstallerError(f"refusing to replace an unmanaged {self.spec.label} runtime: {runtime}")
+            receipt = self.validate_ezquake_receipt(receipt_path, self.spec, self.channel)
+            self.check_runtime(self.spec, self.channel, receipt)
+        elif receipt_path.is_file():
+            self.validate_ezquake_receipt(receipt_path, self.spec, self.channel)
+
+    def commit_runtime(self, prepared: Path, staged_receipt: Path) -> None:
+        assert self.spec is not None and self.stage is not None
+        runtime = self.target / self.spec.runtime(self.channel)
+        receipt = self.target / self.spec.receipt(self.channel)
+        previous_runtime = self.stage / "previous-runtime"
+        previous_receipt = self.stage / "previous-receipt"
+        moved_runtime = moved_receipt = installed_runtime = installed_receipt = False
+        try:
+            if lexists(runtime):
+                runtime.replace(previous_runtime)
+                moved_runtime = True
+            if lexists(receipt):
+                receipt.replace(previous_receipt)
+                moved_receipt = True
+            prepared.replace(runtime)
+            installed_runtime = True
+            shutil.copy2(staged_receipt, receipt)
+            installed_receipt = True
+        except Exception as error:
+            try:
+                if installed_receipt and lexists(receipt):
+                    remove_path(receipt)
+                if installed_runtime and lexists(runtime):
+                    remove_path(runtime)
+                if moved_runtime:
+                    previous_runtime.replace(runtime)
+                if moved_receipt:
+                    previous_receipt.replace(receipt)
+            except Exception as rollback_error:
+                raise InstallerError(f"automatic rollback failed; recovery files kept in {self.stage}: {rollback_error}") from error
+            raise InstallerError(f"could not commit {runtime} and its receipt") from error
+
+    def validate_managed_path(self, value: str) -> None:
+        if not value or "\\" in value or ":" in value:
+            raise InstallerError(f"unsafe path in managed inventory: {value}")
+        path = PurePosixPath(value)
+        if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+            raise InstallerError(f"unsafe path in managed inventory: {value}")
+        if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
+            raise InstallerError(f"personal configuration must not be managed: {value}")
+        if value not in ("LICENSE", "readme.txt") and path.parts[0] not in ("ezquake", "qw", "arena", "prox", "fortress", "classicq"):
+            raise InstallerError(f"unexpected path in managed inventory: {value}")
+
+    def validate_inventory(self, path: Path) -> list[tuple[str, str]]:
+        if not path.is_file() or path.is_symlink():
+            raise InstallerError(f"missing managed inventory: {path}")
+        entries: list[tuple[str, str]] = []
+        seen = set()
+        for line in path.read_text(encoding="utf-8").splitlines():
+            fields = line.split("\t")
+            if len(fields) != 2 or fields[0] in seen:
+                raise InstallerError(f"invalid managed inventory entry: {line}")
+            self.validate_managed_path(fields[0])
+            validate_hex(fields[1], HEX64, f"hash in managed inventory: {fields[0]}")
+            entries.append((fields[0], fields[1]))
+            seen.add(fields[0])
+        return entries
+
+    def create_inventory(self, managed: Path, destination: Path) -> list[tuple[str, str]]:
+        entries = []
+        for path in sorted((path for path in managed.rglob("*") if path.is_file()), key=lambda item: item.relative_to(managed).as_posix()):
+            if path.is_symlink():
+                raise InstallerError(f"distribution contains an unsupported symlink: {path}")
+            relative = path.relative_to(managed).as_posix()
+            self.validate_managed_path(relative)
+            entries.append((relative, file_hash(path)))
+        destination.write_text("".join(f"{name}\t{digest}\n" for name, digest in entries), encoding="utf-8")
+        if os.name != "nt":
+            destination.chmod(0o644)
+        self.validate_inventory(destination)
+        return entries
+
+    def component_metadata(self, component: str) -> tuple[str, str]:
+        paths = {
+            "maps": (MAPS_RECEIPT, MAPS_INVENTORY),
+            "presets": (PRESETS_RECEIPT, PRESETS_INVENTORY),
+            "classicq": (CLASSICQ_RECEIPT, CLASSICQ_INVENTORY),
+        }
+        return paths[component]
+
+    def validate_component_pair(self, component: str, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
+        receipt_relative, inventory_relative = self.component_metadata(component)
+        metadata = metadata or self.target / METADATA_DIR
+        receipt_path = metadata / Path(receipt_relative).name
+        inventory_path = metadata / Path(inventory_relative).name
+        receipt_exists, inventory_exists = lexists(receipt_path), lexists(inventory_path)
+        if not receipt_exists and not inventory_exists:
+            return False, [], None
+        if not receipt_exists or not inventory_exists:
+            raise InstallerError(f"Metadados incompletos do componente {component}.")
+        receipt = read_table(
+            receipt_path, {"format", "component", "selection", "source", "inventory_sha256"},
+            f"recibo do componente {component}",
+        )
+        if receipt["format"] != "1" or receipt["component"] != component:
+            raise InstallerError(f"Recibo inválido do componente {component}.")
+        if not receipt["selection"] or "\n" in receipt["selection"] or "\t" in receipt["selection"]:
+            raise InstallerError(f"Seleção inválida no recibo do componente {component}.")
+        if not receipt["source"] or "\n" in receipt["source"] or "\t" in receipt["source"]:
+            raise InstallerError(f"Origem inválida no recibo do componente {component}.")
+        validate_hex(receipt["inventory_sha256"], HEX64, f"SHA-256 do inventário {component}")
+        entries = self.validate_inventory(inventory_path)
+        if file_hash(inventory_path) != receipt["inventory_sha256"]:
+            raise InstallerError(f"O inventário do componente {component} diverge do recibo.")
+        return True, entries, receipt
+
+    def filter_component_conflicts(self, component: str, managed: Path) -> None:
+        present, old_entries, _ = self.validate_component_pair(component)
+        old = dict(old_entries) if present else {}
+        for source in sorted((path for path in managed.rglob("*") if path.is_file())):
+            relative = source.relative_to(managed).as_posix()
+            self.validate_managed_path(relative)
+            destination = self.target.joinpath(*PurePosixPath(relative).parts)
+            if not lexists(destination):
+                continue
+            if not destination.is_file() or destination.is_symlink():
+                raise InstallerError(f"Caminho existente não é um arquivo regular: {destination}")
+            expected = old.get(relative)
+            if expected is None or file_hash(destination) != expected:
+                console.warning(f"Arquivo pessoal ou modificado preservado: {destination}")
+                source.unlink()
+        remove_empty_directories(managed)
+
+    def write_component_receipt(self, component: str, selection: str, source: str, inventory: Path, destination: Path) -> None:
+        write_table(destination, [
+            ("format", "1"), ("component", component), ("selection", selection),
+            ("source", source), ("inventory_sha256", file_hash(inventory)),
+        ])
+
+    def remove_stale_component_files(self, component: str, new_entries: list[tuple[str, str]]) -> None:
+        present, old_entries, _ = self.validate_component_pair(component)
+        if not present:
+            return
+        new_names = {name for name, _ in new_entries}
+        for name, digest in old_entries:
+            if name in new_names:
+                continue
+            stale = self.target.joinpath(*PurePosixPath(name).parts)
+            if not lexists(stale):
+                continue
+            if not stale.is_file() or stale.is_symlink():
+                raise InstallerError(f"Caminho gerenciado inválido: {stale}")
+            if file_hash(stale) == digest:
+                remove_path(stale)
+            else:
+                console.warning(f"Arquivo modificado preservado: {stale}")
+
+    def commit_component_metadata(self, component: str, inventory: Path, receipt: Path) -> None:
+        assert self.stage is not None
+        self.ensure_metadata_directory()
+        destination = self.target / METADATA_DIR
+        prepared = self.stage / f"{component}-metadata.next"
+        previous = self.stage / f"{component}-metadata.previous"
+        shutil.copytree(destination, prepared)
+        receipt_relative, inventory_relative = self.component_metadata(component)
+        for name, source in (
+            (Path(receipt_relative).name, receipt),
+            (Path(inventory_relative).name, inventory),
+        ):
+            candidate = prepared / name
+            if lexists(candidate):
+                remove_path(candidate)
+            shutil.copy2(source, candidate)
+        self.validate_component_pair(component, prepared)
+        moved_previous = installed = False
+        try:
+            destination.replace(previous)
+            moved_previous = True
+            prepared.replace(destination)
+            installed = True
+        except Exception as error:
+            try:
+                if installed and lexists(destination):
+                    remove_path(destination)
+                if moved_previous:
+                    previous.replace(destination)
+            except Exception as rollback_error:
+                raise InstallerError(f"Rollback dos metadados falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
+            raise InstallerError(f"Não foi possível registrar o componente {component}.") from error
+
+    def install_component_overlay(self, component: str, managed: Path, selection: str, source: str) -> int:
+        assert self.stage is not None
+        self.filter_component_conflicts(component, managed)
+        inventory = self.stage / f"{component}.inventory"
+        entries = self.create_inventory(managed, inventory)
+        if not entries:
+            raise InstallerError(f"Nenhum arquivo novo do componente {component} pôde ser instalado.")
+        receipt = self.stage / f"{component}.receipt"
+        self.write_component_receipt(component, selection, source, inventory, receipt)
+        copy_overlay(managed, self.target)
+        self.remove_stale_component_files(component, entries)
+        self.commit_component_metadata(component, inventory, receipt)
+        return len(entries)
+
+    def remove_component(self, component: str) -> int:
+        present, entries, _ = self.validate_component_pair(component)
+        if not present:
+            return 0
+        removed = 0
+        for name, digest in entries:
+            managed = self.target.joinpath(*PurePosixPath(name).parts)
+            if not lexists(managed):
+                continue
+            if not managed.is_file() or managed.is_symlink():
+                raise InstallerError(f"Caminho gerenciado inválido: {managed}")
+            if file_hash(managed) == digest:
+                remove_path(managed)
+                removed += 1
+            else:
+                console.warning(f"Arquivo modificado preservado: {managed}")
+        receipt_relative, inventory_relative = self.component_metadata(component)
+        remove_path(self.target / receipt_relative)
+        remove_path(self.target / inventory_relative)
+        for name in ("classicq", "qw/maps", "ezquake/configs"):
+            remove_empty_directories(self.target / name)
+        remove_empty_directories(self.target / METADATA_DIR)
+        return removed
+
+    def verify_component(self, component: str) -> int:
+        present, entries, receipt = self.validate_component_pair(component)
+        if not present:
+            return 0
+        for name, expected in entries:
+            managed = self.target.joinpath(*PurePosixPath(name).parts)
+            if not managed.is_file() or managed.is_symlink():
+                raise InstallerError(f"Arquivo gerenciado ausente do componente {component}: {managed}")
+            if file_hash(managed) != expected:
+                raise InstallerError(f"Arquivo gerenciado foi alterado no componente {component}: {managed}")
+            if managed.suffix.casefold() == ".bsp":
+                with managed.open("rb") as source:
+                    header = source.read(4)
+                if len(header) != 4 or struct.unpack("<I", header)[0] != 29:
+                    raise InstallerError(f"BSP gerenciado inválido: {managed}")
+            if managed.suffix.casefold() == ".pak":
+                with managed.open("rb") as source:
+                    if source.read(4) != b"PACK":
+                        raise InstallerError(f"PAK gerenciado inválido: {managed}")
+        assert receipt is not None
+        console.success(f"Componente {component} íntegro ({file_count(len(entries))}; seleção {receipt['selection']}).")
+        return len(entries)
+
+    def map_catalog(self, collection: str) -> list[str]:
+        if collection not in ("base", "core", "all", "locs"):
+            raise InstallerError(f"Coleção de mapas desconhecida: {collection}")
+        url = f"{MAPS_ROOT}/{collection}/"
+        parser = LinkCollector()
+        parser.feed(self.http_get(url).decode("utf-8", "replace"))
+        allowed = {"loc"} if collection == "locs" else {"bsp", "ent", "txt"}
+        names = set()
+        for link in parser.links:
+            path = urllib.parse.urlsplit(link).path
+            name = urllib.parse.unquote(PurePosixPath(path).name)
+            if not MAP_FILE_NAME.fullmatch(name) or name.rsplit(".", 1)[-1].lower() not in allowed:
+                continue
+            names.add(name)
+        if not names:
+            raise InstallerError(f"O catálogo {collection} não contém arquivos reconhecidos.")
+        return sorted(names, key=str.casefold)
+
+    def installed_map_stems(self) -> set[str]:
+        stems = set(BUILTIN_MAP_STEMS)
+        for path in self.target.rglob("*.bsp"):
+            if path.is_file() and not path.is_symlink():
+                stems.add(path.stem.casefold())
+        for package in self.target.rglob("*.pk3"):
+            if not package.is_file() or package.is_symlink():
+                continue
+            try:
+                with zipfile.ZipFile(package) as archive:
+                    for name in archive.namelist():
+                        candidate = PurePosixPath(name)
+                        if len(candidate.parts) >= 2 and candidate.parts[-2].casefold() == "maps" and candidate.suffix.casefold() == ".bsp":
+                            stems.add(candidate.stem.casefold())
+            except zipfile.BadZipFile:
+                console.detail(f"PK3 pessoal ignorado ao procurar mapas: {package}")
+        for package in self.target.rglob("*.pak"):
+            if not package.is_file() or package.is_symlink():
+                continue
+            try:
+                size = package.stat().st_size
+                with package.open("rb") as source:
+                    header = source.read(12)
+                    if len(header) != 12 or header[:4] != b"PACK":
+                        continue
+                    directory_offset, directory_size = struct.unpack("<II", header[4:])
+                    if directory_size % 64 or directory_offset + directory_size > size:
+                        continue
+                    source.seek(directory_offset)
+                    for _ in range(directory_size // 64):
+                        entry = source.read(64)
+                        name = entry[:56].split(b"\0", 1)[0].decode("ascii", "ignore")
+                        candidate = PurePosixPath(name)
+                        if len(candidate.parts) >= 2 and candidate.parts[-2].casefold() == "maps" and candidate.suffix.casefold() == ".bsp":
+                            stems.add(candidate.stem.casefold())
+            except OSError:
+                console.detail(f"PAK pessoal ignorado ao procurar mapas: {package}")
+        return stems
+
+    def choose_map_files(self) -> tuple[str, list[tuple[str, str]]]:
+        print("\nQual conjunto de mapas deseja instalar ou atualizar?")
+        print("  1) base        - seleção base do arquivo QuakeWorld (recomendado)")
+        print("  2) core        - coleção comunitária ampliada")
+        print("  3) individual  - um mapa pelo nome")
+        print("  4) all         - arquivo completo; download grande")
+        aliases = {"1": "base", "base": "base", "2": "core", "core": "core", "3": "individual", "individual": "individual", "4": "all", "all": "all"}
+        while True:
+            try:
+                selection = aliases.get(input("Escolha [1/2/3/4]: ").strip().lower())
+            except EOFError as error:
+                raise InstallerError("Nenhuma coleção de mapas foi selecionada.") from error
+            if selection:
+                break
+            console.warning("Opção inválida. Digite 1, 2, 3 ou 4.")
+        if selection == "all":
+            try:
+                confirmation = input("A coleção completa pode ocupar bastante espaço. Digite TODOS para continuar: ").strip()
+            except EOFError:
+                confirmation = ""
+            if confirmation != "TODOS":
+                raise InstallerError("Instalação da coleção completa cancelada; nenhuma alteração foi feita.")
+
+        console.info("Consultando o arquivo comunitário de mapas...")
+        locs = set(self.map_catalog("locs"))
+        local_stems = self.installed_map_stems()
+        if selection == "individual":
+            while True:
+                try:
+                    map_name = input("Nome do mapa, sem .bsp: ").strip()
+                except EOFError as error:
+                    raise InstallerError("Nenhum mapa foi informado.") from error
+                if MAP_NAME.fullmatch(map_name) and "." not in map_name:
+                    break
+                console.warning("Nome inválido. Use somente letras, números, _, + ou - e omita .bsp.")
+            available = set(self.map_catalog("all"))
+            bsp = f"{map_name}.bsp"
+            if bsp not in available:
+                matches = {name.casefold(): name for name in available}
+                bsp = matches.get(bsp.casefold(), "")
+            files = [("all", bsp)] if bsp else []
+            if not bsp and map_name.casefold() not in local_stems:
+                raise InstallerError(f"O mapa {map_name} não existe no arquivo nem nesta instalação.")
+            loc_by_name = {name.casefold(): name for name in locs}
+            stem = PurePosixPath(bsp).stem if bsp else map_name
+            loc = loc_by_name.get(f"{stem}.loc".casefold())
+            if loc:
+                files.append(("locs", loc))
+            else:
+                console.info(f"Não há LOC publicado para {stem}; somente o BSP externo, se houver, será instalado.")
+            if not files:
+                raise InstallerError(f"{stem} já existe localmente, mas não possui LOC publicado; nada precisa ser instalado.")
+            return f"individual:{stem}", files
+
+        collection_files = self.map_catalog(selection)
+        bsp_stems = local_stems | {PurePosixPath(name).stem.casefold() for name in collection_files if name.lower().endswith(".bsp")}
+        matched_locs = [("locs", name) for name in locs if PurePosixPath(name).stem.casefold() in bsp_stems]
+        return selection, [(selection, name) for name in collection_files] + matched_locs
+
+    def download_map_files(self, files: list[tuple[str, str]], managed: Path) -> None:
+        assert self.stage is not None and self.cache_root is not None
+        destination = managed / "qw/maps"
+        destination.mkdir(parents=True)
+        cache = self.cache_root / "maps"
+        cache.mkdir(parents=True, exist_ok=True)
+        report_every = max(1, len(files) // 10)
+        for index, (collection, name) in enumerate(files, 1):
+            if not MAP_FILE_NAME.fullmatch(name):
+                raise InstallerError(f"Nome de arquivo inseguro no catálogo de mapas: {name}")
+            encoded = urllib.parse.quote(name, safe="-_.+")
+            url = f"{MAPS_ROOT}/{collection}/{encoded}"
+            download = self.stage / f"map-{index}.download"
+            if len(files) <= 10:
+                console.info(f"Baixando arquivo {index}/{len(files)}: {name}")
+            else:
+                console.detail(f"Arquivo {index}/{len(files)}: {name}")
+            self.http_get(url, download)
+            if not download.is_file() or download.stat().st_size == 0:
+                raise InstallerError(f"O servidor retornou um arquivo vazio para {name}.")
+            if name.lower().endswith(".bsp"):
+                with download.open("rb") as source:
+                    version = struct.unpack("<I", source.read(4))[0] if download.stat().st_size >= 4 else -1
+                if version != 29:
+                    raise InstallerError(f"{name} não possui o formato BSP v29 esperado.")
+            cached = cache / name
+            ensure_no_symlink(cached, "arquivo de mapa no cache")
+            if lexists(cached):
+                remove_path(cached)
+            shutil.copy2(download, cached)
+            shutil.copy2(download, destination / name)
+            console.detail(f"SHA-256 {name}: {file_hash(download)}")
+            if len(files) > 10 and (index % report_every == 0 or index == len(files)):
+                console.info(f"Mapas e LOCs baixados: {index}/{len(files)}")
+
+    def manage_maps(self) -> None:
+        print("\nO que deseja fazer com o arquivo de mapas?")
+        print("  1) instalar ou atualizar mapas + LOCs disponíveis")
+        print("  2) remover somente os mapas gerenciados")
+        while True:
+            try:
+                answer = input("Escolha [1/2]: ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhuma operação de mapas foi selecionada.") from error
+            if answer in ("1", "2"):
+                break
+            console.warning("Opção inválida. Digite 1 para instalar/atualizar ou 2 para remover.")
+        if answer == "2":
+            removed = self.remove_component("maps")
+            console.success(f"Mapas gerenciados removidos ({file_count(removed)}); conteúdo pessoal preservado.")
+            return
+        selection, files = self.choose_map_files()
+        self.check_paks()
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self.prepare_cache()
+        managed = self.stage / "maps-managed"
+        managed.mkdir()
+        self.download_map_files(files, managed)
+        count = self.install_component_overlay("maps", managed, selection, MAPS_ROOT)
+        console.success(f"Coleção {selection} instalada ({file_count(count)}, com LOCs quando disponíveis).")
+
+    def manage_presets(self) -> None:
+        print("\nO que deseja fazer com os presets modernos?")
+        print("  1) instalar ou atualizar")
+        print("  2) remover somente os presets gerenciados")
+        while True:
+            try:
+                answer = input("Escolha [1/2]: ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhuma operação de presets foi selecionada.") from error
+            if answer in ("1", "2"):
+                break
+            console.warning("Opção inválida. Digite 1 para instalar/atualizar ou 2 para remover.")
+        if answer == "2":
+            removed = self.remove_component("presets")
+            console.success(f"Presets gerenciados removidos ({file_count(removed)}); configurações pessoais preservadas.")
+            return
+        self.check_paks()
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        managed = self.stage / "presets-managed"
+        configs = managed / "ezquake/configs"
+        configs.mkdir(parents=True)
+        for name, contents in PRESETS.items():
+            (configs / name).write_text(contents, encoding="utf-8")
+        count = self.install_component_overlay("presets", managed, "v1", "x86-qw built-in presets")
+        console.success(f"Presets instalados ({file_count(count)}). Carregue um deles com cfg_load x86-qw-modern.")
+
+    def validate_nquake_receipt(self, path: Path) -> dict[str, str]:
+        receipt = read_table(path, {"format", "distfiles_commit", "inventory_sha256"}, "installation receipt")
+        if receipt["format"] != "1":
+            raise InstallerError(f"unsupported receipt format: {receipt['format']}")
+        validate_hex(receipt["distfiles_commit"], HEX40, "distfiles commit in receipt")
+        validate_hex(receipt["inventory_sha256"], HEX64, "inventory SHA-256 in receipt")
+        return receipt
+
+    def validate_nquake_pair(self, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
+        metadata = metadata or self.target / METADATA_DIR
+        inventory = metadata / Path(NQUAKE_INVENTORY).name
+        receipt_path = metadata / Path(NQUAKE_RECEIPT).name
+        inventory_exists, receipt_exists = lexists(inventory), lexists(receipt_path)
+        if not inventory_exists and not receipt_exists:
+            return False, [], None
+        if not inventory_exists or not receipt_exists:
+            raise InstallerError("incomplete nQuake installation metadata")
+        entries = self.validate_inventory(inventory)
+        receipt = self.validate_nquake_receipt(receipt_path)
+        if file_hash(inventory) != receipt["inventory_sha256"]:
+            raise InstallerError("managed inventory differs from installation receipt")
+        return True, entries, receipt
+
+    def ensure_distfiles_current(self) -> None:
+        assert self.distfiles_dir is not None
+        git_metadata = self.distfiles_dir / ".git"
+        ensure_no_symlink(git_metadata, "distfiles metadata")
+        if not git_metadata.is_dir():
+            if lexists(self.distfiles_dir):
+                raise InstallerError(f"{self.distfiles_dir} exists but is not a git repository")
+            console.info("Preparando o cache dos arquivos nQuake...")
+            self.run_command(["git", "init", "-q", str(self.distfiles_dir)])
+            self.run_command(["git", "-C", str(self.distfiles_dir), "remote", "add", "origin", DISTFILES_REPOSITORY])
+        remote = self.run_command(["git", "-C", str(self.distfiles_dir), "remote", "get-url", "origin"], capture=True)
+        if remote != DISTFILES_REPOSITORY:
+            raise InstallerError(f"unexpected distfiles origin: {remote}")
+        self.run_command(["git", "-C", str(self.distfiles_dir), "config", "remote.origin.promisor", "true"])
+        self.run_command(["git", "-C", str(self.distfiles_dir), "config", "remote.origin.partialclonefilter", "blob:none"])
+        console.info(f"Consultando a versão atual dos arquivos nQuake ({DISTFILES_REF})...")
+        self.run_command(["git", "-C", str(self.distfiles_dir), "-c", "protocol.version=2", "fetch", "--force", "--depth=1", "--filter=blob:none", "origin", DISTFILES_REF])
+        commit = self.run_command(["git", "-C", str(self.distfiles_dir), "rev-parse", "--verify", "FETCH_HEAD^{commit}"], capture=True)
+        validate_hex(commit, HEX40, "distfiles commit")
+        self.distfiles_commit = commit
+        console.success(f"Arquivos nQuake selecionados no commit {commit[:12]}.")
+
+    def prepare_nquake(self) -> tuple[Path, Path, Path]:
+        assert self.stage is not None and self.distfiles_dir is not None
+        self.ensure_distfiles_current()
+        archive = self.stage / "distfiles.tar"
+        self.run_command(["git", "-C", str(self.distfiles_dir), "archive", "--format=tar", f"--output={archive}", self.distfiles_commit, *NQUAKE_PATHS])
+        extracted = self.stage / "distfiles"
+        extracted.mkdir()
+        safe_extract_tar(archive, extracted)
+        managed = self.stage / "managed"
+        managed.mkdir()
+        for source, destination in (
+            ("gpl/ezquake", "ezquake"), ("gpl/qw", "qw"), ("non-gpl/qw", "qw"),
+            ("textures/qw", "qw"), ("addon-textures/qw", "qw"),
+            ("addon-clanarena/arena", "arena"), ("addon-clanarena/prox", "prox"),
+            ("addon-fortress/fortress", "fortress"), ("gpl/LICENSE", "LICENSE"),
+            ("non-gpl/readme.txt", "readme.txt"),
+        ):
+            copy_overlay(extracted / source, managed / destination)
+        default_config = managed / "ezquake/configs/config.cfg"
+        if not default_config.is_file():
+            raise InstallerError("distribution is missing its default config.cfg")
+        staged_default = self.stage / "default-config.cfg"
+        default_config.replace(staged_default)
+        preset = managed / "ezquake/configs/preset.cfg"
+        if lexists(preset):
+            preset.replace(self.stage / "distribution-preset.cfg")
+        reject_tree_symlinks(managed, "distribution")
+        inventory = self.stage / "managed-inventory"
+        self.create_inventory(managed, inventory)
+        self.validate_nquake_pair()
+        return managed, inventory, staged_default
+
+    def remove_stale_managed_files(self, new_entries: list[tuple[str, str]]) -> None:
+        old_inventory = self.target / NQUAKE_INVENTORY
+        if not old_inventory.is_file():
+            return
+        new_names = {name for name, _ in new_entries}
+        for name, digest in self.validate_inventory(old_inventory):
+            if name in new_names:
+                continue
+            stale = self.target.joinpath(*PurePosixPath(name).parts)
+            if lexists(stale):
+                if not stale.is_file() or stale.is_symlink():
+                    raise InstallerError(f"stale managed path is not a regular file: {stale}")
+                if file_hash(stale) == digest:
+                    remove_path(stale)
+                else:
+                    console.warning(f"Arquivo modificado preservado: {stale}")
+
+    def write_nquake_receipt(self, inventory: Path, destination: Path) -> None:
+        write_table(destination, [
+            ("format", "1"), ("distfiles_commit", self.distfiles_commit),
+            ("inventory_sha256", file_hash(inventory)),
+        ])
+        self.validate_nquake_receipt(destination)
+
+    def commit_nquake_metadata(self, inventory: Path, receipt: Path) -> None:
+        assert self.stage is not None
+        destination = self.target / METADATA_DIR
+        prepared = self.stage / "metadata.next"
+        previous = self.stage / "metadata.previous"
+        shutil.copytree(destination, prepared)
+        for name in (Path(NQUAKE_INVENTORY).name, Path(NQUAKE_RECEIPT).name):
+            candidate = prepared / name
+            if lexists(candidate):
+                remove_path(candidate)
+        shutil.copy2(inventory, prepared / Path(NQUAKE_INVENTORY).name)
+        shutil.copy2(receipt, prepared / Path(NQUAKE_RECEIPT).name)
+        self.validate_nquake_pair(prepared)
+        moved_previous = installed = False
+        try:
+            destination.replace(previous)
+            moved_previous = True
+            prepared.replace(destination)
+            installed = True
+        except Exception as error:
+            try:
+                if installed and lexists(destination):
+                    remove_path(destination)
+                if moved_previous:
+                    previous.replace(destination)
+            except Exception as rollback_error:
+                raise InstallerError(f"automatic rollback failed; recovery files kept in {self.stage}: {rollback_error}") from error
+            raise InstallerError(f"could not commit nQuake metadata: {destination}") from error
+
+    def install_nquake(self) -> None:
+        assert self.stage is not None
+        console.section("Fase 2/2 · Dados nQuake")
+        managed, inventory, default_config = self.prepare_nquake()
+        console.info("Aplicando mapas, texturas, skins, demos e addons nQuake...")
+        copy_overlay(managed, self.target)
+        config = self.target / "ezquake/configs/config.cfg"
+        if not config.is_file():
+            copy_overlay(default_config, config)
+        preset = self.target / "ezquake/configs/preset.cfg"
+        if not preset.is_file():
+            preset.parent.mkdir(parents=True, exist_ok=True)
+            preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+        receipt = self.stage / "nquake-receipt"
+        self.write_nquake_receipt(inventory, receipt)
+        new_entries = self.validate_inventory(inventory)
+        self.remove_stale_managed_files(new_entries)
+        self.commit_nquake_metadata(inventory, receipt)
+        console.success(f"Dados nQuake instalados ({file_count(len(new_entries))} sob gerenciamento).")
+
+    def installed_optional_clients(self) -> list[tuple[ClientSpec, str, dict[str, str]]]:
+        installed = []
+        for client in CLIENTS.values():
+            for platform_key in PLATFORMS:
+                receipt_path = self.target / client.receipt(platform_key)
+                if receipt_path.is_file():
+                    receipt = self.validate_client_receipt(receipt_path, client, platform_key)
+                    installed.append((client, platform_key, receipt))
+        return installed
+
+    def install_optional_client(self) -> None:
+        console.section("Cliente opcional · instalação")
+        self.choose_client()
+        assert self.client is not None
+        self.choose_platform(self.client.label)
+        self.choose_client_release()
+        assert self.spec is not None
+        self.check_client_destination_ownership()
+        if self.client.key == "classicq":
+            for client, platform_key, receipt in self.installed_optional_clients():
+                if client.key == "classicq" and platform_key != self.spec.key and receipt["selection"] != self.selected_version:
+                    raise InstallerError(
+                        f"O classicQ compartilha classicq.pak entre sistemas. Atualize primeiro o {PLATFORMS[platform_key].label} "
+                        f"para {self.selected_version}, ou escolha {receipt['selection']}."
+                    )
+        self.check_paks()
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self.prepare_cache()
+        archive = self.ensure_archive()
+        console.info(f"Preparando {self.client.label} {self.spec.label} {self.selected_version}...")
+        prepared, content = self.prepare_client_runtime(archive)
+        staged_receipt = self.stage / "client.receipt"
+        self.write_client_receipt(staged_receipt)
+        self.ensure_metadata_directory()
+        if content is not None:
+            managed = self.stage / "classicq-managed"
+            managed.mkdir()
+            content.replace(managed / "classicq")
+            count = self.install_component_overlay(
+                "classicq", managed, self.selected_version,
+                f"https://github.com/{self.client.repository}/releases/tag/{self.selected_version}",
+            )
+            console.success(f"Dados compartilhados do classicQ atualizados ({file_count(count)}).")
+        self.commit_client_runtime(prepared, staged_receipt)
+        receipt = self.validate_client_receipt(
+            self.target / self.client.receipt(self.spec.key), self.client, self.spec.key,
+        )
+        self.check_client_runtime(self.client, self.spec.key, receipt)
+        console.success(f"{self.client.label} pronto em {self.target / self.client.platforms[self.spec.key].runtime}")
+
+    def remove_optional_client(self) -> None:
+        installed = self.installed_optional_clients()
+        if not installed:
+            console.info("Nenhum cliente opcional gerenciado está instalado.")
+            return
+        print("\nClientes opcionais instalados:")
+        for index, (client, platform_key, receipt) in enumerate(installed, 1):
+            print(f"  {index:3d}) {client.label} · {PLATFORMS[platform_key].label} · {receipt['selection']}")
+        while True:
+            try:
+                answer = input("Escolha o número a remover: ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhum cliente foi selecionado para remoção.") from error
+            if answer.isdigit() and 1 <= int(answer) <= len(installed):
+                break
+            console.warning(f"Número inválido. Escolha um valor entre 1 e {len(installed)}.")
+        client, platform_key, _ = installed[int(answer) - 1]
+        remove_path(self.target / client.platforms[platform_key].runtime)
+        remove_path(self.target / client.receipt(platform_key))
+        if client.key == "classicq" and not any(
+            (self.target / client.receipt(key)).is_file() for key in PLATFORMS
+        ):
+            removed = self.remove_component("classicq")
+            console.info(f"Dados compartilhados do classicQ removidos ({file_count(removed)}).")
+        remove_empty_directories(self.target / METADATA_DIR)
+        console.success(f"{client.label} {PLATFORMS[platform_key].label} removido.")
+
+    def manage_optional_clients(self) -> None:
+        print("\nO que deseja fazer com clientes opcionais?")
+        print("  1) instalar ou atualizar")
+        print("  2) remover")
+        while True:
+            try:
+                answer = input("Escolha [1/2]: ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhuma operação foi selecionada.") from error
+            if answer == "1":
+                self.install_optional_client()
+                return
+            if answer == "2":
+                self.remove_optional_client()
+                return
+            console.warning("Opção inválida. Digite 1 para instalar/atualizar ou 2 para remover.")
+
+    def verify_optional_clients(self) -> int:
+        verified = 0
+        installed = self.installed_optional_clients()
+        for client, platform_key, receipt in installed:
+            runtime = self.target / client.platforms[platform_key].runtime
+            if not lexists(runtime):
+                raise InstallerError(f"Runtime ausente do {client.label}: {runtime}")
+            self.check_client_runtime(client, platform_key, receipt)
+            console.success(f"{client.label} {PLATFORMS[platform_key].label} {receipt['selection']} íntegro.")
+            verified += 1
+        if any(client.key == "classicq" for client, _, _ in installed):
+            self.verify_component("classicq")
+        return verified
+
+    def hub_servers(self) -> list[dict[str, object]]:
+        console.info("Consultando servidores ativos no QuakeWorld Hub...")
+        try:
+            servers = json.loads(self.http_get(HUB_SERVERS_API))
+        except (json.JSONDecodeError, TypeError) as error:
+            raise InstallerError("O Hub retornou um catálogo de servidores inválido.") from error
+        if not isinstance(servers, list):
+            raise InstallerError("O Hub retornou um catálogo de servidores inválido.")
+        valid = []
+        for server in servers:
+            if not isinstance(server, dict):
+                continue
+            address = server.get("address")
+            if not isinstance(address, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", address):
+                continue
+            port = int(address.rsplit(":", 1)[1])
+            if not 1 <= port <= 65535:
+                continue
+            valid.append(server)
+        if not valid:
+            raise InstallerError("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
+        return sorted(
+            valid,
+            key=lambda item: sum(
+                1 for player in item.get("players", [])
+                if isinstance(player, dict) and not player.get("is_bot")
+            ),
+            reverse=True,
+        )
+
+    def host_runtimes(self) -> list[tuple[str, Path]]:
+        platform_key = {"Darwin": "macos", "Linux": "linux", "Windows": "windows"}.get(host_platform.system())
+        if platform_key is None:
+            raise InstallerError(f"A abertura automática não é suportada neste sistema: {host_platform.system()}.")
+        choices: list[tuple[str, Path]] = []
+        spec = PLATFORMS[platform_key]
+        for channel in ("stable", "nightly"):
+            receipt_path = self.target / spec.receipt(channel)
+            if not receipt_path.is_file():
+                continue
+            receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+            self.check_runtime(spec, channel, receipt)
+            choices.append((f"ezQuake {channel} {receipt['selection']}", self.target / spec.runtime(channel)))
+        for client in CLIENTS.values():
+            receipt_path = self.target / client.receipt(platform_key)
+            if not receipt_path.is_file():
+                continue
+            receipt = self.validate_client_receipt(receipt_path, client, platform_key)
+            self.check_client_runtime(client, platform_key, receipt)
+            choices.append((f"{client.label} {receipt['selection']}", self.target / client.platforms[platform_key].runtime))
+        return choices
+
+    def choose_host_runtime(self) -> tuple[str, Path]:
+        choices = self.host_runtimes()
+        if not choices:
+            raise InstallerError("Nenhum cliente gerenciado para este sistema está instalado. Execute install ou clients primeiro.")
+        if len(choices) == 1:
+            return choices[0]
+        print("\nQual cliente deseja abrir?")
+        for index, (label, _) in enumerate(choices, 1):
+            print(f"  {index:3d}) {label}")
+        while True:
+            try:
+                answer = input("Escolha o número: ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhum cliente foi selecionado.") from error
+            if answer.isdigit() and 1 <= int(answer) <= len(choices):
+                return choices[int(answer) - 1]
+            console.warning(f"Número inválido. Escolha um valor entre 1 e {len(choices)}.")
+
+    def launch_runtime(self, runtime: Path, quake_arguments: list[str]) -> None:
+        system = host_platform.system()
+        base_arguments = ["-basedir", str(self.target)]
+        if system == "Darwin":
+            command = ["open", "-n", str(runtime), "--args", *base_arguments, *quake_arguments]
+        else:
+            command = [str(runtime), *base_arguments, *quake_arguments]
+        console.detail("$ " + " ".join(command))
+        try:
+            subprocess.Popen(command, cwd=self.target, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as error:
+            raise InstallerError(f"Não foi possível abrir {runtime}: {error}") from error
+
+    def browse_hub(self) -> None:
+        servers = self.hub_servers()
+        print("\nServidores ativos (jogadores humanos primeiro):")
+        for index, server in enumerate(servers, 1):
+            settings = server.get("settings") if isinstance(server.get("settings"), dict) else {}
+            players = server.get("players") if isinstance(server.get("players"), list) else []
+            humans = sum(1 for player in players if isinstance(player, dict) and not player.get("is_bot"))
+            bots = sum(1 for player in players if isinstance(player, dict) and player.get("is_bot"))
+            mode = str(server.get("mode") or settings.get("mode") or "-")[:12]
+            map_name = str(settings.get("map") or "-")[:18]
+            hostname = str(settings.get("hostname") or server.get("title") or server["address"])
+            hostname = "".join(character if character.isprintable() and character != "\ufffd" else "?" for character in hostname)[:34]
+            human_label = "humano" if humans == 1 else "humanos"
+            bot_label = "bot" if bots == 1 else "bots"
+            print(f"  {index:3d}) {humans:2d} {human_label:7} + {bots:2d} {bot_label:4}  {mode:12} {map_name:18} {hostname}")
+        print("\nDigite um número para jogar, oN para observar, qN para usar QTV, ou Enter para sair.")
+        while True:
+            try:
+                answer = input("Escolha: ").strip().lower()
+            except EOFError:
+                answer = ""
+            if not answer:
+                console.info("Hub fechado; nenhum cliente foi aberto.")
+                return
+            match = re.fullmatch(r"([oq]?)([0-9]+)", answer)
+            if not match or not 1 <= int(match.group(2)) <= len(servers):
+                console.warning(f"Escolha inválida. Use 1 a {len(servers)}, oN ou qN.")
+                continue
+            mode, number = match.group(1), int(match.group(2))
+            server = servers[number - 1]
+            address = str(server["address"])
+            if mode == "q":
+                qtv = server.get("qtv_stream")
+                qtv_url = qtv.get("url", "") if isinstance(qtv, dict) else ""
+                if not isinstance(qtv_url, str) or not re.fullmatch(r"[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", qtv_url):
+                    console.warning("Este servidor não publicou um stream QTV; escolha jogar ou observar diretamente.")
+                    continue
+                quake_arguments = ["+qtvplay", qtv_url]
+                operation = "QTV"
+            elif mode == "o":
+                quake_arguments = ["+observe", address]
+                operation = "observação"
+            else:
+                quake_arguments = ["+join", address]
+                operation = "conexão"
+            label, runtime = self.choose_host_runtime()
+            self.launch_runtime(runtime, quake_arguments)
+            console.success(f"{label} aberto para {operation} em {address}.")
+            return
+
+    def verify_ezquake_variants(self) -> int:
+        verified = 0
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                receipt_path = self.target / spec.receipt(channel)
+                if not receipt_path.is_file():
+                    continue
+                receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+                runtime = self.target / spec.runtime(channel)
+                if not lexists(runtime):
+                    raise InstallerError(f"missing ezQuake runtime: {runtime}")
+                self.check_runtime(spec, channel, receipt)
+                console.success(f"ezQuake {spec.label} {channel} {receipt['selection']} íntegro.")
+                verified += 1
+        return verified
+
+    def verify_installation(self) -> None:
+        self.check_paks()
+        runtime_count = self.verify_ezquake_variants() + self.verify_optional_clients()
+        if runtime_count == 0:
+            raise InstallerError(f"Nenhum cliente QuakeWorld gerenciado foi encontrado em {self.target}. Execute install ou clients primeiro.")
+        present, entries, receipt = self.validate_nquake_pair()
+        if not present:
+            console.info("Os dados nQuake ainda não estão instalados.")
+        else:
+            for relative in REQUIRED_NQUAKE_PATHS:
+                if not lexists(self.target / relative):
+                    raise InstallerError(f"installation is missing: {self.target / relative}")
+            if lexists(self.target / "id1/gpl_maps.pk3"):
+                raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
+            for name, expected in entries:
+                managed = self.target.joinpath(*PurePosixPath(name).parts)
+                if not managed.is_file() or managed.is_symlink():
+                    raise InstallerError(f"managed file is missing: {managed}")
+                if file_hash(managed) != expected:
+                    raise InstallerError(f"managed file changed: {managed}")
+                if managed.suffix.lower() == ".pk3":
+                    with zipfile.ZipFile(managed) as package:
+                        bad = package.testzip()
+                    if bad:
+                        raise InstallerError(f"invalid PK3 member {bad}: {managed}")
+            assert receipt is not None
+            console.success(f"nQuake íntegro no commit {receipt['distfiles_commit'][:12]} ({file_count(len(entries))}).")
+        self.verify_component("maps")
+        self.verify_component("presets")
+
+    def preflight_ezquake_receipts(self) -> None:
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                receipt_path = self.target / spec.receipt(channel)
+                if not lexists(receipt_path):
+                    continue
+                self.validate_ezquake_receipt(receipt_path, spec, channel)
+
+    def preflight_optional_client_receipts(self) -> None:
+        self.installed_optional_clients()
+        for component in ("maps", "presets", "classicq"):
+            self.validate_component_pair(component)
+
+    def uninstall(self) -> None:
+        metadata_names = [
+            NQUAKE_INVENTORY, NQUAKE_RECEIPT,
+            MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
+            CLASSICQ_RECEIPT, CLASSICQ_INVENTORY,
+        ]
+        for spec in PLATFORMS.values():
+            metadata_names.extend((spec.stable_receipt, spec.nightly_receipt))
+        for client in CLIENTS.values():
+            metadata_names.extend(client.receipt(platform_key) for platform_key in PLATFORMS)
+        if not any(lexists(self.target / name) for name in metadata_names):
+            console.info(f"Nenhum runtime gerenciado está instalado em {self.target}.")
+            return
+        self.preflight_ezquake_receipts()
+        self.preflight_optional_client_receipts()
+        present, entries, _ = self.validate_nquake_pair()
+        for name, _ in entries:
+            managed = self.target.joinpath(*PurePosixPath(name).parts)
+            if lexists(managed) and (not managed.is_file() or managed.is_symlink()):
+                raise InstallerError(f"managed path is not a regular file: {managed}")
+        preserved = {}
+        for relative in ("id1/pak0.pak", "id1/pak1.pak", "ezquake/configs/config.cfg"):
+            path = self.target / relative
+            if path.is_file():
+                preserved[relative] = file_hash(path)
+        if present:
+            for name, expected in entries:
+                managed = self.target.joinpath(*PurePosixPath(name).parts)
+                if lexists(managed):
+                    if file_hash(managed) == expected:
+                        remove_path(managed)
+                    else:
+                        console.warning(f"Arquivo modificado preservado: {managed}")
+        else:
+            console.info("Os dados nQuake não estão instalados; arquivos pessoais serão preservados.")
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                receipt_path = self.target / spec.receipt(channel)
+                if not receipt_path.is_file():
+                    continue
+                self.validate_ezquake_receipt(receipt_path, spec, channel)
+                remove_path(self.target / spec.runtime(channel))
+                remove_path(receipt_path)
+        for client in CLIENTS.values():
+            for platform_key in PLATFORMS:
+                receipt_path = self.target / client.receipt(platform_key)
+                if not receipt_path.is_file():
+                    continue
+                self.validate_client_receipt(receipt_path, client, platform_key)
+                remove_path(self.target / client.platforms[platform_key].runtime)
+                remove_path(receipt_path)
+        for component in ("maps", "presets", "classicq"):
+            self.remove_component(component)
+        remove_path(self.target / NQUAKE_RECEIPT)
+        remove_path(self.target / NQUAKE_INVENTORY)
+        for name in ("arena", "prox", "fortress", "classicq", "qw", "ezquake"):
+            remove_empty_directories(self.target / name)
+        remove_empty_directories(self.target / METADATA_DIR)
+        for relative, expected in preserved.items():
+            if file_hash(self.target / relative) != expected:
+                raise InstallerError(f"{relative} changed during uninstall")
+        console.success(f"Componentes gerenciados removidos de {self.target}.")
+        console.info("PAKs registrados e arquivos pessoais foram preservados.")
+
+    def purge(self) -> None:
+        id1 = self.target / "id1"
+        if not id1.is_dir() or id1.is_symlink():
+            raise InstallerError(f"O purge exige um diretório id1 real: {id1}")
+        cache_present = self.cache_is_present()
+        root_device = self.target.stat().st_dev
+        for child in self.target.iterdir():
+            if child.name != "id1":
+                remove_path(child, root_device)
+        unexpected = [child for child in self.target.iterdir() if child.name != "id1"]
+        if unexpected:
+            raise InstallerError(f"purge left an unexpected path: {unexpected[0]}")
+        if cache_present:
+            assert self.cache_root is not None
+            remove_path(self.cache_root)
+            console.success(f"Cache removido: {self.cache_root}")
+        else:
+            console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
+        console.success(f"Instalação removida de {self.target}.")
+        console.info("Somente o diretório id1 foi preservado.")
+
+    def install(self) -> None:
+        console.section("Fase 1/2 · ezQuake")
+        self.choose_platform()
+        self.choose_channel()
+        self.check_runtime_destination_ownership()
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self.choose_release()
+        self.check_paks()
+        pak0_before = file_hash(self.target / "id1/pak0.pak")
+        pak1_before = file_hash(self.target / "id1/pak1.pak")
+        self.prepare_cache()
+        archive = self.ensure_archive()
+        assert self.spec is not None
+        console.info(f"Preparando ezQuake {self.spec.label} {self.channel} {self.selected_version}...")
+        prepared = self.prepare_runtime(archive)
+        staged_receipt = self.stage / "ezquake-receipt"
+        self.write_ezquake_receipt(staged_receipt)
+        self.ensure_metadata_directory()
+        self.commit_runtime(prepared, staged_receipt)
+        console.success("ezQuake instalado e recibo registrado.")
+        if self.confirm_nquake():
+            self.install_nquake()
+        else:
+            console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+        if file_hash(self.target / "id1/pak0.pak") != pak0_before or file_hash(self.target / "id1/pak1.pak") != pak1_before:
+            raise InstallerError("Um PAK registrado foi alterado durante a instalação; a operação foi interrompida.")
+        console.section("Verificação final")
+        self.verify_installation()
+        console.section("Resumo")
+        print(f"  Sistema: {self.spec.label}")
+        print(f"  Canal:   {self.channel}")
+        print(f"  Versão:  {self.selected_version}")
+        print(f"  Destino: {self.target}")
+        if (self.target / NQUAKE_RECEIPT).is_file():
+            console.success("Instalação completa e pronta para uso.")
+        else:
+            console.success(f"ezQuake pronto em {self.target / self.spec.runtime(self.channel)}")
+
+    def cleanup_stage(self) -> None:
+        if self.stage is not None and self.stage.is_dir():
+            remove_path(self.stage)
+
+
+class FriendlyArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: erro: {message}\n")
+
+
+def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
+    parser = FriendlyArgumentParser(
+        prog="install-qw.py",
+        description="Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido.",
+        epilog="Exemplo: ./install-qw.py install ./quake-world",
+        add_help=False,
+    )
+    parser._positionals.title = "argumentos"
+    parser._optionals.title = "opções"
+    parser.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
+    parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
+    parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
+    parser.add_argument(
+        "action", nargs="?", default="install",
+        help="install, clients, maps, presets, hub, verify, uninstall, purge ou cleanup",
+    )
+    parser.add_argument("target", nargs="?", type=Path, help="diretório de instalação (padrão: ./quake-world)")
+    namespace = parser.parse_args(arguments)
+    valid_actions = ("install", "clients", "maps", "presets", "hub", "verify", "uninstall", "purge", "cleanup")
+    if namespace.action not in valid_actions:
+        parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
+    if namespace.action == "cleanup" and namespace.target is not None:
+        parser.error("cleanup não aceita um diretório de destino")
+    namespace.target = namespace.target or project_root / "quake-world"
+    return namespace
+
+
+def main(arguments: list[str] | None = None) -> int:
+    project_root = Path(__file__).resolve().parent
+    options = None
+    try:
+        options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
+        console.configure(verbose=options.verbose, no_color=options.no_color)
+        action_labels = {
+            "install": "instalar ezQuake + nQuake", "clients": "gerenciar clientes opcionais",
+            "maps": "gerenciar mapas + LOCs", "presets": "gerenciar presets",
+            "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
+            "purge": "remover tudo", "cleanup": "limpar cache",
+        }
+        console.banner(action_labels[options.action], options.target)
+        installer = Installer(project_root, options.target)
+        if options.action == "cleanup":
+            console.section("Limpeza do cache")
+            installer.cleanup_cache()
+            return 0
+        installer.validate_target(options.action)
+        console.detail(f"Destino normalizado: {installer.target}")
+        if options.action == "purge":
+            console.section("Remoção completa")
+            installer.purge()
+            return 0
+        installer.reject_target_symlinks()
+        if options.action == "verify":
+            console.section("Verificação da instalação")
+            installer.verify_installation()
+            console.success("Verificação concluída sem problemas.")
+        elif options.action == "uninstall":
+            console.section("Desinstalação")
+            installer.uninstall()
+        elif options.action == "hub":
+            console.section("QuakeWorld Hub")
+            installer.browse_hub()
+        else:
+            try:
+                if options.action == "clients":
+                    installer.manage_optional_clients()
+                elif options.action == "maps":
+                    installer.manage_maps()
+                elif options.action == "presets":
+                    installer.manage_presets()
+                else:
+                    installer.install()
+            finally:
+                installer.cleanup_stage()
+        return 0
+    except KeyboardInterrupt:
+        console.error("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
+        return 130
+    except InstallerError as error:
+        console.error(str(error))
+        if options is not None and not options.verbose:
+            print("       Execute novamente com --verbose para obter detalhes técnicos.", file=sys.stderr)
+        return 1
+    except Exception as error:  # pragma: no cover - last-resort CLI protection
+        console.error(f"Falha inesperada: {error}")
+        if options is not None and options.verbose:
+            traceback.print_exc()
+        else:
+            print("       Execute novamente com --verbose para exibir o diagnóstico completo.", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
