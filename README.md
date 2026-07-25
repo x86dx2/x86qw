@@ -23,6 +23,7 @@ este catálogo.
 
 ```text
 docs/architecture.md    serviços, repositórios e fluxo de publicação
+docs/cloudflare.md      deploy, domínio e redirecionamento do portal
 docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
 docs/installer.md       manual completo do instalador migrado
