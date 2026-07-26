@@ -22,6 +22,28 @@ sozinha, que todos os arquivos agregados ao pacote binário usam termos
 compatíveis. O repositório `nQuake/distfiles` demonstra por que a auditoria deve
 acontecer por artefato, e não apenas pelo nome do projeto.
 
+### Receita inicial do ezQuake 3.6.9
+
+Em 25 de julho de 2026, os três assets oficiais da release 3.6.9 foram baixados
+em uma área temporária. Tamanho, SHA-256 e membros mínimos dos ZIPs coincidiram
+com `checksums.txt` e com os digests publicados pela API do GitHub:
+
+| Plataforma | Arquivo | Tamanho | SHA-256 |
+| --- | --- | ---: | --- |
+| macOS | `ezQuake-macOS-universal.zip` | 8.560.464 | `2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed` |
+| Linux | `ezQuake-linux-x86_64.zip` | 22.268.939 | `6d5707bf9be1a8338441265f9bf03154d107488a4fed9eab4c989c29de6573ee` |
+| Windows | `ezQuake-windows-x64.zip` | 4.135.630 | `1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d` |
+
+A fonte correspondente oficial é `ezquake-source-3.6.9.tar.gz`, SHA-256
+`1a0e9a765b6a8e1fc8ff82bfd8ff7e505682ceed79ccd81ecf2c4795d37a1fb8`.
+Ela também possui uma receita própria para que o mirror não dependa da origem.
+O arquivo contém a GPL-2.0 e o código de `qwprot`, mas o build também incorpora
+dependências de plataforma gerenciadas via vcpkg. Por isso, as três receitas de
+binários e a receita da fonte permanecem `blocked`: ainda é necessário
+inventariar as licenças dos binários
+incorporados e confirmar que a fonte oferecida satisfaz as obrigações de cada
+dependência antes de ativar o mirror.
+
 ## Registro obrigatório por artefato
 
 - componente, versão, canal, sistema e arquitetura;

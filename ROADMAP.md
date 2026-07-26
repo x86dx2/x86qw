@@ -10,10 +10,11 @@
 ## 1. Ingestão reproduzível
 
 - [ ] confirmar licença e redistribuição de cada componente;
-- [ ] criar receitas fixadas por versão, origem e checksum;
-- [ ] baixar em uma área temporária e validar formatos;
+- [x] criar receitas fixadas por versão, origem e checksum;
+- [x] baixar em uma área temporária e validar formatos;
 - [x] registrar artefatos revisados de forma atômica no catálogo;
-- [ ] gerar pacotes x86QW idênticos a partir das mesmas entradas.
+- [x] gerar mirrors x86QW byte a byte a partir das mesmas entradas;
+- [ ] definir receitas determinísticas para futuros pacotes customizados.
 
 ## 2. Distribuição
 

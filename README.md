@@ -29,8 +29,11 @@ docs/installer.md       manual completo do instalador migrado
 PRODUCT.md              propósito, público e princípios da marca
 DESIGN.md               tokens e sistema visual do site
 install-qw.py           instalador macOS, Linux e Windows
+recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
+tools/build_package.py  ingestão reproduzível em uma área temporária
 tools/add_package.py    registro atômico de artefatos revisados
+tools/validate_recipes.py
 tools/validate_catalog.py
 tests/test_catalog.py
 wrangler.jsonc          Worker estático em x86qw.x86.com.br
@@ -40,8 +43,10 @@ wrangler.jsonc          Worker estático em x86qw.x86.com.br
 
 ```sh
 python3 tools/validate_catalog.py
+python3 tools/validate_recipes.py
 python3 -m unittest discover -s tests -v
 ./install-qw.py --help
+python3 tools/build_package.py --help
 python3 tools/add_package.py --help
 npx --yes wrangler@4.114.0 deploy --dry-run
 ```
@@ -55,3 +60,27 @@ npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
 As fontes do site são servidas localmente sob SIL Open Font License; os textos
 das licenças ficam em `site/public/legal/fonts`. Nenhum binário do jogo ou
 conteúdo de terceiros foi publicado no catálogo nesta fase.
+
+## Montar um pacote do mirror
+
+Cada arquivo em `recipes/` fixa origem, tamanho, SHA-256, conteúdo mínimo
+esperado, fonte correspondente e estado da revisão. Uma receita `blocked` é
+documentação auditável, mas não pode gerar nem publicar um pacote.
+
+Depois que a revisão mudar explicitamente para `ready`, a ingestão baixa em um
+diretório temporário, valida o arquivo e grava uma cópia byte a byte em `dist/`:
+
+```sh
+python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json
+```
+
+Para validar um download já obtido sem acessar a rede:
+
+```sh
+python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
+  --artifact /caminho/ezQuake-macOS-universal.zip
+```
+
+`dist/` é local e ignorado pelo Git. O envio para um GitHub Release ou outro
+mirror ocorre antes do registro público. Somente então use `--register`; a ação
+é explícita para impedir que um build local altere o catálogo por acidente.

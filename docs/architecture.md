@@ -34,6 +34,12 @@ fonte fixada -> licença -> download -> validação -> SHA-256 -> pacote imutáv
              -> GitHub Release -> mirror GitLab/R2 -> catálogo -> instalador
 ```
 
+As receitas versionadas ficam em `recipes/`. `tools/build_package.py` aceita
+somente receitas com revisão `ready`, usa um diretório temporário e produz em
+`dist/` uma cópia byte a byte acompanhada de manifesto. Um build nunca entra no
+catálogo implicitamente: o registro exige `--register` depois que o mesmo
+arquivo já estiver disponível nas URLs declaradas.
+
 O Worker serve o site e o catálogo. Ele não retransmite corpos de arquivos
 grandes; o instalador baixa diretamente de uma das URLs registradas no
 catálogo e valida o SHA-256 antes de extrair qualquer conteúdo.
