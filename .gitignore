@@ -5,6 +5,7 @@ __pycache__/
 .cache/
 .artifacts/
 .wrangler/
+.impeccable/live/sessions/
 dist/
 quake-world/
 id1/

@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-26T00:12:55Z",
+  "title": "Design System: x86QW",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Branco de Campo",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.51 0 0)", "oklch(0.63 0 0)", "oklch(0.75 0 0)", "oklch(0.87 0 0)", "oklch(1 0 0)"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Superfície de Inventário",
+        "canonical": "oklch(0.96 0.008 268.5)",
+        "tonalRamp": ["oklch(0.15 0.008 268.5)", "oklch(0.27 0.008 268.5)", "oklch(0.39 0.008 268.5)", "oklch(0.51 0.008 268.5)", "oklch(0.63 0.008 268.5)", "oklch(0.75 0.008 268.5)", "oklch(0.87 0.008 268.5)", "oklch(0.96 0.008 268.5)"]
+      },
+      "surface-strong": {
+        "role": "neutral",
+        "displayName": "Superfície Forte",
+        "canonical": "oklch(0.91 0.018 268.5)",
+        "tonalRamp": ["oklch(0.15 0.018 268.5)", "oklch(0.26 0.018 268.5)", "oklch(0.37 0.018 268.5)", "oklch(0.48 0.018 268.5)", "oklch(0.59 0.018 268.5)", "oklch(0.70 0.018 268.5)", "oklch(0.81 0.018 268.5)", "oklch(0.92 0.018 268.5)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Tinta Fria",
+        "canonical": "oklch(0.18 0.025 268.5)",
+        "tonalRamp": ["oklch(0.15 0.025 268.5)", "oklch(0.26 0.025 268.5)", "oklch(0.37 0.025 268.5)", "oklch(0.48 0.025 268.5)", "oklch(0.59 0.025 268.5)", "oklch(0.70 0.025 268.5)", "oklch(0.81 0.025 268.5)", "oklch(0.92 0.025 268.5)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Tinta Secundária",
+        "canonical": "oklch(0.43 0.035 268.5)",
+        "tonalRamp": ["oklch(0.15 0.035 268.5)", "oklch(0.26 0.035 268.5)", "oklch(0.37 0.035 268.5)", "oklch(0.48 0.035 268.5)", "oklch(0.59 0.035 268.5)", "oklch(0.70 0.035 268.5)", "oklch(0.81 0.035 268.5)", "oklch(0.92 0.035 268.5)"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Índigo de Largada",
+        "canonical": "oklch(0.43 0.15 268.5)",
+        "tonalRamp": ["oklch(0.15 0.15 268.5)", "oklch(0.26 0.15 268.5)", "oklch(0.37 0.15 268.5)", "oklch(0.48 0.15 268.5)", "oklch(0.59 0.15 268.5)", "oklch(0.70 0.15 268.5)", "oklch(0.81 0.15 268.5)", "oklch(0.92 0.15 268.5)"]
+      },
+      "primary-deep": {
+        "role": "primary",
+        "displayName": "Índigo Profundo",
+        "canonical": "oklch(0.27 0.105 268.5)",
+        "tonalRamp": ["oklch(0.15 0.105 268.5)", "oklch(0.26 0.105 268.5)", "oklch(0.37 0.105 268.5)", "oklch(0.48 0.105 268.5)", "oklch(0.59 0.105 268.5)", "oklch(0.70 0.105 268.5)", "oklch(0.81 0.105 268.5)", "oklch(0.92 0.105 268.5)"]
+      },
+      "primary-light": {
+        "role": "primary",
+        "displayName": "Índigo de Telemetria",
+        "canonical": "oklch(0.82 0.075 268.5)",
+        "tonalRamp": ["oklch(0.15 0.075 268.5)", "oklch(0.26 0.075 268.5)", "oklch(0.37 0.075 268.5)", "oklch(0.48 0.075 268.5)", "oklch(0.59 0.075 268.5)", "oklch(0.70 0.075 268.5)", "oklch(0.81 0.075 268.5)", "oklch(0.92 0.075 268.5)"]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Coral de Sinal",
+        "canonical": "oklch(0.58 0.20 34)",
+        "tonalRamp": ["oklch(0.15 0.20 34)", "oklch(0.26 0.20 34)", "oklch(0.37 0.20 34)", "oklch(0.48 0.20 34)", "oklch(0.59 0.20 34)", "oklch(0.70 0.20 34)", "oklch(0.81 0.18 34)", "oklch(0.92 0.12 34)"]
+      },
+      "accent-deep": {
+        "role": "secondary",
+        "displayName": "Coral Profundo",
+        "canonical": "oklch(0.47 0.17 34)",
+        "tonalRamp": ["oklch(0.15 0.17 34)", "oklch(0.26 0.17 34)", "oklch(0.37 0.17 34)", "oklch(0.48 0.17 34)", "oklch(0.59 0.17 34)", "oklch(0.70 0.17 34)", "oklch(0.81 0.15 34)", "oklch(0.92 0.10 34)"]
+      },
+      "accent-on-dark": {
+        "role": "secondary",
+        "displayName": "Coral de Leitura",
+        "canonical": "oklch(0.68 0.18 34)",
+        "tonalRamp": ["oklch(0.15 0.18 34)", "oklch(0.26 0.18 34)", "oklch(0.37 0.18 34)", "oklch(0.48 0.18 34)", "oklch(0.59 0.18 34)", "oklch(0.70 0.18 34)", "oklch(0.81 0.16 34)", "oklch(0.92 0.10 34)"]
+      },
+      "accent-pale": {
+        "role": "secondary",
+        "displayName": "Coral de Contexto",
+        "canonical": "oklch(0.94 0.035 34)",
+        "tonalRamp": ["oklch(0.15 0.035 34)", "oklch(0.26 0.035 34)", "oklch(0.37 0.035 34)", "oklch(0.48 0.035 34)", "oklch(0.59 0.035 34)", "oklch(0.70 0.035 34)", "oklch(0.81 0.035 34)", "oklch(0.94 0.035 34)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Linha de Medição",
+        "canonical": "oklch(0.84 0.018 268.5)",
+        "tonalRamp": ["oklch(0.15 0.018 268.5)", "oklch(0.26 0.018 268.5)", "oklch(0.37 0.018 268.5)", "oklch(0.48 0.018 268.5)", "oklch(0.59 0.018 268.5)", "oklch(0.70 0.018 268.5)", "oklch(0.81 0.018 268.5)", "oklch(0.92 0.018 268.5)"]
+      },
+      "arena-grid": {
+        "role": "tertiary",
+        "displayName": "Arena Grid",
+        "canonical": "oklch(0.72 0.08 268.5 / 0.2)",
+        "tonalRamp": ["oklch(0.15 0.08 268.5 / 0.2)", "oklch(0.26 0.08 268.5 / 0.2)", "oklch(0.37 0.08 268.5 / 0.2)", "oklch(0.48 0.08 268.5 / 0.2)", "oklch(0.59 0.08 268.5 / 0.2)", "oklch(0.70 0.08 268.5 / 0.2)", "oklch(0.81 0.08 268.5 / 0.2)", "oklch(0.92 0.08 268.5 / 0.2)"]
+      },
+      "arena-floor": {
+        "role": "tertiary",
+        "displayName": "Arena Floor",
+        "canonical": "oklch(0.36 0.13 268.5 / 0.78)",
+        "tonalRamp": ["oklch(0.15 0.13 268.5 / 0.78)", "oklch(0.26 0.13 268.5 / 0.78)", "oklch(0.37 0.13 268.5 / 0.78)", "oklch(0.48 0.13 268.5 / 0.78)", "oklch(0.59 0.13 268.5 / 0.78)", "oklch(0.70 0.13 268.5 / 0.78)", "oklch(0.81 0.13 268.5 / 0.78)", "oklch(0.92 0.13 268.5 / 0.78)"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Sucesso",
+        "canonical": "oklch(0.52 0.16 150)",
+        "tonalRamp": ["oklch(0.15 0.16 150)", "oklch(0.26 0.16 150)", "oklch(0.37 0.16 150)", "oklch(0.48 0.16 150)", "oklch(0.59 0.16 150)", "oklch(0.70 0.16 150)", "oklch(0.81 0.14 150)", "oklch(0.92 0.09 150)"]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "Erro",
+        "canonical": "oklch(0.48 0.18 25)",
+        "tonalRamp": ["oklch(0.15 0.18 25)", "oklch(0.26 0.18 25)", "oklch(0.37 0.18 25)", "oklch(0.48 0.18 25)", "oklch(0.59 0.18 25)", "oklch(0.70 0.18 25)", "oklch(0.81 0.16 25)", "oklch(0.92 0.10 25)"]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Branco Puro",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.27 0 0)", "oklch(0.39 0 0)", "oklch(0.51 0 0)", "oklch(0.63 0 0)", "oklch(0.75 0 0)", "oklch(0.87 0 0)", "oklch(1 0 0)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Manchetes e sinais de alta prioridade." },
+      "body": { "displayName": "Body", "purpose": "Explicações, instruções e metadados legíveis." },
+      "label": { "displayName": "Label", "purpose": "Marcadores curtos de estado e navegação." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-signal", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Estados, foco e deslocamentos curtos." },
+      { "name": "route-flow", "value": "2.4s linear", "purpose": "Fluxo pontilhado da arena; removido em movimento reduzido." },
+      { "name": "packet-run", "value": "4.8s ease-signal", "purpose": "Percurso de um único pacote no hero; removido em movimento reduzido." }
+    ],
+    "breakpoints": [
+      { "name": "layout", "value": "920px" },
+      { "name": "mobile", "value": "680px" },
+      { "name": "compact", "value": "360px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal em índigo, usada uma vez por grupo de decisão.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Conhecer o projeto <span aria-hidden=\"true\">↓</span></a>",
+      "css": ".ds-btn-primary { display:inline-flex; min-height:3.25rem; align-items:center; gap:1rem; padding:.82rem 1.15rem; border-radius:3px; background:var(--primary); color:var(--white); font:700 1rem/1.2 var(--body); text-decoration:none; transition:background-color 180ms var(--ease),transform 180ms var(--ease); } .ds-btn-primary:hover { background:var(--primary-deep); transform:translateY(-2px); } .ds-btn-primary:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Ação secundária branca, sem competir com a chamada principal.",
+      "html": "<a class=\"ds-btn-quiet\" href=\"#\">Ver estado real</a>",
+      "css": ".ds-btn-quiet { display:inline-flex; min-height:3.25rem; align-items:center; padding:.82rem 1.15rem; border:1px solid var(--line); border-radius:3px; background:var(--bg); color:var(--ink); font:700 1rem/1.2 var(--body); text-decoration:none; transition:background-color 180ms var(--ease),transform 180ms var(--ease); } .ds-btn-quiet:hover { background:var(--surface); transform:translateY(-2px); } .ds-btn-quiet:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }"
+    },
+    {
+      "name": "Distribution Status",
+      "kind": "chip",
+      "description": "Indicador compacto com ponto redundante e texto explícito.",
+      "html": "<a class=\"ds-status\" href=\"#\"><span aria-hidden=\"true\"></span> Estado da distribuição</a>",
+      "css": ".ds-status { display:inline-flex; min-height:2.5rem; align-items:center; gap:.55rem; padding:.6rem .8rem; border:1px solid var(--line); border-radius:3px; background:var(--surface); color:var(--ink); font:700 .9rem/1.2 var(--body); text-decoration:none; } .ds-status span { width:.55rem; height:.55rem; border-radius:50%; background:var(--accent); } .ds-status:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }"
+    },
+    {
+      "name": "Catalog Status",
+      "kind": "custom",
+      "refersTo": "status-panel",
+      "description": "Painel vivo que comunica o número real de pacotes auditados.",
+      "html": "<div class=\"ds-catalog\"><span class=\"ds-catalog-dot\" aria-hidden=\"true\"></span><div><small>Distribuição em preparação</small><strong>0 pacotes auditados</strong><p>Nenhum binário será publicado antes da revisão.</p></div></div>",
+      "css": ".ds-catalog { display:flex; gap:1.25rem; align-items:center; padding:1.5rem; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font-family:var(--body); } .ds-catalog-dot { width:.9rem; height:.9rem; flex:none; border-radius:50%; background:var(--accent); } .ds-catalog small,.ds-catalog strong { display:block; } .ds-catalog strong { font:800 2rem/1 var(--display); } .ds-catalog p { margin:.3rem 0 0; color:var(--muted); }"
+    },
+    {
+      "name": "Platform Row",
+      "kind": "custom",
+      "description": "Linha de matriz que compara sistema, arquitetura, formato e canal sem cartões.",
+      "html": "<div class=\"ds-platform\"><strong>macOS</strong><span>arm64 + x86_64</span><span>Aplicativo universal</span><span>stable / nightly</span></div>",
+      "css": ".ds-platform { display:grid; grid-template-columns:1fr 1.1fr 1.4fr 1fr; gap:1rem; align-items:center; min-height:4.7rem; border-bottom:1px solid var(--line); color:var(--ink); font-family:var(--body); } .ds-platform strong { font:800 1.8rem/1 var(--display); } @media (max-width:680px) { .ds-platform { grid-template-columns:1fr 1fr; } .ds-platform span:nth-child(n+3) { color:var(--muted); font-size:.86rem; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Painel de Largada",
+    "overview": "Uma pessoa nova ou veterana abre o x86QW em um notebook ou telefone, sob luz ambiente comum, e precisa decidir em poucos segundos se essa distribuição merece confiança. A interface se comporta como um painel de largada: ritmo forte, informação inequívoca e sinais que existem para orientar, não para decorar.\n\nA composição alterna campos claros de leitura com planos índigo comprometidos, tipografia condensada de competição e coral de sinal. Ela rejeita nostalgia pixelada excessiva, estética gamer neon/cyberpunk e landing page SaaS genérica.",
+    "keyCharacteristics": [
+      "Escala tipográfica decidida e leitura imediata.",
+      "Assimetria controlada, com alternância entre informação e sinal visual.",
+      "Evidência técnica apresentada como conteúdo editorial, nunca como ornamento.",
+      "Cantos discretos, linhas estruturais e nenhuma sombra decorativa.",
+      "Movimento limitado ao percurso do sinal e ao retorno de estado."
+    ],
+    "rules": [
+      { "name": "The Signal Rule", "body": "Coral sempre comunica estado, percurso ou decisão; nunca é espalhado como decoração.", "section": "colors" },
+      { "name": "The Daylight Rule", "body": "O conteúdo principal permanece legível sob luz ambiente comum; contraste mínimo é 4.5:1 e texto comum prioritário busca 7:1.", "section": "colors" },
+      { "name": "The Compression Rule", "body": "A fonte condensada serve hierarquia e sinalização; parágrafos e instruções nunca usam a fonte de display.", "section": "typography" },
+      { "name": "The Grounded Rule", "body": "Sombras decorativas são proibidas. Bordas e mudança de superfície resolvem separação; foco usa um contorno coral de 3px.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar Índigo de Largada em campos grandes e Coral de Sinal apenas para informação ativa.",
+      "Do manter títulos condensados abaixo de 6rem e espaçamento de letras nunca menor que -0.04em.",
+      "Do preservar foco visível, navegação por teclado e movimento reduzido em toda interação.",
+      "Do mostrar estado, licença, origem e hash com linguagem direta e verificável.",
+      "Do variar o ritmo entre seções claras, campos cromáticos e matrizes funcionais."
+    ],
+    "donts": [
+      "Don't usar nostalgia pixelada excessiva, estética gamer neon/cyberpunk ou landing page SaaS genérica.",
+      "Don't usar gradiente em texto, glassmorphism, listras diagonais ou glow.",
+      "Don't repetir grades de cartões idênticos com ícone, título e parágrafo.",
+      "Don't aplicar cantos acima de 16px em painéis ou combinar borda com sombra ampla.",
+      "Don't usar cor como único indicador ou esconder o estado ainda incompleto da distribuição."
+    ]
+  }
+}
