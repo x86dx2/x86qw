@@ -3,6 +3,9 @@
 x86QW é uma distribuição moderna e reproduzível de QuakeWorld, mantida por
 `x86dx2` e publicada em `x86qw.x86.com.br`.
 
+Repositório principal: [GitHub](https://github.com/x86dx2/x86qw). Cópia de
+contingência: [GitLab](https://gitlab.com/x86dx2/x86qw).
+
 Este repositório concentra o instalador multiplataforma, o catálogo público, as
 regras de proveniência, as ferramentas de validação e o site do projeto. O
 instalador e a página pública leem o mesmo catálogo canônico, sem uma camada de

@@ -18,8 +18,8 @@
 
 ## 2. Distribuição
 
-- [ ] criar `x86dx2/x86qw` no GitHub;
-- [ ] configurar o mirror passivo no GitLab;
+- [x] criar `x86dx2/x86qw` no GitHub;
+- [ ] automatizar o mirror passivo no GitLab (repositório e cópia inicial criados);
 - [ ] publicar releases imutáveis e seus checksums;
 - [ ] avaliar R2 para `downloads.x86.com.br/x86qw/`.
 

@@ -22,6 +22,10 @@ sem publicar uma nova versão do instalador.
 - `x86dx2/x86qw-dist`: será criado somente se os binários e pipelines de
   publicação tornarem o repositório principal pesado ou difícil de manter.
 
+O GitHub é o remoto principal. `gitlab.com/x86dx2/x86qw` mantém a cópia de
+contingência; o primeiro `main` já foi sincronizado, mas a atualização
+automática continua pendente no roteiro.
+
 O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
 servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
 permite que uma única validação cubra publicação e consumo. A separação de
