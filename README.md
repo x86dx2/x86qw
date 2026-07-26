@@ -36,6 +36,7 @@ recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
 tools/add_package.py    registro atômico de artefatos revisados
+tools/snapshot_upstreams.py  captura permanente e verificável das fontes atuais
 tools/validate_recipes.py
 tools/validate_catalog.py
 tests/test_catalog.py
@@ -87,3 +88,26 @@ python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
 `dist/` é local e ignorado pelo Git. O envio para um GitHub Release ou outro
 mirror ocorre antes do registro público. Somente então use `--register`; a ação
 é explícita para impedir que um build local altere o catálogo por acidente.
+
+## Acervo upstream local
+
+Para preservar o estado atual das fontes sem publicar os arquivos, execute:
+
+```sh
+python3 tools/snapshot_upstreams.py
+```
+
+O comando cria `archive/`, baixa releases, nightlies, mapas, LOCs, GFX e as
+dependências exatas do código-fonte, além de manter mirrors Git completos dos
+projetos principais. Cada arquivo recebe tamanho, URL e SHA-256 em
+`archive/manifest.json`; execuções posteriores retomam o acervo sem baixar
+novamente itens já confirmados.
+
+Validação integral e offline:
+
+```sh
+python3 tools/snapshot_upstreams.py --verify
+```
+
+`archive/` é permanente, mas local e ignorado pelo Git devido ao tamanho. O
+resumo auditável da captura atual fica em `inventory/upstream-current.json`.

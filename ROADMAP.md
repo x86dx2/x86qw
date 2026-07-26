@@ -14,6 +14,7 @@
 - [x] baixar em uma área temporária e validar formatos;
 - [x] registrar artefatos revisados de forma atômica no catálogo;
 - [x] gerar mirrors x86QW byte a byte a partir das mesmas entradas;
+- [x] preservar localmente releases, nightlies, mapas, LOCs, GFX e fontes atuais;
 - [ ] definir receitas determinísticas para futuros pacotes customizados.
 
 ## 2. Distribuição

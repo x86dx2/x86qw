@@ -1,0 +1,27 @@
+{
+  "archive_bytes": 8583738791,
+  "archive_files": 8869,
+  "captured_at": "2026-07-26T16:56:06Z",
+  "collections": {
+    "gfx_details": 586,
+    "gfx_packages": 586,
+    "gfx_previews": 586,
+    "map_indexes": 4,
+    "maps": 6641,
+    "nightly_assets_and_checksums": 6,
+    "release_assets_and_checksums": 12,
+    "source_dependency_snapshots": 4,
+    "spoken_locations": 444
+  },
+  "manifest_sha256": "a914a3821461fad0db8b1dd6223c8f3fc5240b34c69300bc646553ac0c233e07",
+  "missing_optional_files": 0,
+  "repositories": {
+    "classicq": "d50890728f0a88a4caba19f05d88b2ab5d37ee2d",
+    "ezquake-source": "a86996a3d33dc1bc3fb15bfe7bcadd662b822557",
+    "nquake-distfiles": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+    "qwprot": "e836c327cf59a6c8ab1233d9aaa3d03e86e0acf6",
+    "qwprot-community": "c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc",
+    "unezquake": "99e4605538f9ca5775ca2e68d585e4c814fda042"
+  },
+  "scope": "current-upstream-snapshot"
+}
