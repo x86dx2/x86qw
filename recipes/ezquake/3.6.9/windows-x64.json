@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "kind": "mirror",
+  "package": {
+    "component": "ezquake",
+    "version": "3.6.9",
+    "channel": "stable",
+    "platform": "windows",
+    "architecture": "x64",
+    "filename": "ezQuake-windows-x64.zip",
+    "size": 4135630,
+    "sha256": "1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d",
+    "origin_url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip",
+    "license": "GPL-2.0-only",
+    "license_url": "https://github.com/QW-Group/ezquake-source/blob/3.6.9/LICENSE",
+    "source_urls": [
+      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezquake-source-3.6.9.tar.gz",
+      "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezquake-source-3.6.9.tar.gz"
+    ],
+    "redistribution_reviewed": false,
+    "urls": [
+      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip"
+    ],
+    "artifact_format": "zip",
+    "expected_members": [
+      "ezquake.exe"
+    ]
+  },
+  "review": {
+    "status": "blocked",
+    "notes": "Confirmar licenças das dependências incorporadas e a completude da fonte correspondente antes de espelhar o binário."
+  }
+}

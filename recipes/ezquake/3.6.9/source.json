@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "kind": "mirror",
+  "package": {
+    "component": "ezquake-source",
+    "version": "3.6.9",
+    "channel": "stable",
+    "platform": "source",
+    "architecture": "any",
+    "filename": "ezquake-source-3.6.9.tar.gz",
+    "size": 2077359,
+    "sha256": "1a0e9a765b6a8e1fc8ff82bfd8ff7e505682ceed79ccd81ecf2c4795d37a1fb8",
+    "origin_url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezquake-source-3.6.9.tar.gz",
+    "license": "GPL-2.0-only",
+    "license_url": "https://github.com/QW-Group/ezquake-source/blob/3.6.9/LICENSE",
+    "source_urls": [
+      "https://github.com/QW-Group/ezquake-source/tree/3.6.9"
+    ],
+    "redistribution_reviewed": false,
+    "urls": [
+      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezquake-source-3.6.9.tar.gz"
+    ],
+    "artifact_format": "tar.gz",
+    "expected_members": [
+      "ezquake-source-3.6.9/LICENSE",
+      "ezquake-source-3.6.9/CMakeLists.txt",
+      "ezquake-source-3.6.9/src/common.c",
+      "ezquake-source-3.6.9/src/qwprot/src/protocol.h"
+    ]
+  },
+  "review": {
+    "status": "blocked",
+    "notes": "Confirmar a licença dos arquivos auxiliares agregados e documentar a fonte exata das dependências de build antes de publicar."
+  }
+}
