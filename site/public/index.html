@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="x86QW: uma distribuição moderna, reproduzível e auditável de QuakeWorld para macOS, Linux e Windows.">
+    <meta name="theme-color" content="oklch(0.43 0.15 268.5)">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:title" content="x86QW — QuakeWorld, pronto para rodar">
+    <meta property="og:description" content="Cliente moderno, customizações curadas e artefatos verificáveis para macOS, Linux e Windows.">
+    <meta property="og:url" content="https://x86qw.x86.com.br/">
+    <title>x86QW — QuakeWorld, pronto para rodar</title>
+    <link rel="canonical" href="https://x86qw.x86.com.br/">
+    <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+    <link rel="preload" href="/assets/fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/site.css">
+    <script src="/assets/site.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+    <header class="site-header">
+      <a class="brand" href="#topo" aria-label="x86QW, início">
+        <svg aria-hidden="true" viewBox="0 0 44 44" width="36" height="36">
+          <rect width="44" height="44" rx="3" class="brand-block"/>
+          <path d="M9 11h6l7 9 7-9h6L25 23l11 10h-7l-7-7-7 7H8l11-10z" class="brand-x"/>
+          <rect x="31" y="7" width="6" height="6" class="brand-ping"/>
+        </svg>
+        <span>x86<span>QW</span></span>
+      </a>
+
+      <nav aria-label="Navegação principal">
+        <a href="#projeto">Projeto</a>
+        <a href="#plataformas">Plataformas</a>
+        <a href="#confianca">Confiança</a>
+      </nav>
+
+      <a class="header-status" href="#estado">
+        <span aria-hidden="true"></span>
+        Estado da distribuição
+      </a>
+    </header>
+
+    <main id="conteudo" tabindex="-1">
+      <section class="hero" id="topo" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="launch-note"><span aria-hidden="true"></span> Primeira distribuição em auditoria</p>
+          <h1 id="hero-title">QuakeWorld,<br><strong>pronto para rodar.</strong></h1>
+          <p class="hero-lead">O x86QW está reunindo o ezQuake mais recente, as customizações que fizeram o nQuake essencial e uma instalação verificável para três sistemas — sem esconder de onde cada arquivo veio.</p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#projeto">Conhecer o projeto <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="#estado">Ver estado real</a>
+          </div>
+
+          <ul class="platform-list" aria-label="Sistemas planejados">
+            <li>macOS <span>arm64 + x86_64</span></li>
+            <li>Linux <span>x86_64</span></li>
+            <li>Windows <span>x64</span></li>
+          </ul>
+        </div>
+
+        <div class="arena-visual" aria-label="Visualização abstrata do fluxo entre jogadores, catálogo verificado e arena QuakeWorld">
+          <div class="arena-topline">
+            <span>ARENA / SIGNAL</span>
+            <span>QW 1996 → AGORA</span>
+          </div>
+
+          <svg viewBox="0 0 640 660" role="img" aria-labelledby="arena-title arena-desc">
+            <title id="arena-title">Sinal x86QW atravessando uma arena</title>
+            <desc id="arena-desc">Um trajeto geométrico conecta cliente, catálogo e jogo, representando uma instalação rastreável.</desc>
+            <g class="arena-grid" aria-hidden="true">
+              <path d="M0 110H640M0 220H640M0 330H640M0 440H640M0 550H640"/>
+              <path d="M106 0V660M213 0V660M320 0V660M426 0V660M533 0V660"/>
+            </g>
+            <g class="arena-map" aria-hidden="true">
+              <path d="M80 108h166v82h86v-48h154v106h76v196H436v92H252v-72H96V338h58V226H80z"/>
+              <path d="M154 226h98v84h118v-62h116v108h-88v108H252v-70h-98z"/>
+              <circle cx="203" cy="352" r="39"/>
+              <circle cx="438" cy="403" r="49"/>
+            </g>
+            <path class="route-shadow" aria-hidden="true" d="M100 470C160 470 161 351 218 351S278 272 327 272s61 130 112 130 57-118 112-118"/>
+            <path class="route" aria-hidden="true" d="M100 470C160 470 161 351 218 351S278 272 327 272s61 130 112 130 57-118 112-118"/>
+            <g class="signal-nodes" aria-hidden="true">
+              <circle cx="100" cy="470" r="8"/>
+              <circle cx="218" cy="351" r="8"/>
+              <circle cx="327" cy="272" r="8"/>
+              <circle cx="439" cy="402" r="8"/>
+              <circle cx="551" cy="284" r="8"/>
+            </g>
+            <circle class="packet" aria-hidden="true" cx="100" cy="470" r="9"/>
+          </svg>
+
+          <div class="arena-label arena-label-source">
+            <span>01</span>
+            <strong>origem</strong>
+            <small>identificada</small>
+          </div>
+          <div class="arena-label arena-label-hash">
+            <span>02</span>
+            <strong>hash</strong>
+            <small>confirmado</small>
+          </div>
+          <div class="arena-label arena-label-run">
+            <span>03</span>
+            <strong>spawn</strong>
+            <small>sob seu controle</small>
+          </div>
+
+          <div class="arena-caption">
+            <span>stable + nightly</span>
+            <strong>coexistem</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="manifesto section" id="projeto" aria-labelledby="manifesto-title">
+        <div class="section-mark" aria-hidden="true">x86 / QW</div>
+        <div class="manifesto-copy">
+          <h2 id="manifesto-title">Sem launcher proprietário.<br>Sem pacote invisível.<br><strong>Sem abandonar 30 anos de jogo.</strong></h2>
+          <div class="manifesto-detail">
+            <p>O QuakeWorld continua rápido, técnico e vivo. O problema não é o jogo: é transformar fontes espalhadas em uma instalação atual que continue disponível amanhã.</p>
+            <p>O x86QW cria esse ponto de encontro. Cada versão entra no catálogo com origem, licença, tamanho e SHA-256. O instalador usa o catálogo, tenta mirrors independentes e mantém seus PAKs comerciais fora do projeto.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="audiences" aria-label="Para quem é o x86QW">
+        <article class="audience-new">
+          <p>Para quem está chegando</p>
+          <h2>Uma porta de entrada que explica antes de pedir um comando.</h2>
+          <ul>
+            <li>Escolha guiada de sistema, canal e versão.</li>
+            <li>Configuração moderna sem substituir preferências pessoais.</li>
+            <li>Mapas, LOCs e servidor browser como opções explícitas.</li>
+          </ul>
+        </article>
+        <article class="audience-veteran">
+          <p>Para quem nunca saiu</p>
+          <h2>Controle suficiente para confiar. Pouco atrito para jogar.</h2>
+          <ul>
+            <li>Stable e nightly instalados lado a lado.</li>
+            <li>Inventários para verificar, atualizar e remover.</li>
+            <li>Mesma árvore transportável entre macOS, Linux e Windows.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="platforms section" id="plataformas" aria-labelledby="platforms-title">
+        <header class="section-heading">
+          <h2 id="platforms-title">Um instalador.<br><strong>Três destinos.</strong></h2>
+          <p>Prepare o ambiente no sistema onde você está ou monte a pasta para outro computador. A escolha do destino vem primeiro; o host não decide por você.</p>
+        </header>
+
+        <div class="platform-matrix" role="table" aria-label="Plataformas e formatos suportados">
+          <div class="matrix-header" role="row">
+            <span role="columnheader">Sistema</span>
+            <span role="columnheader">Arquitetura</span>
+            <span role="columnheader">Formato</span>
+            <span role="columnheader">Canais</span>
+          </div>
+          <div role="row">
+            <strong role="cell">macOS</strong>
+            <span role="cell">arm64 + x86_64</span>
+            <span role="cell">Aplicativo universal</span>
+            <span role="cell">stable / nightly</span>
+          </div>
+          <div role="row">
+            <strong role="cell">Linux</strong>
+            <span role="cell">x86_64</span>
+            <span role="cell">AppImage</span>
+            <span role="cell">stable / nightly</span>
+          </div>
+          <div role="row">
+            <strong role="cell">Windows</strong>
+            <span role="cell">x64</span>
+            <span role="cell">Executável</span>
+            <span role="cell">stable / nightly</span>
+          </div>
+        </div>
+
+        <ol class="install-flow" aria-label="Fluxo de instalação">
+          <li>
+            <span>1</span>
+            <div><strong>Escolha o destino</strong><p>macOS é o padrão, mas os três sistemas podem ser preparados de qualquer host.</p></div>
+          </li>
+          <li>
+            <span>2</span>
+            <div><strong>Escolha o ritmo</strong><p>Stable para releases oficiais; nightly para acompanhar o desenvolvimento.</p></div>
+          </li>
+          <li>
+            <span>3</span>
+            <div><strong>Escolha os extras</strong><p>nQuake, mapas, LOCs, presets e clientes alternativos só entram com sua confirmação.</p></div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="trust" id="confianca" aria-labelledby="trust-title">
+        <div class="trust-intro">
+          <p>Confiança verificável</p>
+          <h2 id="trust-title">O mirror não é a verdade.<br><strong>O catálogo é o contrato.</strong></h2>
+          <p>Cada download pode existir no GitHub, GitLab ou R2. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado.</p>
+          <a href="/api/v1/catalog.json">Abrir catálogo público <span aria-hidden="true">↗</span></a>
+        </div>
+
+        <dl class="trust-ledger">
+          <div><dt>Origem</dt><dd>Projeto, autor e URL imutável</dd></div>
+          <div><dt>Permissão</dt><dd>Licença e redistribuição revisadas</dd></div>
+          <div><dt>Identidade</dt><dd>Versão, tamanho e SHA-256</dd></div>
+          <div><dt>Redundância</dt><dd>Mirrors ordenados com failover</dd></div>
+          <div><dt>Limite</dt><dd>PAKs comerciais nunca são espelhados</dd></div>
+        </dl>
+      </section>
+
+      <section class="status section" id="estado" aria-labelledby="status-title">
+        <div class="status-heading">
+          <p>Estado público</p>
+          <h2 id="status-title">A release só aparece<br><strong>quando pode ser provada.</strong></h2>
+        </div>
+
+        <div class="catalog-status" data-state="loading" aria-live="polite">
+          <div class="catalog-signal" aria-hidden="true"><span></span></div>
+          <div>
+            <p class="catalog-label">Consultando o catálogo</p>
+            <strong class="catalog-value">—</strong>
+            <p class="catalog-detail">Lendo o contrato público em tempo real.</p>
+          </div>
+          <a href="/api/v1/catalog.json">JSON <span aria-hidden="true">↗</span></a>
+        </div>
+        <noscript><p class="noscript-note">JavaScript está desativado. Consulte o <a href="/api/v1/catalog.json">catálogo JSON</a> diretamente.</p></noscript>
+
+        <div class="readiness">
+          <p><strong>Já funciona:</strong> instalador multiplataforma, validação, inventário, uninstall, cleanup e purge.</p>
+          <p><strong>Em andamento:</strong> auditoria das licenças e publicação dos primeiros artefatos próprios.</p>
+        </div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <p>x86QW é preservação que executa.</p>
+        <h2 id="closing-title">O próximo spawn<br><strong>começa com confiança.</strong></h2>
+        <a class="button button-light" href="#estado">Acompanhar a primeira release</a>
+      </section>
+    </main>
+
+    <footer>
+      <a class="brand brand-footer" href="#topo" aria-label="x86QW, voltar ao início">x86<span>QW</span></a>
+      <p>Distribuição independente de QuakeWorld mantida por x86dx2.<br>Quake é marca da id Software. Seus PAKs originais permanecem seus.</p>
+      <nav aria-label="Links do rodapé">
+        <a href="/api/v1/catalog.json">Catálogo</a>
+        <a href="/legal/fonts/Atkinson-Hyperlegible-OFL.txt">Licença Atkinson</a>
+        <a href="/legal/fonts/Barlow-Condensed-OFL.txt">Licença Barlow</a>
+        <a href="https://www.quakeworld.nu/" rel="external">QuakeWorld.nu ↗</a>
+      </nav>
+    </footer>
+  </body>
+</html>

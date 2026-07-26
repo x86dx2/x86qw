@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://x86qw.x86.com.br/sitemap.xml
