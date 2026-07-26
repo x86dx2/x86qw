@@ -33,6 +33,8 @@
 ## 4. Site
 
 - [x] configurar Workers Static Assets no monorepo;
+- [x] construir a página de divulgação responsiva e acessível;
+- [x] documentar produto e sistema visual;
 - [ ] publicar o site com Cloudflare Workers Static Assets;
 - [x] expor o catálogo canônico em `/api/v1/catalog.json`;
 - [ ] redirecionar `x86.com.br/x86qw` para `x86qw.x86.com.br`.
