@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from component_policy import load_component_policy, require_component  # noqa: E402
+from nquake_components import (  # noqa: E402
+    component_for_source,
+    load_catalog as load_nquake_catalog,
+    source_roots,
+    validate_tree_partition,
+)
 from snapshot_upstreams import (  # noqa: E402
     collapse_case_duplicates,
     consumed_component,
@@ -33,16 +39,24 @@ SPEC.loader.exec_module(install_qw)
 class SnapshotTests(unittest.TestCase):
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()
-        self.assertEqual(
-            list(install_qw.NQUAKE_PATHS),
-            components["nquake"]["upstream_paths"],
-        )
-        for component in ("ezquake", "classicq", "unezquake", "nquake"):
+        catalog = load_nquake_catalog(ROOT / "inventory/nquake-components.json")
+        self.assertGreater(len(source_roots(catalog)), 10)
+        for component in ("ezquake", "nquake"):
             require_component(components, component)
-        for component in ("gfx", "maps", "locs"):
+        for component in ("classicq", "unezquake", "gfx", "maps", "locs"):
             with self.subTest(component=component):
                 with self.assertRaisesRegex(ValueError, "not consumed"):
                     require_component(components, component)
+
+    def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
+        catalog = load_nquake_catalog(ROOT / "inventory/nquake-components.json")
+        snapshots = list((ROOT / "archive/components/nquake/snapshots").iterdir())
+        self.assertEqual(1, len(snapshots))
+        paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
+        partition = validate_tree_partition(catalog, paths)
+        self.assertEqual(535, sum(map(len, partition.values())))
+        self.assertEqual("nquake-ktx", component_for_source(catalog, "gpl/qw/ktx.pk3"))
+        self.assertIsNone(component_for_source(catalog, "gpl/qw/skins/player_orange.png"))
 
     def test_only_runtime_assets_have_consumers(self) -> None:
         self.assertEqual("ezquake", consumed_component(

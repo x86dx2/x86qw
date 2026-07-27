@@ -11,40 +11,12 @@
         "components/ezquake/nightlies/"
       ]
     },
-    "classicq": {
-      "consumers": [
-        "clients:classicq"
-      ],
-      "archive_prefixes": [
-        "components/classicq/releases/"
-      ]
-    },
-    "unezquake": {
-      "consumers": [
-        "clients:unezquake"
-      ],
-      "archive_prefixes": [
-        "components/unezquake/releases/"
-      ]
-    },
     "nquake": {
       "consumers": [
         "install:nquake"
       ],
       "archive_prefixes": [
         "components/nquake/snapshots/"
-      ],
-      "upstream_paths": [
-        "gpl/ezquake",
-        "gpl/qw",
-        "gpl/LICENSE",
-        "non-gpl/qw",
-        "non-gpl/readme.txt",
-        "textures/qw",
-        "addon-textures/qw",
-        "addon-clanarena/arena",
-        "addon-clanarena/prox",
-        "addon-fortress/fortress"
       ]
     }
   }

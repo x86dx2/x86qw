@@ -23,10 +23,12 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 from component_policy import component_for_archive_path, load_component_policy, require_component
+from nquake_components import component_for_source, load_catalog as load_nquake_catalog, source_roots
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARCHIVE = ROOT / "archive"
+NQUAKE_CATALOG = ROOT / "inventory/nquake-components.json"
 USER_AGENT = "x86qw-archive/2"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
@@ -36,14 +38,6 @@ RELEASES = {
     "ezquake": (
         "QW-Group/ezquake-source",
         re.compile(r"ezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip"),
-    ),
-    "classicq": (
-        "classicq/classicq",
-        re.compile(r"classicQ-[0-9.]+-(?:macos-arm64|linux-amd64|windows-amd64)\.zip"),
-    ),
-    "unezquake": (
-        "dusty-qw/unezquake",
-        re.compile(r"unezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip"),
     ),
 }
 NIGHTLIES = {
@@ -80,6 +74,7 @@ class Asset:
     url: str
     path: str
     expected_size: int | None = None
+    subcomponent: str | None = None
 
 
 class LinkParser(HTMLParser):
@@ -185,11 +180,8 @@ def discover_nightlies() -> list[Asset]:
 
 
 def discover_nquake() -> list[Asset]:
-    components = load_component_policy()
-    nquake = components["nquake"]
-    used_paths = nquake.get("upstream_paths")
-    if not isinstance(used_paths, list) or not used_paths or not all(isinstance(path, str) for path in used_paths):
-        raise ValueError("nQuake has no declared upstream paths")
+    catalog = load_nquake_catalog(NQUAKE_CATALOG)
+    used_paths = source_roots(catalog)
 
     commit_data = github_json(f"repos/{NQUAKE_REPOSITORY}/commits/{NQUAKE_REF}")
     if not isinstance(commit_data, dict) or not isinstance(commit_data.get("sha"), str):
@@ -216,12 +208,16 @@ def discover_nquake() -> list[Asset]:
         if not roots:
             continue
         found_roots.update(roots)
+        subcomponent = component_for_source(catalog, path)
+        if subcomponent is None:
+            continue
         quoted = urllib.parse.quote(path, safe="/")
         assets.append(Asset(
             "nquake",
             f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
             f"components/nquake/snapshots/{commit}/{path}",
             size,
+            subcomponent,
         ))
     missing = sorted(set(used_paths) - found_roots)
     if missing:
@@ -248,13 +244,16 @@ def consumed_component(path: str) -> str | None:
     components = load_component_policy()
     component = component_for_archive_path(components, path)
     if component == "nquake":
-        return component
+        parts = PurePosixPath(path).parts
+        if len(parts) < 6 or parts[:3] != ("components", "nquake", "snapshots"):
+            return None
+        upstream_path = PurePosixPath(*parts[4:]).as_posix()
+        catalog = load_nquake_catalog(NQUAKE_CATALOG)
+        return component if component_for_source(catalog, upstream_path) is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
         if "/nightlies/" in path:
             return component if any(pattern.fullmatch(name) for _, pattern in NIGHTLIES.values()) else None
-        return component if RELEASES[component][1].fullmatch(name) else None
-    if component in {"classicq", "unezquake"}:
         return component if RELEASES[component][1].fullmatch(name) else None
     return None
 
@@ -297,9 +296,8 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
     repository = root / LEGACY_NQUAKE_MIRROR
     if not repository.is_dir():
         return 0
-    components = load_component_policy()
-    used_paths = components["nquake"].get("upstream_paths")
-    assert isinstance(used_paths, list)
+    catalog = load_nquake_catalog(NQUAKE_CATALOG)
+    used_paths = source_roots(catalog)
     commit = subprocess.check_output(["git", f"--git-dir={repository}", "rev-parse", "HEAD"], text=True).strip()
     listing = subprocess.check_output(
         ["git", f"--git-dir={repository}", "ls-tree", "-r", "--name-only", "-z", commit, "--", *used_paths]
@@ -311,6 +309,9 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
         if not encoded:
             continue
         upstream_path = encoded.decode("utf-8")
+        subcomponent = component_for_source(catalog, upstream_path)
+        if subcomponent is None:
+            continue
         relative = f"components/nquake/snapshots/{commit}/{upstream_path}"
         target = root / relative
         if not target.is_file():
@@ -326,6 +327,7 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
         files[relative] = {
             "component": "nquake",
             "consumer": "install:nquake",
+            "package": subcomponent,
             "url": f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
             "size": target.stat().st_size,
             "sha256": file_sha256(target),
@@ -375,6 +377,10 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 assert isinstance(consumers, list)
                 metadata["component"] = component_name
                 metadata["consumer"] = consumers[0]
+                if component_name == "nquake":
+                    parts = PurePosixPath(relative).parts
+                    upstream_path = PurePosixPath(*parts[4:]).as_posix()
+                    metadata["package"] = component_for_source(load_nquake_catalog(NQUAKE_CATALOG), upstream_path)
             continue
         target = root / relative
         if target.is_file() or target.is_symlink():
@@ -409,7 +415,10 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
     if target.is_symlink():
         raise ValueError(f"archive target must not be a symlink: {target}")
     if isinstance(known, dict) and target.is_file() and target.stat().st_size == known.get("size"):
-        return asset.path, known, True
+        metadata = dict(known)
+        if asset.subcomponent is not None:
+            metadata["package"] = asset.subcomponent
+        return asset.path, metadata, True
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + ".part")
     last_error: Exception | None = None
@@ -431,13 +440,16 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
             component = load_component_policy()[asset.component]
             consumers = component["consumers"]
             assert isinstance(consumers, list)
-            return asset.path, {
+            metadata: dict[str, object] = {
                 "component": asset.component,
                 "consumer": consumers[0],
                 "url": asset.url,
                 "size": size,
                 "sha256": digest.hexdigest(),
-            }, False
+            }
+            if asset.subcomponent is not None:
+                metadata["package"] = asset.subcomponent
+            return asset.path, metadata, False
         except (OSError, ValueError, urllib.error.URLError) as error:
             last_error = error
         if temporary.exists():

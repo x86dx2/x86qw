@@ -1,16 +1,15 @@
 {
-  "archive_bytes": 931579156,
-  "archive_files": 557,
-  "captured_at": "2026-07-27T13:51:15Z",
+  "archive_bytes": 657900659,
+  "archive_files": 541,
+  "captured_at": "2026-07-27T15:03:36Z",
   "collections": {
-    "classicq_release_binaries": 3,
     "ezquake_release_and_nightly_binaries": 6,
-    "nquake_selected_files": 545,
-    "unezquake_release_binaries": 3
+    "nquake_component_files": 535,
+    "nquake_components": 17
   },
   "layout": "consumed-only-v1",
-  "manifest_sha256": "be4a11c228301709c8bc4c92f08f565b02cdb2ffc5611800eac0b8dbf8099ebc",
+  "manifest_sha256": "c9a51d38bf7e573c201d86e54d22ccec5d929238c88228a263e24fdc52bb285a",
   "nquake_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-  "policy": "inventory/component-policy.json",
+  "policy": "inventory/component-policy.json + inventory/nquake-components.json",
   "scope": "explicitly-incorporated-upstream-files"
 }
