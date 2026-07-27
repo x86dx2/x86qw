@@ -108,17 +108,20 @@ O acervo é organizado primeiro pelo contexto do conteúdo:
 ```text
 archive/
 ├── components/
-│   ├── ezquake/       Git, releases e nightlies por build e plataforma
+│   ├── ezquake/       Git, releases, nightlies e dependências próprias
 │   ├── classicq/      Git e releases
-│   ├── unezquake/     Git e releases
+│   ├── unezquake/     Git, releases e dependências próprias
 │   └── nquake/        mirror Git completo dos distfiles
 ├── content/
 │   ├── maps/          arquivo completo e índices das coleções
 │   ├── locs/          nomes de regiões dos mapas
 │   └── gfx/           detalhes, pacotes opacos e previews
-├── dependencies/      mirrors e snapshots exatos de qwprot e vcpkg
 └── manifest.json      inventário individual com origem, tamanho e SHA-256
 ```
+
+`qwprot` e `vcpkg` ficam dentro do componente que fixa seus commits. O acervo
+não mantém um diretório global de dependências nem presume que versões usadas
+por clientes diferentes sejam intercambiáveis.
 
 Acervos criados antes desse layout podem ser migrados localmente, sem rede ou
 novo download:

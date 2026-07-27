@@ -1,7 +1,7 @@
 {
   "archive_bytes": 8583738791,
   "archive_files": 8869,
-  "captured_at": "2026-07-27T12:09:33Z",
+  "captured_at": "2026-07-27T12:34:26Z",
   "collections": {
     "gfx_details": 586,
     "gfx_packages": 586,
@@ -13,8 +13,8 @@
     "source_dependency_snapshots": 4,
     "spoken_locations": 444
   },
-  "layout": "component-first-v1",
-  "manifest_sha256": "c279555a966f31ec607c1ffae0ecf217bd6db272c588a7f2a317f67c40bded84",
+  "layout": "component-owned-v1",
+  "manifest_sha256": "216696cc7bb4d5bd7c8bc78cbddbd387df5625fc798cd6b17fa734cad8da8b3d",
   "missing_optional_files": 0,
   "repositories": {
     "classicq": "d50890728f0a88a4caba19f05d88b2ab5d37ee2d",
