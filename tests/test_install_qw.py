@@ -32,16 +32,74 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    def test_repository_bundles_the_registered_paks(self):
+        expected = {
+            "pak0.pak": install_qw.ID1_PAK0_SHA256,
+            "pak1.pak": install_qw.ID1_PAK1_SHA256,
+        }
+        for name, digest in expected.items():
+            with self.subTest(name=name):
+                pak = ROOT / "dist/id1" / name
+                self.assertTrue(pak.is_file())
+                self.assertFalse(pak.is_symlink())
+                with pak.open("rb") as source:
+                    self.assertEqual(b"PACK", source.read(4))
+                self.assertEqual(digest, install_qw.file_hash(pak))
+
     def test_cancel_before_selection_leaves_no_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
+            target.rmdir()
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch("builtins.input", side_effect=KeyboardInterrupt):
                     with self.assertRaises(KeyboardInterrupt):
                         installer.install()
             installer.cleanup_stage()
-            self.assertFalse((target / ".install").exists())
-            self.assertEqual([], list(target.glob(".quake-install.*")))
+            self.assertFalse(target.exists())
+
+    def test_new_install_target_receives_bundled_registered_paks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            target.rmdir()
+            bundled = installer.project_root / "dist/id1"
+            bundled.mkdir(parents=True)
+            pak0 = b"PACK" + b"pak0"
+            pak1 = b"PACK" + b"pak1"
+            (bundled / "pak0.pak").write_bytes(pak0)
+            (bundled / "pak1.pak").write_bytes(pak1)
+            with mock.patch.object(install_qw, "ID1_PAK0_SHA256", install_qw.hashlib.sha256(pak0).hexdigest()):
+                with mock.patch.object(install_qw, "ID1_PAK1_SHA256", install_qw.hashlib.sha256(pak1).hexdigest()):
+                    installer.validate_target("install")
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        installer.provision_install_target()
+                    installer.check_paks()
+            self.assertEqual(pak0, (target / "id1/pak0.pak").read_bytes())
+            self.assertEqual(pak1, (target / "id1/pak1.pak").read_bytes())
+
+    def test_missing_target_is_still_rejected_for_non_install_actions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            target.rmdir()
+            with self.assertRaisesRegex(install_qw.InstallerError, "não existe"):
+                installer.validate_target("verify")
+
+    def test_existing_pak_is_never_overwritten_by_the_bundled_copy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            bundled = installer.project_root / "dist/id1"
+            bundled.mkdir(parents=True)
+            valid = b"PACK" + b"registered"
+            for name in ("pak0.pak", "pak1.pak"):
+                (bundled / name).write_bytes(valid)
+            (target / "id1").mkdir()
+            existing = target / "id1/pak0.pak"
+            existing.write_bytes(b"PACKpersonal")
+            digest = install_qw.hashlib.sha256(valid).hexdigest()
+            with mock.patch.object(install_qw, "ID1_PAK0_SHA256", digest):
+                with mock.patch.object(install_qw, "ID1_PAK1_SHA256", digest):
+                    with self.assertRaisesRegex(install_qw.InstallerError, "versão registrada"):
+                        installer.provision_install_target()
+            self.assertEqual(b"PACKpersonal", existing.read_bytes())
 
     def test_invalid_platform_and_channel_are_explained_and_reprompted(self):
         with tempfile.TemporaryDirectory() as temporary:

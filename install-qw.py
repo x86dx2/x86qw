@@ -38,6 +38,7 @@ METADATA_DIR = ".install"
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
 NQUAKE_CATALOG = "inventory/nquake-components.json"
+BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
 CACHE_MARKER_NAME = ".x86-qw-cache"
 CACHE_MARKER_VALUE = "x86-qw-cache-v1"
@@ -434,10 +435,13 @@ class Installer:
         return (result.stdout or "").strip()
 
     def validate_target(self, action: str) -> None:
-        if not self.target.is_dir():
+        target_exists = lexists(self.target)
+        if target_exists and self.target.is_symlink():
+            raise InstallerError(f"O diretório de destino não pode ser um link simbólico: {self.target}")
+        if target_exists and not self.target.is_dir():
+            raise InstallerError(f"O destino não é um diretório: {self.target}")
+        if not target_exists and action != "install":
             raise InstallerError(f"O diretório de destino não existe: {self.target}")
-        if action == "purge" and self.target.is_symlink():
-            raise InstallerError(f"O destino do purge não pode ser um link simbólico: {self.target}")
         self.target = self.target.resolve()
         if self.target == Path(self.target.anchor):
             raise InstallerError("A raiz do sistema de arquivos não pode ser usada como destino.")
@@ -554,20 +558,65 @@ class Installer:
         remove_path(self.cache_root)
         console.success(f"Cache removido: {self.cache_root}")
 
-    def check_pak(self, relative: str, expected: str) -> None:
-        pak = self.target / relative
+    def validate_pak_file(self, pak: Path, expected: str, label: str = "PAK") -> None:
         if not pak.is_file() or pak.is_symlink():
-            raise InstallerError(f"PAK obrigatório não encontrado: {pak}")
+            raise InstallerError(f"{label} não encontrado: {pak}")
         with pak.open("rb") as source:
             if source.read(4) != b"PACK":
                 raise InstallerError(f"O arquivo não possui um cabeçalho PAK válido: {pak}")
         if file_hash(pak) != expected:
             raise InstallerError(f"O PAK não corresponde à versão registrada original: {pak}")
 
+    def check_pak(self, relative: str, expected: str) -> None:
+        self.validate_pak_file(self.target / relative, expected, "PAK obrigatório")
+
     def check_paks(self) -> None:
         self.check_pak("id1/pak0.pak", ID1_PAK0_SHA256)
         self.check_pak("id1/pak1.pak", ID1_PAK1_SHA256)
         console.detail("PAKs registrados validados por SHA-256.")
+
+    def provision_install_target(self) -> None:
+        bundled = self.project_root / BUNDLED_ID1_DIR
+        ensure_no_symlink(bundled, "bundled id1 directory")
+        sources = (
+            ("pak0.pak", ID1_PAK0_SHA256),
+            ("pak1.pak", ID1_PAK1_SHA256),
+        )
+        for name, expected in sources:
+            self.validate_pak_file(bundled / name, expected, "PAK permanente da distribuição")
+
+        ensure_no_symlink(self.target, "installation target")
+        if lexists(self.target) and not self.target.is_dir():
+            raise InstallerError(f"O destino não é um diretório: {self.target}")
+        self.target.mkdir(parents=True, exist_ok=True)
+        id1 = self.target / "id1"
+        ensure_no_symlink(id1, "id1 directory")
+        if lexists(id1) and not id1.is_dir():
+            raise InstallerError(f"O caminho id1 não é um diretório: {id1}")
+        id1.mkdir(exist_ok=True)
+
+        copied = 0
+        for name, expected in sources:
+            destination = id1 / name
+            if lexists(destination):
+                self.validate_pak_file(destination, expected, "PAK existente")
+                continue
+            temporary = id1 / f".{name}.x86qw-part"
+            ensure_no_symlink(temporary, "temporary PAK")
+            try:
+                shutil.copyfile(bundled / name, temporary)
+                if os.name != "nt":
+                    temporary.chmod(0o644)
+                self.validate_pak_file(temporary, expected, "Cópia temporária do PAK")
+                os.replace(temporary, destination)
+            finally:
+                if lexists(temporary):
+                    remove_path(temporary)
+            copied += 1
+        if copied:
+            console.success(f"PAKs registrados preparados em {id1} ({file_count(copied)} copiados).")
+        else:
+            console.detail("PAKs registrados já estavam presentes e foram preservados.")
 
     def ensure_metadata_directory(self) -> None:
         metadata = self.target / METADATA_DIR
@@ -1911,8 +1960,10 @@ class Installer:
         self.choose_platform()
         self.choose_channel()
         self.check_runtime_destination_ownership()
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
         self.choose_release()
+        self.provision_install_target()
+        self.reject_target_symlinks()
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
         self.check_paks()
         pak0_before = file_hash(self.target / "id1/pak0.pak")
         pak1_before = file_hash(self.target / "id1/pak1.pak")

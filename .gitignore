@@ -12,3 +12,11 @@ quake-world/
 id1/
 *.pak
 *.PAK
+
+# Registered Quake data intentionally bundled with the x86QW distribution.
+!/dist/
+/dist/*
+!/dist/id1/
+/dist/id1/*
+!/dist/id1/pak0.pak
+!/dist/id1/pak1.pak
