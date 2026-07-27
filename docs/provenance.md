@@ -10,8 +10,9 @@ atribuição, origem imutável e checksum.
 | --- | --- | --- |
 | ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 publicado byte a byte no `x86qw-dist` |
 | ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` vinculado ao commit completo e publicado |
-| 17 componentes nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/nquake-components.json` | originais preservados e pacotes imutáveis publicados no `x86qw-dist` |
+| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/nquake-components.json` | originais preservados e pacotes imutáveis publicados no `x86qw-dist` |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
+| Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte | original preservado e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
 | PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e copiados diretamente; fora do catálogo de pacotes |
@@ -55,7 +56,7 @@ stable 3.6.9 e com a nightly `20260616-101233_a86996a`. Isso comprova a gestão
 do pacote no cliente; o QVM continua sendo código de servidor, oficialmente
 destinado ao MVDSV segundo o upstream do KTX.
 
-Todos os 23 artefatos atuais também estão no GitLab Generic Package Registry.
+Todos os 24 artefatos instaláveis atuais também estão no GitLab Generic Package Registry.
 O catálogo ordena GitHub primeiro e GitLab depois; a ferramenta de publicação
 baixa ambas as cópias e exige o mesmo tamanho e SHA-256 antes do registro.
 

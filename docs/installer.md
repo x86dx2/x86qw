@@ -97,10 +97,13 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 
 - `recomendado`: toda a experiência base nQuake, sem os três addons maiores;
 - `essencial`: bootstrap, interface principal e KTX;
-- `completo`: os 17 componentes, incluindo QRP, Clan Arena e Team Fortress;
+- `completo`: os 18 componentes, incluindo QRP, Clan Arena, Team Fortress e Total Destruction 2;
 - `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
+O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Seus arquivos de
+servidor são exemplos inertes (`*.example.cfg`), e o `pwd.cfg` histórico com
+senha padrão não entra na instalação.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.
 

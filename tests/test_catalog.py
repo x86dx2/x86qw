@@ -18,7 +18,7 @@ from build_nquake_packages import register_packages  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 23)
+        self.assertEqual(validate_catalog(catalog), 24)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
         self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
@@ -35,9 +35,13 @@ class CatalogTests(unittest.TestCase):
                 "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
-                "clan-arena", "team-fortress",
+                "clan-arena", "team-fortress", "total-destruction-2",
             },
         )
+        td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
+        self.assertEqual("2.22", td2["version"])
+        self.assertEqual(64, len(td2["source_revision"]))
+        self.assertEqual("2.22", td2["upstream_version"])
 
         package = {
             "component": "ezquake",

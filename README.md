@@ -31,7 +31,7 @@ configuração nQuake já foi carregada.
 
 ```text
 docs/architecture.md    serviços, repositórios e fluxo de publicação
-docs/components.md      matriz de versões e estratégia dos 17 componentes
+docs/components.md      matriz de versões e estratégia dos 18 componentes
 docs/cloudflare.md      deploy, domínio e redirecionamento do portal
 docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
@@ -43,7 +43,7 @@ dist/id1/               PAKs registrados permanentes usados pela instalação
 recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
-tools/build_nquake_packages.py  gera os 17 pacotes reproduzíveis do mirror
+tools/build_nquake_packages.py  gera os 18 pacotes reproduzíveis do mirror
 tools/check_component_updates.py  compara versões fixadas com os upstreams
 tools/publish_gitlab_packages.py  publica e verifica o segundo mirror
 tools/add_package.py    registro atômico de artefatos revisados
@@ -78,8 +78,8 @@ npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
 ```
 
 As fontes do site são servidas localmente sob SIL Open Font License; os textos
-das licenças ficam em `site/public/legal/fonts`. O catálogo publica os 17
-pacotes nQuake, os três binários ezQuake 3.6.9 e os três binários da nightly
+das licenças ficam em `site/public/legal/fonts`. O catálogo publica os 18
+pacotes de componentes, os três binários ezQuake 3.6.9 e os três binários da nightly
 fixada atualmente.
 
 ## Montar um pacote do mirror

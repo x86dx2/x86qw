@@ -26,12 +26,15 @@ Estado verificado em 27 de julho de 2026:
 | QRP alta resolução | `e4cb23d40aa2` | snapshot nQuake | contém mapas 1.00 e itens 0.73 |
 | Clan Arena e Pro-X | `e4cb23d40aa2` | snapshot nQuake | coleção histórica sem release atual mapeada |
 | Team Fortress | `e4cb23d40aa2` | snapshot nQuake | coleção histórica sem release atual mapeada |
+| Total Destruction 2 | `2.22` | pacote independente do upstream | distribuição QW completa localizada, sem mapas adicionais |
 
 ## Contrato de atualização
 
 - `reference-snapshot`: acompanha o commit mais recente aprovado do nQuake;
 - `upstream-overlay`: um artefato oficial substitui somente membros declarados
   sobre a base nQuake;
+- `upstream-package`: um componente independente é validado e empacotado sem
+  fingir que pertence ao snapshot do nQuake;
 - todo download possui tamanho e SHA-256 antes de entrar no acervo;
 - o pacote interno registra origem, membros substituídos e hashes resultantes;
 - o catálogo mantém somente a versão atual, enquanto releases antigas continuam
@@ -42,3 +45,10 @@ O KTX é um mod de servidor. Ele permanece entre os componentes porque faz parte
 do nQuake e pode ser consumido por uma instalação de servidor compatível; não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui o runtime
 MVDSV. Os únicos clientes ativos continuam sendo ezQuake stable e nightly.
+
+O TD2 possui duas numerações públicas que não formam uma cronologia simples. A
+página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
+versão não está mais disponível. O pacote incorporado é a distribuição
+QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
+com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
+no perfil `completo` e não baixa mapas fora do acervo já aprovado do x86QW.
