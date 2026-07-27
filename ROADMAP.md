@@ -17,12 +17,15 @@
 - [x] preservar localmente somente releases/nightlies ezQuake e arquivos nQuake consumidos;
 - [x] decompor o conteúdo nQuake em BOM de 17 componentes sem overlays inúteis;
 - [x] gerar pacotes determinísticos por componente a partir do snapshot validado.
+- [x] registrar estratégia, versão e upstream separadamente para os 17 componentes;
+- [x] detectar atualizações upstream sem publicá-las automaticamente;
+- [x] atualizar KTX de `1.46-dev` para `1.47` preservando os recursos nQuake.
 
 ## 2. Distribuição
 
 - [x] criar `x86dx2/x86qw` no GitHub;
 - [x] criar `x86dx2/x86qw-dist` no GitHub e GitLab;
-- [ ] automatizar o mirror passivo no GitLab (repositório e cópia inicial criados);
+- [x] publicar e verificar os 23 artefatos no GitLab Generic Package Registry;
 - [x] publicar a primeira release nQuake imutável e seus checksums;
 - [x] manter R2 fora da arquitetura desta fase.
 
@@ -35,6 +38,7 @@
 - [x] oferecer perfis e seleção individual dos 17 componentes nQuake;
 - [x] registrar recibo e inventário independentes por componente;
 - [x] fazer o instalador consumir pacotes nQuake do `x86qw-dist`, sem depender do repositório upstream;
+- [x] mostrar versão atual e notas de release antes de atualizar componentes;
 
 ## 4. Site
 

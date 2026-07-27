@@ -106,9 +106,13 @@ Cada entrada registra origem, licença revisada, tamanho, SHA-256 e uma lista
 ordenada de mirrors. Se uma cópia estiver indisponível ou entregar um hash
 incorreto, o instalador tenta a próxima automaticamente.
 
-Nesta primeira geração, cada pacote x86QW é produzido a partir de um commit
-exato de `nQuake/distfiles`; o catálogo publica um pacote atual por componente
-e o recibo individual grava sua versão. O instalador baixa apenas de
+Cada componente possui versão própria. Coleções sem release oficial continuam
+fixadas no commit exato de `nQuake/distfiles`; componentes com upstream
+verificável podem receber overlays independentes. O KTX atual combina os
+recursos nQuake com o `qwprogs.qvm` oficial 1.47, substituindo o `1.46-dev`
+embarcado. O catálogo publica um pacote atual por componente e o recibo
+individual grava sua versão. Antes do download, o instalador mostra as versões
+escolhidas e, quando disponível, o link das notas de release. Ele baixa apenas de
 `x86dx2/x86qw-dist`, sem clonar o repositório upstream. Servidores e shareware
 ficam de fora. Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro

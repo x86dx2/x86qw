@@ -10,7 +10,7 @@
   "components": [
     { "id": "upstreams", "type": "external", "label": "Upstream projects", "sublabel": "versioned sources", "pos": [40, 110], "size": [150, 64] },
     { "id": "ingest", "type": "backend", "label": "x86QW ingest", "sublabel": "license + format + hash", "pos": [250, 110], "size": [150, 64], "tag": "reproducible" },
-    { "id": "mirrors", "type": "cloud", "label": "Artifact releases", "sublabel": "GitHub Releases", "pos": [460, 110], "size": [160, 64], "tag": "immutable" },
+    { "id": "mirrors", "type": "cloud", "label": "Artifact mirrors", "sublabel": "GitHub + GitLab", "pos": [460, 110], "size": [160, 64], "tag": "verified" },
     { "id": "players", "type": "external", "label": "Players", "sublabel": "browser", "pos": [40, 330], "size": [150, 64] },
     { "id": "portal", "type": "frontend", "label": "x86.com.br", "sublabel": "portal Worker", "pos": [250, 330], "size": [150, 64] },
     { "id": "site", "type": "frontend", "label": "x86qw.x86.com.br", "sublabel": "Worker Static Assets", "pos": [460, 330], "size": [160, 64] },
@@ -38,7 +38,7 @@
   ],
   "cards": [
     { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
-    { "dot": "emerald", "title": "Reproducible delivery", "items": ["Every artifact records origin, license, size and SHA-256", "GitHub Releases hosts assets; GitLab preserves repository metadata"] },
+    { "dot": "emerald", "title": "Reproducible delivery", "items": ["Every artifact records origin, license, size and SHA-256", "GitHub Releases and GitLab Generic Packages hold verified copies"] },
     { "dot": "rose", "title": "Commercial boundary", "items": ["id1 PAKs are supplied by the player", "They never enter Git, CI, Cloudflare or any mirror"] }
   ]
 }

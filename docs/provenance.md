@@ -11,6 +11,7 @@ atribuição, origem imutável e checksum.
 | ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 publicado byte a byte no `x86qw-dist` |
 | ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` vinculado ao commit completo e publicado |
 | 17 componentes nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/nquake-components.json` | originais preservados e pacotes imutáveis publicados no `x86qw-dist` |
+| KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
 | PAKs de `id1` | cópia comercial fornecida pelo usuário | proibido baixar, versionar ou espelhar |
@@ -37,6 +38,26 @@ As três receitas stable estão `ready` e apontam para a release imutável no
 `x86qw-dist`. O catálogo também registra os três binários nightly e o commit
 completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. O acervo não mantém cópia do
 código-fonte ou dependências de build porque o instalador não os consome.
+
+### Atualização independente do KTX
+
+O release oficial `qwprogs-qvm.zip` 1.47 possui SHA-256
+`e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed`.
+Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
+`a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c`.
+O empacotador preserva os demais membros do `ktx.pk3` de referência e troca
+somente esse QVM. O pacote x86QW resultante é
+`1.47+nquake.e4cb23d40aa2`; fontes, override e hashes ficam no inventário
+versionado e nos metadados internos do ZIP.
+
+O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake
+stable 3.6.9 e com a nightly `20260616-101233_a86996a`. Isso comprova a gestão
+do pacote no cliente; o QVM continua sendo código de servidor, oficialmente
+destinado ao MVDSV segundo o upstream do KTX.
+
+Todos os 23 artefatos atuais também estão no GitLab Generic Package Registry.
+O catálogo ordena GitHub primeiro e GitLab depois; a ferramenta de publicação
+baixa ambas as cópias e exige o mesmo tamanho e SHA-256 antes do registro.
 
 ## Registro obrigatório por artefato
 

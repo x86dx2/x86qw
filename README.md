@@ -16,7 +16,7 @@ sincronização intermediária.
 - cada artefato é imutável e identificado por SHA-256;
 - origem, versão e licença são registradas antes do espelhamento;
 - o instalador consulta `https://x86qw.x86.com.br/api/v1/catalog.json`;
-- GitHub Releases hospeda os artefatos nesta fase; R2 não é utilizado;
+- GitHub Releases e GitLab Generic Packages mantêm duas cópias verificadas; R2 não é utilizado;
 - os PAKs comerciais de `id1` nunca entram no repositório ou no mirror;
 - o instalador continua multiplataforma e usa somente a biblioteca padrão do
   Python.
@@ -25,6 +25,7 @@ sincronização intermediária.
 
 ```text
 docs/architecture.md    serviços, repositórios e fluxo de publicação
+docs/components.md      matriz de versões e estratégia dos 17 componentes
 docs/cloudflare.md      deploy, domínio e redirecionamento do portal
 docs/provenance.md      política e inventário das fontes
 docs/diagrams/          arquitetura interativa e fonte Archify
@@ -36,12 +37,15 @@ recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
 tools/build_nquake_packages.py  gera os 17 pacotes reproduzíveis do mirror
+tools/check_component_updates.py  compara versões fixadas com os upstreams
+tools/publish_gitlab_packages.py  publica e verifica o segundo mirror
 tools/add_package.py    registro atômico de artefatos revisados
 tools/snapshot_upstreams.py  captura somente os arquivos usados pelo produto
 tools/validate_nquake_components.py  valida catálogo e partição dos componentes
 tools/validate_recipes.py
 tools/validate_catalog.py
 inventory/nquake-components.json  BOM, perfis e dependências do conteúdo nQuake
+inventory/nquake-releases.json  versão e estratégia de atualização por componente
 tests/test_catalog.py
 wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```
@@ -52,6 +56,7 @@ wrangler.jsonc          Worker estático em x86qw.x86.com.br
 python3 tools/validate_catalog.py
 python3 tools/validate_recipes.py
 python3 tools/validate_nquake_components.py
+python3 tools/check_component_updates.py
 python3 -m unittest discover -s tests -v
 ./install-qw.py --help
 python3 tools/build_package.py --help
@@ -94,7 +99,8 @@ python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
 mirror ocorre antes do registro público. Somente então use `--register`; a ação
 é explícita para impedir que um build local altere o catálogo por acidente.
 
-Para gerar os pacotes nQuake diretamente do snapshot validado:
+Para gerar os pacotes nQuake diretamente do snapshot e dos overlays de release
+validados:
 
 ```sh
 python3 tools/build_nquake_packages.py
@@ -118,7 +124,8 @@ origem, tamanho e SHA-256 em `archive/manifest.json`; execuções posteriores
 reaproveitam itens já confirmados.
 
 A fronteira geral fica em `inventory/component-policy.json`; o BOM detalhado,
-os perfis e as dependências ficam em `inventory/nquake-components.json`. Um
+os perfis e as dependências ficam em `inventory/nquake-components.json`; versões,
+upstreams e overlays ficam em `inventory/nquake-releases.json`. Um
 componente novo sem consumidor, arquivos e destino declarados é recusado. Isso
 impede que pesquisas, catálogos externos, fontes, dependências de build ou
 coleções inteiras entrem no acervo apenas porque estão disponíveis. Mapas e
@@ -131,7 +138,7 @@ O acervo é organizado primeiro pelo contexto do conteúdo:
 archive/
 ├── components/
 │   ├── ezquake/       binários de releases e nightlies
-│   └── nquake/        snapshot dos 17 componentes usados, fixado por commit
+│   └── nquake/        snapshot fixado e releases externas realmente consumidas
 └── manifest.json      inventário com consumidor, origem, tamanho e SHA-256
 ```
 
@@ -153,3 +160,9 @@ python3 tools/snapshot_upstreams.py --verify
 
 `archive/` é permanente, mas local e ignorado pelo Git devido ao tamanho. O
 resumo auditável da captura atual fica em `inventory/upstream-current.json`.
+
+`tools/check_component_updates.py` consulta somente upstreams explicitamente
+associados a componentes. Coleções sem projeto versionado próprio acompanham o
+commit atual de `nQuake/distfiles`; componentes com release oficial evoluem
+independentemente. O primeiro é KTX 1.47, aplicado sobre os recursos curados do
+nQuake sem modificar os outros 16 componentes.

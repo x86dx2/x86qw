@@ -20,17 +20,19 @@ sem publicar uma nova versão do instalador.
 
 - `x86dx2/x86qw`: catálogo, receitas, instalador, site e validações;
 - `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes de
-  componentes nQuake, com repositório homônimo de contingência no GitLab; não
-  armazena PAKs de `id1`.
+  componentes nQuake; o projeto homônimo usa GitLab Generic Packages como
+  segundo mirror. Nenhum deles armazena PAKs de `id1`.
 
-O GitHub é o remoto principal. `gitlab.com/x86dx2/x86qw` mantém a cópia de
-contingência; o primeiro `main` já foi sincronizado, mas a atualização
-automática continua pendente no roteiro.
+O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
+contingência do código. `tools/publish_gitlab_packages.py` envia somente
+artefatos já presentes no catálogo, baixa cada cópia pública, confere tamanho e
+SHA-256 e só então registra a segunda URL.
 
 O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
 servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
 permite que uma única validação cubra publicação e consumo. Os arquivos grandes
-ficam fora do Git e são publicados como assets de release em `x86qw-dist`.
+ficam fora do Git e são publicados como assets de release no GitHub e pacotes
+genéricos no GitLab.
 
 ## Regra de entrada de componentes
 
@@ -40,10 +42,20 @@ perfis, dependências, origens e destinos. O coletor rejeita caminhos fora dessa
 declarações e a validação offline rejeita arquivos sem consumidor ou componente.
 Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 
+`inventory/nquake-releases.json` mantém a camada de atualização separada: versão
+atual, estratégia, upstream, artefatos consumidos e hashes. Assim uma release
+como KTX pode avançar sem renomear ou reconstruir componentes alheios.
+
 Quando um componente for proposto, a ordem é: implementar a ação consumidora,
 declarar o componente na política, adicionar testes e só então habilitar seu
 download. Remover a ação consumidora exige remover também seus arquivos do
 acervo.
+
+Atualizações são detectadas por `tools/check_component_updates.py`, mas nunca
+publicadas automaticamente. Um adaptador deve preservar o pacote de referência,
+aplicar somente membros declarados, verificar hashes internos e produzir um novo
+pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
+`qwprogs.qvm` dentro de `ktx.pk3`.
 
 ## Fluxo de publicação
 
