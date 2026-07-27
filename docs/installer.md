@@ -307,7 +307,11 @@ Não há uso silencioso do alias `latest`: uma nightly é sempre baixada pelo no
 
 ## Primeira execução no macOS
 
-Abra `quake-world/ezQuake Stable.app` ou `quake-world/ezQuake Nightly.app`. Se o ezQuake pedir o diretório que contém `id1/pak0.pak`, escolha a própria pasta `quake-world`.
+Feche qualquer ezQuake aberto antes de instalar ou atualizar. O aplicativo oficial usa uma autorização sandbox compartilhada entre as instalações stable e nightly. O instalador remove uma seleção antiga para impedir que uma cópia nova continue lendo outro diretório de jogo.
+
+Abra `quake-world/ezQuake Stable.app` ou `quake-world/ezQuake Nightly.app`. Na janela que pede o diretório contendo `id1/pak0.pak`, escolha exatamente a própria pasta `quake-world` mostrada no resumo do instalador. Essa seleção é obrigatória para que o ezQuake encontre `qw/autoexec.cfg` e carregue a configuração inicial nQuake.
+
+O menu principal pode manter a aparência clássica do Quake. Para verificar o estado real, execute `./install-qw.py verify`: o resultado informa se as configurações nQuake estão aguardando a primeira abertura ou se já foram carregadas.
 
 Os builds oficiais atuais usam assinatura ad-hoc e podem não estar notarizados. Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem contorna as proteções do macOS.
 

@@ -11,6 +11,11 @@ regras de proveniência, as ferramentas de validação e o site do projeto. O
 instalador e a página pública leem o mesmo catálogo canônico, sem uma camada de
 sincronização intermediária.
 
+No macOS, feche o ezQuake antes de instalar. Na primeira abertura, selecione a
+própria pasta `quake-world` quando o aplicativo pedir o diretório do jogo; o
+instalador limpa autorizações antigas e `./install-qw.py verify` confirma se a
+configuração nQuake já foi carregada.
+
 ## Princípios
 
 - cada artefato é imutável e identificado por SHA-256;
