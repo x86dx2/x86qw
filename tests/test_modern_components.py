@@ -81,6 +81,8 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(set(installer.nquake_components), set(installer.nquake_catalog["profiles"]["complete"]))
             self.assertNotIn("qrp-hires", installer.nquake_catalog["profiles"]["recommended"])
             self.assertIn("qrp-hires", installer.nquake_catalog["profiles"]["complete"])
+            self.assertNotIn("total-destruction-2", installer.nquake_catalog["profiles"]["recommended"])
+            self.assertIn("total-destruction-2", installer.nquake_catalog["profiles"]["complete"])
 
     def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -160,6 +162,38 @@ class ModernComponentTests(unittest.TestCase):
             managed, defaults = installer.prepare_nquake_package(package, artifact)
             self.assertEqual([], defaults)
             self.assertTrue((managed / "qw/ktx.pk3").is_file())
+
+    def test_nquake_component_accepts_a_standalone_source_revision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, _, _ = self.make_installer(root)
+            revision = "b" * 64
+            version = "2.22"
+            filename = f"total-destruction-2-{version}.zip"
+            package = {
+                "component": "nquake", "package": "total-destruction-2", "version": version,
+                "channel": "content", "platform": "any", "architecture": "any",
+                "filename": filename, "size": 123, "sha256": "c" * 64,
+                "source_revision": revision, "redistribution_reviewed": True,
+                "urls": [f"https://example.invalid/{filename}"],
+            }
+            installer._public_catalog = {"format": 1, "project": "x86qw", "packages": [package]}
+            self.assertEqual(version, installer.nquake_package_record("total-destruction-2")["version"])
+
+            artifact = root / filename
+            metadata = {
+                "format": 1, "project": "x86qw", "package": "total-destruction-2",
+                "version": version, "source_revision": revision,
+                "members": [{"path": "payload/td2/qwprogs.dat", "sha256": hashlib.sha256(b"td2").hexdigest()}],
+            }
+            with zipfile.ZipFile(artifact, "w") as outer:
+                outer.writestr("payload/td2/qwprogs.dat", b"td2")
+                outer.writestr("_x86qw/component.json", json.dumps(metadata))
+            installer.stage = root / "stage"
+            installer.stage.mkdir()
+            managed, defaults = installer.prepare_nquake_package(package, artifact)
+            self.assertEqual([], defaults)
+            self.assertEqual(b"td2", (managed / "td2/qwprogs.dat").read_bytes())
 
     def test_component_download_falls_back_from_github_to_gitlab(self):
         with tempfile.TemporaryDirectory() as temporary:

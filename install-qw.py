@@ -1171,7 +1171,9 @@ class Installer:
             raise InstallerError(f"unsafe path in managed inventory: {value}")
         if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
             raise InstallerError(f"personal configuration must not be managed: {value}")
-        if value not in ("LICENSE", "readme.txt") and path.parts[0] not in ("ezquake", "qw", "arena", "prox", "fortress"):
+        if value not in ("LICENSE", "readme.txt") and path.parts[0] not in (
+            "ezquake", "qw", "arena", "prox", "fortress", "td2",
+        ):
             raise InstallerError(f"unexpected path in managed inventory: {value}")
 
     def validate_inventory(self, path: Path) -> list[tuple[str, str]]:
@@ -1535,13 +1537,14 @@ class Installer:
             raise InstallerError(f"O catálogo deve publicar exatamente um pacote atual para {identifier}.")
         package = matches[0]
         version = package.get("version")
-        commit = package.get("source_commit")
+        source_revision = package.get("source_revision", package.get("source_commit"))
         filename = package.get("filename")
         if not isinstance(version, str) or not COMPONENT_VERSION.fullmatch(version):
             raise InstallerError(f"Versão inválida do componente {identifier}.")
-        if not isinstance(commit, str):
-            raise InstallerError(f"Commit de origem ausente do componente {identifier}.")
-        validate_hex(commit, HEX40, f"commit de origem de {identifier}")
+        if not isinstance(source_revision, str):
+            raise InstallerError(f"Revisão de origem ausente do componente {identifier}.")
+        revision_pattern = HEX40 if len(source_revision) == 40 else HEX64
+        validate_hex(source_revision, revision_pattern, f"revisão de origem de {identifier}")
         if filename != f"{identifier}-{version}.zip":
             raise InstallerError(f"Identidade inconsistente do pacote {identifier}.")
         digest = package.get("sha256")
@@ -1607,16 +1610,18 @@ class Installer:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise InstallerError(f"Metadados internos inválidos no pacote {identifier}.") from error
+        revision_key = "source_revision" if "source_revision" in package else "source_commit"
+        source_revision = package.get(revision_key)
         if (
             not isinstance(metadata, dict)
             or metadata.get("format") != 1
             or metadata.get("project") != "x86qw"
             or metadata.get("package") != identifier
-            or metadata.get("source_commit") != package["source_commit"]
+            or metadata.get(revision_key) != source_revision
             or not isinstance(metadata.get("members"), list)
         ):
             raise InstallerError(f"Identidade interna inválida no pacote {identifier}.")
-        internal_version = metadata.get("version", str(metadata["source_commit"])[:12])
+        internal_version = metadata.get("version", str(source_revision)[:12])
         if internal_version != package["version"]:
             raise InstallerError(f"Versão interna inválida no pacote {identifier}.")
         expected: set[str] = set()

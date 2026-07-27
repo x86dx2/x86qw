@@ -73,6 +73,46 @@
       "embedded_version": "maps-1.00+items-0.73"
     },
     "clan-arena": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "team-fortress": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"}
+    "team-fortress": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "total-destruction-2": {
+      "version": "2.22",
+      "strategy": "upstream-package",
+      "freshness": "upstream-current",
+      "distribution_tag": "total-destruction-2-2.22",
+      "license": "GPL-2.0-or-later",
+      "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+      "source_mirrors": [
+        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+      ],
+      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. Configurações de servidor são instaladas como exemplos e o arquivo de senhas original é excluído.",
+      "compatibility": {
+        "client_scope": [
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
+        ],
+        "verified": [
+          "package-integrity",
+          "managed-file-integrity",
+          "uninstall"
+        ],
+        "gamecode_runtime": "QuakeWorld qwprogs.dat; requer um servidor QW compatível, recomendado MVDSV pelo manual original; o runtime de servidor não é distribuído pelo x86QW"
+      },
+      "upstream": {
+        "name": "Arena Camper Quake",
+        "release": "2.22",
+        "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
+        "source_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+      },
+      "artifacts": [
+        {
+          "filename": "quakeworld-TD2.22QW-server_PTBR.tar.gz",
+          "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+          "archive_path": "components/nquake/releases/total-destruction-2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+          "size": 567029,
+          "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
+        }
+      ]
+    }
   }
 }

@@ -3,21 +3,25 @@ from __future__ import annotations
 import hashlib
 import io
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from build_nquake_packages import rewrite_zip_members  # noqa: E402
+from check_component_updates import check_updates  # noqa: E402
 from nquake_components import components_by_id, load_catalog  # noqa: E402
 from nquake_releases import (  # noqa: E402
     component_for_artifact_path,
     load_releases,
     verified_artifact_members,
+    verified_package_files,
 )
 
 
@@ -35,6 +39,11 @@ class NquakeReleaseTests(unittest.TestCase):
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["archive_path"]
         self.assertEqual("nquake-ktx", component_for_artifact_path(releases, path))
+        td2 = releases["components"]["total-destruction-2"]
+        self.assertEqual("2.22", td2["version"])
+        self.assertEqual("upstream-package", td2["strategy"])
+        td2_path = td2["artifacts"][0]["archive_path"]
+        self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
 
     def test_nested_pk3_rewrite_changes_only_the_selected_member(self) -> None:
         original = io.BytesIO()
@@ -66,6 +75,50 @@ class NquakeReleaseTests(unittest.TestCase):
                 }],
             }
             self.assertEqual({"qwprogs.qvm": b"qvm"}, verified_artifact_members(root, artifact))
+
+    def test_standalone_tar_package_is_verified_without_extracting_unsafe_members(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "components/nquake/releases/total-destruction-2/test/td2.tar.gz"
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            with tarfile.open(path, "w:gz") as package:
+                info = tarfile.TarInfo("td2/qwprogs.dat")
+                info.size = 4
+                package.addfile(info, io.BytesIO(b"game"))
+            artifact = {
+                "archive_path": relative,
+                "size": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            self.assertEqual({"td2/qwprogs.dat": b"game"}, verified_package_files(root, artifact))
+
+            with tarfile.open(path, "w:gz") as package:
+                info = tarfile.TarInfo("../escape")
+                info.size = 3
+                package.addfile(info, io.BytesIO(b"bad"))
+            artifact["size"] = path.stat().st_size
+            artifact["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "unsafe standalone artifact member"):
+                verified_package_files(root, artifact)
+
+    def test_standalone_update_check_verifies_the_pinned_source_without_github_metadata(self) -> None:
+        releases = load_releases(
+            ROOT / "inventory/nquake-releases.json",
+            ROOT / "inventory/nquake-components.json",
+        )
+        td2_artifact = releases["components"]["total-destruction-2"]["artifacts"][0]
+        with mock.patch("check_component_updates.github_json", return_value={
+            "sha": releases["reference"]["revision"],
+            "tag_name": "1.47",
+        }):
+            with mock.patch("check_component_updates.remote_fingerprint", return_value=(
+                td2_artifact["size"], td2_artifact["sha256"],
+            )) as fingerprint:
+                results = check_updates(releases, online=True)
+        td2 = next(result for result in results if result["component"] == "total-destruction-2")
+        self.assertEqual("current", td2["status"])
+        fingerprint.assert_called_once_with(td2_artifact["url"])
 
 
 if __name__ == "__main__":

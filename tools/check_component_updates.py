@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import urllib.request
@@ -31,6 +32,17 @@ def github_json(path: str) -> object:
         return json.load(response)
 
 
+def remote_fingerprint(url: str) -> tuple[int, str]:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    digest = hashlib.sha256()
+    size = 0
+    with urllib.request.urlopen(request, timeout=120) as response:
+        while block := response.read(1024 * 1024):
+            size += len(block)
+            digest.update(block)
+    return size, digest.hexdigest()
+
+
 def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str, str]]:
     reference = releases["reference"]
     assert isinstance(reference, dict)
@@ -54,12 +66,21 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
             actual = current_reference[:12]
             status = "update-available"
         upstream = release.get("upstream")
-        if online and isinstance(upstream, dict):
+        if online and isinstance(upstream, dict) and isinstance(upstream.get("repository"), str):
             response = github_json(f"repos/{upstream['repository']}/releases/latest")
             if not isinstance(response, dict) or not isinstance(response.get("tag_name"), str):
                 raise ValueError(f"invalid upstream release response: {identifier}")
             actual = response["tag_name"]
             if actual != upstream["release"]:
+                status = "update-available"
+        elif online and release["strategy"] == "upstream-package":
+            artifacts = release["artifacts"]
+            assert isinstance(artifacts, list) and len(artifacts) == 1
+            artifact = artifacts[0]
+            assert isinstance(artifact, dict)
+            fingerprint = remote_fingerprint(str(artifact["url"]))
+            if fingerprint != (artifact["size"], artifact["sha256"]):
+                actual = "source-artifact-changed"
                 status = "update-available"
         results.append({
             "component": identifier,

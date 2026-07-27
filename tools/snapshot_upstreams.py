@@ -184,7 +184,7 @@ def discover_nightlies() -> list[Asset]:
 
 def discover_nquake() -> list[Asset]:
     catalog = load_nquake_catalog(NQUAKE_CATALOG)
-    used_paths = source_roots(catalog)
+    used_paths = source_roots(catalog, "reference")
 
     commit_data = github_json(f"repos/{NQUAKE_REPOSITORY}/commits/{NQUAKE_REF}")
     if not isinstance(commit_data, dict) or not isinstance(commit_data.get("sha"), str):
@@ -211,7 +211,7 @@ def discover_nquake() -> list[Asset]:
         if not roots:
             continue
         found_roots.update(roots)
-        subcomponent = component_for_source(catalog, path)
+        subcomponent = component_for_source(catalog, path, "reference")
         if subcomponent is None:
             continue
         quoted = urllib.parse.quote(path, safe="/")
@@ -274,7 +274,7 @@ def consumed_component(path: str) -> str | None:
             return None
         upstream_path = PurePosixPath(*parts[4:]).as_posix()
         catalog = load_nquake_catalog(NQUAKE_CATALOG)
-        return component if component_for_source(catalog, upstream_path) is not None else None
+        return component if component_for_source(catalog, upstream_path, "reference") is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
         if "/nightlies/" in path:
@@ -322,7 +322,7 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
     if not repository.is_dir():
         return 0
     catalog = load_nquake_catalog(NQUAKE_CATALOG)
-    used_paths = source_roots(catalog)
+    used_paths = source_roots(catalog, "reference")
     commit = subprocess.check_output(["git", f"--git-dir={repository}", "rev-parse", "HEAD"], text=True).strip()
     listing = subprocess.check_output(
         ["git", f"--git-dir={repository}", "ls-tree", "-r", "--name-only", "-z", commit, "--", *used_paths]
@@ -334,7 +334,7 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
         if not encoded:
             continue
         upstream_path = encoded.decode("utf-8")
-        subcomponent = component_for_source(catalog, upstream_path)
+        subcomponent = component_for_source(catalog, upstream_path, "reference")
         if subcomponent is None:
             continue
         relative = f"components/nquake/snapshots/{commit}/{upstream_path}"
@@ -408,7 +408,9 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                     if package is None:
                         parts = PurePosixPath(relative).parts
                         upstream_path = PurePosixPath(*parts[4:]).as_posix()
-                        package = component_for_source(load_nquake_catalog(NQUAKE_CATALOG), upstream_path)
+                        package = component_for_source(
+                            load_nquake_catalog(NQUAKE_CATALOG), upstream_path, "reference",
+                        )
                     metadata["package"] = package
             continue
         target = root / relative

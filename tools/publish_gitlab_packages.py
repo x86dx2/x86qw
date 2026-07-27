@@ -44,11 +44,7 @@ def artifact_url(package: dict[str, object]) -> str:
 def local_artifact(package: dict[str, object], archive: Path, dist: Path) -> Path:
     filename = str(package["filename"])
     if package["component"] == "nquake":
-        commit = package.get("source_commit")
-        if not isinstance(commit, str):
-            raise ValueError(f"nQuake package lacks source commit: {filename}")
-        candidate = dist / f"nquake-{commit}" / filename
-        matches = [candidate] if candidate.is_file() else []
+        matches = list(dist.rglob(filename))
     else:
         matches = list(archive.rglob(filename))
     if len(matches) != 1 or not matches[0].is_file():

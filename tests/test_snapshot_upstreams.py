@@ -75,6 +75,9 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual("nquake", consumed_component(
             "components/nquake/releases/nquake-ktx/1.47/qwprogs-qvm.zip"
         ))
+        self.assertEqual("nquake", consumed_component(
+            "components/nquake/releases/total-destruction-2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+        ))
 
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

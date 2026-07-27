@@ -48,7 +48,8 @@
       "nquake-documentation",
       "qrp-hires",
       "clan-arena",
-      "team-fortress"
+      "team-fortress",
+      "total-destruction-2"
     ]
   },
   "components": [
@@ -230,6 +231,32 @@
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}
+      ]
+    },
+    {
+      "id": "total-destruction-2",
+      "label": "Total Destruction 2",
+      "kind": "addon",
+      "description": "TD2QW com armas, magias, runas, modelos, gamecode e fontes para servidores compatíveis.",
+      "requires": ["nquake-bootstrap"],
+      "sources": [
+        {
+          "path": "td2",
+          "destination": "td2",
+          "mode": "overlay",
+          "origin": "release",
+          "exclude": [
+            "td2/docs/licenÃ§a.txt",
+            "td2/mvdsv.cfg",
+            "td2/pwd.cfg",
+            "td2/rotate.cfg",
+            "td2/server.cfg"
+          ]
+        },
+        {"path": "td2/docs/licenÃ§a.txt", "destination": "td2/docs/licenca.txt", "mode": "overlay", "origin": "release"},
+        {"path": "td2/mvdsv.cfg", "destination": "td2/mvdsv.example.cfg", "mode": "overlay", "origin": "release"},
+        {"path": "td2/rotate.cfg", "destination": "td2/rotate.example.cfg", "mode": "overlay", "origin": "release"},
+        {"path": "td2/server.cfg", "destination": "td2/server.example.cfg", "mode": "overlay", "origin": "release"}
       ]
     }
   ]

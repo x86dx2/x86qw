@@ -7,7 +7,7 @@ import argparse
 from pathlib import Path
 
 from nquake_components import load_catalog, validate_tree_partition
-from nquake_releases import load_releases, verified_artifact_members
+from nquake_releases import load_releases, verified_artifact_members, verified_package_files
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,11 +28,17 @@ def main() -> int:
         for release in release_components.values():
             assert isinstance(release, dict)
             for artifact in release.get("artifacts", []):
-                verified_artifact_members(arguments.archive, artifact)
+                if release["strategy"] == "upstream-package":
+                    verified_package_files(arguments.archive, artifact)
+                else:
+                    verified_artifact_members(arguments.archive, artifact)
     if arguments.snapshot:
         paths = sorted(path.relative_to(arguments.snapshot).as_posix() for path in arguments.snapshot.rglob("*") if path.is_file())
         partition = validate_tree_partition(catalog, paths)
-        print(f"Catálogo válido: {len(partition)} componentes, {len(paths)} arquivos atribuídos e versões verificadas.")
+        print(
+            f"Catálogo válido: {len(catalog['components'])} componentes, "
+            f"{len(paths)} arquivos de referência atribuídos e versões verificadas."
+        )
     else:
         print(f"Catálogo válido: {len(catalog['components'])} componentes e versões verificadas.")
     return 0

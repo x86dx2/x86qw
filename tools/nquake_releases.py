@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -14,7 +15,7 @@ from nquake_components import components_by_id, load_catalog as load_component_c
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-STRATEGIES = {"reference-snapshot", "upstream-overlay"}
+STRATEGIES = {"reference-snapshot", "upstream-overlay", "upstream-package"}
 FRESHNESS = {"reference-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
@@ -60,14 +61,14 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
         if release["strategy"] == "reference-snapshot" and version != reference_revision[:12]:
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
         upstream = release.get("upstream")
-        if release["strategy"] == "upstream-overlay":
+        if release["strategy"] in {"upstream-overlay", "upstream-package"}:
             if not isinstance(upstream, dict):
-                raise ValueError(f"upstream overlay has no upstream metadata: {identifier}")
-            if not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
+                raise ValueError(f"upstream release has no upstream metadata: {identifier}")
+            if release["strategy"] == "upstream-overlay" and not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
                 raise ValueError(f"invalid upstream repository: {identifier}")
             if not VERSION.fullmatch(str(upstream.get("release", ""))):
                 raise ValueError(f"invalid upstream release: {identifier}")
-            if not HEX40.fullmatch(str(upstream.get("source_revision", ""))):
+            if release["strategy"] == "upstream-overlay" and not HEX40.fullmatch(str(upstream.get("source_revision", ""))):
                 raise ValueError(f"invalid upstream source revision: {identifier}")
             for field in ("release_url", "source_url"):
                 if not isinstance(upstream.get(field), str) or not upstream[field].startswith("https://"):
@@ -76,6 +77,12 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
                 raise ValueError(f"upstream overlay has no release notes: {identifier}")
             if not VERSION.fullmatch(str(release.get("distribution_tag", ""))):
                 raise ValueError(f"invalid distribution tag: {identifier}")
+            source_mirrors = release.get("source_mirrors", [])
+            if (
+                not isinstance(source_mirrors, list)
+                or not all(isinstance(url, str) and url.startswith("https://") for url in source_mirrors)
+            ):
+                raise ValueError(f"invalid source mirrors: {identifier}")
             compatibility = release.get("compatibility")
             if (
                 not isinstance(compatibility, dict)
@@ -90,8 +97,8 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
         artifacts = release.get("artifacts", [])
         if not isinstance(artifacts, list):
             raise ValueError(f"invalid artifacts: {identifier}")
-        if release["strategy"] == "upstream-overlay" and not artifacts:
-            raise ValueError(f"upstream overlay has no artifact: {identifier}")
+        if release["strategy"] in {"upstream-overlay", "upstream-package"} and not artifacts:
+            raise ValueError(f"upstream release has no artifact: {identifier}")
         for artifact in artifacts:
             if not isinstance(artifact, dict):
                 raise ValueError(f"invalid artifact: {identifier}")
@@ -110,9 +117,11 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
                 raise ValueError(f"invalid artifact size: {identifier}")
             if not HEX64.fullmatch(str(artifact.get("sha256", ""))):
                 raise ValueError(f"invalid artifact hash: {identifier}")
-            members = artifact.get("members")
-            if not isinstance(members, list) or not members:
-                raise ValueError(f"artifact has no consumed members: {identifier}")
+            members = artifact.get("members", [])
+            if not isinstance(members, list) or (release["strategy"] == "upstream-overlay" and not members):
+                raise ValueError(f"artifact has invalid consumed members: {identifier}")
+            if release["strategy"] == "upstream-package" and members:
+                raise ValueError(f"standalone artifact members are selected by the component catalog: {identifier}")
             for member in members:
                 if not isinstance(member, dict):
                     raise ValueError(f"invalid artifact member: {identifier}")
@@ -172,4 +181,37 @@ def verified_artifact_members(archive_root: Path, artifact: dict[str, object]) -
             if len(data) != member["size"] or sha256_bytes(data) != member["sha256"]:
                 raise ValueError(f"component source member failed integrity: {name}")
             selected[name] = data
+    return selected
+
+
+def verified_package_files(archive_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
+    path = archive_root / str(artifact["archive_path"])
+    if not path.is_file() or path.stat().st_size != artifact["size"]:
+        raise ValueError(f"missing or invalid component source artifact: {path}")
+    if sha256_bytes(path.read_bytes()) != artifact["sha256"]:
+        raise ValueError(f"component source artifact failed SHA-256: {path}")
+    selected: dict[str, bytes] = {}
+    if path.name.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(path, "r:gz") as package:
+            for member in package.getmembers():
+                if member.isdir():
+                    continue
+                name = _safe_path(member.name, "standalone artifact member")
+                if not member.isfile() or member.issym() or member.islnk():
+                    raise ValueError(f"standalone artifact contains an unsafe member: {name}")
+                extracted = package.extractfile(member)
+                if extracted is None:
+                    raise ValueError(f"standalone artifact member cannot be read: {name}")
+                selected[name] = extracted.read()
+    elif path.suffix.casefold() == ".zip":
+        with zipfile.ZipFile(path) as package:
+            if package.testzip() is not None:
+                raise ValueError(f"component source artifact contains a corrupt member: {path}")
+            for member in package.infolist():
+                if member.is_dir():
+                    continue
+                name = _safe_path(member.filename, "standalone artifact member")
+                selected[name] = package.read(member)
+    else:
+        raise ValueError(f"unsupported standalone component archive: {path}")
     return selected

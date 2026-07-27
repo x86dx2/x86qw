@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_KINDS = {"core", "gameplay", "content", "addon", "documentation"}
 ALLOWED_MODES = {"overlay", "default"}
+ALLOWED_ORIGINS = {"reference", "release"}
 
 
 def _safe_path(value: object, label: str) -> str:
@@ -75,6 +76,8 @@ def validate_catalog(catalog: object) -> None:
             _safe_path(source_entry.get("destination"), "destination path")
             if source_entry.get("mode") not in ALLOWED_MODES:
                 raise ValueError(f"invalid install mode in {identifier}: {source_path}")
+            if source_entry.get("origin", "reference") not in ALLOWED_ORIGINS:
+                raise ValueError(f"invalid source origin in {identifier}: {source_path}")
             exclusions = source_entry.get("exclude", [])
             if not isinstance(exclusions, list):
                 raise ValueError(f"invalid exclusions in {identifier}: {source_path}")
@@ -145,19 +148,22 @@ def resolve_dependencies(catalog: dict[str, object], selected: list[str]) -> lis
     return resolved
 
 
-def source_roots(catalog: dict[str, object]) -> list[str]:
+def source_roots(catalog: dict[str, object], origin: str = "reference") -> list[str]:
     roots = {
         entry["path"]
         for component in catalog["components"]  # type: ignore[index]
         for entry in component["sources"]
+        if entry.get("origin", "reference") == origin
     }
     return sorted(roots)
 
 
-def component_for_source(catalog: dict[str, object], path: str) -> str | None:
+def component_for_source(catalog: dict[str, object], path: str, origin: str | None = None) -> str | None:
     matches: list[str] = []
     for component in catalog["components"]:  # type: ignore[index]
         for entry in component["sources"]:
+            if origin is not None and entry.get("origin", "reference") != origin:
+                continue
             root = entry["path"]
             if path != root and not path.startswith(root + "/"):
                 continue
@@ -170,9 +176,13 @@ def component_for_source(catalog: dict[str, object], path: str) -> str | None:
     return next(iter(unique), None)
 
 
-def destination_for_source(component: dict[str, object], path: str) -> tuple[str, str]:
+def destination_for_source(
+    component: dict[str, object], path: str, origin: str | None = None,
+) -> tuple[str, str]:
     matches: list[tuple[str, str]] = []
     for entry in component["sources"]:  # type: ignore[index]
+        if origin is not None and entry.get("origin", "reference") != origin:
+            continue
         root = entry["path"]
         if path != root and not path.startswith(root + "/"):
             continue
@@ -186,15 +196,21 @@ def destination_for_source(component: dict[str, object], path: str) -> tuple[str
     return matches[0]
 
 
-def validate_tree_partition(catalog: dict[str, object], paths: list[str]) -> dict[str, list[str]]:
-    partition = {identifier: [] for identifier in components_by_id(catalog)}
-    destinations: dict[str, tuple[str, str]] = {}
+def validate_tree_partition(
+    catalog: dict[str, object], paths: list[str], origin: str = "reference",
+) -> dict[str, list[str]]:
     components = components_by_id(catalog)
+    selected_components = {
+        identifier for identifier, component in components.items()
+        if any(entry.get("origin", "reference") == origin for entry in component["sources"])
+    }
+    partition = {identifier: [] for identifier in selected_components}
+    destinations: dict[str, tuple[str, str]] = {}
     for path in paths:
-        identifier = component_for_source(catalog, path)
+        identifier = component_for_source(catalog, path, origin)
         if identifier is None:
             raise ValueError(f"nQuake source is not assigned to a component: {path}")
-        destination, _ = destination_for_source(components[identifier], path)
+        destination, _ = destination_for_source(components[identifier], path, origin)
         folded = destination.casefold()
         previous = destinations.get(folded)
         if previous is not None and previous != (identifier, path):

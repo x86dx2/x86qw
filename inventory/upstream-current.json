@@ -6,7 +6,7 @@
     "ezquake_release_and_nightly_binaries": 6,
     "nquake_component_files": 535,
     "nquake_release_artifacts": 1,
-    "nquake_components": 17
+    "nquake_components": 18
   },
   "layout": "consumed-only-v1",
   "manifest_sha256": "9291ba3225997f8dcab4ab06a0e6cec0e8a6b366d28fba146f66e17ed2d5722f",

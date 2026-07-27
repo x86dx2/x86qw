@@ -14,12 +14,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from nquake_components import (
+    component_for_source,
     components_by_id,
     destination_for_source,
     load_catalog,
     validate_tree_partition,
 )
-from nquake_releases import component_release, load_releases, verified_artifact_members
+from nquake_releases import (
+    component_release,
+    load_releases,
+    verified_artifact_members,
+    verified_package_files,
+)
 from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
@@ -100,13 +106,33 @@ def component_payload(
     return payload, applied
 
 
+def standalone_component_payloads(
+    archive: Path,
+    catalog: dict[str, object],
+    identifier: str,
+    component: dict[str, object],
+    release: dict[str, object],
+) -> list[tuple[str, str, bytes, list[dict[str, str]]]]:
+    selected: list[tuple[str, str, bytes, list[dict[str, str]]]] = []
+    for artifact in release.get("artifacts", []):
+        assert isinstance(artifact, dict)
+        for upstream_path, payload in sorted(verified_package_files(archive, artifact).items()):
+            if component_for_source(catalog, upstream_path, "release") != identifier:
+                continue
+            destination, mode = destination_for_source(component, upstream_path, "release")
+            selected.append((upstream_path, f"{'defaults' if mode == 'default' else 'payload'}/{destination}", payload, []))
+    if not selected:
+        raise ValueError(f"standalone component selects no files: {identifier}")
+    return selected
+
+
 def build_packages(archive: Path, output: Path) -> dict[str, object]:
     catalog = load_catalog(NQUAKE_COMPONENTS)
     releases = load_releases(NQUAKE_RELEASES, NQUAKE_COMPONENTS)
     components = components_by_id(catalog)
     commit, snapshot = discover_snapshot(archive)
     paths = sorted(path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file())
-    partition = validate_tree_partition(catalog, paths)
+    partition = validate_tree_partition(catalog, paths, "reference")
     release = f"nquake-{commit}"
     release_root = output / release
     release_root.mkdir(parents=True, exist_ok=True)
@@ -114,14 +140,31 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
     for identifier, component in components.items():
         release_metadata = component_release(releases, identifier)
         version = str(release_metadata["version"])
+        strategy = str(release_metadata["strategy"])
+        if strategy == "upstream-package":
+            source_artifacts = release_metadata["artifacts"]
+            assert isinstance(source_artifacts, list) and len(source_artifacts) == 1
+            source_revision = str(source_artifacts[0]["sha256"])
+            payloads = standalone_component_payloads(
+                archive, catalog, identifier, component, release_metadata,
+            )
+        else:
+            source_revision = commit
+            payloads = []
+            for upstream_path in partition[identifier]:
+                destination, mode = destination_for_source(component, upstream_path, "reference")
+                payload, overrides = component_payload(archive, snapshot, upstream_path, release_metadata)
+                payloads.append((
+                    upstream_path,
+                    f"{'defaults' if mode == 'default' else 'payload'}/{destination}",
+                    payload,
+                    overrides,
+                ))
         filename = f"{identifier}-{version}.zip"
         artifact = release_root / filename
         members: list[dict[str, str]] = []
         with zipfile.ZipFile(artifact, "w", allowZip64=True) as package:
-            for upstream_path in partition[identifier]:
-                destination, mode = destination_for_source(component, upstream_path)
-                member_name = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
-                payload, overrides = component_payload(archive, snapshot, upstream_path, release_metadata)
+            for upstream_path, member_name, payload, overrides in payloads:
                 member_metadata: dict[str, object] = {
                     "path": member_name,
                     "sha256": hashlib.sha256(payload).hexdigest(),
@@ -136,9 +179,9 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
                 "format": 1,
                 "project": "x86qw",
                 "package": identifier,
-                "source_commit": commit,
                 "members": members,
             }
+            metadata["source_revision" if strategy == "upstream-package" else "source_commit"] = source_revision
             if release_metadata["strategy"] != "reference-snapshot":
                 metadata["version"] = version
             package_metadata = json.dumps(
@@ -148,12 +191,13 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
             package.writestr(info, data)
         distribution_tag = str(release_metadata.get("distribution_tag", release))
         mirror_url = f"https://github.com/x86dx2/x86qw-dist/releases/download/{distribution_tag}/{filename}"
-        source_urls = [f"https://github.com/nQuake/distfiles/tree/{commit}"]
+        source_urls = [] if strategy == "upstream-package" else [f"https://github.com/nQuake/distfiles/tree/{commit}"]
         upstream = release_metadata.get("upstream")
         if isinstance(upstream, dict):
             source_url = upstream.get("source_url")
             release_url = upstream.get("release_url")
             source_urls.extend(str(url) for url in (source_url, release_url) if isinstance(url, str))
+        source_urls.extend(str(url) for url in release_metadata.get("source_mirrors", []))
         package_record = {
             "component": "nquake",
             "package": identifier,
@@ -165,13 +209,16 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
             "size": artifact.stat().st_size,
             "sha256": file_sha256(artifact),
             "origin_url": mirror_url,
-            "license": "upstream-distfiles-terms",
-            "license_url": f"https://github.com/nQuake/distfiles/tree/{commit}",
+            "license": str(release_metadata.get("license", "upstream-distfiles-terms")),
+            "license_url": str(release_metadata.get("license_url", f"https://github.com/nQuake/distfiles/tree/{commit}")),
             "source_urls": source_urls,
             "redistribution_reviewed": True,
             "urls": [mirror_url],
-            "source_commit": commit,
         }
+        if strategy == "upstream-package":
+            package_record["source_revision"] = source_revision
+        else:
+            package_record["source_commit"] = commit
         if isinstance(upstream, dict):
             package_record["release_url"] = upstream["release_url"]
             package_record["release_notes"] = str(release_metadata.get("notes", ""))
