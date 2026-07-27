@@ -103,6 +103,30 @@ projetos principais. Cada arquivo recebe tamanho, URL e SHA-256 em
 `archive/manifest.json`; execuções posteriores retomam o acervo sem baixar
 novamente itens já confirmados.
 
+O acervo é organizado primeiro pelo contexto do conteúdo:
+
+```text
+archive/
+├── components/
+│   ├── ezquake/       Git, releases e nightlies por build e plataforma
+│   ├── classicq/      Git e releases
+│   ├── unezquake/     Git e releases
+│   └── nquake/        mirror Git completo dos distfiles
+├── content/
+│   ├── maps/          arquivo completo e índices das coleções
+│   ├── locs/          nomes de regiões dos mapas
+│   └── gfx/           detalhes, pacotes opacos e previews
+├── dependencies/      mirrors e snapshots exatos de qwprot e vcpkg
+└── manifest.json      inventário individual com origem, tamanho e SHA-256
+```
+
+Acervos criados antes desse layout podem ser migrados localmente, sem rede ou
+novo download:
+
+```sh
+python3 tools/snapshot_upstreams.py --migrate-layout
+```
+
 Validação integral e offline:
 
 ```sh
