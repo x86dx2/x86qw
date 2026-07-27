@@ -63,6 +63,8 @@ NIGHTLIES = {
 OBSOLETE_ROOTS = (
     "content/gfx",
     "content/maps/indexes",
+    "content/maps",
+    "content/locs",
     "components/ezquake/git",
     "components/ezquake/dependencies",
     "components/classicq/git",
@@ -182,20 +184,6 @@ def discover_nightlies() -> list[Asset]:
     return assets
 
 
-def discover_maps() -> list[Asset]:
-    assets: list[Asset] = []
-    for collection, component, destination_root in (
-        ("all", "maps", "content/maps/all"),
-        ("locs", "locs", "content/locs"),
-    ):
-        root = f"https://maps.quakeworld.nu/{collection}/"
-        for href in links(root):
-            name = safe_filename(href)
-            if name and not urllib.parse.urlsplit(href).path.endswith("/"):
-                assets.append(Asset(component, urllib.parse.urljoin(root, href), f"{destination_root}/{name}"))
-    return assets
-
-
 def discover_nquake() -> list[Asset]:
     components = load_component_policy()
     nquake = components["nquake"]
@@ -243,7 +231,7 @@ def discover_nquake() -> list[Asset]:
 
 def discover_assets() -> list[Asset]:
     components = load_component_policy()
-    discovered = [*discover_release_assets(), *discover_nightlies(), *discover_maps(), *discover_nquake()]
+    discovered = [*discover_release_assets(), *discover_nightlies(), *discover_nquake()]
     unique: dict[str, Asset] = {}
     for asset in discovered:
         require_component(components, asset.component, asset.path)
@@ -259,7 +247,7 @@ def discover_assets() -> list[Asset]:
 def consumed_component(path: str) -> str | None:
     components = load_component_policy()
     component = component_for_archive_path(components, path)
-    if component in {"maps", "locs", "nquake"}:
+    if component == "nquake":
         return component
     name = PurePosixPath(path).name
     if component == "ezquake":

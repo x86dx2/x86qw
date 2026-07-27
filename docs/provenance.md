@@ -13,7 +13,7 @@ atribuição, origem imutável e checksum.
 | dados nQuake | [distfiles](https://github.com/nQuake/distfiles) contém árvores `gpl` e `non-gpl`, mas não possui licença única no topo | bloqueado; classificar arquivo por arquivo e não presumir licença para `non-gpl` |
 | classicQ | [repositório](https://github.com/classicq/classicq) identificado como GPL-2.0 | candidato; auditar dependências e arquivos incluídos na release |
 | unezQuake | [repositório](https://github.com/dusty-qw/unezquake) identificado como GPL-2.0 | candidato; auditar dependências e arquivos incluídos na release |
-| mapas e LOCs | `maps.quakeworld.nu` e autores individuais | bloqueado; exigir licença ou autorização por item |
+| mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
 | PAKs de `id1` | cópia comercial fornecida pelo usuário | proibido baixar, versionar ou espelhar |
 

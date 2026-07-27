@@ -37,16 +37,19 @@ class SnapshotTests(unittest.TestCase):
             list(install_qw.NQUAKE_PATHS),
             components["nquake"]["upstream_paths"],
         )
-        for component in ("ezquake", "classicq", "unezquake", "nquake", "maps", "locs"):
+        for component in ("ezquake", "classicq", "unezquake", "nquake"):
             require_component(components, component)
-        with self.assertRaisesRegex(ValueError, "not consumed"):
-            require_component(components, "gfx")
+        for component in ("gfx", "maps", "locs"):
+            with self.subTest(component=component):
+                with self.assertRaisesRegex(ValueError, "not consumed"):
+                    require_component(components, component)
 
     def test_only_runtime_assets_have_consumers(self) -> None:
         self.assertEqual("ezquake", consumed_component(
             "components/ezquake/releases/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
         ))
-        self.assertEqual("maps", consumed_component("content/maps/all/dm6.bsp"))
+        self.assertIsNone(consumed_component("content/maps/all/dm6.bsp"))
+        self.assertIsNone(consumed_component("content/locs/dm6.loc"))
         self.assertIsNone(consumed_component("content/gfx/packages/1-theme.download"))
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/source/source.tar.gz"))
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/metadata/checksums.txt"))
@@ -55,9 +58,9 @@ class SnapshotTests(unittest.TestCase):
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            kept = "content/maps/all/dm6.bsp"
+            kept = "components/ezquake/releases/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
             removed = "content/gfx/packages/theme.download"
-            for relative, payload in ((kept, b"map"), (removed, b"gfx")):
+            for relative, payload in ((kept, b"zip"), (removed, b"gfx")):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(payload)
@@ -68,7 +71,7 @@ class SnapshotTests(unittest.TestCase):
                 "format": 1, "project": "x86qw", "captured_at": None,
                 "layout": "component-owned-v1", "repositories": {"ezquake": {}},
                 "files": {
-                    kept: {"size": 3, "sha256": hashlib.sha256(b"map").hexdigest()},
+                    kept: {"size": 3, "sha256": hashlib.sha256(b"zip").hexdigest()},
                     removed: {"size": 3, "sha256": hashlib.sha256(b"gfx").hexdigest()},
                 },
             }
@@ -102,16 +105,16 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(safe_filename("../"))
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            payload = root / "content/maps/all/dm6.bsp"
+            payload = root / "components/ezquake/releases/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
             payload.parent.mkdir(parents=True)
-            payload.write_bytes(b"map")
+            payload.write_bytes(b"zip")
             manifest = {
                 "format": 1, "project": "x86qw", "captured_at": None,
                 "layout": "consumed-only-v1", "repositories": {},
-                "files": {"content/maps/all/dm6.bsp": {
-                    "component": "maps", "consumer": "maps:install",
-                    "url": "https://example.invalid/dm6.bsp", "size": 3,
-                    "sha256": "60be9861750facbfad8758254a2f76c0cfe78d54459a3bc187d49b1401fcd8e8",
+                "files": {"components/ezquake/releases/3.6.9/macos-universal/ezQuake-macOS-universal.zip": {
+                    "component": "ezquake", "consumer": "install:ezquake",
+                    "url": "https://example.invalid/ezQuake-macOS-universal.zip", "size": 3,
+                    "sha256": hashlib.sha256(b"zip").hexdigest(),
                 }},
             }
             path = root / "manifest.json"

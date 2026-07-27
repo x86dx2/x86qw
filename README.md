@@ -98,15 +98,17 @@ python3 tools/snapshot_upstreams.py
 ```
 
 O comando cria `archive/` e baixa somente arquivos ligados a uma ação real do
-instalador: binários estáveis e nightly, clientes opcionais, os caminhos do
-nQuake efetivamente sobrepostos, mapas e LOCs. Cada arquivo recebe consumidor,
+instalador: binários estáveis e nightly, clientes opcionais e os caminhos do
+nQuake efetivamente sobrepostos. Cada arquivo recebe consumidor,
 origem, tamanho e SHA-256 em `archive/manifest.json`; execuções posteriores
 reaproveitam itens já confirmados.
 
 A lista canônica fica em `inventory/component-policy.json`. Um componente novo
 sem consumidor e prefixo de acervo declarados é recusado pelos validadores. Isso
 impede que pesquisas, catálogos externos, fontes, dependências de build ou
-coleções inteiras entrem no acervo apenas porque estão disponíveis.
+coleções inteiras entrem no acervo apenas porque estão disponíveis. Mapas e
+LOCs só serão adicionados futuramente, um a um, quando forem incorporados ao
+produto.
 
 O acervo é organizado primeiro pelo contexto do conteúdo:
 
@@ -117,9 +119,6 @@ archive/
 │   ├── classicq/      binários das releases
 │   ├── unezquake/     binários das releases
 │   └── nquake/        snapshot dos caminhos usados, fixado por commit
-├── content/
-│   ├── maps/          arquivos instaláveis da coleção all
-│   └── locs/          nomes de regiões instaláveis
 └── manifest.json      inventário com consumidor, origem, tamanho e SHA-256
 ```
 
@@ -131,7 +130,7 @@ python3 tools/snapshot_upstreams.py --apply-policy
 
 Essa migração extrai do antigo mirror nQuake somente os arquivos indicados pela
 política e depois elimina GFX, históricos Git, código-fonte, dependências de
-compilação, checksums auxiliares e páginas de índice sem consumidor.
+compilação, checksums auxiliares, mapas, LOCs e páginas de índice sem consumidor.
 
 Validação integral e offline:
 

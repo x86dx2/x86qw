@@ -46,22 +46,6 @@
         "addon-clanarena/prox",
         "addon-fortress/fortress"
       ]
-    },
-    "maps": {
-      "consumers": [
-        "maps:install"
-      ],
-      "archive_prefixes": [
-        "content/maps/all/"
-      ]
-    },
-    "locs": {
-      "consumers": [
-        "maps:locs"
-      ],
-      "archive_prefixes": [
-        "content/locs/"
-      ]
     }
   }
 }
