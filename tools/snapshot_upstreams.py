@@ -26,12 +26,30 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARCHIVE = ROOT / "archive"
 USER_AGENT = "x86qw-archive/1"
 REPOSITORIES = {
-    "ezquake-source": "https://github.com/QW-Group/ezquake-source.git",
-    "nquake-distfiles": "https://github.com/nQuake/distfiles.git",
-    "classicq": "https://github.com/classicq/classicq.git",
-    "unezquake": "https://github.com/dusty-qw/unezquake.git",
-    "qwprot": "https://github.com/QW-Group/qwprot.git",
-    "qwprot-community": "https://github.com/QW-Community/qwprot.git",
+    "ezquake-source": (
+        "https://github.com/QW-Group/ezquake-source.git",
+        "components/ezquake/git/repository.git",
+    ),
+    "nquake-distfiles": (
+        "https://github.com/nQuake/distfiles.git",
+        "components/nquake/git/distfiles.git",
+    ),
+    "classicq": (
+        "https://github.com/classicq/classicq.git",
+        "components/classicq/git/repository.git",
+    ),
+    "unezquake": (
+        "https://github.com/dusty-qw/unezquake.git",
+        "components/unezquake/git/repository.git",
+    ),
+    "qwprot": (
+        "https://github.com/QW-Group/qwprot.git",
+        "dependencies/qw-group-qwprot/repository.git",
+    ),
+    "qwprot-community": (
+        "https://github.com/QW-Community/qwprot.git",
+        "dependencies/qw-community-qwprot/repository.git",
+    ),
 }
 SUBMODULES = {
     "ezquake-source": {
@@ -119,6 +137,26 @@ def github_json(path: str) -> object:
         return json.load(response)
 
 
+def release_variant(name: str) -> str:
+    lowered = name.casefold()
+    for variant in (
+        "macos-universal", "macos-arm64", "linux-x86_64", "linux-amd64",
+        "windows-x64", "windows-amd64",
+    ):
+        if variant in lowered:
+            return variant
+    return "source" if "source" in lowered else "metadata"
+
+
+def release_path(component: str, tag: str, name: str) -> str:
+    return f"components/{component}/releases/{tag}/{release_variant(name)}/{name}"
+
+
+def nightly_path(platform: str, name: str) -> str:
+    build = name.split("_ez", 1)[0]
+    return f"components/ezquake/nightlies/{build}/{platform}/{name}"
+
+
 def discover_release_assets() -> list[Asset]:
     assets: list[Asset] = []
     for label, repository in RELEASES.items():
@@ -133,7 +171,7 @@ def discover_release_assets() -> list[Asset]:
             url = item.get("browser_download_url")
             size = item.get("size")
             if name and isinstance(url, str) and isinstance(size, int) and size > 0:
-                assets.append(Asset(url, f"releases/{label}/{tag}/{name}", size))
+                assets.append(Asset(url, release_path(label, tag, name), size))
     return assets
 
 
@@ -145,15 +183,15 @@ def discover_nightlies() -> list[Asset]:
             raise ValueError(f"no nightly found for {platform}")
         name = names[-1]
         assets.extend((
-            Asset(urllib.parse.urljoin(root, name), f"nightly/{platform}/{name}"),
-            Asset(urllib.parse.urljoin(root, name + ".md5"), f"nightly/{platform}/{name}.md5"),
+            Asset(urllib.parse.urljoin(root, name), nightly_path(platform, name)),
+            Asset(urllib.parse.urljoin(root, name + ".md5"), nightly_path(platform, name + ".md5")),
         ))
     return assets
 
 
 def discover_maps() -> list[Asset]:
     assets = [
-        Asset(f"https://maps.quakeworld.nu/{collection}/", f"maps/indexes/{collection}.html")
+        Asset(f"https://maps.quakeworld.nu/{collection}/", f"content/maps/indexes/{collection}.html")
         for collection in ("all", "base", "core", "locs")
     ]
     for collection in ("all", "locs"):
@@ -161,7 +199,8 @@ def discover_maps() -> list[Asset]:
         for href in links(root):
             name = safe_filename(href)
             if name and not urllib.parse.urlsplit(href).path.endswith("/"):
-                assets.append(Asset(urllib.parse.urljoin(root, href), f"maps/{collection}/{name}"))
+                destination = f"content/locs/{name}" if collection == "locs" else f"content/maps/all/{name}"
+                assets.append(Asset(urllib.parse.urljoin(root, href), destination))
     return assets
 
 
@@ -183,9 +222,9 @@ def discover_gfx(workers: int) -> list[Asset]:
     assets: list[Asset] = []
     for identifier, slug in sorted(details.items()):
         assets.extend((
-            Asset(f"https://gfx.quakeworld.nu/details/{identifier}/{slug}/", f"gfx/details/{identifier}-{slug}.html"),
-            Asset(f"https://gfx.quakeworld.nu/download/{identifier}/{slug}/", f"gfx/packages/{identifier}-{slug}.download"),
-            Asset(f"https://gfx.quakeworld.nu/files/{identifier}.jpg", f"gfx/previews/{identifier}.jpg", optional=True),
+            Asset(f"https://gfx.quakeworld.nu/details/{identifier}/{slug}/", f"content/gfx/details/{identifier}-{slug}.html"),
+            Asset(f"https://gfx.quakeworld.nu/download/{identifier}/{slug}/", f"content/gfx/packages/{identifier}-{slug}.download"),
+            Asset(f"https://gfx.quakeworld.nu/files/{identifier}.jpg", f"content/gfx/previews/{identifier}.jpg", optional=True),
         ))
     return assets
 
@@ -193,7 +232,7 @@ def discover_gfx(workers: int) -> list[Asset]:
 def discover_submodules(root: Path) -> list[Asset]:
     assets: list[Asset] = []
     for parent, submodules in SUBMODULES.items():
-        repository = root / "git" / f"{parent}.git"
+        repository = root / REPOSITORIES[parent][1]
         for submodule_path, upstream in submodules.items():
             output = subprocess.check_output(
                 ["git", "-C", str(repository), "ls-tree", "HEAD", submodule_path], text=True
@@ -205,7 +244,7 @@ def discover_submodules(root: Path) -> list[Asset]:
             label = upstream.lower().replace("/", "-")
             assets.append(Asset(
                 f"https://codeload.github.com/{upstream}/tar.gz/{commit}",
-                f"source-dependencies/{label}/{commit}.tar.gz",
+                f"dependencies/{label}/snapshots/{commit}.tar.gz",
             ))
     return assets
 
@@ -257,21 +296,81 @@ def write_manifest(path: Path, manifest: dict[str, object]) -> None:
             temporary.unlink()
 
 
-def migrate_legacy_gfx_names(root: Path, manifest: dict[str, object]) -> int:
+def component_first_path(relative: str) -> str:
+    parts = relative.split("/")
+    if parts[0] == "releases" and len(parts) == 4:
+        return release_path(parts[1], parts[2], parts[3])
+    if parts[0] == "nightly" and len(parts) == 3:
+        return nightly_path(parts[1], parts[2])
+    if relative.startswith("maps/all/"):
+        return "content/maps/all/" + relative.removeprefix("maps/all/")
+    if relative.startswith("maps/indexes/"):
+        return "content/maps/indexes/" + relative.removeprefix("maps/indexes/")
+    if relative.startswith("maps/locs/"):
+        return "content/locs/" + relative.removeprefix("maps/locs/")
+    if relative.startswith("gfx/"):
+        destination = "content/gfx/" + relative.removeprefix("gfx/")
+        if destination.startswith("content/gfx/packages/") and destination.endswith(".zip"):
+            destination = destination.removesuffix(".zip") + ".download"
+        return destination
+    if relative.startswith("source-dependencies/"):
+        _, dependency, name = parts
+        return f"dependencies/{dependency}/snapshots/{name}"
+    return relative
+
+
+def migrate_archive_layout(root: Path, manifest: dict[str, object]) -> tuple[int, int]:
     files = manifest["files"]
-    assert isinstance(files, dict)
-    migrated = 0
-    for old_relative in sorted(key for key in files if key.startswith("gfx/packages/") and key.endswith(".zip")):
-        new_relative = old_relative.removesuffix(".zip") + ".download"
-        old_path = root / old_relative
+    repositories = manifest["repositories"]
+    assert isinstance(files, dict) and isinstance(repositories, dict)
+    migrated_files: dict[str, object] = {}
+    moved_files = 0
+    for old_relative, metadata in sorted(files.items()):
+        new_relative = component_first_path(old_relative)
+        if new_relative in migrated_files:
+            raise ValueError(f"two archive entries resolve to the same path: {new_relative}")
+        if new_relative != old_relative and not (isinstance(metadata, dict) and metadata.get("missing") is True):
+            old_path = root / old_relative
+            new_path = root / new_relative
+            if old_path.exists() and new_path.exists():
+                raise ValueError(f"cannot migrate conflicting archive path: {new_relative}")
+            if old_path.exists():
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                old_path.replace(new_path)
+                moved_files += 1
+            elif not new_path.exists():
+                raise ValueError(f"archive file is missing during migration: {old_relative}")
+        migrated_files[new_relative] = metadata
+    manifest["files"] = migrated_files
+
+    moved_repositories = 0
+    for name, (_, new_relative) in REPOSITORIES.items():
+        old_path = root / "git" / f"{name}.git"
         new_path = root / new_relative
-        if new_relative in files or new_path.exists():
-            raise ValueError(f"cannot migrate conflicting GFX archive name: {new_relative}")
+        if old_path.exists() and new_path.exists():
+            raise ValueError(f"cannot migrate conflicting Git mirror: {new_relative}")
         if old_path.exists():
+            new_path.parent.mkdir(parents=True, exist_ok=True)
             old_path.replace(new_path)
-        files[new_relative] = files.pop(old_relative)
-        migrated += 1
-    return migrated
+            moved_repositories += 1
+        metadata = repositories.get(name)
+        if isinstance(metadata, dict):
+            metadata["path"] = new_relative
+
+    manifest["layout"] = "component-first-v1"
+    for legacy_name in ("releases", "nightly", "maps", "gfx", "source-dependencies", "git"):
+        legacy_root = root / legacy_name
+        if legacy_root.is_dir():
+            for directory in sorted((path for path in legacy_root.rglob("*") if path.is_dir()), reverse=True):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+            try:
+                legacy_root.rmdir()
+            except OSError:
+                pass
+    return moved_files, moved_repositories
 
 
 def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[str, object], bool]:
@@ -323,8 +422,8 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
 def mirror_repositories(root: Path, manifest: dict[str, object]) -> None:
     repositories = manifest["repositories"]
     assert isinstance(repositories, dict)
-    for name, url in REPOSITORIES.items():
-        target = root / "git" / f"{name}.git"
+    for name, (url, relative) in REPOSITORIES.items():
+        target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
             subprocess.run(["git", "-C", str(target), "remote", "update", "--prune"], check=True)
@@ -333,7 +432,7 @@ def mirror_repositories(root: Path, manifest: dict[str, object]) -> None:
         subprocess.run(["git", "-C", str(target), "fsck", "--full", "--no-dangling"], check=True)
         head = subprocess.check_output(["git", "-C", str(target), "rev-parse", "HEAD"], text=True).strip()
         refs = subprocess.check_output(["git", "-C", str(target), "show-ref"], text=True).splitlines()
-        repositories[name] = {"url": url, "head": head, "refs": len(refs)}
+        repositories[name] = {"url": url, "path": relative, "head": head, "refs": len(refs)}
 
 
 def verify_archive(root: Path, manifest: dict[str, object]) -> int:
@@ -356,7 +455,9 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Baixa e inventaria o acervo upstream atual do x86QW.")
     parser.add_argument("--archive", type=Path, default=DEFAULT_ARCHIVE)
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--verify", action="store_true", help="valida o acervo existente sem acessar a rede")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--verify", action="store_true", help="valida o acervo existente sem acessar a rede")
+    mode.add_argument("--migrate-layout", action="store_true", help="migra o acervo antigo sem acessar a rede")
     return parser.parse_args()
 
 
@@ -372,10 +473,14 @@ def main() -> int:
         print(f"archive valid: {count} file(s)")
         return 0
 
-    migrated = migrate_legacy_gfx_names(root, manifest)
-    if migrated:
+    moved_files, moved_repositories = migrate_archive_layout(root, manifest)
+    if moved_files or moved_repositories:
         write_manifest(manifest_path, manifest)
-        print(f"Migrated {migrated} opaque GFX package name(s).")
+        print(f"Migrated archive layout: {moved_files} file(s), {moved_repositories} Git mirror(s).")
+    if options.migrate_layout:
+        checked = verify_archive(root, manifest)
+        print(f"archive layout ready: {checked} verified file(s)")
+        return 0
 
     print("Mirroring Git repositories...")
     mirror_repositories(root, manifest)
