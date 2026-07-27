@@ -31,6 +31,19 @@ servido pelo Worker. Manter o site no mesmo repositório elimina sincronização
 permite que uma única validação cubra publicação e consumo. A separação de
 `x86qw-dist` fica adiada até existir uma distribuição real.
 
+## Regra de entrada de componentes
+
+`inventory/component-policy.json` é a fronteira obrigatória do acervo. Cada
+componente precisa declarar ao menos um consumidor real do instalador e os
+prefixos onde seus originais podem ser guardados. O coletor rejeita caminhos
+fora dessa declaração e a validação offline rejeita qualquer arquivo não
+inventariado. Pesquisar ou avaliar um recurso não o torna parte do x86QW.
+
+Quando um componente for proposto, a ordem é: implementar a ação consumidora,
+declarar o componente na política, adicionar testes e só então habilitar seu
+download. Remover a ação consumidora exige remover também seus arquivos do
+acervo.
+
 ## Fluxo de publicação
 
 ```text

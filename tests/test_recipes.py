@@ -19,7 +19,7 @@ from validate_recipes import recipe_paths, validate_recipe  # noqa: E402
 class RecipeTests(unittest.TestCase):
     def test_repository_recipes_are_valid_and_blocked_until_reviewed(self) -> None:
         paths = recipe_paths()
-        self.assertEqual(4, len(paths))
+        self.assertEqual(3, len(paths))
         for path in paths:
             with self.subTest(path=path):
                 recipe = json.loads(path.read_text(encoding="utf-8"))

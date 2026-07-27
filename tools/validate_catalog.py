@@ -10,6 +10,8 @@ import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
+from component_policy import load_component_policy, require_component
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
@@ -41,6 +43,7 @@ def validate_package(
         "component", "version", "architecture", "filename", "license"
     )):
         raise ValueError(f"{label} has an empty text field")
+    require_component(load_component_policy(), package["component"])
     for key in ("component", "version", "architecture"):
         if not SAFE_SEGMENT.fullmatch(package[key]):
             raise ValueError(f"{label}.{key} is not a safe path segment")
