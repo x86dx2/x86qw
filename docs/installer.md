@@ -8,12 +8,18 @@ O instalador usa apenas a biblioteca padrão do Python.
 
 ## Instalar
 
-Mantenha os PAKs registrados originais em:
+Os PAKs registrados originais fazem parte da distribuição em:
 
 ```text
-quake-world/id1/pak0.pak
-quake-world/id1/pak1.pak
+dist/id1/pak0.pak
+dist/id1/pak1.pak
 ```
+
+Uma instalação nova não exige que `quake-world/` exista. Depois da escolha de
+SO, canal e versão, o instalador valida os dois arquivos permanentes por
+SHA-256, cria `quake-world/id1/` e copia somente os PAKs ausentes. Um PAK já
+existente é preservado e precisa corresponder à versão registrada; o instalador
+nunca o substitui silenciosamente.
 
 No macOS ou Linux, execute:
 
@@ -307,7 +313,10 @@ Os builds oficiais atuais usam assinatura ad-hoc e podem não estar notarizados.
 
 ## O que permanece no projeto
 
-O repositório guarda somente o instalador, seus testes e a documentação. Em `quake-world`, permanecem apenas os PAKs fornecidos pelo usuário e configurações pessoais quando o runtime for removido. Apps, executáveis, addons, texturas, fontes upstream e cache são reconstruíveis.
+O repositório também guarda a fonte permanente dos dois PAKs registrados em
+`dist/id1`. Em `quake-world`, eles e as configurações pessoais permanecem quando
+o runtime for removido. Apps, executáveis, addons, texturas, fontes upstream e
+cache continuam reconstruíveis.
 
 ## Testar o instalador
 

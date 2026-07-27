@@ -21,7 +21,8 @@ sem publicar uma nova versão do instalador.
 - `x86dx2/x86qw`: catálogo, receitas, instalador, site e validações;
 - `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes de
   componentes nQuake; o projeto homônimo usa GitLab Generic Packages como
-  segundo mirror. Nenhum deles armazena PAKs de `id1`.
+  segundo mirror. O repositório do projeto também mantém os dois PAKs registrados
+  em `dist/id1`; eles não entram no catálogo de pacotes.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
 contingência do código. `tools/publish_gitlab_packages.py` envia somente

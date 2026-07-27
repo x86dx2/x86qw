@@ -17,7 +17,8 @@ sincronização intermediária.
 - origem, versão e licença são registradas antes do espelhamento;
 - o instalador consulta `https://x86qw.x86.com.br/api/v1/catalog.json`;
 - GitHub Releases e GitLab Generic Packages mantêm duas cópias verificadas; R2 não é utilizado;
-- os PAKs comerciais de `id1` nunca entram no repositório ou no mirror;
+- os PAKs registrados de `id1` ficam versionados em `dist/id1` e são validados
+  por SHA-256 antes de cada cópia para uma instalação nova;
 - o instalador continua multiplataforma e usa somente a biblioteca padrão do
   Python.
 
@@ -33,6 +34,7 @@ docs/installer.md       manual completo do instalador migrado
 PRODUCT.md              propósito, público e princípios da marca
 DESIGN.md               tokens e sistema visual do site
 install-qw.py           instalador macOS, Linux e Windows
+dist/id1/               PAKs registrados permanentes usados pela instalação
 recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
@@ -95,7 +97,9 @@ python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
   --artifact /caminho/ezQuake-macOS-universal.zip
 ```
 
-`dist/` é local e ignorado pelo Git. O envio para um GitHub Release ou outro
+Os builds gerados em `dist/` são locais e ignorados pelo Git. A única exceção é
+`dist/id1/pak0.pak` e `dist/id1/pak1.pak`, fontes permanentes usadas diretamente
+pelo instalador. O envio dos demais artefatos para um GitHub Release ou outro
 mirror ocorre antes do registro público. Somente então use `--register`; a ação
 é explícita para impedir que um build local altere o catálogo por acidente.
 

@@ -14,7 +14,7 @@ atribuição, origem imutável e checksum.
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
-| PAKs de `id1` | cópia comercial fornecida pelo usuário | proibido baixar, versionar ou espelhar |
+| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e copiados diretamente; fora do catálogo de pacotes |
 
 “Candidato” ainda não autoriza publicação. A licença do código-fonte não prova,
 sozinha, que todos os arquivos agregados ao pacote binário usam termos

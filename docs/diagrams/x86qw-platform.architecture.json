@@ -17,7 +17,7 @@
     { "id": "catalog", "type": "backend", "label": "Catalog v1", "sublabel": "/api/v1/catalog.json", "pos": [680, 330], "size": [150, 64], "tag": "public contract" },
     { "id": "installer", "type": "frontend", "label": "x86QW installer", "sublabel": "Python standard library", "pos": [890, 330], "size": [150, 64] },
     { "id": "runtime", "type": "frontend", "label": "quake-world", "sublabel": "stable + nightly", "pos": [1100, 330], "size": [140, 64] },
-    { "id": "id1", "type": "security", "label": "User PAKs", "sublabel": "local id1 only", "pos": [1100, 500], "size": [140, 64], "tag": "never mirrored" }
+    { "id": "id1", "type": "security", "label": "Registered PAKs", "sublabel": "versioned in dist/id1", "pos": [1100, 500], "size": [140, 64], "tag": "SHA-256 pinned" }
   ],
   "boundaries": [
     { "kind": "region", "label": "x86QW release pipeline", "wraps": ["ingest", "mirrors"] },
@@ -34,11 +34,11 @@
     { "from": "catalog", "to": "installer", "label": "versions + SHA-256", "variant": "emphasis", "labelAt": [860, 408] },
     { "from": "mirrors", "to": "installer", "label": "package", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[540, 240], [965, 240]] },
     { "from": "installer", "to": "runtime", "variant": "emphasis" },
-    { "from": "id1", "to": "runtime", "label": "local only", "variant": "security", "fromSide": "top", "toSide": "bottom" }
+    { "from": "id1", "to": "runtime", "label": "validated copy", "variant": "security", "fromSide": "top", "toSide": "bottom" }
   ],
   "cards": [
     { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
     { "dot": "emerald", "title": "Reproducible delivery", "items": ["Every artifact records origin, license, size and SHA-256", "GitHub Releases and GitLab Generic Packages hold verified copies"] },
-    { "dot": "rose", "title": "Commercial boundary", "items": ["id1 PAKs are supplied by the player", "They never enter Git, CI, Cloudflare or any mirror"] }
+    { "dot": "rose", "title": "Registered game data", "items": ["id1 PAKs are versioned in dist/id1", "The installer validates SHA-256 before copying them"] }
   ]
 }
