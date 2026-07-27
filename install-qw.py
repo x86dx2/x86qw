@@ -44,6 +44,7 @@ CACHE_MARKER_VALUE = "x86-qw-cache-v1"
 DEFAULT_PRESET = 's_raw_volume "0.2"\n'
 STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
+COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
@@ -1350,9 +1351,18 @@ class Installer:
         installed = set(self.installed_nquake_components())
         print("\nComponentes nQuake disponíveis:")
         for index, component in enumerate(self.nquake_components.values(), 1):
-            status = " · instalado" if component["id"] in installed else ""
-            print(f"  {index:2d}) {component['label']}{status}")
+            identifier = str(component["id"])
+            package = self.nquake_package_record(identifier)
+            current = str(package["version"])
+            status = ""
+            if identifier in installed:
+                _, _, receipt = self.validate_component_pair(identifier)
+                assert receipt is not None
+                status = " · instalado" if receipt["selection"] == current else f" · atualizar {receipt['selection']} → {current}"
+            print(f"  {index:2d}) {component['label']} · {current}{status}")
             console.detail(f"{component['id']}: {component['description']}")
+            if package.get("release_url"):
+                console.detail(f"Novidades: {package['release_url']}")
 
     def choose_nquake_components(self) -> list[str]:
         print("\nQual conjunto de componentes nQuake deseja instalar ou atualizar?")
@@ -1399,6 +1409,12 @@ class Installer:
                 console.info("Dependências adicionadas automaticamente: " + ", ".join(added))
             selected = resolved
         console.success(f"{len(selected)} componente(s) selecionado(s).")
+        print("\nVersões que serão instaladas ou atualizadas:")
+        for identifier in selected:
+            package = self.nquake_package_record(identifier)
+            print(f"  - {self.nquake_components[identifier]['label']}: {package['version']}")
+            if package.get("release_url"):
+                print(f"    novidades: {package['release_url']}")
         return selected
 
     def nquake_package_record(self, identifier: str) -> dict[str, object]:
@@ -1428,12 +1444,12 @@ class Installer:
         version = package.get("version")
         commit = package.get("source_commit")
         filename = package.get("filename")
-        if not isinstance(version, str) or not re.fullmatch(r"[0-9a-f]{12}", version):
+        if not isinstance(version, str) or not COMPONENT_VERSION.fullmatch(version):
             raise InstallerError(f"Versão inválida do componente {identifier}.")
         if not isinstance(commit, str):
             raise InstallerError(f"Commit de origem ausente do componente {identifier}.")
         validate_hex(commit, HEX40, f"commit de origem de {identifier}")
-        if version != commit[:12] or filename != f"{identifier}-{version}.zip":
+        if filename != f"{identifier}-{version}.zip":
             raise InstallerError(f"Identidade inconsistente do pacote {identifier}.")
         digest = package.get("sha256")
         if not isinstance(digest, str):
@@ -1449,6 +1465,10 @@ class Installer:
                 raise InstallerError(f"Nome inesperado em um mirror de {identifier}.")
         if package.get("redistribution_reviewed") is not True:
             raise InstallerError(f"O pacote {identifier} ainda não foi liberado pelo x86QW.")
+        if release_url := package.get("release_url"):
+            validate_https_url(release_url, f"notas de versão de {identifier}")
+        if "release_notes" in package and not isinstance(package["release_notes"], str):
+            raise InstallerError(f"Resumo da versão inválido do componente {identifier}.")
         return package
 
     def download_nquake_package(self, package: dict[str, object]) -> Path:
@@ -1503,6 +1523,9 @@ class Installer:
             or not isinstance(metadata.get("members"), list)
         ):
             raise InstallerError(f"Identidade interna inválida no pacote {identifier}.")
+        internal_version = metadata.get("version", str(metadata["source_commit"])[:12])
+        if internal_version != package["version"]:
+            raise InstallerError(f"Versão interna inválida no pacote {identifier}.")
         expected: set[str] = set()
         for member in metadata["members"]:
             if not isinstance(member, dict) or not isinstance(member.get("path"), str) or not isinstance(member.get("sha256"), str):
@@ -1820,6 +1843,7 @@ class Installer:
             return
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
+        modular_nquake_present = bool(self.installed_nquake_components())
         present, entries, _ = self.validate_nquake_pair()
         for name, _ in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
@@ -1838,7 +1862,7 @@ class Installer:
                         remove_path(managed)
                     else:
                         console.warning(f"Arquivo modificado preservado: {managed}")
-        else:
+        elif not modular_nquake_present:
             console.info("Os dados nQuake não estão instalados; arquivos pessoais serão preservados.")
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):

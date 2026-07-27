@@ -120,6 +120,77 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(1, count)
             self.assertEqual(1, installer.verify_component("nquake-ktx"))
 
+    def test_nquake_component_accepts_an_independent_upstream_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, _, _ = self.make_installer(root)
+            commit = "a" * 40
+            version = "1.47+nquake.aaaaaaaaaaaa"
+            filename = f"nquake-ktx-{version}.zip"
+            package = {
+                "component": "nquake", "package": "nquake-ktx", "version": version,
+                "channel": "content", "platform": "any", "architecture": "any",
+                "filename": filename, "size": 123, "sha256": "b" * 64,
+                "source_commit": commit, "redistribution_reviewed": True,
+                "urls": [f"https://example.invalid/{filename}"],
+                "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
+                "release_notes": "KTX atualizado.",
+            }
+            installer._public_catalog = {"format": 1, "project": "x86qw", "packages": [package]}
+            self.assertEqual(version, installer.nquake_package_record("nquake-ktx")["version"])
+
+            artifact = root / filename
+            payload = io.BytesIO()
+            with zipfile.ZipFile(payload, "w") as inner:
+                inner.writestr("qwprogs.qvm", b"new qvm")
+            data = payload.getvalue()
+            metadata = {
+                "format": 1, "project": "x86qw", "package": "nquake-ktx",
+                "version": version, "source_commit": commit,
+                "members": [{
+                    "path": "payload/qw/ktx.pk3",
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                }],
+            }
+            with zipfile.ZipFile(artifact, "w") as outer:
+                outer.writestr("payload/qw/ktx.pk3", data)
+                outer.writestr("_x86qw/component.json", json.dumps(metadata))
+            installer.stage = root / "stage"
+            installer.stage.mkdir()
+            managed, defaults = installer.prepare_nquake_package(package, artifact)
+            self.assertEqual([], defaults)
+            self.assertTrue((managed / "qw/ktx.pk3").is_file())
+
+    def test_component_download_falls_back_from_github_to_gitlab(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            installer.prepare_cache()
+            payload = b"verified package"
+            filename = "nquake-ktx-1.47.zip"
+            package = {
+                "package": "nquake-ktx", "filename": filename,
+                "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest(),
+                "urls": [
+                    f"https://github.com/example/{filename}",
+                    f"https://gitlab.com/example/{filename}",
+                ],
+            }
+
+            def download(url, destination=None, headers=None):
+                if "github.com" in url:
+                    raise install_qw.InstallerError("GitHub unavailable")
+                destination.write_bytes(payload)
+                return b""
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", side_effect=download) as request:
+                    artifact = installer.download_nquake_package(package)
+            self.assertEqual(payload, artifact.read_bytes())
+            self.assertEqual(2, request.call_count)
+
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -172,9 +243,11 @@ class ModernComponentTests(unittest.TestCase):
             (managed / "qw/ktx.pk3").write_bytes(b"pk3")
             installer.install_component_overlay("nquake-ktx", managed, "a" * 40, "https://example.invalid")
             (target / "qw/ktx.pk3").unlink()
-            with contextlib.redirect_stdout(io.StringIO()):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
                 installer.uninstall()
             self.assertFalse((target / ".install").exists())
+            self.assertNotIn("Os dados nQuake não estão instalados", output.getvalue())
 
 
 if __name__ == "__main__":
