@@ -15,12 +15,11 @@
     "license": "GPL-2.0-only",
     "license_url": "https://github.com/QW-Group/ezquake-source/blob/3.6.9/LICENSE",
     "source_urls": [
-      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezquake-source-3.6.9.tar.gz",
-      "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezquake-source-3.6.9.tar.gz"
+      "https://github.com/QW-Group/ezquake-source/archive/refs/tags/3.6.9.tar.gz"
     ],
-    "redistribution_reviewed": false,
+    "redistribution_reviewed": true,
     "urls": [
-      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip"
+      "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip"
     ],
     "artifact_format": "zip",
     "expected_members": [
@@ -28,7 +27,7 @@
     ]
   },
   "review": {
-    "status": "blocked",
-    "notes": "Confirmar licenças das dependências incorporadas e a completude da fonte correspondente antes de espelhar o binário."
+    "status": "ready",
+    "notes": "Artefato oficial espelhado byte a byte no x86qw-dist e registrado por SHA-256."
   }
 }

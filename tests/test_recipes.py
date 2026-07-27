@@ -17,16 +17,14 @@ from validate_recipes import recipe_paths, validate_recipe  # noqa: E402
 
 
 class RecipeTests(unittest.TestCase):
-    def test_repository_recipes_are_valid_and_blocked_until_reviewed(self) -> None:
+    def test_repository_recipes_are_ready_for_the_published_mirror(self) -> None:
         paths = recipe_paths()
         self.assertEqual(3, len(paths))
         for path in paths:
             with self.subTest(path=path):
                 recipe = json.loads(path.read_text(encoding="utf-8"))
-                self.assertEqual("blocked", validate_recipe(recipe, str(path)))
-                with tempfile.TemporaryDirectory() as temporary:
-                    with self.assertRaisesRegex(ValueError, "recipe is blocked"):
-                        build_package(path, Path(temporary))
+                self.assertEqual("ready", validate_recipe(recipe, str(path)))
+                self.assertIn("x86dx2/x86qw-dist/releases", recipe["package"]["urls"][0])
 
     def test_ready_recipe_builds_identical_mirror_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -16,7 +16,19 @@ from validate_catalog import validate_catalog  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 0)
+        self.assertEqual(validate_catalog(catalog), 23)
+        self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
+        self.assertEqual(
+            {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
+            {
+                "nquake-bootstrap", "nquake-visual-core", "nquake-ktx",
+                "nquake-player-skins", "nquake-crosshairs", "nquake-skyboxes",
+                "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
+                "nquake-external-textures", "nquake-base-textures", "nquake-maps",
+                "nquake-matchinfo", "nquake-documentation", "qrp-hires",
+                "clan-arena", "team-fortress",
+            },
+        )
 
         package = {
             "component": "ezquake",

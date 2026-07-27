@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
-PLATFORMS = {"macos", "linux", "windows", "source"}
-CHANNELS = {"stable", "nightly"}
+PLATFORMS = {"macos", "linux", "windows", "source", "any"}
+CHANNELS = {"stable", "nightly", "content"}
 PACKAGE_FIELDS = (
     "component", "version", "channel", "platform", "architecture",
     "filename", "size", "sha256", "urls", "origin_url", "license", "license_url",
@@ -47,6 +47,11 @@ def validate_package(
     for key in ("component", "version", "architecture"):
         if not SAFE_SEGMENT.fullmatch(package[key]):
             raise ValueError(f"{label}.{key} is not a safe path segment")
+    package_id = package.get("package", package["component"])
+    if not isinstance(package_id, str) or not SAFE_SEGMENT.fullmatch(package_id):
+        raise ValueError(f"{label}.package is not a safe path segment")
+    if package["channel"] == "content" and package["component"] != "nquake":
+        raise ValueError(f"{label} content packages must belong to nquake")
     filename = package["filename"]
     if Path(filename).name != filename or "/" in filename or "\\" in filename or filename in {".", ".."}:
         raise ValueError(f"{label}.filename must not contain a path")
@@ -78,8 +83,9 @@ def validate_package(
         if PurePosixPath(unquote(urlsplit(url).path)).name != filename:
             raise ValueError(f"{label} artifact URLs must end with filename")
 
-    return tuple(str(package[key]) for key in (
-        "component", "version", "channel", "platform", "architecture"
+    return tuple(str(value) for value in (
+        package["component"], package_id, package["version"], package["channel"],
+        package["platform"], package["architecture"],
     ))
 
 
