@@ -44,11 +44,11 @@ REPOSITORIES = {
     ),
     "qwprot": (
         "https://github.com/QW-Group/qwprot.git",
-        "dependencies/qw-group-qwprot/repository.git",
+        "components/ezquake/dependencies/qwprot/git/repository.git",
     ),
     "qwprot-community": (
         "https://github.com/QW-Community/qwprot.git",
-        "dependencies/qw-community-qwprot/repository.git",
+        "components/unezquake/dependencies/qwprot/git/repository.git",
     ),
 }
 SUBMODULES = {
@@ -60,6 +60,20 @@ SUBMODULES = {
         "src/qwprot": "QW-Community/qwprot",
         "vcpkg": "Microsoft/vcpkg",
     },
+}
+SUBMODULE_COMPONENTS = {
+    "ezquake-source": "ezquake",
+    "unezquake": "unezquake",
+}
+LEGACY_DEPENDENCY_SNAPSHOTS = {
+    "microsoft-vcpkg/66c0373dc7fca549e5803087b9487edfe3aca0a1.tar.gz":
+        "components/ezquake/dependencies/vcpkg/snapshots/66c0373dc7fca549e5803087b9487edfe3aca0a1.tar.gz",
+    "qw-group-qwprot/d508a7a4425e2dcdfab151cd188f8720907e5bbd.tar.gz":
+        "components/ezquake/dependencies/qwprot/snapshots/d508a7a4425e2dcdfab151cd188f8720907e5bbd.tar.gz",
+    "microsoft-vcpkg/65e691fcff8fbffe91a3cb7277074bd187b54779.tar.gz":
+        "components/unezquake/dependencies/vcpkg/snapshots/65e691fcff8fbffe91a3cb7277074bd187b54779.tar.gz",
+    "qw-community-qwprot/c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc.tar.gz":
+        "components/unezquake/dependencies/qwprot/snapshots/c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc.tar.gz",
 }
 RELEASES = {
     "ezquake": "QW-Group/ezquake-source",
@@ -241,10 +255,11 @@ def discover_submodules(root: Path) -> list[Asset]:
             if not match:
                 raise ValueError(f"invalid submodule reference in {parent}: {submodule_path}")
             commit = match.group(1)
-            label = upstream.lower().replace("/", "-")
+            component = SUBMODULE_COMPONENTS[parent]
+            dependency = PurePosixPath(submodule_path).name
             assets.append(Asset(
                 f"https://codeload.github.com/{upstream}/tar.gz/{commit}",
-                f"dependencies/{label}/snapshots/{commit}.tar.gz",
+                f"components/{component}/dependencies/{dependency}/snapshots/{commit}.tar.gz",
             ))
     return assets
 
@@ -296,7 +311,7 @@ def write_manifest(path: Path, manifest: dict[str, object]) -> None:
             temporary.unlink()
 
 
-def component_first_path(relative: str) -> str:
+def component_owned_path(relative: str) -> str:
     parts = relative.split("/")
     if parts[0] == "releases" and len(parts) == 4:
         return release_path(parts[1], parts[2], parts[3])
@@ -313,9 +328,12 @@ def component_first_path(relative: str) -> str:
         if destination.startswith("content/gfx/packages/") and destination.endswith(".zip"):
             destination = destination.removesuffix(".zip") + ".download"
         return destination
-    if relative.startswith("source-dependencies/"):
-        _, dependency, name = parts
-        return f"dependencies/{dependency}/snapshots/{name}"
+    for prefix in ("source-dependencies/", "dependencies/"):
+        if relative.startswith(prefix):
+            legacy = relative.removeprefix(prefix).replace("/snapshots/", "/")
+            if legacy not in LEGACY_DEPENDENCY_SNAPSHOTS:
+                raise ValueError(f"dependency owner is unknown: {relative}")
+            return LEGACY_DEPENDENCY_SNAPSHOTS[legacy]
     return relative
 
 
@@ -326,7 +344,7 @@ def migrate_archive_layout(root: Path, manifest: dict[str, object]) -> tuple[int
     migrated_files: dict[str, object] = {}
     moved_files = 0
     for old_relative, metadata in sorted(files.items()):
-        new_relative = component_first_path(old_relative)
+        new_relative = component_owned_path(old_relative)
         if new_relative in migrated_files:
             raise ValueError(f"two archive entries resolve to the same path: {new_relative}")
         if new_relative != old_relative and not (isinstance(metadata, dict) and metadata.get("missing") is True):
@@ -345,20 +363,27 @@ def migrate_archive_layout(root: Path, manifest: dict[str, object]) -> tuple[int
 
     moved_repositories = 0
     for name, (_, new_relative) in REPOSITORIES.items():
-        old_path = root / "git" / f"{name}.git"
+        legacy_relatives = [f"git/{name}.git"]
+        if name == "qwprot":
+            legacy_relatives.append("dependencies/qw-group-qwprot/repository.git")
+        elif name == "qwprot-community":
+            legacy_relatives.append("dependencies/qw-community-qwprot/repository.git")
+        old_paths = [root / relative for relative in legacy_relatives if (root / relative).exists()]
         new_path = root / new_relative
-        if old_path.exists() and new_path.exists():
+        if old_paths and new_path.exists():
             raise ValueError(f"cannot migrate conflicting Git mirror: {new_relative}")
-        if old_path.exists():
+        if len(old_paths) > 1:
+            raise ValueError(f"multiple legacy Git mirrors found for: {name}")
+        if old_paths:
             new_path.parent.mkdir(parents=True, exist_ok=True)
-            old_path.replace(new_path)
+            old_paths[0].replace(new_path)
             moved_repositories += 1
         metadata = repositories.get(name)
         if isinstance(metadata, dict):
             metadata["path"] = new_relative
 
-    manifest["layout"] = "component-first-v1"
-    for legacy_name in ("releases", "nightly", "maps", "gfx", "source-dependencies", "git"):
+    manifest["layout"] = "component-owned-v1"
+    for legacy_name in ("releases", "nightly", "maps", "gfx", "source-dependencies", "dependencies", "git"):
         legacy_root = root / legacy_name
         if legacy_root.is_dir():
             for directory in sorted((path for path in legacy_root.rglob("*") if path.is_dir()), reverse=True):
