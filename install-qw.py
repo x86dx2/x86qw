@@ -42,6 +42,8 @@ BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
 CACHE_MARKER_NAME = ".x86-qw-cache"
 CACHE_MARKER_VALUE = "x86-qw-cache-v1"
+MACOS_PREFERENCES_DOMAIN = "com.ezquake.ezQuake"
+MACOS_DIRECTORY_KEYS = ("basedir", "version", "NSOSPLastRootDirectory")
 DEFAULT_PRESET = 's_raw_volume "0.2"\n'
 STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
@@ -433,6 +435,48 @@ class Installer:
             suffix = f": {detail}" if detail else ""
             raise InstallerError(f"O comando {arguments[0]} falhou{suffix}") from error
         return (result.stdout or "").strip()
+
+    def is_native_macos_install(self) -> bool:
+        return host_platform.system() == "Darwin" and self.spec is not None and self.spec.key == "macos"
+
+    def ensure_macos_ezquake_closed(self) -> None:
+        if not self.is_native_macos_install():
+            return
+        try:
+            result = subprocess.run(
+                ["pgrep", "-x", "ezQuake"], check=False, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        except FileNotFoundError as error:
+            raise InstallerError("O utilitário nativo pgrep não foi encontrado no macOS.") from error
+        if result.returncode == 0:
+            raise InstallerError(
+                "Feche o ezQuake antes de continuar. O macOS mantém a autorização do diretório "
+                "do jogo enquanto o aplicativo está aberto."
+            )
+        if result.returncode != 1:
+            detail = (result.stderr or result.stdout or "").strip()
+            suffix = f": {detail}" if detail else ""
+            raise InstallerError(f"Não foi possível verificar se o ezQuake está aberto{suffix}")
+
+    def reset_macos_game_directory(self) -> None:
+        if not self.is_native_macos_install():
+            return
+        self.ensure_macos_ezquake_closed()
+        for key in MACOS_DIRECTORY_KEYS:
+            try:
+                result = subprocess.run(
+                    ["defaults", "delete", MACOS_PREFERENCES_DOMAIN, key],
+                    check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+            except FileNotFoundError as error:
+                raise InstallerError("O utilitário nativo defaults não foi encontrado no macOS.") from error
+            detail = (result.stderr or result.stdout or "").strip()
+            missing = "not found" in detail.casefold() or "does not exist" in detail.casefold()
+            if result.returncode != 0 and not missing:
+                suffix = f": {detail}" if detail else ""
+                raise InstallerError(f"Não foi possível limpar a seleção antiga do ezQuake{suffix}")
+        console.success("Seleção antiga do diretório do ezQuake removida do macOS.")
 
     def validate_target(self, action: str) -> None:
         target_exists = lexists(self.target)
@@ -1865,6 +1909,28 @@ class Installer:
             raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
         self.verify_component("maps")
         self.verify_component("presets")
+        self.report_nquake_startup_state(installed)
+
+    def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
+        installed = self.installed_nquake_components() if installed is None else installed
+        if "nquake-bootstrap" not in installed:
+            return
+        config = self.target / "ezquake/configs/config.cfg"
+        if not config.is_file():
+            console.warning(f"Não foi possível localizar a configuração inicial nQuake: {config}")
+            return
+        content = config.read_text(encoding="utf-8", errors="replace")
+        match = re.search(
+            r'^\s*set\s+_nquake_first_startup\s+"?([01])"?',
+            content,
+            flags=re.MULTILINE,
+        )
+        if match is None:
+            console.warning("Não foi possível determinar o estado de inicialização do nQuake.")
+        elif match.group(1) == "0":
+            console.success("Configurações nQuake carregadas pelo ezQuake.")
+        else:
+            console.info("Configurações nQuake instaladas e aguardando a primeira execução do ezQuake.")
 
     def preflight_ezquake_receipts(self) -> None:
         for spec in PLATFORMS.values():
@@ -1959,6 +2025,7 @@ class Installer:
         console.section("Fase 1/2 · ezQuake")
         self.choose_platform()
         self.choose_channel()
+        self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
         self.choose_release()
         self.provision_install_target()
@@ -1976,7 +2043,10 @@ class Installer:
         self.write_ezquake_receipt(staged_receipt)
         self.ensure_metadata_directory()
         self.commit_runtime(prepared, staged_receipt)
+        self.reset_macos_game_directory()
         console.success("ezQuake instalado e recibo registrado.")
+        if self.is_native_macos_install():
+            console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
         if self.confirm_nquake():
             self.install_nquake()
         else:

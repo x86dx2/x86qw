@@ -115,6 +115,59 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("Opção inválida. Digite 1 para stable ou 2 para nightly.", rendered)
             self.assertIn("Canal selecionado: stable", rendered)
 
+    def test_native_macos_install_rejects_an_open_ezquake(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            process = mock.Mock(returncode=0, stdout="1234\n", stderr="")
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(install_qw.subprocess, "run", return_value=process):
+                    with self.assertRaisesRegex(install_qw.InstallerError, "Feche o ezQuake"):
+                        installer.ensure_macos_ezquake_closed()
+
+    def test_native_macos_install_clears_stale_game_directory_preferences(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            closed = mock.Mock(returncode=1, stdout="", stderr="")
+            deleted = mock.Mock(returncode=0, stdout="", stderr="")
+            missing = mock.Mock(returncode=1, stdout="", stderr="Domain not found.")
+            responses = [closed, deleted, missing, deleted]
+            output = io.StringIO()
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(install_qw.subprocess, "run", side_effect=responses) as run:
+                    with contextlib.redirect_stdout(output):
+                        installer.reset_macos_game_directory()
+            self.assertEqual(4, run.call_count)
+            for key, call in zip(install_qw.MACOS_DIRECTORY_KEYS, run.call_args_list[1:]):
+                self.assertEqual(
+                    ["defaults", "delete", install_qw.MACOS_PREFERENCES_DOMAIN, key],
+                    call.args[0],
+                )
+            self.assertIn("Seleção antiga", output.getvalue())
+
+    def test_macos_preferences_are_untouched_for_cross_platform_packages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["windows"]
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(install_qw.subprocess, "run") as run:
+                    installer.reset_macos_game_directory()
+            run.assert_not_called()
+
+    def test_nquake_startup_state_reports_pending_and_loaded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            config = target / "ezquake/configs/config.cfg"
+            config.parent.mkdir(parents=True)
+            for marker, expected in (("1", "aguardando a primeira execução"), ("0", "carregadas pelo ezQuake")):
+                with self.subTest(marker=marker):
+                    config.write_text(f'set _nquake_first_startup "{marker}"\n', encoding="utf-8")
+                    output = io.StringIO()
+                    with contextlib.redirect_stdout(output):
+                        installer.report_nquake_startup_state(["nquake-bootstrap"])
+                    self.assertIn(expected, output.getvalue())
+
     def test_nightly_catalog_can_expand_without_overwhelming_initial_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
