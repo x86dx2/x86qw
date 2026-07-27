@@ -37,8 +37,12 @@ def validate_catalog(catalog: object) -> None:
     if not isinstance(client, dict) or client.get("id") != "ezquake" or client.get("channels") != ["stable", "nightly"]:
         raise ValueError("the active nQuake client must be ezQuake stable and nightly")
     source = catalog.get("source")
-    if not isinstance(source, dict) or source.get("version_strategy") != "distfiles-commit":
-        raise ValueError("invalid nQuake source version strategy")
+    if (
+        not isinstance(source, dict)
+        or not isinstance(source.get("repository"), str)
+        or not isinstance(source.get("ref"), str)
+    ):
+        raise ValueError("invalid nQuake reference source")
     components = catalog.get("components")
     if not isinstance(components, list) or not components:
         raise ValueError("nQuake component catalog is empty")
@@ -57,9 +61,6 @@ def validate_catalog(catalog: object) -> None:
             raise ValueError(f"invalid component kind: {identifier}")
         if not all(isinstance(component.get(field), str) and component[field] for field in ("label", "description")):
             raise ValueError(f"component lacks user-facing metadata: {identifier}")
-        version = component.get("version")
-        if not isinstance(version, dict) or version.get("strategy") != "distfiles-commit":
-            raise ValueError(f"invalid version strategy: {identifier}")
         requires = component.get("requires")
         if not isinstance(requires, list) or not all(isinstance(item, str) for item in requires):
             raise ValueError(f"invalid dependencies: {identifier}")

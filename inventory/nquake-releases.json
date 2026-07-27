@@ -1,0 +1,78 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "checked_at": "2026-07-27",
+  "reference": {
+    "repository": "https://github.com/nQuake/distfiles",
+    "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+  },
+  "components": {
+    "nquake-bootstrap": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-ktx": {
+      "version": "1.47+nquake.e4cb23d40aa2",
+      "strategy": "upstream-overlay",
+      "freshness": "upstream-current",
+      "distribution_tag": "nquake-ktx-1.47-nquake.e4cb23d40aa2",
+      "embedded_version": "1.46-dev",
+      "notes": "Atualiza o código de jogo KTX para 1.47 e preserva bots, configurações, mapas auxiliares e sons da distribuição nQuake.",
+      "compatibility": {
+        "client_scope": [
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
+        ],
+        "verified": [
+          "install",
+          "package-integrity",
+          "managed-file-integrity",
+          "uninstall"
+        ],
+        "gamecode_runtime": "MVDSV-compatible QVM according to the KTX upstream; server runtime is not distributed by x86QW"
+      },
+      "upstream": {
+        "repository": "QW-Group/ktx",
+        "release": "1.47",
+        "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
+        "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
+        "source_url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz"
+      },
+      "artifacts": [
+        {
+          "filename": "qwprogs-qvm.zip",
+          "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip",
+          "archive_path": "components/nquake/releases/nquake-ktx/1.47/qwprogs-qvm.zip",
+          "size": 403006,
+          "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
+          "members": [
+            {
+              "path": "qwprogs.qvm",
+              "size": 1578544,
+              "sha256": "a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c",
+              "target_archive": "gpl/qw/ktx.pk3",
+              "target_member": "qwprogs.qvm"
+            }
+          ]
+        }
+      ]
+    },
+    "nquake-player-skins": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-crosshairs": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-skyboxes": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-models": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-scoreboard-flags": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-sounds": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-external-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-base-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-maps": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-matchinfo": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-documentation": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "qrp-hires": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-current",
+      "embedded_version": "maps-1.00+items-0.73"
+    },
+    "clan-arena": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "team-fortress": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"}
+  }
+}

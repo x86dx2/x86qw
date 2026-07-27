@@ -24,11 +24,13 @@ from pathlib import Path, PurePosixPath
 
 from component_policy import component_for_archive_path, load_component_policy, require_component
 from nquake_components import component_for_source, load_catalog as load_nquake_catalog, source_roots
+from nquake_releases import component_for_artifact_path, load_releases as load_nquake_releases
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARCHIVE = ROOT / "archive"
 NQUAKE_CATALOG = ROOT / "inventory/nquake-components.json"
+NQUAKE_RELEASES = ROOT / "inventory/nquake-releases.json"
 USER_AGENT = "x86qw-archive/2"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
@@ -75,6 +77,7 @@ class Asset:
     path: str
     expected_size: int | None = None
     subcomponent: str | None = None
+    expected_sha256: str | None = None
 
 
 class LinkParser(HTMLParser):
@@ -225,9 +228,28 @@ def discover_nquake() -> list[Asset]:
     return assets
 
 
+def discover_nquake_release_assets() -> list[Asset]:
+    releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
+    assets: list[Asset] = []
+    components = releases["components"]
+    assert isinstance(components, dict)
+    for identifier, release in components.items():
+        assert isinstance(release, dict)
+        for artifact in release.get("artifacts", []):
+            assert isinstance(artifact, dict)
+            assets.append(Asset(
+                "nquake", str(artifact["url"]), str(artifact["archive_path"]),
+                int(artifact["size"]), identifier, str(artifact["sha256"]),
+            ))
+    return assets
+
+
 def discover_assets() -> list[Asset]:
     components = load_component_policy()
-    discovered = [*discover_release_assets(), *discover_nightlies(), *discover_nquake()]
+    discovered = [
+        *discover_release_assets(), *discover_nightlies(), *discover_nquake(),
+        *discover_nquake_release_assets(),
+    ]
     unique: dict[str, Asset] = {}
     for asset in discovered:
         require_component(components, asset.component, asset.path)
@@ -244,6 +266,9 @@ def consumed_component(path: str) -> str | None:
     components = load_component_policy()
     component = component_for_archive_path(components, path)
     if component == "nquake":
+        releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
+        if component_for_artifact_path(releases, path) is not None:
+            return component
         parts = PurePosixPath(path).parts
         if len(parts) < 6 or parts[:3] != ("components", "nquake", "snapshots"):
             return None
@@ -378,9 +403,13 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 metadata["component"] = component_name
                 metadata["consumer"] = consumers[0]
                 if component_name == "nquake":
-                    parts = PurePosixPath(relative).parts
-                    upstream_path = PurePosixPath(*parts[4:]).as_posix()
-                    metadata["package"] = component_for_source(load_nquake_catalog(NQUAKE_CATALOG), upstream_path)
+                    releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
+                    package = component_for_artifact_path(releases, relative)
+                    if package is None:
+                        parts = PurePosixPath(relative).parts
+                        upstream_path = PurePosixPath(*parts[4:]).as_posix()
+                        package = component_for_source(load_nquake_catalog(NQUAKE_CATALOG), upstream_path)
+                    metadata["package"] = package
             continue
         target = root / relative
         if target.is_file() or target.is_symlink():
@@ -414,7 +443,14 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
     target = root / asset.path
     if target.is_symlink():
         raise ValueError(f"archive target must not be a symlink: {target}")
-    if isinstance(known, dict) and target.is_file() and target.stat().st_size == known.get("size"):
+    if (
+        isinstance(known, dict)
+        and target.is_file()
+        and target.stat().st_size == known.get("size")
+        and known.get("url") == asset.url
+        and (asset.expected_size is None or known.get("size") == asset.expected_size)
+        and (asset.expected_sha256 is None or known.get("sha256") == asset.expected_sha256)
+    ):
         metadata = dict(known)
         if asset.subcomponent is not None:
             metadata["package"] = asset.subcomponent
@@ -436,6 +472,8 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
                     output.write(block)
             if asset.expected_size is not None and size != asset.expected_size:
                 raise ValueError(f"download size mismatch for {asset.url}: expected {asset.expected_size}, got {size}")
+            if asset.expected_sha256 is not None and digest.hexdigest() != asset.expected_sha256:
+                raise ValueError(f"download SHA-256 mismatch for {asset.url}")
             os.replace(temporary, target)
             component = load_component_policy()[asset.component]
             consumers = component["consumers"]

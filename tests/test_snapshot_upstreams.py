@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import importlib.util
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,8 +22,10 @@ from nquake_components import (  # noqa: E402
     validate_tree_partition,
 )
 from snapshot_upstreams import (  # noqa: E402
+    Asset,
     collapse_case_duplicates,
     consumed_component,
+    download_asset,
     load_manifest,
     prune_unconsumed,
     safe_filename,
@@ -68,6 +72,9 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/source/source.tar.gz"))
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/metadata/checksums.txt"))
         self.assertIsNone(consumed_component("components/ezquake/nightlies/build/linux-x86_64/build.AppImage.md5"))
+        self.assertEqual("nquake", consumed_component(
+            "components/nquake/releases/nquake-ktx/1.47/qwprogs-qvm.zip"
+        ))
 
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -138,6 +145,34 @@ class SnapshotTests(unittest.TestCase):
             payload.write_bytes(b"bad")
             with self.assertRaisesRegex(ValueError, "integrity"):
                 verify_archive(root, loaded)
+
+    def test_download_does_not_reuse_stale_metadata_for_a_pinned_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "components/nquake/releases/nquake-ktx/test/qwprogs-qvm.zip"
+            target.parent.mkdir(parents=True)
+            target.write_bytes(b"old")
+            expected = b"new"
+            asset = Asset(
+                "nquake",
+                "https://example.invalid/qwprogs-qvm.zip",
+                target.relative_to(root).as_posix(),
+                len(expected),
+                "nquake-ktx",
+                hashlib.sha256(expected).hexdigest(),
+            )
+            known = {
+                "component": "nquake",
+                "consumer": "install:nquake",
+                "url": "https://example.invalid/old.zip",
+                "size": len(expected),
+                "sha256": hashlib.sha256(b"old").hexdigest(),
+            }
+            with mock.patch("snapshot_upstreams.urllib.request.urlopen", return_value=io.BytesIO(expected)):
+                _, metadata, reused = download_asset(root, asset, known)
+            self.assertFalse(reused)
+            self.assertEqual(expected, target.read_bytes())
+            self.assertEqual(hashlib.sha256(expected).hexdigest(), metadata["sha256"])
 
 
 if __name__ == "__main__":

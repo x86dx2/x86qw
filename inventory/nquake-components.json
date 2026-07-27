@@ -7,8 +7,7 @@
   },
   "source": {
     "repository": "https://github.com/nQuake/distfiles.git",
-    "ref": "master",
-    "version_strategy": "distfiles-commit"
+    "ref": "master"
   },
   "profiles": {
     "essential": [
@@ -58,7 +57,6 @@
       "label": "Configuração base nQuake",
       "kind": "core",
       "description": "Inicialização, configuração padrão preservável, fragfile e exemplos de configuração.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": [],
       "sources": [
         {"path": "gpl/ezquake/configs", "destination": "ezquake/configs", "mode": "overlay", "exclude": ["gpl/ezquake/configs/config.cfg"]},
@@ -73,7 +71,6 @@
       "label": "Interface e recursos visuais nQuake",
       "kind": "core",
       "description": "Pacotes principais do ezQuake e da identidade visual nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "gpl/ezquake/ezquake.pk3", "destination": "ezquake/ezquake.pk3", "mode": "overlay"},
@@ -82,10 +79,9 @@
     },
     {
       "id": "nquake-ktx",
-      "label": "KTX competitivo",
+      "label": "KTX para servidores",
       "kind": "gameplay",
-      "description": "Mod KTX usado em partidas e servidores competitivos.",
-      "version": {"strategy": "distfiles-commit"},
+      "description": "Mod de servidor KTX preservado para instalações compatíveis; não é executado pelo cliente ezQuake.",
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "overlay"}
@@ -96,7 +92,6 @@
       "label": "Skins de jogadores",
       "kind": "content",
       "description": "Skins GPL e comunitárias para jogadores e equipes.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/skins", "destination": "qw/skins", "mode": "overlay"}
@@ -107,7 +102,6 @@
       "label": "Miras",
       "kind": "content",
       "description": "Coleção de miras incluída pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/crosshairs", "destination": "qw/crosshairs", "mode": "overlay"}
@@ -118,7 +112,6 @@
       "label": "Skyboxes",
       "kind": "content",
       "description": "Céus de alta resolução e documentação correspondente.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/env", "destination": "qw/env", "mode": "overlay"}
@@ -129,7 +122,6 @@
       "label": "Modelos",
       "kind": "content",
       "description": "Modelos atualizados empacotados pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/models.pk3", "destination": "qw/models.pk3", "mode": "overlay"}
@@ -140,7 +132,6 @@
       "label": "Bandeiras do placar",
       "kind": "content",
       "description": "Bandeiras de países usadas no placar.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/scoreboard_flags.pk3", "destination": "qw/scoreboard_flags.pk3", "mode": "overlay"}
@@ -151,7 +142,6 @@
       "label": "Sons",
       "kind": "content",
       "description": "Sons adicionais usados pela distribuição nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/sound", "destination": "qw/sound", "mode": "overlay"}
@@ -162,7 +152,6 @@
       "label": "Texturas externas",
       "kind": "content",
       "description": "Texturas individuais mantidas pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/textures", "destination": "qw/textures", "mode": "overlay"}
@@ -173,7 +162,6 @@
       "label": "Texturas base",
       "kind": "content",
       "description": "Pacote de texturas base selecionado pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "textures/qw/textures.pk3", "destination": "qw/textures.pk3", "mode": "overlay"}
@@ -184,7 +172,6 @@
       "label": "Mapas selecionados nQuake",
       "kind": "content",
       "description": "Somente os mapas, ENT e textos que fazem parte da distribuição nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/maps", "destination": "qw/maps", "mode": "overlay"}
@@ -195,7 +182,6 @@
       "label": "Informações de partidas",
       "kind": "content",
       "description": "Arquivos de matchinfo mantidos pela distribuição nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/matchinfo", "destination": "qw/matchinfo", "mode": "overlay"}
@@ -206,7 +192,6 @@
       "label": "Documentação e licenças",
       "kind": "documentation",
       "description": "Licenças, manuais e arquivos de leitura distribuídos pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": [],
       "sources": [
         {"path": "gpl/LICENSE", "destination": "LICENSE", "mode": "overlay"},
@@ -221,7 +206,6 @@
       "label": "QRP alta resolução",
       "kind": "addon",
       "description": "Texturas e brush models em alta resolução do Quake Retexturing Project.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "addon-textures/qw", "destination": "qw", "mode": "overlay"}
@@ -232,7 +216,6 @@
       "label": "Clan Arena e Pro-X",
       "kind": "addon",
       "description": "Modos Clan Arena e Pro-X incluídos no instalador nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"},
@@ -244,7 +227,6 @@
       "label": "Team Fortress",
       "kind": "addon",
       "description": "Conteúdo Team Fortress fornecido pelo nQuake.",
-      "version": {"strategy": "distfiles-commit"},
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}

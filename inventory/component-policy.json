@@ -16,7 +16,8 @@
         "install:nquake"
       ],
       "archive_prefixes": [
-        "components/nquake/snapshots/"
+        "components/nquake/snapshots/",
+        "components/nquake/releases/"
       ]
     }
   }
