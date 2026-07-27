@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download the current upstream x86QW archive with resumable SHA-256 inventory."""
+"""Preserve only upstream files that have an explicit x86QW consumer."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,64 +22,29 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
+from component_policy import component_for_archive_path, load_component_policy, require_component
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARCHIVE = ROOT / "archive"
-USER_AGENT = "x86qw-archive/1"
-REPOSITORIES = {
-    "ezquake-source": (
-        "https://github.com/QW-Group/ezquake-source.git",
-        "components/ezquake/git/repository.git",
-    ),
-    "nquake-distfiles": (
-        "https://github.com/nQuake/distfiles.git",
-        "components/nquake/git/distfiles.git",
+USER_AGENT = "x86qw-archive/2"
+NQUAKE_REPOSITORY = "nQuake/distfiles"
+NQUAKE_REF = "master"
+LEGACY_NQUAKE_MIRROR = "components/nquake/git/distfiles.git"
+
+RELEASES = {
+    "ezquake": (
+        "QW-Group/ezquake-source",
+        re.compile(r"ezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip"),
     ),
     "classicq": (
-        "https://github.com/classicq/classicq.git",
-        "components/classicq/git/repository.git",
+        "classicq/classicq",
+        re.compile(r"classicQ-[0-9.]+-(?:macos-arm64|linux-amd64|windows-amd64)\.zip"),
     ),
     "unezquake": (
-        "https://github.com/dusty-qw/unezquake.git",
-        "components/unezquake/git/repository.git",
+        "dusty-qw/unezquake",
+        re.compile(r"unezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip"),
     ),
-    "qwprot": (
-        "https://github.com/QW-Group/qwprot.git",
-        "components/ezquake/dependencies/qwprot/git/repository.git",
-    ),
-    "qwprot-community": (
-        "https://github.com/QW-Community/qwprot.git",
-        "components/unezquake/dependencies/qwprot/git/repository.git",
-    ),
-}
-SUBMODULES = {
-    "ezquake-source": {
-        "src/qwprot": "QW-Group/qwprot",
-        "vcpkg": "Microsoft/vcpkg",
-    },
-    "unezquake": {
-        "src/qwprot": "QW-Community/qwprot",
-        "vcpkg": "Microsoft/vcpkg",
-    },
-}
-SUBMODULE_COMPONENTS = {
-    "ezquake-source": "ezquake",
-    "unezquake": "unezquake",
-}
-LEGACY_DEPENDENCY_SNAPSHOTS = {
-    "microsoft-vcpkg/66c0373dc7fca549e5803087b9487edfe3aca0a1.tar.gz":
-        "components/ezquake/dependencies/vcpkg/snapshots/66c0373dc7fca549e5803087b9487edfe3aca0a1.tar.gz",
-    "qw-group-qwprot/d508a7a4425e2dcdfab151cd188f8720907e5bbd.tar.gz":
-        "components/ezquake/dependencies/qwprot/snapshots/d508a7a4425e2dcdfab151cd188f8720907e5bbd.tar.gz",
-    "microsoft-vcpkg/65e691fcff8fbffe91a3cb7277074bd187b54779.tar.gz":
-        "components/unezquake/dependencies/vcpkg/snapshots/65e691fcff8fbffe91a3cb7277074bd187b54779.tar.gz",
-    "qw-community-qwprot/c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc.tar.gz":
-        "components/unezquake/dependencies/qwprot/snapshots/c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc.tar.gz",
-}
-RELEASES = {
-    "ezquake": "QW-Group/ezquake-source",
-    "classicq": "classicq/classicq",
-    "unezquake": "dusty-qw/unezquake",
 }
 NIGHTLIES = {
     "macos-universal": (
@@ -94,14 +60,24 @@ NIGHTLIES = {
         re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}_ezquake\.exe$"),
     ),
 }
+OBSOLETE_ROOTS = (
+    "content/gfx",
+    "content/maps/indexes",
+    "components/ezquake/git",
+    "components/ezquake/dependencies",
+    "components/classicq/git",
+    "components/unezquake/git",
+    "components/unezquake/dependencies",
+    "components/nquake/git",
+)
 
 
 @dataclass(frozen=True)
 class Asset:
+    component: str
     url: str
     path: str
     expected_size: int | None = None
-    optional: bool = False
 
 
 class LinkParser(HTMLParser):
@@ -141,12 +117,14 @@ def safe_filename(href: str) -> str | None:
 
 
 def github_json(path: str) -> object:
-    url = f"https://api.github.com/{path}"
-    request = urllib.request.Request(url, headers={
+    headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": USER_AGENT,
         "X-GitHub-Api-Version": "2022-11-28",
-    })
+    }
+    if token := os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(f"https://api.github.com/{path}", headers=headers)
     with urllib.request.urlopen(request, timeout=90) as response:
         return json.load(response)
 
@@ -159,7 +137,7 @@ def release_variant(name: str) -> str:
     ):
         if variant in lowered:
             return variant
-    return "source" if "source" in lowered else "metadata"
+    raise ValueError(f"release asset has no supported runtime variant: {name}")
 
 
 def release_path(component: str, tag: str, name: str) -> str:
@@ -173,19 +151,23 @@ def nightly_path(platform: str, name: str) -> str:
 
 def discover_release_assets() -> list[Asset]:
     assets: list[Asset] = []
-    for label, repository in RELEASES.items():
+    for component, (repository, accepted) in RELEASES.items():
         release = github_json(f"repos/{repository}/releases/latest")
         if not isinstance(release, dict) or not isinstance(release.get("tag_name"), str):
             raise ValueError(f"invalid latest release response for {repository}")
         tag = release["tag_name"]
+        selected = 0
         for item in release.get("assets", []):
             if not isinstance(item, dict):
                 continue
             name = safe_filename(str(item.get("name", "")))
             url = item.get("browser_download_url")
             size = item.get("size")
-            if name and isinstance(url, str) and isinstance(size, int) and size > 0:
-                assets.append(Asset(url, release_path(label, tag, name), size))
+            if name and accepted.fullmatch(name) and isinstance(url, str) and isinstance(size, int) and size > 0:
+                assets.append(Asset(component, url, release_path(component, tag, name), size))
+                selected += 1
+        if selected != 3:
+            raise ValueError(f"expected three runtime assets in latest {component} release, found {selected}")
     return assets
 
 
@@ -196,85 +178,97 @@ def discover_nightlies() -> list[Asset]:
         if not names:
             raise ValueError(f"no nightly found for {platform}")
         name = names[-1]
-        assets.extend((
-            Asset(urllib.parse.urljoin(root, name), nightly_path(platform, name)),
-            Asset(urllib.parse.urljoin(root, name + ".md5"), nightly_path(platform, name + ".md5")),
-        ))
+        assets.append(Asset("ezquake", urllib.parse.urljoin(root, name), nightly_path(platform, name)))
     return assets
 
 
 def discover_maps() -> list[Asset]:
-    assets = [
-        Asset(f"https://maps.quakeworld.nu/{collection}/", f"content/maps/indexes/{collection}.html")
-        for collection in ("all", "base", "core", "locs")
-    ]
-    for collection in ("all", "locs"):
+    assets: list[Asset] = []
+    for collection, component, destination_root in (
+        ("all", "maps", "content/maps/all"),
+        ("locs", "locs", "content/locs"),
+    ):
         root = f"https://maps.quakeworld.nu/{collection}/"
         for href in links(root):
             name = safe_filename(href)
             if name and not urllib.parse.urlsplit(href).path.endswith("/"):
-                destination = f"content/locs/{name}" if collection == "locs" else f"content/maps/all/{name}"
-                assets.append(Asset(urllib.parse.urljoin(root, href), destination))
+                assets.append(Asset(component, urllib.parse.urljoin(root, href), f"{destination_root}/{name}"))
     return assets
 
 
-def discover_gfx(workers: int) -> list[Asset]:
-    first = links("https://gfx.quakeworld.nu/new/")
-    visible_pages = [1, *(int(match.group(1)) for href in first if (match := re.fullmatch(r"/new/page/([0-9]+)/", href)))]
-    page_numbers = list(range(1, max(visible_pages) + 1))
-    page_urls = ["https://gfx.quakeworld.nu/new/" if page == 1 else f"https://gfx.quakeworld.nu/new/page/{page}/" for page in page_numbers]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(workers, 8)) as pool:
-        pages = list(pool.map(links, page_urls))
+def discover_nquake() -> list[Asset]:
+    components = load_component_policy()
+    nquake = components["nquake"]
+    used_paths = nquake.get("upstream_paths")
+    if not isinstance(used_paths, list) or not used_paths or not all(isinstance(path, str) for path in used_paths):
+        raise ValueError("nQuake has no declared upstream paths")
 
-    details: dict[int, str] = {}
-    pattern = re.compile(r"/details/([0-9]+)/([a-z0-9-]+)/")
-    for page in pages:
-        for href in page:
-            if match := pattern.fullmatch(href):
-                details[int(match.group(1))] = match.group(2)
+    commit_data = github_json(f"repos/{NQUAKE_REPOSITORY}/commits/{NQUAKE_REF}")
+    if not isinstance(commit_data, dict) or not isinstance(commit_data.get("sha"), str):
+        raise ValueError("invalid nQuake commit response")
+    commit = commit_data["sha"]
+    tree_data = commit_data.get("commit", {}).get("tree", {})
+    tree_sha = tree_data.get("sha") if isinstance(tree_data, dict) else None
+    if not isinstance(tree_sha, str):
+        raise ValueError("nQuake commit has no tree")
+    tree = github_json(f"repos/{NQUAKE_REPOSITORY}/git/trees/{tree_sha}?recursive=1")
+    if not isinstance(tree, dict) or tree.get("truncated") is True or not isinstance(tree.get("tree"), list):
+        raise ValueError("nQuake tree response is missing or truncated")
 
     assets: list[Asset] = []
-    for identifier, slug in sorted(details.items()):
-        assets.extend((
-            Asset(f"https://gfx.quakeworld.nu/details/{identifier}/{slug}/", f"content/gfx/details/{identifier}-{slug}.html"),
-            Asset(f"https://gfx.quakeworld.nu/download/{identifier}/{slug}/", f"content/gfx/packages/{identifier}-{slug}.download"),
-            Asset(f"https://gfx.quakeworld.nu/files/{identifier}.jpg", f"content/gfx/previews/{identifier}.jpg", optional=True),
+    found_roots: set[str] = set()
+    for item in tree["tree"]:
+        if not isinstance(item, dict) or item.get("type") != "blob":
+            continue
+        path = item.get("path")
+        size = item.get("size")
+        if not isinstance(path, str) or not isinstance(size, int):
+            continue
+        roots = [root for root in used_paths if path == root or path.startswith(root + "/")]
+        if not roots:
+            continue
+        found_roots.update(roots)
+        quoted = urllib.parse.quote(path, safe="/")
+        assets.append(Asset(
+            "nquake",
+            f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
+            f"components/nquake/snapshots/{commit}/{path}",
+            size,
         ))
+    missing = sorted(set(used_paths) - found_roots)
+    if missing:
+        raise ValueError(f"nQuake used path is missing at {commit}: {missing[0]}")
     return assets
 
 
-def discover_submodules(root: Path) -> list[Asset]:
-    assets: list[Asset] = []
-    for parent, submodules in SUBMODULES.items():
-        repository = root / REPOSITORIES[parent][1]
-        for submodule_path, upstream in submodules.items():
-            output = subprocess.check_output(
-                ["git", "-C", str(repository), "ls-tree", "HEAD", submodule_path], text=True
-            ).strip()
-            match = re.fullmatch(r"160000 commit ([0-9a-f]{40})\t.+", output)
-            if not match:
-                raise ValueError(f"invalid submodule reference in {parent}: {submodule_path}")
-            commit = match.group(1)
-            component = SUBMODULE_COMPONENTS[parent]
-            dependency = PurePosixPath(submodule_path).name
-            assets.append(Asset(
-                f"https://codeload.github.com/{upstream}/tar.gz/{commit}",
-                f"components/{component}/dependencies/{dependency}/snapshots/{commit}.tar.gz",
-            ))
-    return assets
-
-
-def discover_assets(root: Path, workers: int) -> list[Asset]:
-    discovered = [
-        *discover_release_assets(), *discover_nightlies(), *discover_maps(),
-        *discover_gfx(workers), *discover_submodules(root),
-    ]
+def discover_assets() -> list[Asset]:
+    components = load_component_policy()
+    discovered = [*discover_release_assets(), *discover_nightlies(), *discover_maps(), *discover_nquake()]
     unique: dict[str, Asset] = {}
     for asset in discovered:
-        if asset.path in unique and unique[asset.path].url != asset.url:
+        require_component(components, asset.component, asset.path)
+        key = asset.path.casefold()
+        existing = unique.get(key)
+        if existing is not None and existing.path == asset.path and existing.url != asset.url:
             raise ValueError(f"two URLs resolve to the same archive path: {asset.path}")
-        unique[asset.path] = asset
+        if existing is None or asset.path < existing.path:
+            unique[key] = asset
     return sorted(unique.values(), key=lambda asset: asset.path)
+
+
+def consumed_component(path: str) -> str | None:
+    components = load_component_policy()
+    component = component_for_archive_path(components, path)
+    if component in {"maps", "locs", "nquake"}:
+        return component
+    name = PurePosixPath(path).name
+    if component == "ezquake":
+        if "/nightlies/" in path:
+            return component if any(pattern.fullmatch(name) for _, pattern in NIGHTLIES.values()) else None
+        return component if RELEASES[component][1].fullmatch(name) else None
+    if component in {"classicq", "unezquake"}:
+        return component if RELEASES[component][1].fullmatch(name) else None
+    return None
 
 
 def file_sha256(path: Path) -> str:
@@ -287,7 +281,7 @@ def file_sha256(path: Path) -> str:
 
 def load_manifest(path: Path) -> dict[str, object]:
     if not path.exists():
-        return {"format": 1, "project": "x86qw", "captured_at": None, "files": {}, "repositories": {}}
+        return {"format": 1, "project": "x86qw", "captured_at": None, "layout": "consumed-only-v1", "files": {}, "repositories": {}}
     manifest = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or manifest.get("format") != 1 or manifest.get("project") != "x86qw":
         raise ValueError(f"invalid archive manifest: {path}")
@@ -311,91 +305,115 @@ def write_manifest(path: Path, manifest: dict[str, object]) -> None:
             temporary.unlink()
 
 
-def component_owned_path(relative: str) -> str:
-    parts = relative.split("/")
-    if parts[0] == "releases" and len(parts) == 4:
-        return release_path(parts[1], parts[2], parts[3])
-    if parts[0] == "nightly" and len(parts) == 3:
-        return nightly_path(parts[1], parts[2])
-    if relative.startswith("maps/all/"):
-        return "content/maps/all/" + relative.removeprefix("maps/all/")
-    if relative.startswith("maps/indexes/"):
-        return "content/maps/indexes/" + relative.removeprefix("maps/indexes/")
-    if relative.startswith("maps/locs/"):
-        return "content/locs/" + relative.removeprefix("maps/locs/")
-    if relative.startswith("gfx/"):
-        destination = "content/gfx/" + relative.removeprefix("gfx/")
-        if destination.startswith("content/gfx/packages/") and destination.endswith(".zip"):
-            destination = destination.removesuffix(".zip") + ".download"
-        return destination
-    for prefix in ("source-dependencies/", "dependencies/"):
-        if relative.startswith(prefix):
-            legacy = relative.removeprefix(prefix).replace("/snapshots/", "/")
-            if legacy not in LEGACY_DEPENDENCY_SNAPSHOTS:
-                raise ValueError(f"dependency owner is unknown: {relative}")
-            return LEGACY_DEPENDENCY_SNAPSHOTS[legacy]
-    return relative
-
-
-def migrate_archive_layout(root: Path, manifest: dict[str, object]) -> tuple[int, int]:
+def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
+    repository = root / LEGACY_NQUAKE_MIRROR
+    if not repository.is_dir():
+        return 0
+    components = load_component_policy()
+    used_paths = components["nquake"].get("upstream_paths")
+    assert isinstance(used_paths, list)
+    commit = subprocess.check_output(["git", f"--git-dir={repository}", "rev-parse", "HEAD"], text=True).strip()
+    listing = subprocess.check_output(
+        ["git", f"--git-dir={repository}", "ls-tree", "-r", "--name-only", "-z", commit, "--", *used_paths]
+    ).split(b"\0")
     files = manifest["files"]
-    repositories = manifest["repositories"]
-    assert isinstance(files, dict) and isinstance(repositories, dict)
-    migrated_files: dict[str, object] = {}
-    moved_files = 0
-    for old_relative, metadata in sorted(files.items()):
-        new_relative = component_owned_path(old_relative)
-        if new_relative in migrated_files:
-            raise ValueError(f"two archive entries resolve to the same path: {new_relative}")
-        if new_relative != old_relative and not (isinstance(metadata, dict) and metadata.get("missing") is True):
-            old_path = root / old_relative
-            new_path = root / new_relative
-            if old_path.exists() and new_path.exists():
-                raise ValueError(f"cannot migrate conflicting archive path: {new_relative}")
-            if old_path.exists():
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-                old_path.replace(new_path)
-                moved_files += 1
-            elif not new_path.exists():
-                raise ValueError(f"archive file is missing during migration: {old_relative}")
-        migrated_files[new_relative] = metadata
-    manifest["files"] = migrated_files
+    assert isinstance(files, dict)
+    imported = 0
+    for encoded in listing:
+        if not encoded:
+            continue
+        upstream_path = encoded.decode("utf-8")
+        relative = f"components/nquake/snapshots/{commit}/{upstream_path}"
+        target = root / relative
+        if not target.is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("wb") as output:
+                subprocess.run(
+                    ["git", f"--git-dir={repository}", "show", f"{commit}:{upstream_path}"],
+                    stdout=output,
+                    check=True,
+                )
+            imported += 1
+        quoted = urllib.parse.quote(upstream_path, safe="/")
+        files[relative] = {
+            "component": "nquake",
+            "consumer": "install:nquake",
+            "url": f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
+            "size": target.stat().st_size,
+            "sha256": file_sha256(target),
+        }
+    return imported
 
-    moved_repositories = 0
-    for name, (_, new_relative) in REPOSITORIES.items():
-        legacy_relatives = [f"git/{name}.git"]
-        if name == "qwprot":
-            legacy_relatives.append("dependencies/qw-group-qwprot/repository.git")
-        elif name == "qwprot-community":
-            legacy_relatives.append("dependencies/qw-community-qwprot/repository.git")
-        old_paths = [root / relative for relative in legacy_relatives if (root / relative).exists()]
-        new_path = root / new_relative
-        if old_paths and new_path.exists():
-            raise ValueError(f"cannot migrate conflicting Git mirror: {new_relative}")
-        if len(old_paths) > 1:
-            raise ValueError(f"multiple legacy Git mirrors found for: {name}")
-        if old_paths:
-            new_path.parent.mkdir(parents=True, exist_ok=True)
-            old_paths[0].replace(new_path)
-            moved_repositories += 1
-        metadata = repositories.get(name)
-        if isinstance(metadata, dict):
-            metadata["path"] = new_relative
 
-    manifest["layout"] = "component-owned-v1"
-    for legacy_name in ("releases", "nightly", "maps", "gfx", "source-dependencies", "dependencies", "git"):
-        legacy_root = root / legacy_name
-        if legacy_root.is_dir():
-            for directory in sorted((path for path in legacy_root.rglob("*") if path.is_dir()), reverse=True):
-                try:
-                    directory.rmdir()
-                except OSError:
-                    pass
-            try:
-                legacy_root.rmdir()
-            except OSError:
-                pass
-    return moved_files, moved_repositories
+def collapse_case_duplicates(root: Path, files: dict[str, object]) -> int:
+    actual_by_case = {
+        path.relative_to(root).as_posix().casefold(): path.relative_to(root).as_posix()
+        for path in root.rglob("*") if path.is_file() and path.name != "manifest.json"
+    }
+    groups: dict[str, list[str]] = {}
+    for relative in files:
+        groups.setdefault(relative.casefold(), []).append(relative)
+    removed = 0
+    for folded, relatives in groups.items():
+        if len(relatives) < 2:
+            continue
+        metadata = [files[relative] for relative in relatives]
+        identities = {
+            (item.get("size"), item.get("sha256"))
+            for item in metadata if isinstance(item, dict)
+        }
+        if len(identities) != 1:
+            raise ValueError(f"case-colliding archive files have different content: {relatives[0]}")
+        physical = actual_by_case.get(folded)
+        keep = physical if physical in relatives else min(relatives)
+        for relative in relatives:
+            if relative != keep:
+                del files[relative]
+                removed += 1
+    return removed
+
+
+def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]:
+    files = manifest["files"]
+    assert isinstance(files, dict)
+    removed_files = collapse_case_duplicates(root, files)
+    for relative in sorted(tuple(files)):
+        component_name = consumed_component(relative)
+        if component_name is not None:
+            metadata = files[relative]
+            if isinstance(metadata, dict):
+                component = load_component_policy()[component_name]
+                consumers = component["consumers"]
+                assert isinstance(consumers, list)
+                metadata["component"] = component_name
+                metadata["consumer"] = consumers[0]
+            continue
+        target = root / relative
+        if target.is_file() or target.is_symlink():
+            target.unlink()
+            removed_files += 1
+        del files[relative]
+
+    removed_roots = 0
+    archive_root = root.resolve()
+    for relative in OBSOLETE_ROOTS:
+        target = (root / relative).resolve()
+        if archive_root not in target.parents:
+            raise ValueError(f"unsafe obsolete archive path: {target}")
+        if target.is_dir():
+            shutil.rmtree(target)
+            removed_roots += 1
+        elif target.exists() or target.is_symlink():
+            target.unlink()
+            removed_roots += 1
+    manifest["repositories"] = {}
+    manifest["layout"] = "consumed-only-v1"
+    for directory in sorted((path for path in root.rglob("*") if path.is_dir()), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+    return removed_files, removed_roots
 
 
 def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[str, object], bool]:
@@ -413,8 +431,6 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
             digest = hashlib.sha256()
             size = 0
             with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
-                content_type = response.headers.get_content_type()
-                disposition = response.headers.get("Content-Disposition")
                 while block := response.read(1024 * 1024):
                     size += len(block)
                     if asset.expected_size is not None and size > asset.expected_size:
@@ -424,16 +440,16 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
             if asset.expected_size is not None and size != asset.expected_size:
                 raise ValueError(f"download size mismatch for {asset.url}: expected {asset.expected_size}, got {size}")
             os.replace(temporary, target)
+            component = load_component_policy()[asset.component]
+            consumers = component["consumers"]
+            assert isinstance(consumers, list)
             return asset.path, {
-                "url": asset.url, "size": size, "sha256": digest.hexdigest(),
-                "content_type": content_type, "content_disposition": disposition,
+                "component": asset.component,
+                "consumer": consumers[0],
+                "url": asset.url,
+                "size": size,
+                "sha256": digest.hexdigest(),
             }, False
-        except urllib.error.HTTPError as error:
-            if asset.optional and error.code == 404:
-                if temporary.exists():
-                    temporary.unlink()
-                return asset.path, {"url": asset.url, "missing": True}, False
-            last_error = error
         except (OSError, ValueError, urllib.error.URLError) as error:
             last_error = error
         if temporary.exists():
@@ -444,45 +460,43 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
     raise last_error
 
 
-def mirror_repositories(root: Path, manifest: dict[str, object]) -> None:
-    repositories = manifest["repositories"]
-    assert isinstance(repositories, dict)
-    for name, (url, relative) in REPOSITORIES.items():
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            subprocess.run(["git", "-C", str(target), "remote", "update", "--prune"], check=True)
-        else:
-            subprocess.run(["git", "clone", "--mirror", url, str(target)], check=True)
-        subprocess.run(["git", "-C", str(target), "fsck", "--full", "--no-dangling"], check=True)
-        head = subprocess.check_output(["git", "-C", str(target), "rev-parse", "HEAD"], text=True).strip()
-        refs = subprocess.check_output(["git", "-C", str(target), "show-ref"], text=True).splitlines()
-        repositories[name] = {"url": url, "path": relative, "head": head, "refs": len(refs)}
-
-
 def verify_archive(root: Path, manifest: dict[str, object]) -> int:
     files = manifest["files"]
     assert isinstance(files, dict)
+    if manifest.get("layout") != "consumed-only-v1" or manifest.get("repositories") != {}:
+        raise ValueError("archive still contains a legacy or repository-oriented layout")
+    expected = set(files)
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != "manifest.json"
+    }
+    if actual != expected:
+        unexpected = sorted(actual - expected)
+        missing = sorted(expected - actual)
+        detail = unexpected[0] if unexpected else missing[0]
+        raise ValueError(f"archive contains an untracked or missing file: {detail}")
     checked = 0
     for relative, metadata in sorted(files.items()):
-        if not isinstance(metadata, dict) or metadata.get("missing") is True:
-            continue
+        component = consumed_component(relative)
+        if component is None:
+            raise ValueError(f"archive file has no explicit x86QW consumer: {relative}")
+        if not isinstance(metadata, dict) or metadata.get("component") not in {None, component}:
+            raise ValueError(f"archive file has invalid component metadata: {relative}")
         path = root / relative
-        if not path.is_file() or path.is_symlink():
-            raise ValueError(f"archive file is missing or unsafe: {relative}")
-        if path.stat().st_size != metadata.get("size") or file_sha256(path) != metadata.get("sha256"):
+        if path.is_symlink() or path.stat().st_size != metadata.get("size") or file_sha256(path) != metadata.get("sha256"):
             raise ValueError(f"archive file failed integrity verification: {relative}")
         checked += 1
     return checked
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Baixa e inventaria o acervo upstream atual do x86QW.")
+    parser = argparse.ArgumentParser(description="Preserva somente arquivos usados explicitamente pelo x86QW.")
     parser.add_argument("--archive", type=Path, default=DEFAULT_ARCHIVE)
     parser.add_argument("--workers", type=int, default=8)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--verify", action="store_true", help="valida o acervo existente sem acessar a rede")
-    mode.add_argument("--migrate-layout", action="store_true", help="migra o acervo antigo sem acessar a rede")
+    mode.add_argument("--apply-policy", action="store_true", help="remove do acervo tudo que não possui consumidor declarado")
     return parser.parse_args()
 
 
@@ -495,26 +509,24 @@ def main() -> int:
     manifest = load_manifest(manifest_path)
     if options.verify:
         count = verify_archive(root, manifest)
-        print(f"archive valid: {count} file(s)")
+        print(f"archive valid: {count} consumed file(s)")
         return 0
 
-    moved_files, moved_repositories = migrate_archive_layout(root, manifest)
-    if moved_files or moved_repositories:
-        write_manifest(manifest_path, manifest)
-        print(f"Migrated archive layout: {moved_files} file(s), {moved_repositories} Git mirror(s).")
-    if options.migrate_layout:
-        checked = verify_archive(root, manifest)
-        print(f"archive layout ready: {checked} verified file(s)")
-        return 0
-
-    print("Mirroring Git repositories...")
-    mirror_repositories(root, manifest)
+    imported = import_legacy_nquake(root, manifest)
+    removed_files, removed_roots = prune_unconsumed(root, manifest)
     write_manifest(manifest_path, manifest)
-    print("Discovering current upstream assets...")
-    assets = discover_assets(root, options.workers)
+    if imported or removed_files or removed_roots:
+        print(f"Applied consumer policy: {imported} nQuake file(s) preserved, {removed_files} file(s) and {removed_roots} obsolete tree(s) removed.")
+    if options.apply_policy:
+        checked = verify_archive(root, manifest)
+        print(f"archive policy applied: {checked} consumed file(s)")
+        return 0
+
+    print("Discovering files consumed by x86QW...")
+    assets = discover_assets()
     files = manifest["files"]
     assert isinstance(files, dict)
-    print(f"Downloading {len(assets)} asset(s) with {options.workers} worker(s)...")
+    print(f"Synchronizing {len(assets)} consumed asset(s) with {options.workers} worker(s)...")
     failures: list[str] = []
     completed = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=options.workers) as pool:
@@ -536,7 +548,7 @@ def main() -> int:
     if failures:
         raise ValueError(f"archive incomplete: {len(failures)} download(s) failed")
     checked = verify_archive(root, manifest)
-    print(f"archive complete: {checked} verified file(s)")
+    print(f"archive complete: {checked} consumed file(s) verified")
     return 0
 
 

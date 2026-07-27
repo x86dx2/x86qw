@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import importlib.util
 import json
 import sys
 import tempfile
@@ -10,50 +12,90 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
+from component_policy import load_component_policy, require_component  # noqa: E402
 from snapshot_upstreams import (  # noqa: E402
-    component_owned_path,
+    collapse_case_duplicates,
+    consumed_component,
     load_manifest,
-    migrate_archive_layout,
+    prune_unconsumed,
     safe_filename,
     verify_archive,
     write_manifest,
 )
 
+SPEC = importlib.util.spec_from_file_location("install_qw_policy", ROOT / "install-qw.py")
+install_qw = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+sys.modules[SPEC.name] = install_qw
+SPEC.loader.exec_module(install_qw)
+
 
 class SnapshotTests(unittest.TestCase):
-    def test_component_owned_layout_migration_is_complete_and_idempotent(self) -> None:
+    def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
+        components = load_component_policy()
+        self.assertEqual(
+            list(install_qw.NQUAKE_PATHS),
+            components["nquake"]["upstream_paths"],
+        )
+        for component in ("ezquake", "classicq", "unezquake", "nquake", "maps", "locs"):
+            require_component(components, component)
+        with self.assertRaisesRegex(ValueError, "not consumed"):
+            require_component(components, "gfx")
+
+    def test_only_runtime_assets_have_consumers(self) -> None:
+        self.assertEqual("ezquake", consumed_component(
+            "components/ezquake/releases/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
+        ))
+        self.assertEqual("maps", consumed_component("content/maps/all/dm6.bsp"))
+        self.assertIsNone(consumed_component("content/gfx/packages/1-theme.download"))
+        self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/source/source.tar.gz"))
+        self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/metadata/checksums.txt"))
+        self.assertIsNone(consumed_component("components/ezquake/nightlies/build/linux-x86_64/build.AppImage.md5"))
+
+    def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            legacy_files = {
-                "releases/ezquake/3.6.9/ezQuake-macOS-universal.zip": b"release",
-                "nightly/macos-universal/20260701-120000_abcdef0_ezQuake-macOS-universal.zip": b"nightly",
-                "maps/all/dm6.bsp": b"map",
-                "maps/indexes/all.html": b"index",
-                "maps/locs/dm6.loc": b"loc",
-                "gfx/packages/1-example.zip": b"opaque",
-                "dependencies/microsoft-vcpkg/snapshots/66c0373dc7fca549e5803087b9487edfe3aca0a1.tar.gz": b"vcpkg",
-                "dependencies/qw-group-qwprot/snapshots/d508a7a4425e2dcdfab151cd188f8720907e5bbd.tar.gz": b"qwprot",
-            }
-            for relative, payload in legacy_files.items():
+            kept = "content/maps/all/dm6.bsp"
+            removed = "content/gfx/packages/theme.download"
+            for relative, payload in ((kept, b"map"), (removed, b"gfx")):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(payload)
-            repository = root / "dependencies/qw-group-qwprot/repository.git"
-            repository.mkdir(parents=True)
-            (repository / "HEAD").write_text("ref: refs/heads/main\n")
+            repository_file = root / "components/ezquake/git/repository.git/HEAD"
+            repository_file.parent.mkdir(parents=True)
+            repository_file.write_text("legacy\n")
             manifest = {
-                "files": {relative: {"size": len(payload)} for relative, payload in legacy_files.items()},
-                "repositories": {"qwprot": {}},
+                "format": 1, "project": "x86qw", "captured_at": None,
+                "layout": "component-owned-v1", "repositories": {"ezquake": {}},
+                "files": {
+                    kept: {"size": 3, "sha256": hashlib.sha256(b"map").hexdigest()},
+                    removed: {"size": 3, "sha256": hashlib.sha256(b"gfx").hexdigest()},
+                },
             }
-            self.assertEqual((8, 1), migrate_archive_layout(root, manifest))
-            self.assertEqual((0, 0), migrate_archive_layout(root, manifest))
-            self.assertEqual("component-owned-v1", manifest["layout"])
-            self.assertTrue((root / "components/ezquake/dependencies/qwprot/git/repository.git/HEAD").is_file())
-            for relative in legacy_files:
-                destination = component_owned_path(relative)
-                self.assertTrue((root / destination).is_file(), destination)
-                self.assertIn(destination, manifest["files"])
-            self.assertFalse((root / "dependencies").exists())
+            self.assertEqual((1, 2), prune_unconsumed(root, manifest))
+            self.assertTrue((root / kept).is_file())
+            self.assertFalse((root / removed).exists())
+            self.assertFalse(repository_file.exists())
+            self.assertEqual({}, manifest["repositories"])
+            self.assertEqual("consumed-only-v1", manifest["layout"])
+
+    def test_case_collisions_are_collapsed_only_for_identical_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "content/maps/all/testmapB.bsp"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"same")
+            digest = hashlib.sha256(b"same").hexdigest()
+            files = {
+                "content/maps/all/testmapB.bsp": {"size": 4, "sha256": digest},
+                "content/maps/all/testmapb.bsp": {"size": 4, "sha256": digest},
+            }
+            self.assertEqual(1, collapse_case_duplicates(root, files))
+            self.assertEqual(["content/maps/all/testmapB.bsp"], list(files))
+
+            files["content/maps/all/testmapb.bsp"] = {"size": 5, "sha256": "0" * 64}
+            with self.assertRaisesRegex(ValueError, "different content"):
+                collapse_case_duplicates(root, files)
 
     def test_safe_names_and_manifest_integrity(self) -> None:
         self.assertEqual("aerowalk#2020.ent", safe_filename("aerowalk%232020.ent"))
@@ -65,12 +107,12 @@ class SnapshotTests(unittest.TestCase):
             payload.write_bytes(b"map")
             manifest = {
                 "format": 1, "project": "x86qw", "captured_at": None,
-                "layout": "component-owned-v1",
+                "layout": "consumed-only-v1", "repositories": {},
                 "files": {"content/maps/all/dm6.bsp": {
+                    "component": "maps", "consumer": "maps:install",
                     "url": "https://example.invalid/dm6.bsp", "size": 3,
                     "sha256": "60be9861750facbfad8758254a2f76c0cfe78d54459a3bc187d49b1401fcd8e8",
                 }},
-                "repositories": {},
             }
             path = root / "manifest.json"
             write_manifest(path, manifest)

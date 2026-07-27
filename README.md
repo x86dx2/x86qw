@@ -36,7 +36,7 @@ recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
 tools/add_package.py    registro atômico de artefatos revisados
-tools/snapshot_upstreams.py  captura permanente e verificável das fontes atuais
+tools/snapshot_upstreams.py  captura somente os arquivos usados pelo produto
 tools/validate_recipes.py
 tools/validate_catalog.py
 tests/test_catalog.py
@@ -97,38 +97,41 @@ Para preservar o estado atual das fontes sem publicar os arquivos, execute:
 python3 tools/snapshot_upstreams.py
 ```
 
-O comando cria `archive/`, baixa releases, nightlies, mapas, LOCs, GFX e as
-dependências exatas do código-fonte, além de manter mirrors Git completos dos
-projetos principais. Cada arquivo recebe tamanho, URL e SHA-256 em
-`archive/manifest.json`; execuções posteriores retomam o acervo sem baixar
-novamente itens já confirmados.
+O comando cria `archive/` e baixa somente arquivos ligados a uma ação real do
+instalador: binários estáveis e nightly, clientes opcionais, os caminhos do
+nQuake efetivamente sobrepostos, mapas e LOCs. Cada arquivo recebe consumidor,
+origem, tamanho e SHA-256 em `archive/manifest.json`; execuções posteriores
+reaproveitam itens já confirmados.
+
+A lista canônica fica em `inventory/component-policy.json`. Um componente novo
+sem consumidor e prefixo de acervo declarados é recusado pelos validadores. Isso
+impede que pesquisas, catálogos externos, fontes, dependências de build ou
+coleções inteiras entrem no acervo apenas porque estão disponíveis.
 
 O acervo é organizado primeiro pelo contexto do conteúdo:
 
 ```text
 archive/
 ├── components/
-│   ├── ezquake/       Git, releases, nightlies e dependências próprias
-│   ├── classicq/      Git e releases
-│   ├── unezquake/     Git, releases e dependências próprias
-│   └── nquake/        mirror Git completo dos distfiles
+│   ├── ezquake/       binários de releases e nightlies
+│   ├── classicq/      binários das releases
+│   ├── unezquake/     binários das releases
+│   └── nquake/        snapshot dos caminhos usados, fixado por commit
 ├── content/
-│   ├── maps/          arquivo completo e índices das coleções
-│   ├── locs/          nomes de regiões dos mapas
-│   └── gfx/           detalhes, pacotes opacos e previews
-└── manifest.json      inventário individual com origem, tamanho e SHA-256
+│   ├── maps/          arquivos instaláveis da coleção all
+│   └── locs/          nomes de regiões instaláveis
+└── manifest.json      inventário com consumidor, origem, tamanho e SHA-256
 ```
 
-`qwprot` e `vcpkg` ficam dentro do componente que fixa seus commits. O acervo
-não mantém um diretório global de dependências nem presume que versões usadas
-por clientes diferentes sejam intercambiáveis.
-
-Acervos criados antes desse layout podem ser migrados localmente, sem rede ou
-novo download:
+Para aplicar a regra ao acervo anterior sem acessar a rede:
 
 ```sh
-python3 tools/snapshot_upstreams.py --migrate-layout
+python3 tools/snapshot_upstreams.py --apply-policy
 ```
+
+Essa migração extrai do antigo mirror nQuake somente os arquivos indicados pela
+política e depois elimina GFX, históricos Git, código-fonte, dependências de
+compilação, checksums auxiliares e páginas de índice sem consumidor.
 
 Validação integral e offline:
 

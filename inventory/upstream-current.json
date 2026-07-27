@@ -1,28 +1,18 @@
 {
-  "archive_bytes": 8583738791,
-  "archive_files": 8869,
-  "captured_at": "2026-07-27T12:34:26Z",
+  "archive_bytes": 7950372460,
+  "archive_files": 7641,
+  "captured_at": "2026-07-27T13:10:56Z",
   "collections": {
-    "gfx_details": 586,
-    "gfx_packages": 586,
-    "gfx_previews": 586,
-    "map_indexes": 4,
-    "maps": 6641,
-    "nightly_assets_and_checksums": 6,
-    "release_assets_and_checksums": 12,
-    "source_dependency_snapshots": 4,
-    "spoken_locations": 444
+    "classicq_release_binaries": 3,
+    "ezquake_release_and_nightly_binaries": 6,
+    "locs": 444,
+    "maps": 6640,
+    "nquake_selected_files": 545,
+    "unezquake_release_binaries": 3
   },
-  "layout": "component-owned-v1",
-  "manifest_sha256": "216696cc7bb4d5bd7c8bc78cbddbd387df5625fc798cd6b17fa734cad8da8b3d",
-  "missing_optional_files": 0,
-  "repositories": {
-    "classicq": "d50890728f0a88a4caba19f05d88b2ab5d37ee2d",
-    "ezquake-source": "a86996a3d33dc1bc3fb15bfe7bcadd662b822557",
-    "nquake-distfiles": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-    "qwprot": "e836c327cf59a6c8ab1233d9aaa3d03e86e0acf6",
-    "qwprot-community": "c49bc4081dcefb5b81320dba2636f3ddf1ffb9cc",
-    "unezquake": "99e4605538f9ca5775ca2e68d585e4c814fda042"
-  },
-  "scope": "current-upstream-snapshot"
+  "layout": "consumed-only-v1",
+  "manifest_sha256": "1e30e9c3d2495520c1f43166079aefdb5d43a5b03263a75a16e62ff3d5d77c2f",
+  "nquake_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+  "policy": "inventory/component-policy.json",
+  "scope": "explicitly-consumed-upstream-files"
 }
