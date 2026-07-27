@@ -1,13 +1,12 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
-import os
-import plistlib
-import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -25,43 +24,17 @@ class ModernComponentTests(unittest.TestCase):
         install_qw.console.configure(verbose=False, no_color=True)
 
     def make_installer(self, root):
-        project = root / "project"
-        target = project / "quake-world"
+        target = root / "quake-world"
         cache = root / "cache" / "x86-qw"
         target.mkdir(parents=True)
         cache.parent.mkdir()
-        return install_qw.Installer(project, target, cache), target, cache
-
-    def write_client_receipt(self, target, client_key, version):
-        client = install_qw.CLIENTS[client_key]
-        platform = client.platforms["macos"]
-        tag = version if client_key == "unezquake" else f"v{version}"
-        artifact = platform.asset_name.format(version=version)
-        metadata = target / ".install"
-        metadata.mkdir(exist_ok=True)
-        install_qw.write_table(metadata / Path(client.receipt("macos")).name, [
-            ("format", "1"), ("client", client.key), ("platform", "macos"),
-            ("architecture", platform.architecture), ("selection", tag),
-            ("install_name", platform.runtime), ("bundle_version", version),
-            ("artifact_name", artifact),
-            ("artifact_url", f"https://github.com/{client.repository}/releases/download/{tag}/{artifact}"),
-            ("artifact_sha256", "a" * 64), ("binary_sha256", "b" * 64),
-        ])
+        return install_qw.Installer(ROOT, target, cache), target, cache
 
     def test_new_actions_are_accepted(self):
-        for action in ("clients", "maps", "presets", "hub"):
+        for action in ("components", "presets", "hub"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
-
-    def test_map_catalog_accepts_only_safe_expected_files(self):
-        html = b'''<a href="dm6.bsp">ok</a><a href="named%20bad.bsp">bad</a>
-            <a href="../escape.bsp">escape name only</a><a href="tool.exe">bad</a>
-            <a href="dm6.loc">wrong collection</a><a href="readme.txt">text</a>'''
-        with tempfile.TemporaryDirectory() as temporary:
-            installer, _, _ = self.make_installer(Path(temporary))
-            with mock.patch.object(installer, "http_get", return_value=html):
-                self.assertEqual(["dm6.bsp", "escape.bsp", "readme.txt"], installer.map_catalog("base"))
 
     def test_component_overlay_preserves_unowned_files_and_is_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -77,12 +50,12 @@ class ModernComponentTests(unittest.TestCase):
             (maps / "personal.loc").write_text("upstream", encoding="utf-8")
             (maps / "new.loc").write_text("new", encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
-                count = installer.install_component_overlay("maps", managed, "test", "https://example.invalid")
+                count = installer.install_component_overlay("nquake-maps", managed, "test", "https://example.invalid")
             self.assertEqual(1, count)
             self.assertEqual("mine", personal.read_text(encoding="utf-8"))
             self.assertEqual("new", (target / "qw/maps/new.loc").read_text(encoding="utf-8"))
-            installer.verify_component("maps")
-            self.assertEqual(1, installer.remove_component("maps"))
+            installer.verify_component("nquake-maps")
+            self.assertEqual(1, installer.remove_component("nquake-maps"))
             self.assertEqual("mine", personal.read_text(encoding="utf-8"))
             self.assertFalse((target / "qw/maps/new.loc").exists())
 
@@ -100,78 +73,52 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(len(install_qw.PRESETS), installer.verify_component("presets"))
             self.assertTrue((target / "ezquake/configs/x86-qw-modern.cfg").is_file())
 
-    def test_individual_map_automatically_includes_matching_loc(self):
+    def test_component_profiles_are_ezquake_only_and_dependency_complete(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            catalogs = {"all": ["dm6.bsp"], "locs": ["DM6.loc"]}
-            with mock.patch.object(installer, "map_catalog", side_effect=lambda name: catalogs[name]):
-                with mock.patch("builtins.input", side_effect=["3", "dm6"]):
-                    selection, files = installer.choose_map_files()
-            self.assertEqual("individual:dm6", selection)
-            self.assertEqual([("all", "dm6.bsp"), ("locs", "DM6.loc")], files)
+            self.assertEqual("ezquake", installer.nquake_catalog["client"]["id"])
+            self.assertEqual(["stable", "nightly"], installer.nquake_catalog["client"]["channels"])
+            self.assertEqual(set(installer.nquake_components), set(installer.nquake_catalog["profiles"]["complete"]))
+            self.assertNotIn("qrp-hires", installer.nquake_catalog["profiles"]["recommended"])
+            self.assertIn("qrp-hires", installer.nquake_catalog["profiles"]["complete"])
 
-    def test_map_install_validates_bsp_and_records_loc(self):
+    def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, cache = self.make_installer(Path(temporary))
-
-            def fake_http_get(url, destination=None, headers=None):
-                del headers
-                if destination is None:
-                    raise AssertionError(url)
-                if url.endswith(".bsp"):
-                    destination.write_bytes(struct.pack("<I", 29) + b"bsp")
-                else:
-                    destination.write_text("0 0 0 room\n", encoding="utf-8")
-                return b""
-
-            catalogs = {"base": ["dm6.bsp"], "locs": ["dm6.loc"]}
-            with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "check_paks"):
-                    with mock.patch.object(installer, "map_catalog", side_effect=lambda name: catalogs[name]):
-                        with mock.patch.object(installer, "http_get", side_effect=fake_http_get):
-                            with mock.patch("builtins.input", side_effect=["1", "1"]):
-                                installer.manage_maps()
-            self.assertEqual(2, installer.verify_component("maps"))
-            self.assertTrue((target / "qw/maps/dm6.bsp").is_file())
-            self.assertTrue((target / "qw/maps/dm6.loc").is_file())
-            self.assertTrue((cache / "maps/dm6.bsp").is_file())
-
-    def test_client_catalog_uses_the_reviewed_x86qw_catalog(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            installer, _, _ = self.make_installer(Path(temporary))
-            installer.client = install_qw.CLIENTS["classicq"]
-            installer.spec = install_qw.PLATFORMS["macos"]
-            name = "classicQ-3.5.0-macos-arm64.zip"
-            url = f"https://downloads.x86.com.br/x86qw/{name}"
-            package = {
-                "component": "classicq", "version": "v3.5.0", "channel": "stable",
-                "platform": "macos", "architecture": "arm64", "filename": name,
-                "size": 42, "sha256": "a" * 64,
-                "origin_url": f"https://github.com/classicq/classicq/releases/download/v3.5.0/{name}",
-                "license": "GPL-2.0", "license_url": "https://github.com/classicq/classicq/blob/master/LICENSE",
-                "source_urls": ["https://github.com/classicq/classicq/archive/refs/tags/v3.5.0.tar.gz"],
-                "redistribution_reviewed": True, "urls": [url],
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            inner = io.BytesIO()
+            with zipfile.ZipFile(inner, "w") as package:
+                package.writestr("progs.dat", b"ktx")
+            payload = inner.getvalue()
+            commit = "a" * 40
+            artifact = root / "nquake-ktx-aaaaaaaaaaaa.zip"
+            metadata = {
+                "format": 1, "project": "x86qw", "package": "nquake-ktx",
+                "source_commit": commit,
+                "members": [{
+                    "path": "payload/qw/ktx.pk3",
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "source": "gpl/qw/ktx.pk3",
+                }],
             }
-            catalog = {"format": 1, "project": "x86qw", "packages": [package]}
-            with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
-                    self.assertEqual([("v3.5.0", (url,), "a" * 64)], installer.client_catalog())
-
-    def test_thin_arm64_client_bundle_is_accepted(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            installer, _, _ = self.make_installer(Path(temporary))
-            app = Path(temporary) / "classicQ.app"
-            binary = app / "Contents/MacOS/classicq-macos-arm64"
-            binary.parent.mkdir(parents=True)
-            header = bytearray(32)
-            header[:4] = b"\xcf\xfa\xed\xfe"
-            struct.pack_into("<I", header, 4, 0x0100000C)
-            binary.write_bytes(header)
-            with (app / "Contents/Info.plist").open("wb") as destination:
-                plistlib.dump({"CFBundleShortVersionString": "3.5.0", "CFBundleExecutable": binary.name}, destination)
-            version, digest = installer.inspect_macos_client(app, binary.name, "arm64")
-            self.assertEqual("3.5.0", version)
-            self.assertEqual(64, len(digest))
+            with zipfile.ZipFile(artifact, "w") as package:
+                package.writestr("payload/qw/ktx.pk3", payload)
+                package.writestr("_x86qw/component.json", json.dumps(metadata))
+            catalog_package = {
+                "package": "nquake-ktx", "version": commit[:12],
+                "source_commit": commit,
+                "origin_url": f"https://example.invalid/{artifact.name}",
+            }
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed, defaults = installer.prepare_nquake_package(catalog_package, artifact)
+            self.assertEqual([], defaults)
+            self.assertTrue((managed / "qw/ktx.pk3").is_file())
+            count = installer.install_component_overlay(
+                "nquake-ktx", managed, commit[:12], str(catalog_package["origin_url"]),
+            )
+            self.assertEqual(1, count)
+            self.assertEqual(1, installer.verify_component("nquake-ktx"))
 
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -215,24 +162,18 @@ class ModernComponentTests(unittest.TestCase):
                                         installer.browse_hub()
                     launch.assert_called_once_with(runtime, expected)
 
-    def test_uninstall_removes_receipts_when_client_runtimes_are_missing_or_invalid(self):
+    def test_uninstall_removes_component_receipt_when_managed_file_is_missing(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            self.write_client_receipt(target, "classicq", "3.5.0")
-            self.write_client_receipt(target, "unezquake", "2.0.4")
-            (target / "unezQuake.app").mkdir()
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            (managed / "qw").mkdir(parents=True)
+            (managed / "qw/ktx.pk3").write_bytes(b"pk3")
+            installer.install_component_overlay("nquake-ktx", managed, "a" * 40, "https://example.invalid")
+            (target / "qw/ktx.pk3").unlink()
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.uninstall()
-            self.assertFalse((target / ".install").exists())
-            self.assertFalse((target / "unezQuake.app").exists())
-
-    def test_optional_client_removal_tolerates_missing_runtime(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
-            self.write_client_receipt(target, "classicq", "3.5.0")
-            with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch("builtins.input", return_value="1"):
-                    installer.remove_optional_client()
             self.assertFalse((target / ".install").exists())
 
 
