@@ -12,11 +12,13 @@ if (statusBox) {
       }
 
       const count = catalog.packages.length;
+      const ktx = catalog.packages.find((item) => item.package === 'nquake-ktx');
+      const ktxVersion = ktx && (ktx.upstream_version || ktx.version);
       statusBox.dataset.state = count ? 'ready' : 'pending';
       statusBox.querySelector('.catalog-label').textContent = count ? 'Catálogo publicado' : 'Distribuição em preparação';
       statusBox.querySelector('.catalog-value').textContent = `${count} ${count === 1 ? 'pacote auditado' : 'pacotes auditados'}`;
       statusBox.querySelector('.catalog-detail').textContent = count
-        ? 'Cada entrada possui origem, licença, tamanho, hash e mirrors revisados.'
+        ? `Cada entrada possui origem, versão, hash e mirrors revisados.${ktxVersion ? ` KTX atual: ${ktxVersion}.` : ''}`
         : 'Nenhum binário será publicado antes da revisão de licença e proveniência.';
     })
     .catch(() => {

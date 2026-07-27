@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-27T15:16:01Z",
+  "generated_at": "2026-07-27T16:03:08Z",
   "packages": [
     {
       "component": "ezquake",
@@ -20,7 +20,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
       ]
     },
     {
@@ -40,7 +41,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
       ]
     },
     {
@@ -60,7 +62,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe"
       ]
     },
     {
@@ -80,7 +83,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-linux-x86_64.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-linux-x86_64.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-linux-x86_64.zip"
       ]
     },
     {
@@ -100,7 +104,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-macOS-universal.zip"
       ]
     },
     {
@@ -120,7 +125,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-windows-x64.zip"
       ]
     },
     {
@@ -141,7 +147,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/clan-arena/e4cb23d40aa2/clan-arena-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -163,7 +170,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-base-textures/e4cb23d40aa2/nquake-base-textures-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -185,7 +193,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-bootstrap/e4cb23d40aa2/nquake-bootstrap-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -207,7 +216,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-crosshairs/e4cb23d40aa2/nquake-crosshairs-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -229,7 +239,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-documentation/e4cb23d40aa2/nquake-documentation-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -251,31 +262,38 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-external-textures/e4cb23d40aa2/nquake-external-textures-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
       "package": "nquake-ktx",
-      "version": "e4cb23d40aa2",
+      "version": "1.47+nquake.e4cb23d40aa2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-ktx-e4cb23d40aa2.zip",
-      "size": 2260919,
-      "sha256": "befc525545e8bc22015e1842b99f997fad0452719229101b887bb3d4df034c37",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-ktx-e4cb23d40aa2.zip",
+      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
+      "size": 2351970,
+      "sha256": "4301a2667945608a2defc4f3b9a1d87c5272e2e0a5218e909b3dbfc550310e7b",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
-        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+        "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz",
+        "https://github.com/QW-Group/ktx/releases/tag/1.47"
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-ktx-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
+      "release_notes": "Atualiza o código de jogo KTX para 1.47 e preserva bots, configurações, mapas auxiliares e sons da distribuição nQuake.",
+      "upstream_version": "1.47"
     },
     {
       "component": "nquake",
@@ -295,7 +313,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-maps/e4cb23d40aa2/nquake-maps-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -317,7 +336,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-matchinfo/e4cb23d40aa2/nquake-matchinfo-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -339,7 +359,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-models/e4cb23d40aa2/nquake-models-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -361,7 +382,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-player-skins/e4cb23d40aa2/nquake-player-skins-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -383,7 +405,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-scoreboard-flags/e4cb23d40aa2/nquake-scoreboard-flags-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -405,7 +428,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-skyboxes/e4cb23d40aa2/nquake-skyboxes-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -427,7 +451,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-sounds/e4cb23d40aa2/nquake-sounds-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -449,7 +474,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-visual-core/e4cb23d40aa2/nquake-visual-core-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -471,7 +497,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/qrp-hires/e4cb23d40aa2/qrp-hires-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -493,7 +520,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/team-fortress/e4cb23d40aa2/team-fortress-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     }

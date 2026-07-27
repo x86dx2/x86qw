@@ -79,6 +79,20 @@ def validate_package(
         parsed = urlsplit(url) if isinstance(url, str) else None
         if parsed is None or parsed.scheme != "https" or not parsed.netloc:
             raise ValueError(f"{label} accepts only absolute HTTPS URLs")
+    if "release_url" in package:
+        release_url = package["release_url"]
+        parsed = urlsplit(release_url) if isinstance(release_url, str) else None
+        if parsed is None or parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError(f"{label}.release_url must be an absolute HTTPS URL")
+    if "release_notes" in package and (
+        not isinstance(package["release_notes"], str) or not package["release_notes"].strip()
+    ):
+        raise ValueError(f"{label}.release_notes must be non-empty text")
+    if "upstream_version" in package and (
+        not isinstance(package["upstream_version"], str)
+        or not SAFE_SEGMENT.fullmatch(package["upstream_version"])
+    ):
+        raise ValueError(f"{label}.upstream_version is invalid")
     for url in [package["origin_url"], *urls]:
         if PurePosixPath(unquote(urlsplit(url).path)).name != filename:
             raise ValueError(f"{label} artifact URLs must end with filename")

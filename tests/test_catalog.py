@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
+from publish_gitlab_packages import artifact_url  # noqa: E402
+from build_nquake_packages import register_packages  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
@@ -18,6 +20,13 @@ class CatalogTests(unittest.TestCase):
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
         self.assertEqual(validate_catalog(catalog), 23)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
+        ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
+        self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
+        self.assertEqual("1.47", ktx["upstream_version"])
+        self.assertTrue(all(len(package["urls"]) == 2 for package in catalog["packages"]))
+        self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
+        self.assertTrue(all("gitlab.com" in package["urls"][1] for package in catalog["packages"]))
+        self.assertEqual(ktx["urls"][1], artifact_url(ktx))
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
             {
@@ -88,6 +97,32 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(1, validate_catalog(json.loads(catalog_path.read_text())))
             with self.assertRaises(ValueError):
                 register_package(catalog_path, artifact, **arguments)
+
+    def test_component_registration_preserves_verified_fallback_mirrors(self) -> None:
+        import tempfile
+
+        package = {
+            "component": "nquake", "package": "nquake-ktx", "version": "1.47",
+            "channel": "content", "platform": "any", "architecture": "any",
+            "filename": "nquake-ktx-1.47.zip", "size": 1, "sha256": "0" * 64,
+            "origin_url": "https://github.com/example/nquake-ktx-1.47.zip",
+            "license": "GPL-2.0", "license_url": "https://github.com/example/LICENSE",
+            "source_urls": ["https://github.com/example/source.tar.gz"],
+            "redistribution_reviewed": True,
+            "urls": ["https://github.com/example/nquake-ktx-1.47.zip"],
+            "source_commit": "a" * 40,
+        }
+        fallback = "https://gitlab.com/example/nquake-ktx-1.47.zip"
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "catalog.json"
+            catalog_package = dict(package, urls=[*package["urls"], fallback])
+            path.write_text(json.dumps({
+                "format": 1, "project": "x86qw", "generated_at": None,
+                "packages": [catalog_package],
+            }))
+            register_packages(path, {"packages": [package]})
+            saved = json.loads(path.read_text())
+            self.assertEqual([*package["urls"], fallback], saved["packages"][0]["urls"])
 
 
 if __name__ == "__main__":
