@@ -9,7 +9,7 @@ versionada fica ao lado, em `x86qw-platform.architecture.json`.
 ```text
 https://x86qw.x86.com.br/                    site do projeto
 https://x86qw.x86.com.br/api/v1/catalog.json catálogo do instalador
-https://downloads.x86.com.br/x86qw/...       artefatos, quando R2 for ativado
+https://github.com/x86dx2/x86qw-dist/releases artefatos imutáveis nesta fase
 ```
 
 O catálogo é o único endereço que o instalador precisa conhecer. Cada pacote
@@ -19,8 +19,9 @@ sem publicar uma nova versão do instalador.
 ## Repositórios
 
 - `x86dx2/x86qw`: catálogo, receitas, instalador, site e validações;
-- `x86dx2/x86qw-dist`: será criado somente se os binários e pipelines de
-  publicação tornarem o repositório principal pesado ou difícil de manter.
+- `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes de
+  componentes nQuake, com repositório homônimo de contingência no GitLab; não
+  armazena PAKs de `id1`.
 
 O GitHub é o remoto principal. `gitlab.com/x86dx2/x86qw` mantém a cópia de
 contingência; o primeiro `main` já foi sincronizado, mas a atualização
@@ -28,16 +29,16 @@ automática continua pendente no roteiro.
 
 O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
 servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
-permite que uma única validação cubra publicação e consumo. A separação de
-`x86qw-dist` fica adiada até existir uma distribuição real.
+permite que uma única validação cubra publicação e consumo. Os arquivos grandes
+ficam fora do Git e são publicados como assets de release em `x86qw-dist`.
 
 ## Regra de entrada de componentes
 
-`inventory/component-policy.json` é a fronteira obrigatória do acervo. Cada
-componente precisa declarar ao menos um consumidor real do instalador e os
-prefixos onde seus originais podem ser guardados. O coletor rejeita caminhos
-fora dessa declaração e a validação offline rejeita qualquer arquivo não
-inventariado. Pesquisar ou avaliar um recurso não o torna parte do x86QW.
+`inventory/component-policy.json` é a fronteira geral do acervo.
+`inventory/nquake-components.json` decompõe o conteúdo de referência em BOM,
+perfis, dependências, origens e destinos. O coletor rejeita caminhos fora dessas
+declarações e a validação offline rejeita arquivos sem consumidor ou componente.
+Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 
 Quando um componente for proposto, a ordem é: implementar a ação consumidora,
 declarar o componente na política, adicionar testes e só então habilitar seu
@@ -47,8 +48,8 @@ acervo.
 ## Fluxo de publicação
 
 ```text
-fonte fixada -> licença -> download -> validação -> SHA-256 -> pacote imutável
-             -> GitHub Release -> mirror GitLab/R2 -> catálogo -> instalador
+fonte fixada -> download -> validação -> SHA-256 -> pacote imutável
+             -> GitHub Release -> catálogo -> instalador
 ```
 
 As receitas versionadas ficam em `recipes/`. `tools/build_package.py` aceita
@@ -68,4 +69,5 @@ catálogo e valida o SHA-256 antes de extrair qualquer conteúdo.
 - nomes de arquivo não podem conter caminhos;
 - nenhum pacote é aceito sem tamanho e SHA-256;
 - versões publicadas não são substituídas, apenas descontinuadas no catálogo;
-- GitHub e GitLab mantêm cópias independentes; R2 será a terceira cópia.
+- GitHub hospeda os assets nesta fase; GitLab mantém o código e os manifestos de
+  contingência. R2 não faz parte da arquitetura atual.

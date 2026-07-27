@@ -16,7 +16,7 @@ sincronização intermediária.
 - cada artefato é imutável e identificado por SHA-256;
 - origem, versão e licença são registradas antes do espelhamento;
 - o instalador consulta `https://x86qw.x86.com.br/api/v1/catalog.json`;
-- GitHub, GitLab e futuramente R2 são mirrors, não contratos do instalador;
+- GitHub Releases hospeda os artefatos nesta fase; R2 não é utilizado;
 - os PAKs comerciais de `id1` nunca entram no repositório ou no mirror;
 - o instalador continua multiplataforma e usa somente a biblioteca padrão do
   Python.
@@ -35,10 +35,13 @@ install-qw.py           instalador macOS, Linux e Windows
 recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
+tools/build_nquake_packages.py  gera os 17 pacotes reproduzíveis do mirror
 tools/add_package.py    registro atômico de artefatos revisados
 tools/snapshot_upstreams.py  captura somente os arquivos usados pelo produto
+tools/validate_nquake_components.py  valida catálogo e partição dos componentes
 tools/validate_recipes.py
 tools/validate_catalog.py
+inventory/nquake-components.json  BOM, perfis e dependências do conteúdo nQuake
 tests/test_catalog.py
 wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```
@@ -48,6 +51,7 @@ wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```sh
 python3 tools/validate_catalog.py
 python3 tools/validate_recipes.py
+python3 tools/validate_nquake_components.py
 python3 -m unittest discover -s tests -v
 ./install-qw.py --help
 python3 tools/build_package.py --help
@@ -62,8 +66,9 @@ npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
 ```
 
 As fontes do site são servidas localmente sob SIL Open Font License; os textos
-das licenças ficam em `site/public/legal/fonts`. Nenhum binário do jogo ou
-conteúdo de terceiros foi publicado no catálogo nesta fase.
+das licenças ficam em `site/public/legal/fonts`. O catálogo publica os 17
+pacotes nQuake, os três binários ezQuake 3.6.9 e os três binários da nightly
+fixada atualmente.
 
 ## Montar um pacote do mirror
 
@@ -89,6 +94,15 @@ python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
 mirror ocorre antes do registro público. Somente então use `--register`; a ação
 é explícita para impedir que um build local altere o catálogo por acidente.
 
+Para gerar os pacotes nQuake diretamente do snapshot validado:
+
+```sh
+python3 tools/build_nquake_packages.py
+```
+
+Depois de publicar os mesmos arquivos no release indicado pelo manifesto, use
+`--register` para registrar seus hashes no catálogo público.
+
 ## Acervo upstream local
 
 Para preservar o estado atual das fontes sem publicar os arquivos, execute:
@@ -98,17 +112,18 @@ python3 tools/snapshot_upstreams.py
 ```
 
 O comando cria `archive/` e baixa somente arquivos ligados a uma ação real do
-instalador: binários estáveis e nightly, clientes opcionais e os caminhos do
-nQuake efetivamente sobrepostos. Cada arquivo recebe consumidor,
+instalador: binários ezQuake stable/nightly e os arquivos atribuídos a um dos
+componentes nQuake. Cada arquivo recebe consumidor, pacote,
 origem, tamanho e SHA-256 em `archive/manifest.json`; execuções posteriores
 reaproveitam itens já confirmados.
 
-A lista canônica fica em `inventory/component-policy.json`. Um componente novo
-sem consumidor e prefixo de acervo declarados é recusado pelos validadores. Isso
+A fronteira geral fica em `inventory/component-policy.json`; o BOM detalhado,
+os perfis e as dependências ficam em `inventory/nquake-components.json`. Um
+componente novo sem consumidor, arquivos e destino declarados é recusado. Isso
 impede que pesquisas, catálogos externos, fontes, dependências de build ou
 coleções inteiras entrem no acervo apenas porque estão disponíveis. Mapas e
-LOCs só serão adicionados futuramente, um a um, quando forem incorporados ao
-produto.
+LOCs externos ao nQuake só serão adicionados futuramente, um a um, quando forem
+incorporados ao produto.
 
 O acervo é organizado primeiro pelo contexto do conteúdo:
 
@@ -116,9 +131,7 @@ O acervo é organizado primeiro pelo contexto do conteúdo:
 archive/
 ├── components/
 │   ├── ezquake/       binários de releases e nightlies
-│   ├── classicq/      binários das releases
-│   ├── unezquake/     binários das releases
-│   └── nquake/        snapshot dos caminhos usados, fixado por commit
+│   └── nquake/        snapshot dos 17 componentes usados, fixado por commit
 └── manifest.json      inventário com consumidor, origem, tamanho e SHA-256
 ```
 
@@ -128,9 +141,9 @@ Para aplicar a regra ao acervo anterior sem acessar a rede:
 python3 tools/snapshot_upstreams.py --apply-policy
 ```
 
-Essa migração extrai do antigo mirror nQuake somente os arquivos indicados pela
-política e depois elimina GFX, históricos Git, código-fonte, dependências de
-compilação, checksums auxiliares, mapas, LOCs e páginas de índice sem consumidor.
+Essa migração preserva somente ezQuake e os arquivos nQuake atribuídos pelo BOM,
+eliminando clientes futuros, overlays sobrescritos, GFX avulso, históricos Git,
+código-fonte, dependências de compilação e índices sem consumidor.
 
 Validação integral e offline:
 

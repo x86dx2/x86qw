@@ -1,0 +1,4 @@
+/api/v1/catalog.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *

@@ -2,10 +2,7 @@
 
 Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instalador Python executa no macOS, Linux ou Windows, pode preparar binários para qualquer um dos três sistemas e acrescenta recursos modernos sem substituir arquivos pessoais. Ele não instala pacotes nem arquivos globais.
 
-Requisitos:
-
-- Python 3.10 ou mais recente;
-- Git, utilizado somente na Fase 2 para obter os arquivos nQuake sem baixar componentes de servidor desnecessários.
+Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
 
@@ -65,23 +62,24 @@ quake-world/.install/
 ├── ezquake-linux-nightly.receipt
 ├── ezquake-windows-stable.receipt
 ├── ezquake-windows-nightly.receipt
-├── client-classicq-macos.receipt
-├── client-unezquake-macos.receipt
-├── nquake.receipt
-├── nquake.inventory
-├── maps.{receipt,inventory}
 ├── presets.{receipt,inventory}
-└── classicq.{receipt,inventory}
+├── nquake-bootstrap.{receipt,inventory}
+├── nquake-visual-core.{receipt,inventory}
+├── nquake-ktx.{receipt,inventory}
+└── <demais componentes nQuake>.{receipt,inventory}
 ```
 
-O bootstrap trabalha somente com essa estrutura. O par `nquake.{inventory,receipt}` é atualizado em conjunto, sem publicar versões incompatíveis entre si.
+Cada componente possui inventário e recibo independentes. Assim ele pode ser
+instalado, atualizado, verificado ou removido sem assumir propriedade sobre os
+demais componentes e arquivos pessoais.
 
 ### Fases
 
 A execução continua dividida em duas fases:
 
 1. **ezQuake:** seleciona, baixa, valida e instala o artefato do SO escolhido.
-2. **nQuake:** após confirmação explícita, instala os dados, texturas e addons compartilhados por todos os binários.
+2. **componentes nQuake:** após confirmação explícita, escolhe um perfil ou
+   componentes individuais e instala somente o conteúdo selecionado.
 
 Ao terminar a primeira fase, o instalador pergunta:
 
@@ -89,7 +87,16 @@ Ao terminar a primeira fase, o instalador pergunta:
 Deseja instalar/atualizar também os dados nQuake? [s/N]
 ```
 
-O padrão é `N`. A Fase 2 precisa ser instalada somente uma vez no mesmo `quake-world`; executá-la novamente atualiza seus arquivos gerenciados sem substituir configurações pessoais. O executável Windows antigo presente nos distfiles não faz parte do overlay.
+O padrão é `N`. Se a resposta for positiva, há quatro opções:
+
+- `recomendado`: toda a experiência base nQuake, sem os três addons maiores;
+- `essencial`: bootstrap, interface principal e KTX;
+- `completo`: os 17 componentes, incluindo QRP, Clan Arena e Team Fortress;
+- `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
+
+O executável Windows antigo presente nos distfiles não faz parte do overlay.
+Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
+nQuake é usado apenas quando ainda não existe configuração no destino.
 
 - `stable`: releases estáveis aprovadas e espelhadas pelo x86QW;
 - `nightly`: snapshots de desenvolvimento aprovados e espelhados pelo x86QW.
@@ -99,44 +106,40 @@ Cada entrada registra origem, licença revisada, tamanho, SHA-256 e uma lista
 ordenada de mirrors. Se uma cópia estiver indisponível ou entregar um hash
 incorreto, o instalador tenta a próxima automaticamente.
 
-O instalador grava o commit exato de `nQuake/distfiles` usado. Servidores e shareware ficam de fora. Em uma instalação nova, também cria `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro start; um preset existente nunca é substituído.
+Nesta primeira geração, cada pacote x86QW é produzido a partir de um commit
+exato de `nQuake/distfiles`; o catálogo publica um pacote atual por componente
+e o recibo individual grava sua versão. O instalador baixa apenas de
+`x86dx2/x86qw-dist`, sem clonar o repositório upstream. Servidores e shareware
+ficam de fora. Em uma instalação nova, também cria
+`ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
+start; um preset existente nunca é substituído.
 
 ## Recursos modernos opcionais
 
 Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente pela ação `install`:
 
 ```sh
-./install-qw.py clients
-./install-qw.py maps
+./install-qw.py components
 ./install-qw.py presets
 ./install-qw.py hub
 ```
 
-### Clientes alternativos
+### Componentes nQuake
 
-`clients` instala, atualiza ou remove um cliente alternativo sem substituir ezQuake stable ou nightly:
+`components` instala, atualiza ou remove conteúdo nQuake sem tocar nos binários
+ezQuake stable/nightly. O catálogo atual oferece:
 
-- [classicQ](https://github.com/classicq/classicq): cliente de aparência clássica com SDL3 e renderizador Metal nativo no Apple Silicon. No macOS é instalado como `classicQ.app`; Linux e Windows recebem `classicq-x86_64` e `classicq.exe`;
-- [unezQuake](https://github.com/dusty-qw/unezquake): fork experimental com antilag, predição, HUD e crosshair vetorial. É instalado como `unezQuake.app`, `unezquake-x86_64.AppImage` ou `unezquake.exe`.
+- base: bootstrap, interface visual, KTX, skins, miras, skyboxes, modelos,
+  bandeiras, sons, texturas, mapas selecionados, matchinfo e documentação;
+- addons: QRP em alta resolução, Clan Arena/Pro-X e Team Fortress.
 
-As duas famílias coexistem com todos os ezQuake instalados. O catálogo mostra
-somente pacotes cuja licença e redistribuição foram revisadas pelo x86QW e cujo
-SHA-256 foi registrado. Como os três pacotes do classicQ compartilham
-`classicq/classicq.pak`, eles precisam permanecer na mesma versão dentro de um
-`quake-world` transportável.
+Dependências são resolvidas antes do download. Na remoção, componentes que
+dependem do item escolhido também são incluídos e informados ao usuário. Cada
+recibo registra o commit de origem e o SHA-256 de cada arquivo instalado.
 
-### Mapas e LOCs
-
-`maps` consulta ao vivo o arquivo comunitário [maps.quakeworld.nu](https://maps.quakeworld.nu/), com quatro escolhas:
-
-- `base`: conjunto base recomendado;
-- `core`: coleção comunitária ampliada;
-- `individual`: um mapa informado pelo nome;
-- `all`: arquivo completo, protegido por uma confirmação adicional por poder ocupar bastante espaço.
-
-Para todo BSP selecionado, todo mapa original dos PAKs e todo mapa já detectado em BSP, PK3 ou PAK local, o LOC de mesmo nome é incluído automaticamente quando existir. Um LOC é apenas o arquivo de nomes das regiões do mapa usado por mensagens de equipe e HUD; ele é pequeno, mas só é útil junto ao BSP correspondente. Os arquivos ficam em `qw/maps`. O servidor não publica checksums próprios, portanto cada download é feito novamente por HTTPS, validado como BSP v29 quando aplicável e registrado com SHA-256 local no inventário.
-
-Arquivos já existentes que não pertencem ao componente `maps` são preservados. A remoção apaga somente os hashes ainda idênticos aos que o instalador gravou.
+Não há download em massa de mapas ou LOCs externos. `nquake-maps` contém apenas
+o conjunto que já pertence à distribuição de referência. Novos mapas serão
+incluídos pontualmente quando passarem a fazer parte do x86QW.
 
 ### Presets
 
@@ -165,7 +168,10 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 - observar diretamente: informe `o` seguido do número, como `o3`;
 - assistir via QTV: informe `q` seguido do número, como `q3`.
 
-Se houver mais de um cliente compatível com o sistema atual, o instalador pergunta qual abrir. A execução recebe `-basedir quake-world`, portanto todos compartilham os mesmos PAKs e dados. Não há registro global de protocolo nem alteração no navegador ou no sistema operacional.
+Se stable e nightly estiverem instalados para o sistema atual, o instalador
+pergunta qual ezQuake abrir. A execução recebe `-basedir quake-world`, portanto
+os dois compartilham os mesmos PAKs e componentes. Não há registro global de
+protocolo nem alteração no navegador ou no sistema operacional.
 
 ### Conteúdo visual e servidor próprio
 
@@ -230,8 +236,7 @@ Para investigar uma falha ou auditar exatamente o que será usado, ative o modo 
 
 Esse modo acrescenta host e versão do Python, URLs consultadas, comandos externos, caminho do cache e checksums. Ele não instala ferramentas nem bibliotecas extras. Para desativar cores explicitamente, use `--no-color`; a variável padrão `NO_COLOR` também é respeitada.
 
-O instalador consulta somente o catálogo público x86QW para ezQuake e clientes
-alternativos. Para desenvolvimento, `X86_QW_CATALOG_URL` permite apontar para
+O instalador consulta somente o catálogo público x86QW para ezQuake. Para desenvolvimento, `X86_QW_CATALOG_URL` permite apontar para
 outro endpoint HTTPS compatível; a variável não é gravada nos recibos.
 
 Use `./install-qw.py --help` para consultar ações e opções sem iniciar nenhuma operação.
@@ -245,8 +250,8 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 - formato ELF x86-64 e permissão dos AppImages Linux;
 - formato PE32+ x86-64 dos executáveis Windows;
 - identificador oficial selecionado, origem imutável e SHA-256 de cada binário; no macOS, também a versão gravada no bundle.
-- clientes classicQ e unezQuake instalados e seus recibos por plataforma;
-- hashes dos mapas, LOCs, presets e dados compartilhados do classicQ gerenciados.
+- hashes e formatos dos arquivos pertencentes a cada componente nQuake;
+- hashes dos presets gerenciados.
 
 ## Desinstalar e limpar o cache
 
@@ -256,13 +261,20 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 ./install-qw.py cleanup
 ```
 
-`uninstall` remove todos os binários macOS, Linux e Windows comprovadamente gerenciados, clientes opcionais, mapas, LOCs, presets próprios do instalador, seus recibos e os arquivos cujo hash ainda corresponde ao inventário. Arquivos modificados são preservados. Os PAKs, `config.cfg`, demos, screenshots, logs, presets pessoais e outros arquivos pessoais permanecem em `quake-world`.
+`uninstall` remove todos os binários macOS, Linux e Windows comprovadamente
+gerenciados, componentes nQuake, presets próprios do instalador, seus recibos e
+os arquivos cujo hash ainda corresponde ao inventário. Arquivos modificados são
+preservados. Os PAKs, `config.cfg`, demos, screenshots, logs, presets pessoais e
+outros arquivos pessoais permanecem em `quake-world`.
 
 O recibo é a autoridade para a remoção: `uninstall` também conclui quando um app ou executável registrado já está ausente ou incompleto. Use `verify` quando quiser exigir e diagnosticar a integridade dos runtimes instalados.
 
 `purge` é a remoção total: apaga tudo dentro de `quake-world`, incluindo arquivos pessoais e metadados desconhecidos, preservando somente a árvore `id1`. Também remove o cache nativo criado pelo instalador. A ação recusa alvos sem um diretório `id1` real.
 
-`cleanup` remove somente o cache criado pelo próprio instalador, incluindo downloads dos três sistemas, clientes opcionais, mapas e LOCs. A remoção só ocorre se o marcador de propriedade criado pelo instalador estiver presente. O diretório é resolvido conforme o host:
+`cleanup` remove somente o cache criado pelo próprio instalador, incluindo
+downloads ezQuake e pacotes dos componentes nQuake. A remoção só
+ocorre se o marcador de propriedade criado pelo instalador estiver presente. O
+diretório é resolvido conforme o host:
 
 - macOS: `$(getconf DARWIN_USER_CACHE_DIR)/x86-qw`;
 - Linux: `$XDG_CACHE_HOME/x86-qw` ou `~/.cache/x86-qw`;
@@ -276,7 +288,10 @@ printf '%s/x86-qw\n' "$(getconf DARWIN_USER_CACHE_DIR | sed 's#/$##')"
 
 ## Atualizar ou trocar de canal
 
-Execute a ação correspondente novamente: `install` para ezQuake/nQuake, `clients` para clientes alternativos, `maps` para mapas+LOCs ou `presets` para configurações. Somente o componente escolhido é substituído; os demais binários e arquivos pessoais permanecem preservados.
+Execute a ação correspondente novamente: `install` para ezQuake e uma seleção
+nQuake, `components` para conteúdo nQuake ou `presets` para configurações.
+Somente o componente escolhido é substituído; os demais binários e arquivos
+pessoais permanecem preservados.
 
 Não há uso silencioso do alias `latest`: uma nightly é sempre baixada pelo nome exato, com data, hora e commit.
 
