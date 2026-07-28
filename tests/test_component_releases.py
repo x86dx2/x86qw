@@ -37,15 +37,15 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
         self.assertEqual("1.46-dev", ktx["embedded_version"])
         self.assertEqual("upstream-current", ktx["freshness"])
-        path = ktx["artifacts"][0]["archive_path"]
+        path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("nquake-ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
         self.assertEqual("2.22", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
-        td2_path = td2["artifacts"][0]["archive_path"]
+        td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
-        self.assertTrue(path.startswith("components/ktx/releases/"))
-        self.assertTrue(td2_path.startswith("components/td2/releases/"))
+        self.assertTrue(path.startswith("mods/ktx/"))
+        self.assertTrue(td2_path.startswith("mods/td2/"))
         self.assertEqual("ktx", ktx["distribution_component"])
         self.assertEqual("td2", td2["distribution_component"])
 
@@ -66,12 +66,12 @@ class ComponentReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(payload, "w") as package:
                 package.writestr("qwprogs.qvm", b"qvm")
             data = payload.getvalue()
-            relative = "components/ktx/releases/test/qwprogs-qvm.zip"
+            relative = "mods/ktx/test/qwprogs-qvm.zip"
             path = root / relative
             path.parent.mkdir(parents=True)
             path.write_bytes(data)
             artifact = {
-                "archive_path": relative, "size": len(data),
+                "distribution_path": relative, "size": len(data),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "members": [{
                     "path": "qwprogs.qvm", "size": 3,
@@ -83,7 +83,7 @@ class ComponentReleaseTests(unittest.TestCase):
     def test_standalone_tar_package_is_verified_without_extracting_unsafe_members(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            relative = "components/td2/releases/test/td2.tar.gz"
+            relative = "mods/td2/test/td2.tar.gz"
             path = root / relative
             path.parent.mkdir(parents=True)
             with tarfile.open(path, "w:gz") as package:
@@ -91,7 +91,7 @@ class ComponentReleaseTests(unittest.TestCase):
                 info.size = 4
                 package.addfile(info, io.BytesIO(b"game"))
             artifact = {
-                "archive_path": relative,
+                "distribution_path": relative,
                 "size": path.stat().st_size,
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             }

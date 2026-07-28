@@ -24,7 +24,7 @@ Estado verificado em 27 de julho de 2026:
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Documentação | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
 | QRP alta resolução | `e4cb23d40aa2` | snapshot nQuake | contém mapas 1.00 e itens 0.73 |
-| Clan Arena e Pro-X | `e4cb23d40aa2` | snapshot nQuake | coleção histórica sem release atual mapeada |
+| Clan Arena e Pro-X | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com configuração mutável corrigida | coleção histórica sem release atual mapeada |
 | Team Fortress | `e4cb23d40aa2` | snapshot nQuake | coleção histórica sem release atual mapeada |
 | Total Destruction 2 | `2.22` | pacote independente do upstream | distribuição QW completa localizada, sem mapas adicionais |
 
@@ -43,7 +43,7 @@ Estado verificado em 27 de julho de 2026:
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` oficial 1.47, mas o
-artefato do upstream é preservado em `archive/components/ktx/`. Ele não é
+artefato do upstream é preservado em `dist/mods/ktx/`. Ele não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
 
 O TD2 possui duas numerações públicas que não formam uma cronologia simples. A
@@ -51,5 +51,9 @@ página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
 versão não está mais disponível. O pacote incorporado é a distribuição
 QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
 com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
-no perfil `completo`, fica em `archive/components/td2/` e não baixa mapas fora
-do acervo já aprovado do x86QW.
+no perfil `completo`, fica em `dist/mods/td2/2.22/` e não baixa mapas fora
+do acervo já aprovado do x86QW. O pacote permanece uma cópia do upstream; binds,
+HUD, parâmetros do servidor e isolamento do gamecode pertencem à camada
+versionada em `dist/mods/td2/2.22/x86qw/`, declarada pelo BOM e registrada na instalação
+como `.install/play-support.*`. A camada é reaplicada depois de cada atualização,
+enquanto `td2/x86qw-td2-user.cfg` permanece pessoal e fora do inventário.

@@ -93,6 +93,18 @@ def validate_package(
         or not SAFE_SEGMENT.fullmatch(package["upstream_version"])
     ):
         raise ValueError(f"{label}.upstream_version is invalid")
+    if "distribution_path" in package:
+        distribution_path = package["distribution_path"]
+        if not isinstance(distribution_path, str):
+            raise ValueError(f"{label}.distribution_path is invalid")
+        relative = PurePosixPath(distribution_path)
+        if (
+            relative.is_absolute()
+            or any(part in ("", ".", "..") for part in relative.parts)
+            or "\\" in distribution_path
+            or relative.name != filename
+        ):
+            raise ValueError(f"{label}.distribution_path is unsafe")
     for url in [package["origin_url"], *urls]:
         if PurePosixPath(unquote(urlsplit(url).path)).name != filename:
             raise ValueError(f"{label} artifact URLs must end with filename")

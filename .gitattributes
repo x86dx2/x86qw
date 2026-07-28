@@ -1,0 +1,16 @@
+# Binary payloads are part of the x86QW distribution and live in Git LFS.
+dist/** -diff -merge -text
+dist/**/*.AppImage filter=lfs diff=lfs merge=lfs -text
+dist/**/*.bsp filter=lfs diff=lfs merge=lfs -text
+dist/**/*.exe filter=lfs diff=lfs merge=lfs -text
+dist/**/*.gz filter=lfs diff=lfs merge=lfs -text
+dist/**/*.pak filter=lfs diff=lfs merge=lfs -text
+dist/**/*.PAK filter=lfs diff=lfs merge=lfs -text
+dist/**/*.pk3 filter=lfs diff=lfs merge=lfs -text
+dist/**/*.zip filter=lfs diff=lfs merge=lfs -text
+
+# Project-authored metadata and overlays remain reviewable as text.
+dist/manifest.json diff merge text
+dist/packages/**/manifest.json diff merge text
+dist/mods/td2/*/x86qw/*.cfg diff merge text
+dist/mods/td2/*/x86qw/*.example diff merge text

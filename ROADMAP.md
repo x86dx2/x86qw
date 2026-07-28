@@ -4,7 +4,7 @@
 
 - [x] criar o repositório local separado do protótipo atual;
 - [x] definir o contrato mínimo do catálogo;
-- [x] bloquear PAKs comerciais e artefatos gerados no Git;
+- [x] versionar em `dist/` todos os payloads que compõem a distribuição, usando Git LFS para binários grandes;
 - [x] registrar a política de proveniência.
 
 ## 1. Ingestão reproduzível
@@ -21,7 +21,7 @@
 - [x] detectar atualizações upstream sem publicá-las automaticamente;
 - [x] atualizar KTX de `1.46-dev` para `1.47` preservando os recursos nQuake.
 - [x] incorporar TD2QW 2.22 como pacote independente, preservando o original e sem mapas adicionais.
-- [x] separar fisicamente nQuake, KTX e TD2 por origem e generalizar o pipeline de componentes.
+- [x] organizar ezQuake, nQuake, KTX, TD2 e ajustes x86QW sob a única árvore canônica `dist/`.
 
 ## 2. Distribuição
 
@@ -30,6 +30,7 @@
 - [x] publicar e verificar os 24 artefatos instaláveis no GitLab Generic Package Registry;
 - [x] publicar a primeira release nQuake imutável e seus checksums;
 - [x] manter R2 fora da arquitetura desta fase.
+- [x] tornar `dist/` a fonte canônica e tratar Releases e Generic Packages somente como mirrors de entrega.
 
 ## 3. Instalador
 
@@ -39,7 +40,7 @@
 - [x] manter stable e nightly coexistentes em macOS, Linux e Windows;
 - [x] oferecer perfis e seleção individual dos 18 componentes;
 - [x] registrar recibo e inventário independentes por componente;
-- [x] fazer o instalador consumir pacotes x86QW do `x86qw-dist`, sem depender dos repositórios upstream;
+- [x] fazer o instalador consumir primeiro os pacotes versionados em `dist/`, com mirrors externos como fallback;
 - [x] mostrar versão atual e notas de release antes de atualizar componentes;
 
 ## 4. Site

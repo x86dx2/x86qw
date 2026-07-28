@@ -22,11 +22,11 @@ def load_component_policy(path: Path = DEFAULT_POLICY) -> dict[str, dict[str, ob
         if not isinstance(name, str) or not name or not isinstance(component, dict):
             raise ValueError(f"invalid component declaration: {name!r}")
         consumers = component.get("consumers")
-        prefixes = component.get("archive_prefixes")
+        prefixes = component.get("distribution_prefixes")
         if not isinstance(consumers, list) or not consumers or not all(isinstance(item, str) and item for item in consumers):
             raise ValueError(f"component has no explicit consumer: {name}")
         if not isinstance(prefixes, list) or not prefixes or not all(isinstance(item, str) and item.endswith("/") for item in prefixes):
-            raise ValueError(f"component has invalid archive prefixes: {name}")
+            raise ValueError(f"component has invalid distribution prefixes: {name}")
     return components
 
 
@@ -35,17 +35,17 @@ def require_component(components: dict[str, dict[str, object]], name: str, path:
     if component is None:
         raise ValueError(f"component is not consumed by x86QW: {name}")
     if path is not None:
-        prefixes = component["archive_prefixes"]
+        prefixes = component["distribution_prefixes"]
         assert isinstance(prefixes, list)
         if not any(path.startswith(prefix) for prefix in prefixes):
-            raise ValueError(f"archive path is outside the declared consumer scope for {name}: {path}")
+            raise ValueError(f"distribution path is outside the declared consumer scope for {name}: {path}")
 
 
-def component_for_archive_path(components: dict[str, dict[str, object]], path: str) -> str | None:
+def component_for_distribution_path(components: dict[str, dict[str, object]], path: str) -> str | None:
     matches = [
         name for name, component in components.items()
-        if any(path.startswith(prefix) for prefix in component["archive_prefixes"])
+        if any(path.startswith(prefix) for prefix in component["distribution_prefixes"])
     ]
     if len(matches) > 1:
-        raise ValueError(f"archive path belongs to multiple components: {path}")
+        raise ValueError(f"distribution path belongs to multiple components: {path}")
     return matches[0] if matches else None

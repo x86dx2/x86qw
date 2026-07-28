@@ -42,6 +42,7 @@ METADATA_DIR = ".install"
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
 COMPONENT_CATALOG = "inventory/components.json"
+PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
 CACHE_MARKER_NAME = ".x86-qw-cache"
@@ -61,6 +62,7 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
+PLAY_SUPPORT_VERSION = "2"
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
@@ -549,6 +551,7 @@ class Installer:
         self.app_archive_sha256 = ""
         self.app_bundle_version = ""
         self.app_binary_sha256 = ""
+        self.app_distribution_path = ""
         self.cache_prefix = ""
         self._public_catalog: dict[str, object] | None = None
         try:
@@ -1034,6 +1037,9 @@ class Installer:
             for url in urls:
                 if https_url_filename(url, f"mirror de packages[{index}]") != filename:
                     raise InstallerError(f"Mirror com nome inesperado no catálogo x86QW: packages[{index}].")
+            distribution_path = package.get("distribution_path", "")
+            if distribution_path:
+                self.validate_distribution_path(distribution_path, filename)
             records.append((version, tuple(urls), digest))
 
         if not records:
@@ -1072,6 +1078,19 @@ class Installer:
         self.selected_version, self.app_urls, self.app_expected_checksum = selected
         self.app_url = self.app_urls[0]
         self.app_archive_name = https_url_filename(self.app_url, "mirror selecionado")
+        if self._public_catalog is not None:
+            selected_packages = [
+                package for package in self._public_catalog["packages"]
+                if isinstance(package, dict)
+                and package.get("component") == "ezquake"
+                and package.get("version") == self.selected_version
+                and package.get("channel") == self.channel
+                and package.get("platform") == self.spec.key
+                and package.get("architecture") == self.spec.architecture
+            ]
+            if len(selected_packages) != 1:
+                raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
+            self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
         console.success(f"Versão selecionada: {self.selected_version}")
         console.detail(f"Artefato: {self.app_url}")
         if self.channel == "stable":
@@ -1105,6 +1124,15 @@ class Installer:
                 raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
             console.success("Arquivo do cache validado.")
         else:
+            local = self.distribution_artifact(
+                self.app_distribution_path, self.app_archive_name,
+                expected_size=None, expected_sha256=self.app_expected_checksum,
+            ) if self.app_distribution_path else None
+            if local is not None:
+                shutil.copy2(local, archive)
+                console.success(f"Artefato carregado da distribuição local: {self.app_distribution_path}")
+                self.app_archive_sha256 = file_hash(archive)
+                return archive
             download = self.stage / f"{self.app_archive_name}.download"
             console.info(f"Baixando {self.app_archive_name}...")
             last_error: InstallerError | None = None
@@ -1741,6 +1769,9 @@ class Installer:
         validate_hex(digest, HEX64, f"SHA-256 de {identifier}")
         if not isinstance(package.get("size"), int) or package["size"] <= 0:
             raise InstallerError(f"Tamanho inválido do componente {identifier}.")
+        distribution_path = package.get("distribution_path", "")
+        if distribution_path:
+            self.validate_distribution_path(distribution_path, filename)
         urls = package.get("urls")
         if not isinstance(urls, list) or not urls or not all(isinstance(url, str) for url in urls):
             raise InstallerError(f"Mirrors inválidos do componente {identifier}.")
@@ -1757,11 +1788,20 @@ class Installer:
 
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
-            catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
             console.info(message)
+            catalog_url = os.environ.get("X86_QW_CATALOG_URL")
+            local_catalog = self.project_root / PUBLIC_CATALOG
             try:
-                catalog = json.loads(self.http_get(catalog_url))
-            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+                if catalog_url:
+                    catalog = json.loads(self.http_get(catalog_url))
+                    console.detail(f"Catálogo remoto explícito: {catalog_url}")
+                elif local_catalog.is_file() and not local_catalog.is_symlink():
+                    catalog = json.loads(local_catalog.read_text(encoding="utf-8"))
+                    console.detail(f"Catálogo da distribuição local: {local_catalog}")
+                else:
+                    catalog = json.loads(self.http_get(CATALOG_URL))
+                    console.detail(f"Catálogo público: {CATALOG_URL}")
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):
                 raise InstallerError("O catálogo x86QW recebido é inválido.")
@@ -1771,6 +1811,41 @@ class Installer:
                 raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
             self._public_catalog = catalog
         return self._public_catalog
+
+    def validate_distribution_path(self, value: object, filename: str) -> str:
+        if not isinstance(value, str) or not value or "\\" in value or ":" in value:
+            raise InstallerError(f"Caminho inválido na distribuição: {value!r}")
+        relative = PurePosixPath(value)
+        if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+            raise InstallerError(f"Caminho inseguro na distribuição: {value}")
+        if relative.name != filename:
+            raise InstallerError(f"O caminho da distribuição não termina em {filename}: {value}")
+        return value
+
+    def distribution_artifact(
+        self,
+        relative: str,
+        filename: str,
+        *,
+        expected_size: int | None,
+        expected_sha256: str,
+    ) -> Path | None:
+        self.validate_distribution_path(relative, filename)
+        root = self.project_root / "dist"
+        candidate = root.joinpath(*PurePosixPath(relative).parts)
+        if not lexists(candidate):
+            return None
+        if candidate.is_symlink() or not candidate.is_file():
+            raise InstallerError(f"Artefato inválido na distribuição: {candidate}")
+        if expected_size is not None and candidate.stat().st_size != expected_size:
+            raise InstallerError(
+                f"Artefato incompleto na distribuição: {candidate}. Execute git lfs pull e tente novamente."
+            )
+        if file_hash(candidate) != expected_sha256:
+            raise InstallerError(
+                f"Artefato adulterado na distribuição: {candidate}. Execute git lfs pull e tente novamente."
+            )
+        return candidate
 
     def download_component_package(self, package: dict[str, object]) -> Path:
         assert self.cache_root is not None and self.stage is not None
@@ -1786,6 +1861,16 @@ class Installer:
                 raise InstallerError(f"O pacote {identifier} em cache é inválido. Execute cleanup e tente novamente.")
             console.detail(f"Pacote validado no cache: {artifact}")
             return artifact
+        distribution_path = package.get("distribution_path")
+        if isinstance(distribution_path, str) and distribution_path:
+            local = self.distribution_artifact(
+                distribution_path, filename,
+                expected_size=int(package["size"]), expected_sha256=digest,
+            )
+            if local is not None:
+                shutil.copy2(local, artifact)
+                console.success(f"Pacote carregado da distribuição local: {distribution_path}")
+                return artifact
         temporary = self.stage / f"{identifier}.download"
         last_error: InstallerError | None = None
         for index, url in enumerate(package["urls"]):
@@ -1944,6 +2029,7 @@ class Installer:
             if not preset.is_file():
                 preset.parent.mkdir(parents=True, exist_ok=True)
                 preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+        self.ensure_local_play_support(self.available_local_games())
 
     def choose_components_to_remove(self) -> list[str]:
         installed = self.installed_components()
@@ -1995,6 +2081,7 @@ class Installer:
             for identifier in selected:
                 removed = self.remove_component(identifier)
                 console.success(f"{self.components[identifier]['label']} removido ({file_count(removed)}).")
+            self.ensure_local_play_support(self.available_local_games())
             return
         selected = self.choose_components()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
@@ -2162,6 +2249,8 @@ class Installer:
         ]
         if game.key != "ktx":
             arguments.extend(["+sv_progtype", "0"])
+        if game.key == "td2":
+            arguments.extend(["+exec", "x86qw-td2.cfg"])
         arguments.extend(["+map", map_name])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
@@ -2170,9 +2259,14 @@ class Installer:
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
         legacy_games = [game for game in games if game.key != "ktx"]
-        if not legacy_games:
-            return
+        td2_enabled = any(game.key == "td2" for game in legacy_games)
+        td2_sources = self.td2_project_sources() if td2_enabled else {}
         present, old_entries, _ = self.validate_component_pair("play-support")
+        if not legacy_games:
+            if present:
+                removed = self.remove_component("play-support")
+                console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
+            return
         old = dict(old_entries) if present else {}
         previous_stage = self.stage
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-play.", dir=self.target))
@@ -2181,15 +2275,21 @@ class Installer:
             prepared = 0
             for game in legacy_games:
                 program_name = f"x86qw_{game.gamedir}"
-                files = {
-                    f"{game.gamedir}/{program_name}.dat": self.local_game_program(game),
-                    f"{game.gamedir}/server.cfg": (
+                if game.key == "td2":
+                    server_profile = td2_sources["td2/server.cfg"]
+                else:
+                    server_profile = (
                         "// x86QW: isola mods QuakeC antigos do QVM do KTX.\n"
                         'sv_progtype "0"\n'
                         f'sv_progsname "{program_name}"\n'
                         f'sv_gamedir "{game.gamedir}"\n'
-                    ).encode(),
+                    ).encode()
+                files = {
+                    f"{game.gamedir}/{program_name}.dat": self.local_game_program(game),
+                    f"{game.gamedir}/server.cfg": server_profile,
                 }
+                if game.key == "td2":
+                    files["td2/x86qw-td2.cfg"] = td2_sources["td2/x86qw-td2.cfg"]
                 for relative, payload in files.items():
                     destination = self.target / relative
                     if lexists(destination):
@@ -2204,12 +2304,50 @@ class Installer:
                     prepared += 1
             if prepared:
                 count = self.install_component_overlay(
-                    "play-support", managed, "1", "x86QW local-play compatibility",
+                    "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",
                 )
                 console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
+            if td2_enabled:
+                self.ensure_td2_user_profile(td2_sources["td2/x86qw-td2-user.cfg"])
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
+
+    def ensure_td2_user_profile(self, initial: bytes) -> None:
+        destination = self.target / "td2/x86qw-td2-user.cfg"
+        if lexists(destination):
+            if not destination.is_file() or destination.is_symlink():
+                raise InstallerError(f"Configuração pessoal TD2 inválida: {destination}")
+            return
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(initial)
+        if os.name != "nt":
+            destination.chmod(0o644)
+        console.info(f"Configuração pessoal TD2 criada: {destination}")
+
+    def td2_project_sources(self) -> dict[str, bytes]:
+        expected = {
+            "td2/x86qw-td2.cfg": "overlay",
+            "td2/server.cfg": "overlay",
+            "td2/x86qw-td2-user.cfg": "default",
+        }
+        entries = self.components["total-destruction-2"].get("project_sources", [])
+        actual = {entry["destination"]: entry["mode"] for entry in entries}
+        if actual != expected:
+            raise InstallerError("A camada TD2 do repositório diverge do contrato x86QW.")
+        sources: dict[str, bytes] = {}
+        for entry in entries:
+            source = self.project_root.joinpath(*PurePosixPath(entry["path"]).parts)
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(f"Arquivo-fonte TD2 não encontrado no repositório: {source}")
+            try:
+                payload = source.read_bytes()
+            except OSError as error:
+                raise InstallerError(f"Não foi possível ler a camada TD2: {source}") from error
+            if not payload:
+                raise InstallerError(f"Arquivo-fonte TD2 vazio: {source}")
+            sources[entry["destination"]] = payload
+        return sources
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
         package = self.target / game.marker

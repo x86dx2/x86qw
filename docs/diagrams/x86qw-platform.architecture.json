@@ -38,7 +38,7 @@
   ],
   "cards": [
     { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
-    { "dot": "emerald", "title": "Reproducible delivery", "items": ["Every artifact records origin, license, size and SHA-256", "GitHub Releases and GitLab Generic Packages hold verified copies"] },
+    { "dot": "emerald", "title": "Canonical distribution", "items": ["Every delivered artifact lives under dist/ with origin, size and SHA-256", "Git LFS versions large payloads; external registries are delivery mirrors"] },
     { "dot": "rose", "title": "Registered game data", "items": ["id1 PAKs are versioned in dist/id1", "The installer validates SHA-256 before copying them"] }
   ]
 }

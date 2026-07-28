@@ -250,6 +250,11 @@
       "kind": "addon",
       "description": "TD2QW com armas, magias, runas, modelos, gamecode e fontes para servidores compatíveis.",
       "requires": ["nquake-bootstrap"],
+      "project_sources": [
+        {"path": "dist/mods/td2/2.22/x86qw/client.cfg", "destination": "td2/x86qw-td2.cfg", "mode": "overlay"},
+        {"path": "dist/mods/td2/2.22/x86qw/server.cfg", "destination": "td2/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/td2/2.22/x86qw/user.cfg.example", "destination": "td2/x86qw-td2-user.cfg", "mode": "default"}
+      ],
       "sources": [
         {
           "path": "td2",

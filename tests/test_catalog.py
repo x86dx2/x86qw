@@ -24,10 +24,11 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
-        self.assertTrue(all(len(package["urls"]) == 2 for package in catalog["packages"]))
+        self.assertTrue(all(package["urls"] for package in catalog["packages"]))
         self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
-        self.assertTrue(all("gitlab.com" in package["urls"][1] for package in catalog["packages"]))
-        self.assertEqual(ktx["urls"][1], artifact_url(ktx))
+        self.assertTrue(all(package.get("distribution_path") for package in catalog["packages"]))
+        self.assertTrue(all((ROOT / "dist" / package["distribution_path"]).is_file() for package in catalog["packages"]))
+        self.assertIn(artifact_url(ktx), ktx["urls"])
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
             {

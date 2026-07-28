@@ -34,6 +34,7 @@ def register_package(
     source_urls: list[str],
     mirror_urls: list[str],
     redistribution_reviewed: bool,
+    distribution_path: str | None = None,
 ) -> dict[str, object]:
     if artifact.is_symlink() or not artifact.is_file():
         raise ValueError(f"artifact must be a regular file: {artifact}")
@@ -64,6 +65,8 @@ def register_package(
         "redistribution_reviewed": True,
         "urls": mirror_urls,
     }
+    if distribution_path is not None:
+        package["distribution_path"] = distribution_path
     packages = catalog.get("packages")
     if not isinstance(packages, list):
         raise ValueError("catalog packages must be a list")
@@ -106,6 +109,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--source-url", dest="source_urls", action="append", required=True)
     parser.add_argument("--url", dest="mirror_urls", action="append", required=True)
     parser.add_argument("--redistribution-reviewed", action="store_true", required=True)
+    parser.add_argument("--distribution-path", help="caminho do artefato relativo a dist/")
     return parser.parse_args()
 
 
@@ -133,6 +137,7 @@ def main() -> int:
         source_urls=options.source_urls,
         mirror_urls=options.mirror_urls,
         redistribution_reviewed=options.redistribution_reviewed,
+        distribution_path=options.distribution_path,
     )
     print(f"registered {package['component']} {package['version']} {package['platform']} sha256={package['sha256']}")
     return 0

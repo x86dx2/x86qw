@@ -59,6 +59,7 @@ def validate_catalog(catalog: object) -> None:
     identifiers: set[str] = set()
     selectors: list[tuple[str, str, set[str]]] = []
     dependencies: dict[str, list[str]] = {}
+    project_destinations: set[str] = set()
     for component in components:
         if not isinstance(component, dict):
             raise ValueError("invalid component entry")
@@ -93,6 +94,22 @@ def validate_catalog(catalog: object) -> None:
             if any(item != source_path and not item.startswith(source_path + "/") for item in excluded):
                 raise ValueError(f"exclusion is outside its source in {identifier}: {source_path}")
             selectors.append((identifier, source_path, excluded))
+        project_sources = component.get("project_sources", [])
+        if not isinstance(project_sources, list):
+            raise ValueError(f"invalid project sources: {identifier}")
+        for source_entry in project_sources:
+            if not isinstance(source_entry, dict):
+                raise ValueError(f"invalid project source entry: {identifier}")
+            source_path = _safe_path(source_entry.get("path"), "project source path")
+            destination = _safe_path(source_entry.get("destination"), "project destination path")
+            if not source_path.startswith("dist/"):
+                raise ValueError(f"project source is outside the distribution: {source_path}")
+            if source_entry.get("mode") not in ALLOWED_MODES:
+                raise ValueError(f"invalid project install mode in {identifier}: {source_path}")
+            folded = destination.casefold()
+            if folded in project_destinations:
+                raise ValueError(f"duplicate project destination: {destination}")
+            project_destinations.add(folded)
 
     for identifier, requires in dependencies.items():
         missing = set(requires) - identifiers

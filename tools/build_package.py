@@ -147,6 +147,7 @@ def build_package(
             target.chmod(0o644)
 
     public_package = {key: package[key] for key in PACKAGE_FIELDS}
+    public_package["distribution_path"] = target.relative_to(output_root).as_posix()
     manifest_data = {
         "format": 1,
         "project": "x86qw",
@@ -189,6 +190,7 @@ def main() -> int:
             license_name=package["license"], license_url=package["license_url"],
             source_urls=package["source_urls"], mirror_urls=package["urls"],
             redistribution_reviewed=package["redistribution_reviewed"],
+            distribution_path=target.relative_to(options.output_dir).as_posix(),
         )
     print(f"built {target}")
     print(f"manifest {manifest}")

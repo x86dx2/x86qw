@@ -340,6 +340,27 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(payload, archive.read_bytes())
             self.assertEqual(installer.app_urls[1], installer.app_url)
 
+    def test_client_artifact_is_loaded_from_the_versioned_distribution_without_network(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "quake-world"
+            target.mkdir()
+            cache = root / "cache/x86-qw"
+            cache.parent.mkdir()
+            installer = install_qw.Installer(ROOT, target, cache)
+            installer.spec = install_qw.PLATFORMS["macos"]
+            installer.channel = "stable"
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            installer.prepare_cache()
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch("builtins.input", return_value="1"):
+                    installer.choose_release()
+                with mock.patch.object(installer, "http_get", side_effect=AssertionError("network used")):
+                    artifact = installer.ensure_archive()
+            source = ROOT / "dist" / installer.app_distribution_path
+            self.assertEqual(source.read_bytes(), artifact.read_bytes())
+
     def test_nquake_confirmation_defaults_to_no_and_reprompts_invalid_answer(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))

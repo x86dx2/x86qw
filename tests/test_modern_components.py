@@ -85,6 +85,15 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("qrp-hires", installer.component_catalog["profiles"]["complete"])
             self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
+            td2 = installer.components["total-destruction-2"]
+            self.assertEqual(
+                {
+                    "dist/mods/td2/2.22/x86qw/client.cfg",
+                    "dist/mods/td2/2.22/x86qw/server.cfg",
+                    "dist/mods/td2/2.22/x86qw/user.cfg.example",
+                },
+                {source["path"] for source in td2["project_sources"]},
+            )
 
     def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -284,6 +293,19 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(payload, artifact.read_bytes())
             self.assertEqual(2, request.call_count)
 
+    def test_component_package_is_loaded_from_dist_without_network(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            installer.prepare_cache()
+            package = installer.component_package_record("nquake-bootstrap")
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", side_effect=AssertionError("network used")):
+                    artifact = installer.download_component_package(package)
+            source = ROOT / "dist" / package["distribution_path"]
+            self.assertEqual(source.read_bytes(), artifact.read_bytes())
+
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -322,7 +344,7 @@ class ModernComponentTests(unittest.TestCase):
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
                 "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
-                "+sv_progtype", "0", "+map", "dm6",
+                "+sv_progtype", "0", "+exec", "x86qw-td2.cfg", "+map", "dm6",
             ])
 
     def test_local_play_support_is_managed_and_reversible(self):
@@ -335,13 +357,48 @@ class ModernComponentTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support([game])
             server_config = target / "td2/server.cfg"
+            client_config = target / "td2/x86qw-td2.cfg"
+            user_config = target / "td2/x86qw-td2-user.cfg"
             self.assertIn('sv_progtype "0"', server_config.read_text(encoding="utf-8"))
             self.assertIn('sv_gamedir "td2"', server_config.read_text(encoding="utf-8"))
             self.assertIn('sv_progsname "x86qw_td2"', server_config.read_text(encoding="utf-8"))
+            self.assertIn('localinfo temp1 "65560"', server_config.read_text(encoding="utf-8"))
+            self.assertIn('bind 1 "impulse 1"', client_config.read_text(encoding="utf-8"))
+            self.assertIn('bind 9 "impulse 20"', client_config.read_text(encoding="utf-8"))
+            self.assertIn('exec x86qw-td2-user.cfg', client_config.read_text(encoding="utf-8"))
+            self.assertEqual((ROOT / "dist/mods/td2/2.22/x86qw/client.cfg").read_bytes(), client_config.read_bytes())
+            self.assertEqual((ROOT / "dist/mods/td2/2.22/x86qw/server.cfg").read_bytes(), server_config.read_bytes())
+            self.assertEqual((ROOT / "dist/mods/td2/2.22/x86qw/user.cfg.example").read_bytes(), user_config.read_bytes())
             self.assertEqual(b"quakec", (target / "td2/x86qw_td2.dat").read_bytes())
-            self.assertEqual(2, installer.verify_component("play-support"))
-            self.assertEqual(2, installer.remove_component("play-support"))
+            self.assertTrue(user_config.is_file())
+            self.assertEqual(3, installer.verify_component("play-support"))
+            self.assertEqual(3, installer.remove_component("play-support"))
             self.assertFalse(server_config.exists())
+            self.assertFalse(client_config.exists())
+            self.assertTrue(user_config.exists())
+
+    def test_td2_upstream_update_rebuilds_gamecode_and_preserves_x86qw_user_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            upstream = target / "td2/qwprogs.dat"
+            upstream.parent.mkdir(parents=True)
+            upstream.write_bytes(b"td2-v1")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support([game])
+
+            user_config = target / "td2/x86qw-td2-user.cfg"
+            user_config.write_text('bind MOUSE4 "impulse 23"\n', encoding="utf-8")
+            upstream.write_bytes(b"td2-v2")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support([game])
+
+            self.assertEqual(b"td2-v2", (target / "td2/x86qw_td2.dat").read_bytes())
+            self.assertEqual('bind MOUSE4 "impulse 23"\n', user_config.read_text(encoding="utf-8"))
+            self.assertEqual(3, installer.verify_component("play-support"))
+            _, entries, receipt = installer.validate_component_pair("play-support")
+            self.assertNotIn("td2/x86qw-td2-user.cfg", dict(entries))
+            self.assertEqual(install_qw.PLAY_SUPPORT_VERSION, receipt["selection"])
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:

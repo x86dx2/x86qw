@@ -18,7 +18,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STRATEGIES = {"reference-snapshot", "upstream-overlay", "upstream-package"}
 FRESHNESS = {"reference-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-ARCHIVE_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+DISTRIBUTION_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def _safe_path(value: object, label: str) -> str:
@@ -56,7 +56,7 @@ def validate_releases(
     components = releases.get("components")
     if not isinstance(components, dict) or set(components) != component_ids:
         raise ValueError("release inventory must cover every component exactly once")
-    artifact_paths: set[str] = set()
+    distribution_paths: set[str] = set()
     for identifier, release in components.items():
         if not isinstance(release, dict):
             raise ValueError(f"invalid release metadata: {identifier}")
@@ -67,7 +67,10 @@ def validate_releases(
             raise ValueError(f"invalid release strategy or freshness: {identifier}")
         if release.get("distribution_component", "nquake") not in content_namespaces:
             raise ValueError(f"invalid distribution component: {identifier}")
-        if release["strategy"] == "reference-snapshot" and version != reference_revision[:12]:
+        if release["strategy"] == "reference-snapshot" and not (
+            version == reference_revision[:12]
+            or version.startswith(reference_revision[:12] + "+x86qw.")
+        ):
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
         upstream = release.get("upstream")
         if release["strategy"] in {"upstream-overlay", "upstream-package"}:
@@ -86,8 +89,8 @@ def validate_releases(
                 raise ValueError(f"upstream overlay has no release notes: {identifier}")
             if not VERSION.fullmatch(str(release.get("distribution_tag", ""))):
                 raise ValueError(f"invalid distribution tag: {identifier}")
-            for field in ("distribution_component", "archive_component"):
-                if not ARCHIVE_COMPONENT.fullmatch(str(release.get(field, ""))):
+            for field in ("distribution_component",):
+                if not DISTRIBUTION_COMPONENT.fullmatch(str(release.get(field, ""))):
                     raise ValueError(f"invalid {field}: {identifier}")
             source_mirrors = release.get("source_mirrors", [])
             if (
@@ -117,12 +120,13 @@ def validate_releases(
             filename = artifact.get("filename")
             if not isinstance(filename, str) or PurePosixPath(filename).name != filename:
                 raise ValueError(f"invalid artifact filename: {identifier}")
-            archive_path = _safe_path(artifact.get("archive_path"), "artifact archive path")
-            archive_component = str(release.get("archive_component", "nquake"))
-            if archive_path in artifact_paths or not archive_path.startswith(f"components/{archive_component}/releases/"):
-                raise ValueError(f"duplicate or misplaced artifact path: {identifier}")
-            artifact_paths.add(archive_path)
-            if PurePosixPath(archive_path).name != filename:
+            distribution_path = _safe_path(artifact.get("distribution_path"), "artifact distribution path")
+            distribution_component = str(release.get("distribution_component", "nquake"))
+            expected_prefix = f"mods/{distribution_component}/"
+            if distribution_path in distribution_paths or not distribution_path.startswith(expected_prefix):
+                raise ValueError(f"duplicate or misplaced distribution path: {identifier}")
+            distribution_paths.add(distribution_path)
+            if PurePosixPath(distribution_path).name != filename:
                 raise ValueError(f"artifact path and filename differ: {identifier}")
             if not isinstance(artifact.get("url"), str) or not artifact["url"].startswith("https://"):
                 raise ValueError(f"invalid artifact URL: {identifier}")
@@ -163,7 +167,7 @@ def component_for_artifact_path(releases: dict[str, object], path: str) -> str |
         identifier
         for identifier, release in components.items() if isinstance(release, dict)
         for artifact in release.get("artifacts", [])
-        if isinstance(artifact, dict) and artifact.get("archive_path") == path
+        if isinstance(artifact, dict) and artifact.get("distribution_path") == path
     ]
     if len(matches) > 1:
         raise ValueError(f"component release artifact is assigned more than once: {path}")
@@ -174,8 +178,8 @@ def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def verified_artifact_members(archive_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
-    path = archive_root / str(artifact["archive_path"])
+def verified_artifact_members(distribution_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
+    path = distribution_root / str(artifact["distribution_path"])
     if not path.is_file() or path.stat().st_size != artifact["size"]:
         raise ValueError(f"missing or invalid component source artifact: {path}")
     payload = path.read_bytes()
@@ -197,8 +201,8 @@ def verified_artifact_members(archive_root: Path, artifact: dict[str, object]) -
     return selected
 
 
-def verified_package_files(archive_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
-    path = archive_root / str(artifact["archive_path"])
+def verified_package_files(distribution_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
+    path = distribution_root / str(artifact["distribution_path"])
     if not path.is_file() or path.stat().st_size != artifact["size"]:
         raise ValueError(f"missing or invalid component source artifact: {path}")
     if sha256_bytes(path.read_bytes()) != artifact["sha256"]:

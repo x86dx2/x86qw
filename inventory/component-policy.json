@@ -6,33 +6,32 @@
       "consumers": [
         "install:ezquake"
       ],
-      "archive_prefixes": [
-        "components/ezquake/releases/",
-        "components/ezquake/nightlies/"
+      "distribution_prefixes": [
+        "ezquake/"
       ]
     },
     "nquake": {
       "consumers": [
         "install:nquake-reference"
       ],
-      "archive_prefixes": [
-        "components/nquake/snapshots/"
+      "distribution_prefixes": [
+        "nquake/"
       ]
     },
     "ktx": {
       "consumers": [
         "install:nquake-ktx"
       ],
-      "archive_prefixes": [
-        "components/ktx/releases/"
+      "distribution_prefixes": [
+        "mods/ktx/"
       ]
     },
     "td2": {
       "consumers": [
         "install:total-destruction-2"
       ],
-      "archive_prefixes": [
-        "components/td2/releases/"
+      "distribution_prefixes": [
+        "mods/td2/"
       ]
     }
   }

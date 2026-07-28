@@ -103,14 +103,21 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
 O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Seus arquivos de
 servidor são exemplos inertes (`*.example.cfg`), e o `pwd.cfg` histórico com
-senha padrão não entra na instalação.
+senha padrão não entra na instalação. Depois do pacote original, o instalador
+aplica separadamente a camada x86QW de execução local. Assim uma nova versão do
+TD2 pode substituir seu conteúdo upstream sem misturar ou perder os ajustes do
+x86QW. As fontes dessa camada são arquivos normais do repositório em
+`dist/mods/td2/2.22/x86qw/`, declarados em `inventory/components.json`; não ficam
+embutidas no código Python.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.
 
 - `stable`: releases estáveis aprovadas e espelhadas pelo x86QW;
 - `nightly`: snapshots de desenvolvimento aprovados e espelhados pelo x86QW.
 
-As duas listas vêm de `https://x86qw.x86.com.br/api/v1/catalog.json`.
+As duas listas vêm do catálogo versionado em `site/public/api/v1/catalog.json`;
+sem um checkout completo, o mesmo arquivo é obtido em
+`https://x86qw.x86.com.br/api/v1/catalog.json`.
 Cada entrada registra origem, licença revisada, tamanho, SHA-256 e uma lista
 ordenada de mirrors. Se uma cópia estiver indisponível ou entregar um hash
 incorreto, o instalador tenta a próxima automaticamente.
@@ -121,9 +128,9 @@ verificável podem receber overlays independentes. O KTX atual combina os
 recursos nQuake com o `qwprogs.qvm` oficial 1.47, substituindo o `1.46-dev`
 embarcado. O catálogo publica um pacote atual por componente e o recibo
 individual grava sua versão. Antes do download, o instalador mostra as versões
-escolhidas e, quando disponível, o link das notas de release. Ele baixa apenas de
-`x86dx2/x86qw-dist`, sem clonar o repositório upstream. Servidores e shareware
-ficam de fora. Em uma instalação nova, também cria
+escolhidas e, quando disponível, o link das notas de release. Ele usa primeiro
+o pacote correspondente em `dist/` e só recorre aos mirrors externos quando a
+cópia local não existe. Servidores e shareware ficam de fora. Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
 start; um preset existente nunca é substituído.
 
@@ -200,8 +207,42 @@ A execução sempre configura os dois lados do servidor local, nesta ordem:
 `-game` prepara o caminho do cliente, `+gamedir` seleciona o gamecode e
 `+sv_gamedir` publica o valor correto de `*gamedir` aos clientes. Isso impede
 que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
-mod. O comando não instala conteúdo, não altera configurações pessoais e não
-transforma a máquina em servidor dedicado público.
+mod. O comando não baixa conteúdo nem transforma a máquina em servidor dedicado
+público.
+
+No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` antes de `+map`. O arquivo
+gerenciado `td2/x86qw-td2.cfg` preserva os recursos modernos já configurados no
+ezQuake e substitui apenas os controles e a apresentação específicos do mod:
+
+```text
+1           magia
+2 a 8       armas normais
+9           arma especial
+0           votar SIM
+Z           largar runa
+X           largar arma especial
+roda        trocar arma para frente/trás
+Mouse 4     magia
+Mouse 5     arma especial
+F10         mostrar resumo dos controles
+```
+
+O `td2/server.cfg` da camada x86QW seleciona o gamecode exclusivo, ativa antilag
+e inicia o perfil completo local: armas especiais, runas, Turbo, votações,
+zumbi vingador, poder da Luz e modelos alternativos de pipebomb. O pacote
+original continua preservado, inclusive seus arquivos `*.example.cfg`.
+
+Personalizações do jogador devem ser colocadas em:
+
+```text
+quake-world/td2/x86qw-td2-user.cfg
+```
+
+Esse arquivo é criado somente quando não existe, é executado depois do preset
+x86QW e nunca entra em `.install/play-support.inventory`. Atualizar o TD2 ou o
+ezQuake reaplica a camada do projeto e preserva esse arquivo pessoal. Remover os
+componentes também o preserva; `purge` continua sendo a ação explícita que
+remove toda a instalação.
 
 ### Navegador de servidores
 

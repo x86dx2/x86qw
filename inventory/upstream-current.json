@@ -1,6 +1,6 @@
 {
-  "archive_bytes": 658870694,
-  "archive_files": 543,
+  "upstream_bytes": 658870694,
+  "upstream_files": 543,
   "captured_at": "2026-07-28T00:02:39Z",
   "collections": {
     "ezquake_release_and_nightly_binaries": 6,
@@ -8,8 +8,8 @@
     "independent_release_artifacts": 2,
     "components": 18
   },
-  "layout": "consumed-only-v1",
-  "manifest_sha256": "71b42cbeedff9ac0de496f1d8cf8cab62a7f0b0ae81caf820ae0659078337f66",
+  "layout": "distribution-v1",
+  "manifest_sha256": "ca78372ba83b38d1958ea80cad5cea999b93e17a450fa51470f3f4dce96d781a",
   "nquake_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
   "policy": "inventory/component-policy.json + inventory/components.json + inventory/component-releases.json",
   "scope": "explicitly-incorporated-upstream-files"

@@ -8,9 +8,9 @@ atribuição, origem imutável e checksum.
 
 | Componente | Evidência | Estado do mirror |
 | --- | --- | --- |
-| ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 publicado byte a byte no `x86qw-dist` |
-| ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` vinculado ao commit completo e publicado |
-| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/components.json` | originais preservados e pacotes imutáveis publicados no `x86qw-dist` |
+| ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 preservado em `dist/ezquake` e replicado nos mirrors |
+| ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/ezquake` |
+| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/components.json` | originais em `dist/nquake` e pacotes imutáveis em `dist/packages` |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte | original preservado e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
@@ -35,9 +35,9 @@ com `checksums.txt` e com os digests publicados pela API do GitHub:
 | Linux | `ezQuake-linux-x86_64.zip` | 22.268.939 | `6d5707bf9be1a8338441265f9bf03154d107488a4fed9eab4c989c29de6573ee` |
 | Windows | `ezQuake-windows-x64.zip` | 4.135.630 | `1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d` |
 
-As três receitas stable estão `ready` e apontam para a release imutável no
-`x86qw-dist`. O catálogo também registra os três binários nightly e o commit
-completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. O acervo não mantém cópia do
+As três receitas stable estão `ready`; seus artefatos ficam em `dist/ezquake`
+e também apontam para o mirror imutável no `x86qw-dist`. O catálogo registra os três binários nightly e o commit
+completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. A distribuição não mantém cópia do
 código-fonte ou dependências de build porque o instalador não os consome.
 
 ### Atualização independente do KTX

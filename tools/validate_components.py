@@ -18,20 +18,25 @@ def main() -> int:
     parser.add_argument("--catalog", type=Path, default=ROOT / "inventory/components.json")
     parser.add_argument("--releases", type=Path, default=ROOT / "inventory/component-releases.json")
     parser.add_argument("--snapshot", type=Path, help="diretório raiz de um snapshot nQuake")
-    parser.add_argument("--archive", type=Path, help="valida também os artefatos de release preservados")
+    parser.add_argument("--distribution", type=Path, help="valida também os artefatos preservados em dist")
     arguments = parser.parse_args()
     catalog = load_catalog(arguments.catalog)
     releases = load_releases(arguments.releases, arguments.catalog)
-    if arguments.archive:
+    for component in catalog["components"]:
+        for source in component.get("project_sources", []):
+            path = ROOT / source["path"]
+            if not path.is_file() or path.is_symlink() or not path.stat().st_size:
+                raise ValueError(f"fonte x86QW inválida: {source['path']}")
+    if arguments.distribution:
         release_components = releases["components"]
         assert isinstance(release_components, dict)
         for release in release_components.values():
             assert isinstance(release, dict)
             for artifact in release.get("artifacts", []):
                 if release["strategy"] == "upstream-package":
-                    verified_package_files(arguments.archive, artifact)
+                    verified_package_files(arguments.distribution, artifact)
                 else:
-                    verified_artifact_members(arguments.archive, artifact)
+                    verified_artifact_members(arguments.distribution, artifact)
     if arguments.snapshot:
         paths = sorted(path.relative_to(arguments.snapshot).as_posix() for path in arguments.snapshot.rglob("*") if path.is_file())
         partition = validate_tree_partition(catalog, paths)
