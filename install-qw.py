@@ -4,13 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import http.client
 import json
 import os
 import platform as host_platform
 import plistlib
 import re
+import selectors
 import shutil
+import socket
 import stat
 import struct
 import subprocess
@@ -57,6 +61,89 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = Path(__file__).resolve().parent
+
+
+def create_resilient_connection(
+    address: tuple[str, int],
+    timeout: float | object = socket._GLOBAL_DEFAULT_TIMEOUT,
+    source_address: tuple[str, int] | None = None,
+) -> socket.socket:
+    """Connect to the first reachable DNS address without waiting on a dead first result."""
+    host, port = address
+    candidates = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    if not candidates:
+        raise OSError(f"Nenhum endereço foi encontrado para {host}.")
+    effective_timeout = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+    deadline = None if effective_timeout is None else time.monotonic() + float(effective_timeout)
+    pending: list[socket.socket] = []
+    errors: list[OSError] = []
+    selector = selectors.DefaultSelector()
+    connected: socket.socket | None = None
+    in_progress = {
+        errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY, errno.EINTR,
+        *(value for name in ("WSAEINPROGRESS", "WSAEWOULDBLOCK", "WSAEALREADY")
+          if (value := getattr(errno, name, None)) is not None),
+    }
+    try:
+        for family, socktype, proto, _, sockaddr in candidates:
+            connection = socket.socket(family, socktype, proto)
+            pending.append(connection)
+            try:
+                connection.setblocking(False)
+                if source_address:
+                    connection.bind(source_address)
+                result = connection.connect_ex(sockaddr)
+                if result in (0, errno.EISCONN):
+                    connected = connection
+                    break
+                if result not in in_progress:
+                    raise OSError(result, os.strerror(result))
+                selector.register(connection, selectors.EVENT_WRITE)
+            except OSError as error:
+                errors.append(error)
+                connection.close()
+                pending.remove(connection)
+
+        while connected is None and selector.get_map():
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            if remaining == 0 or not (events := selector.select(remaining)):
+                raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
+            for key, _ in events:
+                connection = key.fileobj
+                assert isinstance(connection, socket.socket)
+                result = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                if result == 0:
+                    connected = connection
+                    break
+                errors.append(OSError(result, os.strerror(result)))
+                selector.unregister(connection)
+                connection.close()
+                pending.remove(connection)
+        if connected is None:
+            if errors:
+                raise errors[-1]
+            raise OSError(f"Não foi possível conectar a {host}:{port}.")
+        connected.settimeout(effective_timeout)
+        return connected
+    finally:
+        selector.close()
+        for connection in pending:
+            if connection is not connected:
+                connection.close()
+
+
+class ResilientHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args: object, **kwargs: object):
+        super().__init__(*args, **kwargs)
+        self._create_connection = create_resilient_connection
+
+
+class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, request: urllib.request.Request):  # type: ignore[no-untyped-def]
+        return self.do_open(ResilientHTTPSConnection, request, context=self._context)
+
+
+HTTPS_OPENER = urllib.request.build_opener(ResilientHTTPSHandler())
 
 
 @dataclass(frozen=True)
@@ -770,7 +857,7 @@ class Installer:
         last_error: Exception | None = None
         for attempt in range(1, 4):
             try:
-                with urllib.request.urlopen(request, timeout=60) as response:
+                with HTTPS_OPENER.open(request, timeout=60) as response:
                     validate_https_url(response.geturl(), "redirecionamento de download")
                     if destination is None:
                         return response.read()
@@ -814,17 +901,8 @@ class Installer:
         architecture: str,
     ) -> list[ReleaseRecord]:
         assert self.spec is not None
-        catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
-        console.info("Consultando o catálogo oficial x86QW...")
-        try:
-            catalog = json.loads(self.http_get(catalog_url))
-        except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
-            raise InstallerError("O catálogo x86QW recebido é inválido.") from error
-        if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
-            raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
-        packages = catalog.get("packages")
-        if not isinstance(packages, list):
-            raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
+        catalog = self.public_catalog("Consultando o catálogo oficial x86QW...")
+        packages = catalog["packages"]
 
         records: list[ReleaseRecord] = []
         for index, package in enumerate(packages):
@@ -1514,22 +1592,8 @@ class Installer:
         return selected
 
     def component_package_record(self, identifier: str) -> dict[str, object]:
-        catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
-        if self._public_catalog is None:
-            console.info("Consultando o catálogo atual de componentes x86QW...")
-            try:
-                catalog = json.loads(self.http_get(catalog_url))
-            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
-                raise InstallerError("O catálogo x86QW recebido é inválido.") from error
-            if not isinstance(catalog, dict):
-                raise InstallerError("O catálogo x86QW recebido é inválido.")
-            self._public_catalog = catalog
-        catalog = self._public_catalog
-        if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
-            raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
-        packages = catalog.get("packages")
-        if not isinstance(packages, list):
-            raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
+        catalog = self.public_catalog("Consultando o catálogo atual de componentes x86QW...")
+        packages = catalog["packages"]
         matches = [package for package in packages if isinstance(package, dict) and (
             package.get("package"), package.get("channel"),
             package.get("platform"), package.get("architecture"),
@@ -1568,6 +1632,23 @@ class Installer:
         if "release_notes" in package and not isinstance(package["release_notes"], str):
             raise InstallerError(f"Resumo da versão inválido do componente {identifier}.")
         return package
+
+    def public_catalog(self, message: str) -> dict[str, object]:
+        if self._public_catalog is None:
+            catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
+            console.info(message)
+            try:
+                catalog = json.loads(self.http_get(catalog_url))
+            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+                raise InstallerError("O catálogo x86QW recebido é inválido.") from error
+            if not isinstance(catalog, dict):
+                raise InstallerError("O catálogo x86QW recebido é inválido.")
+            if catalog.get("format") != 1 or catalog.get("project") != "x86qw":
+                raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
+            if not isinstance(catalog.get("packages"), list):
+                raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
+            self._public_catalog = catalog
+        return self._public_catalog
 
     def download_component_package(self, package: dict[str, object]) -> Path:
         assert self.cache_root is not None and self.stage is not None

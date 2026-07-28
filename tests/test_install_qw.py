@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import socket
 import struct
 import sys
 import tempfile
@@ -213,10 +214,41 @@ class InstallerTests(unittest.TestCase):
                         installer.stable_catalog(),
                     )
             package["redistribution_reviewed"] = False
+            installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
                     with self.assertRaises(install_qw.InstallerError):
                         installer.stable_catalog()
+
+    def test_public_catalog_is_reused_between_client_and_components(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()) as get:
+                    installer.stable_catalog()
+                    installer.component_package_record("nquake-bootstrap")
+            get.assert_called_once_with(install_qw.CATALOG_URL)
+
+    def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            candidates = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.0.2.1", port)),
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", port)),
+            ]
+            started = install_qw.time.monotonic()
+            with mock.patch.object(install_qw.socket, "getaddrinfo", return_value=candidates):
+                connection = install_qw.create_resilient_connection(("example.invalid", port), timeout=2)
+            elapsed = install_qw.time.monotonic() - started
+            try:
+                self.assertEqual("127.0.0.1", connection.getpeername()[0])
+                self.assertLess(elapsed, 1)
+            finally:
+                connection.close()
 
     def test_download_falls_back_to_the_next_catalog_mirror(self):
         with tempfile.TemporaryDirectory() as temporary:
