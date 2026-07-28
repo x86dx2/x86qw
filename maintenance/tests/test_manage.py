@@ -63,7 +63,7 @@ class DistributionManagerTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(releases["reference"]["revision"], new)
-        self.assertEqual(releases["components"]["clan-arena"]["version"], "bbbbbbbbbbbb+x86qw.1")
+        self.assertEqual(releases["components"]["clan-arena"]["version"], "bbbbbbbbbbbb+x86qw.2")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["nquake-ktx"]["version"])
         self.assertNotIn(old[:12], releases["components"]["nquake-ktx"]["distribution_tag"])
 
@@ -140,7 +140,7 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
         self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
         self.assertIn("QRP alta resolução: e4cb23d40aa2", output)
-        self.assertIn("Clan Arena e Pro-X: e4cb23d40aa2+x86qw.1", output)
+        self.assertIn("Clan Arena e Pro-X: e4cb23d40aa2+x86qw.2", output)
         self.assertIn("Team Fortress: e4cb23d40aa2", output)
         self.assertIn("KTX para servidores", output)
         self.assertIn("dist/mods/ktx/1.47/qwprogs-qvm.zip", output)

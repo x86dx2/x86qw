@@ -229,9 +229,17 @@
         },
         {
           "path": "addon-clanarena/prox/configs/config.cfg",
-          "destination": "prox/configs/config.cfg",
-          "mode": "default"
+          "destination": "prox/configs/nquake-legacy.cfg",
+          "mode": "overlay"
         }
+      ],
+      "project_sources": [
+        {"path": "dist/mods/clan-arena/x86qw.2/arena/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/clan-arena/x86qw.2/arena/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/clan-arena/x86qw.2/arena/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"},
+        {"path": "dist/mods/clan-arena/x86qw.2/prox/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
+        {"path": "dist/mods/clan-arena/x86qw.2/prox/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/clan-arena/x86qw.2/prox/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
       ]
     },
     {

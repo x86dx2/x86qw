@@ -14,7 +14,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
-from build_component_packages import rewrite_zip_members  # noqa: E402
+from component_sources import (  # noqa: E402
+    load_source_context,
+    move_zip_members,
+    resolve_component_payloads,
+    rewrite_zip_members,
+)
 from check_component_updates import check_updates  # noqa: E402
 from components import components_by_id, load_catalog  # noqa: E402
 from component_releases import (  # noqa: E402
@@ -58,6 +63,33 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(rebuilt)) as package:
             self.assertEqual(b"same", package.read("configs/default.cfg"))
             self.assertEqual(b"new", package.read("qwprogs.qvm"))
+
+    def test_legacy_runtime_config_is_renamed_without_changing_its_content(self) -> None:
+        original = io.BytesIO()
+        with zipfile.ZipFile(original, "w") as package:
+            package.writestr("configs/config.cfg", b"legacy")
+            package.writestr("qwprogs.dat", b"gamecode")
+        rebuilt = move_zip_members(
+            original.getvalue(),
+            {"configs/config.cfg": "configs/nquake-pk3-legacy.cfg"},
+        )
+        with zipfile.ZipFile(io.BytesIO(rebuilt)) as package:
+            self.assertNotIn("configs/config.cfg", package.namelist())
+            self.assertEqual(b"legacy", package.read("configs/nquake-pk3-legacy.cfg"))
+            self.assertEqual(b"gamecode", package.read("qwprogs.dat"))
+
+    def test_clan_arena_package_keeps_legacy_configs_out_of_the_runtime_path(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "clan-arena")
+        members = {member: payload for _, member, payload, _ in payloads}
+        self.assertIn("payload/prox/configs/nquake-legacy.cfg", members)
+        with zipfile.ZipFile(io.BytesIO(members["payload/prox/prox.pk3"])) as package:
+            self.assertNotIn("configs/config.cfg", package.namelist())
+            self.assertIn("configs/nquake-pk3-legacy.cfg", package.namelist())
 
     def test_preserved_release_artifact_and_consumed_member_are_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -155,6 +155,33 @@ def rewrite_zip_members(payload: bytes, replacements: dict[str, bytes]) -> bytes
     return output.getvalue()
 
 
+def move_zip_members(payload: bytes, moves: dict[str, str]) -> bytes:
+    source = io.BytesIO(payload)
+    output = io.BytesIO()
+    with zipfile.ZipFile(source) as original:
+        if original.testzip() is not None:
+            raise ValueError("base component archive contains a corrupt member")
+        original_files = {
+            info.filename: original.read(info.filename)
+            for info in original.infolist() if not info.is_dir()
+        }
+    missing = set(moves) - set(original_files)
+    collisions = set(moves.values()) & (set(original_files) - set(moves))
+    if missing:
+        raise ValueError(f"component archive move source is missing: {sorted(missing)[0]}")
+    if collisions or len(set(moves.values())) != len(moves):
+        raise ValueError(f"component archive move destination already exists: {sorted(collisions or moves.values())[0]}")
+    for old, new in moves.items():
+        original_files[new] = original_files.pop(old)
+    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
+        for name, data in sorted(original_files.items()):
+            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            rebuilt.writestr(info, data)
+    return output.getvalue()
+
+
 def reference_component_payload(
     context: ComponentSourceContext,
     upstream_path: str,
@@ -179,6 +206,14 @@ def reference_component_payload(
             })
     if replacements:
         payload = rewrite_zip_members(payload, replacements)
+    moves = {
+        str(move["source"]): str(move["destination"])
+        for move in release.get("archive_moves", [])
+        if isinstance(move, dict) and move.get("target_archive") == upstream_path
+    }
+    if moves:
+        payload = move_zip_members(payload, moves)
+        applied.extend({"source": old, "destination": new} for old, new in moves.items())
     return payload, applied
 
 

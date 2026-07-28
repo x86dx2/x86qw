@@ -202,7 +202,7 @@ stable e nightly coexistirem, pergunta qual cliente usar.
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
 ```text
--game <mod> +gamedir <mod> +sv_gamedir <mod> +map <mapa>
+-game <mod> +gamedir <mod> +sv_gamedir <mod> [+exec perfil-x86qw.cfg] +map <mapa>
 ```
 
 `-game` prepara o caminho do cliente, `+gamedir` seleciona o gamecode e
@@ -210,6 +210,52 @@ A execução sempre configura os dois lados do servidor local, nesta ordem:
 que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
 mod. O comando não baixa conteúdo nem transforma a máquina em servidor dedicado
 público.
+
+Final Arena e Pro-X permanecem como dois jogos distintos, embora o nQuake os
+distribua no mesmo add-on:
+
+- Final Arena 1.20 usa uma fila individual: o vencedor permanece na arena e o
+  perdedor volta ao fim da fila;
+- Pro-X QW 0.8b organiza partidas por rounds e equipes, com ready, break,
+  entrada, observação e votação de mapas próprios.
+
+O x86QW preserva os PK3 originais, mas carrega perfis separados depois da
+configuração do ezQuake. O antigo `configs/config.cfg` embutido no Pro-X é
+renomeado para `configs/nquake-pk3-legacy.cfg` no pacote instalável; a cópia
+solta do nQuake fica em `prox/configs/nquake-legacy.cfg`. Assim eles continuam
+disponíveis como referência sem substituir automaticamente HUD, vídeo e binds
+do jogador.
+
+Controles acrescentados para Final Arena:
+
+```text
+F3          estatísticas
+F4          posição na fila
+F5          entrar ou sair da pausa
+F7          votar no próximo mapa
+F8          estado da partida
+F10         ajuda e comandos do mod
+```
+
+Controles acrescentados para Pro-X:
+
+```text
+F1          votar SIM
+F3          pronto
+F4          interromper ou pausar
+F5          entrar na partida
+F6          observar
+F10         ajuda e comandos do mod
+```
+
+Os perfis de servidor selecionam gamecodes exclusivos, ativam antilag e
+isolam os gamedirs. Personalizações sobrevivem às atualizações e devem ser
+colocadas respectivamente em:
+
+```text
+quake-world/arena/x86qw-arena-user.cfg
+quake-world/prox/x86qw-prox-user.cfg
+```
 
 No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` antes de `+map`. O arquivo
 gerenciado `td2/x86qw-td2.cfg` preserva os recursos modernos já configurados no

@@ -48,6 +48,8 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
+        clan_arena = next(package for package in catalog["packages"] if package.get("package") == "clan-arena")
+        self.assertEqual("e4cb23d40aa2+x86qw.2", clan_arena["version"])
 
         package = {
             "component": "ezquake",

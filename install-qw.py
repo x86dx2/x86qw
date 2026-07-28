@@ -69,10 +69,11 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
-PLAY_SUPPORT_VERSION = "2"
+PLAY_SUPPORT_VERSION = "3"
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
+PROFILED_LOCAL_GAMES = frozenset({"clan-arena", "pro-x", "td2"})
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = Path(__file__).resolve().parent
 
@@ -2330,8 +2331,8 @@ class Installer:
         ]
         if game.key != "ktx":
             arguments.extend(["+sv_progtype", "0"])
-        if game.key == "td2":
-            arguments.extend(["+exec", "x86qw-td2.cfg"])
+        if game.key in PROFILED_LOCAL_GAMES:
+            arguments.extend(["+exec", f"x86qw-{game.gamedir}.cfg"])
         arguments.extend(["+map", map_name])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
@@ -2340,8 +2341,10 @@ class Installer:
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
         legacy_games = [game for game in games if game.key != "ktx"]
-        td2_enabled = any(game.key == "td2" for game in legacy_games)
-        td2_sources = self.td2_project_sources() if td2_enabled else {}
+        profile_sources = {
+            game.key: self.game_project_sources(game)
+            for game in legacy_games if game.key in PROFILED_LOCAL_GAMES
+        }
         present, old_entries, _ = self.validate_component_pair("play-support")
         if not legacy_games:
             if present:
@@ -2356,8 +2359,9 @@ class Installer:
             prepared = 0
             for game in legacy_games:
                 program_name = f"x86qw_{game.gamedir}"
-                if game.key == "td2":
-                    server_profile = td2_sources["td2/server.cfg"]
+                sources = profile_sources.get(game.key)
+                if sources is not None:
+                    server_profile = sources[f"{game.gamedir}/server.cfg"]
                 else:
                     server_profile = (
                         "// x86QW: isola mods QuakeC antigos do QVM do KTX.\n"
@@ -2369,8 +2373,10 @@ class Installer:
                     f"{game.gamedir}/{program_name}.dat": self.local_game_program(game),
                     f"{game.gamedir}/server.cfg": server_profile,
                 }
-                if game.key == "td2":
-                    files["td2/x86qw-td2.cfg"] = td2_sources["td2/x86qw-td2.cfg"]
+                if sources is not None:
+                    files[f"{game.gamedir}/x86qw-{game.gamedir}.cfg"] = sources[
+                        f"{game.gamedir}/x86qw-{game.gamedir}.cfg"
+                    ]
                 for relative, payload in files.items():
                     destination = self.target / relative
                     if lexists(destination):
@@ -2388,45 +2394,54 @@ class Installer:
                     "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",
                 )
                 console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
-            if td2_enabled:
-                self.ensure_td2_user_profile(td2_sources["td2/x86qw-td2-user.cfg"])
+            for game in legacy_games:
+                sources = profile_sources.get(game.key)
+                if sources is not None:
+                    self.ensure_game_user_profile(
+                        game,
+                        sources[f"{game.gamedir}/x86qw-{game.gamedir}-user.cfg"],
+                    )
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
 
-    def ensure_td2_user_profile(self, initial: bytes) -> None:
-        destination = self.target / "td2/x86qw-td2-user.cfg"
+    def ensure_game_user_profile(self, game: LocalGameSpec, initial: bytes) -> None:
+        destination = self.target / game.gamedir / f"x86qw-{game.gamedir}-user.cfg"
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
-                raise InstallerError(f"Configuração pessoal TD2 inválida: {destination}")
+                raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")
             return
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(initial)
         if os.name != "nt":
             destination.chmod(0o644)
-        console.info(f"Configuração pessoal TD2 criada: {destination}")
+        console.info(f"Configuração pessoal de {game.label} criada: {destination}")
 
-    def td2_project_sources(self) -> dict[str, bytes]:
+    def game_project_sources(self, game: LocalGameSpec) -> dict[str, bytes]:
+        stem = f"x86qw-{game.gamedir}"
         expected = {
-            "td2/x86qw-td2.cfg": "overlay",
-            "td2/server.cfg": "overlay",
-            "td2/x86qw-td2-user.cfg": "default",
+            f"{game.gamedir}/{stem}.cfg": "overlay",
+            f"{game.gamedir}/server.cfg": "overlay",
+            f"{game.gamedir}/{stem}-user.cfg": "default",
         }
-        entries = self.components["total-destruction-2"].get("project_sources", [])
+        entries = [
+            entry for entry in self.components[game.component].get("project_sources", [])
+            if str(entry.get("destination", "")).startswith(f"{game.gamedir}/")
+        ]
         actual = {entry["destination"]: entry["mode"] for entry in entries}
         if actual != expected:
-            raise InstallerError("A camada TD2 do repositório diverge do contrato x86QW.")
+            raise InstallerError(f"A camada de {game.label} no repositório diverge do contrato x86QW.")
         sources: dict[str, bytes] = {}
         for entry in entries:
             source = self.project_root.joinpath(*PurePosixPath(entry["path"]).parts)
             if not source.is_file() or source.is_symlink():
-                raise InstallerError(f"Arquivo-fonte TD2 não encontrado no repositório: {source}")
+                raise InstallerError(f"Arquivo-fonte de {game.label} não encontrado no repositório: {source}")
             try:
                 payload = source.read_bytes()
             except OSError as error:
-                raise InstallerError(f"Não foi possível ler a camada TD2: {source}") from error
+                raise InstallerError(f"Não foi possível ler a camada de {game.label}: {source}") from error
             if not payload:
-                raise InstallerError(f"Arquivo-fonte TD2 vazio: {source}")
+                raise InstallerError(f"Arquivo-fonte de {game.label} vazio: {source}")
             sources[entry["destination"]] = payload
         return sources
 

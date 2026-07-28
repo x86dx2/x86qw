@@ -152,6 +152,19 @@ def validate_releases(
                     raise ValueError(f"invalid artifact member size: {identifier}")
                 if not HEX64.fullmatch(str(member.get("sha256", ""))):
                     raise ValueError(f"invalid artifact member hash: {identifier}")
+        archive_moves = release.get("archive_moves", [])
+        if not isinstance(archive_moves, list):
+            raise ValueError(f"invalid archive moves: {identifier}")
+        move_identities: set[tuple[str, str]] = set()
+        for move in archive_moves:
+            if not isinstance(move, dict):
+                raise ValueError(f"invalid archive move: {identifier}")
+            target = _safe_path(move.get("target_archive"), "archive move target")
+            source = _safe_path(move.get("source"), "archive move source")
+            destination = _safe_path(move.get("destination"), "archive move destination")
+            if source == destination or (target, source) in move_identities:
+                raise ValueError(f"duplicate or ineffective archive move: {identifier}")
+            move_identities.add((target, source))
 
 
 def component_release(releases: dict[str, object], identifier: str) -> dict[str, object]:

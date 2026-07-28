@@ -1,0 +1,7 @@
+// Personalizacoes locais do Pro-X.
+// Este arquivo e criado uma vez e preservado nas atualizacoes do x86QW.
+
+// Exemplos:
+// bind F7 "prox_red"
+// bind F8 "prox_blue"
+// bind F9 "prox_map1"

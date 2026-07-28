@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-28T21:00:21Z",
+  "generated_at": "2026-07-28T23:50:45Z",
   "packages": [
     {
       "component": "ezquake",
@@ -166,14 +166,14 @@
     {
       "component": "nquake",
       "package": "clan-arena",
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "clan-arena-e4cb23d40aa2+x86qw.1.zip",
-      "size": 13871367,
-      "sha256": "5aeb88198fec5fcd0dc8ddf759c0726cc2be40c664b2d636e98255a14bbf8195",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.1.zip",
+      "filename": "clan-arena-e4cb23d40aa2+x86qw.2.zip",
+      "size": 13881481,
+      "sha256": "80874324d78139fbffa68015ce8c591b0f19ee428ca4f15f59455dace76c0800",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -181,7 +181,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/clan-arena/e4cb23d40aa2+x86qw.2/clan-arena-e4cb23d40aa2+x86qw.2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },

@@ -94,6 +94,18 @@ class ModernComponentTests(unittest.TestCase):
                 },
                 {source["path"] for source in td2["project_sources"]},
             )
+            clan_arena = installer.components["clan-arena"]
+            self.assertEqual(
+                {
+                    "dist/mods/clan-arena/x86qw.2/arena/client.cfg",
+                    "dist/mods/clan-arena/x86qw.2/arena/server.cfg",
+                    "dist/mods/clan-arena/x86qw.2/arena/user.cfg.example",
+                    "dist/mods/clan-arena/x86qw.2/prox/client.cfg",
+                    "dist/mods/clan-arena/x86qw.2/prox/server.cfg",
+                    "dist/mods/clan-arena/x86qw.2/prox/user.cfg.example",
+                },
+                {source["path"] for source in clan_arena["project_sources"]},
+            )
 
     def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -367,6 +379,31 @@ class ModernComponentTests(unittest.TestCase):
                 "+sv_progtype", "0", "+exec", "x86qw-td2.cfg", "+map", "dm6",
             ])
 
+    def test_play_loads_the_specific_arena_and_prox_profiles(self):
+        expectations = {
+            "clan-arena": ("arena", "23ar-a", "x86qw-arena.cfg"),
+            "pro-x": ("prox", "proxmap1", "x86qw-prox.cfg"),
+        }
+        for key, (gamedir, map_name, profile) in expectations.items():
+            with self.subTest(game=key), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                game = next(game for game in install_qw.LOCAL_GAMES if game.key == key)
+                runtime = target / "ezQuake Stable.app"
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with mock.patch.object(installer, "check_paks"):
+                        with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "local_map_names", return_value=[map_name]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch("builtins.input", side_effect=["", ""]):
+                                                    installer.play_local()
+                launch.assert_called_once_with(runtime, [
+                    "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
+                    "+sv_progtype", "0", "+exec", profile, "+map", map_name,
+                ])
+
     def test_local_play_support_is_managed_and_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -419,6 +456,59 @@ class ModernComponentTests(unittest.TestCase):
             _, entries, receipt = installer.validate_component_pair("play-support")
             self.assertNotIn("td2/x86qw-td2-user.cfg", dict(entries))
             self.assertEqual(install_qw.PLAY_SUPPORT_VERSION, receipt["selection"])
+
+    def test_arena_and_prox_profiles_update_gamecode_and_preserve_user_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            games = [
+                next(game for game in install_qw.LOCAL_GAMES if game.key == key)
+                for key in ("clan-arena", "pro-x")
+            ]
+            for game in games:
+                package = target / game.marker
+                package.parent.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(package, "w") as archive:
+                    archive.writestr("qwprogs.dat", f"{game.key}-v1".encode())
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support(games)
+
+            for game in games:
+                gamedir = target / game.gamedir
+                client = gamedir / f"x86qw-{game.gamedir}.cfg"
+                server = gamedir / "server.cfg"
+                user = gamedir / f"x86qw-{game.gamedir}-user.cfg"
+                self.assertEqual(
+                    (ROOT / f"dist/mods/clan-arena/x86qw.2/{game.gamedir}/client.cfg").read_bytes(),
+                    client.read_bytes(),
+                )
+                self.assertEqual(
+                    (ROOT / f"dist/mods/clan-arena/x86qw.2/{game.gamedir}/server.cfg").read_bytes(),
+                    server.read_bytes(),
+                )
+                self.assertIn(f'sv_progsname "x86qw_{game.gamedir}"', server.read_text())
+                user.write_text(f"// personal {game.key}\n", encoding="utf-8")
+                with zipfile.ZipFile(target / game.marker, "w") as archive:
+                    archive.writestr("qwprogs.dat", f"{game.key}-v2".encode())
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support(games)
+
+            for game in games:
+                gamedir = target / game.gamedir
+                self.assertEqual(
+                    f"{game.key}-v2".encode(),
+                    (gamedir / f"x86qw_{game.gamedir}.dat").read_bytes(),
+                )
+                self.assertEqual(
+                    f"// personal {game.key}\n",
+                    (gamedir / f"x86qw-{game.gamedir}-user.cfg").read_text(),
+                )
+            self.assertEqual(6, installer.verify_component("play-support"))
+            self.assertEqual(6, installer.remove_component("play-support"))
+            for game in games:
+                self.assertTrue((
+                    target / game.gamedir / f"x86qw-{game.gamedir}-user.cfg"
+                ).is_file())
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:
