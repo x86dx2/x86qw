@@ -16,6 +16,16 @@ própria pasta `quake-world` quando o aplicativo pedir o diretório do jogo; o
 instalador limpa autorizações antigas e `./install-qw.py verify` confirma se a
 configuração nQuake já foi carregada.
 
+Para abrir um mod local sem montar argumentos manualmente, use:
+
+```sh
+./install-qw.py play
+```
+
+O menu oferece apenas mods efetivamente instalados, valida o componente,
+descobre os mapas presentes nos diretórios, PAKs e PK3s e permite escolher entre
+KTX, Clan Arena, Pro-X, Team Fortress e Total Destruction 2.
+
 ## Princípios
 
 - cada artefato é imutável e identificado por SHA-256;

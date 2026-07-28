@@ -134,6 +134,7 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 ```sh
 ./install-qw.py components
 ./install-qw.py presets
+./install-qw.py play
 ./install-qw.py hub
 ```
 
@@ -172,6 +173,35 @@ cfg_load x86-qw-modern
 ```
 
 O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inventário deste componente.
+
+### Jogo local
+
+`play` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
+linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
+arquivos de entrada estão presentes:
+
+- KTX em `qw/ktx.pk3`;
+- Clan Arena em `arena/arena.pk3`;
+- Pro-X em `prox/prox.pk3`;
+- Team Fortress em `fortress/misc.pak`;
+- Total Destruction 2 em `td2/qwprogs.dat`.
+
+Antes de abrir o jogo, o instalador valida o recibo do componente e descobre os
+mapas disponíveis em arquivos BSP soltos, PK3s e PAKs do gamedir e de `id1`.
+Ele oferece sugestões, aceita um nome instalado ou lista o acervo completo. Se
+stable e nightly coexistirem, pergunta qual cliente usar.
+
+A execução sempre configura os dois lados do servidor local, nesta ordem:
+
+```text
+-game <mod> +gamedir <mod> +sv_gamedir <mod> +map <mapa>
+```
+
+`-game` prepara o caminho do cliente, `+gamedir` seleciona o gamecode e
+`+sv_gamedir` publica o valor correto de `*gamedir` aos clientes. Isso impede
+que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
+mod. O comando não instala conteúdo, não altera configurações pessoais e não
+transforma a máquina em servidor dedicado público.
 
 ### Navegador de servidores
 

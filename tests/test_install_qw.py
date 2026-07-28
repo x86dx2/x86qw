@@ -232,23 +232,64 @@ class InstallerTests(unittest.TestCase):
             get.assert_called_once_with(install_qw.CATALOG_URL)
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
-            listener.bind(("127.0.0.1", 0))
-            listener.listen()
-            port = listener.getsockname()[1]
-            candidates = [
-                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.0.2.1", port)),
-                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", port)),
-            ]
-            started = install_qw.time.monotonic()
-            with mock.patch.object(install_qw.socket, "getaddrinfo", return_value=candidates):
-                connection = install_qw.create_resilient_connection(("example.invalid", port), timeout=2)
-            elapsed = install_qw.time.monotonic() - started
-            try:
-                self.assertEqual("127.0.0.1", connection.getpeername()[0])
-                self.assertLess(elapsed, 1)
-            finally:
-                connection.close()
+        class FakeSocket:
+            def __init__(self, reachable):
+                self.reachable = reachable
+                self.closed = False
+                self.timeout = None
+
+            def setblocking(self, value):
+                del value
+
+            def connect_ex(self, address):
+                del address
+                return install_qw.errno.EINPROGRESS
+
+            def getsockopt(self, level, option):
+                del level, option
+                return 0 if self.reachable else install_qw.errno.EHOSTUNREACH
+
+            def settimeout(self, value):
+                self.timeout = value
+
+            def close(self):
+                self.closed = True
+
+        class FakeSelector:
+            def __init__(self):
+                self.registered = []
+
+            def register(self, connection, event):
+                del event
+                self.registered.append(connection)
+
+            def unregister(self, connection):
+                self.registered.remove(connection)
+
+            def get_map(self):
+                return {id(connection): connection for connection in self.registered}
+
+            def select(self, timeout):
+                del timeout
+                reachable = next(connection for connection in self.registered if connection.reachable)
+                return [(mock.Mock(fileobj=reachable), None)]
+
+            def close(self):
+                pass
+
+        sockets = [FakeSocket(False), FakeSocket(True)]
+        candidates = [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.0.2.1", 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
+        ]
+        with mock.patch.object(install_qw.socket, "getaddrinfo", return_value=candidates):
+            with mock.patch.object(install_qw.socket, "socket", side_effect=sockets):
+                with mock.patch.object(install_qw.selectors, "DefaultSelector", FakeSelector):
+                    connection = install_qw.create_resilient_connection(("example.invalid", 443), timeout=2)
+        self.assertIs(sockets[1], connection)
+        self.assertTrue(sockets[0].closed)
+        self.assertFalse(sockets[1].closed)
+        self.assertEqual(2, sockets[1].timeout)
 
     def test_download_falls_back_to_the_next_catalog_mirror(self):
         with tempfile.TemporaryDirectory() as temporary:

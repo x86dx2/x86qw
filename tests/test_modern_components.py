@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import struct
 import sys
 import tempfile
 import unittest
@@ -31,7 +32,7 @@ class ModernComponentTests(unittest.TestCase):
         return install_qw.Installer(ROOT, target, cache), target, cache
 
     def test_new_actions_are_accepted(self):
-        for action in ("components", "presets", "hub"):
+        for action in ("components", "presets", "play", "hub"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
@@ -244,6 +245,43 @@ class ModernComponentTests(unittest.TestCase):
                     installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
             command = popen.call_args.args[0]
             self.assertEqual(["open", "-n", str(runtime), "--args", "-basedir", str(target), "+connect", "server.example:27500"], command)
+
+    def test_play_uses_client_and_server_gamedirs_before_map(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            runtime = target / "ezQuake Nightly.app"
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "verify_component") as verify:
+                            with mock.patch.object(installer, "local_map_names", return_value=["dm6", "dm2"]):
+                                with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
+                                    with mock.patch.object(installer, "launch_runtime") as launch:
+                                        with mock.patch("builtins.input", side_effect=["", ""]):
+                                            installer.play_local()
+            verify.assert_called_once_with("total-destruction-2")
+            launch.assert_called_once_with(runtime, [
+                "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2", "+map", "dm6",
+            ])
+
+    def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            maps = target / "td2/maps"
+            maps.mkdir(parents=True)
+            (maps / "custom.bsp").write_bytes(b"bsp")
+            with zipfile.ZipFile(target / "td2/addon.pk3", "w") as archive:
+                archive.writestr("maps/zipmap.bsp", b"bsp")
+                archive.writestr("../maps/escape.bsp", b"bad")
+            id1 = target / "id1"
+            id1.mkdir()
+            payload = b"bsp"
+            member = b"maps/dm6.bsp".ljust(56, b"\0") + struct.pack("<II", 12, len(payload))
+            (id1 / "pak0.pak").write_bytes(
+                b"PACK" + struct.pack("<II", 12 + len(payload), len(member)) + payload + member
+            )
+            self.assertEqual(["custom", "dm6", "zipmap"], installer.local_map_names("td2"))
 
     def test_hub_uses_native_join_observe_and_qtv_commands(self):
         with tempfile.TemporaryDirectory() as temporary:

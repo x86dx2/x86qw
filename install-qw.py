@@ -110,7 +110,6 @@ def create_resilient_connection(
                 raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
             for key, _ in events:
                 connection = key.fileobj
-                assert isinstance(connection, socket.socket)
                 result = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                 if result == 0:
                     connected = connection
@@ -166,6 +165,19 @@ class PlatformSpec:
         return self.stable_receipt if channel == "stable" else self.nightly_receipt
 
 
+@dataclass(frozen=True)
+class LocalGameSpec:
+    key: str
+    label: str
+    gamedir: str
+    component: str
+    marker: str
+    default_map: str
+    suggested_maps: tuple[str, ...]
+    description: str
+    confirmation: str
+
+
 PLATFORMS = {
     "macos": PlatformSpec(
         "macos", "macOS", "universal", "ezQuake-macOS-universal.zip",
@@ -186,6 +198,40 @@ PLATFORMS = {
         ".install/ezquake-windows-stable.receipt", ".install/ezquake-windows-nightly.receipt",
     ),
 }
+
+
+LOCAL_GAMES = (
+    LocalGameSpec(
+        "ktx", "KTX", "qw", "nquake-ktx", "qw/ktx.pk3", "dm6",
+        ("dm6", "dm2", "dm4", "aerowalk"),
+        "QuakeWorld competitivo com o QVM oficial do KTX.",
+        "No console, ktxver deve mostrar a versão carregada.",
+    ),
+    LocalGameSpec(
+        "clan-arena", "Clan Arena", "arena", "clan-arena", "arena/arena.pk3", "23ar-a",
+        ("23ar-a", "arenarg2", "arenarg4", "dm2arena"),
+        "Arena eliminatória incluída pela distribuição nQuake.",
+        "No console, gamedir e *gamedir devem mostrar arena.",
+    ),
+    LocalGameSpec(
+        "pro-x", "Pro-X", "prox", "clan-arena", "prox/prox.pk3", "proxmap1",
+        ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
+        "Modo de arena Pro-X incluído junto ao Clan Arena.",
+        "No console, gamedir e *gamedir devem mostrar prox.",
+    ),
+    LocalGameSpec(
+        "team-fortress", "Team Fortress", "fortress", "team-fortress", "fortress/misc.pak", "2fort5r",
+        ("2fort5r", "well6", "bases", "mbasesr"),
+        "Team Fortress clássico para QuakeWorld.",
+        "A inicialização deve mostrar Welcome to TeamFortress v2.8.",
+    ),
+    LocalGameSpec(
+        "td2", "Total Destruction 2", "td2", "total-destruction-2", "td2/qwprogs.dat", "dm6",
+        ("dm6", "dm2", "dm4", "e1m2"),
+        "TD2 2.22 com armas, magias, runas e poderes.",
+        "No serverinfo, *gamedir deve ser td2 e td2qw deve ser 2.22.",
+    ),
+)
 
 PRESETS = {
     "x86-qw-modern.cfg": """// x86-qw: visual moderno, carregamento manual com cfg_load x86-qw-modern
@@ -1838,6 +1884,164 @@ class Installer:
         selected = self.choose_components()
         self.install_components(selected)
 
+    @staticmethod
+    def map_name_from_member(member: str) -> str | None:
+        normalized = member.replace("\\", "/")
+        path = PurePosixPath(normalized)
+        if len(path.parts) != 2 or path.parts[0].lower() != "maps" or path.suffix.lower() != ".bsp":
+            return None
+        name = path.stem
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", name):
+            return None
+        return name
+
+    def maps_from_package(self, package: Path) -> set[str]:
+        maps: set[str] = set()
+        if package.suffix.lower() == ".pk3":
+            try:
+                with zipfile.ZipFile(package) as archive:
+                    members = archive.namelist()
+            except (OSError, zipfile.BadZipFile) as error:
+                raise InstallerError(f"Pacote de mapas inválido: {package}") from error
+            for member in members:
+                if name := self.map_name_from_member(member):
+                    maps.add(name)
+            return maps
+        try:
+            size = package.stat().st_size
+            with package.open("rb") as archive:
+                header = archive.read(12)
+                if len(header) != 12 or header[:4] != b"PACK":
+                    raise InstallerError(f"PAK de mapas inválido: {package}")
+                directory_offset, directory_size = struct.unpack("<II", header[4:])
+                if (
+                    directory_offset < 12 or directory_size % 64
+                    or directory_offset + directory_size > size
+                ):
+                    raise InstallerError(f"Diretório PAK inválido: {package}")
+                archive.seek(directory_offset)
+                directory = archive.read(directory_size)
+        except OSError as error:
+            raise InstallerError(f"Não foi possível ler o PAK de mapas: {package}") from error
+        for offset in range(0, len(directory), 64):
+            raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
+            try:
+                member = raw_name.decode("ascii")
+            except UnicodeDecodeError:
+                continue
+            if name := self.map_name_from_member(member):
+                maps.add(name)
+        return maps
+
+    def local_map_names(self, gamedir: str) -> list[str]:
+        maps: set[str] = set()
+        roots = [self.target / "id1"]
+        if gamedir != "id1":
+            roots.append(self.target / gamedir)
+        for root in roots:
+            maps_directory = root / "maps"
+            if maps_directory.is_dir() and not maps_directory.is_symlink():
+                for path in maps_directory.iterdir():
+                    if path.is_file() and not path.is_symlink():
+                        if name := self.map_name_from_member(f"maps/{path.name}"):
+                            maps.add(name)
+            if not root.is_dir() or root.is_symlink():
+                continue
+            for package in root.iterdir():
+                if (
+                    package.is_file() and not package.is_symlink()
+                    and package.suffix.lower() in (".pak", ".pk3")
+                ):
+                    maps.update(self.maps_from_package(package))
+        return sorted(maps, key=str.casefold)
+
+    def available_local_games(self) -> list[LocalGameSpec]:
+        available = []
+        for game in LOCAL_GAMES:
+            present, _, _ = self.validate_component_pair(game.component)
+            marker = self.target.joinpath(*PurePosixPath(game.marker).parts)
+            if present and marker.is_file() and not marker.is_symlink():
+                available.append(game)
+        return available
+
+    def choose_local_game(self, games: list[LocalGameSpec]) -> LocalGameSpec:
+        print("\nQual mod deseja jogar localmente?")
+        for index, game in enumerate(games, 1):
+            default = " (padrão)" if index == 1 else ""
+            print(f"  {index}) {game.label}{default} - {game.description}")
+        while True:
+            try:
+                answer = input(f"Escolha [1-{len(games)}] (padrão: 1): ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhum mod foi selecionado.") from error
+            if not answer:
+                return games[0]
+            if answer.isdigit() and 1 <= int(answer) <= len(games):
+                return games[int(answer) - 1]
+            matches = [game for game in games if game.key.casefold() == answer.casefold()]
+            if len(matches) == 1:
+                return matches[0]
+            console.warning(f"Escolha inválida. Use um número entre 1 e {len(games)}.")
+
+    @staticmethod
+    def show_map_names(maps: list[str]) -> None:
+        print("\nTodos os mapas disponíveis:")
+        for offset in range(0, len(maps), 6):
+            print("  " + "  ".join(f"{name:<16}" for name in maps[offset:offset + 6]).rstrip())
+
+    def choose_local_map(self, game: LocalGameSpec) -> str:
+        maps = self.local_map_names(game.gamedir)
+        lookup = {name.casefold(): name for name in maps}
+        default = lookup.get(game.default_map.casefold())
+        if default is None:
+            raise InstallerError(
+                f"O mapa padrão {game.default_map} não está disponível para {game.label}. "
+                "Execute components para reparar o conteúdo."
+            )
+        suggestions = [lookup[name.casefold()] for name in game.suggested_maps if name.casefold() in lookup]
+        print(f"\nMapas sugeridos para {game.label}:")
+        for index, name in enumerate(suggestions, 1):
+            suffix = " (padrão)" if name.casefold() == default.casefold() else ""
+            print(f"  {index}) {name}{suffix}")
+        print(f"  t) mostrar todos os {len(maps)} mapas disponíveis")
+        while True:
+            try:
+                answer = input(f"Escolha o número ou informe o mapa (padrão: {default}): ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhum mapa foi selecionado.") from error
+            if not answer:
+                return default
+            if answer.casefold() in ("t", "todos"):
+                self.show_map_names(maps)
+                continue
+            if answer.isdigit() and 1 <= int(answer) <= len(suggestions):
+                return suggestions[int(answer) - 1]
+            if answer.casefold() in lookup:
+                return lookup[answer.casefold()]
+            console.warning(f"Mapa não encontrado: {answer}. Digite t para listar os mapas instalados.")
+
+    def play_local(self) -> None:
+        self.check_paks()
+        games = self.available_local_games()
+        if not games:
+            raise InstallerError(
+                "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
+            )
+        game = self.choose_local_game(games)
+        self.verify_component(game.component)
+        map_name = self.choose_local_map(game)
+        label, runtime = self.choose_host_runtime()
+        arguments = [
+            "-game", game.gamedir,
+            "+gamedir", game.gamedir,
+            "+sv_gamedir", game.gamedir,
+            "+map", map_name,
+        ]
+        console.info(f"Abrindo {game.label} no mapa {map_name}...")
+        self.launch_runtime(runtime, arguments)
+        console.success(f"{label} aberto com {game.label}.")
+        console.info(game.confirmation)
+
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
         try:
@@ -2178,11 +2382,11 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
         "action", nargs="?", default="install",
-        help="install, components, presets, hub, verify, uninstall, purge ou cleanup",
+        help="install, components, presets, play, hub, verify, uninstall, purge ou cleanup",
     )
     parser.add_argument("target", nargs="?", type=Path, help="diretório de instalação (padrão: ./quake-world)")
     namespace = parser.parse_args(arguments)
-    valid_actions = ("install", "components", "presets", "hub", "verify", "uninstall", "purge", "cleanup")
+    valid_actions = ("install", "components", "presets", "play", "hub", "verify", "uninstall", "purge", "cleanup")
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action == "cleanup" and namespace.target is not None:
@@ -2200,7 +2404,7 @@ def main(arguments: list[str] | None = None) -> int:
         action_labels = {
             "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
             "presets": "gerenciar presets",
-            "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
+            "play": "jogar um mod local", "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
             "purge": "remover tudo", "cleanup": "limpar cache",
         }
         console.banner(action_labels[options.action], options.target)
@@ -2226,6 +2430,9 @@ def main(arguments: list[str] | None = None) -> int:
         elif options.action == "hub":
             console.section("QuakeWorld Hub")
             installer.browse_hub()
+        elif options.action == "play":
+            console.section("Jogo local")
+            installer.play_local()
         else:
             try:
                 if options.action == "components":
