@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-27T17:22:38Z",
+  "generated_at": "2026-07-28T00:04:53Z",
   "packages": [
     {
       "component": "ezquake",
@@ -268,7 +268,7 @@
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
-      "component": "nquake",
+      "component": "ktx",
       "package": "nquake-ktx",
       "version": "1.47+nquake.e4cb23d40aa2",
       "channel": "content",
@@ -526,7 +526,7 @@
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
-      "component": "nquake",
+      "component": "td2",
       "package": "total-destruction-2",
       "version": "2.22",
       "channel": "content",

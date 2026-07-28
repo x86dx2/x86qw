@@ -255,11 +255,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             with mock.patch("builtins.input", return_value=""):
-                self.assertFalse(installer.confirm_nquake())
+                self.assertFalse(installer.confirm_components())
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 with mock.patch("builtins.input", side_effect=["talvez", "sim"]):
-                    self.assertTrue(installer.confirm_nquake())
+                    self.assertTrue(installer.confirm_components())
             self.assertIn("Resposta inválida. Digite s para sim ou n para não.", output.getvalue())
 
     def test_human_readable_sizes(self):

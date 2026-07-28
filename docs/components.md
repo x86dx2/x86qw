@@ -41,14 +41,15 @@ Estado verificado em 27 de julho de 2026:
   imutáveis no repositório de distribuição;
 - `tools/check_component_updates.py` detecta novidades, mas não as publica.
 
-O KTX é um mod de servidor. Ele permanece entre os componentes porque faz parte
-do nQuake e pode ser consumido por uma instalação de servidor compatível; não é
-executado nem substitui o cliente ezQuake. O x86QW ainda não distribui o runtime
-MVDSV. Os únicos clientes ativos continuam sendo ezQuake stable e nightly.
+O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
+`ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` oficial 1.47, mas o
+artefato do upstream é preservado em `archive/components/ktx/`. Ele não é
+executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
 
 O TD2 possui duas numerações públicas que não formam uma cronologia simples. A
 página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
 versão não está mais disponível. O pacote incorporado é a distribuição
 QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
 com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
-no perfil `completo` e não baixa mapas fora do acervo já aprovado do x86QW.
+no perfil `completo`, fica em `archive/components/td2/` e não baixa mapas fora
+do acervo já aprovado do x86QW.

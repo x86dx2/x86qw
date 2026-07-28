@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check whether tracked nQuake component sources still represent their latest upstreams."""
+"""Check whether tracked x86QW component sources still represent their latest upstreams."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ import os
 import urllib.request
 from pathlib import Path
 
-from nquake_releases import load_releases
+from component_releases import load_releases
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ROOT / "inventory/nquake-components.json"
-RELEASES = ROOT / "inventory/nquake-releases.json"
+COMPONENTS = ROOT / "inventory/components.json"
+RELEASES = ROOT / "inventory/component-releases.json"
 USER_AGENT = "x86qw-freshness/1"
 
 

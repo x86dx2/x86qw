@@ -76,13 +76,14 @@ class ModernComponentTests(unittest.TestCase):
     def test_component_profiles_are_ezquake_only_and_dependency_complete(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            self.assertEqual("ezquake", installer.nquake_catalog["client"]["id"])
-            self.assertEqual(["stable", "nightly"], installer.nquake_catalog["client"]["channels"])
-            self.assertEqual(set(installer.nquake_components), set(installer.nquake_catalog["profiles"]["complete"]))
-            self.assertNotIn("qrp-hires", installer.nquake_catalog["profiles"]["recommended"])
-            self.assertIn("qrp-hires", installer.nquake_catalog["profiles"]["complete"])
-            self.assertNotIn("total-destruction-2", installer.nquake_catalog["profiles"]["recommended"])
-            self.assertIn("total-destruction-2", installer.nquake_catalog["profiles"]["complete"])
+            self.assertEqual("ezquake", installer.component_catalog["client"]["id"])
+            self.assertEqual(["stable", "nightly"], installer.component_catalog["client"]["channels"])
+            self.assertEqual({"nquake", "ktx", "td2"}, installer.content_component_namespaces)
+            self.assertEqual(set(installer.components), set(installer.component_catalog["profiles"]["complete"]))
+            self.assertNotIn("qrp-hires", installer.component_catalog["profiles"]["recommended"])
+            self.assertIn("qrp-hires", installer.component_catalog["profiles"]["complete"])
+            self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
+            self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
 
     def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -113,7 +114,7 @@ class ModernComponentTests(unittest.TestCase):
             }
             installer.stage = target / ".stage"
             installer.stage.mkdir()
-            managed, defaults = installer.prepare_nquake_package(catalog_package, artifact)
+            managed, defaults = installer.prepare_component_package(catalog_package, artifact)
             self.assertEqual([], defaults)
             self.assertTrue((managed / "qw/ktx.pk3").is_file())
             count = installer.install_component_overlay(
@@ -130,7 +131,7 @@ class ModernComponentTests(unittest.TestCase):
             version = "1.47+nquake.aaaaaaaaaaaa"
             filename = f"nquake-ktx-{version}.zip"
             package = {
-                "component": "nquake", "package": "nquake-ktx", "version": version,
+                "component": "ktx", "package": "nquake-ktx", "version": version,
                 "channel": "content", "platform": "any", "architecture": "any",
                 "filename": filename, "size": 123, "sha256": "b" * 64,
                 "source_commit": commit, "redistribution_reviewed": True,
@@ -139,7 +140,7 @@ class ModernComponentTests(unittest.TestCase):
                 "release_notes": "KTX atualizado.",
             }
             installer._public_catalog = {"format": 1, "project": "x86qw", "packages": [package]}
-            self.assertEqual(version, installer.nquake_package_record("nquake-ktx")["version"])
+            self.assertEqual(version, installer.component_package_record("nquake-ktx")["version"])
 
             artifact = root / filename
             payload = io.BytesIO()
@@ -159,7 +160,7 @@ class ModernComponentTests(unittest.TestCase):
                 outer.writestr("_x86qw/component.json", json.dumps(metadata))
             installer.stage = root / "stage"
             installer.stage.mkdir()
-            managed, defaults = installer.prepare_nquake_package(package, artifact)
+            managed, defaults = installer.prepare_component_package(package, artifact)
             self.assertEqual([], defaults)
             self.assertTrue((managed / "qw/ktx.pk3").is_file())
 
@@ -171,14 +172,14 @@ class ModernComponentTests(unittest.TestCase):
             version = "2.22"
             filename = f"total-destruction-2-{version}.zip"
             package = {
-                "component": "nquake", "package": "total-destruction-2", "version": version,
+                "component": "td2", "package": "total-destruction-2", "version": version,
                 "channel": "content", "platform": "any", "architecture": "any",
                 "filename": filename, "size": 123, "sha256": "c" * 64,
                 "source_revision": revision, "redistribution_reviewed": True,
                 "urls": [f"https://example.invalid/{filename}"],
             }
             installer._public_catalog = {"format": 1, "project": "x86qw", "packages": [package]}
-            self.assertEqual(version, installer.nquake_package_record("total-destruction-2")["version"])
+            self.assertEqual(version, installer.component_package_record("total-destruction-2")["version"])
 
             artifact = root / filename
             metadata = {
@@ -191,7 +192,7 @@ class ModernComponentTests(unittest.TestCase):
                 outer.writestr("_x86qw/component.json", json.dumps(metadata))
             installer.stage = root / "stage"
             installer.stage.mkdir()
-            managed, defaults = installer.prepare_nquake_package(package, artifact)
+            managed, defaults = installer.prepare_component_package(package, artifact)
             self.assertEqual([], defaults)
             self.assertEqual(b"td2", (managed / "td2/qwprogs.dat").read_bytes())
 
@@ -221,7 +222,7 @@ class ModernComponentTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "http_get", side_effect=download) as request:
-                    artifact = installer.download_nquake_package(package)
+                    artifact = installer.download_component_package(package)
             self.assertEqual(payload, artifact.read_bytes())
             self.assertEqual(2, request.call_count)
 
@@ -281,7 +282,7 @@ class ModernComponentTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 installer.uninstall()
             self.assertFalse((target / ".install").exists())
-            self.assertNotIn("Os dados nQuake não estão instalados", output.getvalue())
+            self.assertNotIn("Os componentes x86QW não estão instalados", output.getvalue())
 
 
 if __name__ == "__main__":

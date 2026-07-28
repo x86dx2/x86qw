@@ -50,8 +50,8 @@ def validate_package(
     package_id = package.get("package", package["component"])
     if not isinstance(package_id, str) or not SAFE_SEGMENT.fullmatch(package_id):
         raise ValueError(f"{label}.package is not a safe path segment")
-    if package["channel"] == "content" and package["component"] != "nquake":
-        raise ValueError(f"{label} content packages must belong to nquake")
+    if package["channel"] == "content" and package["component"] == "ezquake":
+        raise ValueError(f"{label} content packages must use a content component namespace")
     filename = package["filename"]
     if Path(filename).name != filename or "/" in filename or "\\" in filename or filename in {".", ".."}:
         raise ValueError(f"{label}.filename must not contain a path")

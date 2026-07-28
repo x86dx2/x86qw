@@ -43,16 +43,16 @@ dist/id1/               PAKs registrados permanentes usados pela instalação
 recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
-tools/build_nquake_packages.py  gera os 18 pacotes reproduzíveis do mirror
+tools/build_component_packages.py  gera os 18 pacotes reproduzíveis do mirror
 tools/check_component_updates.py  compara versões fixadas com os upstreams
 tools/publish_gitlab_packages.py  publica e verifica o segundo mirror
 tools/add_package.py    registro atômico de artefatos revisados
 tools/snapshot_upstreams.py  captura somente os arquivos usados pelo produto
-tools/validate_nquake_components.py  valida catálogo e partição dos componentes
+tools/validate_components.py  valida catálogo e partição dos componentes
 tools/validate_recipes.py
 tools/validate_catalog.py
-inventory/nquake-components.json  BOM, perfis e dependências do conteúdo nQuake
-inventory/nquake-releases.json  versão e estratégia de atualização por componente
+inventory/components.json  BOM, perfis e dependências de todos os componentes x86QW
+inventory/component-releases.json  versão e estratégia de atualização por componente
 tests/test_catalog.py
 wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```
@@ -62,7 +62,7 @@ wrangler.jsonc          Worker estático em x86qw.x86.com.br
 ```sh
 python3 tools/validate_catalog.py
 python3 tools/validate_recipes.py
-python3 tools/validate_nquake_components.py
+python3 tools/validate_components.py
 python3 tools/check_component_updates.py
 python3 -m unittest discover -s tests -v
 ./install-qw.py --help
@@ -108,11 +108,11 @@ pelo instalador. O envio dos demais artefatos para um GitHub Release ou outro
 mirror ocorre antes do registro público. Somente então use `--register`; a ação
 é explícita para impedir que um build local altere o catálogo por acidente.
 
-Para gerar os pacotes nQuake diretamente do snapshot e dos overlays de release
-validados:
+Para gerar os pacotes dos componentes a partir do snapshot nQuake e dos
+artefatos independentes validados:
 
 ```sh
-python3 tools/build_nquake_packages.py
+python3 tools/build_component_packages.py
 ```
 
 Depois de publicar os mesmos arquivos no release indicado pelo manifesto, use
@@ -127,14 +127,14 @@ python3 tools/snapshot_upstreams.py
 ```
 
 O comando cria `archive/` e baixa somente arquivos ligados a uma ação real do
-instalador: binários ezQuake stable/nightly e os arquivos atribuídos a um dos
-componentes nQuake. Cada arquivo recebe consumidor, pacote,
+instalador: binários ezQuake stable/nightly, o snapshot nQuake e os artefatos
+independentes KTX e TD2. Cada arquivo recebe consumidor, pacote,
 origem, tamanho e SHA-256 em `archive/manifest.json`; execuções posteriores
 reaproveitam itens já confirmados.
 
 A fronteira geral fica em `inventory/component-policy.json`; o BOM detalhado,
-os perfis e as dependências ficam em `inventory/nquake-components.json`; versões,
-upstreams e overlays ficam em `inventory/nquake-releases.json`. Um
+os perfis e as dependências ficam em `inventory/components.json`; versões,
+upstreams e overlays ficam em `inventory/component-releases.json`. Um
 componente novo sem consumidor, arquivos e destino declarados é recusado. Isso
 impede que pesquisas, catálogos externos, fontes, dependências de build ou
 coleções inteiras entrem no acervo apenas porque estão disponíveis. Mapas e
@@ -147,7 +147,9 @@ O acervo é organizado primeiro pelo contexto do conteúdo:
 archive/
 ├── components/
 │   ├── ezquake/       binários de releases e nightlies
-│   └── nquake/        snapshot fixado e releases externas realmente consumidas
+│   ├── nquake/        somente o snapshot fixado da distribuição de referência
+│   ├── ktx/           release oficial KTX consumida pelo overlay
+│   └── td2/           distribuição original TD2 incorporada ao x86QW
 └── manifest.json      inventário com consumidor, origem, tamanho e SHA-256
 ```
 
@@ -157,7 +159,8 @@ Para aplicar a regra ao acervo anterior sem acessar a rede:
 python3 tools/snapshot_upstreams.py --apply-policy
 ```
 
-Essa migração preserva somente ezQuake e os arquivos nQuake atribuídos pelo BOM,
+Essa migração preserva somente ezQuake, os arquivos nQuake atribuídos pelo BOM
+e os artefatos independentes KTX/TD2 declarados,
 eliminando clientes futuros, overlays sobrescritos, GFX avulso, históricos Git,
 código-fonte, dependências de compilação e índices sem consumidor.
 

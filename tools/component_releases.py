@@ -1,4 +1,4 @@
-"""Version, provenance and upstream-override helpers for nQuake components."""
+"""Version, provenance and upstream-override helpers for x86QW components."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from nquake_components import components_by_id, load_catalog as load_component_catalog
+from components import components_by_id, load_catalog as load_component_catalog
 
 
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
@@ -18,6 +18,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STRATEGIES = {"reference-snapshot", "upstream-overlay", "upstream-package"}
 FRESHNESS = {"reference-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+ARCHIVE_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def _safe_path(value: object, label: str) -> str:
@@ -33,22 +34,28 @@ def load_releases(path: Path, component_catalog_path: Path) -> dict[str, object]
     try:
         releases = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read nQuake release inventory: {path}") from error
+        raise ValueError(f"cannot read component release inventory: {path}") from error
     component_catalog = load_component_catalog(component_catalog_path)
-    validate_releases(releases, set(components_by_id(component_catalog)))
+    validate_releases(
+        releases,
+        set(components_by_id(component_catalog)),
+        set(component_catalog["content_namespaces"]),
+    )
     return releases
 
 
-def validate_releases(releases: object, component_ids: set[str]) -> None:
+def validate_releases(
+    releases: object, component_ids: set[str], content_namespaces: set[str],
+) -> None:
     if not isinstance(releases, dict) or releases.get("format") != 1 or releases.get("project") != "x86qw":
-        raise ValueError("invalid nQuake release inventory identity")
+        raise ValueError("invalid component release inventory identity")
     reference = releases.get("reference")
     if not isinstance(reference, dict) or not HEX40.fullmatch(str(reference.get("revision", ""))):
         raise ValueError("invalid nQuake reference revision")
     reference_revision = str(reference["revision"])
     components = releases.get("components")
     if not isinstance(components, dict) or set(components) != component_ids:
-        raise ValueError("nQuake release inventory must cover every component exactly once")
+        raise ValueError("release inventory must cover every component exactly once")
     artifact_paths: set[str] = set()
     for identifier, release in components.items():
         if not isinstance(release, dict):
@@ -58,6 +65,8 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
             raise ValueError(f"invalid component version: {identifier}")
         if release.get("strategy") not in STRATEGIES or release.get("freshness") not in FRESHNESS:
             raise ValueError(f"invalid release strategy or freshness: {identifier}")
+        if release.get("distribution_component", "nquake") not in content_namespaces:
+            raise ValueError(f"invalid distribution component: {identifier}")
         if release["strategy"] == "reference-snapshot" and version != reference_revision[:12]:
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
         upstream = release.get("upstream")
@@ -77,6 +86,9 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
                 raise ValueError(f"upstream overlay has no release notes: {identifier}")
             if not VERSION.fullmatch(str(release.get("distribution_tag", ""))):
                 raise ValueError(f"invalid distribution tag: {identifier}")
+            for field in ("distribution_component", "archive_component"):
+                if not ARCHIVE_COMPONENT.fullmatch(str(release.get(field, ""))):
+                    raise ValueError(f"invalid {field}: {identifier}")
             source_mirrors = release.get("source_mirrors", [])
             if (
                 not isinstance(source_mirrors, list)
@@ -106,7 +118,8 @@ def validate_releases(releases: object, component_ids: set[str]) -> None:
             if not isinstance(filename, str) or PurePosixPath(filename).name != filename:
                 raise ValueError(f"invalid artifact filename: {identifier}")
             archive_path = _safe_path(artifact.get("archive_path"), "artifact archive path")
-            if archive_path in artifact_paths or not archive_path.startswith(f"components/nquake/releases/{identifier}/"):
+            archive_component = str(release.get("archive_component", "nquake"))
+            if archive_path in artifact_paths or not archive_path.startswith(f"components/{archive_component}/releases/"):
                 raise ValueError(f"duplicate or misplaced artifact path: {identifier}")
             artifact_paths.add(archive_path)
             if PurePosixPath(archive_path).name != filename:
@@ -139,7 +152,7 @@ def component_release(releases: dict[str, object], identifier: str) -> dict[str,
     assert isinstance(components, dict)
     release = components.get(identifier)
     if not isinstance(release, dict):
-        raise ValueError(f"unknown nQuake component release: {identifier}")
+        raise ValueError(f"unknown component release: {identifier}")
     return release
 
 

@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url  # noqa: E402
-from build_nquake_packages import register_packages  # noqa: E402
+from build_component_packages import register_packages  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
@@ -23,6 +23,7 @@ class CatalogTests(unittest.TestCase):
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
         self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
+        self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(len(package["urls"]) == 2 for package in catalog["packages"]))
         self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
         self.assertTrue(all("gitlab.com" in package["urls"][1] for package in catalog["packages"]))
@@ -30,16 +31,17 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
             {
-                "nquake-bootstrap", "nquake-visual-core", "nquake-ktx",
+                "nquake-bootstrap", "nquake-visual-core",
                 "nquake-player-skins", "nquake-crosshairs", "nquake-skyboxes",
                 "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
-                "clan-arena", "team-fortress", "total-destruction-2",
+                "clan-arena", "team-fortress",
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22", td2["version"])
+        self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
 
@@ -102,11 +104,11 @@ class CatalogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 register_package(catalog_path, artifact, **arguments)
 
-    def test_component_registration_preserves_verified_fallback_mirrors(self) -> None:
+    def test_component_registration_reclassifies_origin_and_preserves_fallback_mirrors(self) -> None:
         import tempfile
 
         package = {
-            "component": "nquake", "package": "nquake-ktx", "version": "1.47",
+            "component": "ktx", "package": "nquake-ktx", "version": "1.47",
             "channel": "content", "platform": "any", "architecture": "any",
             "filename": "nquake-ktx-1.47.zip", "size": 1, "sha256": "0" * 64,
             "origin_url": "https://github.com/example/nquake-ktx-1.47.zip",
@@ -119,7 +121,7 @@ class CatalogTests(unittest.TestCase):
         fallback = "https://gitlab.com/example/nquake-ktx-1.47.zip"
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "catalog.json"
-            catalog_package = dict(package, urls=[*package["urls"], fallback])
+            catalog_package = dict(package, component="nquake", urls=[*package["urls"], fallback])
             path.write_text(json.dumps({
                 "format": 1, "project": "x86qw", "generated_at": None,
                 "packages": [catalog_package],
@@ -127,6 +129,7 @@ class CatalogTests(unittest.TestCase):
             register_packages(path, {"packages": [package]})
             saved = json.loads(path.read_text())
             self.assertEqual([*package["urls"], fallback], saved["packages"][0]["urls"])
+            self.assertEqual("ktx", saved["packages"][0]["component"])
 
 
 if __name__ == "__main__":

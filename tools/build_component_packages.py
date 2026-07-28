@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build deterministic x86QW component packages from the preserved nQuake snapshot."""
+"""Build deterministic x86QW component packages from their preserved sources."""
 
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from nquake_components import (
+from components import (
     component_for_source,
     components_by_id,
     destination_for_source,
     load_catalog,
     validate_tree_partition,
 )
-from nquake_releases import (
+from component_releases import (
     component_release,
     load_releases,
     verified_artifact_members,
@@ -30,8 +30,8 @@ from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NQUAKE_COMPONENTS = ROOT / "inventory/nquake-components.json"
-NQUAKE_RELEASES = ROOT / "inventory/nquake-releases.json"
+COMPONENT_CATALOG = ROOT / "inventory/components.json"
+COMPONENT_RELEASES = ROOT / "inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 
 
@@ -127,14 +127,15 @@ def standalone_component_payloads(
 
 
 def build_packages(archive: Path, output: Path) -> dict[str, object]:
-    catalog = load_catalog(NQUAKE_COMPONENTS)
-    releases = load_releases(NQUAKE_RELEASES, NQUAKE_COMPONENTS)
+    catalog = load_catalog(COMPONENT_CATALOG)
+    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
     components = components_by_id(catalog)
     commit, snapshot = discover_snapshot(archive)
     paths = sorted(path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file())
     partition = validate_tree_partition(catalog, paths, "reference")
-    release = f"nquake-{commit}"
-    release_root = output / release
+    reference_release = f"nquake-{commit}"
+    build_id = f"components-{commit}"
+    release_root = output / build_id
     release_root.mkdir(parents=True, exist_ok=True)
     packages = []
     for identifier, component in components.items():
@@ -189,7 +190,7 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
             ).encode() + b"\n"
             info, data = zip_member("_x86qw/component.json", package_metadata)
             package.writestr(info, data)
-        distribution_tag = str(release_metadata.get("distribution_tag", release))
+        distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/x86dx2/x86qw-dist/releases/download/{distribution_tag}/{filename}"
         source_urls = [] if strategy == "upstream-package" else [f"https://github.com/nQuake/distfiles/tree/{commit}"]
         upstream = release_metadata.get("upstream")
@@ -199,7 +200,7 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
             source_urls.extend(str(url) for url in (source_url, release_url) if isinstance(url, str))
         source_urls.extend(str(url) for url in release_metadata.get("source_mirrors", []))
         package_record = {
-            "component": "nquake",
+            "component": str(release_metadata.get("distribution_component", "nquake")),
             "package": identifier,
             "version": version,
             "channel": "content",
@@ -227,9 +228,9 @@ def build_packages(archive: Path, output: Path) -> dict[str, object]:
     manifest = {
         "format": 1,
         "project": "x86qw",
-        "release": release,
+        "release": build_id,
         "source_commit": commit,
-        "release_inventory": NQUAKE_RELEASES.name,
+        "release_inventory": COMPONENT_RELEASES.name,
         "packages": packages,
     }
     (release_root / "manifest.json").write_text(
@@ -245,15 +246,15 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
     if not isinstance(packages, list):
         raise ValueError("catalog packages must be a list")
     for package in manifest["packages"]:
-        identity = (package["component"], package["package"], package["version"])
+        identity = (package["package"], package["version"])
         existing = [item for item in packages if isinstance(item, dict) and (
-            item.get("component"), item.get("package", item.get("component")), item.get("version")
+            item.get("package", item.get("component")), item.get("version")
         ) == identity]
         if existing:
             candidate = existing[0]
             same_payload = all(
                 candidate.get(key) == value
-                for key, value in package.items() if key != "urls"
+                for key, value in package.items() if key not in {"component", "urls"}
             )
             candidate_urls = candidate.get("urls")
             package_urls = package.get("urls")
@@ -264,12 +265,13 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
             )
             if len(existing) != 1 or not same_payload or not mirrors_extend_primary:
                 raise ValueError(f"published package identity changed: {identity}")
+            candidate["component"] = package["component"]
             continue
         packages[:] = [item for item in packages if not isinstance(item, dict) or (
-            item.get("component"), item.get("package", item.get("component")),
+            item.get("package", item.get("component")),
             item.get("channel"), item.get("platform"), item.get("architecture"),
         ) != (
-            package["component"], package["package"], package["channel"],
+            package["package"], package["channel"],
             package["platform"], package["architecture"],
         )]
         packages.append(package)
@@ -309,5 +311,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, ValueError, json.JSONDecodeError, zipfile.BadZipFile) as error:
-        print(f"nQuake package build failed: {error}")
+        print(f"component package build failed: {error}")
         raise SystemExit(1)

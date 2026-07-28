@@ -21,6 +21,7 @@
 - [x] detectar atualizações upstream sem publicá-las automaticamente;
 - [x] atualizar KTX de `1.46-dev` para `1.47` preservando os recursos nQuake.
 - [x] incorporar TD2QW 2.22 como pacote independente, preservando o original e sem mapas adicionais.
+- [x] separar fisicamente nQuake, KTX e TD2 por origem e generalizar o pipeline de componentes.
 
 ## 2. Distribuição
 
@@ -38,7 +39,7 @@
 - [x] manter stable e nightly coexistentes em macOS, Linux e Windows;
 - [x] oferecer perfis e seleção individual dos 18 componentes;
 - [x] registrar recibo e inventário independentes por componente;
-- [x] fazer o instalador consumir pacotes nQuake do `x86qw-dist`, sem depender do repositório upstream;
+- [x] fazer o instalador consumir pacotes x86QW do `x86qw-dist`, sem depender dos repositórios upstream;
 - [x] mostrar versão atual e notas de release antes de atualizar componentes;
 
 ## 4. Site

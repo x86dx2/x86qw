@@ -43,7 +43,7 @@ def artifact_url(package: dict[str, object]) -> str:
 
 def local_artifact(package: dict[str, object], archive: Path, dist: Path) -> Path:
     filename = str(package["filename"])
-    if package["component"] == "nquake":
+    if package.get("channel") == "content" and isinstance(package.get("package"), str):
         matches = list(dist.rglob(filename))
     else:
         matches = list(archive.rglob(filename))

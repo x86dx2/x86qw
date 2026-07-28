@@ -13,11 +13,26 @@
     },
     "nquake": {
       "consumers": [
-        "install:nquake"
+        "install:nquake-reference"
       ],
       "archive_prefixes": [
-        "components/nquake/snapshots/",
-        "components/nquake/releases/"
+        "components/nquake/snapshots/"
+      ]
+    },
+    "ktx": {
+      "consumers": [
+        "install:nquake-ktx"
+      ],
+      "archive_prefixes": [
+        "components/ktx/releases/"
+      ]
+    },
+    "td2": {
+      "consumers": [
+        "install:total-destruction-2"
+      ],
+      "archive_prefixes": [
+        "components/td2/releases/"
       ]
     }
   }

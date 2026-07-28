@@ -1,16 +1,16 @@
 {
-  "archive_bytes": 658303665,
-  "archive_files": 542,
-  "captured_at": "2026-07-27T15:45:10Z",
+  "archive_bytes": 658870694,
+  "archive_files": 543,
+  "captured_at": "2026-07-28T00:02:39Z",
   "collections": {
     "ezquake_release_and_nightly_binaries": 6,
-    "nquake_component_files": 535,
-    "nquake_release_artifacts": 1,
-    "nquake_components": 18
+    "nquake_reference_files": 535,
+    "independent_release_artifacts": 2,
+    "components": 18
   },
   "layout": "consumed-only-v1",
-  "manifest_sha256": "9291ba3225997f8dcab4ab06a0e6cec0e8a6b366d28fba146f66e17ed2d5722f",
+  "manifest_sha256": "71b42cbeedff9ac0de496f1d8cf8cab62a7f0b0ae81caf820ae0659078337f66",
   "nquake_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-  "policy": "inventory/component-policy.json + inventory/nquake-components.json + inventory/nquake-releases.json",
+  "policy": "inventory/component-policy.json + inventory/components.json + inventory/component-releases.json",
   "scope": "explicitly-incorporated-upstream-files"
 }

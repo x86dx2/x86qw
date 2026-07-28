@@ -15,9 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from component_policy import load_component_policy, require_component  # noqa: E402
-from nquake_components import (  # noqa: E402
+from components import (  # noqa: E402
     component_for_source,
-    load_catalog as load_nquake_catalog,
+    load_catalog as load_component_catalog,
     source_roots,
     validate_tree_partition,
 )
@@ -43,9 +43,9 @@ SPEC.loader.exec_module(install_qw)
 class SnapshotTests(unittest.TestCase):
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()
-        catalog = load_nquake_catalog(ROOT / "inventory/nquake-components.json")
+        catalog = load_component_catalog(ROOT / "inventory/components.json")
         self.assertGreater(len(source_roots(catalog)), 10)
-        for component in ("ezquake", "nquake"):
+        for component in ("ezquake", "nquake", "ktx", "td2"):
             require_component(components, component)
         for component in ("classicq", "unezquake", "gfx", "maps", "locs"):
             with self.subTest(component=component):
@@ -53,7 +53,7 @@ class SnapshotTests(unittest.TestCase):
                     require_component(components, component)
 
     def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
-        catalog = load_nquake_catalog(ROOT / "inventory/nquake-components.json")
+        catalog = load_component_catalog(ROOT / "inventory/components.json")
         snapshots = list((ROOT / "archive/components/nquake/snapshots").iterdir())
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
@@ -72,11 +72,11 @@ class SnapshotTests(unittest.TestCase):
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/source/source.tar.gz"))
         self.assertIsNone(consumed_component("components/ezquake/releases/3.6.9/metadata/checksums.txt"))
         self.assertIsNone(consumed_component("components/ezquake/nightlies/build/linux-x86_64/build.AppImage.md5"))
-        self.assertEqual("nquake", consumed_component(
-            "components/nquake/releases/nquake-ktx/1.47/qwprogs-qvm.zip"
+        self.assertEqual("ktx", consumed_component(
+            "components/ktx/releases/1.47/qwprogs-qvm.zip"
         ))
-        self.assertEqual("nquake", consumed_component(
-            "components/nquake/releases/total-destruction-2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+        self.assertEqual("td2", consumed_component(
+            "components/td2/releases/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
         ))
 
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
@@ -152,12 +152,12 @@ class SnapshotTests(unittest.TestCase):
     def test_download_does_not_reuse_stale_metadata_for_a_pinned_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / "components/nquake/releases/nquake-ktx/test/qwprogs-qvm.zip"
+            target = root / "components/ktx/releases/test/qwprogs-qvm.zip"
             target.parent.mkdir(parents=True)
             target.write_bytes(b"old")
             expected = b"new"
             asset = Asset(
-                "nquake",
+                "ktx",
                 "https://example.invalid/qwprogs-qvm.zip",
                 target.relative_to(root).as_posix(),
                 len(expected),
@@ -165,8 +165,8 @@ class SnapshotTests(unittest.TestCase):
                 hashlib.sha256(expected).hexdigest(),
             )
             known = {
-                "component": "nquake",
-                "consumer": "install:nquake",
+                "component": "ktx",
+                "consumer": "install:nquake-ktx",
                 "url": "https://example.invalid/old.zip",
                 "size": len(expected),
                 "sha256": hashlib.sha256(b"old").hexdigest(),

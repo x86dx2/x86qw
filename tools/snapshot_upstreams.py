@@ -23,14 +23,14 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 from component_policy import component_for_archive_path, load_component_policy, require_component
-from nquake_components import component_for_source, load_catalog as load_nquake_catalog, source_roots
-from nquake_releases import component_for_artifact_path, load_releases as load_nquake_releases
+from components import component_for_source, load_catalog as load_component_catalog, source_roots
+from component_releases import component_for_artifact_path, load_releases
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARCHIVE = ROOT / "archive"
-NQUAKE_CATALOG = ROOT / "inventory/nquake-components.json"
-NQUAKE_RELEASES = ROOT / "inventory/nquake-releases.json"
+COMPONENT_CATALOG = ROOT / "inventory/components.json"
+COMPONENT_RELEASES = ROOT / "inventory/component-releases.json"
 USER_AGENT = "x86qw-archive/2"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
@@ -183,7 +183,7 @@ def discover_nightlies() -> list[Asset]:
 
 
 def discover_nquake() -> list[Asset]:
-    catalog = load_nquake_catalog(NQUAKE_CATALOG)
+    catalog = load_component_catalog(COMPONENT_CATALOG)
     used_paths = source_roots(catalog, "reference")
 
     commit_data = github_json(f"repos/{NQUAKE_REPOSITORY}/commits/{NQUAKE_REF}")
@@ -228,8 +228,9 @@ def discover_nquake() -> list[Asset]:
     return assets
 
 
-def discover_nquake_release_assets() -> list[Asset]:
-    releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
+def discover_component_release_assets() -> list[Asset]:
+    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
+    policy = load_component_policy()
     assets: list[Asset] = []
     components = releases["components"]
     assert isinstance(components, dict)
@@ -237,8 +238,11 @@ def discover_nquake_release_assets() -> list[Asset]:
         assert isinstance(release, dict)
         for artifact in release.get("artifacts", []):
             assert isinstance(artifact, dict)
+            archive_component = component_for_archive_path(policy, str(artifact["archive_path"]))
+            if archive_component is None:
+                raise ValueError(f"release artifact has no archive owner: {artifact['archive_path']}")
             assets.append(Asset(
-                "nquake", str(artifact["url"]), str(artifact["archive_path"]),
+                archive_component, str(artifact["url"]), str(artifact["archive_path"]),
                 int(artifact["size"]), identifier, str(artifact["sha256"]),
             ))
     return assets
@@ -248,7 +252,7 @@ def discover_assets() -> list[Asset]:
     components = load_component_policy()
     discovered = [
         *discover_release_assets(), *discover_nightlies(), *discover_nquake(),
-        *discover_nquake_release_assets(),
+        *discover_component_release_assets(),
     ]
     unique: dict[str, Asset] = {}
     for asset in discovered:
@@ -265,15 +269,15 @@ def discover_assets() -> list[Asset]:
 def consumed_component(path: str) -> str | None:
     components = load_component_policy()
     component = component_for_archive_path(components, path)
+    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
+    if component in {"ktx", "td2"}:
+        return component if component_for_artifact_path(releases, path) is not None else None
     if component == "nquake":
-        releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
-        if component_for_artifact_path(releases, path) is not None:
-            return component
         parts = PurePosixPath(path).parts
         if len(parts) < 6 or parts[:3] != ("components", "nquake", "snapshots"):
             return None
         upstream_path = PurePosixPath(*parts[4:]).as_posix()
-        catalog = load_nquake_catalog(NQUAKE_CATALOG)
+        catalog = load_component_catalog(COMPONENT_CATALOG)
         return component if component_for_source(catalog, upstream_path, "reference") is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
@@ -321,7 +325,7 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
     repository = root / LEGACY_NQUAKE_MIRROR
     if not repository.is_dir():
         return 0
-    catalog = load_nquake_catalog(NQUAKE_CATALOG)
+    catalog = load_component_catalog(COMPONENT_CATALOG)
     used_paths = source_roots(catalog, "reference")
     commit = subprocess.check_output(["git", f"--git-dir={repository}", "rev-parse", "HEAD"], text=True).strip()
     listing = subprocess.check_output(
@@ -351,7 +355,7 @@ def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
         quoted = urllib.parse.quote(upstream_path, safe="/")
         files[relative] = {
             "component": "nquake",
-            "consumer": "install:nquake",
+            "consumer": "install:nquake-reference",
             "package": subcomponent,
             "url": f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
             "size": target.stat().st_size,
@@ -402,16 +406,16 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 assert isinstance(consumers, list)
                 metadata["component"] = component_name
                 metadata["consumer"] = consumers[0]
-                if component_name == "nquake":
-                    releases = load_nquake_releases(NQUAKE_RELEASES, NQUAKE_CATALOG)
+                if component_name in {"ktx", "td2"}:
+                    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
                     package = component_for_artifact_path(releases, relative)
-                    if package is None:
-                        parts = PurePosixPath(relative).parts
-                        upstream_path = PurePosixPath(*parts[4:]).as_posix()
-                        package = component_for_source(
-                            load_nquake_catalog(NQUAKE_CATALOG), upstream_path, "reference",
-                        )
                     metadata["package"] = package
+                elif component_name == "nquake":
+                    parts = PurePosixPath(relative).parts
+                    upstream_path = PurePosixPath(*parts[4:]).as_posix()
+                    metadata["package"] = component_for_source(
+                        load_component_catalog(COMPONENT_CATALOG), upstream_path, "reference",
+                    )
             continue
         target = root / relative
         if target.is_file() or target.is_symlink():

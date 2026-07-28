@@ -19,8 +19,8 @@ sem publicar uma nova versão do instalador.
 ## Repositórios
 
 - `x86dx2/x86qw`: catálogo, receitas, instalador, site e validações;
-- `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes de
-  componentes nQuake; o projeto homônimo usa GitLab Generic Packages como
+- `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes dos
+  componentes x86QW; o projeto homônimo usa GitLab Generic Packages como
   segundo mirror. O repositório do projeto também mantém os dois PAKs registrados
   em `dist/id1`; eles não entram no catálogo de pacotes.
 
@@ -38,14 +38,19 @@ genéricos no GitLab.
 ## Regra de entrada de componentes
 
 `inventory/component-policy.json` é a fronteira geral do acervo.
-`inventory/nquake-components.json` decompõe o conteúdo de referência em BOM,
+`inventory/components.json` decompõe o conteúdo de referência em BOM,
 perfis, dependências, origens e destinos. O coletor rejeita caminhos fora dessas
 declarações e a validação offline rejeita arquivos sem consumidor ou componente.
 Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 
-`inventory/nquake-releases.json` mantém a camada de atualização separada: versão
+`inventory/component-releases.json` mantém a camada de atualização separada: versão
 atual, estratégia, upstream, artefatos consumidos e hashes. Assim uma release
 como KTX pode avançar sem renomear ou reconstruir componentes alheios.
+
+O acervo físico segue a origem, não o perfil de instalação: `nquake/` contém
+somente o snapshot da distribuição de referência, `ktx/` guarda releases do
+projeto KTX e `td2/` guarda releases do Total Destruction 2. Os perfis que unem
+essas origens pertencem ao x86QW.
 
 Quando um componente for proposto, a ordem é: implementar a ação consumidora,
 declarar o componente na política, adicionar testes e só então habilitar seu

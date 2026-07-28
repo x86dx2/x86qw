@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform ezQuake + nQuake installer."""
+"""Cross-platform ezQuake + x86QW component installer."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
-from tools.nquake_components import components_by_id, load_catalog as load_nquake_catalog, resolve_dependencies
+from tools.components import components_by_id, load_catalog as load_component_catalog, resolve_dependencies
 
 
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
@@ -37,7 +37,7 @@ METADATA_DIR = ".install"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
-NQUAKE_CATALOG = "inventory/nquake-components.json"
+COMPONENT_CATALOG = "inventory/components.json"
 BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
 CACHE_MARKER_NAME = ".x86-qw-cache"
@@ -414,10 +414,11 @@ class Installer:
         self.cache_prefix = ""
         self._public_catalog: dict[str, object] | None = None
         try:
-            self.nquake_catalog = load_nquake_catalog(INSTALLER_ROOT / NQUAKE_CATALOG)
+            self.component_catalog = load_component_catalog(INSTALLER_ROOT / COMPONENT_CATALOG)
         except ValueError as error:
             raise InstallerError(str(error)) from error
-        self.nquake_components = components_by_id(self.nquake_catalog)
+        self.components = components_by_id(self.component_catalog)
+        self.content_component_namespaces = set(self.component_catalog["content_namespaces"])
 
     def run_command(self, arguments: list[str], *, capture: bool = False) -> str:
         console.detail("$ " + " ".join(arguments))
@@ -493,7 +494,7 @@ class Installer:
             raise InstallerError("A raiz do projeto não pode ser usada como destino; use quake-world.")
 
     def reject_target_symlinks(self) -> None:
-        managed_roots = ("id1", "ezquake", "qw", "arena", "prox", "fortress", METADATA_DIR)
+        managed_roots = ("id1", "ezquake", "qw", "arena", "prox", "fortress", "td2", METADATA_DIR)
         for name in managed_roots:
             candidate = self.target / name
             ensure_no_symlink(candidate, "managed path")
@@ -506,7 +507,7 @@ class Installer:
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
         ):
             ensure_no_symlink(self.target / relative, "managed path")
-        for component in self.nquake_components:
+        for component in self.components:
             for relative in self.component_metadata(component):
                 ensure_no_symlink(self.target / relative, "managed path")
 
@@ -749,10 +750,10 @@ class Installer:
                 return channel
             console.warning("Opção inválida. Digite 1 para stable ou 2 para nightly.")
 
-    def confirm_nquake(self) -> bool:
+    def confirm_components(self) -> bool:
         while True:
             try:
-                answer = input("\nDeseja instalar/atualizar também os dados nQuake? [s/N]: ").strip().lower()
+                answer = input("\nDeseja instalar/atualizar também os componentes x86QW? [s/N]: ").strip().lower()
             except EOFError:
                 answer = ""
             if answer in ("s", "sim", "y", "yes"):
@@ -1212,7 +1213,7 @@ class Installer:
         }
         if component in paths:
             return paths[component]
-        if component in self.nquake_components:
+        if component in self.components:
             return f".install/{component}.receipt", f".install/{component}.inventory"
         raise InstallerError(f"Componente desconhecido: {component}")
 
@@ -1434,20 +1435,20 @@ class Installer:
             raise InstallerError("managed inventory differs from installation receipt")
         return True, entries, receipt
 
-    def installed_nquake_components(self) -> list[str]:
+    def installed_components(self) -> list[str]:
         installed = []
-        for identifier in self.nquake_components:
+        for identifier in self.components:
             present, _, _ = self.validate_component_pair(identifier)
             if present:
                 installed.append(identifier)
         return installed
 
-    def show_nquake_components(self) -> None:
-        installed = set(self.installed_nquake_components())
-        print("\nComponentes nQuake disponíveis:")
-        for index, component in enumerate(self.nquake_components.values(), 1):
+    def show_components(self) -> None:
+        installed = set(self.installed_components())
+        print("\nComponentes x86QW disponíveis:")
+        for index, component in enumerate(self.components.values(), 1):
             identifier = str(component["id"])
-            package = self.nquake_package_record(identifier)
+            package = self.component_package_record(identifier)
             current = str(package["version"])
             status = ""
             if identifier in installed:
@@ -1459,11 +1460,11 @@ class Installer:
             if package.get("release_url"):
                 console.detail(f"Novidades: {package['release_url']}")
 
-    def choose_nquake_components(self) -> list[str]:
-        print("\nQual conjunto de componentes nQuake deseja instalar ou atualizar?")
-        print("  1) recomendado - experiência completa do nQuake sem addons grandes (padrão)")
+    def choose_components(self) -> list[str]:
+        print("\nQual conjunto de componentes x86QW deseja instalar ou atualizar?")
+        print("  1) recomendado - experiência nQuake atualizada sem addons grandes (padrão)")
         print("  2) essencial   - configuração, interface principal e KTX")
-        print("  3) completo    - tudo do nQuake, incluindo QRP, Clan Arena e Team Fortress")
+        print("  3) completo    - nQuake, QRP, Clan Arena, Team Fortress e TD2")
         print("  4) personalizado - escolha cada componente ou addon")
         aliases = {"": "recommended", "1": "recommended", "2": "essential", "3": "complete", "4": "custom"}
         while True:
@@ -1475,28 +1476,28 @@ class Installer:
                 break
             console.warning("Opção inválida. Digite 1, 2, 3 ou 4.")
         if profile != "custom":
-            selected = list(self.nquake_catalog["profiles"][profile])
+            selected = list(self.component_catalog["profiles"][profile])
         else:
-            self.show_nquake_components()
+            self.show_components()
             try:
                 answer = input("Informe números ou identificadores separados por vírgula: ").strip()
             except EOFError as error:
-                raise InstallerError("Nenhum componente nQuake foi selecionado.") from error
+                raise InstallerError("Nenhum componente x86QW foi selecionado.") from error
             selected = []
-            ordered = list(self.nquake_components)
+            ordered = list(self.components)
             for token in (item.strip() for item in answer.split(",")):
                 if token.isdigit() and 1 <= int(token) <= len(ordered):
                     identifier = ordered[int(token) - 1]
-                elif token in self.nquake_components:
+                elif token in self.components:
                     identifier = token
                 else:
-                    raise InstallerError(f"Componente nQuake desconhecido: {token or '(vazio)'}")
+                    raise InstallerError(f"Componente x86QW desconhecido: {token or '(vazio)'}")
                 if identifier not in selected:
                     selected.append(identifier)
             if not selected:
-                raise InstallerError("Nenhum componente nQuake foi selecionado.")
+                raise InstallerError("Nenhum componente x86QW foi selecionado.")
             try:
-                resolved = resolve_dependencies(self.nquake_catalog, selected)
+                resolved = resolve_dependencies(self.component_catalog, selected)
             except ValueError as error:
                 raise InstallerError(str(error)) from error
             added = [identifier for identifier in resolved if identifier not in selected]
@@ -1506,16 +1507,16 @@ class Installer:
         console.success(f"{len(selected)} componente(s) selecionado(s).")
         print("\nVersões que serão instaladas ou atualizadas:")
         for identifier in selected:
-            package = self.nquake_package_record(identifier)
-            print(f"  - {self.nquake_components[identifier]['label']}: {package['version']}")
+            package = self.component_package_record(identifier)
+            print(f"  - {self.components[identifier]['label']}: {package['version']}")
             if package.get("release_url"):
                 print(f"    novidades: {package['release_url']}")
         return selected
 
-    def nquake_package_record(self, identifier: str) -> dict[str, object]:
+    def component_package_record(self, identifier: str) -> dict[str, object]:
         catalog_url = os.environ.get("X86_QW_CATALOG_URL", CATALOG_URL)
         if self._public_catalog is None:
-            console.info("Consultando o catálogo atual de componentes nQuake...")
+            console.info("Consultando o catálogo atual de componentes x86QW...")
             try:
                 catalog = json.loads(self.http_get(catalog_url))
             except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
@@ -1530,9 +1531,10 @@ class Installer:
         if not isinstance(packages, list):
             raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
         matches = [package for package in packages if isinstance(package, dict) and (
-            package.get("component"), package.get("package"), package.get("channel"),
+            package.get("package"), package.get("channel"),
             package.get("platform"), package.get("architecture"),
-        ) == ("nquake", identifier, "content", "any", "any")]
+        ) == (identifier, "content", "any", "any")
+            and package.get("component") in self.content_component_namespaces]
         if len(matches) != 1:
             raise InstallerError(f"O catálogo deve publicar exatamente um pacote atual para {identifier}.")
         package = matches[0]
@@ -1567,7 +1569,7 @@ class Installer:
             raise InstallerError(f"Resumo da versão inválido do componente {identifier}.")
         return package
 
-    def download_nquake_package(self, package: dict[str, object]) -> Path:
+    def download_component_package(self, package: dict[str, object]) -> Path:
         assert self.cache_root is not None and self.stage is not None
         identifier = str(package["package"])
         filename = str(package["filename"])
@@ -1575,7 +1577,7 @@ class Installer:
         cache = self.cache_root / "components"
         cache.mkdir(parents=True, exist_ok=True)
         artifact = cache / filename
-        ensure_no_symlink(artifact, "pacote nQuake em cache")
+        ensure_no_symlink(artifact, "pacote de componente em cache")
         if artifact.is_file():
             if artifact.stat().st_size != package["size"] or file_hash(artifact) != digest:
                 raise InstallerError(f"O pacote {identifier} em cache é inválido. Execute cleanup e tente novamente.")
@@ -1599,7 +1601,7 @@ class Installer:
                     console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
         raise InstallerError(f"Nenhum mirror entregou o pacote {identifier}: {last_error}")
 
-    def prepare_nquake_package(self, package: dict[str, object], artifact: Path) -> tuple[Path, list[tuple[Path, Path]]]:
+    def prepare_component_package(self, package: dict[str, object], artifact: Path) -> tuple[Path, list[tuple[Path, Path]]]:
         assert self.stage is not None
         identifier = str(package["package"])
         root = self.stage / f"package-{identifier}"
@@ -1669,16 +1671,16 @@ class Installer:
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)
 
-    def install_nquake_components(self, selected: list[str]) -> None:
+    def install_components(self, selected: list[str]) -> None:
         assert self.stage is not None
         self.prepare_cache()
         self.migrate_legacy_nquake()
         for index, identifier in enumerate(selected, 1):
-            component = self.nquake_components[identifier]
+            component = self.components[identifier]
             console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
-            package = self.nquake_package_record(identifier)
-            artifact = self.download_nquake_package(package)
-            managed, defaults = self.prepare_nquake_package(package, artifact)
+            package = self.component_package_record(identifier)
+            artifact = self.download_component_package(package)
+            managed, defaults = self.prepare_component_package(package, artifact)
             count = self.install_component_overlay(
                 identifier, managed, str(package["version"]), str(package["origin_url"]),
             )
@@ -1695,13 +1697,13 @@ class Installer:
                 preset.write_text(DEFAULT_PRESET, encoding="utf-8")
 
     def choose_components_to_remove(self) -> list[str]:
-        installed = self.installed_nquake_components()
+        installed = self.installed_components()
         if not installed:
-            console.info("Nenhum componente nQuake gerenciado está instalado.")
+            console.info("Nenhum componente x86QW gerenciado está instalado.")
             return []
-        print("\nComponentes nQuake instalados:")
+        print("\nComponentes x86QW instalados:")
         for index, identifier in enumerate(installed, 1):
-            print(f"  {index:2d}) {self.nquake_components[identifier]['label']}")
+            print(f"  {index:2d}) {self.components[identifier]['label']}")
         try:
             answer = input("Informe os números a remover, separados por vírgula: ").strip()
         except EOFError as error:
@@ -1718,7 +1720,7 @@ class Installer:
         while changed:
             changed = False
             for identifier in installed:
-                if identifier not in expanded and set(self.nquake_components[identifier]["requires"]) & expanded:
+                if identifier not in expanded and set(self.components[identifier]["requires"]) & expanded:
                     expanded.add(identifier)
                     changed = True
         added = [identifier for identifier in installed if identifier in expanded and identifier not in selected]
@@ -1726,8 +1728,8 @@ class Installer:
             console.warning("Dependentes também serão removidos: " + ", ".join(added))
         return [identifier for identifier in reversed(installed) if identifier in expanded]
 
-    def manage_nquake_components(self) -> None:
-        print("\nO que deseja fazer com os componentes nQuake?")
+    def manage_components(self) -> None:
+        print("\nO que deseja fazer com os componentes x86QW?")
         print("  1) instalar ou atualizar")
         print("  2) remover componentes instalados")
         while True:
@@ -1743,17 +1745,17 @@ class Installer:
             selected = self.choose_components_to_remove()
             for identifier in selected:
                 removed = self.remove_component(identifier)
-                console.success(f"{self.nquake_components[identifier]['label']} removido ({file_count(removed)}).")
+                console.success(f"{self.components[identifier]['label']} removido ({file_count(removed)}).")
             return
-        selected = self.choose_nquake_components()
+        selected = self.choose_components()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
-        self.install_nquake_components(selected)
+        self.install_components(selected)
 
-    def install_nquake(self) -> None:
+    def install_component_phase(self) -> None:
         assert self.stage is not None
-        console.section("Fase 2/2 · Componentes nQuake")
-        selected = self.choose_nquake_components()
-        self.install_nquake_components(selected)
+        console.section("Fase 2/2 · Componentes x86QW")
+        selected = self.choose_components()
+        self.install_components(selected)
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
@@ -1905,9 +1907,9 @@ class Installer:
         legacy, _, _ = self.validate_nquake_pair()
         if legacy:
             raise InstallerError("Metadados nQuake antigos encontrados. Execute components para migrar a instalação.")
-        installed = self.installed_nquake_components()
+        installed = self.installed_components()
         if not installed:
-            console.info("Nenhum componente nQuake está instalado.")
+            console.info("Nenhum componente x86QW está instalado.")
         for identifier in installed:
             self.verify_component(identifier)
         if lexists(self.target / "id1/gpl_maps.pk3"):
@@ -1917,7 +1919,7 @@ class Installer:
         self.report_nquake_startup_state(installed)
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
-        installed = self.installed_nquake_components() if installed is None else installed
+        installed = self.installed_components() if installed is None else installed
         if "nquake-bootstrap" not in installed:
             return
         config = self.target / "ezquake/configs/config.cfg"
@@ -1946,7 +1948,7 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
 
     def preflight_component_receipts(self) -> None:
-        for component in (*self.nquake_components, "maps", "presets"):
+        for component in (*self.components, "maps", "presets"):
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
@@ -1954,7 +1956,7 @@ class Installer:
             NQUAKE_INVENTORY, NQUAKE_RECEIPT,
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
         ]
-        for component in self.nquake_components:
+        for component in self.components:
             metadata_names.extend(self.component_metadata(component))
         for spec in PLATFORMS.values():
             metadata_names.extend((spec.stable_receipt, spec.nightly_receipt))
@@ -1963,7 +1965,7 @@ class Installer:
             return
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
-        modular_nquake_present = bool(self.installed_nquake_components())
+        modular_nquake_present = bool(self.installed_components())
         present, entries, _ = self.validate_nquake_pair()
         for name, _ in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
@@ -1983,7 +1985,7 @@ class Installer:
                     else:
                         console.warning(f"Arquivo modificado preservado: {managed}")
         elif not modular_nquake_present:
-            console.info("Os dados nQuake não estão instalados; arquivos pessoais serão preservados.")
+            console.info("Os componentes x86QW não estão instalados; arquivos pessoais serão preservados.")
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
                 receipt_path = self.target / spec.receipt(channel)
@@ -1992,7 +1994,7 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
                 remove_path(self.target / spec.runtime(channel))
                 remove_path(receipt_path)
-        for component in (*reversed(tuple(self.nquake_components)), "maps", "presets"):
+        for component in (*reversed(tuple(self.components)), "maps", "presets"):
             self.remove_component(component)
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)
@@ -2052,8 +2054,8 @@ class Installer:
         console.success("ezQuake instalado e recibo registrado.")
         if self.is_native_macos_install():
             console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
-        if self.confirm_nquake():
-            self.install_nquake()
+        if self.confirm_components():
+            self.install_component_phase()
         else:
             console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
         if file_hash(self.target / "id1/pak0.pak") != pak0_before or file_hash(self.target / "id1/pak1.pak") != pak1_before:
@@ -2065,7 +2067,7 @@ class Installer:
         print(f"  Canal:   {self.channel}")
         print(f"  Versão:  {self.selected_version}")
         print(f"  Destino: {self.target}")
-        if self.installed_nquake_components():
+        if self.installed_components():
             console.success("Instalação completa e pronta para uso.")
         else:
             console.success(f"ezQuake pronto em {self.target / self.spec.runtime(self.channel)}")
@@ -2115,7 +2117,7 @@ def main(arguments: list[str] | None = None) -> int:
         options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         action_labels = {
-            "install": "instalar ezQuake + componentes nQuake", "components": "gerenciar componentes nQuake",
+            "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
             "presets": "gerenciar presets",
             "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
             "purge": "remover tudo", "cleanup": "limpar cache",
@@ -2146,7 +2148,7 @@ def main(arguments: list[str] | None = None) -> int:
         else:
             try:
                 if options.action == "components":
-                    installer.manage_nquake_components()
+                    installer.manage_components()
                 elif options.action == "presets":
                     installer.manage_presets()
                 else:

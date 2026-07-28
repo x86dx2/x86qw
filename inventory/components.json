@@ -5,7 +5,8 @@
     "id": "ezquake",
     "channels": ["stable", "nightly"]
   },
-  "source": {
+  "content_namespaces": ["nquake", "ktx", "td2"],
+  "reference_source": {
     "repository": "https://github.com/nQuake/distfiles.git",
     "ref": "master"
   },

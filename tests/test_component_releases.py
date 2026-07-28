@@ -14,10 +14,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from build_nquake_packages import rewrite_zip_members  # noqa: E402
+from build_component_packages import rewrite_zip_members  # noqa: E402
 from check_component_updates import check_updates  # noqa: E402
-from nquake_components import components_by_id, load_catalog  # noqa: E402
-from nquake_releases import (  # noqa: E402
+from components import components_by_id, load_catalog  # noqa: E402
+from component_releases import (  # noqa: E402
     component_for_artifact_path,
     load_releases,
     verified_artifact_members,
@@ -25,12 +25,12 @@ from nquake_releases import (  # noqa: E402
 )
 
 
-class NquakeReleaseTests(unittest.TestCase):
-    def test_release_inventory_covers_every_component_and_tracks_ktx_147(self) -> None:
-        components = load_catalog(ROOT / "inventory/nquake-components.json")
+class ComponentReleaseTests(unittest.TestCase):
+    def test_release_inventory_covers_every_component_and_tracks_independent_origins(self) -> None:
+        components = load_catalog(ROOT / "inventory/components.json")
         releases = load_releases(
-            ROOT / "inventory/nquake-releases.json",
-            ROOT / "inventory/nquake-components.json",
+            ROOT / "inventory/component-releases.json",
+            ROOT / "inventory/components.json",
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["nquake-ktx"]
@@ -44,6 +44,10 @@ class NquakeReleaseTests(unittest.TestCase):
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["archive_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
+        self.assertTrue(path.startswith("components/ktx/releases/"))
+        self.assertTrue(td2_path.startswith("components/td2/releases/"))
+        self.assertEqual("ktx", ktx["distribution_component"])
+        self.assertEqual("td2", td2["distribution_component"])
 
     def test_nested_pk3_rewrite_changes_only_the_selected_member(self) -> None:
         original = io.BytesIO()
@@ -62,7 +66,7 @@ class NquakeReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(payload, "w") as package:
                 package.writestr("qwprogs.qvm", b"qvm")
             data = payload.getvalue()
-            relative = "components/nquake/releases/nquake-ktx/test/qwprogs-qvm.zip"
+            relative = "components/ktx/releases/test/qwprogs-qvm.zip"
             path = root / relative
             path.parent.mkdir(parents=True)
             path.write_bytes(data)
@@ -79,7 +83,7 @@ class NquakeReleaseTests(unittest.TestCase):
     def test_standalone_tar_package_is_verified_without_extracting_unsafe_members(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            relative = "components/nquake/releases/total-destruction-2/test/td2.tar.gz"
+            relative = "components/td2/releases/test/td2.tar.gz"
             path = root / relative
             path.parent.mkdir(parents=True)
             with tarfile.open(path, "w:gz") as package:
@@ -104,8 +108,8 @@ class NquakeReleaseTests(unittest.TestCase):
 
     def test_standalone_update_check_verifies_the_pinned_source_without_github_metadata(self) -> None:
         releases = load_releases(
-            ROOT / "inventory/nquake-releases.json",
-            ROOT / "inventory/nquake-components.json",
+            ROOT / "inventory/component-releases.json",
+            ROOT / "inventory/components.json",
         )
         td2_artifact = releases["components"]["total-destruction-2"]["artifacts"][0]
         with mock.patch("check_component_updates.github_json", return_value={

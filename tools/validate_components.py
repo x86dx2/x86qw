@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Validate the nQuake component catalog and an optional local snapshot."""
+"""Validate the x86QW component catalog and an optional nQuake reference snapshot."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from nquake_components import load_catalog, validate_tree_partition
-from nquake_releases import load_releases, verified_artifact_members, verified_package_files
+from components import load_catalog, validate_tree_partition
+from component_releases import load_releases, verified_artifact_members, verified_package_files
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--catalog", type=Path, default=ROOT / "inventory/nquake-components.json")
-    parser.add_argument("--releases", type=Path, default=ROOT / "inventory/nquake-releases.json")
+    parser.add_argument("--catalog", type=Path, default=ROOT / "inventory/components.json")
+    parser.add_argument("--releases", type=Path, default=ROOT / "inventory/component-releases.json")
     parser.add_argument("--snapshot", type=Path, help="diretório raiz de um snapshot nQuake")
     parser.add_argument("--archive", type=Path, help="valida também os artefatos de release preservados")
     arguments = parser.parse_args()

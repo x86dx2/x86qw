@@ -72,7 +72,7 @@ quake-world/.install/
 ├── nquake-bootstrap.{receipt,inventory}
 ├── nquake-visual-core.{receipt,inventory}
 ├── nquake-ktx.{receipt,inventory}
-└── <demais componentes nQuake>.{receipt,inventory}
+└── <demais componentes x86QW>.{receipt,inventory}
 ```
 
 Cada componente possui inventário e recibo independentes. Assim ele pode ser
@@ -84,13 +84,13 @@ demais componentes e arquivos pessoais.
 A execução continua dividida em duas fases:
 
 1. **ezQuake:** seleciona, baixa, valida e instala o artefato do SO escolhido.
-2. **componentes nQuake:** após confirmação explícita, escolhe um perfil ou
+2. **componentes x86QW:** após confirmação explícita, escolhe um perfil ou
    componentes individuais e instala somente o conteúdo selecionado.
 
 Ao terminar a primeira fase, o instalador pergunta:
 
 ```text
-Deseja instalar/atualizar também os dados nQuake? [s/N]
+Deseja instalar/atualizar também os componentes x86QW? [s/N]
 ```
 
 O padrão é `N`. Se a resposta for positiva, há quatro opções:
@@ -137,14 +137,14 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 ./install-qw.py hub
 ```
 
-### Componentes nQuake
+### Componentes x86QW
 
-`components` instala, atualiza ou remove conteúdo nQuake sem tocar nos binários
+`components` instala, atualiza ou remove conteúdo de diferentes origens sem tocar nos binários
 ezQuake stable/nightly. O catálogo atual oferece:
 
 - base: bootstrap, interface visual, KTX, skins, miras, skyboxes, modelos,
   bandeiras, sons, texturas, mapas selecionados, matchinfo e documentação;
-- addons: QRP em alta resolução, Clan Arena/Pro-X e Team Fortress.
+- addons: QRP em alta resolução, Clan Arena/Pro-X, Team Fortress e TD2.
 
 Dependências são resolvidas antes do download. Na remoção, componentes que
 dependem do item escolhido também são incluídos e informados ao usuário. Cada
@@ -275,7 +275,7 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 ```
 
 `uninstall` remove todos os binários macOS, Linux e Windows comprovadamente
-gerenciados, componentes nQuake, presets próprios do instalador, seus recibos e
+gerenciados, componentes x86QW, presets próprios do instalador, seus recibos e
 os arquivos cujo hash ainda corresponde ao inventário. Arquivos modificados são
 preservados. Os PAKs, `config.cfg`, demos, screenshots, logs, presets pessoais e
 outros arquivos pessoais permanecem em `quake-world`.
@@ -285,7 +285,7 @@ O recibo é a autoridade para a remoção: `uninstall` também conclui quando um
 `purge` é a remoção total: apaga tudo dentro de `quake-world`, incluindo arquivos pessoais e metadados desconhecidos, preservando somente a árvore `id1`. Também remove o cache nativo criado pelo instalador. A ação recusa alvos sem um diretório `id1` real.
 
 `cleanup` remove somente o cache criado pelo próprio instalador, incluindo
-downloads ezQuake e pacotes dos componentes nQuake. A remoção só
+downloads ezQuake e pacotes dos componentes x86QW. A remoção só
 ocorre se o marcador de propriedade criado pelo instalador estiver presente. O
 diretório é resolvido conforme o host:
 
@@ -302,7 +302,7 @@ printf '%s/x86-qw\n' "$(getconf DARWIN_USER_CACHE_DIR | sed 's#/$##')"
 ## Atualizar ou trocar de canal
 
 Execute a ação correspondente novamente: `install` para ezQuake e uma seleção
-nQuake, `components` para conteúdo nQuake ou `presets` para configurações.
+x86QW, `components` para conteúdo adicional ou `presets` para configurações.
 Somente o componente escolhido é substituído; os demais binários e arquivos
 pessoais permanecem preservados.
 

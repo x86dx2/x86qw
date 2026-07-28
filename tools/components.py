@@ -1,4 +1,4 @@
-"""Validation and selection helpers for the nQuake component catalog."""
+"""Validation and selection helpers for the x86QW component catalog."""
 
 from __future__ import annotations
 
@@ -26,18 +26,26 @@ def load_catalog(path: Path) -> dict[str, object]:
     try:
         catalog = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read nQuake component catalog: {path}") from error
+        raise ValueError(f"cannot read component catalog: {path}") from error
     validate_catalog(catalog)
     return catalog
 
 
 def validate_catalog(catalog: object) -> None:
     if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
-        raise ValueError("invalid nQuake component catalog identity")
+        raise ValueError("invalid component catalog identity")
     client = catalog.get("client")
     if not isinstance(client, dict) or client.get("id") != "ezquake" or client.get("channels") != ["stable", "nightly"]:
-        raise ValueError("the active nQuake client must be ezQuake stable and nightly")
-    source = catalog.get("source")
+        raise ValueError("the active x86QW client must be ezQuake stable and nightly")
+    namespaces = catalog.get("content_namespaces")
+    if (
+        not isinstance(namespaces, list)
+        or not namespaces
+        or len(namespaces) != len(set(namespaces))
+        or not all(isinstance(item, str) and COMPONENT_ID.fullmatch(item) for item in namespaces)
+    ):
+        raise ValueError("invalid content component namespaces")
+    source = catalog.get("reference_source")
     if (
         not isinstance(source, dict)
         or not isinstance(source.get("repository"), str)
@@ -46,14 +54,14 @@ def validate_catalog(catalog: object) -> None:
         raise ValueError("invalid nQuake reference source")
     components = catalog.get("components")
     if not isinstance(components, list) or not components:
-        raise ValueError("nQuake component catalog is empty")
+        raise ValueError("component catalog is empty")
 
     identifiers: set[str] = set()
     selectors: list[tuple[str, str, set[str]]] = []
     dependencies: dict[str, list[str]] = {}
     for component in components:
         if not isinstance(component, dict):
-            raise ValueError("invalid nQuake component entry")
+            raise ValueError("invalid component entry")
         identifier = component.get("id")
         if not isinstance(identifier, str) or not COMPONENT_ID.fullmatch(identifier) or identifier in identifiers:
             raise ValueError(f"invalid or duplicate component id: {identifier}")
@@ -102,7 +110,7 @@ def validate_catalog(catalog: object) -> None:
         if resolved != set(selected):
             raise ValueError(f"profile omits a dependency: {name}")
     if set(profiles["complete"]) != identifiers:
-        raise ValueError("complete profile must contain every nQuake component")
+        raise ValueError("complete profile must contain every x86QW component")
 
 
 def _validate_dependency_graph(dependencies: dict[str, list[str]]) -> None:
@@ -111,7 +119,7 @@ def _validate_dependency_graph(dependencies: dict[str, list[str]]) -> None:
 
     def visit(identifier: str) -> None:
         if identifier in visiting:
-            raise ValueError(f"cyclic nQuake component dependency: {identifier}")
+            raise ValueError(f"cyclic component dependency: {identifier}")
         if identifier in visited:
             return
         visiting.add(identifier)
@@ -135,7 +143,7 @@ def resolve_dependencies(catalog: dict[str, object], selected: list[str]) -> lis
 
     def add(identifier: str) -> None:
         if identifier not in components:
-            raise ValueError(f"unknown nQuake component: {identifier}")
+            raise ValueError(f"unknown component: {identifier}")
         if identifier in seen:
             return
         for dependency in components[identifier]["requires"]:  # type: ignore[index]
@@ -172,7 +180,7 @@ def component_for_source(catalog: dict[str, object], path: str, origin: str | No
             matches.append(component["id"])
     unique = set(matches)
     if len(unique) > 1:
-        raise ValueError(f"nQuake source belongs to multiple components: {path}")
+        raise ValueError(f"source belongs to multiple components: {path}")
     return next(iter(unique), None)
 
 
@@ -192,7 +200,7 @@ def destination_for_source(
         destination = entry["destination"]
         matches.append((f"{destination}/{suffix}" if suffix else destination, entry["mode"]))
     if len(matches) != 1:
-        raise ValueError(f"nQuake source has no unique destination: {path}")
+        raise ValueError(f"source has no unique destination: {path}")
     return matches[0]
 
 
@@ -209,15 +217,15 @@ def validate_tree_partition(
     for path in paths:
         identifier = component_for_source(catalog, path, origin)
         if identifier is None:
-            raise ValueError(f"nQuake source is not assigned to a component: {path}")
+            raise ValueError(f"reference source is not assigned to a component: {path}")
         destination, _ = destination_for_source(components[identifier], path, origin)
         folded = destination.casefold()
         previous = destinations.get(folded)
         if previous is not None and previous != (identifier, path):
-            raise ValueError(f"nQuake destination collision: {destination}")
+            raise ValueError(f"component destination collision: {destination}")
         destinations[folded] = (identifier, path)
         partition[identifier].append(path)
     empty = [identifier for identifier, assigned in partition.items() if not assigned]
     if empty:
-        raise ValueError(f"nQuake component selects no files: {empty[0]}")
+        raise ValueError(f"component selects no files: {empty[0]}")
     return partition
