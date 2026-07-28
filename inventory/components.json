@@ -221,7 +221,17 @@
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"},
-        {"path": "addon-clanarena/prox", "destination": "prox", "mode": "overlay"}
+        {
+          "path": "addon-clanarena/prox",
+          "destination": "prox",
+          "mode": "overlay",
+          "exclude": ["addon-clanarena/prox/configs/config.cfg"]
+        },
+        {
+          "path": "addon-clanarena/prox/configs/config.cfg",
+          "destination": "prox/configs/config.cfg",
+          "mode": "default"
+        }
       ]
     },
     {

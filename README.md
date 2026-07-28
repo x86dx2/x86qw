@@ -30,7 +30,9 @@ KTX, Clan Arena, Pro-X, Team Fortress e Total Destruction 2. Para os quatro
 mods QuakeC clássicos, `play` cria cópias gerenciadas do gamecode com nomes
 exclusivos e pequenos `server.cfg`; isso impede que o `qwprogs.qvm` do KTX seja
 carregado por engano. Esses arquivos entram em `.install/play-support.*` e são
-removidos normalmente por `uninstall`.
+removidos normalmente por `uninstall`. Configurações que o próprio cliente
+reescreve, como `prox/configs/config.cfg`, são defaults preserváveis e não fazem
+parte do inventário imutável do componente.
 
 ## Princípios
 

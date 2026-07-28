@@ -197,6 +197,63 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual([], defaults)
             self.assertEqual(b"td2", (managed / "td2/qwprogs.dat").read_bytes())
 
+    def test_clan_arena_runtime_config_is_normalized_to_a_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            commit = "a" * 40
+            artifact = root / "clan-arena-aaaaaaaaaaaa.zip"
+            payload = b"upstream config"
+            metadata = {
+                "format": 1, "project": "x86qw", "package": "clan-arena",
+                "source_commit": commit,
+                "members": [{
+                    "path": "payload/prox/configs/config.cfg",
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                }],
+            }
+            with zipfile.ZipFile(artifact, "w") as package:
+                package.writestr("payload/prox/configs/config.cfg", payload)
+                package.writestr("_x86qw/component.json", json.dumps(metadata))
+            catalog_package = {
+                "package": "clan-arena", "version": commit[:12],
+                "source_commit": commit, "origin_url": f"https://example.invalid/{artifact.name}",
+            }
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed, defaults = installer.prepare_component_package(catalog_package, artifact)
+            self.assertFalse((managed / "prox/configs/config.cfg").exists())
+            self.assertEqual([(target / "prox/configs/config.cfg", payload)], [
+                (destination, source.read_bytes()) for source, destination in defaults
+            ])
+
+    def test_modified_clan_arena_config_is_migrated_and_preserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            config = managed / "prox/configs/config.cfg"
+            config.parent.mkdir(parents=True)
+            config.write_text("upstream\n", encoding="utf-8")
+            for relative in ("arena/arena.pk3", "prox/prox.pk3"):
+                package = managed / relative
+                package.parent.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(package, "w") as archive:
+                    archive.writestr("qwprogs.dat", b"gamecode")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "clan-arena", managed, "test", "https://example.invalid/clan-arena.zip",
+                )
+            installed_config = target / "prox/configs/config.cfg"
+            installed_config.write_text("personal\n", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.migrate_mutable_component_defaults("clan-arena")
+            self.assertEqual("personal\n", installed_config.read_text(encoding="utf-8"))
+            self.assertEqual(2, installer.verify_component("clan-arena"))
+            inventory = (target / ".install/clan-arena.inventory").read_text(encoding="utf-8")
+            self.assertNotIn("prox/configs/config.cfg", inventory)
+
     def test_component_download_falls_back_from_github_to_gitlab(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

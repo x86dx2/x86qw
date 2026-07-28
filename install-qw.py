@@ -61,6 +61,9 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
+MUTABLE_COMPONENT_DEFAULTS = {
+    "clan-arena": ("prox/configs/config.cfg",),
+}
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = Path(__file__).resolve().parent
 
@@ -1851,7 +1854,53 @@ class Installer:
             (path, self.target / path.relative_to(root / "defaults"))
             for path in (root / "defaults").rglob("*") if path.is_file()
         ] if (root / "defaults").is_dir() else []
+        normalized_defaults = root / "normalized-defaults"
+        for relative in MUTABLE_COMPONENT_DEFAULTS.get(identifier, ()):
+            source = managed.joinpath(*PurePosixPath(relative).parts)
+            if not source.is_file():
+                continue
+            normalized = normalized_defaults.joinpath(*PurePosixPath(relative).parts)
+            normalized.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(normalized)
+            defaults.append((normalized, self.target.joinpath(*PurePosixPath(relative).parts)))
+        remove_empty_directories(managed)
         return managed, defaults
+
+    def migrate_mutable_component_defaults(self, component: str) -> None:
+        mutable = set(MUTABLE_COMPONENT_DEFAULTS.get(component, ()))
+        if not mutable:
+            return
+        present, entries, receipt = self.validate_component_pair(component)
+        affected = [(name, digest) for name, digest in entries if name in mutable]
+        if not present or not affected:
+            return
+        assert receipt is not None
+        for name, _ in affected:
+            path = self.target.joinpath(*PurePosixPath(name).parts)
+            if lexists(path) and (not path.is_file() or path.is_symlink()):
+                raise InstallerError(f"Configuração mutável inválida: {path}")
+        previous_stage = self.stage
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-migrate.", dir=self.target))
+        try:
+            inventory = self.stage / f"{component}.inventory"
+            inventory.write_text(
+                "".join(f"{name}\t{digest}\n" for name, digest in entries if name not in mutable),
+                encoding="utf-8",
+            )
+            if os.name != "nt":
+                inventory.chmod(0o644)
+            self.validate_inventory(inventory)
+            staged_receipt = self.stage / f"{component}.receipt"
+            self.write_component_receipt(
+                component, receipt["selection"], receipt["source"], inventory, staged_receipt,
+            )
+            self.commit_component_metadata(component, inventory, staged_receipt)
+        finally:
+            self.cleanup_stage()
+            self.stage = previous_stage
+        console.success(
+            f"Configuração pessoal de {component} retirada do inventário imutável e preservada."
+        )
 
     def migrate_legacy_nquake(self) -> None:
         present, entries, _ = self.validate_nquake_pair()
@@ -2101,6 +2150,7 @@ class Installer:
                 "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
             )
         game = self.choose_local_game(games)
+        self.migrate_mutable_component_defaults(game.component)
         self.verify_component(game.component)
         map_name = self.choose_local_map(game)
         self.ensure_local_play_support(games)
