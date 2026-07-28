@@ -187,6 +187,90 @@ def summarize_delta(delta: list[dict[str, str]]) -> list[str]:
     return others
 
 
+def update_inventory_lines(
+    results: list[dict[str, str]],
+    assets: list[Asset],
+    releases: dict[str, object],
+    catalog: dict[str, object],
+) -> list[str]:
+    lines: list[str] = []
+    packages = catalog.get("packages")
+    if not isinstance(packages, list):
+        raise ManagerError("catalogo sem pacotes")
+    for channel in ("stable", "nightly"):
+        current = sorted({
+            str(package["version"])
+            for package in packages
+            if isinstance(package, dict)
+            and package.get("component") == "ezquake"
+            and package.get("channel") == channel
+        })
+        upstream = sorted({
+            PurePosixPath(asset.path).parts[1]
+            for asset in assets
+            if asset.component == "ezquake"
+            and PurePosixPath(asset.path).parts[2] == channel
+        })
+        if len(current) != 1 or len(upstream) != 1:
+            raise ManagerError(f"catalogo ezQuake {channel} precisa representar exatamente uma versao")
+        marker = "OK" if current == upstream else "ATUALIZAR"
+        version = current[0] if marker == "OK" else f"{current[0]} -> {upstream[0]}"
+        platform_count = sum(
+            asset.component == "ezquake" and PurePosixPath(asset.path).parts[2] == channel
+            for asset in assets
+        )
+        lines.append(f"[{marker}] ezQuake {channel}: {version} ({platform_count} plataformas)")
+
+    release_components = releases.get("components")
+    if not isinstance(release_components, dict):
+        raise ManagerError("inventario sem releases de componentes")
+    component_catalog = load_component_catalog(COMPONENTS)
+    labels = {
+        str(component["id"]): str(component["label"])
+        for component in component_catalog["components"]
+    }
+
+    reference_results = [item for item in results if item["strategy"] == "reference-snapshot"]
+    reference = releases.get("reference")
+    if not isinstance(reference, dict):
+        raise ManagerError("inventario sem referencia nQuake")
+    lines.append(
+        f"[OK] Conteudo baseado no nQuake: {str(reference['revision'])[:12]} "
+        f"({len(reference_results)} componentes)"
+    )
+    for result in reference_results:
+        identifier = result["component"]
+        release = release_components.get(identifier)
+        if not isinstance(release, dict):
+            raise ManagerError(f"release ausente: {identifier}")
+        lines.append(f"     - {labels.get(identifier, identifier)}: {release['version']}")
+
+    for result in results:
+        if result["strategy"] == "reference-snapshot":
+            continue
+        identifier = result["component"]
+        release = release_components.get(identifier)
+        if not isinstance(release, dict):
+            raise ManagerError(f"release ausente: {identifier}")
+        marker = "OK" if result["status"] == "current" else "ATUALIZAR"
+        upstream = release.get("upstream")
+        upstream_version = str(upstream.get("release")) if isinstance(upstream, dict) else result["latest_source"]
+        if marker != "OK":
+            upstream_version = result["latest_source"]
+        detail = str(result["installed"])
+        if upstream_version != detail:
+            detail = f"upstream {upstream_version}; pacote x86QW {detail}"
+        artifacts = release.get("artifacts", [])
+        locations = [
+            f"dist/{artifact['distribution_path']}"
+            for artifact in artifacts
+            if isinstance(artifact, dict) and isinstance(artifact.get("distribution_path"), str)
+        ]
+        location = f"; fonte {', '.join(locations)}" if locations else ""
+        lines.append(f"[{marker}] {labels.get(identifier, identifier)}: {detail}{location}")
+    return lines
+
+
 def reference_revision(assets: list[Asset]) -> str:
     revisions = {
         PurePosixPath(asset.path).parts[1]
@@ -691,6 +775,10 @@ def command_update(options: argparse.Namespace) -> int:
     print("[INFO] Consultando todos os upstreams declarados...")
     releases = load_releases(RELEASES, COMPONENTS)
     results = check_updates(releases, online=True)
+    assets = discover_assets()
+    print("\nComponentes e clientes verificados:")
+    for line in update_inventory_lines(results, assets, releases, load_json(CATALOG)):
+        print(line)
     blocked = [
         item for item in results
         if item["status"] != "current" and item["strategy"] not in {"reference-snapshot"}
@@ -700,7 +788,6 @@ def command_update(options: argparse.Namespace) -> int:
         raise ManagerError(
             f"{names} exige nova versao/revisao explicita. Use 'add' com uma definicao revisada antes do update"
         )
-    assets = discover_assets()
     current_manifest = load_manifest(DIST / "manifest.json")
     discovered_reference = reference_revision(assets)
     old_reference = str(releases["reference"]["revision"])

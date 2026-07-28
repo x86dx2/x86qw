@@ -15,6 +15,7 @@ from maintenance.manage import (
     parser,
     reference_content_changed,
     summarize_delta,
+    update_inventory_lines,
     update_ezquake_catalog,
     update_reference_releases,
 )
@@ -111,6 +112,40 @@ class DistributionManagerTests(unittest.TestCase):
     def test_public_parser_exposes_the_complete_lifecycle(self) -> None:
         choices = parser()._subparsers._group_actions[0].choices
         self.assertEqual(set(choices), {"check", "update", "add", "verify", "build", "publish", "commit"})
+
+    def test_update_summary_exposes_clients_ktx_td2_and_their_sources(self) -> None:
+        catalog = json.loads((PROJECT_ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8"))
+        releases = json.loads(
+            (PROJECT_ROOT / "maintenance/inventory/component-releases.json").read_text(encoding="utf-8")
+        )
+        assets = [
+            Asset("ezquake", package["origin_url"], package["distribution_path"], package["size"])
+            for package in catalog["packages"]
+            if package["component"] == "ezquake"
+        ]
+        results = [
+            {
+                "component": identifier,
+                "installed": str(release["version"]),
+                "latest_source": str(release.get("upstream", {}).get("release", release["version"])),
+                "status": "current",
+                "strategy": str(release["strategy"]),
+            }
+            for identifier, release in releases["components"].items()
+        ]
+
+        output = "\n".join(update_inventory_lines(results, assets, releases, catalog))
+
+        self.assertIn("ezQuake stable: 3.6.9 (3 plataformas)", output)
+        self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
+        self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
+        self.assertIn("QRP alta resolução: e4cb23d40aa2", output)
+        self.assertIn("Clan Arena e Pro-X: e4cb23d40aa2+x86qw.1", output)
+        self.assertIn("Team Fortress: e4cb23d40aa2", output)
+        self.assertIn("KTX para servidores", output)
+        self.assertIn("dist/mods/ktx/1.47/qwprogs-qvm.zip", output)
+        self.assertIn("Total Destruction 2", output)
+        self.assertIn("dist/mods/td2/2.22/", output)
 
     def test_contextual_layout_has_no_legacy_root_directories(self) -> None:
         for name in ("distribution", "inventory", "recipes", "tools", "tests"):
