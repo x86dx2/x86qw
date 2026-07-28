@@ -11,10 +11,10 @@ from pathlib import Path
 
 try:
     from .component_releases import load_releases
-    from .github_api import github_json
+    from .public_upstreams import git_remote_revision, github_latest_release
 except ImportError:  # Execucao direta
     from component_releases import load_releases
-    from github_api import github_json
+    from public_upstreams import git_remote_revision, github_latest_release
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,10 +40,8 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
     reference_revision = str(reference["revision"])
     current_reference = reference_revision
     if online:
-        response = github_json("repos/nQuake/distfiles/commits/master")
-        if not isinstance(response, dict) or not isinstance(response.get("sha"), str):
-            raise ValueError("invalid nQuake upstream response")
-        current_reference = response["sha"]
+        repository = str(reference["repository"])
+        current_reference = git_remote_revision(repository, "refs/heads/master")
 
     results: list[dict[str, str]] = []
     components = releases["components"]
@@ -58,10 +56,7 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
             status = "update-available"
         upstream = release.get("upstream")
         if online and isinstance(upstream, dict) and isinstance(upstream.get("repository"), str):
-            response = github_json(f"repos/{upstream['repository']}/releases/latest")
-            if not isinstance(response, dict) or not isinstance(response.get("tag_name"), str):
-                raise ValueError(f"invalid upstream release response: {identifier}")
-            actual = response["tag_name"]
+            actual = github_latest_release(str(upstream["repository"]))
             if actual != upstream["release"]:
                 status = "update-available"
         elif online and release["strategy"] == "upstream-package":

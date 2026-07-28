@@ -21,12 +21,12 @@ try:
     from .component_policy import component_for_distribution_path, load_component_policy, require_component
     from .components import component_for_source, load_catalog as load_component_catalog, source_roots
     from .component_releases import component_for_artifact_path, load_releases
-    from .github_api import github_json
+    from .public_upstreams import git_remote_tree, github_latest_release, remote_content_length
 except ImportError:  # Execucao direta
     from component_policy import component_for_distribution_path, load_component_policy, require_component
     from components import component_for_source, load_catalog as load_component_catalog, source_roots
     from component_releases import component_for_artifact_path, load_releases
-    from github_api import github_json
+    from public_upstreams import git_remote_tree, github_latest_release, remote_content_length
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +40,13 @@ RELEASES = {
     "ezquake": (
         "QW-Group/ezquake-source",
         re.compile(r"ezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip"),
+    ),
+}
+RELEASE_ASSETS = {
+    "ezquake": (
+        "ezQuake-macOS-universal.zip",
+        "ezQuake-linux-x86_64.zip",
+        "ezQuake-windows-x64.zip",
     ),
 }
 NIGHTLIES = {
@@ -140,22 +147,13 @@ def nightly_path(platform: str, name: str) -> str:
 def discover_release_assets() -> list[Asset]:
     assets: list[Asset] = []
     for component, (repository, accepted) in RELEASES.items():
-        release = github_json(f"repos/{repository}/releases/latest")
-        if not isinstance(release, dict) or not isinstance(release.get("tag_name"), str):
-            raise ValueError(f"invalid latest release response for {repository}")
-        tag = release["tag_name"]
-        selected = 0
-        for item in release.get("assets", []):
-            if not isinstance(item, dict):
-                continue
-            name = safe_filename(str(item.get("name", "")))
-            url = item.get("browser_download_url")
-            size = item.get("size")
-            if name and accepted.fullmatch(name) and isinstance(url, str) and isinstance(size, int) and size > 0:
-                assets.append(Asset(component, url, release_path(component, tag, name), size))
-                selected += 1
-        if selected != 3:
-            raise ValueError(f"expected three runtime assets in latest {component} release, found {selected}")
+        tag = github_latest_release(repository)
+        names = RELEASE_ASSETS.get(component, ())
+        if len(names) != 3 or not all(accepted.fullmatch(name) for name in names):
+            raise ValueError(f"a lista de artefatos stable esta incompleta para {component}")
+        for name in names:
+            url = f"https://github.com/{repository}/releases/download/{urllib.parse.quote(tag, safe='')}/{name}"
+            assets.append(Asset(component, url, release_path(component, tag, name), remote_content_length(url)))
     return assets
 
 
@@ -174,33 +172,13 @@ def discover_nquake() -> list[Asset]:
     catalog = load_component_catalog(COMPONENT_CATALOG)
     used_paths = source_roots(catalog, "reference")
 
-    commit_data = github_json(f"repos/{NQUAKE_REPOSITORY}/commits/{NQUAKE_REF}")
-    if not isinstance(commit_data, dict) or not isinstance(commit_data.get("sha"), str):
-        raise ValueError("invalid nQuake commit response")
-    commit = commit_data["sha"]
-    tree_data = commit_data.get("commit", {}).get("tree", {})
-    tree_sha = tree_data.get("sha") if isinstance(tree_data, dict) else None
-    if not isinstance(tree_sha, str):
-        raise ValueError("nQuake commit has no tree")
-    tree = github_json(f"repos/{NQUAKE_REPOSITORY}/git/trees/{tree_sha}?recursive=1")
-    if not isinstance(tree, dict) or tree.get("truncated") is True or not isinstance(tree.get("tree"), list):
-        raise ValueError("nQuake tree response is missing or truncated")
+    commit, tree = git_remote_tree(f"https://github.com/{NQUAKE_REPOSITORY}.git", NQUAKE_REF)
 
     assets: list[Asset] = []
     found_roots: set[str] = set()
-    for item in tree["tree"]:
-        if not isinstance(item, dict) or item.get("type") != "blob":
-            continue
-        path = item.get("path")
-        size = item.get("size")
-        blob_sha = item.get("sha")
-        if (
-            not isinstance(path, str)
-            or not isinstance(size, int)
-            or not isinstance(blob_sha, str)
-            or not re.fullmatch(r"[0-9a-f]{40}", blob_sha)
-        ):
-            continue
+    for item in tree:
+        path = item.path
+        blob_sha = item.sha1
         roots = [root for root in used_paths if path == root or path.startswith(root + "/")]
         if not roots:
             continue
@@ -213,7 +191,7 @@ def discover_nquake() -> list[Asset]:
             "nquake",
             f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
             f"nquake/{commit}/{path}",
-            size,
+            None,
             subcomponent,
             None,
             blob_sha,
@@ -427,11 +405,6 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
         try:
             request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
             digest = hashlib.sha256()
-            git_digest = hashlib.sha1() if asset.expected_git_sha1 is not None else None
-            if git_digest is not None:
-                if asset.expected_size is None:
-                    raise ValueError(f"git blob verification requires a declared size: {asset.url}")
-                git_digest.update(f"blob {asset.expected_size}\0".encode())
             size = 0
             with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
                 while block := response.read(1024 * 1024):
@@ -439,15 +412,18 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
                     if asset.expected_size is not None and size > asset.expected_size:
                         raise ValueError(f"download exceeds declared size: {asset.url}")
                     digest.update(block)
-                    if git_digest is not None:
-                        git_digest.update(block)
                     output.write(block)
             if asset.expected_size is not None and size != asset.expected_size:
                 raise ValueError(f"download size mismatch for {asset.url}: expected {asset.expected_size}, got {size}")
             if asset.expected_sha256 is not None and digest.hexdigest() != asset.expected_sha256:
                 raise ValueError(f"download SHA-256 mismatch for {asset.url}")
-            if git_digest is not None and git_digest.hexdigest() != asset.expected_git_sha1:
-                raise ValueError(f"download Git blob identity mismatch for {asset.url}")
+            if asset.expected_git_sha1 is not None:
+                git_digest = hashlib.sha1(f"blob {size}\0".encode())
+                with temporary.open("rb") as downloaded:
+                    for block in iter(lambda: downloaded.read(1024 * 1024), b""):
+                        git_digest.update(block)
+                if git_digest.hexdigest() != asset.expected_git_sha1:
+                    raise ValueError(f"download Git blob identity mismatch for {asset.url}")
             os.replace(temporary, target)
             component = load_component_policy()[asset.component]
             consumers = component["consumers"]

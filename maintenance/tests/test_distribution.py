@@ -166,7 +166,7 @@ class DistributionTests(unittest.TestCase):
                 "ktx",
                 "https://example.invalid/qwprogs-qvm.zip",
                 target.relative_to(root).as_posix(),
-                len(expected),
+                None,
                 "nquake-ktx",
                 hashlib.sha256(expected).hexdigest(),
                 git_identity,

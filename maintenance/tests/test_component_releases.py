@@ -112,10 +112,10 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
         )
         td2_artifact = releases["components"]["total-destruction-2"]["artifacts"][0]
-        with mock.patch("check_component_updates.github_json", return_value={
-            "sha": releases["reference"]["revision"],
-            "tag_name": "1.47",
-        }):
+        with mock.patch(
+            "check_component_updates.git_remote_revision",
+            return_value=releases["reference"]["revision"],
+        ), mock.patch("check_component_updates.github_latest_release", return_value="1.47"):
             with mock.patch("check_component_updates.remote_fingerprint", return_value=(
                 td2_artifact["size"], td2_artifact["sha256"],
             )) as fingerprint:

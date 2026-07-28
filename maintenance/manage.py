@@ -30,12 +30,12 @@ from maintenance.tools.component_releases import load_releases
 from maintenance.tools.component_sources import discover_snapshot
 from maintenance.tools.components import load_catalog as load_component_catalog, validate_tree_partition
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
+from maintenance.tools.public_upstreams import github_commit_revision
 from maintenance.tools.sync_distribution import (
     Asset,
     discover_assets,
     download_asset,
     file_sha256,
-    github_json,
     load_manifest,
     verify_distribution,
     write_manifest,
@@ -328,8 +328,8 @@ def reference_content_changed(
         if (
             not path.is_file()
             or path.is_symlink()
-            or path.stat().st_size != asset.expected_size
-            or metadata.get("size") != asset.expected_size
+            or (asset.expected_size is not None and path.stat().st_size != asset.expected_size)
+            or (asset.expected_size is not None and metadata.get("size") != asset.expected_size)
             or git_blob_sha1(path) != asset.expected_git_sha1
         ):
             return True
@@ -411,10 +411,7 @@ def ezquake_source_revision(asset: Asset) -> str:
     if "/stable/" in f"/{asset.path}":
         return version
     short = version.rsplit("_", 1)[-1]
-    response = github_json(f"repos/QW-Group/ezquake-source/commits/{short}")
-    if not isinstance(response, dict) or not isinstance(response.get("sha"), str):
-        raise ManagerError(f"nao foi possivel resolver o commit do nightly {version}")
-    return response["sha"]
+    return github_commit_revision("QW-Group/ezquake-source", short)
 
 
 def update_ezquake_catalog(

@@ -84,7 +84,7 @@ class DistributionManagerTests(unittest.TestCase):
             }}}
             assets = [Asset(
                 "nquake", "https://example.invalid/new", f"nquake/{'b' * 40}/gpl/qw/ktx.pk3",
-                len(payload), "nquake-ktx", None, digest,
+                None, "nquake-ktx", None, digest,
             )]
 
             self.assertFalse(reference_content_changed(assets, manifest, root=root))
