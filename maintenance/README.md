@@ -45,6 +45,11 @@ git diff --stat
 ./maintenance/manage.py commit --push
 ```
 
+As consultas ao GitHub reutilizam, nesta ordem, `GH_TOKEN`, `GITHUB_TOKEN` ou
+a sessao local criada por `gh auth login`. O token fica somente em memoria e
+nao e copiado para o projeto. Sem nenhuma dessas credenciais, a consulta
+continua anonima e pode atingir o limite publico do GitHub.
+
 ## Atualizacoes independentes
 
 O snapshot do nQuake pode ser atualizado mecanicamente porque cada caminho ja

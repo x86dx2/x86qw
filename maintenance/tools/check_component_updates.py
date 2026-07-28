@@ -6,33 +6,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import urllib.request
 from pathlib import Path
 
 try:
     from .component_releases import load_releases
+    from .github_api import github_json
 except ImportError:  # Execucao direta
     from component_releases import load_releases
+    from github_api import github_json
 
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENTS = ROOT / "maintenance/inventory/components.json"
 RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 USER_AGENT = "x86qw-freshness/1"
-
-
-def github_json(path: str) -> object:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": USER_AGENT,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token := os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(f"https://api.github.com/{path}", headers=headers)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return json.load(response)
 
 
 def remote_fingerprint(url: str) -> tuple[int, str]:

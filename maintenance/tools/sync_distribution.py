@@ -21,10 +21,12 @@ try:
     from .component_policy import component_for_distribution_path, load_component_policy, require_component
     from .components import component_for_source, load_catalog as load_component_catalog, source_roots
     from .component_releases import component_for_artifact_path, load_releases
+    from .github_api import github_json
 except ImportError:  # Execucao direta
     from component_policy import component_for_distribution_path, load_component_policy, require_component
     from components import component_for_source, load_catalog as load_component_catalog, source_roots
     from component_releases import component_for_artifact_path, load_releases
+    from github_api import github_json
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -113,19 +115,6 @@ def safe_filename(href: str) -> str | None:
     if not name or name in {".", ".."} or "/" in name or "\\" in name or "\0" in name:
         return None
     return name
-
-
-def github_json(path: str) -> object:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": USER_AGENT,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if token := os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(f"https://api.github.com/{path}", headers=headers)
-    with urllib.request.urlopen(request, timeout=90) as response:
-        return json.load(response)
 
 
 def release_variant(name: str) -> str:
