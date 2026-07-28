@@ -9,8 +9,8 @@ import zipfile
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "distribution/tools"))
 
 from build_package import build_package, verify_artifact  # noqa: E402
 from validate_recipes import recipe_paths, validate_recipe  # noqa: E402

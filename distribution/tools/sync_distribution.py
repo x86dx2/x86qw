@@ -1,17 +1,12 @@
-#!/usr/bin/env python3
-"""Preserve only upstream files that have an explicit x86QW consumer."""
+"""Primitivas de descoberta e sincronizacao usadas pelo gerenciador x86QW."""
 
 from __future__ import annotations
 
-import argparse
-import concurrent.futures
 import hashlib
 import json
 import os
 import re
 import shutil
-import subprocess
-import sys
 import tempfile
 import time
 import urllib.error
@@ -22,19 +17,22 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
-from component_policy import component_for_distribution_path, load_component_policy, require_component
-from components import component_for_source, load_catalog as load_component_catalog, source_roots
-from component_releases import component_for_artifact_path, load_releases
+try:
+    from .component_policy import component_for_distribution_path, load_component_policy, require_component
+    from .components import component_for_source, load_catalog as load_component_catalog, source_roots
+    from .component_releases import component_for_artifact_path, load_releases
+except ImportError:  # Execucao direta
+    from component_policy import component_for_distribution_path, load_component_policy, require_component
+    from components import component_for_source, load_catalog as load_component_catalog, source_roots
+    from component_releases import component_for_artifact_path, load_releases
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DISTRIBUTION = ROOT / "dist"
-COMPONENT_CATALOG = ROOT / "inventory/components.json"
-COMPONENT_RELEASES = ROOT / "inventory/component-releases.json"
+ROOT = Path(__file__).resolve().parents[2]
+COMPONENT_CATALOG = ROOT / "distribution/inventory/components.json"
+COMPONENT_RELEASES = ROOT / "distribution/inventory/component-releases.json"
 USER_AGENT = "x86qw-distribution/1"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
-LEGACY_NQUAKE_MIRROR = "components/nquake/git/distfiles.git"
 
 RELEASES = {
     "ezquake": (
@@ -78,6 +76,7 @@ class Asset:
     expected_size: int | None = None
     subcomponent: str | None = None
     expected_sha256: str | None = None
+    expected_git_sha1: str | None = None
 
 
 class LinkParser(HTMLParser):
@@ -205,7 +204,13 @@ def discover_nquake() -> list[Asset]:
             continue
         path = item.get("path")
         size = item.get("size")
-        if not isinstance(path, str) or not isinstance(size, int):
+        blob_sha = item.get("sha")
+        if (
+            not isinstance(path, str)
+            or not isinstance(size, int)
+            or not isinstance(blob_sha, str)
+            or not re.fullmatch(r"[0-9a-f]{40}", blob_sha)
+        ):
             continue
         roots = [root for root in used_paths if path == root or path.startswith(root + "/")]
         if not roots:
@@ -221,6 +226,8 @@ def discover_nquake() -> list[Asset]:
             f"nquake/{commit}/{path}",
             size,
             subcomponent,
+            None,
+            blob_sha,
         ))
     missing = sorted(set(used_paths) - found_roots)
     if missing:
@@ -266,10 +273,16 @@ def discover_assets() -> list[Asset]:
     return sorted(unique.values(), key=lambda asset: asset.path)
 
 
-def consumed_component(path: str) -> str | None:
-    components = load_component_policy()
+def consumed_component(
+    path: str,
+    *,
+    component_catalog: Path = COMPONENT_CATALOG,
+    component_releases: Path = COMPONENT_RELEASES,
+    policy_path: Path | None = None,
+) -> str | None:
+    components = load_component_policy(policy_path) if policy_path is not None else load_component_policy()
     component = component_for_distribution_path(components, path)
-    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
+    releases = load_releases(component_releases, component_catalog)
     if component in {"ktx", "td2"}:
         return component if component_for_artifact_path(releases, path) is not None else None
     if component == "nquake":
@@ -277,7 +290,7 @@ def consumed_component(path: str) -> str | None:
         if len(parts) < 3 or parts[0] != "nquake" or len(parts[1]) != 40:
             return None
         upstream_path = PurePosixPath(*parts[2:]).as_posix()
-        catalog = load_component_catalog(COMPONENT_CATALOG)
+        catalog = load_component_catalog(component_catalog)
         return component if component_for_source(catalog, upstream_path, "reference") is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
@@ -319,49 +332,6 @@ def write_manifest(path: Path, manifest: dict[str, object]) -> None:
     finally:
         if temporary.exists():
             temporary.unlink()
-
-
-def import_legacy_nquake(root: Path, manifest: dict[str, object]) -> int:
-    repository = root / LEGACY_NQUAKE_MIRROR
-    if not repository.is_dir():
-        return 0
-    catalog = load_component_catalog(COMPONENT_CATALOG)
-    used_paths = source_roots(catalog, "reference")
-    commit = subprocess.check_output(["git", f"--git-dir={repository}", "rev-parse", "HEAD"], text=True).strip()
-    listing = subprocess.check_output(
-        ["git", f"--git-dir={repository}", "ls-tree", "-r", "--name-only", "-z", commit, "--", *used_paths]
-    ).split(b"\0")
-    files = manifest["files"]
-    assert isinstance(files, dict)
-    imported = 0
-    for encoded in listing:
-        if not encoded:
-            continue
-        upstream_path = encoded.decode("utf-8")
-        subcomponent = component_for_source(catalog, upstream_path, "reference")
-        if subcomponent is None:
-            continue
-        relative = f"nquake/{commit}/{upstream_path}"
-        target = root / relative
-        if not target.is_file():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("wb") as output:
-                subprocess.run(
-                    ["git", f"--git-dir={repository}", "show", f"{commit}:{upstream_path}"],
-                    stdout=output,
-                    check=True,
-                )
-            imported += 1
-        quoted = urllib.parse.quote(upstream_path, safe="/")
-        files[relative] = {
-            "component": "nquake",
-            "consumer": "install:nquake-reference",
-            "package": subcomponent,
-            "url": f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
-            "size": target.stat().st_size,
-            "sha256": file_sha256(target),
-        }
-    return imported
 
 
 def collapse_case_duplicates(root: Path, files: dict[str, object]) -> int:
@@ -468,6 +438,11 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
         try:
             request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
             digest = hashlib.sha256()
+            git_digest = hashlib.sha1() if asset.expected_git_sha1 is not None else None
+            if git_digest is not None:
+                if asset.expected_size is None:
+                    raise ValueError(f"git blob verification requires a declared size: {asset.url}")
+                git_digest.update(f"blob {asset.expected_size}\0".encode())
             size = 0
             with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
                 while block := response.read(1024 * 1024):
@@ -475,11 +450,15 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
                     if asset.expected_size is not None and size > asset.expected_size:
                         raise ValueError(f"download exceeds declared size: {asset.url}")
                     digest.update(block)
+                    if git_digest is not None:
+                        git_digest.update(block)
                     output.write(block)
             if asset.expected_size is not None and size != asset.expected_size:
                 raise ValueError(f"download size mismatch for {asset.url}: expected {asset.expected_size}, got {size}")
             if asset.expected_sha256 is not None and digest.hexdigest() != asset.expected_sha256:
                 raise ValueError(f"download SHA-256 mismatch for {asset.url}")
+            if git_digest is not None and git_digest.hexdigest() != asset.expected_git_sha1:
+                raise ValueError(f"download Git blob identity mismatch for {asset.url}")
             os.replace(temporary, target)
             component = load_component_policy()[asset.component]
             consumers = component["consumers"]
@@ -504,7 +483,14 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
     raise last_error
 
 
-def verify_distribution(root: Path, manifest: dict[str, object]) -> int:
+def verify_distribution(
+    root: Path,
+    manifest: dict[str, object],
+    *,
+    component_catalog: Path = COMPONENT_CATALOG,
+    component_releases: Path = COMPONENT_RELEASES,
+    policy_path: Path | None = None,
+) -> int:
     files = manifest["files"]
     assert isinstance(files, dict)
     if manifest.get("layout") != "distribution-v1" or manifest.get("repositories") != {}:
@@ -518,9 +504,24 @@ def verify_distribution(root: Path, manifest: dict[str, object]) -> int:
     if not expected <= actual:
         missing = sorted(expected - actual)
         raise ValueError(f"distribution is missing a registered upstream file: {missing[0]}")
+    component_document = load_component_catalog(component_catalog)
+    allowed_project_files = {
+        PurePosixPath(str(source["path"])).relative_to("dist").as_posix()
+        for component_entry in component_document["components"]
+        for source in component_entry.get("project_sources", [])
+    }
+    allowed_unmanaged = {"id1/pak0.pak", "id1/pak1.pak", *allowed_project_files}
+    unexpected = sorted(actual - expected - allowed_unmanaged)
+    if unexpected:
+        raise ValueError(f"distribution contains a file without an explicit consumer: {unexpected[0]}")
     checked = 0
     for relative, metadata in sorted(files.items()):
-        component = consumed_component(relative)
+        component = consumed_component(
+            relative,
+            component_catalog=component_catalog,
+            component_releases=component_releases,
+            policy_path=policy_path,
+        )
         if component is None:
             raise ValueError(f"distribution file has no explicit x86QW consumer: {relative}")
         if not isinstance(metadata, dict) or metadata.get("component") not in {None, component}:
@@ -530,73 +531,3 @@ def verify_distribution(root: Path, manifest: dict[str, object]) -> int:
             raise ValueError(f"distribution file failed integrity verification: {relative}")
         checked += 1
     return checked
-
-
-def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Preserva somente arquivos usados explicitamente pelo x86QW.")
-    parser.add_argument("--distribution", type=Path, default=DEFAULT_DISTRIBUTION)
-    parser.add_argument("--workers", type=int, default=8)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--verify", action="store_true", help="valida os upstreams da distribuição sem acessar a rede")
-    mode.add_argument("--apply-policy", action="store_true", help="remove da distribuição upstreams sem consumidor declarado")
-    return parser.parse_args()
-
-
-def main() -> int:
-    options = parse_arguments()
-    if not 1 <= options.workers <= 32:
-        raise ValueError("workers must be between 1 and 32")
-    root = options.distribution.resolve()
-    manifest_path = root / "manifest.json"
-    manifest = load_manifest(manifest_path)
-    if options.verify:
-        count = verify_distribution(root, manifest)
-        print(f"distribution valid: {count} consumed upstream file(s)")
-        return 0
-
-    imported = import_legacy_nquake(root, manifest)
-    removed_files, removed_roots = prune_unconsumed(root, manifest)
-    write_manifest(manifest_path, manifest)
-    if imported or removed_files or removed_roots:
-        print(f"Applied consumer policy: {imported} nQuake file(s) preserved, {removed_files} file(s) and {removed_roots} obsolete tree(s) removed.")
-    if options.apply_policy:
-        checked = verify_distribution(root, manifest)
-        print(f"distribution policy applied: {checked} consumed upstream file(s)")
-        return 0
-
-    print("Discovering files consumed by x86QW...")
-    assets = discover_assets()
-    files = manifest["files"]
-    assert isinstance(files, dict)
-    print(f"Synchronizing {len(assets)} consumed asset(s) with {options.workers} worker(s)...")
-    failures: list[str] = []
-    completed = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=options.workers) as pool:
-        futures = {pool.submit(download_asset, root, asset, files.get(asset.path)): asset for asset in assets}
-        for future in concurrent.futures.as_completed(futures):
-            asset = futures[future]
-            try:
-                relative, metadata, skipped = future.result()
-                files[relative] = metadata
-                completed += 1
-                action = "cached" if skipped else "saved"
-                print(f"[{completed}/{len(assets)}] {action}: {relative}", flush=True)
-                if completed % 25 == 0:
-                    write_manifest(manifest_path, manifest)
-            except Exception as error:
-                failures.append(f"{asset.url}: {error}")
-                print(f"[error] {asset.url}: {error}", file=sys.stderr, flush=True)
-    write_manifest(manifest_path, manifest)
-    if failures:
-        raise ValueError(f"distribution incomplete: {len(failures)} download(s) failed")
-    checked = verify_distribution(root, manifest)
-    print(f"distribution complete: {checked} consumed upstream file(s) verified")
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
-        print(f"distribution failed: {error}", file=sys.stderr)
-        raise SystemExit(1)

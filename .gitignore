@@ -4,7 +4,7 @@ __pycache__/
 *.py[cod]
 .cache/
 .artifacts/
-build/
+distribution/build/
 .wrangler/
 quake-world/
 id1/

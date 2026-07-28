@@ -10,12 +10,15 @@ import os
 import urllib.request
 from pathlib import Path
 
-from component_releases import load_releases
+try:
+    from .component_releases import load_releases
+except ImportError:  # Execucao direta
+    from component_releases import load_releases
 
 
-ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ROOT / "inventory/components.json"
-RELEASES = ROOT / "inventory/component-releases.json"
+ROOT = Path(__file__).resolve().parents[2]
+COMPONENTS = ROOT / "distribution/inventory/components.json"
+RELEASES = ROOT / "distribution/inventory/component-releases.json"
 USER_AGENT = "x86qw-freshness/1"
 
 

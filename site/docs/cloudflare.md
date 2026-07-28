@@ -1,14 +1,16 @@
 # Publicação na Cloudflare
 
-O `wrangler.jsonc` publica `site/public` como Workers Static Assets e registra
+O `site/wrangler.jsonc` publica `site/public` como Workers Static Assets e registra
 `x86qw.x86.com.br` como Custom Domain. Nenhum Worker JavaScript executa no
 caminho normal: HTML, CSS e o catálogo são arquivos estáticos no edge.
 
 ## Validar sem publicar
 
 ```sh
+cd site
 npx --yes wrangler@4.114.0 deploy --dry-run
-python3 tools/validate_catalog.py
+cd ..
+./distribution/manage.py verify --no-tests
 ```
 
 A versão 4.114.0 do Wrangler foi usada para validar esta configuração em 25 de
@@ -19,7 +21,7 @@ julho de 2026. Atualizações devem repetir o dry-run antes do deploy.
 1. Confirme que `x86.com.br` é uma zona ativa na conta Cloudflare correta.
 2. Confirme que `x86qw.x86.com.br` não possui um CNAME conflitante.
 3. Autentique o Wrangler com um token restrito à conta e à zona.
-4. Execute `npx --yes wrangler@4.114.0 deploy`.
+4. Entre em `site/` e execute `npx --yes wrangler@4.114.0 deploy`.
 5. Valide `/`, `/api/v1/catalog.json` e uma URL inexistente.
 
 O deploy cria o Custom Domain e seu registro DNS/certificado. Tokens, IDs de

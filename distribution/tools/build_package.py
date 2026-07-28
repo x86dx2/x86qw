@@ -15,9 +15,14 @@ import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from add_package import register_package
-from validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
-from validate_recipes import validate_recipe
+try:
+    from .add_package import register_package
+    from .validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
+    from .validate_recipes import validate_recipe
+except ImportError:  # Execucao direta
+    from add_package import register_package
+    from validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
+    from validate_recipes import validate_recipe
 
 
 DEFAULT_OUTPUT = ROOT / "dist"

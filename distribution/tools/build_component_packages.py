@@ -12,13 +12,17 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
-from validate_catalog import DEFAULT_CATALOG, validate_catalog
+try:
+    from .component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
+    from .validate_catalog import DEFAULT_CATALOG, validate_catalog
+except ImportError:  # Execucao direta
+    from component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
+    from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
-ROOT = Path(__file__).resolve().parents[1]
-COMPONENT_CATALOG = ROOT / "inventory/components.json"
-COMPONENT_RELEASES = ROOT / "inventory/component-releases.json"
+ROOT = Path(__file__).resolve().parents[2]
+COMPONENT_CATALOG = ROOT / "distribution/inventory/components.json"
+COMPONENT_RELEASES = ROOT / "distribution/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 
 
@@ -37,8 +41,14 @@ def zip_member(name: str, payload: bytes) -> tuple[zipfile.ZipInfo, bytes]:
     return info, payload
 
 
-def build_packages(distribution: Path, output: Path) -> dict[str, object]:
-    context = load_source_context(distribution, COMPONENT_CATALOG, COMPONENT_RELEASES)
+def build_packages(
+    distribution: Path,
+    output: Path,
+    *,
+    component_catalog: Path = COMPONENT_CATALOG,
+    component_releases: Path = COMPONENT_RELEASES,
+) -> dict[str, object]:
+    context = load_source_context(distribution, component_catalog, component_releases)
     components = context.components
     commit = context.commit
     reference_release = f"nquake-{commit}"
@@ -119,7 +129,7 @@ def build_packages(distribution: Path, output: Path) -> dict[str, object]:
         "project": "x86qw",
         "release": build_id,
         "source_commit": commit,
-        "release_inventory": COMPONENT_RELEASES.name,
+        "release_inventory": component_releases.name,
         "packages": packages,
     }
     (release_root / "manifest.json").write_text(
@@ -186,7 +196,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--distribution", type=Path, default=ROOT / "dist")
-    parser.add_argument("--output", type=Path, default=ROOT / "build/packages")
+    parser.add_argument("--output", type=Path, default=ROOT / "distribution/build/packages")
     parser.add_argument("--register", action="store_true", help="registra os pacotes no catálogo público")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     arguments = parser.parse_args()

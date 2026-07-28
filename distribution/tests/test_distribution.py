@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "tools"))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "distribution/tools"))
 
 from component_policy import load_component_policy, require_component  # noqa: E402
 from components import (  # noqa: E402
@@ -43,7 +43,7 @@ SPEC.loader.exec_module(install_qw)
 class DistributionTests(unittest.TestCase):
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()
-        catalog = load_component_catalog(ROOT / "inventory/components.json")
+        catalog = load_component_catalog(ROOT / "distribution/inventory/components.json")
         self.assertGreater(len(source_roots(catalog)), 10)
         for component in ("ezquake", "nquake", "ktx", "td2"):
             require_component(components, component)
@@ -53,7 +53,7 @@ class DistributionTests(unittest.TestCase):
                     require_component(components, component)
 
     def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
-        catalog = load_component_catalog(ROOT / "inventory/components.json")
+        catalog = load_component_catalog(ROOT / "distribution/inventory/components.json")
         snapshots = list((ROOT / "dist/nquake").iterdir())
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
@@ -145,6 +145,11 @@ class DistributionTests(unittest.TestCase):
             write_manifest(path, manifest)
             loaded = load_manifest(path)
             self.assertEqual(1, verify_distribution(root, loaded))
+            extra = root / "unused.bin"
+            extra.write_bytes(b"unused")
+            with self.assertRaisesRegex(ValueError, "without an explicit consumer"):
+                verify_distribution(root, loaded)
+            extra.unlink()
             payload.write_bytes(b"bad")
             with self.assertRaisesRegex(ValueError, "integrity"):
                 verify_distribution(root, loaded)
@@ -156,6 +161,7 @@ class DistributionTests(unittest.TestCase):
             target.parent.mkdir(parents=True)
             target.write_bytes(b"old")
             expected = b"new"
+            git_identity = hashlib.sha1(f"blob {len(expected)}\0".encode() + expected).hexdigest()
             asset = Asset(
                 "ktx",
                 "https://example.invalid/qwprogs-qvm.zip",
@@ -163,6 +169,7 @@ class DistributionTests(unittest.TestCase):
                 len(expected),
                 "nquake-ktx",
                 hashlib.sha256(expected).hexdigest(),
+                git_identity,
             )
             known = {
                 "component": "ktx",

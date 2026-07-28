@@ -13,7 +13,10 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from validate_catalog import DEFAULT_CATALOG, validate_catalog
+try:
+    from .validate_catalog import DEFAULT_CATALOG, validate_catalog
+except ImportError:  # Execucao direta
+    from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9_.+-]*$")

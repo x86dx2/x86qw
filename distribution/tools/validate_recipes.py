@@ -7,10 +7,13 @@ import json
 import sys
 from pathlib import Path, PurePosixPath
 
-from validate_catalog import ROOT, validate_package
+try:
+    from .validate_catalog import ROOT, validate_package
+except ImportError:  # Execucao direta
+    from validate_catalog import ROOT, validate_package
 
 
-DEFAULT_RECIPES = ROOT / "recipes"
+DEFAULT_RECIPES = ROOT / "distribution/recipes"
 FORMATS = {"tar.gz", "zip"}
 REVIEW_STATES = {"blocked", "ready"}
 

@@ -10,10 +10,13 @@ import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
-from component_policy import load_component_policy, require_component
+try:
+    from .component_policy import load_component_policy, require_component
+except ImportError:  # Execucao direta: python3 distribution/tools/validate_catalog.py
+    from component_policy import load_component_policy, require_component
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")

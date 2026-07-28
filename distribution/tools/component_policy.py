@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_POLICY = ROOT / "inventory/component-policy.json"
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_POLICY = ROOT / "distribution/inventory/component-policy.json"
 
 
 def load_component_policy(path: Path = DEFAULT_POLICY) -> dict[str, dict[str, object]]:

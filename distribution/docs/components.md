@@ -39,7 +39,8 @@ Estado verificado em 27 de julho de 2026:
 - o pacote interno registra origem, membros substituídos e hashes resultantes;
 - o catálogo mantém somente a versão atual, enquanto releases antigas continuam
   imutáveis nos mirrors de entrega;
-- `tools/check_component_updates.py` detecta novidades, mas não as publica.
+- `distribution/manage.py check` detecta novidades; `update` prepara apenas as
+  atualizações seguras e `publish` permanece uma ação separada.
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` oficial 1.47, mas o

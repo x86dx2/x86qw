@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from distribution.manage import (
+    PROJECT_ROOT,
+    Asset,
+    distribution_delta,
+    parser,
+    reference_content_changed,
+    summarize_delta,
+    update_ezquake_catalog,
+    update_reference_releases,
+)
+
+
+class DistributionManagerTests(unittest.TestCase):
+    def test_distribution_delta_reports_new_and_obsolete_managed_files(self) -> None:
+        manifest = {
+            "files": {
+                "ezquake/old.zip": {"url": "https://example.invalid/old.zip"},
+                "mods/kept.zip": {"url": "https://example.invalid/kept.zip", "size": 10, "sha256": "a" * 64},
+            }
+        }
+        assets = [
+            Asset("td2", "https://example.invalid/kept.zip", "mods/kept.zip", 10, expected_sha256="a" * 64),
+            Asset("td2", "https://example.invalid/new.zip", "mods/new.zip", 20),
+        ]
+
+        delta = distribution_delta(assets, manifest)
+
+        self.assertEqual([item["path"] for item in delta], ["ezquake/old.zip", "mods/new.zip"])
+        self.assertEqual({item["status"] for item in delta}, {"obsolete", "update-available"})
+
+    def test_nquake_delta_is_summarized_as_one_snapshot_change(self) -> None:
+        delta = [
+            {"path": f"nquake/{'a' * 40}/one", "status": "obsolete", "reason": "old"},
+            {"path": f"nquake/{'b' * 40}/one", "status": "update-available", "reason": "new"},
+            {"path": f"nquake/{'b' * 40}/two", "status": "update-available", "reason": "new"},
+        ]
+
+        summary = summarize_delta(delta)
+
+        self.assertEqual(len(summary), 1)
+        self.assertIn("aaaaaaaaaaaa (1 removidos)", summary[0])
+        self.assertIn("bbbbbbbbbbbb (2 novos)", summary[0])
+
+    def test_reference_update_preserves_x86qw_suffixes_and_overlay_version(self) -> None:
+        releases = json.loads(
+            (PROJECT_ROOT / "distribution/inventory/component-releases.json").read_text(encoding="utf-8")
+        )
+        old = str(releases["reference"]["revision"])
+        new = "b" * 40
+
+        changed = update_reference_releases(releases, new)
+
+        self.assertTrue(changed)
+        self.assertEqual(releases["reference"]["revision"], new)
+        self.assertEqual(releases["components"]["clan-arena"]["version"], "bbbbbbbbbbbb+x86qw.1")
+        self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["nquake-ktx"]["version"])
+        self.assertNotIn(old[:12], releases["components"]["nquake-ktx"]["distribution_tag"])
+
+    def test_reference_advance_without_consumed_byte_changes_is_ignored(self) -> None:
+        payload = b"same product bytes"
+        digest = hashlib.sha1(f"blob {len(payload)}\0".encode() + payload).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = f"nquake/{'a' * 40}/gpl/qw/ktx.pk3"
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            path.write_bytes(payload)
+            manifest = {"files": {relative: {
+                "url": "https://example.invalid/old",
+                "size": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "package": "nquake-ktx",
+            }}}
+            assets = [Asset(
+                "nquake", "https://example.invalid/new", f"nquake/{'b' * 40}/gpl/qw/ktx.pk3",
+                len(payload), "nquake-ktx", None, digest,
+            )]
+
+            self.assertFalse(reference_content_changed(assets, manifest, root=root))
+
+    def test_ezquake_catalog_and_recipes_are_rebuilt_from_the_same_assets(self) -> None:
+        catalog = json.loads((PROJECT_ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8"))
+        manifest = json.loads((PROJECT_ROOT / "dist/manifest.json").read_text(encoding="utf-8"))
+        assets = []
+        for package in catalog["packages"]:
+            if package["component"] == "ezquake":
+                assets.append(Asset(
+                    "ezquake", package["origin_url"], package["distribution_path"], package["size"],
+                ))
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "distribution.manage.ezquake_source_revision", return_value="c" * 40,
+        ):
+            recipes = Path(temporary) / "recipes"
+
+            stable, nightly = update_ezquake_catalog(copy.deepcopy(catalog), assets, manifest, recipes)
+
+            self.assertEqual(stable, "3.6.9")
+            self.assertEqual(nightly, "20260616-101233_a86996a")
+            self.assertEqual(len(list(recipes.rglob("*.json"))), 3)
+
+    def test_public_parser_exposes_the_complete_lifecycle(self) -> None:
+        choices = parser()._subparsers._group_actions[0].choices
+        self.assertEqual(set(choices), {"check", "update", "add", "verify", "build", "publish", "commit"})
+
+    def test_contextual_layout_has_no_legacy_root_directories(self) -> None:
+        for name in ("inventory", "recipes", "tools", "tests"):
+            self.assertFalse((PROJECT_ROOT / name).exists(), name)
+        self.assertFalse((PROJECT_ROOT / "distribution/inventory/upstream-current.json").exists())
+        self.assertTrue((PROJECT_ROOT / "site/wrangler.jsonc").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

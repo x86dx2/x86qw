@@ -22,6 +22,8 @@
 - [x] atualizar KTX de `1.46-dev` para `1.47` preservando os recursos nQuake.
 - [x] incorporar TD2QW 2.22 como pacote independente, preservando o original e sem mapas adicionais.
 - [x] organizar ezQuake, nQuake, KTX, TD2 e ajustes x86QW sob a única árvore canônica `dist/`.
+- [x] unificar check, update, add, verify, build, publish e commit em `distribution/manage.py`.
+- [x] separar distribuição, instalador e site em contextos autocontidos e remover inventários redundantes.
 
 ## 2. Distribuição
 

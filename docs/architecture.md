@@ -28,7 +28,7 @@ HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes loca
   Os dois PAKs registrados permanecem em `dist/id1` e não entram no catálogo.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
-contingência do código. `tools/publish_gitlab_packages.py` envia somente
+contingência do código. `distribution/manage.py publish` envia somente
 artefatos já presentes no catálogo, baixa cada cópia pública, confere tamanho e
 SHA-256 e só então registra a segunda URL.
 
@@ -45,27 +45,27 @@ os clientes espelhados e os pacotes derivados necessários fora de um checkout.
 
 ## Regra de entrada de componentes
 
-`inventory/component-policy.json` é a fronteira geral da distribuição.
-`inventory/components.json` decompõe o conteúdo de referência em BOM,
+`distribution/inventory/component-policy.json` é a fronteira geral da distribuição.
+`distribution/inventory/components.json` decompõe o conteúdo de referência em BOM,
 perfis, dependências, origens e destinos. O coletor rejeita caminhos fora dessas
 declarações e a validação offline rejeita arquivos sem consumidor ou componente.
 Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 
-`inventory/component-releases.json` mantém a camada de atualização separada: versão
+`distribution/inventory/component-releases.json` mantém a camada de atualização separada: versão
 atual, estratégia, upstream, artefatos consumidos e hashes. Assim uma release
 como KTX pode avançar sem renomear ou reconstruir componentes alheios.
 
 Todo conteúdo canônico fica sob `dist/`: `ezquake/` contém os clientes,
 `nquake/` contém somente o conteúdo incorporado da referência, `mods/` mantém
 upstreams e ajustes próprios e `id1/` mantém os PAKs registrados. ZIPs derivados
-ficam temporariamente em `build/packages/`, fora do Git.
+ficam temporariamente em `distribution/build/packages/`, fora do Git.
 
 O fluxo de um componente customizado possui duas entradas independentes:
 
 ```text
 dist/<origem incorporada> + dist/<ajuste x86QW>
                        -> instalador local -> quake-world/
-                       -> build/packages/<pacote> -> mirrors de entrega
+                       -> distribution/build/packages/<pacote> -> mirrors de entrega
 ```
 
 Quando um componente for proposto, a ordem é: implementar a ação consumidora,
@@ -73,8 +73,9 @@ declarar o componente na política, adicionar testes e só então habilitar seu
 download. Remover a ação consumidora exige remover também seus arquivos do
 acervo.
 
-Atualizações são detectadas por `tools/check_component_updates.py`, mas nunca
-publicadas automaticamente. Um adaptador deve preservar o pacote de referência,
+Atualizações são detectadas por `distribution/manage.py check`. O comando
+`update` aplica apenas atualizações mecanicamente seguras; releases independentes
+exigem uma definição revisada em `add` e `publish` continua explícito. Um adaptador deve preservar o pacote de referência,
 aplicar somente membros declarados, verificar hashes internos e produzir um novo
 pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
 `qwprogs.qvm` dentro de `ktx.pk3`.
@@ -83,14 +84,13 @@ pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
 
 ```text
 fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador local
-                     -> build/packages/ -> mirrors opcionais -> instalador remoto
+                     -> distribution/build/packages/ -> mirrors -> instalador remoto
 ```
 
-As receitas versionadas ficam em `recipes/`. `tools/build_package.py` aceita
-somente receitas com revisão `ready`, usa um diretório temporário e produz em
-`dist/` uma cópia byte a byte acompanhada de manifesto. O registro no catálogo
-continua explícito com `--register`, mas não depende da publicação prévia em um
-serviço externo.
+As receitas versionadas ficam em `distribution/recipes/`. O gerenciador valida
+origem, tamanho, SHA-256 e membros mínimos. Atualizações são montadas em staging
+e somente substituem a árvore canônica quando catálogo, inventários, receitas e
+payloads formam um estado coerente.
 
 O Worker serve o site e o catálogo. Para componentes, o instalador valida e
 materializa as fontes em `dist/` quando presentes; caso contrário, baixa o ZIP

@@ -15,10 +15,13 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from validate_catalog import DEFAULT_CATALOG, validate_catalog
+try:
+    from .validate_catalog import DEFAULT_CATALOG, validate_catalog
+except ImportError:  # Execucao direta
+    from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ID = 84856335
 API_ROOT = f"https://gitlab.com/api/v4/projects/{PROJECT_ID}/packages/generic"
 USER_AGENT = "x86qw-gitlab-mirror/1"
@@ -111,7 +114,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--dist", type=Path, default=ROOT / "dist")
-    parser.add_argument("--builds", type=Path, default=ROOT / "build/packages")
+    parser.add_argument("--builds", type=Path, default=ROOT / "distribution/build/packages")
     parser.add_argument("--publish", action="store_true", help="envia artefatos ausentes usando a autenticação do glab")
     parser.add_argument("--register", action="store_true", help="adiciona URLs GitLab ao catálogo após verificar tudo")
     arguments = parser.parse_args()
