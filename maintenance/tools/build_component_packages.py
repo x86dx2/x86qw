@@ -21,8 +21,8 @@ except ImportError:  # Execucao direta
 
 
 ROOT = Path(__file__).resolve().parents[2]
-COMPONENT_CATALOG = ROOT / "distribution/inventory/components.json"
-COMPONENT_RELEASES = ROOT / "distribution/inventory/component-releases.json"
+COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
+COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 
 
@@ -196,7 +196,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--distribution", type=Path, default=ROOT / "dist")
-    parser.add_argument("--output", type=Path, default=ROOT / "distribution/build/packages")
+    parser.add_argument("--output", type=Path, default=ROOT / "maintenance/build/packages")
     parser.add_argument("--register", action="store_true", help="registra os pacotes no catálogo público")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     arguments = parser.parse_args()

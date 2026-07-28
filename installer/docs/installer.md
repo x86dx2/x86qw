@@ -107,7 +107,7 @@ senha padrão não entra na instalação. Depois do pacote original, o instalado
 aplica separadamente a camada x86QW de execução local. Assim uma nova versão do
 TD2 pode substituir seu conteúdo upstream sem misturar ou perder os ajustes do
 x86QW. As fontes dessa camada são arquivos normais do repositório em
-`dist/mods/td2/2.22/x86qw/`, declarados em `distribution/inventory/components.json`; não ficam
+`dist/mods/td2/2.22/x86qw/`, declarados em `maintenance/inventory/components.json`; não ficam
 embutidas no código Python.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.

@@ -17,8 +17,8 @@ except ImportError:  # Execucao direta
 
 
 ROOT = Path(__file__).resolve().parents[2]
-COMPONENTS = ROOT / "distribution/inventory/components.json"
-RELEASES = ROOT / "distribution/inventory/component-releases.json"
+COMPONENTS = ROOT / "maintenance/inventory/components.json"
+RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 USER_AGENT = "x86qw-freshness/1"
 
 

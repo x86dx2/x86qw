@@ -28,9 +28,9 @@ except ImportError:  # Execucao direta
 
 
 ROOT = Path(__file__).resolve().parents[2]
-COMPONENT_CATALOG = ROOT / "distribution/inventory/components.json"
-COMPONENT_RELEASES = ROOT / "distribution/inventory/component-releases.json"
-USER_AGENT = "x86qw-distribution/1"
+COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
+COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
+USER_AGENT = "x86qw-maintenance/1"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
 

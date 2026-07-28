@@ -13,7 +13,7 @@ except ImportError:  # Execucao direta
     from validate_catalog import ROOT, validate_package
 
 
-DEFAULT_RECIPES = ROOT / "distribution/recipes"
+DEFAULT_RECIPES = ROOT / "maintenance/recipes"
 FORMATS = {"tar.gz", "zip"}
 REVIEW_STATES = {"blocked", "ready"}
 

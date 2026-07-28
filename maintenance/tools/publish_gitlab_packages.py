@@ -114,7 +114,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--dist", type=Path, default=ROOT / "dist")
-    parser.add_argument("--builds", type=Path, default=ROOT / "distribution/build/packages")
+    parser.add_argument("--builds", type=Path, default=ROOT / "maintenance/build/packages")
     parser.add_argument("--publish", action="store_true", help="envia artefatos ausentes usando a autenticação do glab")
     parser.add_argument("--register", action="store_true", help="adiciona URLs GitLab ao catálogo após verificar tudo")
     arguments = parser.parse_args()

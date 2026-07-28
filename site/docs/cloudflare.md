@@ -10,7 +10,7 @@ caminho normal: HTML, CSS e o catálogo são arquivos estáticos no edge.
 cd site
 npx --yes wrangler@4.114.0 deploy --dry-run
 cd ..
-./distribution/manage.py verify --no-tests
+./maintenance/manage.py verify --no-tests
 ```
 
 A versão 4.114.0 do Wrangler foi usada para validar esta configuração em 25 de

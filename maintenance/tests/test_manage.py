@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from distribution.manage import (
+from maintenance.manage import (
     PROJECT_ROOT,
     Asset,
     distribution_delta,
@@ -53,7 +53,7 @@ class DistributionManagerTests(unittest.TestCase):
 
     def test_reference_update_preserves_x86qw_suffixes_and_overlay_version(self) -> None:
         releases = json.loads(
-            (PROJECT_ROOT / "distribution/inventory/component-releases.json").read_text(encoding="utf-8")
+            (PROJECT_ROOT / "maintenance/inventory/component-releases.json").read_text(encoding="utf-8")
         )
         old = str(releases["reference"]["revision"])
         new = "b" * 40
@@ -98,7 +98,7 @@ class DistributionManagerTests(unittest.TestCase):
                     "ezquake", package["origin_url"], package["distribution_path"], package["size"],
                 ))
         with tempfile.TemporaryDirectory() as temporary, mock.patch(
-            "distribution.manage.ezquake_source_revision", return_value="c" * 40,
+            "maintenance.manage.ezquake_source_revision", return_value="c" * 40,
         ):
             recipes = Path(temporary) / "recipes"
 
@@ -113,9 +113,9 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertEqual(set(choices), {"check", "update", "add", "verify", "build", "publish", "commit"})
 
     def test_contextual_layout_has_no_legacy_root_directories(self) -> None:
-        for name in ("inventory", "recipes", "tools", "tests"):
+        for name in ("distribution", "inventory", "recipes", "tools", "tests"):
             self.assertFalse((PROJECT_ROOT / name).exists(), name)
-        self.assertFalse((PROJECT_ROOT / "distribution/inventory/upstream-current.json").exists())
+        self.assertFalse((PROJECT_ROOT / "maintenance/inventory/upstream-current.json").exists())
         self.assertTrue((PROJECT_ROOT / "site/wrangler.jsonc").is_file())
 
 

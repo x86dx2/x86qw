@@ -23,14 +23,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from distribution.tools.build_component_packages import build_packages, register_packages
-from distribution.tools.build_package import verify_artifact
-from distribution.tools.check_component_updates import check_updates
-from distribution.tools.component_releases import load_releases
-from distribution.tools.component_sources import discover_snapshot
-from distribution.tools.components import load_catalog as load_component_catalog, validate_tree_partition
-from distribution.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
-from distribution.tools.sync_distribution import (
+from maintenance.tools.build_component_packages import build_packages, register_packages
+from maintenance.tools.build_package import verify_artifact
+from maintenance.tools.check_component_updates import check_updates
+from maintenance.tools.component_releases import load_releases
+from maintenance.tools.component_sources import discover_snapshot
+from maintenance.tools.components import load_catalog as load_component_catalog, validate_tree_partition
+from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
+from maintenance.tools.sync_distribution import (
     Asset,
     discover_assets,
     download_asset,
@@ -40,18 +40,18 @@ from distribution.tools.sync_distribution import (
     verify_distribution,
     write_manifest,
 )
-from distribution.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
-from distribution.tools.validate_recipes import recipe_paths, validate_recipe
+from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
+from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
 
 
 DIST = PROJECT_ROOT / "dist"
-DISTRIBUTION = PROJECT_ROOT / "distribution"
-INVENTORY = DISTRIBUTION / "inventory"
+MAINTENANCE = PROJECT_ROOT / "maintenance"
+INVENTORY = MAINTENANCE / "inventory"
 COMPONENTS = INVENTORY / "components.json"
 RELEASES = INVENTORY / "component-releases.json"
 POLICY = INVENTORY / "component-policy.json"
-RECIPES = DISTRIBUTION / "recipes"
-BUILDS = DISTRIBUTION / "build/packages"
+RECIPES = MAINTENANCE / "recipes"
+BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
 GITHUB_REPOSITORY = "x86dx2/x86qw-dist"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -627,14 +627,17 @@ def command_verify(options: argparse.Namespace) -> int:
         f"receitas: {recipe_count}; upstreams: {upstream_count}; nQuake: {revision[:12]}."
     )
     misplaced = [
-        path for path in ("DESIGN.md", "PRODUCT.md", "wrangler.jsonc", "inventory", "recipes", "tools", "tests")
+        path for path in (
+            "DESIGN.md", "PRODUCT.md", "wrangler.jsonc", "distribution",
+            "inventory", "recipes", "tools", "tests",
+        )
         if (PROJECT_ROOT / path).exists()
     ]
     if misplaced:
         raise ManagerError(f"itens fora de contexto na raiz: {', '.join(misplaced)}")
     if not options.no_tests:
         environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-        for suite in ("distribution/tests", "installer/tests", "site/tests"):
+        for suite in ("maintenance/tests", "installer/tests", "site/tests"):
             print(f"[INFO] Testando {suite}...")
             subprocess.run(
                 [sys.executable, "-m", "unittest", "discover", "-s", suite, "-v"],
@@ -722,7 +725,7 @@ def command_update(options: argparse.Namespace) -> int:
     require_clean_worktree()
     confirm("Aplicar esta atualizacao ao Git working tree?", yes=options.yes)
 
-    work = prepare_workspace(DISTRIBUTION / "build")
+    work = prepare_workspace(MAINTENANCE / "build")
     try:
         manifest = sync_candidate(work / "dist", assets, workers=options.workers)
         staged_releases = load_json(work / "component-releases.json")
@@ -755,7 +758,7 @@ def command_update(options: argparse.Namespace) -> int:
     elif options.push:
         raise ManagerError("--push exige --commit")
     else:
-        print("[PROXIMO] Execute './distribution/manage.py verify' e revise 'git diff' antes do commit.")
+        print("[PROXIMO] Execute './maintenance/manage.py verify' e revise 'git diff' antes do commit.")
     return 0
 
 
@@ -771,7 +774,7 @@ def fetch_definition_file(entry: dict[str, object], base: Path, destination: Pat
             raise ManagerError(f"arquivo local invalido: {origin}")
         shutil.copyfile(origin, destination)
     elif isinstance(url, str) and url.startswith("https://"):
-        request = urllib.request.Request(url, headers={"User-Agent": "x86qw-distribution/1"})
+        request = urllib.request.Request(url, headers={"User-Agent": "x86qw-maintenance/1"})
         with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as output:
             shutil.copyfileobj(response, output)
     else:
@@ -815,7 +818,7 @@ def command_add(options: argparse.Namespace) -> int:
         return 0
     require_clean_worktree()
     confirm(f"Incorporar {len(files)} arquivo(s) e atualizar os inventarios?", yes=options.yes)
-    work = prepare_workspace(DISTRIBUTION / "build")
+    work = prepare_workspace(MAINTENANCE / "build")
     try:
         staged_components = load_json(work / "components.json")
         staged_releases = load_json(work / "component-releases.json")
@@ -908,7 +911,7 @@ def command_add(options: argparse.Namespace) -> int:
     finally:
         if work.exists():
             shutil.rmtree(work)
-    print("[PROXIMO] Execute './distribution/manage.py verify' e revise 'git diff'.")
+    print("[PROXIMO] Execute './maintenance/manage.py verify' e revise 'git diff'.")
     return 0
 
 
@@ -991,7 +994,7 @@ def command_publish(options: argparse.Namespace) -> int:
             print(f"[GITLAB] verificar/publicar {len(packages)} artefato(s)")
         else:
             command = [
-                sys.executable, str(DISTRIBUTION / "tools/publish_gitlab_packages.py"),
+                sys.executable, str(MAINTENANCE / "tools/publish_gitlab_packages.py"),
                 "--catalog", str(CATALOG), "--dist", str(DIST), "--builds", str(BUILDS),
             ]
             command.extend(["--publish", "--register"])
@@ -1005,7 +1008,7 @@ def command_commit(options: argparse.Namespace) -> int:
     if not status:
         print("[OK] Nao ha alteracoes para registrar no Git.")
         return 0
-    run(["git", "add", "dist", "distribution/inventory", "distribution/recipes", "site/public/api/v1/catalog.json"])
+    run(["git", "add", "dist", "maintenance/inventory", "maintenance/recipes", "site/public/api/v1/catalog.json"])
     staged = run(["git", "diff", "--cached", "--name-only"], capture=True).stdout.strip()
     if not staged:
         raise ManagerError("nao ha mudancas de distribuicao para commit")

@@ -12,7 +12,7 @@ from urllib.parse import unquote, urlsplit
 
 try:
     from .component_policy import load_component_policy, require_component
-except ImportError:  # Execucao direta: python3 distribution/tools/validate_catalog.py
+except ImportError:  # Execucao direta: python3 maintenance/tools/validate_catalog.py
     from component_policy import load_component_policy, require_component
 
 

@@ -33,7 +33,7 @@ O manual completo esta em [installer/docs/installer.md](installer/docs/installer
 
 ```text
 dist/                    produto final canonico e versionado
-distribution/            manutencao, inventarios, receitas, testes e builds
+maintenance/            manutencao, inventarios, receitas, testes e builds
 installer/               documentacao e testes do instalador da raiz
 site/                    site inteiro: produto, design, deploy, assets e testes
 docs/                    arquitetura global da plataforma
@@ -43,13 +43,13 @@ ROADMAP.md                roteiro global do produto
 
 Cada dominio guarda tudo que lhe pertence:
 
-- `distribution/inventory/` define componentes, dependencias, versoes, origens
+- `maintenance/inventory/` define componentes, dependencias, versoes, origens
   e a fronteira de arquivos aceitos;
-- `distribution/recipes/` registra artefatos stable byte a byte;
-- `distribution/tools/` contem apenas modulos internos usados pelo gerenciador;
-- `distribution/tests/`, `installer/tests/` e `site/tests/` testam seus proprios
+- `maintenance/recipes/` registra artefatos stable byte a byte;
+- `maintenance/tools/` contem apenas modulos internos usados pelo gerenciador;
+- `maintenance/tests/`, `installer/tests/` e `site/tests/` testam seus proprios
   contextos;
-- `distribution/build/` recebe ZIPs derivados e e ignorado pelo Git;
+- `maintenance/build/` recebe ZIPs derivados e e ignorado pelo Git;
 - `site/wrangler.jsonc`, `site/PRODUCT.md`, `site/DESIGN.md` e `site/docs/`
   pertencem ao site, sem arquivos de site soltos na raiz;
 - `quake-world/`, caches e `__pycache__` sao estado local ignorado, nunca fonte
@@ -68,16 +68,16 @@ dist/
 
 ## Manter a distribuicao
 
-`distribution/manage.py` e a unica interface oficial de manutencao:
+`maintenance/manage.py` e a unica interface oficial de manutencao:
 
 ```sh
-./distribution/manage.py check
-./distribution/manage.py update --dry-run
-./distribution/manage.py update
-./distribution/manage.py verify
-./distribution/manage.py build
-./distribution/manage.py publish --dry-run
-./distribution/manage.py commit
+./maintenance/manage.py check
+./maintenance/manage.py update --dry-run
+./maintenance/manage.py update
+./maintenance/manage.py verify
+./maintenance/manage.py build
+./maintenance/manage.py publish --dry-run
+./maintenance/manage.py commit
 ```
 
 `update` descobre upstreams, prepara uma arvore temporaria, baixa somente
@@ -88,7 +88,7 @@ versao inventada: quando o upstream muda, o comando exige uma definicao
 revisada via `add`.
 
 O contrato completo, incluindo o formato de inclusao de pacotes e
-configuracoes, esta em [distribution/README.md](distribution/README.md).
+configuracoes, esta em [maintenance/README.md](maintenance/README.md).
 
 ## Site
 
@@ -105,7 +105,7 @@ Abra <http://127.0.0.1:8787>. Instrucoes de deploy ficam em
 ## Validacao integral
 
 ```sh
-./distribution/manage.py verify
+./maintenance/manage.py verify
 ./install-qw.py --help
 cd site && npx --yes wrangler@4.114.0 deploy --dry-run
 ```

@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "distribution/tools"))
+sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402

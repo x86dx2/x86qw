@@ -12,7 +12,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "distribution/tools"))
+sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from component_policy import load_component_policy, require_component  # noqa: E402
 from components import (  # noqa: E402
@@ -43,7 +43,7 @@ SPEC.loader.exec_module(install_qw)
 class DistributionTests(unittest.TestCase):
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()
-        catalog = load_component_catalog(ROOT / "distribution/inventory/components.json")
+        catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
         self.assertGreater(len(source_roots(catalog)), 10)
         for component in ("ezquake", "nquake", "ktx", "td2"):
             require_component(components, component)
@@ -53,7 +53,7 @@ class DistributionTests(unittest.TestCase):
                     require_component(components, component)
 
     def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
-        catalog = load_component_catalog(ROOT / "distribution/inventory/components.json")
+        catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
         snapshots = list((ROOT / "dist/nquake").iterdir())
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())

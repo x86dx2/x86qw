@@ -12,7 +12,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "distribution/tools"))
+sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from build_component_packages import rewrite_zip_members  # noqa: E402
 from check_component_updates import check_updates  # noqa: E402
@@ -27,10 +27,10 @@ from component_releases import (  # noqa: E402
 
 class ComponentReleaseTests(unittest.TestCase):
     def test_release_inventory_covers_every_component_and_tracks_independent_origins(self) -> None:
-        components = load_catalog(ROOT / "distribution/inventory/components.json")
+        components = load_catalog(ROOT / "maintenance/inventory/components.json")
         releases = load_releases(
-            ROOT / "distribution/inventory/component-releases.json",
-            ROOT / "distribution/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+            ROOT / "maintenance/inventory/components.json",
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["nquake-ktx"]
@@ -108,8 +108,8 @@ class ComponentReleaseTests(unittest.TestCase):
 
     def test_standalone_update_check_verifies_the_pinned_source_without_github_metadata(self) -> None:
         releases = load_releases(
-            ROOT / "distribution/inventory/component-releases.json",
-            ROOT / "distribution/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+            ROOT / "maintenance/inventory/components.json",
         )
         td2_artifact = releases["components"]["total-destruction-2"]["artifacts"][0]
         with mock.patch("check_component_updates.github_json", return_value={

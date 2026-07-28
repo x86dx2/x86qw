@@ -32,8 +32,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
-from distribution.tools.components import components_by_id, load_catalog as load_component_catalog, resolve_dependencies
-from distribution.tools.component_sources import (
+from maintenance.tools.components import components_by_id, load_catalog as load_component_catalog, resolve_dependencies
+from maintenance.tools.component_sources import (
     ComponentSourceContext,
     load_source_context,
     resolve_component_payloads,
@@ -47,8 +47,8 @@ METADATA_DIR = ".install"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
-COMPONENT_CATALOG = "distribution/inventory/components.json"
-COMPONENT_RELEASES = "distribution/inventory/component-releases.json"
+COMPONENT_CATALOG = "maintenance/inventory/components.json"
+COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"

@@ -10,13 +10,13 @@ temporarios.
 Use apenas o gerenciador da raiz do contexto:
 
 ```sh
-./distribution/manage.py check
-./distribution/manage.py update
-./distribution/manage.py add caminho/change.json
-./distribution/manage.py verify
-./distribution/manage.py build
-./distribution/manage.py publish
-./distribution/manage.py commit --push
+./maintenance/manage.py check
+./maintenance/manage.py update
+./maintenance/manage.py add caminho/change.json
+./maintenance/manage.py verify
+./maintenance/manage.py build
+./maintenance/manage.py publish
+./maintenance/manage.py commit --push
 ```
 
 - `check`: consulta os upstreams declarados sem escrever no projeto; retorna
@@ -28,7 +28,7 @@ Use apenas o gerenciador da raiz do contexto:
   definicao local revisada;
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
 - `build`: valida os binarios stable e gera os 18 ZIPs derivados em
-  `distribution/build/packages/`;
+  `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
@@ -36,13 +36,13 @@ Use apenas o gerenciador da raiz do contexto:
 separar revisao e publicacao:
 
 ```sh
-./distribution/manage.py check
-./distribution/manage.py update --dry-run
-./distribution/manage.py update
-./distribution/manage.py verify
+./maintenance/manage.py check
+./maintenance/manage.py update --dry-run
+./maintenance/manage.py update
+./maintenance/manage.py verify
 git diff --stat
-./distribution/manage.py publish
-./distribution/manage.py commit --push
+./maintenance/manage.py publish
+./maintenance/manage.py commit --push
 ```
 
 ## Atualizacoes independentes
