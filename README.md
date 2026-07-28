@@ -11,10 +11,12 @@ regras de proveniência, as ferramentas de validação e o site do projeto. O
 instalador e a página pública leem o mesmo catálogo canônico, sem uma camada de
 sincronização intermediária.
 
-No macOS, feche o ezQuake antes de instalar. Na primeira abertura, selecione a
-própria pasta `quake-world` quando o aplicativo pedir o diretório do jogo; o
-instalador limpa autorizações antigas e `./install-qw.py verify` confirma se a
-configuração nQuake já foi carregada.
+No macOS, feche o ezQuake antes de instalar. O pacote oficial é preparado
+localmente com assinatura ad-hoc sem o entitlement de sandbox que torna o
+bookmark do diretório inválido entre aberturas; por isso `-basedir` acessa
+diretamente `quake-world` e o usuário não precisa localizar os PAKs. Instalações
+anteriores são reparadas e têm o recibo atualizado automaticamente ao usar
+`play` ou `hub`. `./install-qw.py verify` confirma a integridade resultante.
 
 Para abrir um mod local sem montar argumentos manualmente, use:
 
@@ -24,7 +26,11 @@ Para abrir um mod local sem montar argumentos manualmente, use:
 
 O menu oferece apenas mods efetivamente instalados, valida o componente,
 descobre os mapas presentes nos diretórios, PAKs e PK3s e permite escolher entre
-KTX, Clan Arena, Pro-X, Team Fortress e Total Destruction 2.
+KTX, Clan Arena, Pro-X, Team Fortress e Total Destruction 2. Para os quatro
+mods QuakeC clássicos, `play` cria cópias gerenciadas do gamecode com nomes
+exclusivos e pequenos `server.cfg`; isso impede que o `qwprogs.qvm` do KTX seja
+carregado por engano. Esses arquivos entram em `.install/play-support.*` e são
+removidos normalmente por `uninstall`.
 
 ## Princípios
 

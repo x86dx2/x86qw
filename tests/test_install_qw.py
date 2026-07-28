@@ -156,6 +156,22 @@ class InstallerTests(unittest.TestCase):
                     installer.reset_macos_game_directory()
             run.assert_not_called()
 
+    def test_macos_sandbox_is_removed_with_native_codesign(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            app = target / "ezQuake.app"
+            with mock.patch.object(installer, "macos_app_is_sandboxed", side_effect=[True, False]):
+                with mock.patch.object(installer, "run_command") as command:
+                    self.assertTrue(installer.remove_macos_app_sandbox(app))
+            self.assertEqual(
+                ["codesign", "--force", "--deep", "--sign", "-", str(app)],
+                command.call_args_list[0].args[0],
+            )
+            self.assertEqual(
+                ["codesign", "--verify", "--deep", "--strict", str(app)],
+                command.call_args_list[1].args[0],
+            )
+
     def test_nquake_startup_state_reports_pending_and_loaded(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

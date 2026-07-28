@@ -59,6 +59,8 @@ MAPS_RECEIPT = ".install/maps.receipt"
 MAPS_INVENTORY = ".install/maps.inventory"
 PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
+PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
+PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = Path(__file__).resolve().parent
 
@@ -596,6 +598,9 @@ class Installer:
     def reset_macos_game_directory(self) -> None:
         if not self.is_native_macos_install():
             return
+        self.clear_macos_game_directory()
+
+    def clear_macos_game_directory(self) -> None:
         self.ensure_macos_ezquake_closed()
         for key in MACOS_DIRECTORY_KEYS:
             try:
@@ -611,6 +616,32 @@ class Installer:
                 suffix = f": {detail}" if detail else ""
                 raise InstallerError(f"Não foi possível limpar a seleção antiga do ezQuake{suffix}")
         console.success("Seleção antiga do diretório do ezQuake removida do macOS.")
+
+    def macos_app_is_sandboxed(self, app: Path) -> bool:
+        if host_platform.system() != "Darwin":
+            return False
+        try:
+            result = subprocess.run(
+                ["codesign", "-d", "--entitlements", "-", str(app)],
+                check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        except FileNotFoundError as error:
+            raise InstallerError("O utilitário nativo codesign não foi encontrado no macOS.") from error
+        detail = f"{result.stdout}\n{result.stderr}"
+        if result.returncode != 0:
+            raise InstallerError(f"Não foi possível ler os entitlements do ezQuake: {detail.strip()}")
+        return "com.apple.security.app-sandbox" in detail
+
+    def remove_macos_app_sandbox(self, app: Path) -> bool:
+        if not self.macos_app_is_sandboxed(app):
+            return False
+        console.info("Ajustando o bundle macOS para acessar diretamente o diretório x86QW...")
+        self.run_command(["codesign", "--force", "--deep", "--sign", "-", str(app)])
+        self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
+        if self.macos_app_is_sandboxed(app):
+            raise InstallerError(f"Não foi possível remover o sandbox incompatível de {app}.")
+        console.success("Bundle macOS preparado sem a limitação de bookmark do sandbox.")
+        return True
 
     def validate_target(self, action: str) -> None:
         target_exists = lexists(self.target)
@@ -1167,6 +1198,8 @@ class Installer:
                 raise InstallerError(f"stable bundle version is {version}, expected {self.selected_version}")
             if self.channel == "nightly" and f"-g{self.selected_version.rsplit('_', 1)[-1]}" not in version:
                 raise InstallerError(f"nightly bundle {version} does not match {self.selected_version}")
+            if self.remove_macos_app_sandbox(source):
+                version, binary_hash = self.inspect_macos_app(source)
             source.replace(prepared)
             self.app_bundle_version = version
             self.app_binary_sha256 = binary_hash
@@ -1219,14 +1252,53 @@ class Installer:
 
     def write_ezquake_receipt(self, path: Path) -> None:
         assert self.spec is not None
-        write_table(path, [
-            ("format", "1"), ("platform", self.spec.key), ("architecture", self.spec.architecture),
-            ("channel", self.channel), ("selection", self.selected_version),
-            ("install_name", self.spec.runtime(self.channel)), ("bundle_version", self.app_bundle_version),
-            ("artifact_name", self.app_archive_name), ("artifact_url", self.app_url),
-            ("artifact_sha256", self.app_archive_sha256), ("binary_sha256", self.app_binary_sha256),
-        ])
+        self.write_ezquake_receipt_record(path, {
+            "format": "1", "platform": self.spec.key, "architecture": self.spec.architecture,
+            "channel": self.channel, "selection": self.selected_version,
+            "install_name": self.spec.runtime(self.channel), "bundle_version": self.app_bundle_version,
+            "artifact_name": self.app_archive_name, "artifact_url": self.app_url,
+            "artifact_sha256": self.app_archive_sha256, "binary_sha256": self.app_binary_sha256,
+        })
         self.validate_ezquake_receipt(path, self.spec, self.channel)
+
+    def write_ezquake_receipt_record(self, path: Path, receipt: dict[str, str]) -> None:
+        write_table(path, [
+            ("format", receipt["format"]), ("platform", receipt["platform"]),
+            ("architecture", receipt["architecture"]), ("channel", receipt["channel"]),
+            ("selection", receipt["selection"]), ("install_name", receipt["install_name"]),
+            ("bundle_version", receipt["bundle_version"]), ("artifact_name", receipt["artifact_name"]),
+            ("artifact_url", receipt["artifact_url"]), ("artifact_sha256", receipt["artifact_sha256"]),
+            ("binary_sha256", receipt["binary_sha256"]),
+        ])
+
+    def repair_installed_macos_runtime(
+        self,
+        spec: PlatformSpec,
+        channel: str,
+        receipt_path: Path,
+        receipt: dict[str, str],
+    ) -> dict[str, str]:
+        runtime = self.target / spec.runtime(channel)
+        if spec.key != "macos" or not self.macos_app_is_sandboxed(runtime):
+            return receipt
+        self.ensure_macos_ezquake_closed()
+        self.remove_macos_app_sandbox(runtime)
+        _, binary_hash = self.inspect_macos_app(runtime)
+        updated = dict(receipt)
+        updated["binary_sha256"] = binary_hash
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{receipt_path.name}.", dir=receipt_path.parent)
+        os.close(descriptor)
+        temporary = Path(temporary_name)
+        try:
+            self.write_ezquake_receipt_record(temporary, updated)
+            self.validate_ezquake_receipt(temporary, spec, channel)
+            temporary.replace(receipt_path)
+        finally:
+            if lexists(temporary):
+                remove_path(temporary)
+        self.clear_macos_game_directory()
+        console.success(f"ezQuake {channel} reparado para o macOS atual.")
+        return updated
 
     def check_runtime(self, spec: PlatformSpec, channel: str, receipt: dict[str, str]) -> None:
         runtime = self.target / spec.runtime(channel)
@@ -1334,6 +1406,7 @@ class Installer:
         paths = {
             "maps": (MAPS_RECEIPT, MAPS_INVENTORY),
             "presets": (PRESETS_RECEIPT, PRESETS_INVENTORY),
+            "play-support": (PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY),
         }
         if component in paths:
             return paths[component]
@@ -1474,7 +1547,7 @@ class Installer:
         receipt_relative, inventory_relative = self.component_metadata(component)
         remove_path(self.target / receipt_relative)
         remove_path(self.target / inventory_relative)
-        for name in ("qw/maps", "ezquake/configs"):
+        for name in ("qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2"):
             remove_empty_directories(self.target / name)
         remove_empty_directories(self.target / METADATA_DIR)
         return removed
@@ -2030,17 +2103,110 @@ class Installer:
         game = self.choose_local_game(games)
         self.verify_component(game.component)
         map_name = self.choose_local_map(game)
+        self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = [
             "-game", game.gamedir,
             "+gamedir", game.gamedir,
             "+sv_gamedir", game.gamedir,
-            "+map", map_name,
         ]
+        if game.key != "ktx":
+            arguments.extend(["+sv_progtype", "0"])
+        arguments.extend(["+map", map_name])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
         console.success(f"{label} aberto com {game.label}.")
         console.info(game.confirmation)
+
+    def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
+        legacy_games = [game for game in games if game.key != "ktx"]
+        if not legacy_games:
+            return
+        present, old_entries, _ = self.validate_component_pair("play-support")
+        old = dict(old_entries) if present else {}
+        previous_stage = self.stage
+        self.stage = Path(tempfile.mkdtemp(prefix=".quake-play.", dir=self.target))
+        try:
+            managed = self.stage / "managed"
+            prepared = 0
+            for game in legacy_games:
+                program_name = f"x86qw_{game.gamedir}"
+                files = {
+                    f"{game.gamedir}/{program_name}.dat": self.local_game_program(game),
+                    f"{game.gamedir}/server.cfg": (
+                        "// x86QW: isola mods QuakeC antigos do QVM do KTX.\n"
+                        'sv_progtype "0"\n'
+                        f'sv_progsname "{program_name}"\n'
+                        f'sv_gamedir "{game.gamedir}"\n'
+                    ).encode(),
+                }
+                for relative, payload in files.items():
+                    destination = self.target / relative
+                    if lexists(destination):
+                        if not destination.is_file() or destination.is_symlink():
+                            raise InstallerError(f"Suporte local inválido: {destination}")
+                        if old.get(relative) != file_hash(destination):
+                            console.warning(f"Arquivo pessoal preservado: {destination}")
+                            continue
+                    candidate = managed / relative
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.write_bytes(payload)
+                    prepared += 1
+            if prepared:
+                count = self.install_component_overlay(
+                    "play-support", managed, "1", "x86QW local-play compatibility",
+                )
+                console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
+        finally:
+            self.cleanup_stage()
+            self.stage = previous_stage
+
+    def local_game_program(self, game: LocalGameSpec) -> bytes:
+        package = self.target / game.marker
+        suffix = package.suffix.casefold()
+        if suffix == ".dat":
+            return package.read_bytes()
+        if suffix == ".pk3":
+            try:
+                with zipfile.ZipFile(package) as archive:
+                    return archive.read("qwprogs.dat")
+            except (KeyError, OSError, zipfile.BadZipFile) as error:
+                raise InstallerError(f"Gamecode qwprogs.dat não encontrado em {package}.") from error
+        if suffix == ".pak":
+            return self.pak_member(package, "qwprogs.dat")
+        raise InstallerError(f"Formato de gamecode local não suportado: {package}")
+
+    def pak_member(self, package: Path, member_name: str) -> bytes:
+        try:
+            size = package.stat().st_size
+            with package.open("rb") as archive:
+                header = archive.read(12)
+                if len(header) != 12 or header[:4] != b"PACK":
+                    raise InstallerError(f"PAK inválido: {package}")
+                directory_offset, directory_size = struct.unpack("<II", header[4:])
+                if directory_offset < 12 or directory_size % 64 or directory_offset + directory_size > size:
+                    raise InstallerError(f"Diretório PAK inválido: {package}")
+                archive.seek(directory_offset)
+                directory = archive.read(directory_size)
+                for offset in range(0, len(directory), 64):
+                    raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
+                    try:
+                        name = raw_name.decode("ascii")
+                    except UnicodeDecodeError:
+                        continue
+                    if name.casefold() != member_name.casefold():
+                        continue
+                    data_offset, data_size = struct.unpack_from("<II", directory, offset + 56)
+                    if data_offset < 12 or data_offset + data_size > size:
+                        raise InstallerError(f"Membro PAK inválido em {package}: {name}")
+                    archive.seek(data_offset)
+                    payload = archive.read(data_size)
+                    if len(payload) != data_size:
+                        raise InstallerError(f"Membro PAK truncado em {package}: {name}")
+                    return payload
+        except OSError as error:
+            raise InstallerError(f"Não foi possível ler o PAK: {package}") from error
+        raise InstallerError(f"Gamecode {member_name} não encontrado em {package}.")
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
@@ -2083,6 +2249,7 @@ class Installer:
             if not receipt_path.is_file():
                 continue
             receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+            receipt = self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
             self.check_runtime(spec, channel, receipt)
             choices.append((f"ezQuake {channel} {receipt['selection']}", self.target / spec.runtime(channel)))
         return choices
@@ -2201,6 +2368,7 @@ class Installer:
             raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
         self.verify_component("maps")
         self.verify_component("presets")
+        self.verify_component("play-support")
         self.report_nquake_startup_state(installed)
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
@@ -2233,13 +2401,14 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
 
     def preflight_component_receipts(self) -> None:
-        for component in (*self.components, "maps", "presets"):
+        for component in (*self.components, "maps", "presets", "play-support"):
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
         metadata_names = [
             NQUAKE_INVENTORY, NQUAKE_RECEIPT,
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
+            PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY,
         ]
         for component in self.components:
             metadata_names.extend(self.component_metadata(component))
@@ -2279,7 +2448,7 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
                 remove_path(self.target / spec.runtime(channel))
                 remove_path(receipt_path)
-        for component in (*reversed(tuple(self.components)), "maps", "presets"):
+        for component in (*reversed(tuple(self.components)), "maps", "presets", "play-support"):
             self.remove_component(component)
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)

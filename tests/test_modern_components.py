@@ -258,12 +258,33 @@ class ModernComponentTests(unittest.TestCase):
                             with mock.patch.object(installer, "local_map_names", return_value=["dm6", "dm2"]):
                                 with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
                                     with mock.patch.object(installer, "launch_runtime") as launch:
-                                        with mock.patch("builtins.input", side_effect=["", ""]):
-                                            installer.play_local()
+                                        with mock.patch.object(installer, "ensure_local_play_support") as support:
+                                            with mock.patch("builtins.input", side_effect=["", ""]):
+                                                installer.play_local()
             verify.assert_called_once_with("total-destruction-2")
+            support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
-                "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2", "+map", "dm6",
+                "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
+                "+sv_progtype", "0", "+map", "dm6",
             ])
+
+    def test_local_play_support_is_managed_and_reversible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            gamecode = target / "td2/qwprogs.dat"
+            gamecode.parent.mkdir(parents=True)
+            gamecode.write_bytes(b"quakec")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support([game])
+            server_config = target / "td2/server.cfg"
+            self.assertIn('sv_progtype "0"', server_config.read_text(encoding="utf-8"))
+            self.assertIn('sv_gamedir "td2"', server_config.read_text(encoding="utf-8"))
+            self.assertIn('sv_progsname "x86qw_td2"', server_config.read_text(encoding="utf-8"))
+            self.assertEqual(b"quakec", (target / "td2/x86qw_td2.dat").read_bytes())
+            self.assertEqual(2, installer.verify_component("play-support"))
+            self.assertEqual(2, installer.remove_component("play-support"))
+            self.assertFalse(server_config.exists())
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:
