@@ -10,7 +10,7 @@ atribuição, origem imutável e checksum.
 | --- | --- | --- |
 | ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 preservado em `dist/ezquake` e replicado nos mirrors |
 | ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/ezquake` |
-| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/components.json` | originais em `dist/nquake` e pacotes imutáveis em `dist/packages` |
+| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `inventory/components.json` | originais em `dist/nquake`; pacotes de entrega são builds reproduzíveis temporários |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte | original preservado e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |

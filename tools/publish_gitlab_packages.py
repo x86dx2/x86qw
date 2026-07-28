@@ -41,12 +41,18 @@ def artifact_url(package: dict[str, object]) -> str:
     return f"{API_ROOT}/{'/'.join(quoted)}"
 
 
-def local_artifact(package: dict[str, object], dist: Path) -> Path:
+def local_artifact(package: dict[str, object], dist: Path, builds: Path) -> Path:
     filename = str(package["filename"])
     relative = package.get("distribution_path")
-    if not isinstance(relative, str):
-        raise ValueError(f"catalog package has no distribution path: {filename}")
-    path = dist / relative
+    if isinstance(relative, str):
+        path = dist / relative
+    elif package.get("channel") == "content":
+        candidates = [path for path in builds.rglob(filename) if path.is_file() and not path.is_symlink()]
+        if len(candidates) != 1:
+            raise ValueError(f"expected one temporary build artifact for {filename}, found {len(candidates)}")
+        path = candidates[0]
+    else:
+        raise ValueError(f"catalog package has no local distribution artifact: {filename}")
     if not path.is_file() or path.is_symlink():
         raise ValueError(f"distribution artifact is missing: {path}")
     if path.stat().st_size != package["size"]:
@@ -105,6 +111,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--dist", type=Path, default=ROOT / "dist")
+    parser.add_argument("--builds", type=Path, default=ROOT / "build/packages")
     parser.add_argument("--publish", action="store_true", help="envia artefatos ausentes usando a autenticação do glab")
     parser.add_argument("--register", action="store_true", help="adiciona URLs GitLab ao catálogo após verificar tudo")
     arguments = parser.parse_args()
@@ -117,7 +124,7 @@ def main() -> int:
     verified = 0
     for index, package in enumerate(packages, 1):
         assert isinstance(package, dict)
-        path = local_artifact(package, arguments.dist)
+        path = local_artifact(package, arguments.dist, arguments.builds)
         url = artifact_url(package)
         remote = remote_sha256(url)
         if remote is None:

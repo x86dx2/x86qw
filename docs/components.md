@@ -38,7 +38,7 @@ Estado verificado em 27 de julho de 2026:
 - todo download possui tamanho e SHA-256 antes de entrar no acervo;
 - o pacote interno registra origem, membros substituídos e hashes resultantes;
 - o catálogo mantém somente a versão atual, enquanto releases antigas continuam
-  imutáveis no repositório de distribuição;
+  imutáveis nos mirrors de entrega;
 - `tools/check_component_updates.py` detecta novidades, mas não as publica.
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o

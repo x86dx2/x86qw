@@ -9,7 +9,10 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from components import components_by_id, load_catalog as load_component_catalog
+try:
+    from .components import components_by_id, load_catalog as load_component_catalog
+except ImportError:  # Executado diretamente por ferramentas em tools/.
+    from components import components_by_id, load_catalog as load_component_catalog
 
 
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")

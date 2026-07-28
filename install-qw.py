@@ -19,6 +19,7 @@ import stat
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import traceback
@@ -32,6 +33,11 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 from tools.components import components_by_id, load_catalog as load_component_catalog, resolve_dependencies
+from tools.component_sources import (
+    ComponentSourceContext,
+    load_source_context,
+    resolve_component_payloads,
+)
 
 
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
@@ -42,6 +48,7 @@ METADATA_DIR = ".install"
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
 COMPONENT_CATALOG = "inventory/components.json"
+COMPONENT_RELEASES = "inventory/component-releases.json"
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
@@ -554,6 +561,7 @@ class Installer:
         self.app_distribution_path = ""
         self.cache_prefix = ""
         self._public_catalog: dict[str, object] | None = None
+        self._component_source_context: ComponentSourceContext | None = None
         try:
             self.component_catalog = load_component_catalog(INSTALLER_ROOT / COMPONENT_CATALOG)
         except ValueError as error:
@@ -1848,7 +1856,9 @@ class Installer:
         return candidate
 
     def download_component_package(self, package: dict[str, object]) -> Path:
-        assert self.cache_root is not None and self.stage is not None
+        assert self.stage is not None
+        self.prepare_cache()
+        assert self.cache_root is not None
         identifier = str(package["package"])
         filename = str(package["filename"])
         digest = str(package["sha256"])
@@ -1888,6 +1898,73 @@ class Installer:
                 if index + 1 < len(package["urls"]):
                     console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
         raise InstallerError(f"Nenhum mirror entregou o pacote {identifier}: {last_error}")
+
+    def component_source_context(self) -> ComponentSourceContext | None:
+        distribution = self.project_root / "dist"
+        if not (distribution / "nquake").is_dir():
+            return None
+        if self._component_source_context is None:
+            try:
+                self._component_source_context = load_source_context(
+                    distribution,
+                    self.project_root / COMPONENT_CATALOG,
+                    self.project_root / COMPONENT_RELEASES,
+                )
+            except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
+                raise InstallerError(
+                    "As fontes canônicas locais estão incompletas ou inválidas. "
+                    "Execute git lfs pull e tente novamente."
+                ) from error
+        return self._component_source_context
+
+    def prepare_component_sources(
+        self, package: dict[str, object],
+    ) -> tuple[Path, list[tuple[Path, Path]], str] | None:
+        assert self.stage is not None
+        context = self.component_source_context()
+        if context is None:
+            return None
+        identifier = str(package["package"])
+        try:
+            release, source_revision, payloads = resolve_component_payloads(context, identifier)
+        except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
+            raise InstallerError(
+                f"Não foi possível materializar {identifier} a partir das fontes canônicas locais. "
+                "Execute git lfs pull e tente novamente."
+            ) from error
+        revision_key = "source_revision" if "source_revision" in package else "source_commit"
+        if release.get("version") != package.get("version") or package.get(revision_key) != source_revision:
+            raise InstallerError(f"As fontes canônicas locais não correspondem ao catálogo de {identifier}.")
+
+        root = self.stage / f"sources-{identifier}"
+        root.mkdir()
+        expected: set[str] = set()
+        for _, member_name, payload, _ in payloads:
+            relative = PurePosixPath(member_name)
+            if (
+                relative.is_absolute()
+                or any(part in ("", ".", "..") for part in relative.parts)
+                or relative.parts[0] not in ("payload", "defaults")
+                or member_name in expected
+            ):
+                raise InstallerError(f"Destino inválido nas fontes canônicas de {identifier}: {member_name}")
+            destination = root.joinpath(*relative.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(payload)
+            if os.name != "nt":
+                destination.chmod(0o644)
+            expected.add(member_name)
+        managed = root / "payload"
+        if not managed.is_dir():
+            raise InstallerError(f"As fontes canônicas de {identifier} não produziram conteúdo instalável.")
+        defaults_root = root / "defaults"
+        defaults = [
+            (path, self.target / path.relative_to(defaults_root))
+            for path in defaults_root.rglob("*") if path.is_file()
+        ] if defaults_root.is_dir() else []
+        source = f"x86qw:dist/{identifier}@{source_revision}"
+        console.success(f"Componente materializado das fontes canônicas locais: {identifier}")
+        return managed, defaults, source
 
     def prepare_component_package(self, package: dict[str, object], artifact: Path) -> tuple[Path, list[tuple[Path, Path]]]:
         assert self.stage is not None
@@ -2007,16 +2084,20 @@ class Installer:
 
     def install_components(self, selected: list[str]) -> None:
         assert self.stage is not None
-        self.prepare_cache()
         self.migrate_legacy_nquake()
         for index, identifier in enumerate(selected, 1):
             component = self.components[identifier]
             console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
             package = self.component_package_record(identifier)
-            artifact = self.download_component_package(package)
-            managed, defaults = self.prepare_component_package(package, artifact)
+            prepared = self.prepare_component_sources(package)
+            if prepared is None:
+                artifact = self.download_component_package(package)
+                managed, defaults = self.prepare_component_package(package, artifact)
+                source = str(package["origin_url"])
+            else:
+                managed, defaults, source = prepared
             count = self.install_component_overlay(
-                identifier, managed, str(package["version"]), str(package["origin_url"]),
+                identifier, managed, str(package["version"]), source,
             )
             for staged, destination in defaults:
                 if not lexists(destination):

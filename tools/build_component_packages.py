@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import tempfile
@@ -13,19 +12,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from components import (
-    component_for_source,
-    components_by_id,
-    destination_for_source,
-    load_catalog,
-    validate_tree_partition,
-)
-from component_releases import (
-    component_release,
-    load_releases,
-    verified_artifact_members,
-    verified_package_files,
-)
+from component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
 from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
@@ -50,117 +37,19 @@ def zip_member(name: str, payload: bytes) -> tuple[zipfile.ZipInfo, bytes]:
     return info, payload
 
 
-def discover_snapshot(distribution: Path) -> tuple[str, Path]:
-    snapshots = [path for path in (distribution / "nquake").iterdir() if path.is_dir()]
-    if len(snapshots) != 1 or len(snapshots[0].name) != 40:
-        raise ValueError("distribution must contain exactly one commit-addressed nQuake source tree")
-    return snapshots[0].name, snapshots[0]
-
-
-def rewrite_zip_members(payload: bytes, replacements: dict[str, bytes]) -> bytes:
-    source = io.BytesIO(payload)
-    output = io.BytesIO()
-    with zipfile.ZipFile(source) as original:
-        if original.testzip() is not None:
-            raise ValueError("base component archive contains a corrupt member")
-        original_files = {
-            info.filename: original.read(info.filename)
-            for info in original.infolist() if not info.is_dir()
-        }
-    missing = set(replacements) - set(original_files)
-    if missing:
-        raise ValueError(f"component override target is missing: {sorted(missing)[0]}")
-    original_files.update(replacements)
-    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
-        for name, data in sorted(original_files.items()):
-            info, content = zip_member(name, data)
-            rebuilt.writestr(info, content)
-    return output.getvalue()
-
-
-def component_payload(
-    distribution: Path,
-    snapshot: Path,
-    upstream_path: str,
-    release: dict[str, object],
-) -> tuple[bytes, list[dict[str, str]]]:
-    payload = (snapshot / upstream_path).read_bytes()
-    applied: list[dict[str, str]] = []
-    replacements: dict[str, bytes] = {}
-    for artifact in release.get("artifacts", []):
-        assert isinstance(artifact, dict)
-        members = verified_artifact_members(distribution, artifact)
-        for member in artifact["members"]:
-            assert isinstance(member, dict)
-            if member["target_archive"] != upstream_path:
-                continue
-            member_path = str(member["path"])
-            replacements[str(member["target_member"])] = members[member_path]
-            applied.append({
-                "artifact": str(artifact["url"]),
-                "member": member_path,
-                "sha256": str(member["sha256"]),
-            })
-    if replacements:
-        payload = rewrite_zip_members(payload, replacements)
-    return payload, applied
-
-
-def standalone_component_payloads(
-    distribution: Path,
-    catalog: dict[str, object],
-    identifier: str,
-    component: dict[str, object],
-    release: dict[str, object],
-) -> list[tuple[str, str, bytes, list[dict[str, str]]]]:
-    selected: list[tuple[str, str, bytes, list[dict[str, str]]]] = []
-    for artifact in release.get("artifacts", []):
-        assert isinstance(artifact, dict)
-        for upstream_path, payload in sorted(verified_package_files(distribution, artifact).items()):
-            if component_for_source(catalog, upstream_path, "release") != identifier:
-                continue
-            destination, mode = destination_for_source(component, upstream_path, "release")
-            selected.append((upstream_path, f"{'defaults' if mode == 'default' else 'payload'}/{destination}", payload, []))
-    if not selected:
-        raise ValueError(f"standalone component selects no files: {identifier}")
-    return selected
-
-
 def build_packages(distribution: Path, output: Path) -> dict[str, object]:
-    catalog = load_catalog(COMPONENT_CATALOG)
-    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
-    components = components_by_id(catalog)
-    commit, snapshot = discover_snapshot(distribution)
-    paths = sorted(path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file())
-    partition = validate_tree_partition(catalog, paths, "reference")
+    context = load_source_context(distribution, COMPONENT_CATALOG, COMPONENT_RELEASES)
+    components = context.components
+    commit = context.commit
     reference_release = f"nquake-{commit}"
     build_id = f"components-{commit}"
     release_root = output / build_id
     release_root.mkdir(parents=True, exist_ok=True)
     packages = []
-    for identifier, component in components.items():
-        release_metadata = component_release(releases, identifier)
+    for identifier in components:
+        release_metadata, source_revision, payloads = resolve_component_payloads(context, identifier)
         version = str(release_metadata["version"])
         strategy = str(release_metadata["strategy"])
-        if strategy == "upstream-package":
-            source_artifacts = release_metadata["artifacts"]
-            assert isinstance(source_artifacts, list) and len(source_artifacts) == 1
-            source_revision = str(source_artifacts[0]["sha256"])
-            payloads = standalone_component_payloads(
-                distribution, catalog, identifier, component, release_metadata,
-            )
-        else:
-            source_revision = commit
-            payloads = []
-            for upstream_path in partition[identifier]:
-                destination, mode = destination_for_source(component, upstream_path, "reference")
-                payload, overrides = component_payload(distribution, snapshot, upstream_path, release_metadata)
-                payloads.append((
-                    upstream_path,
-                    f"{'defaults' if mode == 'default' else 'payload'}/{destination}",
-                    payload,
-                    overrides,
-                ))
         filename = f"{identifier}-{version}.zip"
         artifact = release_root / filename
         members: list[dict[str, str]] = []
@@ -215,7 +104,6 @@ def build_packages(distribution: Path, output: Path) -> dict[str, object]:
             "source_urls": source_urls,
             "redistribution_reviewed": True,
             "urls": [mirror_url],
-            "distribution_path": f"packages/{build_id}/{filename}",
         }
         if strategy == "upstream-package":
             package_record["source_revision"] = source_revision
@@ -267,6 +155,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
             if len(existing) != 1 or not same_payload or not mirrors_extend_primary:
                 raise ValueError(f"published package identity changed: {identity}")
             candidate["component"] = package["component"]
+            candidate.pop("distribution_path", None)
             continue
         packages[:] = [item for item in packages if not isinstance(item, dict) or (
             item.get("package", item.get("component")),
@@ -297,7 +186,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--distribution", type=Path, default=ROOT / "dist")
-    parser.add_argument("--output", type=Path, default=ROOT / "dist/packages")
+    parser.add_argument("--output", type=Path, default=ROOT / "build/packages")
     parser.add_argument("--register", action="store_true", help="registra os pacotes no catálogo público")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     arguments = parser.parse_args()

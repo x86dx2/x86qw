@@ -161,8 +161,7 @@
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
       "release_notes": "Atualiza o código de jogo KTX para 1.47 e preserva bots, configurações, mapas auxiliares e sons da distribuição nQuake.",
-      "upstream_version": "1.47",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip"
+      "upstream_version": "1.47"
     },
     {
       "component": "nquake",
@@ -184,7 +183,6 @@
       "urls": [
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.1.zip"
       ],
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.1.zip",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
@@ -208,8 +206,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-base-textures/e4cb23d40aa2/nquake-base-textures-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -232,8 +229,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-bootstrap/e4cb23d40aa2/nquake-bootstrap-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -256,8 +252,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-crosshairs/e4cb23d40aa2/nquake-crosshairs-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -280,8 +275,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-documentation/e4cb23d40aa2/nquake-documentation-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -304,8 +298,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-external-textures/e4cb23d40aa2/nquake-external-textures-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -328,8 +321,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-maps/e4cb23d40aa2/nquake-maps-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -352,8 +344,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-matchinfo/e4cb23d40aa2/nquake-matchinfo-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -376,8 +367,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-models/e4cb23d40aa2/nquake-models-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -400,8 +390,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-player-skins/e4cb23d40aa2/nquake-player-skins-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -424,8 +413,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-scoreboard-flags/e4cb23d40aa2/nquake-scoreboard-flags-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -448,8 +436,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-skyboxes/e4cb23d40aa2/nquake-skyboxes-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -472,8 +459,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-sounds/e4cb23d40aa2/nquake-sounds-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -496,8 +482,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-visual-core/e4cb23d40aa2/nquake-visual-core-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -520,8 +505,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/qrp-hires/e4cb23d40aa2/qrp-hires-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -544,8 +528,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/team-fortress/e4cb23d40aa2/team-fortress-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "td2",
@@ -574,8 +557,7 @@
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
       "release_notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. Configurações de servidor são instaladas como exemplos e o arquivo de senhas original é excluído.",
-      "upstream_version": "2.22",
-      "distribution_path": "packages/components-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/total-destruction-2-2.22.zip"
+      "upstream_version": "2.22"
     }
   ]
 }

@@ -293,18 +293,38 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(payload, artifact.read_bytes())
             self.assertEqual(2, request.call_count)
 
-    def test_component_package_is_loaded_from_dist_without_network(self):
+    def test_component_is_materialized_from_canonical_sources_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             installer.stage = target / ".stage"
             installer.stage.mkdir()
-            installer.prepare_cache()
             package = installer.component_package_record("nquake-bootstrap")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "http_get", side_effect=AssertionError("network used")):
-                    artifact = installer.download_component_package(package)
-            source = ROOT / "dist" / package["distribution_path"]
-            self.assertEqual(source.read_bytes(), artifact.read_bytes())
+                    prepared = installer.prepare_component_sources(package)
+            self.assertIsNotNone(prepared)
+            assert prepared is not None
+            managed, defaults, source = prepared
+            self.assertTrue((managed / "qw/autoexec.cfg").is_file())
+            self.assertTrue(any(destination == target / "ezquake/configs/config.cfg" for _, destination in defaults))
+            self.assertTrue(source.startswith("x86qw:dist/nquake-bootstrap@"))
+
+    def test_component_install_prefers_canonical_sources_over_remote_packages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(
+                    installer, "download_component_package", side_effect=AssertionError("remote package used"),
+                ):
+                    installer.install_components(["nquake-bootstrap"])
+            self.assertTrue((target / "qw/autoexec.cfg").is_file())
+            self.assertTrue((target / "ezquake/configs/config.cfg").is_file())
+            self.assertGreater(installer.verify_component("nquake-bootstrap"), 0)
+            receipt = (target / ".install/nquake-bootstrap.receipt").read_text(encoding="utf-8")
+            self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
+            self.assertFalse(cache.exists())
 
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:

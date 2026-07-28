@@ -26,8 +26,11 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
         self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
-        self.assertTrue(all(package.get("distribution_path") for package in catalog["packages"]))
-        self.assertTrue(all((ROOT / "dist" / package["distribution_path"]).is_file() for package in catalog["packages"]))
+        clients = [package for package in catalog["packages"] if package["component"] == "ezquake"]
+        content = [package for package in catalog["packages"] if package["channel"] == "content"]
+        self.assertTrue(all(package.get("distribution_path") for package in clients))
+        self.assertTrue(all((ROOT / "dist" / package["distribution_path"]).is_file() for package in clients))
+        self.assertTrue(all("distribution_path" not in package for package in content))
         self.assertIn(artifact_url(ktx), ktx["urls"])
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},

@@ -581,19 +581,19 @@
         <rect x="40" y="110" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="40" y="110" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
         <text x="115" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Upstream projects</text>
-        <text x="115" y="156" class="t-muted" font-size="9" text-anchor="middle">versioned sources</text>
+        <text x="115" y="156" class="t-muted" font-size="9" text-anchor="middle">selected sources</text>
 
         <rect x="250" y="110" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="250" y="110" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-        <text x="325" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">x86QW ingest</text>
-        <text x="325" y="156" class="t-muted" font-size="9" text-anchor="middle">license + format + hash</text>
-        <text x="325" y="166" class="t-backend" font-size="7" text-anchor="middle">reproducible</text>
+        <text x="325" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Canonical dist/</text>
+        <text x="325" y="156" class="t-muted" font-size="9" text-anchor="middle">sources + format + hash</text>
+        <text x="325" y="166" class="t-backend" font-size="7" text-anchor="middle">versioned</text>
 
         <rect x="460" y="110" width="160" height="64" rx="6" class="c-mask"/>
         <rect x="460" y="110" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
-        <text x="540" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Artifact mirrors</text>
+        <text x="540" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Generated packages</text>
         <text x="540" y="156" class="t-muted" font-size="9" text-anchor="middle">GitHub + GitLab</text>
-        <text x="540" y="166" class="t-cloud" font-size="7" text-anchor="middle">verified</text>
+        <text x="540" y="166" class="t-cloud" font-size="7" text-anchor="middle">reproducible</text>
 
         <rect x="40" y="330" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="40" y="330" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
@@ -644,8 +644,8 @@
 
         <rect x="811.8" y="398" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
         <text x="860" y="408" class="t-backend" font-size="8" text-anchor="middle">versions + SHA-256</text>
-        <rect x="730.7" y="220" width="43.6" height="14" rx="3" class="c-mask"/>
-        <text x="752.5" y="230" class="t-backend" font-size="8" text-anchor="middle">package</text>
+        <rect x="704" y="220" width="97" height="14" rx="3" class="c-mask"/>
+        <text x="752.5" y="230" class="t-backend" font-size="8" text-anchor="middle">remote fallback</text>
 
         <rect x="1141" y="480" width="58" height="14" rx="3" class="c-mask"/>
         <text x="1170" y="490" class="t-security" font-size="8" text-anchor="middle">validated copy</text>
@@ -681,11 +681,11 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>Reproducible delivery</h3>
+          <h3>Canonical distribution</h3>
         </div>
         <ul>
-          <li>&bull; Every artifact records origin, license, size and SHA-256</li>
-          <li>&bull; Git LFS versions dist/; external registries are delivery mirrors</li>
+          <li>&bull; Selected sources live once under dist/ with origin, size and SHA-256</li>
+          <li>&bull; Component ZIPs are temporary reproducible builds outside Git</li>
         </ul>
       </div>
 

@@ -126,11 +126,12 @@ Cada componente possui versão própria. Coleções sem release oficial continua
 fixadas no commit exato de `nQuake/distfiles`; componentes com upstream
 verificável podem receber overlays independentes. O KTX atual combina os
 recursos nQuake com o `qwprogs.qvm` oficial 1.47, substituindo o `1.46-dev`
-embarcado. O catálogo publica um pacote atual por componente e o recibo
+embarcado. O catálogo publica uma versão atual por componente e o recibo
 individual grava sua versão. Antes do download, o instalador mostra as versões
-escolhidas e, quando disponível, o link das notas de release. Ele usa primeiro
-o pacote correspondente em `dist/` e só recorre aos mirrors externos quando a
-cópia local não existe. Servidores e shareware ficam de fora. Em uma instalação nova, também cria
+escolhidas e, quando disponível, o link das notas de release. Em um checkout,
+ele materializa o componente diretamente de `dist/nquake` e `dist/mods`; sem
+essas fontes, recorre aos pacotes dos mirrors externos. Servidores e shareware
+ficam de fora. Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
 start; um preset existente nunca é substituído.
 

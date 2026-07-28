@@ -40,7 +40,7 @@
 - [x] manter stable e nightly coexistentes em macOS, Linux e Windows;
 - [x] oferecer perfis e seleção individual dos 18 componentes;
 - [x] registrar recibo e inventário independentes por componente;
-- [x] fazer o instalador consumir primeiro os pacotes versionados em `dist/`, com mirrors externos como fallback;
+- [x] fazer o instalador materializar primeiro as fontes canônicas em `dist/`, com pacotes externos como fallback;
 - [x] mostrar versão atual e notas de release antes de atualizar componentes;
 
 ## 4. Site

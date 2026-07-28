@@ -6,11 +6,11 @@ x86QW é uma distribuição moderna e reproduzível de QuakeWorld, mantida por
 Repositório principal: [GitHub](https://github.com/x86dx2/x86qw). Cópia de
 contingência: [GitLab](https://gitlab.com/x86dx2/x86qw).
 
-Este repositório é a fonte canônica da distribuição: tudo que o x86QW entrega
-ao jogador fica em `dist/`, incluindo binários ezQuake, conteúdo nQuake, mods,
-ajustes próprios, pacotes instaláveis e os PAKs registrados. O instalador usa
-primeiro essa cópia local validada e consulta os mirrors somente quando o
-artefato não acompanha o checkout.
+Este repositório é a fonte canônica da distribuição: toda entrada necessária
+para reconstruir o x86QW fica em `dist/`, incluindo binários ezQuake, conteúdo
+nQuake, mods, ajustes próprios e os PAKs registrados. Em um checkout, o
+instalador materializa os componentes diretamente dessas fontes; os pacotes dos
+mirrors são builds derivados para instalações sem a árvore canônica.
 
 No macOS, feche o ezQuake antes de instalar. O pacote oficial é preparado
 localmente com assinatura ad-hoc sem o entitlement de sandbox que torna o
@@ -47,7 +47,7 @@ destino e modo de instalação; o instalador somente consome essa declaração.
 
 - cada artefato é imutável e identificado por SHA-256;
 - origem, versão e licença são registradas antes do espelhamento;
-- o catálogo associa cada pacote ao seu caminho permanente dentro de `dist/`;
+- o catálogo associa versões às fontes canônicas e aos pacotes derivados publicados;
 - GitHub Releases e GitLab Generic Packages são mirrors de entrega, não a fonte canônica;
 - os binários grandes de `dist/` são versionados com Git LFS; R2 não é utilizado;
 - os PAKs registrados de `id1` ficam versionados em `dist/id1` e são validados
@@ -71,12 +71,13 @@ dist/                   distribuição QuakeWorld canônica e versionada
 dist/ezquake/           clientes stable e nightly para os três sistemas
 dist/nquake/            conteúdo nQuake efetivamente incorporado
 dist/mods/              KTX, TD2 e customizações próprias
-dist/packages/          pacotes seletivos consumidos pelo instalador
 dist/id1/               PAKs registrados permanentes
+build/packages/         ZIPs temporários para publicar mirrors (ignorado pelo Git)
 recipes/                origens, checksums e estado da revisão por artefato
 site/public/            site e catálogo publicados pelo Cloudflare Worker
 tools/build_package.py  ingestão reproduzível em uma área temporária
-tools/build_component_packages.py  gera os 18 pacotes reproduzíveis do mirror
+tools/component_sources.py  materializa componentes das fontes canônicas
+tools/build_component_packages.py  gera temporariamente os 18 pacotes dos mirrors
 tools/check_component_updates.py  compara versões fixadas com os upstreams
 tools/publish_gitlab_packages.py  publica e verifica o segundo mirror
 tools/add_package.py    registro atômico de artefatos revisados
@@ -135,20 +136,21 @@ python3 tools/build_package.py recipes/ezquake/3.6.9/macos-universal.json \
   --artifact /caminho/ezQuake-macOS-universal.zip
 ```
 
-Os builds em `dist/` fazem parte da distribuição e são versionados. Arquivos
-grandes usam Git LFS; depois de clonar, `git lfs pull` materializa seus corpos.
-O envio para GitHub Releases ou GitLab Packages apenas replica os mesmos bytes
-para instalação sem checkout completo.
+As fontes e os artefatos upstream consumidos em `dist/` fazem parte da
+distribuição e são versionados. Arquivos grandes usam Git LFS; depois de clonar,
+`git lfs pull` materializa seus corpos. Os pacotes seletivos são derivados dessas
+fontes apenas para instalação sem checkout completo.
 
 Para gerar os pacotes dos componentes a partir do snapshot nQuake e dos
 artefatos independentes validados:
 
 ```sh
-python3 tools/build_component_packages.py --register
+python3 tools/build_component_packages.py
 ```
 
-Os pacotes são gravados em `dist/packages/` e o catálogo registra também o
-caminho local de cada um.
+Os pacotes são gravados em `build/packages/`, ignorado pelo Git. Use `--register`
+somente ao preparar uma nova publicação; o instalador de um checkout lê
+diretamente as fontes canônicas e não depende desses ZIPs.
 
 ## Atualizar a distribuição
 
@@ -180,7 +182,6 @@ dist/
 ├── ezquake/           binários stable e nightly
 ├── nquake/            conteúdo fixado da distribuição de referência
 ├── mods/              upstreams e ajustes dos mods incorporados
-├── packages/          artefatos finais consumidos pelo instalador
 ├── id1/               PAKs registrados
 └── manifest.json      proveniência e SHA-256 dos upstreams
 ```
