@@ -148,6 +148,8 @@ def validate_releases(
                 _safe_path(member.get("path"), "artifact member")
                 _safe_path(member.get("target_archive"), "target archive")
                 _safe_path(member.get("target_member"), "target member")
+                if member.get("target_mode", "replace") not in {"replace", "add"}:
+                    raise ValueError(f"invalid artifact member target mode: {identifier}")
                 if not isinstance(member.get("size"), int) or member["size"] <= 0:
                     raise ValueError(f"invalid artifact member size: {identifier}")
                 if not HEX64.fullmatch(str(member.get("sha256", ""))):

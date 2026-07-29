@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-29T01:25:28Z",
+  "generated_at": "2026-07-29T02:02:00Z",
   "packages": [
     {
       "component": "ezquake",
@@ -138,14 +138,14 @@
     {
       "component": "ktx",
       "package": "nquake-ktx",
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.3",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.5",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.3.zip",
-      "size": 2353188,
-      "sha256": "4ccaf7f324010650cc450566fee6f3ffe448308f5f2759673e5732123db02061",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.3.zip",
+      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.5.zip",
+      "size": 2388452,
+      "sha256": "c8ffd7250bf56c13bcfc8d5765df6d28a85e2fa035f0f093dc4a9301c03820d5",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.5.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -155,12 +155,12 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.3.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2+x86qw.3/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.3.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.5.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2+x86qw.5/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.5.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e acrescenta gameplay x86QW com armas ergonômicas, comunicação competitiva e override pessoal.",
+      "release_notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake, inclui o mapa de símbolos oficial do QVM, neutraliza localmente a opção de profiling exclusiva do MVDSV e acrescenta gameplay x86QW com armas ergonômicas, comunicação competitiva e override pessoal.",
       "upstream_version": "1.47"
     },
     {

@@ -39,7 +39,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["nquake-ktx"]
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.3", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.5", ktx["version"])
         self.assertEqual("1.46-dev", ktx["embedded_version"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -63,6 +63,31 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(rebuilt)) as package:
             self.assertEqual(b"same", package.read("configs/default.cfg"))
             self.assertEqual(b"new", package.read("qwprogs.qvm"))
+
+    def test_nested_pk3_can_add_only_an_explicitly_declared_member(self) -> None:
+        original = io.BytesIO()
+        with zipfile.ZipFile(original, "w") as package:
+            package.writestr("qwprogs.qvm", b"qvm")
+        with self.assertRaisesRegex(ValueError, "override target is missing"):
+            rewrite_zip_members(original.getvalue(), {"qwprogs.map": b"symbols"})
+        rebuilt = rewrite_zip_members(
+            original.getvalue(), {"qwprogs.map": b"symbols"}, {"qwprogs.map"},
+        )
+        with zipfile.ZipFile(io.BytesIO(rebuilt)) as package:
+            self.assertEqual(b"qvm", package.read("qwprogs.qvm"))
+            self.assertEqual(b"symbols", package.read("qwprogs.map"))
+
+    def test_ktx_package_includes_the_official_qvm_symbol_map(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "nquake-ktx")
+        members = {member: payload for _, member, payload, _ in payloads}
+        with zipfile.ZipFile(io.BytesIO(members["payload/qw/ktx.pk3"])) as package:
+            self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
+            self.assertEqual(112_973, len(package.read("qwprogs.map")))
 
     def test_legacy_runtime_config_is_renamed_without_changing_its_content(self) -> None:
         original = io.BytesIO()

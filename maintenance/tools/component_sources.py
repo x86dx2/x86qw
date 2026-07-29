@@ -132,7 +132,14 @@ def verified_reference_payload(context: ComponentSourceContext, upstream_path: s
     return payload
 
 
-def rewrite_zip_members(payload: bytes, replacements: dict[str, bytes]) -> bytes:
+def rewrite_zip_members(
+    payload: bytes,
+    replacements: dict[str, bytes],
+    additions: set[str] | None = None,
+) -> bytes:
+    additions = additions or set()
+    if not additions <= set(replacements):
+        raise ValueError("component archive additions must have a declared payload")
     source = io.BytesIO(payload)
     output = io.BytesIO()
     with zipfile.ZipFile(source) as original:
@@ -142,9 +149,13 @@ def rewrite_zip_members(payload: bytes, replacements: dict[str, bytes]) -> bytes
             info.filename: original.read(info.filename)
             for info in original.infolist() if not info.is_dir()
         }
-    missing = set(replacements) - set(original_files)
+    original_names = set(original_files)
+    missing = set(replacements) - original_names - additions
+    collisions = additions & original_names
     if missing:
         raise ValueError(f"component override target is missing: {sorted(missing)[0]}")
+    if collisions:
+        raise ValueError(f"component archive addition already exists: {sorted(collisions)[0]}")
     original_files.update(replacements)
     with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
         for name, data in sorted(original_files.items()):
@@ -190,6 +201,7 @@ def reference_component_payload(
     payload = verified_reference_payload(context, upstream_path)
     applied: list[dict[str, str]] = []
     replacements: dict[str, bytes] = {}
+    additions: set[str] = set()
     for artifact in release.get("artifacts", []):
         assert isinstance(artifact, dict)
         members = verified_artifact_members(context.distribution, artifact)
@@ -198,14 +210,17 @@ def reference_component_payload(
             if member["target_archive"] != upstream_path:
                 continue
             member_path = str(member["path"])
-            replacements[str(member["target_member"])] = members[member_path]
+            target_member = str(member["target_member"])
+            replacements[target_member] = members[member_path]
+            if member.get("target_mode", "replace") == "add":
+                additions.add(target_member)
             applied.append({
                 "artifact": str(artifact["url"]),
                 "member": member_path,
                 "sha256": str(member["sha256"]),
             })
     if replacements:
-        payload = rewrite_zip_members(payload, replacements)
+        payload = rewrite_zip_members(payload, replacements, additions)
     moves = {
         str(move["source"]): str(move["destination"])
         for move in release.get("archive_moves", [])

@@ -44,8 +44,9 @@ Estado verificado em 28 de julho de 2026:
   atualizações seguras e `publish` permanece uma ação separada.
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
-`ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` oficial 1.47, mas o
-artefato do upstream é preservado em `dist/mods/ktx/`. Ele não é
+`ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
+`qwprogs.map` oficiais da versão 1.47, mas o artefato do upstream é preservado
+em `dist/mods/ktx/`. Ele não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
 
 ## Contrato dos perfis de gameplay

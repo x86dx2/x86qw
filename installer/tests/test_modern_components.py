@@ -623,6 +623,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_every_playable_mod_profile_prints_its_keys_and_binds_help(self):
         expected_gameplay = {
             "ktx": {
+                'alias sv_enableprofile ""',
                 'bind 1 "x86qw_ktx_axe"',
                 'bind q "x86qw_ktx_gl"',
                 'bind e "x86qw_ktx_rl"',

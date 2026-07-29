@@ -45,10 +45,12 @@ código-fonte ou dependências de build porque o instalador não os consome.
 O release oficial `qwprogs-qvm.zip` 1.47 possui SHA-256
 `e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed`.
 Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
-`a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c`.
-O empacotador preserva os demais membros do `ktx.pk3` de referência e troca
-somente esse QVM. O pacote x86QW resultante é
-`1.47+nquake.e4cb23d40aa2+x86qw.3`; fontes, override, gameplay e hashes ficam no inventário
+`a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c`;
+`qwprogs.map` possui 112.973 bytes e SHA-256
+`71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
+O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
+QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
+`1.47+nquake.e4cb23d40aa2+x86qw.5`; fontes, override, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake
