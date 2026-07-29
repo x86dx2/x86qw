@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
+PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 
 
 def file_sha256(path: Path) -> str:
@@ -103,7 +104,7 @@ def build_packages(
             info, data = zip_member("_x86qw/component.json", package_metadata)
             package.writestr(info, data)
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
-        mirror_url = f"https://github.com/x86dx2/x86qw-dist/releases/download/{distribution_tag}/{filename}"
+        mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
         source_urls = [] if strategy == "upstream-package" else [f"https://github.com/nQuake/distfiles/tree/{commit}"]
         upstream = release_metadata.get("upstream")
         if isinstance(upstream, dict):
@@ -178,18 +179,12 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
         ) == identity]
         if existing:
             candidate = existing[0]
+            publication_fields = {"component", "origin_url", "release_url", "urls"}
             same_payload = all(
                 candidate.get(key) == value
-                for key, value in package.items() if key not in {"component", "urls"}
+                for key, value in package.items() if key not in publication_fields
             )
-            candidate_urls = candidate.get("urls")
-            package_urls = package.get("urls")
-            mirrors_extend_primary = (
-                isinstance(candidate_urls, list)
-                and isinstance(package_urls, list)
-                and candidate_urls[:len(package_urls)] == package_urls
-            )
-            if len(existing) != 1 or not same_payload or not mirrors_extend_primary:
+            if len(existing) != 1 or not same_payload:
                 raise ValueError(f"published package identity changed: {identity}")
             candidate["component"] = package["component"]
             candidate.pop("distribution_path", None)

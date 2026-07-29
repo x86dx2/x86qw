@@ -12,7 +12,8 @@ https://x86qw.x86.com.br/install.sh          bootstrap macOS/Linux
 https://x86qw.x86.com.br/install.ps1         bootstrap Windows
 https://x86qw.x86.com.br/api/v1/catalog.json catálogo do instalador
 https://github.com/x86dx2/x86qw/tree/main/dist distribuição canônica
-https://github.com/x86dx2/x86qw-dist/releases mirror de entrega legado
+https://github.com/x86dx2/x86qw/releases      releases atuais e futuras
+https://github.com/x86dx2/x86qw-dist/releases histórico legado, sem migração
 ```
 
 Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
@@ -21,7 +22,7 @@ somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
 HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
 O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
 o catálogo publicado e grava uma CLI permanente em `.install/cli` na instalação.
-Os launchers `dist/installer/bin/x86qw` e `x86qw.cmd` são fontes versionadas incluídas
+Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
 no bundle e apenas copiadas para a raiz da instalação.
 Os bundles históricos ficam em `dist/installer/packages/<versão>/`; o link
 relativo `dist/installer/packages/latest` aponta para a maior versão disponível. O
@@ -31,18 +32,20 @@ O marco inicial desse catálogo é a versão `1.0.20`.
 
 ## Repositórios
 
-- `x86dx2/x86qw`: distribuição completa em `dist/`, catálogo, instalador, site e validações;
-- `x86dx2/x86qw-dist`: GitHub Releases com binários ezQuake e pacotes dos
-  componentes x86QW; o projeto homônimo usa GitLab Generic Packages como
-  segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
+- `x86dx2/x86qw`: distribuição completa em `dist/`, catálogo, instalador, site,
+  validações e GitHub Releases a partir do instalador `1.0.28`;
+- `x86dx2/x86qw-dist`: arquivo legado das releases anteriores, preservado sem
+  copiar seu histórico para o repositório principal. O GitLab Generic Packages
+  continua como segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
   das fontes canônicas e não são versionados novamente no repositório principal.
   Os dois PAKs registrados permanecem em `dist/game-data/id1` e entram somente no bundle
   público versionado do instalador, que possui tamanho e SHA-256 no catálogo.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
-contingência do código. `maintenance/manage.py publish` envia somente
-artefatos já presentes no catálogo, baixa cada cópia pública, confere tamanho e
-SHA-256 e só então registra a segunda URL.
+contingência do código. `maintenance/manage.py publish` respeita o repositório
+registrado em cada URL do catálogo: verifica o histórico em `x86qw-dist` e cria
+as releases novas em `x86qw`. Ele envia somente artefatos já catalogados, baixa
+cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
 
 Customizações próprias fazem parte da distribuição, não são constantes
 escondidas no instalador. Para o TD2, elas ficam em

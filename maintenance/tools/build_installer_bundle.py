@@ -40,6 +40,9 @@ FILES = (
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+LEGACY_GITHUB_REPOSITORY = "x86dx2/x86qw-dist"
+PRIMARY_RELEASE_SINCE = (1, 0, 28)
 
 
 def bundle_files() -> tuple[str, ...]:
@@ -179,8 +182,13 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
 def installer_record(result: dict[str, object], *, current: bool) -> dict[str, object]:
     version = str(result["version"])
     filename = str(result["filename"])
+    github_repository = (
+        PRIMARY_GITHUB_REPOSITORY
+        if version_key(version) >= PRIMARY_RELEASE_SINCE
+        else LEGACY_GITHUB_REPOSITORY
+    )
     github = (
-        f"https://github.com/x86dx2/x86qw-dist/releases/download/"
+        f"https://github.com/{github_repository}/releases/download/"
         f"installer-{version}/{filename}"
     )
     gitlab = (
@@ -205,7 +213,7 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "redistribution_reviewed": True,
         "urls": [github, gitlab],
         "distribution_path": result["distribution_path"],
-        "release_url": f"https://github.com/x86dx2/x86qw-dist/releases/tag/installer-{version}",
+        "release_url": f"https://github.com/{github_repository}/releases/tag/installer-{version}",
         "release_notes": "Bootstrap autocontido do instalador público x86QW.",
     }
 

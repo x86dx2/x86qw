@@ -8,7 +8,8 @@ apenas mirrors derivados para instalacoes sem um checkout completo.
 
 Repositores: [GitHub](https://github.com/x86dx2/x86qw) e
 [GitLab](https://gitlab.com/x86dx2/x86qw). Site:
-[x86qw.x86.com.br](https://x86qw.x86.com.br/).
+[x86qw.x86.com.br](https://x86qw.x86.com.br/). Releases atuais:
+[GitHub Releases](https://github.com/x86dx2/x86qw/releases).
 
 ## Instalar e jogar
 
