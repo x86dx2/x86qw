@@ -644,12 +644,12 @@ class ModernComponentTests(unittest.TestCase):
             verify.assert_called_once_with("total-destruction-2")
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
-                "+set", "sb_listcache", "0",
+                "+sb_listcache", "0",
                 "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
                 "+sv_progtype", "0",
                 "+cl_remote_capabilities", "$cl_remote_capabilities,bind,scr_centertime",
-                "+set", "cl_pext_lagteleport", "0", "+set", "con_suppress", "1",
-                "+map", "dm6", "+wait", "+set", "con_suppress", "0",
+                "+cl_pext_lagteleport", "0",
+                "+map", "dm6", "+wait",
                 "+exec", "x86qw-td2.cfg",
             ])
 
@@ -659,19 +659,17 @@ class ModernComponentTests(unittest.TestCase):
                 "arena", "23ar-a", "x86qw-arena.cfg",
                 [
                     "+cl_remote_capabilities", "$cl_remote_capabilities,noaim",
-                    "+set", "cl_pext_lagteleport", "0",
-                    "+set", "con_suppress", "1",
+                    "+cl_pext_lagteleport", "0",
                 ],
-                ["+set", "con_suppress", "0"],
+                [],
             ),
             "pro-x": (
                 "prox", "proxmap1", "x86qw-prox.cfg",
                 [
                     "+cl_remote_capabilities", "$cl_remote_capabilities,setinfo,bind",
-                    "+set", "cl_pext_lagteleport", "0",
-                    "+set", "con_suppress", "1",
+                    "+cl_pext_lagteleport", "0",
                 ],
-                ["+set", "con_suppress", "0"],
+                [],
             ),
         }
         for key, (gamedir, map_name, profile, before_map, after_wait) in expectations.items():
@@ -691,7 +689,7 @@ class ModernComponentTests(unittest.TestCase):
                                                     with mock.patch("builtins.input", side_effect=["", ""]):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
-                    "+set", "sb_listcache", "0",
+                    "+sb_listcache", "0",
                     "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", *before_map, "+map", map_name, "+wait",
                     *after_wait, "+exec", profile,
@@ -714,12 +712,12 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", side_effect=["", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
-                "+set", "sb_listcache", "0",
+                "+sb_listcache", "0",
                 "-game", "fortress", "+gamedir", "fortress", "+sv_gamedir", "fortress",
                 "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg",
                 "+cl_remote_capabilities", "$cl_remote_capabilities,bind",
-                "+set", "cl_pext_lagteleport", "0", "+set", "con_suppress", "1",
-                "+map", "2fort5r", "+wait", "+set", "con_suppress", "0",
+                "+cl_pext_lagteleport", "0",
+                "+map", "2fort5r", "+wait",
                 "+exec", "x86qw-fortress.cfg",
             ])
 

@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-29T19:45:09Z",
+  "captured_at": "2026-07-29T20:27:05Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4353,10 +4353,17 @@
     },
     "installer/packages/0.1.0/x86qw-installer-0.1.0.zip": {
       "component": "installer",
-      "consumer": "bootstrap:installer",
+      "consumer": "archive:installer-history",
       "sha256": "61d008c48ca55ea8faec263df48775dfa9a3e72df66607efed4ea052b15234b3",
       "size": 24171125,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip"
+    },
+    "installer/packages/0.1.1/x86qw-installer-0.1.1.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "dfc078b8be8d0bdbce23baddcc75c4c08c0f971ac596fc62d1678a61b9787d6b",
+      "size": 24171129,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.1/x86qw-installer-0.1.1.zip"
     },
     "mods/ktx/1.47/source/ktx-1.47.tar.gz": {
       "component": "ktx",

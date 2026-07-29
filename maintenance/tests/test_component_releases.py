@@ -124,7 +124,13 @@ class ComponentReleaseTests(unittest.TestCase):
         ).read_bytes()
         self.assertIn(b'gl_max_size                          "16384"', packaged)
         self.assertNotIn(b'gl_max_size                          "32768"', packaged)
+        self.assertNotRegex(packaged, rb"(?m)^r_fx_geometry\s")
+        self.assertNotRegex(packaged, rb"(?m)^cl_verify_qwprotocol\s")
+        self.assertIn(b"r_fx_geometry is not exposed", packaged)
+        self.assertIn(b"keep the ezQuake cl_verify_qwprotocol default", packaged)
         self.assertIn(b'gl_max_size                          "32768"', preserved)
+        self.assertRegex(preserved, rb"(?m)^r_fx_geometry\s")
+        self.assertRegex(preserved, rb"(?m)^cl_verify_qwprotocol\s")
 
     def test_bootstrap_installs_only_runtime_configs_and_temporary_aliases(self) -> None:
         context = load_source_context(
@@ -151,6 +157,7 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertNotIn('maxspectators 8', autoexec)
         self.assertNotIn('exec configs/config.cfg', autoexec)
         self.assertIn('sb_listcache 0', autoexec)
+        self.assertIn('cfg_use_gamedir 0', autoexec)
 
     def test_td2_runtime_package_excludes_reference_material(self) -> None:
         context = load_source_context(
