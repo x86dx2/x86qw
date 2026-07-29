@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-29T18:58:32Z",
+  "generated_at": "2026-07-29T19:03:39Z",
   "packages": [
     {
       "component": "ezquake",
@@ -321,7 +321,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "1.0.27",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -341,6 +341,32 @@
       ],
       "distribution_path": "installer/packages/1.0.27/x86qw-installer-1.0.27.zip",
       "release_url": "https://github.com/x86dx2/x86qw-dist/releases/tag/installer-1.0.27",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW."
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "1.0.28",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-1.0.28.zip",
+      "size": 24171196,
+      "sha256": "6ab8e1b15ff33a966c144a112bad36a9a4018114cfab277bce96da1c88cedfba",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.28/x86qw-installer-1.0.28.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.28/x86qw-installer-1.0.28.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/1.0.28/x86qw-installer-1.0.28.zip"
+      ],
+      "distribution_path": "installer/packages/1.0.28/x86qw-installer-1.0.28.zip",
+      "release_url": "https://github.com/x86dx2/x86qw-dist/releases/tag/installer-1.0.28",
       "release_notes": "Bootstrap autocontido do instalador público x86QW."
     },
     {

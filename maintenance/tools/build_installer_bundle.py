@@ -22,9 +22,9 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.27"
+VERSION = "1.0.28"
 FILES = (
-    "dist/installer/bin/x86qw",
+    "dist/installer/bin/x86qw.sh",
     "dist/installer/bin/x86qw.cmd",
     "dist/installer/bin/manager.py",
     "dist/installer/bin/gameplay.py",
@@ -141,7 +141,7 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
                 info = zipfile.ZipInfo(f"x86qw-installer-{version}/{relative}", FIXED_TIME)
                 info.compress_type = zipfile.ZIP_DEFLATED
                 executable = relative in {
-                    "dist/installer/bin/x86qw", "dist/installer/bin/manager.py",
+                    "dist/installer/bin/x86qw.sh", "dist/installer/bin/manager.py",
                     "dist/installer/bin/gameplay.py",
                 }
                 info.external_attr = (stat.S_IFREG | (0o755 if executable else 0o644)) << 16

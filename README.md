@@ -35,13 +35,13 @@ preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 
 Os valores aceitos são `macos`, `linux` e `windows`. Ao
 concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
-`hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `x86qw`
-sem argumentos mostra esse guia de uso; a ação principal é `./x86qw play`.
+`hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
+sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
-ao `install.ps1` no Windows). `x86qw update` atualiza a própria CLI e somente o
-que já está instalado. `x86qw upgrade` também incorpora componentes novos que
+ao `install.ps1` no Windows). `./x86qw.sh update` atualiza a própria CLI e somente o
+que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novos que
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
 registrado naquela instalação. Ambos mostram o plano completo e exigem que o
 jogador digite `yes` antes de alterar arquivos; `--yes` confirma o plano em
@@ -108,7 +108,7 @@ dist/
 │   ├── bin/              executáveis e módulos distribuídos
 │   │   ├── install.sh    bootstrap canônico para macOS e Linux
 │   │   ├── install.ps1   bootstrap canônico para Windows
-│   │   ├── x86qw         launcher permanente macOS/Linux
+│   │   ├── x86qw.sh      launcher permanente macOS/Linux
 │   │   ├── x86qw.cmd     launcher permanente Windows
 │   │   ├── manager.py    gerenciador de instalação e manutenção
 │   │   ├── gameplay.py   módulo interno especializado em gameplay local

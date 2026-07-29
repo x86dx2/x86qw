@@ -7,7 +7,7 @@ show_help() {
   cat <<'EOF'
 x86QW · QuakeWorld moderno
 
-Uso: ./x86qw <comando> [opções]
+Uso: ./x86qw.sh <comando> [opções]
 
 Gameplay:
   play                 escolhe e inicia um mod local
@@ -22,7 +22,7 @@ Manutenção:
   uninstall --purge    remove completamente instalação, dados e cache
   help                 mostra esta ajuda
 
-Exemplo: ./x86qw play
+Exemplo: ./x86qw.sh play
 
 A instalação inicial e a adição de conteúdo são exclusivas do install.sh.
 EOF

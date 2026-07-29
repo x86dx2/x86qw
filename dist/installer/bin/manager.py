@@ -2788,7 +2788,7 @@ class Installer:
             if present and selected:
                 removed = self.remove_component("play-support")
                 console.detail(
-                    f"Suporte local removido ({file_count(removed)}); x86qw play o reconstruirá quando necessário."
+                    f"Suporte local removido ({file_count(removed)}); ./x86qw.sh play o reconstruirá quando necessário."
                 )
             self.refresh_qw_package_order()
             self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
@@ -3098,7 +3098,7 @@ class Installer:
         for path in (
             self.target / METADATA_DIR / "cli",
             self.target / CLI_RECEIPT,
-            self.target / "x86qw",
+            self.target / "x86qw.sh",
         ):
             if lexists(path):
                 remove_path(path)
@@ -3115,7 +3115,7 @@ class Installer:
         if lexists(self.target):
             identity = (
                 self.target / METADATA_DIR,
-                self.target / "x86qw",
+                self.target / "x86qw.sh",
                 self.target / "x86qw.cmd",
             )
             if not any(lexists(path) for path in identity):
@@ -3314,7 +3314,7 @@ class Installer:
             suffix = (
                 ". Elas serão incorporadas nesta operação."
                 if profile_upgrade
-                else ". Use x86qw upgrade para incorporá-las."
+                else ". Use ./x86qw.sh upgrade para incorporá-las."
             )
             console.info(
                 "Novidades disponíveis para o perfil " + str(state["profile"]) + ": "
@@ -3437,7 +3437,7 @@ class Installer:
         temporary_receipt.replace(cli_receipt)
 
         launchers = (
-            ("dist/installer/bin/x86qw", "x86qw", 0o755),
+            ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
             ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
         )
         for relative, name, mode in launchers:
@@ -3451,7 +3451,7 @@ class Installer:
                 temporary.chmod(mode)
             temporary.replace(destination)
 
-        shell_launcher = self.target / "x86qw"
+        shell_launcher = self.target / "x86qw.sh"
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
 
 

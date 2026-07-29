@@ -1,13 +1,13 @@
 # Instalador x86QW
 
-As interfaces públicas são `install.sh`/`install.ps1` para instalar e `x86qw`
+As interfaces públicas são `install.sh`/`install.ps1` para instalar e `x86qw.sh`
 para jogar ou manter uma instalação. Este diretório é a fonte canônica de tudo
 que o projeto distribui como instalador. A raiz separa executáveis,
 documentação e pacotes imutáveis:
 
 - `bin/install.sh`: bootstrap público para macOS e Linux;
 - `bin/install.ps1`: bootstrap público para Windows;
-- `bin/x86qw`: launcher permanente para macOS e Linux;
+- `bin/x86qw.sh`: launcher permanente para macOS e Linux;
 - `bin/x86qw.cmd`: launcher permanente para Windows;
 - `bin/manager.py`: gerenciador principal de instalação e manutenção;
 - `bin/gameplay.py`: implementação interna de gameplay e seleção de mods;

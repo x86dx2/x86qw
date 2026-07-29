@@ -334,22 +334,23 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue((target / ".install/cli/dist/mods/team-fortress/2.9/x86qw/client.cfg").is_file())
             self.assertTrue((target / "x86qw.cmd").is_file())
             self.assertEqual(
-                (ROOT / "dist/installer/bin/x86qw").read_bytes(),
-                (target / "x86qw").read_bytes(),
+                (ROOT / "dist/installer/bin/x86qw.sh").read_bytes(),
+                (target / "x86qw.sh").read_bytes(),
             )
+            self.assertFalse((target / "x86qw").exists())
             self.assertEqual(
                 (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes(),
                 (target / "x86qw.cmd").read_bytes(),
             )
             self.assertEqual("1.0.6", installer.installed_cli_version())
-            launcher = target / "x86qw"
+            launcher = target / "x86qw.sh"
             self.assertTrue(os.access(launcher, os.X_OK))
             result = subprocess.run(
                 [str(launcher)], text=True, capture_output=True, check=False,
             )
             self.assertEqual(0, result.returncode, result.stderr)
-            self.assertIn("Uso: ./x86qw <comando>", result.stdout)
-            self.assertIn("./x86qw play", result.stdout)
+            self.assertIn("Uso: ./x86qw.sh <comando>", result.stdout)
+            self.assertIn("./x86qw.sh play", result.stdout)
             self.assertIn("upgrade", result.stdout)
             self.assertNotIn("components", result.stdout)
             rejected = subprocess.run(
@@ -879,13 +880,13 @@ class InstallerTests(unittest.TestCase):
             (target / install_qw.CLI_RECEIPT).write_text(
                 '{"format":1,"project":"x86qw","version":"1.0.5"}\n', encoding="utf-8",
             )
-            (target / "x86qw").write_text("#!/bin/sh\n", encoding="utf-8")
+            (target / "x86qw.sh").write_text("#!/bin/sh\n", encoding="utf-8")
             (target / "x86qw.cmd").write_text("@echo off\r\n", encoding="utf-8")
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"preserve")
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.uninstall()
-            self.assertFalse((target / "x86qw").exists())
+            self.assertFalse((target / "x86qw.sh").exists())
             self.assertFalse((target / "x86qw.cmd").exists())
             self.assertFalse((target / ".install/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())

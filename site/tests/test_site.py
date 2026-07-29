@@ -69,7 +69,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(1, len(current))
         package = current[0]
         self.assertEqual(
-            ["1.0.20", "1.0.21", "1.0.22", "1.0.23", "1.0.24", "1.0.25", "1.0.26", "1.0.27"],
+            ["1.0.20", "1.0.21", "1.0.22", "1.0.23", "1.0.24", "1.0.25", "1.0.26", "1.0.27", "1.0.28"],
             sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
         )
         for historical in installers:

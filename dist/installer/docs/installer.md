@@ -26,9 +26,9 @@ pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é trata
 como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
-Ao concluir, a raiz da instalação contém `x86qw` e `x86qw.cmd`. Esses comandos
-usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw play`,
-`./x86qw update`, `./x86qw upgrade`, `./x86qw verify` e `./x86qw cleanup`. Sem argumento, a CLI
+Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
+usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw.sh play`,
+`./x86qw.sh update`, `./x86qw.sh upgrade`, `./x86qw.sh verify` e `./x86qw.sh cleanup`. Sem argumento, a CLI
 mostra o help e não inicia instalação alguma. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
@@ -37,7 +37,7 @@ e são copiados byte a byte para o destino. O instalador não gera scripts em ru
 O contrato é intencionalmente separado:
 
 - `install.sh`/`install.ps1`: instalação inicial, detecção do SO, canal, versão e componentes;
-- `x86qw`: gameplay, servidores, atualização, verificação, limpeza e desinstalação.
+- `x86qw.sh`: gameplay, servidores, atualização, verificação, limpeza e desinstalação.
 
 A CLI instalada rejeita `install`, `components` e `presets`. Para adicionar um
 cliente, canal ou seleção arbitrária, execute novamente o bootstrap público.
@@ -259,7 +259,7 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 
 ### Jogo local
 
-`x86qw play` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
+`x86qw.sh play` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
 linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
 
@@ -306,7 +306,7 @@ executados. Se uma instalação anterior já tiver esse arquivo como configuraç
 pessoal, a atualização cria `config.pre-x86qw.cfg` e migra o perfil ativo para
 a base moderna do jogador.
 
-Todos os cinco modos do menu de `x86qw play` carregam gameplay próprio. A base nQuake
+Todos os cinco modos do menu de `x86qw.sh play` carregam gameplay próprio. A base nQuake
 continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
 perfil do mod corrige conflitos e expõe suas mecânicas; o arquivo pessoal é
 executado por último:
@@ -535,8 +535,8 @@ válidas; por isso precisa ser solicitado explicitamente.
 No diretório instalado, execute:
 
 ```sh
-./x86qw update
-./x86qw upgrade
+./x86qw.sh update
+./x86qw.sh upgrade
 ```
 
 Os dois comandos atualizam primeiro a própria CLI por um bundle x86QW validado
@@ -564,16 +564,16 @@ mostram o plano completo e exigem a confirmação literal `yes`. Para automaçõ
 `--yes` aceita o plano sem abrir o prompt:
 
 ```sh
-./x86qw update --yes
-./x86qw upgrade --yes
+./x86qw.sh update --yes
+./x86qw.sh upgrade --yes
 ```
 
 Para apresentar o mesmo plano e encerrar sem pedir confirmação nem alterar
 arquivos, use:
 
 ```sh
-./x86qw update --dry-run
-./x86qw upgrade --dry-run
+./x86qw.sh update --dry-run
+./x86qw.sh upgrade --dry-run
 ```
 
 Qualquer resposta diferente de `yes` cancela a operação. Em um ambiente sem
