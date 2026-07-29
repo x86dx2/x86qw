@@ -10,7 +10,7 @@ INICIAR
 
 Use o launcher da raiz do projeto:
 
-  ./play-qw.py
+  ./x86qw play
 
 Ele lista apenas os mods instalados, permite escolher o mapa e inicia o
 ezQuake no gamedir correto. Cada mod mostra seus controles ao carregar.
@@ -34,17 +34,18 @@ pois eles sao gerenciados pela distribuicao.
 MANUTENCAO
 ----------
 
-  ./install-qw.py verify
-  ./install-qw.py components
-  ./install-qw.py cleanup
-  ./install-qw.py uninstall
-  ./install-qw.py purge
+  ./x86qw verify
+  ./x86qw update
+  ./x86qw upgrade
+  ./x86qw cleanup
+  ./x86qw uninstall
+  ./x86qw uninstall --purge
 
 O cleanup remove caches regeneraveis. Downloads de servidores e dados
 pessoais so sao removidos quando solicitados explicitamente.
 
-Os PAKs registrados ficam em id1/ e sao preservados por atualizacoes,
-desinstalacao e purge.
+Os PAKs registrados ficam em id1/ e sao preservados por atualizacoes e pela
+desinstalacao comum. O modo uninstall --purge remove toda a instalacao.
 
 Documentacao do ezQuake: https://ezquake.com/docs/
 Projeto x86QW: https://x86qw.x86.com.br/

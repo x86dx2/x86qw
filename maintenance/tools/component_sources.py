@@ -59,7 +59,7 @@ def file_sha256_bytes(payload: bytes) -> str:
 
 
 def discover_snapshot(distribution: Path) -> tuple[str, Path]:
-    root = distribution / "nquake"
+    root = distribution / "distributions/nquake"
     if not root.is_dir() or root.is_symlink():
         raise ValueError(f"canonical nQuake source tree is missing: {root}")
     snapshots = [path for path in root.iterdir() if path.is_dir() and not path.is_symlink()]

@@ -140,12 +140,12 @@ def release_variant(name: str) -> str:
 
 
 def release_path(component: str, tag: str, name: str) -> str:
-    return f"{component}/{tag}/stable/{release_variant(name)}/{name}"
+    return f"clients/{component}/stable/{tag}/{release_variant(name)}/{name}"
 
 
 def nightly_path(platform: str, name: str) -> str:
     build = name.split("_ez", 1)[0]
-    return f"ezquake/{build}/nightly/{platform}/{name}"
+    return f"clients/ezquake/nightly/{build}/{platform}/{name}"
 
 
 def discover_release_assets() -> list[Asset]:
@@ -194,7 +194,7 @@ def discover_nquake() -> list[Asset]:
         assets.append(Asset(
             "nquake",
             f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
-            f"nquake/{commit}/{path}",
+            f"distributions/nquake/{commit}/{path}",
             None,
             subcomponent,
             None,
@@ -304,16 +304,20 @@ def consumed_component(
     releases = load_releases(component_releases, component_catalog)
     if component == "installer":
         return component if re.fullmatch(
-            r"installer/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
+            r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
             path,
         ) else None
     if component in {"ktx", "pro-x", "team-fortress", "td2"}:
         return component if component_for_artifact_path(releases, path) is not None else None
     if component == "nquake":
         parts = PurePosixPath(path).parts
-        if len(parts) < 3 or parts[0] != "nquake" or len(parts[1]) != 40:
+        if (
+            len(parts) < 4
+            or parts[:2] != ("distributions", "nquake")
+            or len(parts[2]) != 40
+        ):
             return None
-        upstream_path = PurePosixPath(*parts[2:]).as_posix()
+        upstream_path = PurePosixPath(*parts[3:]).as_posix()
         catalog = load_component_catalog(component_catalog)
         return component if component_for_source(catalog, upstream_path, "reference") is not None else None
     name = PurePosixPath(path).name
@@ -409,7 +413,7 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                     metadata["package"] = package
                 elif component_name == "nquake":
                     parts = PurePosixPath(relative).parts
-                    upstream_path = PurePosixPath(*parts[2:]).as_posix()
+                    upstream_path = PurePosixPath(*parts[3:]).as_posix()
                     metadata["package"] = component_for_source(
                         load_component_catalog(COMPONENT_CATALOG), upstream_path, "reference",
                     )
@@ -538,10 +542,44 @@ def verify_distribution(
             *component_entry.get("project_overrides", []),
         )
     }
-    allowed_unmanaged = {"id1/pak0.pak", "id1/pak1.pak", *allowed_project_files}
+    allowed_unmanaged = {
+        "installer/README.md",
+        "installer/docs/installer.md",
+        "installer/bin/install.ps1",
+        "installer/bin/install.sh",
+        "installer/bin/manager.py",
+        "installer/bin/gameplay.py",
+        "installer/bin/x86qw",
+        "installer/bin/x86qw.cmd",
+        "game-data/id1/pak0.pak",
+        "game-data/id1/pak1.pak",
+        *allowed_project_files,
+    }
     unexpected = sorted(actual - expected - allowed_unmanaged)
     if unexpected:
         raise ValueError(f"distribution contains a file without an explicit consumer: {unexpected[0]}")
+    installer_files = [
+        path for path, metadata in files.items()
+        if isinstance(metadata, dict) and metadata.get("component") == "installer"
+    ]
+    current_installers = [
+        path for path, metadata in files.items()
+        if isinstance(metadata, dict)
+        and metadata.get("component") == "installer"
+        and metadata.get("consumer") == "bootstrap:installer"
+    ]
+    if installer_files and len(current_installers) != 1:
+        raise ValueError("distribution must register exactly one current installer package")
+    if installer_files:
+        current_parts = PurePosixPath(current_installers[0]).parts
+        if len(current_parts) != 4 or current_parts[:2] != ("installer", "packages"):
+            raise ValueError("current installer package has an invalid distribution path")
+        latest = root / "installer/packages/latest"
+        expected_link = current_parts[2]
+        if not latest.is_symlink() or os.readlink(latest) != expected_link:
+            raise ValueError(f"installer latest pointer must target {expected_link}")
+        if latest.resolve() != (root / "installer/packages" / expected_link).resolve():
+            raise ValueError("installer latest pointer escapes its package directory")
     checked = 0
     for relative, metadata in sorted(files.items()):
         component = consumed_component(

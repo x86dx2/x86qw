@@ -14,17 +14,19 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location("install_qw_modern", ROOT / "install-qw.py")
+SPEC = importlib.util.spec_from_file_location("install_qw_modern", ROOT / "dist/installer/bin/manager.py")
 install_qw = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = install_qw
 SPEC.loader.exec_module(install_qw)
+sys.modules["cli"] = install_qw
 
-PLAY_SPEC = importlib.util.spec_from_file_location("play_qw_modern", ROOT / "play-qw.py")
+PLAY_SPEC = importlib.util.spec_from_file_location("play_qw_modern", ROOT / "dist/installer/bin/gameplay.py")
 play_qw = importlib.util.module_from_spec(PLAY_SPEC)
 assert PLAY_SPEC.loader is not None
 sys.modules[PLAY_SPEC.name] = play_qw
 PLAY_SPEC.loader.exec_module(play_qw)
+sys.modules["gameplay"] = play_qw
 
 
 class ModernComponentTests(unittest.TestCase):
@@ -60,14 +62,16 @@ class ModernComponentTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 install_qw.parse_arguments(["verify", "--dry-run"], ROOT)
 
-    def test_play_has_its_own_command_line(self):
+    def test_play_has_its_own_module_and_is_exposed_by_the_main_cli(self):
         target = ROOT / "custom-quake"
         parsed = play_qw.parse_arguments(["--no-color", str(target)], ROOT)
         self.assertEqual(target, parsed.target)
         self.assertTrue(parsed.no_color)
-        with contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit):
-                install_qw.parse_arguments(["play"], ROOT)
+        main = install_qw.parse_arguments(["play", str(target)], ROOT)
+        self.assertEqual("play", main.action)
+        with mock.patch.object(play_qw, "main", return_value=0) as delegated:
+            self.assertEqual(0, install_qw.main(["play", str(target), "--no-color"]))
+        delegated.assert_called_once_with([str(target), "--no-color"])
 
     def test_play_menu_shows_installed_versions_and_aligns_descriptions(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -92,7 +96,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
             "ktx": ("1.48+nquake.abcdef+x86qw.1", "1.48"),
-            "final-arena": ("e4cb23d40aa2+x86qw.5", "1.20"),
+            "final-arena": ("e4cb23d40aa2+x86qw.6", "1.20"),
             "pro-x": ("1.1+x86qw.1", "1.1"),
             "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.1", "2.9"),
             "td2": ("2.22+x86qw.5", "2.22"),

@@ -33,7 +33,7 @@ from sync_distribution import (  # noqa: E402
     write_manifest,
 )
 
-SPEC = importlib.util.spec_from_file_location("install_qw_policy", ROOT / "install-qw.py")
+SPEC = importlib.util.spec_from_file_location("install_qw_policy", ROOT / "dist/installer/bin/manager.py")
 install_qw = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = install_qw
@@ -41,6 +41,21 @@ SPEC.loader.exec_module(install_qw)
 
 
 class DistributionTests(unittest.TestCase):
+    def test_top_level_taxonomy_separates_clients_distributions_and_game_data(self) -> None:
+        stable = ROOT / "dist/clients/ezquake/stable/3.6.9"
+        nightly = ROOT / "dist/clients/ezquake/nightly/20260616-101233_a86996a"
+        self.assertTrue((stable / "source").is_dir())
+        self.assertTrue((nightly / "source").is_dir())
+        for root in (stable, nightly):
+            self.assertTrue((root / "linux-x86_64").is_dir())
+            self.assertTrue((root / "macos-universal").is_dir())
+            self.assertTrue((root / "windows-x64").is_dir())
+        self.assertTrue((ROOT / "dist/distributions/nquake").is_dir())
+        self.assertTrue((ROOT / "dist/game-data/id1/pak0.pak").is_file())
+        self.assertTrue((ROOT / "dist/game-data/id1/pak1.pak").is_file())
+        for legacy in ("ezquake", "nquake", "id1"):
+            self.assertFalse((ROOT / "dist" / legacy).exists())
+
     def test_versioned_mods_use_contextual_source_upstream_and_x86qw_directories(self) -> None:
         versions = {
             "final-arena": "1.20+x86qw.1",
@@ -76,7 +91,7 @@ class DistributionTests(unittest.TestCase):
 
     def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
         catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
-        snapshots = list((ROOT / "dist/nquake").iterdir())
+        snapshots = list((ROOT / "dist/distributions/nquake").iterdir())
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
         partition = validate_tree_partition(catalog, paths)
@@ -86,23 +101,25 @@ class DistributionTests(unittest.TestCase):
 
     def test_only_runtime_assets_have_consumers(self) -> None:
         self.assertEqual("ezquake", consumed_component(
-            "ezquake/3.6.9/stable/macos-universal/ezQuake-macOS-universal.zip"
+            "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
         ))
         self.assertIsNone(consumed_component("content/maps/all/dm6.bsp"))
         self.assertIsNone(consumed_component("content/locs/dm6.loc"))
         self.assertIsNone(consumed_component("content/gfx/packages/1-theme.download"))
-        self.assertIsNone(consumed_component("ezquake/3.6.9/stable/source/source.tar.gz"))
-        self.assertIsNone(consumed_component("ezquake/3.6.9/stable/metadata/checksums.txt"))
-        self.assertIsNone(consumed_component("ezquake/build/nightly/linux-x86_64/build.AppImage.md5"))
+        self.assertIsNone(consumed_component("clients/ezquake/stable/3.6.9/source/source.tar.gz"))
+        self.assertIsNone(consumed_component("clients/ezquake/stable/3.6.9/metadata/checksums.txt"))
+        self.assertIsNone(consumed_component(
+            "clients/ezquake/nightly/build/linux-x86_64/build.AppImage.md5"
+        ))
         self.assertEqual("ezquake", consumed_component(
-            "ezquake/3.6.9/source/ezquake-source-3.6.9.tar.gz"
+            "clients/ezquake/stable/3.6.9/source/ezquake-source-3.6.9.tar.gz"
         ))
         self.assertEqual("ktx", consumed_component("mods/ktx/1.47/source/ktx-1.47.tar.gz"))
         self.assertEqual("team-fortress", consumed_component(
             "mods/team-fortress/2.9/source/tf_29src.zip"
         ))
         self.assertEqual("installer", consumed_component(
-            "installer/1.0.0/x86qw-installer-1.0.0.zip"
+            "installer/packages/1.0.0/x86qw-installer-1.0.0.zip"
         ))
         self.assertEqual("ktx", consumed_component(
             "mods/ktx/1.47/upstream/qwprogs-qvm.zip"
@@ -114,7 +131,7 @@ class DistributionTests(unittest.TestCase):
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            kept = "ezquake/3.6.9/stable/macos-universal/ezQuake-macOS-universal.zip"
+            kept = "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
             removed = "content/gfx/packages/theme.download"
             for relative, payload in ((kept, b"zip"), (removed, b"gfx")):
                 path = root / relative
@@ -161,13 +178,13 @@ class DistributionTests(unittest.TestCase):
         self.assertIsNone(safe_filename("../"))
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            payload = root / "ezquake/3.6.9/stable/macos-universal/ezQuake-macOS-universal.zip"
+            payload = root / "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
             payload.parent.mkdir(parents=True)
             payload.write_bytes(b"zip")
             manifest = {
                 "format": 1, "project": "x86qw", "captured_at": None,
                 "layout": "distribution-v1", "repositories": {},
-                "files": {"ezquake/3.6.9/stable/macos-universal/ezQuake-macOS-universal.zip": {
+                "files": {"clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip": {
                     "component": "ezquake", "consumer": "install:ezquake",
                     "url": "https://example.invalid/ezQuake-macOS-universal.zip", "size": 3,
                     "sha256": hashlib.sha256(b"zip").hexdigest(),

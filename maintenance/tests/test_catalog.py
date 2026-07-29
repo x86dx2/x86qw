@@ -18,7 +18,7 @@ from build_component_packages import component_package_metadata, register_packag
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 26)
+        self.assertEqual(validate_catalog(catalog), 33)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
         self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
@@ -52,7 +52,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("e4cb23d40aa2+x86qw.5", final_arena["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.6", final_arena["version"])
         self.assertEqual("1.1+x86qw.1", pro_x["version"])
         self.assertEqual("pro-x", pro_x["component"])
         team_fortress = next(
@@ -60,6 +60,11 @@ class CatalogTests(unittest.TestCase):
         )
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
+        installers = [package for package in catalog["packages"] if package["component"] == "installer"]
+        self.assertEqual(8, len(installers))
+        self.assertEqual(["1.0.27"], [
+            package["version"] for package in installers if package.get("current") is True
+        ])
 
         package = {
             "component": "ezquake",
@@ -97,12 +102,12 @@ class CatalogTests(unittest.TestCase):
     def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
         metadata = component_package_metadata(
             "nquake-bootstrap",
-            "e4cb23d40aa2+x86qw.5",
+            "e4cb23d40aa2+x86qw.6",
             "reference-snapshot",
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
             [],
         )
-        self.assertEqual("e4cb23d40aa2+x86qw.5", metadata["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.6", metadata["version"])
         self.assertEqual(
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
             metadata["source_commit"],

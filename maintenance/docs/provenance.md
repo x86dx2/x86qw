@@ -8,16 +8,16 @@ atribuição, origem imutável e checksum.
 
 | Componente | Evidência | Estado do mirror |
 | --- | --- | --- |
-| ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 preservado em `dist/ezquake` e replicado nos mirrors |
-| ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/ezquake` |
-| componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/nquake`; pacotes de entrega são builds reproduzíveis temporários |
+| ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 preservado em `dist/clients/ezquake/stable/3.6.9` e replicado nos mirrors |
+| ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/clients/ezquake/nightly/20260616-101233_a86996a` |
+| componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/distributions/nquake`; pacotes de entrega são builds reproduzíveis temporários |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | Pro-X | [release pública 1.1](https://www.quakeworld.nu/forum/topic/3741/prox-11-released) recuperada do arquivo histórico do autor | ZIP original em `dist/mods/pro-x/1.1/upstream/`; código-fonte público não localizado |
 | Team Fortress | [runtime e fontes 2.9](https://www.frag-net.com/mod_quake_fortress.html) | runtime em `upstream/`, fontes em `source/` e gamecode 2.9 aplicado sobre assets nQuake |
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte; `saw_down.wav` histórico é byte-idêntico ao `saw.wav` preservado | original completo em `dist/mods/td2/2.22/source/` e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
-| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e incorporados somente ao bundle público do instalador |
+| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/game-data/id1` e incorporados somente ao bundle público do instalador |
 
 “Candidato” ainda não autoriza publicação. A licença do código-fonte não prova,
 sozinha, que todos os arquivos agregados ao pacote binário usam termos
@@ -37,7 +37,7 @@ com `checksums.txt` e com os digests publicados pela API do GitHub:
 | Linux | `ezQuake-linux-x86_64.zip` | 22.268.939 | `6d5707bf9be1a8338441265f9bf03154d107488a4fed9eab4c989c29de6573ee` |
 | Windows | `ezQuake-windows-x64.zip` | 4.135.630 | `1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d` |
 
-As três receitas stable estão `ready`; seus artefatos ficam em `dist/ezquake`
+As três receitas stable estão `ready`; seus artefatos ficam em `dist/clients/ezquake/stable/3.6.9`
 e também apontam para o mirror imutável no `x86qw-dist`. O catálogo registra os três binários nightly e o commit
 completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. Os tarballs de fonte exatos de
 stable e nightly também ficam preservados em `dist/` para consulta e compilação.

@@ -7,6 +7,7 @@ import argparse
 import errno
 import hashlib
 import http.client
+import importlib
 import json
 import os
 import platform as host_platform
@@ -32,6 +33,13 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
+sys.dont_write_bytecode = True
+sys.modules.setdefault("manager", sys.modules[__name__])
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from maintenance.tools.components import (
     components_by_id,
     load_catalog as load_component_catalog,
@@ -55,8 +63,8 @@ NQUAKE_INVENTORY = ".install/nquake.inventory"
 COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
 ONLINE_CLI_FILES = (
-    "install-qw.py",
-    "play-qw.py",
+    "dist/installer/bin/manager.py",
+    "dist/installer/bin/gameplay.py",
     "maintenance/__init__.py",
     "maintenance/tools/__init__.py",
     "maintenance/tools/components.py",
@@ -66,7 +74,7 @@ ONLINE_CLI_FILES = (
     "maintenance/inventory/component-releases.json",
 )
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
-BUNDLED_ID1_DIR = Path("dist/id1")
+BUNDLED_ID1_DIR = Path("dist/game-data/id1")
 CACHE_DIR_NAME = "x86qw"
 CACHE_MARKER_NAME = ".x86qw-cache"
 CACHE_MARKER_VALUE = "x86qw-cache-v1"
@@ -111,7 +119,7 @@ MUTABLE_COMPONENT_DEFAULTS = {
 }
 LEGACY_COMPONENTS = frozenset({"clan-arena"})
 ReleaseRecord = tuple[str, tuple[str, ...], str]
-INSTALLER_ROOT = Path(__file__).resolve().parent
+INSTALLER_ROOT = PROJECT_ROOT
 
 
 def create_resilient_connection(
@@ -2084,7 +2092,8 @@ class Installer:
         matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
             package.get("component"), package.get("package"), package.get("channel"),
             package.get("platform"), package.get("architecture"),
-        ) == ("installer", "x86qw-installer", "content", "any", "any")]
+        ) == ("installer", "x86qw-installer", "content", "any", "any")
+            and package.get("current") is True]
         if len(matches) != 1:
             raise InstallerError("O catálogo deve publicar exatamente um bundle atual do x86QW.")
         package = matches[0]
@@ -2166,7 +2175,7 @@ class Installer:
             extracted.mkdir()
             safe_extract_zip(artifact, extracted)
             bundle = extracted / f"x86qw-installer-{available}"
-            script = bundle / "install-qw.py"
+            script = bundle / "dist/installer/bin/manager.py"
             metadata = bundle / INSTALLER_BUNDLE_METADATA
             if not script.is_file() or script.is_symlink() or not metadata.is_file() or metadata.is_symlink():
                 raise InstallerError("O bundle de atualização x86QW está incompleto.")
@@ -2332,7 +2341,7 @@ class Installer:
         if self.online_only:
             return None
         distribution = self.project_root / "dist"
-        if not (distribution / "nquake").is_dir():
+        if not (distribution / "distributions/nquake").is_dir():
             return None
         if self._component_source_context is None:
             try:
@@ -2779,7 +2788,7 @@ class Installer:
             if present and selected:
                 removed = self.remove_component("play-support")
                 console.detail(
-                    f"Suporte local removido ({file_count(removed)}); play-qw.py o reconstruirá quando necessário."
+                    f"Suporte local removido ({file_count(removed)}); x86qw play o reconstruirá quando necessário."
                 )
             self.refresh_qw_package_order()
             self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
@@ -3411,7 +3420,11 @@ class Installer:
             temporary = destination.with_name(destination.name + ".new")
             temporary.write_bytes(source.read_bytes())
             if os.name != "nt":
-                temporary.chmod(0o755 if relative in {"install-qw.py", "play-qw.py"} else 0o644)
+                temporary.chmod(
+                    0o755
+                    if relative in {"dist/installer/bin/manager.py", "dist/installer/bin/gameplay.py"}
+                    else 0o644
+                )
             temporary.replace(destination)
 
         cli_receipt = self.target / CLI_RECEIPT
@@ -3423,92 +3436,22 @@ class Installer:
         )
         temporary_receipt.replace(cli_receipt)
 
+        launchers = (
+            ("dist/installer/bin/x86qw", "x86qw", 0o755),
+            ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
+        )
+        for relative, name, mode in launchers:
+            source = self.project_root.joinpath(*PurePosixPath(relative).parts)
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(f"Launcher público ausente ou inválido: {source}")
+            destination = self.target / name
+            temporary = destination.with_name(destination.name + ".new")
+            temporary.write_bytes(source.read_bytes())
+            if os.name != "nt":
+                temporary.chmod(mode)
+            temporary.replace(destination)
+
         shell_launcher = self.target / "x86qw"
-        shell_launcher.write_text(
-            "#!/bin/sh\n"
-            "set -eu\n"
-            "root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
-            "show_help() {\n"
-            "  cat <<'EOF'\n"
-            "x86QW · QuakeWorld moderno\n\n"
-            "Uso: ./x86qw <comando> [opções]\n\n"
-            "Gameplay:\n"
-            "  play                 escolhe e inicia um mod local\n"
-            "  hub                  lista servidores públicos para jogar ou observar\n\n"
-            "Manutenção:\n"
-            "  update [--yes]       atualiza somente clientes e componentes já instalados\n"
-            "  upgrade [--yes]      incorpora novidades do perfil da instalação\n"
-            "  verify               verifica a integridade da instalação\n"
-            "  cleanup              limpa o cache gerenciado pelo x86QW\n"
-            "  uninstall            remove o x86QW e preserva PAKs e dados pessoais\n"
-            "  uninstall --purge    remove completamente instalação, dados e cache\n"
-            "  help                 mostra esta ajuda\n\n"
-            "Exemplo: ./x86qw play\n\n"
-            "A instalação inicial e a adição de conteúdo são exclusivas do install.sh.\n"
-            "EOF\n"
-            "}\n"
-            "case \"${1:-}\" in\n"
-            "  '') show_help; exit 0 ;;\n"
-            "  help|-h|--help) show_help; exit 0 ;;\n"
-            "  play) shift; exec python3 \"$root/.install/cli/play-qw.py\" \"$root\" \"$@\" ;;\n"
-            "  update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;\n"
-            "  *) printf 'x86qw: comando desconhecido: %s\\n\\n' \"$1\" >&2; show_help >&2; exit 2 ;;\n"
-            "esac\n"
-            "exec python3 \"$root/.install/cli/install-qw.py\" --online-only --installed-cli \"$action\" \"$root\" \"$@\"\n",
-            encoding="utf-8",
-        )
-        if os.name != "nt":
-            shell_launcher.chmod(0o755)
-        (self.target / "x86qw.cmd").write_text(
-            "@echo off\r\n"
-            "set \"X86QW_ROOT=%~dp0\"\r\n"
-            "if \"%~1\"==\"\" goto help\r\n"
-            "if /I \"%~1\"==\"help\" goto help\r\n"
-            "if /I \"%~1\"==\"-h\" goto help\r\n"
-            "if /I \"%~1\"==\"--help\" goto help\r\n"
-            "if /I \"%~1\"==\"play\" goto play\r\n"
-            "if /I \"%~1\"==\"update\" goto maintenance\r\n"
-            "if /I \"%~1\"==\"upgrade\" goto maintenance\r\n"
-            "if /I \"%~1\"==\"hub\" goto maintenance\r\n"
-            "if /I \"%~1\"==\"verify\" goto maintenance\r\n"
-            "if /I \"%~1\"==\"cleanup\" goto maintenance\r\n"
-            "if /I \"%~1\"==\"uninstall\" goto maintenance\r\n"
-            "echo x86qw: comando desconhecido: %~1 1>&2\r\n"
-            "goto help_error\r\n"
-            ":play\r\n"
-            "py -3 \"%X86QW_ROOT%.install\\cli\\play-qw.py\" \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
-            "exit /b %ERRORLEVEL%\r\n"
-            ":maintenance\r\n"
-            "set \"X86QW_ACTION=%~1\"\r\n"
-            "py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only --installed-cli %1 \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
-            "set \"X86QW_EXIT=%ERRORLEVEL%\"\r\n"
-            "if /I \"%X86QW_ACTION%\"==\"uninstall\" if \"%X86QW_EXIT%\"==\"0\" del \"%~f0\"\r\n"
-            "exit /b %X86QW_EXIT%\r\n"
-            ":help\r\n"
-            "echo x86QW - QuakeWorld moderno\r\n"
-            "echo.\r\n"
-            "echo Uso: x86qw.cmd ^<comando^> [opcoes]\r\n"
-            "echo.\r\n"
-            "echo Gameplay:\r\n"
-            "echo   play                 escolhe e inicia um mod local\r\n"
-            "echo   hub                  lista servidores publicos\r\n"
-            "echo.\r\n"
-            "echo Manutencao:\r\n"
-            "echo   update [--yes]       atualiza o conteudo ja instalado\r\n"
-            "echo   upgrade [--yes]      incorpora novidades do perfil\r\n"
-            "echo   verify               verifica a instalacao\r\n"
-            "echo   cleanup              limpa o cache x86QW\r\n"
-            "echo   uninstall            preserva PAKs e dados pessoais\r\n"
-            "echo   uninstall --purge    remove completamente o x86QW\r\n"
-            "echo   help                 mostra esta ajuda\r\n"
-            "echo.\r\n"
-            "echo A instalacao e exclusiva do install.ps1.\r\n"
-            "exit /b 0\r\n"
-            ":help_error\r\n"
-            "call :help\r\n"
-            "exit /b 2\r\n",
-            encoding="utf-8",
-        )
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
 
 
@@ -3520,9 +3463,9 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
     parser = FriendlyArgumentParser(
-        prog="install-qw.py",
+        prog="dist/installer/bin/manager.py",
         description="Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido.",
-        epilog="Exemplo: ./install-qw.py install ./quake-world",
+        epilog="Exemplo: ./dist/installer/bin/manager.py install ./quake-world",
         add_help=False,
     )
     parser._positionals.title = "argumentos"
@@ -3568,14 +3511,17 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "action", nargs="?", default="install",
-        help="install, update, upgrade, components, presets, hub, verify, uninstall ou cleanup",
+        help="install, play, update, upgrade, components, presets, hub, verify, uninstall ou cleanup",
     )
     parser.add_argument(
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
     namespace = parser.parse_args(arguments)
-    valid_actions = ("install", "update", "upgrade", "components", "presets", "hub", "verify", "uninstall", "cleanup")
+    valid_actions = (
+        "install", "play", "update", "upgrade", "components", "presets", "hub", "verify",
+        "uninstall", "cleanup",
+    )
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
@@ -3618,13 +3564,25 @@ def choose_public_target(suggested: Path | None = None) -> Path:
 
 
 def main(arguments: list[str] | None = None) -> int:
-    project_root = Path(__file__).resolve().parent
+    project_root = INSTALLER_ROOT
     options = None
     try:
-        options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
+        raw_arguments = sys.argv[1:] if arguments is None else arguments
+        if raw_arguments[:1] == ["play"]:
+            gameplay = importlib.import_module("gameplay")
+            return gameplay.main(raw_arguments[1:])
+        options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         if options.online_only and options.target is None:
             options.target = choose_public_target()
+        if options.action == "play":
+            gameplay = importlib.import_module("gameplay")
+            play_arguments = [str(options.target)]
+            if options.verbose:
+                play_arguments.insert(0, "--verbose")
+            if options.no_color:
+                play_arguments.insert(0, "--no-color")
+            return gameplay.main(play_arguments)
         action_labels = {
             "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
             "presets": "gerenciar presets",

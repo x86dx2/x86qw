@@ -15,7 +15,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location("install_qw", ROOT / "install-qw.py")
+SPEC = importlib.util.spec_from_file_location("install_qw", ROOT / "dist/installer/bin/manager.py")
 install_qw = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = install_qw
@@ -41,7 +41,7 @@ class InstallerTests(unittest.TestCase):
         }
         for name, digest in expected.items():
             with self.subTest(name=name):
-                pak = ROOT / "dist/id1" / name
+                pak = ROOT / "dist/game-data/id1" / name
                 self.assertTrue(pak.is_file())
                 self.assertFalse(pak.is_symlink())
                 with pak.open("rb") as source:
@@ -63,7 +63,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             target.rmdir()
-            bundled = installer.project_root / "dist/id1"
+            bundled = installer.project_root / "dist/game-data/id1"
             bundled.mkdir(parents=True)
             pak0 = b"PACK" + b"pak0"
             pak1 = b"PACK" + b"pak1"
@@ -88,7 +88,7 @@ class InstallerTests(unittest.TestCase):
     def test_existing_pak_is_never_overwritten_by_the_bundled_copy(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            bundled = installer.project_root / "dist/id1"
+            bundled = installer.project_root / "dist/game-data/id1"
             bundled.mkdir(parents=True)
             valid = b"PACK" + b"registered"
             for name in ("pak0.pak", "pak1.pak"):
@@ -330,9 +330,17 @@ class InstallerTests(unittest.TestCase):
                     return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
                 ):
                     installer.install_online_cli()
-            self.assertTrue((target / ".install/cli/install-qw.py").is_file())
+            self.assertTrue((target / ".install/cli/dist/installer/bin/manager.py").is_file())
             self.assertTrue((target / ".install/cli/dist/mods/team-fortress/2.9/x86qw/client.cfg").is_file())
             self.assertTrue((target / "x86qw.cmd").is_file())
+            self.assertEqual(
+                (ROOT / "dist/installer/bin/x86qw").read_bytes(),
+                (target / "x86qw").read_bytes(),
+            )
+            self.assertEqual(
+                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes(),
+                (target / "x86qw.cmd").read_bytes(),
+            )
             self.assertEqual("1.0.6", installer.installed_cli_version())
             launcher = target / "x86qw"
             self.assertTrue(os.access(launcher, os.X_OK))
@@ -591,7 +599,7 @@ class InstallerTests(unittest.TestCase):
             )
             archive = root / "x86qw-installer-1.0.5.zip"
             with zipfile.ZipFile(archive, "w") as package:
-                package.writestr("x86qw-installer-1.0.5/install-qw.py", "# update\n")
+                package.writestr("x86qw-installer-1.0.5/dist/installer/bin/manager.py", "# update\n")
                 package.writestr(
                     "x86qw-installer-1.0.5/_x86qw/installer.json",
                     '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
@@ -611,6 +619,35 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("--yes", command)
             self.assertEqual(["upgrade", str(target)], command[-2:])
             self.assertFalse(any(target.glob(".x86qw-update.*")))
+
+    def test_cli_update_selects_only_the_current_bundle_from_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            base = {
+                "component": "installer",
+                "package": "x86qw-installer",
+                "channel": "content",
+                "platform": "any",
+                "architecture": "any",
+                "size": 1,
+                "sha256": "a" * 64,
+                "urls": ["https://example.invalid/x86qw-installer-1.0.1.zip"],
+                "redistribution_reviewed": True,
+            }
+            historical = dict(
+                base, version="1.0.1", current=False,
+                filename="x86qw-installer-1.0.1.zip",
+            )
+            current = dict(
+                base, version="1.0.20", current=True,
+                filename="x86qw-installer-1.0.20.zip",
+                urls=["https://example.invalid/x86qw-installer-1.0.20.zip"],
+            )
+            installer._public_catalog = {
+                "format": 1, "project": "x86qw", "packages": [historical, current],
+            }
+
+            self.assertEqual("1.0.20", installer.installer_bundle_record()["version"])
 
     def test_cli_update_never_downgrades_itself(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -635,7 +672,7 @@ class InstallerTests(unittest.TestCase):
             )
             archive = root / "x86qw-installer-1.0.5.zip"
             with zipfile.ZipFile(archive, "w") as package:
-                package.writestr("x86qw-installer-1.0.5/install-qw.py", "# update\n")
+                package.writestr("x86qw-installer-1.0.5/dist/installer/bin/manager.py", "# update\n")
                 package.writestr(
                     "x86qw-installer-1.0.5/_x86qw/installer.json",
                     '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
@@ -836,8 +873,9 @@ class InstallerTests(unittest.TestCase):
     def test_regular_uninstall_removes_the_cli_and_preserves_id1(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            (target / ".install/cli").mkdir(parents=True)
-            (target / ".install/cli/install-qw.py").write_text("# cli\n", encoding="utf-8")
+            cli = target / ".install/cli/dist/installer/bin/manager.py"
+            cli.parent.mkdir(parents=True)
+            cli.write_text("# cli\n", encoding="utf-8")
             (target / install_qw.CLI_RECEIPT).write_text(
                 '{"format":1,"project":"x86qw","version":"1.0.5"}\n', encoding="utf-8",
             )

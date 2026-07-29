@@ -120,7 +120,7 @@ class ComponentReleaseTests(unittest.TestCase):
         members = {member: payload for _, member, payload, _ in payloads}
         packaged = members["payload/qw/nquake_default.cfg"]
         preserved = (
-            ROOT / "dist/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg"
+            ROOT / "dist/distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg"
         ).read_bytes()
         self.assertIn(b'gl_max_size                          "16384"', packaged)
         self.assertNotIn(b'gl_max_size                          "32768"', packaged)

@@ -14,7 +14,9 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-core = importlib.import_module("install-qw")
+sys.dont_write_bytecode = True
+
+core = importlib.import_module("manager")
 
 InstallerError = core.InstallerError
 console = core.console
@@ -481,9 +483,9 @@ class Player(core.Installer):
 
 def parse_arguments(arguments: list[str], project_root: Path):
     parser = core.FriendlyArgumentParser(
-        prog="play-qw.py",
+        prog="dist/installer/bin/gameplay.py",
         description="Abre os mods locais da distribuição x86QW no ezQuake.",
-        epilog="Exemplo: ./play-qw.py ./quake-world",
+        epilog="Exemplo: ./dist/installer/bin/gameplay.py ./quake-world",
         add_help=False,
     )
     parser._positionals.title = "argumentos"
@@ -513,7 +515,7 @@ def show_banner(target: Path) -> None:
 
 
 def main(arguments: list[str] | None = None) -> int:
-    project_root = Path(__file__).resolve().parent
+    project_root = core.INSTALLER_ROOT
     options = None
     player = None
     try:

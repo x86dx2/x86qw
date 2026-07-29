@@ -1,6 +1,7 @@
 from html.parser import HTMLParser
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import unittest
@@ -63,7 +64,18 @@ class SiteTests(unittest.TestCase):
 
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
-        package = next(item for item in catalog["packages"] if item.get("package") == "x86qw-installer")
+        installers = [item for item in catalog["packages"] if item.get("package") == "x86qw-installer"]
+        current = [item for item in installers if item.get("current") is True]
+        self.assertEqual(1, len(current))
+        package = current[0]
+        self.assertEqual(
+            ["1.0.20", "1.0.21", "1.0.22", "1.0.23", "1.0.24", "1.0.25", "1.0.26", "1.0.27"],
+            sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
+        )
+        for historical in installers:
+            historical_bundle = ROOT.parents[1] / "dist" / historical["distribution_path"]
+            self.assertEqual(historical["size"], historical_bundle.stat().st_size)
+            self.assertEqual(historical["sha256"], hashlib.sha256(historical_bundle.read_bytes()).hexdigest())
         bundle = ROOT.parents[1] / "dist" / package["distribution_path"]
         self.assertEqual(package["size"], bundle.stat().st_size)
         self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
@@ -75,8 +87,13 @@ class SiteTests(unittest.TestCase):
             {"format": 1, "project": "x86qw", "version": package["version"]},
             identity,
         )
+        latest = ROOT.parents[1] / "dist" / "installer" / "packages" / "latest"
+        self.assertTrue(latest.is_symlink())
+        self.assertEqual(package["version"], os.readlink(latest))
         for name in ("install.sh", "install.ps1"):
             script = (ROOT / name).read_text(encoding="utf-8")
+            canonical = (ROOT.parents[1] / "dist" / "installer" / "bin" / name).read_text(encoding="utf-8")
+            self.assertEqual(canonical, script)
             self.assertIn(package["sha256"], script)
             self.assertNotIn("__X86QW_INSTALLER_SHA256__", script)
         home = (ROOT / "index.html").read_text(encoding="utf-8")

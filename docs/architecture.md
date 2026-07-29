@@ -16,11 +16,18 @@ https://github.com/x86dx2/x86qw-dist/releases mirror de entrega legado
 ```
 
 Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
-componentes diretamente de `dist/nquake` e `dist/mods` e usa `distribution_path`
+componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `distribution_path`
 somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
 HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
 O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
 o catálogo publicado e grava uma CLI permanente em `.install/cli` na instalação.
+Os launchers `dist/installer/bin/x86qw` e `x86qw.cmd` são fontes versionadas incluídas
+no bundle e apenas copiadas para a raiz da instalação.
+Os bundles históricos ficam em `dist/installer/packages/<versão>/`; o link
+relativo `dist/installer/packages/latest` aponta para a maior versão disponível. O
+catálogo conserva todas as versões, marca exatamente uma como `current` e os
+bootstraps permanecem fixados nessa versão e em seu SHA-256.
+O marco inicial desse catálogo é a versão `1.0.20`.
 
 ## Repositórios
 
@@ -29,7 +36,7 @@ o catálogo publicado e grava uma CLI permanente em `.install/cli` na instalaç�
   componentes x86QW; o projeto homônimo usa GitLab Generic Packages como
   segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
   das fontes canônicas e não são versionados novamente no repositório principal.
-  Os dois PAKs registrados permanecem em `dist/id1` e entram somente no bundle
+  Os dois PAKs registrados permanecem em `dist/game-data/id1` e entram somente no bundle
   público versionado do instalador, que possui tamanho e SHA-256 no catálogo.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
@@ -63,9 +70,11 @@ Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 atual, estratégia, upstream, artefatos consumidos e hashes. Assim uma release
 como KTX pode avançar sem renomear ou reconstruir componentes alheios.
 
-Todo conteúdo canônico fica sob `dist/`: `ezquake/` contém os clientes,
-`nquake/` contém somente o conteúdo incorporado da referência, `mods/` mantém
-upstreams e ajustes próprios e `id1/` mantém os PAKs registrados. ZIPs derivados
+Todo conteúdo canônico fica sob `dist/`: `clients/ezquake/stable/` contém as
+releases oficiais, `clients/ezquake/nightly/` contém os snapshots de
+desenvolvimento, `distributions/nquake/` contém somente o conteúdo incorporado
+da distribuição de referência, `mods/` mantém upstreams e ajustes próprios e
+`game-data/id1/` mantém os PAKs registrados. ZIPs derivados
 ficam temporariamente em `maintenance/build/packages/`, fora do Git.
 
 O fluxo de um componente customizado possui duas entradas independentes:
@@ -93,7 +102,7 @@ pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
 ```text
 fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
                      -> maintenance/build/packages/ -> mirrors -> instalador público
-dist/id1 + CLI -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
+dist/game-data/id1 + CLI -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
 ```
 
 As receitas versionadas ficam em `maintenance/recipes/`. O gerenciador valida

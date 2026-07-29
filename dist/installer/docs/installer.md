@@ -1,4 +1,4 @@
-# QuakeWorld moderno e multiplataforma
+# Manual do x86QW moderno e multiplataforma
 
 Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instalador Python executa no macOS, Linux ou Windows, pode preparar binários para qualquer um dos três sistemas e acrescenta recursos modernos sem substituir arquivos pessoais. Ele não instala pacotes nem arquivos globais.
 
@@ -30,7 +30,9 @@ Ao concluir, a raiz da instalação contém `x86qw` e `x86qw.cmd`. Esses comando
 usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw play`,
 `./x86qw update`, `./x86qw upgrade`, `./x86qw verify` e `./x86qw cleanup`. Sem argumento, a CLI
 mostra o help e não inicia instalação alguma. O clone e os comandos
-`./install-qw.py` e `./play-qw.py` da raiz são o fluxo de desenvolvimento.
+`./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
+Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
+e são copiados byte a byte para o destino. O instalador não gera scripts em runtime.
 
 O contrato é intencionalmente separado:
 
@@ -47,8 +49,8 @@ Novos componentes oficialmente incorporados ao perfil escolhido entram por
 Os PAKs registrados originais fazem parte da distribuição em:
 
 ```text
-dist/id1/pak0.pak
-dist/id1/pak1.pak
+dist/game-data/id1/pak0.pak
+dist/game-data/id1/pak1.pak
 ```
 
 Uma instalação nova não exige que `quake-world/` exista. Depois da detecção do
@@ -60,13 +62,13 @@ nunca o substitui silenciosamente.
 No macOS ou Linux, execute:
 
 ```sh
-./install-qw.py install
+./dist/installer/bin/manager.py install
 ```
 
 No Windows, execute:
 
 ```powershell
-py -3 .\install-qw.py install
+py -3 .\dist\installer\bin\manager.py install
 ```
 
 O SO do host é detectado sem perguntas:
@@ -84,7 +86,7 @@ Para preparar um cliente diferente do host, informe explicitamente
 `--platform macos`, `--platform linux` ou `--platform windows`:
 
 ```sh
-./install-qw.py install --platform windows
+./dist/installer/bin/manager.py install --platform windows
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
 ```
 
@@ -201,7 +203,7 @@ recursos nQuake com o `qwprogs.qvm` oficial 1.47, substituindo o `1.46-dev`
 embarcado. O catálogo publica uma versão atual por componente e o recibo
 individual grava sua versão. Antes do download, o instalador mostra as versões
 escolhidas e, quando disponível, o link das notas de release. Em um checkout,
-ele materializa o componente diretamente de `dist/nquake` e `dist/mods`; sem
+ele materializa o componente diretamente de `dist/distributions/nquake` e `dist/mods`; sem
 essas fontes, recorre aos pacotes dos mirrors externos. Servidores e shareware
 ficam de fora. Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
@@ -212,10 +214,10 @@ start; um preset existente nunca é substituído.
 Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente pela ação `install`:
 
 ```sh
-./install-qw.py components
-./install-qw.py presets
-./install-qw.py hub
-./play-qw.py
+./dist/installer/bin/manager.py components
+./dist/installer/bin/manager.py presets
+./dist/installer/bin/manager.py hub
+./dist/installer/bin/manager.py play
 ```
 
 ### Componentes x86QW
@@ -257,11 +259,11 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 
 ### Jogo local
 
-`play-qw.py` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
+`x86qw play` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
 linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
 
-No Windows, a entrada equivalente é `py -3 .\play-qw.py`.
+No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play`.
 
 - KTX em `qw/ktx.pk3`;
 - Final Arena em `arena/arena.pk3`;
@@ -304,7 +306,7 @@ executados. Se uma instalação anterior já tiver esse arquivo como configuraç
 pessoal, a atualização cria `config.pre-x86qw.cfg` e migra o perfil ativo para
 a base moderna do jogador.
 
-Todos os cinco modos do menu de `play-qw.py` carregam gameplay próprio. A base nQuake
+Todos os cinco modos do menu de `x86qw play` carregam gameplay próprio. A base nQuake
 continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
 perfil do mod corrige conflitos e expõe suas mecânicas; o arquivo pessoal é
 executado por último:
@@ -442,10 +444,10 @@ O instalador já aplica a permissão executável no AppImage. Se o método usado
 ## Verificar
 
 ```sh
-./install-qw.py verify
+./dist/installer/bin/manager.py verify
 ```
 
-No Windows, substitua `./install-qw.py` por `py -3 .\install-qw.py` nos exemplos.
+No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\installer\bin\manager.py` nos exemplos.
 
 ## Saída e diagnóstico
 
@@ -454,7 +456,7 @@ A saída padrão prioriza decisões, andamento e resultado. Downloads exibem uma
 Para investigar uma falha ou auditar exatamente o que será usado, ative o modo detalhado:
 
 ```sh
-./install-qw.py --verbose install
+./dist/installer/bin/manager.py --verbose install
 ```
 
 Esse modo acrescenta host e versão do Python, URLs consultadas, comandos externos, caminho do cache e checksums. Ele não instala ferramentas nem bibliotecas extras. Para desativar cores explicitamente, use `--no-color`; a variável padrão `NO_COLOR` também é respeitada.
@@ -462,7 +464,7 @@ Esse modo acrescenta host e versão do Python, URLs consultadas, comandos extern
 O instalador consulta somente o catálogo público x86QW para ezQuake. Para desenvolvimento, `X86_QW_CATALOG_URL` permite apontar para
 outro endpoint HTTPS compatível; a variável não é gravada nos recibos.
 
-Use `./install-qw.py --help` para consultar ações e opções sem iniciar nenhuma operação.
+Use `./dist/installer/bin/manager.py --help` para consultar ações e opções sem iniciar nenhuma operação.
 
 Cada combinação SO/canal recebe um recibo próprio. A verificação funciona offline e cobre:
 
@@ -479,9 +481,9 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 ## Desinstalar e limpar o cache
 
 ```sh
-./install-qw.py uninstall
-./install-qw.py uninstall --purge
-./install-qw.py cleanup
+./dist/installer/bin/manager.py uninstall
+./dist/installer/bin/manager.py uninstall --purge
+./dist/installer/bin/manager.py cleanup
 ```
 
 `uninstall` remove a CLI permanente, todos os binários macOS, Linux e Windows comprovadamente
@@ -519,9 +521,9 @@ Downloads recebidos de servidores Team Fortress e dados pessoais são classes
 separadas e permanecem preservados por padrão:
 
 ```sh
-./install-qw.py cleanup --downloads
-./install-qw.py cleanup --personal-data
-./install-qw.py cleanup --downloads --personal-data
+./dist/installer/bin/manager.py cleanup --downloads
+./dist/installer/bin/manager.py cleanup --personal-data
+./dist/installer/bin/manager.py cleanup --downloads --personal-data
 ```
 
 `--downloads` remove apenas arquivos não gerenciados sob `fortress/progs` e
@@ -595,13 +597,13 @@ Feche qualquer ezQuake aberto antes de instalar ou atualizar. O aplicativo ofici
 
 Abra `quake-world/ezQuake Stable.app` ou `quake-world/ezQuake Nightly.app`. Na janela que pede o diretório contendo `id1/pak0.pak`, escolha exatamente a própria pasta `quake-world` mostrada no resumo do instalador. Essa seleção é obrigatória para que o ezQuake encontre `qw/autoexec.cfg` e carregue a configuração inicial nQuake.
 
-O menu principal pode manter a aparência clássica do Quake. Para verificar o estado real, execute `./install-qw.py verify`: o resultado informa se as configurações nQuake estão aguardando a primeira abertura ou se já foram carregadas.
+O menu principal pode manter a aparência clássica do Quake. Para verificar o estado real, execute `./dist/installer/bin/manager.py verify`: o resultado informa se as configurações nQuake estão aguardando a primeira abertura ou se já foram carregadas.
 
 Os builds oficiais atuais usam assinatura ad-hoc e podem não estar notarizados. Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem contorna as proteções do macOS.
 
 ## O que permanece no projeto
 
-O repositório guarda os dois PAKs registrados em `dist/id1` e as fontes
+O repositório guarda os dois PAKs registrados em `dist/game-data/id1` e as fontes
 disponíveis de ezQuake stable/nightly, KTX, Team Fortress e TD2 junto aos seus
 contextos em `dist/`. Em `quake-world`, PAKs e configurações pessoais permanecem
 quando o runtime for removido. Apps, executáveis, addons, texturas e cache
@@ -610,7 +612,7 @@ continuam reconstruíveis.
 ## Testar o instalador
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s installer/tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest maintenance.tests.test_installer maintenance.tests.test_modern_components -v
 ```
 
 Os testes usam somente diretórios temporários e não alteram `quake-world` nem o cache real.
