@@ -5,13 +5,13 @@ do nQuake corresponde a um projeto com releases: skins, miras, skyboxes, mapas e
 outros recursos são coleções curadas. Nesses casos, a versão correta é o commit
 imutável do `nQuake/distfiles`, não um número inventado.
 
-Estado verificado em 27 de julho de 2026:
+Estado verificado em 28 de julho de 2026:
 
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.2` | release oficial sobre recursos nQuake e perfil x86QW | atualizado de `1.46-dev` para `1.47` |
+| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.3` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas e comunicação competitiva preservada |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -24,10 +24,10 @@ Estado verificado em 27 de julho de 2026:
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Documentação | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
 | QRP alta resolução | `e4cb23d40aa2` | snapshot nQuake | contém mapas 1.00 e itens 0.73 |
-| Final Arena | `e4cb23d40aa2+x86qw.2` | snapshot nQuake e perfil x86QW próprio | Final Arena 1.20 separado do Pro-X |
-| Pro-X | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com configuração histórica neutralizada | Pro-X QW 0.8b separado do Final Arena |
-| Team Fortress | `e4cb23d40aa2+x86qw.2` | snapshot nQuake e perfil x86QW próprio | Team Fortress 2.8 com ajuda automática |
-| Total Destruction 2 | `2.22+x86qw.2` | pacote independente do upstream e perfil x86QW | distribuição QW completa localizada, sem mapas adicionais |
+| Final Arena | `e4cb23d40aa2+x86qw.3` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis |
+| Pro-X | `e4cb23d40aa2+x86qw.4` | snapshot nQuake com configuração histórica neutralizada | perfil reaplicado pelo `qw_server.cfg` solicitado pelo gamecode |
+| Team Fortress | `e4cb23d40aa2+x86qw.3` | snapshot nQuake e gameplay x86QW próprio | binds nQuake preservados e menus de classe expostos |
+| Total Destruction 2 | `2.22+x86qw.3` | pacote independente do upstream e gameplay x86QW | magia, especial, runas e votação acessíveis |
 
 ## Contrato de atualização
 
@@ -47,6 +47,23 @@ O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` oficial 1.47, mas o
 artefato do upstream é preservado em `dist/mods/ktx/`. Ele não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
+
+## Contrato dos perfis de gameplay
+
+Cada mod parte da configuração geral do nQuake. A camada x86QW substitui apenas
+binds que conflitam com a mecânica do mod, mantém os recursos coerentes do
+nQuake e acrescenta acesso às funções confirmadas no manual, na configuração
+original ou no gamecode correspondente. O arquivo pessoal é executado por
+último e nunca é sobrescrito:
+
+```text
+nQuake -> x86QW do mod -> x86qw-<mod>-user.cfg
+```
+
+As teclas de movimento, sensibilidade, rede e preferências visuais continuam
+pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod,
+ajustes de compatibilidade do HUD e ajuda contextual. `F10` repete a ajuda
+automática mostrada ao carregar cada mod.
 
 Final Arena e Pro-X são consumidos de subdiretórios diferentes do snapshot
 nQuake e geram pacotes, versões, inventários e recibos independentes. O caminho

@@ -254,6 +254,7 @@
       ],
       "project_sources": [
         {"path": "dist/mods/pro-x/0.8b+x86qw.1/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/0.8b+x86qw.1/qw-server.cfg", "destination": "prox/qw_server.cfg", "mode": "overlay"},
         {"path": "dist/mods/pro-x/0.8b+x86qw.1/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
         {"path": "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
       ]

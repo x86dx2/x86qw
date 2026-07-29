@@ -107,6 +107,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(
                 {
                     "dist/mods/pro-x/0.8b+x86qw.1/client.cfg",
+                    "dist/mods/pro-x/0.8b+x86qw.1/qw-server.cfg",
                     "dist/mods/pro-x/0.8b+x86qw.1/server.cfg",
                     "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example",
                 },
@@ -552,6 +553,7 @@ class ModernComponentTests(unittest.TestCase):
                 gamedir = target / game.gamedir
                 client = gamedir / f"x86qw-{game.profile}.cfg"
                 server = gamedir / "server.cfg"
+                compatibility = gamedir / "qw_server.cfg"
                 user = gamedir / f"x86qw-{game.profile}-user.cfg"
                 self.assertEqual(
                     (ROOT / (
@@ -570,6 +572,8 @@ class ModernComponentTests(unittest.TestCase):
                     server.read_bytes(),
                 )
                 self.assertIn(f'sv_progsname "x86qw_{game.gamedir}"', server.read_text())
+                if game.key == "pro-x":
+                    self.assertEqual("exec x86qw-prox.cfg", compatibility.read_text().strip().splitlines()[-1])
                 user.write_text(f"// personal {game.key}\n", encoding="utf-8")
                 with zipfile.ZipFile(target / game.marker, "w") as archive:
                     archive.writestr("qwprogs.dat", f"{game.key}-v2".encode())
@@ -587,14 +591,79 @@ class ModernComponentTests(unittest.TestCase):
                     f"// personal {game.key}\n",
                     (gamedir / f"x86qw-{game.profile}-user.cfg").read_text(),
                 )
-            self.assertEqual(6, installer.verify_component("play-support"))
-            self.assertEqual(6, installer.remove_component("play-support"))
+            self.assertEqual(7, installer.verify_component("play-support"))
+            self.assertEqual(7, installer.remove_component("play-support"))
             for game in games:
                 self.assertTrue((
                     target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
                 ).is_file())
 
     def test_every_playable_mod_profile_prints_its_keys_and_binds_help(self):
+        expected_gameplay = {
+            "ktx": {
+                'bind 1 "x86qw_ktx_axe"',
+                'bind q "x86qw_ktx_gl"',
+                'bind e "x86qw_ktx_rl"',
+                'bind z "tp_msgquaddead"',
+                'bind x "tp_msgenemypwr"',
+                'bind F5 "toggleready"',
+                'bind F7 "join"',
+            },
+            "final-arena": {
+                'alias arena_stats "impulse 68"',
+                'alias arena_position "impulse 69"',
+                'alias arena_break "impulse 70"',
+                'alias arena_commands "impulse 82"',
+                'alias arena_next "impulse 83"',
+                'alias arena_backpacks "impulse 85"',
+                'alias arena_status "impulse 86"',
+                'alias arena_airgib "impulse 88"',
+                'bind 1 "impulse 1"',
+                'bind F1 "join"',
+                'bind F2 "arena_position"',
+                'bind F7 "arena_backpacks"',
+                'bind F8 "arena_airgib"',
+            },
+            "pro-x": {
+                'alias prox_menu "menu"',
+                'alias prox_id "id"',
+                'alias prox_map1 "impulse 201"',
+                'alias prox_map5 "impulse 205"',
+                'bind 1 "impulse 1;weapon 1"',
+                'bind 9 "impulse 9"',
+                'bind 0 "impulse 10"',
+                'bind F2 "prox_admin_yes"',
+                'bind F9 "prox_menu"',
+            },
+            "team-fortress": {
+                'bind 1 "impulse 1"',
+                'bind c "+det50"',
+                'bind f "saveme"',
+                'bind r "reload"',
+                'bind x "+det20"',
+                'bind z "+det5"',
+                'bind MOUSE2 "+gren1"',
+                'bind MOUSE3 "+gren2"',
+                'bind ALT "flaginfo"',
+                'bind CTRL "discard"',
+                'bind SHIFT "special"',
+                'bind F1 "inv"',
+                'bind F2 "showclasses"',
+                'bind F3 "changeclass"',
+            },
+            "td2": {
+                'alias td2_magic "impulse 1"',
+                'alias td2_special "impulse 20"',
+                'alias td2_drop_rune "impulse 22"',
+                'alias td2_drop_special "impulse 23"',
+                'alias td2_vote_next "impulse 100"',
+                'bind 1 "impulse 1"',
+                'bind 9 "impulse 20"',
+                'bind 0 "impulse 21"',
+                'bind MOUSE4 "td2_magic"',
+                'bind F1 "td2_vote_next"',
+            },
+        }
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             for game in install_qw.LOCAL_GAMES:
@@ -604,7 +673,11 @@ class ModernComponentTests(unittest.TestCase):
                     help_alias = f"x86qw_{game.profile}_help"
                     self.assertIn(f"alias {help_alias}", profile)
                     self.assertIn(f'bind F10 "{help_alias}', profile)
-                    self.assertIn('bind 1 "impulse 1"', profile)
+                    for expected in expected_gameplay[game.key]:
+                        self.assertIn(expected, profile)
+                    user_exec = f"exec x86qw-{game.profile}-user.cfg"
+                    self.assertIn(user_exec, profile)
+                    self.assertLess(profile.index(user_exec), profile.rindex(help_alias))
                     self.assertEqual(help_alias, profile.strip().splitlines()[-1])
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):

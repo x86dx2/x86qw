@@ -1,2 +1,7 @@
 // Personalizacoes locais do Team Fortress.
-// Este arquivo e criado como fortress/x86qw-fortress-user.cfg e nunca e sobrescrito.
+// Criado como fortress/x86qw-fortress-user.cfg, carregado depois do perfil e nunca sobrescrito.
+// Exemplos:
+// bind MOUSE4 "detpipe"
+// bind MOUSE5 "inv"
+// bind b "build"
+// alias x86qw_fortress_help "echo Meus controles Team Fortress"

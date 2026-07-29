@@ -63,8 +63,8 @@ class DistributionManagerTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(releases["reference"]["revision"], new)
-        self.assertEqual(releases["components"]["final-arena"]["version"], "bbbbbbbbbbbb+x86qw.2")
-        self.assertEqual(releases["components"]["pro-x"]["version"], "bbbbbbbbbbbb+x86qw.2")
+        self.assertEqual(releases["components"]["final-arena"]["version"], "bbbbbbbbbbbb+x86qw.3")
+        self.assertEqual(releases["components"]["pro-x"]["version"], "bbbbbbbbbbbb+x86qw.4")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["nquake-ktx"]["version"])
         self.assertNotIn(old[:12], releases["components"]["nquake-ktx"]["distribution_tag"])
 
@@ -141,8 +141,8 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
         self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
         self.assertIn("QRP alta resolução: e4cb23d40aa2", output)
-        self.assertIn("Final Arena: e4cb23d40aa2+x86qw.2", output)
-        self.assertIn("Pro-X: e4cb23d40aa2+x86qw.2", output)
+        self.assertIn("Final Arena: e4cb23d40aa2+x86qw.3", output)
+        self.assertIn("Pro-X: e4cb23d40aa2+x86qw.4", output)
         self.assertIn("Team Fortress: e4cb23d40aa2", output)
         self.assertIn("KTX para servidores", output)
         self.assertIn("dist/mods/ktx/1.47/qwprogs-qvm.zip", output)

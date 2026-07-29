@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "checked_at": "2026-07-27",
+  "checked_at": "2026-07-28",
   "reference": {
     "repository": "https://github.com/nQuake/distfiles",
     "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
@@ -10,13 +10,13 @@
     "nquake-bootstrap": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.2",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.3",
       "strategy": "upstream-overlay",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
       "distribution_tag": "nquake-ktx-1.47-nquake.e4cb23d40aa2",
       "embedded_version": "1.46-dev",
-      "notes": "Atualiza o código de jogo KTX para 1.47 e preserva bots, configurações, mapas auxiliares e sons da distribuição nQuake.",
+      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e acrescenta gameplay x86QW com armas ergonômicas, comunicação competitiva e override pessoal.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -74,14 +74,14 @@
       "embedded_version": "maps-1.00+items-0.73"
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.3",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Final Arena 1.20",
-      "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil x86QW independente com ajuda automática de controles."
+      "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil de gameplay x86QW com armas, fila, estatísticas, votação, opções e override pessoal."
     },
     "pro-x": {
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.4",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Pro-X QW 0.8b",
@@ -92,17 +92,17 @@
           "destination": "configs/nquake-pk3-legacy.cfg"
         }
       ],
-      "notes": "Preserva o prox.pk3 do nQuake, neutraliza somente a configuração histórica autocarregável e acrescenta um perfil x86QW independente."
+      "notes": "Preserva o prox.pk3 do nQuake, neutraliza a configuração histórica autocarregável e atende qw_server.cfg localmente para reaplicar gameplay x86QW após os binds remotos bloqueados pelo ezQuake."
     },
     "team-fortress": {
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.3",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Team Fortress 2.8",
-      "notes": "Preserva o Team Fortress do nQuake e acrescenta perfil x86QW com ajuda automática dos controles."
+      "notes": "Preserva o Team Fortress e seus binds do nQuake, acrescentando seleção coerente de armas, menus de classe e ajuda automática x86QW."
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.2",
+      "version": "2.22+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
@@ -113,7 +113,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
       ],
-      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. Configurações de servidor são instaladas como exemplos e o arquivo de senhas original é excluído.",
+      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. A camada x86QW expõe magia, armas, runas, votos e override pessoal; configurações de servidor são exemplos e a senha original é excluída.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

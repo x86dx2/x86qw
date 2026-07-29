@@ -1,2 +1,6 @@
 // Personalizacoes locais do Final Arena.
-// Este arquivo e criado como arena/x86qw-arena-user.cfg e nunca e sobrescrito.
+// Criado como arena/x86qw-arena-user.cfg, carregado depois do perfil e nunca sobrescrito.
+// Exemplos:
+// bind MOUSE4 "arena_position"
+// bind F5 "arena_backpacks"
+// alias x86qw_arena_help "echo Meus controles Final Arena"

@@ -1,3 +1,7 @@
-// x86QW: personalizacoes locais do TD2.
-// Este arquivo nunca e sobrescrito pelo instalador.
-// Adicione aqui binds ou opcoes que devem prevalecer sobre x86qw-td2.cfg.
+// Personalizacoes locais do Total Destruction 2.
+// Criado como td2/x86qw-td2-user.cfg, carregado depois do perfil e nunca sobrescrito.
+// Exemplos:
+// bind MOUSE4 "td2_special"
+// bind MOUSE5 "td2_magic"
+// bind F4 "td2_vote_aerowalk"
+// alias x86qw_td2_help "echo Meus controles TD2"

@@ -2503,6 +2503,8 @@ class Installer:
         }
         if game.key != "ktx":
             expected[f"{game.gamedir}/server.cfg"] = "overlay"
+        if game.key == "pro-x":
+            expected[f"{game.gamedir}/qw_server.cfg"] = "overlay"
         entries = [
             entry for entry in self.components[game.component].get("project_sources", [])
             if str(entry.get("destination", "")).startswith(f"{game.gamedir}/")

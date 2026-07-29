@@ -1,2 +1,6 @@
 // Personalizacoes locais do Pro-X.
-// Este arquivo e criado como prox/x86qw-prox-user.cfg e nunca e sobrescrito.
+// Criado como prox/x86qw-prox-user.cfg, carregado depois do perfil e nunca sobrescrito.
+// Exemplos:
+// bind MOUSE4 "prox_menu"
+// bind F9 "prox_map1"
+// alias x86qw_prox_help "echo Meus controles Pro-X"

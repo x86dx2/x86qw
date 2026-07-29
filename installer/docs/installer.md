@@ -228,37 +228,36 @@ solta do nQuake fica em `prox/configs/nquake-legacy.cfg`. Assim eles continuam
 disponíveis como referência sem substituir automaticamente HUD, vídeo e binds
 do jogador.
 
-Controles acrescentados para Final Arena:
+Todos os cinco modos do menu `play` carregam gameplay próprio. A base nQuake
+continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
+perfil do mod corrige conflitos e expõe suas mecânicas; o arquivo pessoal é
+executado por último:
 
 ```text
-1 a 8       selecionar armas
-F3          estatísticas
-F4          posição na fila
-F5          entrar ou sair da pausa
-F7          votar no próximo mapa
-F8          estado da partida
-F10         ajuda e comandos do mod
+configuração nQuake -> x86qw-<mod>.cfg -> x86qw-<mod>-user.cfg
 ```
 
-Controles acrescentados para Pro-X:
+O console imprime os binds padrão ao carregar, e `F10` repete a ajuda. Os
+perfis não são cópias entre si:
 
-```text
-1 a 8       selecionar armas
-F1          votar SIM
-F3          pronto
-F4          interromper ou pausar
-F5          entrar na partida
-F6          observar
-F7          entrar no time vermelho
-F8          entrar no time azul
-F10         ajuda e comandos do mod
-```
-
-Todos os cinco modos do menu `play` carregam um perfil x86QW. Ao abrir o mod,
-o console imprime automaticamente as teclas configuradas; `F10` mostra o mesmo
-resumo novamente. KTX acrescenta atalhos de votação, ready, break, entrada,
-observação e times. Team Fortress mostra e preserva os controles clássicos de
-granadas, detpacks, recarga, especial, bandeira, descarte e pedido de médico.
+- **KTX:** `1-8` selecionam armas com fallback; `Q`, `E` e `Mouse2` dão acesso
+  rápido a GL, RL e LG. As comunicações do nQuake continuam disponíveis, mas
+  `quad morto` e `inimigo com powerup` foram movidos de `1` e `5` para `Z` e
+  `X`. `F1-F8` preservam quad, pent, timers, ready, break, join e observe.
+- **Final Arena:** `F1` entra, `F2` mostra a fila, `F3` estatísticas, `F4`
+  pausa, `F5` próximo mapa, `F6` status, `F7` mochilas e `F8` airgib. São os
+  impulses publicados pelo gamecode do Final Arena 1.20.
+- **Pro-X:** preserva os impulses duplos de armas do perfil histórico; `F1-F9`
+  cobrem voto, administração, ready, break, entrada, observação, equipes e
+  menu. `M`, `I` e `H` acessam menu, identificação e som de acerto.
+  O `qw_server.cfg` solicitado pelo gamecode reaplica esse perfil localmente
+  depois que o ezQuake bloqueia os antigos binds enviados pelo servidor.
+- **Team Fortress:** mantém granadas, detpacks, recarga, habilidade de classe,
+  bandeira, descarte e pedido de médico do addon nQuake. `F1-F9` dão acesso a
+  inventário, classes, troca de classe, ajuda do mapa e ações frequentes.
+- **TD2:** `1` usa magia, `2-8` armas normais, `9` arma especial e `0` voto
+  SIM. `Mouse4/5` acessam magia/especial, `Z/X` descartam runa/especial e `F1`
+  propõe o próximo mapa.
 
 Os perfis de servidor selecionam gamecodes exclusivos, ativam antilag e isolam
 os gamedirs. Personalizações sobrevivem às atualizações e ficam em:
@@ -272,8 +271,7 @@ quake-world/td2/x86qw-td2-user.cfg
 ```
 
 No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` depois de `+map` e de um
-`wait`. O arquivo
-gerenciado `td2/x86qw-td2.cfg` preserva os recursos modernos já configurados no
+`wait`. O arquivo gerenciado preserva os recursos modernos já configurados no
 ezQuake e substitui apenas os controles e a apresentação específicos do mod:
 
 ```text
@@ -286,6 +284,9 @@ X           largar arma especial
 roda        trocar arma para frente/trás
 Mouse 4     magia
 Mouse 5     arma especial
+F1          propor o próximo mapa
+F2          largar runa
+F3          largar arma especial
 F10         mostrar resumo dos controles
 ```
 
