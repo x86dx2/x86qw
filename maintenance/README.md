@@ -27,7 +27,7 @@ Use apenas o gerenciador da raiz do contexto:
 - `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
   definicao local revisada;
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
-- `build`: valida os binarios stable e gera os 18 ZIPs derivados em
+- `build`: valida os binarios stable e gera os 19 ZIPs derivados em
   `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
@@ -107,6 +107,9 @@ O exemplo e apenas a forma do contrato; a validacao completa exige seletores,
 artefatos e metadados aceitos pelos inventarios reais. Um arquivo usa `source`
 relativo a definicao ou `url` HTTPS, nunca ambos. Tamanho e SHA-256 declarados
 sao conferidos antes de qualquer troca. Todos os destinos ficam sob `dist/`.
+Ao alterar um perfil, `add` preserva automaticamente sua assinatura anterior e
+registra a nova em `inventory/components.json`. Esse histórico permite que
+`./x86qw.sh upgrade` reconheça instalações que pularam releases intermediárias.
 
 Para atualizar um componente existente, envie o objeto completo com
 `"replace": true` e uma nova release imutavel. Configuracoes x86QW devem ficar
@@ -119,7 +122,9 @@ em um subdiretorio `x86qw/` do componente e ser declaradas como
 inventory/component-policy.json    namespaces aceitos no dist
 inventory/components.json          BOM, perfis, dependencias e destinos
 inventory/component-releases.json  versoes, estrategias, artefatos e hashes
+inventory/upstreams.json           versoes, fontes preservadas e receitas de build
 recipes/                            receitas dos clientes stable preservados
+recipes/sources/                    instrucoes de compilacao por upstream
 tools/                              implementacao interna importada por manage.py
 tests/                              regressao exclusiva da distribuicao
 build/                              artefatos derivados ignorados pelo Git

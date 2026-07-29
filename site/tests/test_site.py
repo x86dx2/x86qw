@@ -1,6 +1,11 @@
 from html.parser import HTMLParser
+import hashlib
+import json
+import os
 from pathlib import Path
+import re
 import unittest
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1] / "public"
@@ -56,6 +61,44 @@ class SiteTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", home)
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
+
+    def test_public_bootstrap_matches_the_registered_installer_bundle(self):
+        catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
+        installers = [item for item in catalog["packages"] if item.get("package") == "x86qw-installer"]
+        current = [item for item in installers if item.get("current") is True]
+        self.assertEqual(1, len(current))
+        package = current[0]
+        self.assertEqual(
+            ["1.0.20", "1.0.21", "1.0.22", "1.0.23", "1.0.24", "1.0.25", "1.0.26", "1.0.27", "1.0.28"],
+            sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
+        )
+        for historical in installers:
+            historical_bundle = ROOT.parents[1] / "dist" / historical["distribution_path"]
+            self.assertEqual(historical["size"], historical_bundle.stat().st_size)
+            self.assertEqual(historical["sha256"], hashlib.sha256(historical_bundle.read_bytes()).hexdigest())
+        bundle = ROOT.parents[1] / "dist" / package["distribution_path"]
+        self.assertEqual(package["size"], bundle.stat().st_size)
+        self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
+        with zipfile.ZipFile(bundle) as archive:
+            identity = json.loads(archive.read(
+                f"x86qw-installer-{package['version']}/_x86qw/installer.json"
+            ))
+        self.assertEqual(
+            {"format": 1, "project": "x86qw", "version": package["version"]},
+            identity,
+        )
+        latest = ROOT.parents[1] / "dist" / "installer" / "packages" / "latest"
+        self.assertTrue(latest.is_symlink())
+        self.assertEqual(package["version"], os.readlink(latest))
+        for name in ("install.sh", "install.ps1"):
+            script = (ROOT / name).read_text(encoding="utf-8")
+            canonical = (ROOT.parents[1] / "dist" / "installer" / "bin" / name).read_text(encoding="utf-8")
+            self.assertEqual(canonical, script)
+            self.assertIn(package["sha256"], script)
+            self.assertNotIn("__X86QW_INSTALLER_SHA256__", script)
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertRegex(home, re.escape('https://x86qw.x86.com.br/install.sh'))
+        self.assertIn("data-copy-install", home)
 
 
 if __name__ == "__main__":

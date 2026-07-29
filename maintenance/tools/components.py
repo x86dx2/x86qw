@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -9,8 +10,13 @@ from pathlib import Path, PurePosixPath
 
 COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_KINDS = {"core", "gameplay", "content", "addon", "documentation"}
-ALLOWED_MODES = {"overlay", "default"}
+ALLOWED_MODES = {"overlay", "default", "preserve"}
 ALLOWED_ORIGINS = {"reference", "release"}
+
+
+def profile_fingerprint(selected: list[str]) -> str:
+    payload = "".join(identifier + "\n" for identifier in sorted(selected)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _safe_path(value: object, label: str) -> str:
@@ -104,18 +110,56 @@ def validate_catalog(catalog: object) -> None:
             destination = _safe_path(source_entry.get("destination"), "project destination path")
             if not source_path.startswith("dist/"):
                 raise ValueError(f"project source is outside the distribution: {source_path}")
-            if source_entry.get("mode") not in ALLOWED_MODES:
+            if source_entry.get("mode") not in {"overlay", "default"}:
                 raise ValueError(f"invalid project install mode in {identifier}: {source_path}")
             folded = destination.casefold()
             if folded in project_destinations:
                 raise ValueError(f"duplicate project destination: {destination}")
             project_destinations.add(folded)
+        project_overrides = component.get("project_overrides", [])
+        if not isinstance(project_overrides, list):
+            raise ValueError(f"invalid project overrides: {identifier}")
+        override_targets: set[str] = set()
+        for override in project_overrides:
+            if not isinstance(override, dict):
+                raise ValueError(f"invalid project override: {identifier}")
+            source_path = _safe_path(override.get("path"), "project override path")
+            target = _safe_path(override.get("target"), "project override target")
+            if not source_path.startswith("dist/"):
+                raise ValueError(f"project override is outside the distribution: {source_path}")
+            folded_target = target.casefold()
+            if folded_target in override_targets:
+                raise ValueError(f"duplicate project override target: {target}")
+            override_targets.add(folded_target)
+            matches = [
+                entry for entry in sources
+                if target == entry["path"] or target.startswith(entry["path"] + "/")
+            ]
+            if len(matches) != 1 or matches[0]["mode"] == "preserve":
+                raise ValueError(f"project override has no runtime target in {identifier}: {target}")
 
     for identifier, requires in dependencies.items():
         missing = set(requires) - identifiers
         if missing or identifier in requires:
             raise ValueError(f"invalid dependency for {identifier}: {sorted(missing or {identifier})[0]}")
     _validate_dependency_graph(dependencies)
+
+    compatibility = catalog.get("compatibility")
+    if not isinstance(compatibility, dict) or compatibility.get("policy") != "common-baseline":
+        raise ValueError("component catalog must declare the common stable/nightly baseline")
+    compatible_clients = compatibility.get("clients")
+    if (
+        not isinstance(compatible_clients, dict)
+        or set(compatible_clients) != {"stable", "nightly"}
+        or not all(isinstance(version, str) and version for version in compatible_clients.values())
+    ):
+        raise ValueError("invalid stable/nightly compatibility versions")
+    covered = compatibility.get("covered_components")
+    if not isinstance(covered, list) or len(covered) != len(set(covered)) or set(covered) != identifiers:
+        raise ValueError("stable/nightly compatibility must cover every component")
+    verified = compatibility.get("verified")
+    if not isinstance(verified, list) or not verified or not all(isinstance(item, str) and item for item in verified):
+        raise ValueError("invalid stable/nightly verification scope")
 
     profiles = catalog.get("profiles")
     if not isinstance(profiles, dict) or set(profiles) != {"essential", "recommended", "complete"}:
@@ -128,6 +172,25 @@ def validate_catalog(catalog: object) -> None:
             raise ValueError(f"profile omits a dependency: {name}")
     if set(profiles["complete"]) != identifiers:
         raise ValueError("complete profile must contain every x86QW component")
+    history = catalog.get("profile_history")
+    if not isinstance(history, dict) or set(history) != set(profiles):
+        raise ValueError("catalog must preserve profile history")
+    claimed: dict[str, str] = {}
+    for name, fingerprints in history.items():
+        if (
+            not isinstance(fingerprints, list)
+            or not fingerprints
+            or len(fingerprints) != len(set(fingerprints))
+            or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in fingerprints)
+        ):
+            raise ValueError(f"invalid profile history: {name}")
+        current = profile_fingerprint(profiles[name])
+        if current not in fingerprints:
+            raise ValueError(f"profile history omits current definition: {name}")
+        for fingerprint in fingerprints:
+            previous = claimed.setdefault(fingerprint, name)
+            if previous != name:
+                raise ValueError(f"profile history is ambiguous: {previous} and {name}")
 
 
 def _validate_dependency_graph(dependencies: dict[str, list[str]]) -> None:
@@ -192,7 +255,7 @@ def component_for_source(catalog: dict[str, object], path: str, origin: str | No
             root = entry["path"]
             if path != root and not path.startswith(root + "/"):
                 continue
-            if path in entry.get("exclude", []):
+            if _excluded(path, entry.get("exclude", [])):
                 continue
             matches.append(component["id"])
     unique = set(matches)
@@ -211,7 +274,7 @@ def destination_for_source(
         root = entry["path"]
         if path != root and not path.startswith(root + "/"):
             continue
-        if path in entry.get("exclude", []):
+        if _excluded(path, entry.get("exclude", [])):
             continue
         suffix = path.removeprefix(root).lstrip("/")
         destination = entry["destination"]
@@ -219,6 +282,11 @@ def destination_for_source(
     if len(matches) != 1:
         raise ValueError(f"source has no unique destination: {path}")
     return matches[0]
+
+
+def _excluded(path: str, exclusions: object) -> bool:
+    assert isinstance(exclusions, list)
+    return any(path == item or path.startswith(str(item) + "/") for item in exclusions)
 
 
 def validate_tree_partition(

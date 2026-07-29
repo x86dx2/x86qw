@@ -1,0 +1,6 @@
+// x86QW: personalizacoes globais carregadas depois do bootstrap.
+// Este arquivo e criado uma vez como qw/x86qw-user.cfg e nunca e sobrescrito.
+//
+// Exemplos:
+// bind F11 "toggleconsole"
+// alias graphics "echo Meu preset pessoal"

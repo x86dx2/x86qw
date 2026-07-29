@@ -17,7 +17,7 @@
     { "id": "catalog", "type": "backend", "label": "Catalog v1", "sublabel": "/api/v1/catalog.json", "pos": [680, 330], "size": [150, 64], "tag": "public contract" },
     { "id": "installer", "type": "frontend", "label": "x86QW installer", "sublabel": "Python standard library", "pos": [890, 330], "size": [150, 64] },
     { "id": "runtime", "type": "frontend", "label": "quake-world", "sublabel": "stable + nightly", "pos": [1100, 330], "size": [140, 64] },
-    { "id": "id1", "type": "security", "label": "Registered PAKs", "sublabel": "versioned in dist/id1", "pos": [1100, 500], "size": [140, 64], "tag": "SHA-256 pinned" }
+    { "id": "id1", "type": "security", "label": "Registered PAKs", "sublabel": "versioned in dist/game-data/id1", "pos": [1100, 500], "size": [140, 64], "tag": "SHA-256 pinned" }
   ],
   "boundaries": [
     { "kind": "region", "label": "x86QW release pipeline", "wraps": ["ingest", "mirrors"] },
@@ -39,6 +39,6 @@
   "cards": [
     { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
     { "dot": "emerald", "title": "Canonical distribution", "items": ["Selected sources live once under dist/ with origin, size and SHA-256", "Component ZIPs are reproducible temporary builds, not duplicated Git content"] },
-    { "dot": "rose", "title": "Registered game data", "items": ["id1 PAKs are versioned in dist/id1", "The installer validates SHA-256 before copying them"] }
+    { "dot": "rose", "title": "Registered game data", "items": ["id1 PAKs are versioned in dist/game-data/id1", "The installer validates SHA-256 before copying them"] }
   ]
 }

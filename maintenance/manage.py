@@ -28,7 +28,11 @@ from maintenance.tools.build_package import verify_artifact
 from maintenance.tools.check_component_updates import check_updates
 from maintenance.tools.component_releases import load_releases
 from maintenance.tools.component_sources import discover_snapshot
-from maintenance.tools.components import load_catalog as load_component_catalog, validate_tree_partition
+from maintenance.tools.components import (
+    load_catalog as load_component_catalog,
+    profile_fingerprint,
+    validate_tree_partition,
+)
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
 from maintenance.tools.sync_distribution import (
@@ -42,6 +46,7 @@ from maintenance.tools.sync_distribution import (
 )
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
+from maintenance.tools.upstreams import load_upstreams, verify_preserved_sources
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -50,6 +55,7 @@ INVENTORY = MAINTENANCE / "inventory"
 COMPONENTS = INVENTORY / "components.json"
 RELEASES = INVENTORY / "component-releases.json"
 POLICY = INVENTORY / "component-policy.json"
+UPSTREAMS = INVENTORY / "upstreams.json"
 RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
@@ -175,9 +181,13 @@ def summarize_delta(delta: list[dict[str, str]]) -> list[str]:
     others: list[str] = []
     for item in delta:
         parts = PurePosixPath(item["path"]).parts
-        if len(parts) > 2 and parts[0] == "nquake" and re.fullmatch(r"[0-9a-f]{40}", parts[1]):
+        if (
+            len(parts) > 3
+            and parts[:2] == ("distributions", "nquake")
+            and re.fullmatch(r"[0-9a-f]{40}", parts[2])
+        ):
             group = nquake_old if item["status"] == "obsolete" else nquake_new
-            group[parts[1]] = group.get(parts[1], 0) + 1
+            group[parts[2]] = group.get(parts[2], 0) + 1
             continue
         others.append(f"{item['path']} ({item['reason']})")
     if nquake_new or nquake_old:
@@ -185,6 +195,20 @@ def summarize_delta(delta: list[dict[str, str]]) -> list[str]:
         new = ", ".join(f"{revision[:12]} ({count} novos)" for revision, count in nquake_new.items()) or "nenhum"
         others.insert(0, f"snapshot nQuake: {old} -> {new}")
     return others
+
+
+def ezquake_runtime_coordinates(asset: Asset) -> tuple[str, str, str] | None:
+    if asset.component != "ezquake":
+        return None
+    parts = PurePosixPath(asset.path).parts
+    if len(parts) < 6 or parts[:2] != ("clients", "ezquake"):
+        return None
+    channel, version, variant = parts[2], parts[3], parts[4]
+    if channel not in {"stable", "nightly"} or not variant.startswith(
+        ("macos-", "linux-", "windows-")
+    ):
+        return None
+    return channel, version, variant
 
 
 def update_inventory_lines(
@@ -206,17 +230,18 @@ def update_inventory_lines(
             and package.get("channel") == channel
         })
         upstream = sorted({
-            PurePosixPath(asset.path).parts[1]
+            coordinates[1]
             for asset in assets
-            if asset.component == "ezquake"
-            and PurePosixPath(asset.path).parts[2] == channel
+            if (coordinates := ezquake_runtime_coordinates(asset)) is not None
+            and coordinates[0] == channel
         })
         if len(current) != 1 or len(upstream) != 1:
             raise ManagerError(f"catalogo ezQuake {channel} precisa representar exatamente uma versao")
         marker = "OK" if current == upstream else "ATUALIZAR"
         version = current[0] if marker == "OK" else f"{current[0]} -> {upstream[0]}"
         platform_count = sum(
-            asset.component == "ezquake" and PurePosixPath(asset.path).parts[2] == channel
+            (coordinates := ezquake_runtime_coordinates(asset)) is not None
+            and coordinates[0] == channel
             for asset in assets
         )
         lines.append(f"[{marker}] ezQuake {channel}: {version} ({platform_count} plataformas)")
@@ -273,9 +298,9 @@ def update_inventory_lines(
 
 def reference_revision(assets: list[Asset]) -> str:
     revisions = {
-        PurePosixPath(asset.path).parts[1]
+        PurePosixPath(asset.path).parts[2]
         for asset in assets
-        if asset.component == "nquake" and len(PurePosixPath(asset.path).parts) > 2
+        if asset.component == "nquake" and len(PurePosixPath(asset.path).parts) > 3
     }
     if len(revisions) != 1:
         raise ManagerError("a descoberta nQuake nao produziu exatamente uma revisao")
@@ -308,18 +333,18 @@ def reference_content_changed(
     for relative, metadata in files.items():
         parts = PurePosixPath(relative).parts
         if (
-            len(parts) > 2
-            and parts[0] == "nquake"
-            and re.fullmatch(r"[0-9a-f]{40}", parts[1])
+            len(parts) > 3
+            and parts[:2] == ("distributions", "nquake")
+            and re.fullmatch(r"[0-9a-f]{40}", parts[2])
             and isinstance(metadata, dict)
         ):
-            current_by_upstream[PurePosixPath(*parts[2:]).as_posix()] = (relative, metadata)
+            current_by_upstream[PurePosixPath(*parts[3:]).as_posix()] = (relative, metadata)
     discovered = [asset for asset in assets if asset.component == "nquake"]
     if len(discovered) != len(current_by_upstream):
         return True
     for asset in discovered:
         parts = PurePosixPath(asset.path).parts
-        upstream = PurePosixPath(*parts[2:]).as_posix()
+        upstream = PurePosixPath(*parts[3:]).as_posix()
         current = current_by_upstream.get(upstream)
         if current is None or asset.expected_git_sha1 is None:
             return True
@@ -346,9 +371,9 @@ def preserve_current_reference_assets(
     for relative, metadata in files.items():
         parts = PurePosixPath(relative).parts
         if not (
-            len(parts) > 2
-            and parts[0] == "nquake"
-            and re.fullmatch(r"[0-9a-f]{40}", parts[1])
+            len(parts) > 3
+            and parts[:2] == ("distributions", "nquake")
+            and re.fullmatch(r"[0-9a-f]{40}", parts[2])
             and isinstance(metadata, dict)
         ):
             continue
@@ -385,7 +410,7 @@ def update_reference_releases(releases: dict[str, object], revision: str) -> boo
         if strategy == "reference-snapshot":
             suffix = version[len(old_short):] if version.startswith(old_short) else ""
             release["version"] = short + suffix
-        elif strategy == "upstream-overlay":
+        elif strategy in {"upstream-overlay", "reference-overlay"}:
             release["version"] = version.replace(f"nquake.{old_short}", f"nquake.{short}")
             if isinstance(release.get("distribution_tag"), str):
                 release["distribution_tag"] = str(release["distribution_tag"]).replace(
@@ -396,7 +421,10 @@ def update_reference_releases(releases: dict[str, object], revision: str) -> boo
 
 
 def asset_platform(asset: Asset) -> str:
-    variant = PurePosixPath(asset.path).parts[3]
+    coordinates = ezquake_runtime_coordinates(asset)
+    if coordinates is None:
+        raise ManagerError(f"artefato não é um runtime ezQuake: {asset.path}")
+    variant = coordinates[2]
     if variant.startswith("macos"):
         return "macos"
     if variant.startswith("linux"):
@@ -407,8 +435,11 @@ def asset_platform(asset: Asset) -> str:
 
 
 def ezquake_source_revision(asset: Asset) -> str:
-    version = PurePosixPath(asset.path).parts[1]
-    if "/stable/" in f"/{asset.path}":
+    coordinates = ezquake_runtime_coordinates(asset)
+    if coordinates is None:
+        raise ManagerError(f"artefato não é um runtime ezQuake: {asset.path}")
+    channel, version, _ = coordinates
+    if channel == "stable":
         return version
     short = version.rsplit("_", 1)[-1]
     return github_commit_revision("QW-Group/ezquake-source", short)
@@ -429,14 +460,14 @@ def update_ezquake_catalog(
         for item in packages
         if isinstance(item, dict) and item.get("component") == "ezquake"
     }
-    ezquake_assets = [asset for asset in assets if asset.component == "ezquake"]
+    ezquake_assets = [asset for asset in assets if ezquake_runtime_coordinates(asset) is not None]
     replacements: list[dict[str, object]] = []
     stable_version = ""
     nightly_version = ""
     stable_records: list[dict[str, object]] = []
     for asset in ezquake_assets:
         parts = PurePosixPath(asset.path).parts
-        version, channel = parts[1], parts[2]
+        channel, version = parts[2], parts[3]
         platform = asset_platform(asset)
         template = templates.get((channel, platform))
         metadata = files.get(asset.path)
@@ -497,7 +528,7 @@ def update_ezquake_catalog(
                 "notes": "Artefato oficial preservado byte a byte no dist e validado por SHA-256.",
             },
         }
-        variant = PurePosixPath(str(record["distribution_path"])).parts[3]
+        variant = PurePosixPath(str(record["distribution_path"])).parts[4]
         write_json(target_root / f"{variant}.json", recipe)
     validate_catalog(catalog)
     for path in recipe_paths(recipes):
@@ -655,7 +686,7 @@ def command_check(options: argparse.Namespace) -> int:
         if head != pinned and not changed:
             assets = preserve_current_reference_assets(assets, manifest)
             for item in component_results:
-                if item["strategy"] == "reference-snapshot":
+                if item["strategy"] in {"reference-snapshot", "reference-overlay"}:
                     item["status"] = "current"
                     item["latest_source"] = item["installed"]
         delta = distribution_delta(assets, manifest)
@@ -667,7 +698,10 @@ def command_check(options: argparse.Namespace) -> int:
             "reference": reference_note,
         }, ensure_ascii=False, indent=2))
     else:
-        reference_updates = [item for item in outdated if item["strategy"] == "reference-snapshot"]
+        reference_updates = [
+            item for item in outdated
+            if item["strategy"] in {"reference-snapshot", "reference-overlay"}
+        ]
         for item in component_results:
             if item in reference_updates:
                 continue
@@ -695,6 +729,7 @@ def command_verify(options: argparse.Namespace) -> int:
     package_count = validate_catalog(catalog)
     component_catalog = load_component_catalog(COMPONENTS)
     load_releases(RELEASES, COMPONENTS)
+    upstream_registry = load_upstreams(UPSTREAMS)
     recipe_count = 0
     for path in recipe_paths(RECIPES):
         validate_recipe(load_json(path), str(path))
@@ -703,14 +738,16 @@ def command_verify(options: argparse.Namespace) -> int:
     paths = sorted(path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file())
     validate_tree_partition(component_catalog, paths)
     upstream_count = verify_distribution(DIST, load_manifest(DIST / "manifest.json"))
+    source_count = verify_preserved_sources(upstream_registry, DIST, PROJECT_ROOT)
     print(
         f"[OK] Catalogo: {package_count} pacotes; componentes: {len(component_catalog['components'])}; "
-        f"receitas: {recipe_count}; upstreams: {upstream_count}; nQuake: {revision[:12]}."
+        f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
+        f"nQuake: {revision[:12]}."
     )
     misplaced = [
         path for path in (
             "DESIGN.md", "PRODUCT.md", "wrangler.jsonc", "distribution",
-            "inventory", "recipes", "tools", "tests",
+            "installer", "inventory", "recipes", "tools", "tests",
         )
         if (PROJECT_ROOT / path).exists()
     ]
@@ -718,7 +755,7 @@ def command_verify(options: argparse.Namespace) -> int:
         raise ManagerError(f"itens fora de contexto na raiz: {', '.join(misplaced)}")
     if not options.no_tests:
         environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-        for suite in ("maintenance/tests", "installer/tests", "site/tests"):
+        for suite in ("maintenance/tests", "site/tests"):
             print(f"[INFO] Testando {suite}...")
             subprocess.run(
                 [sys.executable, "-m", "unittest", "discover", "-s", suite, "-v"],
@@ -735,10 +772,16 @@ def command_build(options: argparse.Namespace) -> int:
         raw = load_json(recipe)
         package = raw["package"]
         assert isinstance(package, dict)
-        artifact = DIST.joinpath(
-            str(package["component"]), str(package["version"]), str(package["channel"]),
-            f"{package['platform']}-{package['architecture']}", str(package["filename"]),
-        )
+        if package["component"] == "ezquake":
+            artifact = DIST.joinpath(
+                "clients", "ezquake", str(package["channel"]), str(package["version"]),
+                f"{package['platform']}-{package['architecture']}", str(package["filename"]),
+            )
+        else:
+            artifact = DIST.joinpath(
+                str(package["component"]), str(package["version"]), str(package["channel"]),
+                f"{package['platform']}-{package['architecture']}", str(package["filename"]),
+            )
         verify_artifact(artifact, package)
     BUILDS.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix="packages-", dir=BUILDS.parent))
@@ -778,7 +821,8 @@ def command_update(options: argparse.Namespace) -> int:
         print(line)
     blocked = [
         item for item in results
-        if item["status"] != "current" and item["strategy"] not in {"reference-snapshot"}
+        if item["status"] != "current"
+        and item["strategy"] not in {"reference-snapshot", "reference-overlay"}
     ]
     if blocked:
         names = ", ".join(item["component"] for item in blocked)
@@ -889,6 +933,20 @@ def upsert_component(catalog: dict[str, object], component: dict[str, object], r
     entries.sort(key=lambda item: str(item.get("id", "")))
 
 
+def preserve_profile_fingerprints(catalog: dict[str, object]) -> None:
+    profiles = catalog.get("profiles")
+    history = catalog.get("profile_history")
+    if not isinstance(profiles, dict) or not isinstance(history, dict) or set(profiles) != set(history):
+        raise ManagerError("historico de perfis de componentes invalido")
+    for name, selected in profiles.items():
+        fingerprints = history.get(name)
+        if not isinstance(selected, list) or not isinstance(fingerprints, list):
+            raise ManagerError(f"historico do perfil {name} invalido")
+        fingerprint = profile_fingerprint(selected)
+        if fingerprint not in fingerprints:
+            fingerprints.append(fingerprint)
+
+
 def command_add(options: argparse.Namespace) -> int:
     definition_path = options.definition.resolve()
     definition = load_json(definition_path)
@@ -911,6 +969,7 @@ def command_add(options: argparse.Namespace) -> int:
         if component is not None:
             if not isinstance(component, dict):
                 raise ManagerError("component precisa ser um objeto")
+            preserve_profile_fingerprints(staged_components)
             upsert_component(staged_components, component, bool(definition.get("replace")))
             identifier = str(component["id"])
             profiles = definition.get("profiles", [])
@@ -925,6 +984,7 @@ def command_add(options: argparse.Namespace) -> int:
                     raise ManagerError(f"perfil desconhecido: {profile}")
                 if identifier not in members:
                     members.append(identifier)
+            preserve_profile_fingerprints(staged_components)
             release = definition.get("release")
             release_entries = staged_releases.get("components")
             if not isinstance(release, dict) or not isinstance(release_entries, dict):

@@ -18,7 +18,7 @@ except ImportError:  # Executado diretamente por ferramentas em tools/.
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-STRATEGIES = {"reference-snapshot", "upstream-overlay", "upstream-package"}
+STRATEGIES = {"reference-snapshot", "reference-overlay", "upstream-overlay", "upstream-package"}
 FRESHNESS = {"reference-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 DISTRIBUTION_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -76,7 +76,7 @@ def validate_releases(
         ):
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
         upstream = release.get("upstream")
-        if release["strategy"] in {"upstream-overlay", "upstream-package"}:
+        if release["strategy"] in {"reference-overlay", "upstream-overlay", "upstream-package"}:
             if not isinstance(upstream, dict):
                 raise ValueError(f"upstream release has no upstream metadata: {identifier}")
             if release["strategy"] == "upstream-overlay" and not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
@@ -115,7 +115,7 @@ def validate_releases(
         artifacts = release.get("artifacts", [])
         if not isinstance(artifacts, list):
             raise ValueError(f"invalid artifacts: {identifier}")
-        if release["strategy"] in {"upstream-overlay", "upstream-package"} and not artifacts:
+        if release["strategy"] in {"reference-overlay", "upstream-overlay", "upstream-package"} and not artifacts:
             raise ValueError(f"upstream release has no artifact: {identifier}")
         for artifact in artifacts:
             if not isinstance(artifact, dict):
@@ -148,6 +148,8 @@ def validate_releases(
                 _safe_path(member.get("path"), "artifact member")
                 _safe_path(member.get("target_archive"), "target archive")
                 _safe_path(member.get("target_member"), "target member")
+                if member.get("target_mode", "replace") not in {"replace", "add"}:
+                    raise ValueError(f"invalid artifact member target mode: {identifier}")
                 if not isinstance(member.get("size"), int) or member["size"] <= 0:
                     raise ValueError(f"invalid artifact member size: {identifier}")
                 if not HEX64.fullmatch(str(member.get("sha256", ""))):
@@ -165,6 +167,91 @@ def validate_releases(
             if source == destination or (target, source) in move_identities:
                 raise ValueError(f"duplicate or ineffective archive move: {identifier}")
             move_identities.add((target, source))
+        archive_removals = release.get("archive_removals", [])
+        if not isinstance(archive_removals, list):
+            raise ValueError(f"invalid archive removals: {identifier}")
+        removal_identities: set[tuple[str, str]] = set()
+        for removal in archive_removals:
+            if not isinstance(removal, dict):
+                raise ValueError(f"invalid archive removal: {identifier}")
+            target = _safe_path(removal.get("target_archive"), "archive removal target")
+            member = _safe_path(removal.get("member"), "archive removal member")
+            if (target, member) in removal_identities:
+                raise ValueError(f"duplicate archive removal: {identifier}")
+            removal_identities.add((target, member))
+        archive_text_replacements = release.get("archive_text_replacements", [])
+        if not isinstance(archive_text_replacements, list):
+            raise ValueError(f"invalid archive text replacements: {identifier}")
+        archive_replacement_identities: set[tuple[str, str, str]] = set()
+        for replacement in archive_text_replacements:
+            if not isinstance(replacement, dict):
+                raise ValueError(f"invalid archive text replacement: {identifier}")
+            target = _safe_path(replacement.get("target_archive"), "archive text replacement target")
+            member = _safe_path(replacement.get("member"), "archive text replacement member")
+            before = replacement.get("before")
+            after = replacement.get("after")
+            if (
+                not isinstance(before, str)
+                or not before
+                or not isinstance(after, str)
+                or before == after
+            ):
+                raise ValueError(f"ineffective archive text replacement: {identifier}")
+            if not HEX64.fullmatch(str(replacement.get("source_sha256", ""))):
+                raise ValueError(f"invalid archive member source hash: {identifier}")
+            identity = (target, member, before)
+            if identity in archive_replacement_identities:
+                raise ValueError(f"duplicate archive text replacement: {identifier}")
+            archive_replacement_identities.add(identity)
+            count = replacement.get("count", 1)
+            if not isinstance(count, int) or count <= 0:
+                raise ValueError(f"invalid archive text replacement count: {identifier}")
+        package_copies = release.get("package_copies", [])
+        if not isinstance(package_copies, list):
+            raise ValueError(f"invalid package copies: {identifier}")
+        if package_copies and release["strategy"] != "upstream-package":
+            raise ValueError(f"package copies require an upstream package: {identifier}")
+        copy_destinations: set[str] = set()
+        for copy in package_copies:
+            if not isinstance(copy, dict):
+                raise ValueError(f"invalid package copy: {identifier}")
+            source = _safe_path(copy.get("source"), "package copy source")
+            destination = _safe_path(copy.get("destination"), "package copy destination")
+            if source == destination or destination in copy_destinations:
+                raise ValueError(f"duplicate or ineffective package copy: {identifier}")
+            if not isinstance(copy.get("size"), int) or copy["size"] <= 0:
+                raise ValueError(f"invalid package copy size: {identifier}")
+            if not HEX64.fullmatch(str(copy.get("sha256", ""))):
+                raise ValueError(f"invalid package copy hash: {identifier}")
+            copy_destinations.add(destination)
+        text_replacements = release.get("text_replacements", [])
+        if not isinstance(text_replacements, list):
+            raise ValueError(f"invalid text replacements: {identifier}")
+        if text_replacements and release["strategy"] == "upstream-package":
+            raise ValueError(f"text replacements require reference files: {identifier}")
+        replacement_identities: set[tuple[str, str]] = set()
+        for replacement in text_replacements:
+            if not isinstance(replacement, dict):
+                raise ValueError(f"invalid text replacement: {identifier}")
+            target = _safe_path(replacement.get("target"), "text replacement target")
+            before = replacement.get("before")
+            after = replacement.get("after")
+            if (
+                not isinstance(before, str)
+                or not before
+                or not isinstance(after, str)
+                or before == after
+            ):
+                raise ValueError(f"ineffective text replacement: {identifier}")
+            if not HEX64.fullmatch(str(replacement.get("source_sha256", ""))):
+                raise ValueError(f"invalid text replacement source hash: {identifier}")
+            identity = (target, before)
+            if identity in replacement_identities:
+                raise ValueError(f"duplicate text replacement: {identifier}")
+            replacement_identities.add(identity)
+            count = replacement.get("count", 1)
+            if not isinstance(count, int) or count <= 0:
+                raise ValueError(f"invalid text replacement count: {identifier}")
 
 
 def component_release(releases: dict[str, object], identifier: str) -> dict[str, object]:

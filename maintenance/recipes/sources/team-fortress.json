@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "upstream": "team-fortress",
+  "status": "documented",
+  "toolchain": "Historical QuakeC compiler compatible with the supplied Makefile and PROGS.SRC",
+  "instructions": "Extract tf_29src.zip in an isolated directory, preserve filename case and follow its Makefile. Do not replace the mirrored official qwprogs.dat until gameplay parity is verified.",
+  "outputs": ["qwprogs.dat"],
+  "verification": "Compare behavior with the official Team Fortress 2.9 qwprogs.dat on ezQuake stable and nightly."
+}

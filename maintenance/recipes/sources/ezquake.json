@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "upstream": "ezquake",
+  "status": "documented",
+  "toolchain": "CMake presets and vcpkg declared by the selected ezQuake source revision",
+  "instructions": "Extract the preserved source archive and follow BUILD.md for the target platform.",
+  "outputs": ["ezQuake application or executable for the selected platform"],
+  "verification": "Compare runtime identity and execute the x86QW stable/nightly compatibility suite."
+}

@@ -12,13 +12,48 @@ Repositores: [GitHub](https://github.com/x86dx2/x86qw) e
 
 ## Instalar e jogar
 
-O instalador usa somente a biblioteca padrao do Python e prepara macOS, Linux
-ou Windows:
+Jogadores não precisam clonar este repositório. No macOS ou Linux:
 
 ```sh
-./install-qw.py
-./install-qw.py verify
-./play-qw.py
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+```
+
+No Windows PowerShell:
+
+```powershell
+irm https://x86qw.x86.com.br/install.ps1 | iex
+```
+
+O bootstrap valida seu bundle por SHA-256, consulta somente o catálogo público
+e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. O
+cliente do sistema atual é detectado automaticamente, sem perguntar o SO. Para
+preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+```
+
+Os valores aceitos são `macos`, `linux` e `windows`. Ao
+concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
+`hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
+sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
+
+Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
+canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
+ao `install.ps1` no Windows). `./x86qw.sh update` atualiza a própria CLI e somente o
+que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novos que
+passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
+registrado naquela instalação. Ambos mostram o plano completo e exigem que o
+jogador digite `yes` antes de alterar arquivos; `--yes` confirma o plano em
+automações e `--dry-run` encerra depois de apresentá-lo.
+
+Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
+fontes canônicas locais:
+
+```sh
+./dist/installer/bin/manager.py
+./dist/installer/bin/manager.py verify
+./dist/installer/bin/manager.py play
 ```
 
 Stable e nightly coexistem. No macOS, o instalador remove o entitlement de
@@ -26,19 +61,18 @@ sandbox do bundle com a ferramenta nativa `codesign`, limpa bookmarks antigos
 e preserva recibos reversiveis. Os mods QuakeC usam nomes de gamecode exclusivos
 e os parametros `gamedir` corretos; arquivos pessoais e configuracoes que o
 cliente reescreve nao sao tratados como payload imutavel.
+Os launchers isolam a colecao com `-nohome`, e `qw/pak.lst` fixa a prioridade
+dos PK3 para que texturas e addons sejam carregados sempre na mesma ordem.
 
-O manual completo esta em [installer/docs/installer.md](installer/docs/installer.md).
+O manual completo esta em [dist/installer/docs/installer.md](dist/installer/docs/installer.md).
 
 ## Estrutura
 
 ```text
 dist/                    produto final canonico e versionado
 maintenance/            manutencao, inventarios, receitas, testes e builds
-installer/               documentacao e testes das ferramentas da raiz
 site/                    site inteiro: produto, design, deploy, assets e testes
 docs/                    arquitetura global da plataforma
-install-qw.py             instala, atualiza, verifica e remove a distribuicao
-play-qw.py                seleciona e abre mods locais no ezQuake
 ROADMAP.md                roteiro global do produto
 ```
 
@@ -48,8 +82,8 @@ Cada dominio guarda tudo que lhe pertence:
   e a fronteira de arquivos aceitos;
 - `maintenance/recipes/` registra artefatos stable byte a byte;
 - `maintenance/tools/` contem apenas modulos internos usados pelo gerenciador;
-- `maintenance/tests/`, `installer/tests/` e `site/tests/` testam seus proprios
-  contextos;
+- `maintenance/tests/` valida distribuição, manutenção e instalador;
+- `site/tests/` valida o site e a projeção pública dos bootstraps;
 - `maintenance/build/` recebe ZIPs derivados e e ignorado pelo Git;
 - `site/wrangler.jsonc`, `site/PRODUCT.md`, `site/DESIGN.md` e `site/docs/`
   pertencem ao site, sem arquivos de site soltos na raiz;
@@ -60,10 +94,29 @@ Cada dominio guarda tudo que lhe pertence:
 
 ```text
 dist/
-├── ezquake/              stable e nightly para os tres sistemas
-├── nquake/               snapshot fixado e particionado pelo BOM
+├── clients/
+│   └── ezquake/
+│       ├── stable/       releases oficiais, separadas por versao
+│       └── nightly/      snapshots de desenvolvimento, separados por build
+├── distributions/
+│   └── nquake/           snapshot fixado e particionado pelo BOM
+├── game-data/
+│   └── id1/              pak0.pak e pak1.pak registrados
 ├── mods/                 KTX, Final Arena, Pro-X, Team Fortress, TD2 e perfis x86QW
-├── id1/                  pak0.pak e pak1.pak registrados
+├── installer/            bundle versionado usado pelo bootstrap público
+│   ├── README.md         contrato e manutenção deste contexto
+│   ├── bin/              executáveis e módulos distribuídos
+│   │   ├── install.sh    bootstrap canônico para macOS e Linux
+│   │   ├── install.ps1   bootstrap canônico para Windows
+│   │   ├── x86qw.sh      launcher permanente macOS/Linux
+│   │   ├── x86qw.cmd     launcher permanente Windows
+│   │   ├── manager.py    gerenciador de instalação e manutenção
+│   │   ├── gameplay.py   módulo interno especializado em gameplay local
+│   ├── docs/
+│   │   └── installer.md  manual completo
+│   └── packages/         histórico de bundles públicos imutáveis
+│       ├── latest → <versão atual>
+│       └── <versão>/     pacote daquela release do instalador
 └── manifest.json         origem, consumidor, tamanho e SHA-256 dos upstreams
 ```
 
@@ -107,8 +160,8 @@ Abra <http://127.0.0.1:8787>. Instrucoes de deploy ficam em
 
 ```sh
 ./maintenance/manage.py verify
-./install-qw.py --help
-./play-qw.py --help
+./dist/installer/bin/manager.py --help
+./dist/installer/bin/manager.py play --help
 cd site && npx --yes wrangler@4.114.0 deploy --dry-run
 ```
 
@@ -121,7 +174,7 @@ instala dependencias adicionais.
 - somente arquivos com utilidade direta e consumidor declarado entram no Git;
 - o `dist/` preserva a copia exata do upstream e separa customizacoes x86QW;
 - versoes publicadas sao imutaveis e identificadas por tamanho e SHA-256;
-- mapas, LOCs, fontes e colecoes nao sao baixados em massa;
-- o instalador materializa primeiro as fontes locais e usa mirrors como fallback;
+- mapas e LOCs externos não são baixados em massa; entra apenas o acervo curado do nQuake;
+- o modo de desenvolvimento materializa fontes locais; o modo público usa apenas mirrors do catálogo;
 - binarios grandes usam Git LFS; R2 nao faz parte da arquitetura atual;
-- `id1` e tratado como material registrado e nunca entra nos pacotes publicos.
+- `id1` e tratado como material registrado, validado por SHA-256 e incorporado ao bundle público.

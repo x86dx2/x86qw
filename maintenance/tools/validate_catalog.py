@@ -96,6 +96,8 @@ def validate_package(
         or not SAFE_SEGMENT.fullmatch(package["upstream_version"])
     ):
         raise ValueError(f"{label}.upstream_version is invalid")
+    if package["component"] == "installer" and not isinstance(package.get("current"), bool):
+        raise ValueError(f"{label}.current must be a boolean for installer packages")
     if "distribution_path" in package:
         distribution_path = package["distribution_path"]
         if not isinstance(distribution_path, str):
@@ -134,6 +136,12 @@ def validate_catalog(catalog: object) -> int:
         if identity in identities:
             raise ValueError(f"{label} duplicates a package identity")
         identities.add(identity)
+    installer_packages = [
+        package for package in packages
+        if isinstance(package, dict) and package.get("component") == "installer"
+    ]
+    if installer_packages and sum(package.get("current") is True for package in installer_packages) != 1:
+        raise ValueError("catalog must identify exactly one current installer package")
     return len(packages)
 
 

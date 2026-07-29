@@ -12,16 +12,16 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url  # noqa: E402
-from build_component_packages import register_packages  # noqa: E402
+from build_component_packages import component_package_metadata, register_packages  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 25)
+        self.assertEqual(validate_catalog(catalog), 34)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.3", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -30,8 +30,10 @@ class CatalogTests(unittest.TestCase):
         content = [package for package in catalog["packages"] if package["channel"] == "content"]
         self.assertTrue(all(package.get("distribution_path") for package in clients))
         self.assertTrue(all((ROOT / "dist" / package["distribution_path"]).is_file() for package in clients))
-        self.assertTrue(all("distribution_path" not in package for package in content))
-        self.assertIn(artifact_url(ktx), ktx["urls"])
+        derived_content = [package for package in content if package["component"] != "installer"]
+        self.assertTrue(all("distribution_path" not in package for package in derived_content))
+        self.assertEqual(ktx["origin_url"], ktx["urls"][0])
+        self.assertTrue(set(ktx["urls"]) <= {ktx["origin_url"], artifact_url(ktx)})
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
             {
@@ -40,18 +42,29 @@ class CatalogTests(unittest.TestCase):
                 "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
-                "final-arena", "pro-x", "team-fortress",
+                "final-arena",
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22+x86qw.3", td2["version"])
+        self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("e4cb23d40aa2+x86qw.3", final_arena["version"])
-        self.assertEqual("e4cb23d40aa2+x86qw.4", pro_x["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.6", final_arena["version"])
+        self.assertEqual("1.1+x86qw.1", pro_x["version"])
+        self.assertEqual("pro-x", pro_x["component"])
+        team_fortress = next(
+            package for package in catalog["packages"] if package.get("package") == "team-fortress"
+        )
+        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
+        self.assertEqual("team-fortress", team_fortress["component"])
+        installers = [package for package in catalog["packages"] if package["component"] == "installer"]
+        self.assertEqual(9, len(installers))
+        self.assertEqual(["1.0.28"], [
+            package["version"] for package in installers if package.get("current") is True
+        ])
 
         package = {
             "component": "ezquake",
@@ -85,6 +98,20 @@ class CatalogTests(unittest.TestCase):
         package["redistribution_reviewed"] = False
         with self.assertRaises(ValueError):
             validate_catalog(catalog)
+
+    def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
+        metadata = component_package_metadata(
+            "nquake-bootstrap",
+            "e4cb23d40aa2+x86qw.6",
+            "reference-snapshot",
+            "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+            [],
+        )
+        self.assertEqual("e4cb23d40aa2+x86qw.6", metadata["version"])
+        self.assertEqual(
+            "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+            metadata["source_commit"],
+        )
 
     def test_reviewed_artifact_registration_is_atomic_and_immutable(self) -> None:
         import tempfile

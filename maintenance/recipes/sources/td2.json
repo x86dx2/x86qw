@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "upstream": "td2",
+  "status": "documented",
+  "toolchain": "QuakeC toolchain documented inside the preserved TD2 2.22 distribution",
+  "instructions": "Extract the original archive and build only from td2/src_td2_2.22 without modifying the mirrored source.",
+  "outputs": ["qwprogs.dat"],
+  "verification": "Run the TD2 package-integrity and local-game diagnostics before replacing the official gamecode."
+}

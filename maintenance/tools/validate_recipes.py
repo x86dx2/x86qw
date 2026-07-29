@@ -56,7 +56,10 @@ def validate_recipe(recipe: object, label: str = "recipe") -> str:
 
 
 def recipe_paths(root: Path = DEFAULT_RECIPES) -> list[Path]:
-    return sorted(root.rglob("*.json"))
+    return sorted(
+        path for path in root.rglob("*.json")
+        if "sources" not in path.relative_to(root).parts
+    )
 
 
 def main(argv: list[str]) -> int:
