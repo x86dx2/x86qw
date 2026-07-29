@@ -94,17 +94,23 @@ class ModernComponentTests(unittest.TestCase):
                 },
                 {source["path"] for source in td2["project_sources"]},
             )
-            clan_arena = installer.components["clan-arena"]
+            final_arena = installer.components["final-arena"]
             self.assertEqual(
                 {
-                    "dist/mods/clan-arena/x86qw.2/arena/client.cfg",
-                    "dist/mods/clan-arena/x86qw.2/arena/server.cfg",
-                    "dist/mods/clan-arena/x86qw.2/arena/user.cfg.example",
-                    "dist/mods/clan-arena/x86qw.2/prox/client.cfg",
-                    "dist/mods/clan-arena/x86qw.2/prox/server.cfg",
-                    "dist/mods/clan-arena/x86qw.2/prox/user.cfg.example",
+                    "dist/mods/final-arena/1.20+x86qw.1/client.cfg",
+                    "dist/mods/final-arena/1.20+x86qw.1/server.cfg",
+                    "dist/mods/final-arena/1.20+x86qw.1/user.cfg.example",
                 },
-                {source["path"] for source in clan_arena["project_sources"]},
+                {source["path"] for source in final_arena["project_sources"]},
+            )
+            pro_x = installer.components["pro-x"]
+            self.assertEqual(
+                {
+                    "dist/mods/pro-x/0.8b+x86qw.1/client.cfg",
+                    "dist/mods/pro-x/0.8b+x86qw.1/server.cfg",
+                    "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example",
+                },
+                {source["path"] for source in pro_x["project_sources"]},
             )
 
     def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
@@ -275,6 +281,54 @@ class ModernComponentTests(unittest.TestCase):
             inventory = (target / ".install/clan-arena.inventory").read_text(encoding="utf-8")
             self.assertNotIn("prox/configs/config.cfg", inventory)
 
+    def test_combined_clan_arena_receipt_is_removed_before_the_split_components(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "combined"
+            for relative, payload in (
+                ("arena/arena.pk3", b"arena"),
+                ("prox/prox.pk3", b"prox"),
+            ):
+                destination = managed / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(payload)
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "clan-arena", managed, "legacy", "https://example.invalid/clan-arena.zip",
+                )
+                installer.migrate_legacy_clan_arena(["final-arena", "pro-x"])
+            self.assertFalse((target / ".install/clan-arena.receipt").exists())
+            self.assertFalse((target / ".install/clan-arena.inventory").exists())
+            self.assertFalse((target / "arena/arena.pk3").exists())
+            self.assertFalse((target / "prox/prox.pk3").exists())
+
+    def test_play_support_releases_profiles_to_their_component(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "play"
+            for relative in (
+                "arena/x86qw-arena.cfg",
+                "arena/server.cfg",
+                "arena/x86qw_arena.dat",
+            ):
+                destination = managed / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(relative, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "play-support", managed, "3", "x86QW legacy local-play layer",
+                )
+                installer.release_play_support_profiles(["final-arena"])
+            self.assertFalse((target / "arena/x86qw-arena.cfg").exists())
+            self.assertFalse((target / "arena/server.cfg").exists())
+            self.assertTrue((target / "arena/x86qw_arena.dat").is_file())
+            _, entries, _ = installer.validate_component_pair("play-support")
+            self.assertEqual(["arena/x86qw_arena.dat"], [name for name, _ in entries])
+
     def test_component_download_falls_back_from_github_to_gitlab(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -381,7 +435,7 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
         expectations = {
-            "clan-arena": ("arena", "23ar-a", "x86qw-arena.cfg"),
+            "final-arena": ("arena", "23ar-a", "x86qw-arena.cfg"),
             "pro-x": ("prox", "proxmap1", "x86qw-prox.cfg"),
         }
         for key, (gamedir, map_name, profile) in expectations.items():
@@ -462,7 +516,7 @@ class ModernComponentTests(unittest.TestCase):
             installer, target, _ = self.make_installer(Path(temporary))
             games = [
                 next(game for game in install_qw.LOCAL_GAMES if game.key == key)
-                for key in ("clan-arena", "pro-x")
+                for key in ("final-arena", "pro-x")
             ]
             for game in games:
                 package = target / game.marker
@@ -474,15 +528,23 @@ class ModernComponentTests(unittest.TestCase):
 
             for game in games:
                 gamedir = target / game.gamedir
-                client = gamedir / f"x86qw-{game.gamedir}.cfg"
+                client = gamedir / f"x86qw-{game.profile}.cfg"
                 server = gamedir / "server.cfg"
-                user = gamedir / f"x86qw-{game.gamedir}-user.cfg"
+                user = gamedir / f"x86qw-{game.profile}-user.cfg"
                 self.assertEqual(
-                    (ROOT / f"dist/mods/clan-arena/x86qw.2/{game.gamedir}/client.cfg").read_bytes(),
+                    (ROOT / (
+                        "dist/mods/final-arena/1.20+x86qw.1/client.cfg"
+                        if game.key == "final-arena"
+                        else "dist/mods/pro-x/0.8b+x86qw.1/client.cfg"
+                    )).read_bytes(),
                     client.read_bytes(),
                 )
                 self.assertEqual(
-                    (ROOT / f"dist/mods/clan-arena/x86qw.2/{game.gamedir}/server.cfg").read_bytes(),
+                    (ROOT / (
+                        "dist/mods/final-arena/1.20+x86qw.1/server.cfg"
+                        if game.key == "final-arena"
+                        else "dist/mods/pro-x/0.8b+x86qw.1/server.cfg"
+                    )).read_bytes(),
                     server.read_bytes(),
                 )
                 self.assertIn(f'sv_progsname "x86qw_{game.gamedir}"', server.read_text())
@@ -501,14 +563,26 @@ class ModernComponentTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     f"// personal {game.key}\n",
-                    (gamedir / f"x86qw-{game.gamedir}-user.cfg").read_text(),
+                    (gamedir / f"x86qw-{game.profile}-user.cfg").read_text(),
                 )
             self.assertEqual(6, installer.verify_component("play-support"))
             self.assertEqual(6, installer.remove_component("play-support"))
             for game in games:
                 self.assertTrue((
-                    target / game.gamedir / f"x86qw-{game.gamedir}-user.cfg"
+                    target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
                 ).is_file())
+
+    def test_every_playable_mod_profile_prints_its_keys_and_binds_help(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            for game in install_qw.LOCAL_GAMES:
+                with self.subTest(game=game.key):
+                    sources = installer.game_project_sources(game)
+                    profile = sources[f"{game.gamedir}/x86qw-{game.profile}.cfg"].decode()
+                    help_alias = f"x86qw_{game.profile}_help"
+                    self.assertIn(f"alias {help_alias}", profile)
+                    self.assertIn(f'bind F10 "{help_alias}', profile)
+                    self.assertEqual(help_alias, profile.strip().splitlines()[-1])
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -144,6 +144,19 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
     packages = catalog.get("packages")
     if not isinstance(packages, list):
         raise ValueError("catalog packages must be a list")
+    current_components = {
+        str(package["package"])
+        for package in manifest["packages"]
+        if isinstance(package, dict)
+    }
+    packages[:] = [
+        package for package in packages
+        if not (
+            isinstance(package, dict)
+            and package.get("channel") == "content"
+            and package.get("package", package.get("component")) not in current_components
+        )
+    ]
     for package in manifest["packages"]:
         identity = (package["package"], package["version"])
         existing = [item for item in packages if isinstance(item, dict) and (

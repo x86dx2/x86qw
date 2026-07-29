@@ -69,11 +69,12 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
-PLAY_SUPPORT_VERSION = "3"
+PLAY_SUPPORT_VERSION = "4"
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
-PROFILED_LOCAL_GAMES = frozenset({"clan-arena", "pro-x", "td2"})
+LEGACY_COMPONENTS = frozenset({"clan-arena"})
+PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = Path(__file__).resolve().parent
 
@@ -185,6 +186,7 @@ class LocalGameSpec:
     key: str
     label: str
     gamedir: str
+    profile: str
     component: str
     marker: str
     default_map: str
@@ -217,31 +219,31 @@ PLATFORMS = {
 
 LOCAL_GAMES = (
     LocalGameSpec(
-        "ktx", "KTX", "qw", "nquake-ktx", "qw/ktx.pk3", "dm6",
+        "ktx", "KTX", "qw", "ktx", "nquake-ktx", "qw/ktx.pk3", "dm6",
         ("dm6", "dm2", "dm4", "aerowalk"),
         "QuakeWorld competitivo com o QVM oficial do KTX.",
         "No console, ktxver deve mostrar a versão carregada.",
     ),
     LocalGameSpec(
-        "clan-arena", "Clan Arena", "arena", "clan-arena", "arena/arena.pk3", "23ar-a",
+        "final-arena", "Final Arena", "arena", "arena", "final-arena", "arena/arena.pk3", "23ar-a",
         ("23ar-a", "arenarg2", "arenarg4", "dm2arena"),
-        "Arena eliminatória incluída pela distribuição nQuake.",
+        "Duelos individuais em fila: o vencedor permanece na arena.",
         "No console, gamedir e *gamedir devem mostrar arena.",
     ),
     LocalGameSpec(
-        "pro-x", "Pro-X", "prox", "clan-arena", "prox/prox.pk3", "proxmap1",
+        "pro-x", "Pro-X", "prox", "prox", "pro-x", "prox/prox.pk3", "proxmap1",
         ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
-        "Modo de arena Pro-X incluído junto ao Clan Arena.",
+        "Rounds e equipes com ready, break e votação.",
         "No console, gamedir e *gamedir devem mostrar prox.",
     ),
     LocalGameSpec(
-        "team-fortress", "Team Fortress", "fortress", "team-fortress", "fortress/misc.pak", "2fort5r",
+        "team-fortress", "Team Fortress", "fortress", "fortress", "team-fortress", "fortress/misc.pak", "2fort5r",
         ("2fort5r", "well6", "bases", "mbasesr"),
         "Team Fortress clássico para QuakeWorld.",
         "A inicialização deve mostrar Welcome to TeamFortress v2.8.",
     ),
     LocalGameSpec(
-        "td2", "Total Destruction 2", "td2", "total-destruction-2", "td2/qwprogs.dat", "dm6",
+        "td2", "Total Destruction 2", "td2", "td2", "total-destruction-2", "td2/qwprogs.dat", "dm6",
         ("dm6", "dm2", "dm4", "e1m2"),
         "TD2 2.22 com armas, magias, runas e poderes.",
         "No serverinfo, *gamedir deve ser td2 e td2qw deve ser 2.22.",
@@ -1452,6 +1454,8 @@ class Installer:
             return paths[component]
         if component in self.components:
             return f".install/{component}.receipt", f".install/{component}.inventory"
+        if component in LEGACY_COMPONENTS:
+            return f".install/{component}.receipt", f".install/{component}.inventory"
         raise InstallerError(f"Componente desconhecido: {component}")
 
     def validate_component_pair(self, component: str, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
@@ -1701,7 +1705,7 @@ class Installer:
         print("\nQual conjunto de componentes x86QW deseja instalar ou atualizar?")
         print("  1) recomendado - experiência nQuake atualizada sem addons grandes (padrão)")
         print("  2) essencial   - configuração, interface principal e KTX")
-        print("  3) completo    - nQuake, QRP, Clan Arena, Team Fortress e TD2")
+        print("  3) completo    - nQuake, QRP, Final Arena, Pro-X, Team Fortress e TD2")
         print("  4) personalizado - escolha cada componente ou addon")
         aliases = {"": "recommended", "1": "recommended", "2": "essential", "3": "complete", "4": "custom"}
         while True:
@@ -2083,9 +2087,73 @@ class Installer:
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)
 
+    def migrate_legacy_clan_arena(self, selected: list[str]) -> None:
+        if not {"final-arena", "pro-x"} & set(selected):
+            return
+        present, _, _ = self.validate_component_pair("clan-arena")
+        if not present:
+            return
+        console.info("Separando o componente antigo Clan Arena e Pro-X...")
+        removed = self.remove_component("clan-arena")
+        console.success(
+            f"Recibo combinado removido ({file_count(removed)}); arquivos modificados foram preservados."
+        )
+
+    def release_play_support_profiles(self, selected: list[str]) -> None:
+        present, entries, receipt = self.validate_component_pair("play-support")
+        if not present:
+            return
+        released = {
+            str(source["destination"])
+            for identifier in selected
+            for source in self.components[identifier].get("project_sources", [])
+            if source.get("mode") == "overlay"
+        }
+        if not released:
+            return
+        remaining: list[tuple[str, str]] = []
+        changed = False
+        for name, digest in entries:
+            if name not in released:
+                remaining.append((name, digest))
+                continue
+            changed = True
+            managed = self.target.joinpath(*PurePosixPath(name).parts)
+            if not lexists(managed):
+                continue
+            if not managed.is_file() or managed.is_symlink():
+                raise InstallerError(f"Perfil local legado inválido: {managed}")
+            if file_hash(managed) == digest:
+                remove_path(managed)
+            else:
+                console.warning(f"Perfil modificado preservado durante a migração: {managed}")
+        if not changed:
+            return
+        if not remaining:
+            receipt_path, inventory_path = self.component_metadata("play-support")
+            remove_path(self.target / receipt_path)
+            remove_path(self.target / inventory_path)
+            return
+        assert self.stage is not None and receipt is not None
+        inventory = self.stage / "play-support-migrated.inventory"
+        inventory.write_text(
+            "".join(f"{name}\t{digest}\n" for name, digest in remaining),
+            encoding="utf-8",
+        )
+        if os.name != "nt":
+            inventory.chmod(0o644)
+        self.validate_inventory(inventory)
+        staged_receipt = self.stage / "play-support-migrated.receipt"
+        self.write_component_receipt(
+            "play-support", receipt["selection"], receipt["source"], inventory, staged_receipt,
+        )
+        self.commit_component_metadata("play-support", inventory, staged_receipt)
+
     def install_components(self, selected: list[str]) -> None:
         assert self.stage is not None
         self.migrate_legacy_nquake()
+        self.migrate_legacy_clan_arena(selected)
+        self.release_play_support_profiles(selected)
         for index, identifier in enumerate(selected, 1):
             component = self.components[identifier]
             console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
@@ -2332,7 +2400,7 @@ class Installer:
         if game.key != "ktx":
             arguments.extend(["+sv_progtype", "0"])
         if game.key in PROFILED_LOCAL_GAMES:
-            arguments.extend(["+exec", f"x86qw-{game.gamedir}.cfg"])
+            arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
         arguments.extend(["+map", map_name])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
@@ -2340,13 +2408,12 @@ class Installer:
         console.info(game.confirmation)
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
-        legacy_games = [game for game in games if game.key != "ktx"]
         profile_sources = {
             game.key: self.game_project_sources(game)
-            for game in legacy_games if game.key in PROFILED_LOCAL_GAMES
+            for game in games if game.key in PROFILED_LOCAL_GAMES
         }
         present, old_entries, _ = self.validate_component_pair("play-support")
-        if not legacy_games:
+        if not games:
             if present:
                 removed = self.remove_component("play-support")
                 console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
@@ -2357,26 +2424,21 @@ class Installer:
         try:
             managed = self.stage / "managed"
             prepared = 0
-            for game in legacy_games:
-                program_name = f"x86qw_{game.gamedir}"
+            for game in games:
                 sources = profile_sources.get(game.key)
                 if sources is not None:
-                    server_profile = sources[f"{game.gamedir}/server.cfg"]
+                    component_present, component_entries, _ = self.validate_component_pair(game.component)
+                    component_owned = set(dict(component_entries)) if component_present else set()
+                    files = {
+                        relative: payload
+                        for relative, payload in sources.items()
+                        if not relative.endswith("-user.cfg") and relative not in component_owned
+                    }
                 else:
-                    server_profile = (
-                        "// x86QW: isola mods QuakeC antigos do QVM do KTX.\n"
-                        'sv_progtype "0"\n'
-                        f'sv_progsname "{program_name}"\n'
-                        f'sv_gamedir "{game.gamedir}"\n'
-                    ).encode()
-                files = {
-                    f"{game.gamedir}/{program_name}.dat": self.local_game_program(game),
-                    f"{game.gamedir}/server.cfg": server_profile,
-                }
-                if sources is not None:
-                    files[f"{game.gamedir}/x86qw-{game.gamedir}.cfg"] = sources[
-                        f"{game.gamedir}/x86qw-{game.gamedir}.cfg"
-                    ]
+                    files = {}
+                if game.key != "ktx":
+                    program_name = f"x86qw_{game.gamedir}"
+                    files[f"{game.gamedir}/{program_name}.dat"] = self.local_game_program(game)
                 for relative, payload in files.items():
                     destination = self.target / relative
                     if lexists(destination):
@@ -2394,19 +2456,22 @@ class Installer:
                     "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",
                 )
                 console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
-            for game in legacy_games:
+            elif present:
+                removed = self.remove_component("play-support")
+                console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
+            for game in games:
                 sources = profile_sources.get(game.key)
                 if sources is not None:
                     self.ensure_game_user_profile(
                         game,
-                        sources[f"{game.gamedir}/x86qw-{game.gamedir}-user.cfg"],
+                        sources[f"{game.gamedir}/x86qw-{game.profile}-user.cfg"],
                     )
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
 
     def ensure_game_user_profile(self, game: LocalGameSpec, initial: bytes) -> None:
-        destination = self.target / game.gamedir / f"x86qw-{game.gamedir}-user.cfg"
+        destination = self.target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
                 raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")
@@ -2418,12 +2483,13 @@ class Installer:
         console.info(f"Configuração pessoal de {game.label} criada: {destination}")
 
     def game_project_sources(self, game: LocalGameSpec) -> dict[str, bytes]:
-        stem = f"x86qw-{game.gamedir}"
+        stem = f"x86qw-{game.profile}"
         expected = {
             f"{game.gamedir}/{stem}.cfg": "overlay",
-            f"{game.gamedir}/server.cfg": "overlay",
             f"{game.gamedir}/{stem}-user.cfg": "default",
         }
+        if game.key != "ktx":
+            expected[f"{game.gamedir}/server.cfg"] = "overlay"
         entries = [
             entry for entry in self.components[game.component].get("project_sources", [])
             if str(entry.get("destination", "")).startswith(f"{game.gamedir}/")
@@ -2685,7 +2751,7 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
 
     def preflight_component_receipts(self) -> None:
-        for component in (*self.components, "maps", "presets", "play-support"):
+        for component in (*self.components, *LEGACY_COMPONENTS, "maps", "presets", "play-support"):
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
@@ -2695,6 +2761,8 @@ class Installer:
             PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY,
         ]
         for component in self.components:
+            metadata_names.extend(self.component_metadata(component))
+        for component in LEGACY_COMPONENTS:
             metadata_names.extend(self.component_metadata(component))
         for spec in PLATFORMS.values():
             metadata_names.extend((spec.stable_receipt, spec.nightly_receipt))
@@ -2732,7 +2800,7 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
                 remove_path(self.target / spec.runtime(channel))
                 remove_path(receipt_path)
-        for component in (*reversed(tuple(self.components)), "maps", "presets", "play-support"):
+        for component in (*reversed(tuple(self.components)), *LEGACY_COMPONENTS, "maps", "presets", "play-support"):
             self.remove_component(component)
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)

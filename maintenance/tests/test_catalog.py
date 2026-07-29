@@ -18,10 +18,10 @@ from build_component_packages import register_packages  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 24)
+        self.assertEqual(validate_catalog(catalog), 25)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
-        self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.1", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -40,16 +40,18 @@ class CatalogTests(unittest.TestCase):
                 "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
-                "clan-arena", "team-fortress",
+                "final-arena", "pro-x", "team-fortress",
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22", td2["version"])
+        self.assertEqual("2.22+x86qw.1", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
-        clan_arena = next(package for package in catalog["packages"] if package.get("package") == "clan-arena")
-        self.assertEqual("e4cb23d40aa2+x86qw.2", clan_arena["version"])
+        final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
+        pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
+        self.assertEqual("e4cb23d40aa2+x86qw.1", final_arena["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.1", pro_x["version"])
 
         package = {
             "component": "ezquake",

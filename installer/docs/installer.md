@@ -97,16 +97,17 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 
 - `recomendado`: toda a experiência base nQuake, sem os três addons maiores;
 - `essencial`: bootstrap, interface principal e KTX;
-- `completo`: os 18 componentes, incluindo QRP, Clan Arena, Team Fortress e Total Destruction 2;
+- `completo`: os 19 componentes, incluindo QRP, Final Arena, Pro-X, Team Fortress e TD2;
 - `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
 O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Seus arquivos de
 servidor são exemplos inertes (`*.example.cfg`), e o `pwd.cfg` histórico com
-senha padrão não entra na instalação. Depois do pacote original, o instalador
-aplica separadamente a camada x86QW de execução local. Assim uma nova versão do
-TD2 pode substituir seu conteúdo upstream sem misturar ou perder os ajustes do
-x86QW. As fontes dessa camada são arquivos normais do repositório em
+senha padrão não entra na instalação. O pacote x86QW incorpora o perfil de
+cliente, o servidor local e o modelo de configuração pessoal junto ao conteúdo
+original. A camada `play-support` mantém apenas a cópia isolada do gamecode.
+Assim uma nova versão do TD2 pode substituir seu conteúdo upstream sem misturar
+ou perder os ajustes do x86QW. As fontes do perfil são arquivos normais em
 `dist/mods/td2/2.22/x86qw/`, declarados em `maintenance/inventory/components.json`; não ficam
 embutidas no código Python.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
@@ -153,7 +154,7 @@ ezQuake stable/nightly. O catálogo atual oferece:
 
 - base: bootstrap, interface visual, KTX, skins, miras, skyboxes, modelos,
   bandeiras, sons, texturas, mapas selecionados, matchinfo e documentação;
-- addons: QRP em alta resolução, Clan Arena/Pro-X, Team Fortress e TD2.
+- addons: QRP em alta resolução, Final Arena, Pro-X, Team Fortress e TD2.
 
 Dependências são resolvidas antes do download. Na remoção, componentes que
 dependem do item escolhido também são incluídos e informados ao usuário. Cada
@@ -189,7 +190,7 @@ linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
 
 - KTX em `qw/ktx.pk3`;
-- Clan Arena em `arena/arena.pk3`;
+- Final Arena em `arena/arena.pk3`;
 - Pro-X em `prox/prox.pk3`;
 - Team Fortress em `fortress/misc.pak`;
 - Total Destruction 2 em `td2/qwprogs.dat`.
@@ -211,16 +212,16 @@ que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
 mod. O comando não baixa conteúdo nem transforma a máquina em servidor dedicado
 público.
 
-Final Arena e Pro-X permanecem como dois jogos distintos, embora o nQuake os
-distribua no mesmo add-on:
+Final Arena e Pro-X são componentes completamente independentes no x86QW,
+embora o snapshot histórico do nQuake os armazene sob `addon-clanarena`:
 
 - Final Arena 1.20 usa uma fila individual: o vencedor permanece na arena e o
   perdedor volta ao fim da fila;
 - Pro-X QW 0.8b organiza partidas por rounds e equipes, com ready, break,
   entrada, observação e votação de mapas próprios.
 
-O x86QW preserva os PK3 originais, mas carrega perfis separados depois da
-configuração do ezQuake. O antigo `configs/config.cfg` embutido no Pro-X é
+Cada um possui pacote, versão, recibo, inventário e perfil próprios. O x86QW
+preserva os PK3 originais. O antigo `configs/config.cfg` embutido no Pro-X é
 renomeado para `configs/nquake-pk3-legacy.cfg` no pacote instalável; a cópia
 solta do nQuake fica em `prox/configs/nquake-legacy.cfg`. Assim eles continuam
 disponíveis como referência sem substituir automaticamente HUD, vídeo e binds
@@ -245,16 +246,26 @@ F3          pronto
 F4          interromper ou pausar
 F5          entrar na partida
 F6          observar
+F7          entrar no time vermelho
+F8          entrar no time azul
 F10         ajuda e comandos do mod
 ```
 
-Os perfis de servidor selecionam gamecodes exclusivos, ativam antilag e
-isolam os gamedirs. Personalizações sobrevivem às atualizações e devem ser
-colocadas respectivamente em:
+Todos os cinco modos do menu `play` carregam um perfil x86QW. Ao abrir o mod,
+o console imprime automaticamente as teclas configuradas; `F10` mostra o mesmo
+resumo novamente. KTX acrescenta atalhos de votação, ready, break, entrada,
+observação e times. Team Fortress mostra e preserva os controles clássicos de
+granadas, detpacks, recarga, especial, bandeira, descarte e pedido de médico.
+
+Os perfis de servidor selecionam gamecodes exclusivos, ativam antilag e isolam
+os gamedirs. Personalizações sobrevivem às atualizações e ficam em:
 
 ```text
+quake-world/qw/x86qw-ktx-user.cfg
 quake-world/arena/x86qw-arena-user.cfg
 quake-world/prox/x86qw-prox-user.cfg
+quake-world/fortress/x86qw-fortress-user.cfg
+quake-world/td2/x86qw-td2-user.cfg
 ```
 
 No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` antes de `+map`. O arquivo

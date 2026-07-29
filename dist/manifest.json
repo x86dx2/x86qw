@@ -74,7 +74,7 @@
     "nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/arena/arena.pk3": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "clan-arena",
+      "package": "final-arena",
       "sha256": "15070e25036cb9bae50078923ace90e7db30c16840a9c3e941120b5f975ea6cb",
       "size": 7023073,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/arena/arena.pk3"
@@ -82,7 +82,7 @@
     "nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/prox/configs/config.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "clan-arena",
+      "package": "pro-x",
       "sha256": "c527adbc1b15e604a7119d8511c446da2015b90c08b39cfa39657d08aade5d61",
       "size": 122832,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/prox/configs/config.cfg"
@@ -90,7 +90,7 @@
     "nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/prox/prox.pk3": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "clan-arena",
+      "package": "pro-x",
       "sha256": "5a26192cd1c168b3c4bff3adea302f0ab8b8900faa95892eeb6eeb4bef7f76ce",
       "size": 6907133,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/prox/prox.pk3"

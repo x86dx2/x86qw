@@ -7,7 +7,7 @@ import io
 import json
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     from .components import (
@@ -237,6 +237,27 @@ def standalone_component_payloads(
     return selected
 
 
+def project_component_payloads(
+    context: ComponentSourceContext,
+    component: dict[str, object],
+) -> list[Payload]:
+    selected: list[Payload] = []
+    project_root = context.distribution.parent
+    for entry in component.get("project_sources", []):
+        assert isinstance(entry, dict)
+        source_name = str(entry["path"])
+        source = project_root.joinpath(*PurePosixPath(source_name).parts)
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(f"canonical x86QW project source is missing or unsafe: {source}")
+        payload = source.read_bytes()
+        if not payload:
+            raise ValueError(f"canonical x86QW project source is empty: {source}")
+        destination = str(entry["destination"])
+        member = f"{'defaults' if entry['mode'] == 'default' else 'payload'}/{destination}"
+        selected.append((source_name, member, payload, []))
+    return selected
+
+
 def resolve_component_payloads(
     context: ComponentSourceContext,
     identifier: str,
@@ -259,4 +280,8 @@ def resolve_component_payloads(
             payload, overrides = reference_component_payload(context, upstream_path, release)
             member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
             payloads.append((upstream_path, member, payload, overrides))
+    payloads.extend(project_component_payloads(context, component))
+    members = [member for _, member, _, _ in payloads]
+    if len(members) != len(set(members)):
+        raise ValueError(f"component sources produce a duplicate package member: {identifier}")
     return release, source_revision, payloads

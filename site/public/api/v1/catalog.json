@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-28T23:50:45Z",
+  "generated_at": "2026-07-29T00:10:39Z",
   "packages": [
     {
       "component": "ezquake",
@@ -138,14 +138,14 @@
     {
       "component": "ktx",
       "package": "nquake-ktx",
-      "version": "1.47+nquake.e4cb23d40aa2",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
-      "size": 2351970,
-      "sha256": "4301a2667945608a2defc4f3b9a1d87c5272e2e0a5218e909b3dbfc550310e7b",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
+      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.1.zip",
+      "size": 2352776,
+      "sha256": "e0f949d271797c12428b758babad4109366ca9ff3c1eb0247be23058e1dd6f2a",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -155,8 +155,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2+x86qw.1/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.1.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
@@ -165,15 +165,15 @@
     },
     {
       "component": "nquake",
-      "package": "clan-arena",
-      "version": "e4cb23d40aa2+x86qw.2",
+      "package": "final-arena",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "clan-arena-e4cb23d40aa2+x86qw.2.zip",
-      "size": 13881481,
-      "sha256": "80874324d78139fbffa68015ce8c591b0f19ee428ca4f15f59455dace76c0800",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.2.zip",
+      "filename": "final-arena-e4cb23d40aa2+x86qw.1.zip",
+      "size": 6984264,
+      "sha256": "1dbd40c391296bdfb79b829fd02480ce557cb57a95ca9f1dd4183a4fb6cd08ea",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -181,8 +181,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/clan-arena-e4cb23d40aa2+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/clan-arena/e4cb23d40aa2+x86qw.2/clan-arena-e4cb23d40aa2+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/final-arena/e4cb23d40aa2+x86qw.1/final-arena-e4cb23d40aa2+x86qw.1.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
@@ -487,6 +487,29 @@
     },
     {
       "component": "nquake",
+      "package": "pro-x",
+      "version": "e4cb23d40aa2+x86qw.1",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "pro-x-e4cb23d40aa2+x86qw.1.zip",
+      "size": 6900149,
+      "sha256": "4a85eac880eb1defbbabd433a3905364a6c23b838471c932cb46aa23f6177aee",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/pro-x-e4cb23d40aa2+x86qw.1.zip",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "source_urls": [
+        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/pro-x-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/pro-x/e4cb23d40aa2+x86qw.1/pro-x-e4cb23d40aa2+x86qw.1.zip"
+      ],
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+    },
+    {
+      "component": "nquake",
       "package": "qrp-hires",
       "version": "e4cb23d40aa2",
       "channel": "content",
@@ -511,14 +534,14 @@
     {
       "component": "nquake",
       "package": "team-fortress",
-      "version": "e4cb23d40aa2",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "team-fortress-e4cb23d40aa2.zip",
-      "size": 8572690,
-      "sha256": "4b58efcf6f81314e5e61a1daa1de733859f1411a41a9c5e7fa8bacc580f750fc",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip",
+      "filename": "team-fortress-e4cb23d40aa2+x86qw.1.zip",
+      "size": 8573922,
+      "sha256": "ea1670a1b49c0ab12be58ebc5d4e130d30d6ea7ae24d7dcb378a95cc0e3a6a01",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -526,22 +549,22 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/team-fortress/e4cb23d40aa2/team-fortress-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/team-fortress-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/team-fortress/e4cb23d40aa2+x86qw.1/team-fortress-e4cb23d40aa2+x86qw.1.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "td2",
       "package": "total-destruction-2",
-      "version": "2.22",
+      "version": "2.22+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "total-destruction-2-2.22.zip",
-      "size": 584526,
-      "sha256": "0b0a572f6c2d6d97e3e340282823e876c610733d6cc9dd31c3518a9fc719f735",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22.zip",
+      "filename": "total-destruction-2-2.22+x86qw.1.zip",
+      "size": 585950,
+      "sha256": "60baf51a7f6607403c14e2db9809e30b2cc045eca9a1a07f6bcf3022dc38c335",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
       "source_urls": [
@@ -552,8 +575,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2/2.22/total-destruction-2-2.22.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2/2.22+x86qw.1/total-destruction-2-2.22+x86qw.1.zip"
       ],
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",

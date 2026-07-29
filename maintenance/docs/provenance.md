@@ -48,7 +48,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência e troca
 somente esse QVM. O pacote x86QW resultante é
-`1.47+nquake.e4cb23d40aa2`; fontes, override e hashes ficam no inventário
+`1.47+nquake.e4cb23d40aa2+x86qw.1`; fontes, override, perfil e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake
@@ -56,7 +56,7 @@ stable 3.6.9 e com a nightly `20260616-101233_a86996a`. Isso comprova a gestão
 do pacote no cliente; o QVM continua sendo código de servidor, oficialmente
 destinado ao MVDSV segundo o upstream do KTX.
 
-Todos os 24 artefatos instaláveis atuais também estão no GitLab Generic Package Registry.
+Todos os artefatos instaláveis atuais também são publicados no GitLab Generic Package Registry.
 O catálogo ordena GitHub primeiro e GitLab depois; a ferramenta de publicação
 baixa ambas as cópias e exige o mesmo tamanho e SHA-256 antes do registro.
 

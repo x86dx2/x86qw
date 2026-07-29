@@ -61,7 +61,7 @@ Cada dominio guarda tudo que lhe pertence:
 dist/
 ├── ezquake/              stable e nightly para os tres sistemas
 ├── nquake/               snapshot fixado e particionado pelo BOM
-├── mods/                 KTX, TD2, Arena/Pro-X e customizacoes x86QW consumidas
+├── mods/                 KTX, Final Arena, Pro-X, Team Fortress, TD2 e perfis x86QW
 ├── id1/                  pak0.pak e pak1.pak registrados
 └── manifest.json         origem, consumidor, tamanho e SHA-256 dos upstreams
 ```

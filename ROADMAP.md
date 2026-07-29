@@ -40,7 +40,7 @@
 - [x] migrar a base funcional e suas duas suítes de regressão;
 - [x] limitar o cliente ativo ao ezQuake stable/nightly;
 - [x] manter stable e nightly coexistentes em macOS, Linux e Windows;
-- [x] oferecer perfis e seleção individual dos 18 componentes;
+- [x] oferecer perfis e seleção individual dos 19 componentes;
 - [x] registrar recibo e inventário independentes por componente;
 - [x] fazer o instalador materializar primeiro as fontes canônicas em `dist/`, com pacotes externos como fallback;
 - [x] mostrar versão atual e notas de release antes de atualizar componentes;

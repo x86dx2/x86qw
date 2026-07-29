@@ -48,7 +48,8 @@
       "nquake-matchinfo",
       "nquake-documentation",
       "qrp-hires",
-      "clan-arena",
+      "final-arena",
+      "pro-x",
       "team-fortress",
       "total-destruction-2"
     ]
@@ -87,6 +88,10 @@
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "overlay"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/ktx/1.47/x86qw/client.cfg", "destination": "qw/x86qw-ktx.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"}
       ]
     },
     {
@@ -214,13 +219,27 @@
       ]
     },
     {
-      "id": "clan-arena",
-      "label": "Clan Arena e Pro-X",
+      "id": "final-arena",
+      "label": "Final Arena",
       "kind": "addon",
-      "description": "Modos Clan Arena e Pro-X incluídos no instalador nQuake.",
+      "description": "Final Arena 1.20, com duelos individuais em fila e perfil próprio x86QW.",
       "requires": ["nquake-bootstrap"],
       "sources": [
-        {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"},
+        {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
+      ]
+    },
+    {
+      "id": "pro-x",
+      "label": "Pro-X",
+      "kind": "addon",
+      "description": "Pro-X QW 0.8b, com rounds, equipes, votações e perfil próprio x86QW.",
+      "requires": ["nquake-bootstrap"],
+      "sources": [
         {
           "path": "addon-clanarena/prox",
           "destination": "prox",
@@ -234,12 +253,9 @@
         }
       ],
       "project_sources": [
-        {"path": "dist/mods/clan-arena/x86qw.2/arena/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
-        {"path": "dist/mods/clan-arena/x86qw.2/arena/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/clan-arena/x86qw.2/arena/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"},
-        {"path": "dist/mods/clan-arena/x86qw.2/prox/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
-        {"path": "dist/mods/clan-arena/x86qw.2/prox/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/clan-arena/x86qw.2/prox/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
+        {"path": "dist/mods/pro-x/0.8b+x86qw.1/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/0.8b+x86qw.1/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
       ]
     },
     {
@@ -250,6 +266,11 @@
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/team-fortress/2.8+x86qw.1/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.8+x86qw.1/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.8+x86qw.1/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"}
       ]
     },
     {

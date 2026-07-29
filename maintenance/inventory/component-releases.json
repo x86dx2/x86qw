@@ -10,7 +10,7 @@
     "nquake-bootstrap": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.1",
       "strategy": "upstream-overlay",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
@@ -73,14 +73,18 @@
       "freshness": "reference-current",
       "embedded_version": "maps-1.00+items-0.73"
     },
-    "clan-arena": {
-      "version": "e4cb23d40aa2+x86qw.2",
+    "final-arena": {
+      "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "embedded_versions": {
-        "arena": "Final Arena 1.20",
-        "prox": "Pro-X QW 0.8b"
-      },
+      "embedded_version": "Final Arena 1.20",
+      "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil x86QW independente com ajuda automática de controles."
+    },
+    "pro-x": {
+      "version": "e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-current",
+      "embedded_version": "Pro-X QW 0.8b",
       "archive_moves": [
         {
           "target_archive": "addon-clanarena/prox/prox.pk3",
@@ -88,11 +92,17 @@
           "destination": "configs/nquake-pk3-legacy.cfg"
         }
       ],
-      "notes": "Preserva os PK3 do nQuake e acrescenta perfis x86QW separados para cliente, servidor e personalizacoes de Final Arena e Pro-X."
+      "notes": "Preserva o prox.pk3 do nQuake, neutraliza somente a configuração histórica autocarregável e acrescenta um perfil x86QW independente."
     },
-    "team-fortress": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "team-fortress": {
+      "version": "e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-current",
+      "embedded_version": "Team Fortress 2.8",
+      "notes": "Preserva o Team Fortress do nQuake e acrescenta perfil x86QW com ajuda automática dos controles."
+    },
     "total-destruction-2": {
-      "version": "2.22",
+      "version": "2.22+x86qw.1",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",

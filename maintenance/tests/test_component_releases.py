@@ -39,13 +39,13 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["nquake-ktx"]
-        self.assertEqual("1.47+nquake.e4cb23d40aa2", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.1", ktx["version"])
         self.assertEqual("1.46-dev", ktx["embedded_version"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("nquake-ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22", td2["version"])
+        self.assertEqual("2.22+x86qw.1", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -78,18 +78,35 @@ class ComponentReleaseTests(unittest.TestCase):
             self.assertEqual(b"legacy", package.read("configs/nquake-pk3-legacy.cfg"))
             self.assertEqual(b"gamecode", package.read("qwprogs.dat"))
 
-    def test_clan_arena_package_keeps_legacy_configs_out_of_the_runtime_path(self) -> None:
+    def test_pro_x_package_keeps_legacy_configs_out_of_the_runtime_path(self) -> None:
         context = load_source_context(
             ROOT / "dist",
             ROOT / "maintenance/inventory/components.json",
             ROOT / "maintenance/inventory/component-releases.json",
         )
-        _, _, payloads = resolve_component_payloads(context, "clan-arena")
+        _, _, payloads = resolve_component_payloads(context, "pro-x")
         members = {member: payload for _, member, payload, _ in payloads}
         self.assertIn("payload/prox/configs/nquake-legacy.cfg", members)
+        self.assertIn("payload/prox/x86qw-prox.cfg", members)
+        self.assertIn("defaults/prox/x86qw-prox-user.cfg", members)
         with zipfile.ZipFile(io.BytesIO(members["payload/prox/prox.pk3"])) as package:
             self.assertNotIn("configs/config.cfg", package.namelist())
             self.assertIn("configs/nquake-pk3-legacy.cfg", package.namelist())
+
+    def test_final_arena_and_pro_x_are_distinct_packages(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, arena_payloads = resolve_component_payloads(context, "final-arena")
+        _, _, prox_payloads = resolve_component_payloads(context, "pro-x")
+        arena_members = {member for _, member, _, _ in arena_payloads}
+        prox_members = {member for _, member, _, _ in prox_payloads}
+        self.assertIn("payload/arena/arena.pk3", arena_members)
+        self.assertNotIn("payload/prox/prox.pk3", arena_members)
+        self.assertIn("payload/prox/prox.pk3", prox_members)
+        self.assertNotIn("payload/arena/arena.pk3", prox_members)
 
     def test_preserved_release_artifact_and_consumed_member_are_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
