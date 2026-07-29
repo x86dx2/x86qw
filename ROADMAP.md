@@ -33,6 +33,7 @@
 - [x] publicar a primeira release nQuake imutável e seus checksums;
 - [x] manter R2 fora da arquitetura desta fase.
 - [x] tornar `dist/` a fonte canônica e tratar Releases e Generic Packages somente como mirrors de entrega.
+- [x] publicar releases novas no repositório principal e preservar `x86qw-dist` somente como histórico legado.
 
 ## 3. Instalador
 

@@ -146,24 +146,28 @@ class CatalogTests(unittest.TestCase):
             "component": "ktx", "package": "nquake-ktx", "version": "1.47",
             "channel": "content", "platform": "any", "architecture": "any",
             "filename": "nquake-ktx-1.47.zip", "size": 1, "sha256": "0" * 64,
-            "origin_url": "https://github.com/example/nquake-ktx-1.47.zip",
+            "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/nquake-ktx-1.47.zip",
             "license": "GPL-2.0", "license_url": "https://github.com/example/LICENSE",
             "source_urls": ["https://github.com/example/source.tar.gz"],
             "redistribution_reviewed": True,
-            "urls": ["https://github.com/example/nquake-ktx-1.47.zip"],
+            "urls": ["https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/nquake-ktx-1.47.zip"],
             "source_commit": "a" * 40,
         }
         fallback = "https://gitlab.com/example/nquake-ktx-1.47.zip"
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "catalog.json"
-            catalog_package = dict(package, component="nquake", urls=[*package["urls"], fallback])
+            legacy = "https://github.com/x86dx2/x86qw-dist/releases/download/ktx-1.47/nquake-ktx-1.47.zip"
+            catalog_package = dict(
+                package, component="nquake", origin_url=legacy, urls=[legacy, fallback],
+            )
             path.write_text(json.dumps({
                 "format": 1, "project": "x86qw", "generated_at": None,
                 "packages": [catalog_package],
             }))
             register_packages(path, {"packages": [package]})
             saved = json.loads(path.read_text())
-            self.assertEqual([*package["urls"], fallback], saved["packages"][0]["urls"])
+            self.assertEqual([legacy, fallback], saved["packages"][0]["urls"])
+            self.assertEqual(legacy, saved["packages"][0]["origin_url"])
             self.assertEqual("ktx", saved["packages"][0]["component"])
 
 

@@ -59,7 +59,7 @@ UPSTREAMS = INVENTORY / "upstreams.json"
 RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
-GITHUB_REPOSITORY = "x86dx2/x86qw-dist"
+PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 EXPECTED_STABLE_MEMBERS = {
     "linux": ["ezQuake-x86_64.AppImage"],
@@ -488,8 +488,18 @@ def update_ezquake_catalog(
             "distribution_path": asset.path,
         })
         tag = f"ezquake-{version}" if channel == "stable" else f"ezquake-nightly-{version}"
+        github_repository = PRIMARY_GITHUB_REPOSITORY
+        if template.get("version") == version and template.get("sha256") == metadata["sha256"]:
+            for existing_url in template.get("urls", []):
+                try:
+                    github_repository, _ = github_release_coordinates(
+                        str(existing_url), str(record["filename"]),
+                    )
+                    break
+                except ManagerError:
+                    continue
         record["urls"] = [
-            f"https://github.com/{GITHUB_REPOSITORY}/releases/download/{tag}/{record['filename']}"
+            f"https://github.com/{github_repository}/releases/download/{tag}/{record['filename']}"
         ]
         record["urls"].append(artifact_url(record))
         replacements.append(record)
@@ -1059,16 +1069,19 @@ def command_add(options: argparse.Namespace) -> int:
     return 0
 
 
-def github_release_tag(url: str, filename: str) -> str:
-    marker = "/releases/download/"
-    if marker not in url or not url.endswith("/" + filename):
+def github_release_coordinates(url: str, filename: str) -> tuple[str, str]:
+    match = re.fullmatch(
+        r"https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)",
+        url,
+    )
+    if match is None or match.group(3) != filename:
         raise ManagerError(f"URL primaria nao representa um GitHub Release: {url}")
-    return url.split(marker, 1)[1].rsplit("/", 1)[0]
+    return match.group(1), match.group(2)
 
 
-def github_release(tag: str) -> dict[str, object] | None:
+def github_release(repository: str, tag: str) -> dict[str, object] | None:
     result = subprocess.run(
-        ["gh", "api", f"repos/{GITHUB_REPOSITORY}/releases/tags/{tag}"],
+        ["gh", "api", f"repos/{repository}/releases/tags/{tag}"],
         cwd=PROJECT_ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -1085,42 +1098,51 @@ def github_release(tag: str) -> dict[str, object] | None:
 def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
     packages = catalog["packages"]
     assert isinstance(packages, list)
-    releases: dict[str, list[tuple[dict[str, object], Path]]] = {}
+    releases: dict[tuple[str, str], list[tuple[dict[str, object], Path, str]]] = {}
     for package in packages:
         assert isinstance(package, dict)
         urls = package["urls"]
         assert isinstance(urls, list)
-        primary = next((str(url) for url in urls if f"github.com/{GITHUB_REPOSITORY}/releases/download/" in str(url)), None)
-        if primary is None:
+        github_mirror: tuple[str, str, str] | None = None
+        for url in urls:
+            try:
+                repository, tag = github_release_coordinates(str(url), str(package["filename"]))
+                github_mirror = repository, tag, str(url)
+                break
+            except ManagerError:
+                continue
+        if github_mirror is None:
             raise ManagerError(f"pacote sem mirror GitHub: {package['filename']}")
-        tag = github_release_tag(primary, str(package["filename"]))
-        releases.setdefault(tag, []).append((package, local_artifact(package, DIST, BUILDS)))
-    for tag, artifacts in releases.items():
-        release = github_release(tag)
+        repository, tag, primary = github_mirror
+        releases.setdefault((repository, tag), []).append(
+            (package, local_artifact(package, DIST, BUILDS), primary)
+        )
+    for (repository, tag), artifacts in releases.items():
+        release = github_release(repository, tag)
         if release is None:
-            print(f"[GITHUB] criar release {tag}")
+            print(f"[GITHUB {repository}] criar release {tag}")
             if not dry_run:
-                run(["gh", "release", "create", tag, "--repo", GITHUB_REPOSITORY, "--title", tag, "--notes", "x86QW distribution artifact mirror."])
-                release = github_release(tag)
+                run(["gh", "release", "create", tag, "--repo", repository, "--title", tag, "--notes", "x86QW distribution artifact mirror."])
+                release = github_release(repository, tag)
         remote_assets = {
             item.get("name"): item for item in (release or {}).get("assets", []) if isinstance(item, dict)
         }
-        for package, path in artifacts:
+        for package, path, primary in artifacts:
             remote = remote_assets.get(package["filename"])
             if remote is not None:
                 digest = remote.get("digest")
                 fingerprint = (
                     (remote.get("size"), str(digest).removeprefix("sha256:"))
                     if isinstance(digest, str)
-                    else remote_sha256(str(package["urls"][0]))
+                    else remote_sha256(primary)
                 )
                 if fingerprint != (package["size"], package["sha256"]):
                     raise ManagerError(f"asset GitHub imutavel difere do catalogo: {package['filename']}")
-                print(f"[GITHUB] verificado {package['filename']}")
+                print(f"[GITHUB {repository}] verificado {package['filename']}")
                 continue
-            print(f"[GITHUB] enviar {package['filename']}")
+            print(f"[GITHUB {repository}] enviar {package['filename']}")
             if not dry_run:
-                run(["gh", "release", "upload", tag, str(path), "--repo", GITHUB_REPOSITORY])
+                run(["gh", "release", "upload", tag, str(path), "--repo", repository])
 
 
 def command_publish(options: argparse.Namespace) -> int:

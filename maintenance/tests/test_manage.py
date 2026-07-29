@@ -12,6 +12,7 @@ from maintenance.manage import (
     PROJECT_ROOT,
     Asset,
     distribution_delta,
+    github_release_coordinates,
     parser,
     preserve_profile_fingerprints,
     reference_content_changed,
@@ -133,6 +134,26 @@ class DistributionManagerTests(unittest.TestCase):
             self.assertEqual(stable, "3.6.9")
             self.assertEqual(nightly, "20260616-101233_a86996a")
             self.assertEqual(len(list(recipes.rglob("*.json"))), 3)
+            generated = json.loads(next(recipes.rglob("macos-universal.json")).read_text())
+            self.assertIn("x86dx2/x86qw-dist/releases", generated["package"]["urls"][0])
+
+    def test_github_release_coordinates_support_current_and_legacy_repositories(self) -> None:
+        filename = "x86qw-installer-1.0.28.zip"
+        self.assertEqual(
+            ("x86dx2/x86qw", "installer-1.0.28"),
+            github_release_coordinates(
+                f"https://github.com/x86dx2/x86qw/releases/download/installer-1.0.28/{filename}",
+                filename,
+            ),
+        )
+        self.assertEqual(
+            ("x86dx2/x86qw-dist", "installer-1.0.27"),
+            github_release_coordinates(
+                "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.27/"
+                "x86qw-installer-1.0.27.zip",
+                "x86qw-installer-1.0.27.zip",
+            ),
+        )
 
     def test_public_parser_exposes_the_complete_lifecycle(self) -> None:
         choices = parser()._subparsers._group_actions[0].choices

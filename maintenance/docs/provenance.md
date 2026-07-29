@@ -38,7 +38,8 @@ com `checksums.txt` e com os digests publicados pela API do GitHub:
 | Windows | `ezQuake-windows-x64.zip` | 4.135.630 | `1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d` |
 
 As três receitas stable estão `ready`; seus artefatos ficam em `dist/clients/ezquake/stable/3.6.9`
-e também apontam para o mirror imutável no `x86qw-dist`. O catálogo registra os três binários nightly e o commit
+e preservam o mirror histórico imutável no `x86qw-dist`. Releases novas são publicadas em
+`x86dx2/x86qw`, sem migrar as anteriores. O catálogo registra os três binários nightly e o commit
 completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. Os tarballs de fonte exatos de
 stable e nightly também ficam preservados em `dist/` para consulta e compilação.
 

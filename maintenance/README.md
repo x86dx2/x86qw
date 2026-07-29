@@ -29,7 +29,8 @@ Use apenas o gerenciador da raiz do contexto:
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
 - `build`: valida os binarios stable e gera os 19 ZIPs derivados em
   `maintenance/build/packages/`;
-- `publish`: publica/verifica GitHub Releases e GitLab Generic Packages;
+- `publish`: publica/verifica GitHub Releases e GitLab Generic Packages; URLs
+  históricas continuam em `x86qw-dist`, enquanto releases novas usam `x86qw`;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
 `update --commit --push` existe para automacao, mas a rotina recomendada e
