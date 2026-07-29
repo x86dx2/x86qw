@@ -46,6 +46,8 @@ contingência do código. `maintenance/manage.py publish` respeita o repositóri
 registrado em cada URL do catálogo: verifica o histórico em `x86qw-dist` e cria
 as releases novas em `x86qw`. Ele envia somente artefatos já catalogados, baixa
 cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
+As releases do instalador no repositório principal usam a convenção
+`x86qw-installer-X.Y.Z`; as tags legadas em `x86qw-dist` não são renomeadas.
 
 Customizações próprias fazem parte da distribuição, não são constantes
 escondidas no instalador. Para o TD2, elas ficam em

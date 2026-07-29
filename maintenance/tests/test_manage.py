@@ -140,9 +140,9 @@ class DistributionManagerTests(unittest.TestCase):
     def test_github_release_coordinates_support_current_and_legacy_repositories(self) -> None:
         filename = "x86qw-installer-1.0.28.zip"
         self.assertEqual(
-            ("x86dx2/x86qw", "installer-1.0.28"),
+            ("x86dx2/x86qw", "x86qw-installer-1.0.28"),
             github_release_coordinates(
-                f"https://github.com/x86dx2/x86qw/releases/download/installer-1.0.28/{filename}",
+                f"https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.28/{filename}",
                 filename,
             ),
         )

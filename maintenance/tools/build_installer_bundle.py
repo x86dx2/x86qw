@@ -187,9 +187,14 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         if version_key(version) >= PRIMARY_RELEASE_SINCE
         else LEGACY_GITHUB_REPOSITORY
     )
+    release_tag = (
+        f"x86qw-installer-{version}"
+        if github_repository == PRIMARY_GITHUB_REPOSITORY
+        else f"installer-{version}"
+    )
     github = (
         f"https://github.com/{github_repository}/releases/download/"
-        f"installer-{version}/{filename}"
+        f"{release_tag}/{filename}"
     )
     gitlab = (
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/"
@@ -213,7 +218,7 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "redistribution_reviewed": True,
         "urls": [github, gitlab],
         "distribution_path": result["distribution_path"],
-        "release_url": f"https://github.com/{github_repository}/releases/tag/installer-{version}",
+        "release_url": f"https://github.com/{github_repository}/releases/tag/{release_tag}",
         "release_notes": "Bootstrap autocontido do instalador público x86QW.",
     }
 
