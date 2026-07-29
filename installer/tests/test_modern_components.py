@@ -415,6 +415,30 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
             self.assertFalse(cache.exists())
 
+    def test_bootstrap_migrates_only_the_obsolete_nquake_texture_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            config = target / "ezquake/configs/config.cfg"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                'name "personal"\ngl_max_size                           "32768"\nvolume "0.5"\n',
+                encoding="utf-8",
+            )
+            td2_config = target / "td2/configs/config.cfg"
+            td2_config.parent.mkdir(parents=True)
+            td2_config.write_bytes(b'gl_max_size "32768"\nname "td2"\n')
+            prox_config = target / "prox/configs/config.cfg"
+            prox_config.parent.mkdir(parents=True)
+            prox_config.write_text('gl_max_size "2048"\n', encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.migrate_nquake_texture_limit()
+            self.assertEqual(
+                'name "personal"\ngl_max_size                           "16384"\nvolume "0.5"\n',
+                config.read_text(encoding="utf-8"),
+            )
+            self.assertEqual(b'gl_max_size "16384"\nname "td2"\n', td2_config.read_bytes())
+            self.assertEqual('gl_max_size "2048"\n', prox_config.read_text(encoding="utf-8"))
+
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -482,6 +506,28 @@ class ModernComponentTests(unittest.TestCase):
                     "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", "+map", map_name, "+wait", "+exec", profile,
                 ])
+
+    def test_team_fortress_loads_legacy_capabilities_before_the_map(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "team-fortress")
+            runtime = target / "ezQuake Nightly.app"
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "installed_component_for_game", return_value=game.component):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "local_map_names", return_value=["2fort5r"]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch("builtins.input", side_effect=["", ""]):
+                                                    installer.play_local()
+            launch.assert_called_once_with(runtime, [
+                "-game", "fortress", "+gamedir", "fortress", "+sv_gamedir", "fortress",
+                "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg", "+map", "2fort5r",
+                "+wait", "+exec", "x86qw-fortress.cfg",
+            ])
 
     def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -595,6 +641,7 @@ class ModernComponentTests(unittest.TestCase):
                 )
                 self.assertIn(f'sv_progsname "x86qw_{game.gamedir}"', server.read_text())
                 if game.key == "pro-x":
+                    self.assertIn('set sv_aim "0"', server.read_text())
                     self.assertEqual("exec x86qw-prox.cfg", compatibility.read_text().strip().splitlines()[-1])
                 user.write_text(f"// personal {game.key}\n", encoding="utf-8")
                 with zipfile.ZipFile(target / game.marker, "w") as archive:

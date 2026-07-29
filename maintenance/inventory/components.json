@@ -269,6 +269,7 @@
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}
       ],
       "project_sources": [
+        {"path": "dist/mods/team-fortress/2.8+x86qw.1/pre.cfg", "destination": "fortress/x86qw-fortress-pre.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.8+x86qw.1/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.8+x86qw.1/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.8+x86qw.1/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"}

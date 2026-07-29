@@ -24,6 +24,7 @@ lexists = core.lexists
 
 PLAY_SUPPORT_VERSION = "4"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
+PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
 
 
 @dataclass(frozen=True)
@@ -244,6 +245,8 @@ class Player(core.Installer):
         ]
         if game.key != "ktx":
             arguments.extend(["+sv_progtype", "0"])
+        if game.key in PRECONNECT_LOCAL_GAMES:
+            arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
             arguments.extend(["+wait", "+exec", f"x86qw-{game.profile}.cfg"])
@@ -335,6 +338,8 @@ class Player(core.Installer):
         }
         if game.key != "ktx":
             expected[f"{game.gamedir}/server.cfg"] = "overlay"
+        if game.key in PRECONNECT_LOCAL_GAMES:
+            expected[f"{game.gamedir}/{stem}-pre.cfg"] = "overlay"
         if game.key == "pro-x":
             expected[f"{game.gamedir}/qw_server.cfg"] = "overlay"
         entries = [

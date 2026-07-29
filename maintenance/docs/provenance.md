@@ -12,7 +12,7 @@ atribuição, origem imutável e checksum.
 | ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/ezquake` |
 | 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/nquake`; pacotes de entrega são builds reproduzíveis temporários |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
-| Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte | original preservado e pacote instalável independente, sem mapas nem senha padrão |
+| Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte; `saw_down.wav` histórico é byte-idêntico ao `saw.wav` preservado | original preservado e pacote instalável independente, sem mapas nem senha padrão; nome de áudio omitido recomposto com hash fixado |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
 | PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e copiados diretamente; fora do catálogo de pacotes |

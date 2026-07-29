@@ -110,6 +110,9 @@ Assim uma nova versão do TD2 pode substituir seu conteúdo upstream sem mistura
 ou perder os ajustes do x86QW. As fontes do perfil são arquivos normais em
 `dist/mods/td2/2.22/x86qw/`, declarados em `maintenance/inventory/components.json`; não ficam
 embutidas no código Python.
+O builder também recompõe `sound/weapons/saw_down.wav`, omitido pela distribuição
+2.22 apesar de ser pré-carregado pelo gamecode, usando o `saw.wav` byte-idêntico
+do mesmo artefato e conferindo tamanho e SHA-256 declarados no inventário.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.
 

@@ -167,6 +167,47 @@ def validate_releases(
             if source == destination or (target, source) in move_identities:
                 raise ValueError(f"duplicate or ineffective archive move: {identifier}")
             move_identities.add((target, source))
+        package_copies = release.get("package_copies", [])
+        if not isinstance(package_copies, list):
+            raise ValueError(f"invalid package copies: {identifier}")
+        if package_copies and release["strategy"] != "upstream-package":
+            raise ValueError(f"package copies require an upstream package: {identifier}")
+        copy_destinations: set[str] = set()
+        for copy in package_copies:
+            if not isinstance(copy, dict):
+                raise ValueError(f"invalid package copy: {identifier}")
+            source = _safe_path(copy.get("source"), "package copy source")
+            destination = _safe_path(copy.get("destination"), "package copy destination")
+            if source == destination or destination in copy_destinations:
+                raise ValueError(f"duplicate or ineffective package copy: {identifier}")
+            if not isinstance(copy.get("size"), int) or copy["size"] <= 0:
+                raise ValueError(f"invalid package copy size: {identifier}")
+            if not HEX64.fullmatch(str(copy.get("sha256", ""))):
+                raise ValueError(f"invalid package copy hash: {identifier}")
+            copy_destinations.add(destination)
+        text_replacements = release.get("text_replacements", [])
+        if not isinstance(text_replacements, list):
+            raise ValueError(f"invalid text replacements: {identifier}")
+        if text_replacements and release["strategy"] == "upstream-package":
+            raise ValueError(f"text replacements require reference files: {identifier}")
+        replacement_targets: set[str] = set()
+        for replacement in text_replacements:
+            if not isinstance(replacement, dict):
+                raise ValueError(f"invalid text replacement: {identifier}")
+            target = _safe_path(replacement.get("target"), "text replacement target")
+            before = replacement.get("before")
+            after = replacement.get("after")
+            if (
+                target in replacement_targets
+                or not isinstance(before, str)
+                or not before
+                or not isinstance(after, str)
+                or before == after
+            ):
+                raise ValueError(f"duplicate or ineffective text replacement: {identifier}")
+            if not HEX64.fullmatch(str(replacement.get("source_sha256", ""))):
+                raise ValueError(f"invalid text replacement source hash: {identifier}")
+            replacement_targets.add(target)
 
 
 def component_release(releases: dict[str, object], identifier: str) -> dict[str, object]:

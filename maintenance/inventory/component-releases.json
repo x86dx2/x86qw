@@ -7,7 +7,20 @@
     "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
   },
   "components": {
-    "nquake-bootstrap": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-bootstrap": {
+      "version": "e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-current",
+      "notes": "Preserva a configuração nQuake e limita o tamanho máximo de textura a 16384, compatível com o OpenGL 4.1 do Apple Silicon e suficiente para os recursos atuais do x86QW.",
+      "text_replacements": [
+        {
+          "target": "non-gpl/qw/nquake_default.cfg",
+          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "before": "gl_max_size                          \"32768\"",
+          "after": "gl_max_size                          \"16384\""
+        }
+      ]
+    },
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
       "version": "1.47+nquake.e4cb23d40aa2+x86qw.5",
@@ -89,7 +102,7 @@
       "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil de gameplay x86QW com armas, fila, estatísticas, votação, opções e override pessoal."
     },
     "pro-x": {
-      "version": "e4cb23d40aa2+x86qw.4",
+      "version": "e4cb23d40aa2+x86qw.5",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Pro-X QW 0.8b",
@@ -100,17 +113,17 @@
           "destination": "configs/nquake-pk3-legacy.cfg"
         }
       ],
-      "notes": "Preserva o prox.pk3 do nQuake, neutraliza a configuração histórica autocarregável e atende qw_server.cfg localmente para reaplicar gameplay x86QW após os binds remotos bloqueados pelo ezQuake."
+      "notes": "Preserva o prox.pk3 do nQuake, neutraliza a configuração histórica autocarregável, fornece a cvar de compatibilidade sv_aim esperada pelo gamecode e atende qw_server.cfg localmente para reaplicar gameplay x86QW após os binds remotos bloqueados pelo ezQuake."
     },
     "team-fortress": {
-      "version": "e4cb23d40aa2+x86qw.3",
+      "version": "e4cb23d40aa2+x86qw.4",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Team Fortress 2.8",
-      "notes": "Preserva o Team Fortress e seus binds do nQuake, acrescentando seleção coerente de armas, menus de classe e ajuda automática x86QW."
+      "notes": "Preserva o Team Fortress e seus binds do nQuake, acrescenta seleção coerente de armas, menus de classe e ajuda automática x86QW e libera somente as quatro cvars remotas exigidas pelos efeitos e velocidades do gamecode antigo; binds remotos permanecem bloqueados."
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.3",
+      "version": "2.22+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
@@ -121,7 +134,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
       ],
-      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. A camada x86QW expõe magia, armas, runas, votos e override pessoal; configurações de servidor são exemplos e a senha original é excluída.",
+      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. A camada x86QW expõe magia, armas, runas, votos e override pessoal; configurações de servidor são exemplos, a senha original é excluída e o som saw_down.wav omitido pelo pacote 2.22 é restaurado a partir do saw.wav byte-idêntico do próprio upstream.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -147,6 +160,14 @@
           "distribution_path": "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
           "size": 567029,
           "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
+        }
+      ],
+      "package_copies": [
+        {
+          "source": "td2/sound/weapons/saw.wav",
+          "destination": "td2/sound/weapons/saw_down.wav",
+          "size": 7576,
+          "sha256": "1a4b26b7537507d5f93a575087864b8531894a7daa8441c68533e2e997fbea28"
         }
       ]
     }

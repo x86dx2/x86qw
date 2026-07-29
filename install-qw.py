@@ -57,6 +57,9 @@ CACHE_MARKER_VALUE = "x86-qw-cache-v1"
 MACOS_PREFERENCES_DOMAIN = "com.ezquake.ezQuake"
 MACOS_DIRECTORY_KEYS = ("basedir", "version", "NSOSPLastRootDirectory")
 DEFAULT_PRESET = 's_raw_volume "0.2"\n'
+NQUAKE_TEXTURE_LIMIT = re.compile(
+    rb'^([ \t]*gl_max_size[ \t]+)"?32768"?([ \t]*)(\r?)$', re.MULTILINE,
+)
 STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
 COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
@@ -2124,12 +2127,49 @@ class Installer:
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(staged, destination)
                     console.info(f"Configuração inicial criada: {destination}")
+            if identifier == "nquake-bootstrap":
+                self.migrate_nquake_texture_limit()
             console.success(f"{component['label']} atualizado ({file_count(count)}).")
         if "nquake-bootstrap" in selected:
             preset = self.target / "ezquake/configs/preset.cfg"
             if not preset.is_file():
                 preset.parent.mkdir(parents=True, exist_ok=True)
                 preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+
+    def migrate_nquake_texture_limit(self) -> None:
+        migrated = 0
+        configs = sorted(set(self.target.glob("*/configs/config.cfg")))
+        for config in configs:
+            if not lexists(config):
+                continue
+            if (
+                not config.is_file()
+                or config.is_symlink()
+                or config.parent.is_symlink()
+                or config.parent.parent.is_symlink()
+            ):
+                raise InstallerError(f"Configuração pessoal nQuake inválida: {config}")
+            contents = config.read_bytes()
+            updated, count = NQUAKE_TEXTURE_LIMIT.subn(rb'\g<1>"16384"\g<2>\g<3>', contents)
+            if count == 0:
+                continue
+            descriptor, temporary_name = tempfile.mkstemp(prefix=f".{config.name}.", dir=config.parent)
+            temporary = Path(temporary_name)
+            try:
+                with os.fdopen(descriptor, "wb") as output:
+                    output.write(updated)
+                if os.name != "nt":
+                    temporary.chmod(0o644)
+                temporary.replace(config)
+            finally:
+                if lexists(temporary):
+                    remove_path(temporary)
+            migrated += 1
+        if migrated:
+            console.info(
+                f"Limite de textura nQuake ajustado de 32768 para 16384 em {file_count(migrated)}; "
+                "demais preferências foram preservadas."
+            )
 
     def choose_components_to_remove(self) -> list[str]:
         installed = self.installed_components()

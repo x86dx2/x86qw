@@ -44,14 +44,14 @@ class CatalogTests(unittest.TestCase):
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22+x86qw.3", td2["version"])
+        self.assertEqual("2.22+x86qw.4", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
         self.assertEqual("e4cb23d40aa2+x86qw.3", final_arena["version"])
-        self.assertEqual("e4cb23d40aa2+x86qw.4", pro_x["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.5", pro_x["version"])
 
         package = {
             "component": "ezquake",

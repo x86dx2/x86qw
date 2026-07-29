@@ -45,7 +45,7 @@ class ComponentReleaseTests(unittest.TestCase):
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("nquake-ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.3", td2["version"])
+        self.assertEqual("2.22+x86qw.4", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -53,6 +53,23 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertTrue(td2_path.startswith("mods/td2/"))
         self.assertEqual("ktx", ktx["distribution_component"])
         self.assertEqual("td2", td2["distribution_component"])
+
+    def test_td2_restores_the_omitted_original_chainsaw_down_sound(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "total-destruction-2")
+        members = {member: payload for _, member, payload, _ in payloads}
+        saw = members["payload/td2/sound/weapons/saw.wav"]
+        saw_down = members["payload/td2/sound/weapons/saw_down.wav"]
+        self.assertEqual(7_576, len(saw_down))
+        self.assertEqual(
+            "1a4b26b7537507d5f93a575087864b8531894a7daa8441c68533e2e997fbea28",
+            hashlib.sha256(saw_down).hexdigest(),
+        )
+        self.assertEqual(saw, saw_down)
 
     def test_nested_pk3_rewrite_changes_only_the_selected_member(self) -> None:
         original = io.BytesIO()
@@ -88,6 +105,22 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(members["payload/qw/ktx.pk3"])) as package:
             self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
             self.assertEqual(112_973, len(package.read("qwprogs.map")))
+
+    def test_bootstrap_limits_textures_without_changing_the_preserved_snapshot(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "nquake-bootstrap")
+        members = {member: payload for _, member, payload, _ in payloads}
+        packaged = members["payload/qw/nquake_default.cfg"]
+        preserved = (
+            ROOT / "dist/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg"
+        ).read_bytes()
+        self.assertIn(b'gl_max_size                          "16384"', packaged)
+        self.assertNotIn(b'gl_max_size                          "32768"', packaged)
+        self.assertIn(b'gl_max_size                          "32768"', preserved)
 
     def test_legacy_runtime_config_is_renamed_without_changing_its_content(self) -> None:
         original = io.BytesIO()

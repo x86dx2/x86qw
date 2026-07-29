@@ -200,6 +200,22 @@ def reference_component_payload(
 ) -> tuple[bytes, list[dict[str, str]]]:
     payload = verified_reference_payload(context, upstream_path)
     applied: list[dict[str, str]] = []
+    for replacement in release.get("text_replacements", []):
+        assert isinstance(replacement, dict)
+        if replacement["target"] != upstream_path:
+            continue
+        if file_sha256_bytes(payload) != replacement["source_sha256"]:
+            raise ValueError(f"text replacement source failed integrity: {upstream_path}")
+        before = str(replacement["before"]).encode("utf-8")
+        after = str(replacement["after"]).encode("utf-8")
+        if payload.count(before) != 1:
+            raise ValueError(f"text replacement is not uniquely applicable: {upstream_path}")
+        payload = payload.replace(before, after, 1)
+        applied.append({
+            "target": upstream_path,
+            "source_sha256": str(replacement["source_sha256"]),
+            "replacement_sha256": file_sha256_bytes(after),
+        })
     replacements: dict[str, bytes] = {}
     additions: set[str] = set()
     for artifact in release.get("artifacts", []):
@@ -239,14 +255,40 @@ def standalone_component_payloads(
     release: dict[str, object],
 ) -> list[Payload]:
     selected: list[Payload] = []
+    package_files: dict[str, bytes] = {}
     for artifact in release.get("artifacts", []):
         assert isinstance(artifact, dict)
-        for upstream_path, payload in sorted(verified_package_files(context.distribution, artifact).items()):
+        artifact_files = verified_package_files(context.distribution, artifact)
+        duplicate_sources = set(package_files) & set(artifact_files)
+        if duplicate_sources:
+            raise ValueError(f"standalone artifacts contain a duplicate member: {sorted(duplicate_sources)[0]}")
+        package_files.update(artifact_files)
+        for upstream_path, payload in sorted(artifact_files.items()):
             if component_for_source(context.catalog, upstream_path, "release") != identifier:
                 continue
             destination, mode = destination_for_source(component, upstream_path, "release")
             member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
             selected.append((upstream_path, member, payload, []))
+    for copy in release.get("package_copies", []):
+        assert isinstance(copy, dict)
+        source = str(copy["source"])
+        destination_path = str(copy["destination"])
+        payload = package_files.get(source)
+        if payload is None:
+            raise ValueError(f"standalone package copy source is missing: {source}")
+        if len(payload) != copy["size"] or file_sha256_bytes(payload) != copy["sha256"]:
+            raise ValueError(f"standalone package copy source failed integrity: {source}")
+        if component_for_source(context.catalog, source, "release") != identifier:
+            raise ValueError(f"standalone package copy source belongs to another component: {source}")
+        if component_for_source(context.catalog, destination_path, "release") != identifier:
+            raise ValueError(f"standalone package copy destination belongs to another component: {destination_path}")
+        destination, mode = destination_for_source(component, destination_path, "release")
+        member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
+        selected.append((f"{source} -> {destination_path}", member, payload, [{
+            "source": source,
+            "destination": destination_path,
+            "sha256": str(copy["sha256"]),
+        }]))
     if not selected:
         raise ValueError(f"standalone component selects no files: {identifier}")
     return selected
@@ -295,6 +337,22 @@ def resolve_component_payloads(
             payload, overrides = reference_component_payload(context, upstream_path, release)
             member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
             payloads.append((upstream_path, member, payload, overrides))
+        declared_replacements = {
+            str(replacement["target"])
+            for replacement in release.get("text_replacements", [])
+            if isinstance(replacement, dict)
+        }
+        applied_replacements = {
+            str(override["target"])
+            for _, _, _, overrides in payloads
+            for override in overrides
+            if "source_sha256" in override and "target" in override
+        }
+        missing_replacements = declared_replacements - applied_replacements
+        if missing_replacements:
+            raise ValueError(
+                f"text replacement target is not consumed by {identifier}: {sorted(missing_replacements)[0]}"
+            )
     payloads.extend(project_component_payloads(context, component))
     members = [member for _, member, _, _ in payloads]
     if len(members) != len(set(members)):
