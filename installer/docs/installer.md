@@ -143,8 +143,8 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 ```sh
 ./install-qw.py components
 ./install-qw.py presets
-./install-qw.py play
 ./install-qw.py hub
+./play-qw.py
 ```
 
 ### Componentes x86QW
@@ -185,9 +185,11 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 
 ### Jogo local
 
-`play` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
+`play-qw.py` abre um servidor local pelo ezQuake sem exigir que o usuário monte a
 linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
+
+No Windows, a entrada equivalente é `py -3 .\play-qw.py`.
 
 - KTX em `qw/ktx.pk3`;
 - Final Arena em `arena/arena.pk3`;
@@ -195,7 +197,7 @@ arquivos de entrada estão presentes:
 - Team Fortress em `fortress/misc.pak`;
 - Total Destruction 2 em `td2/qwprogs.dat`.
 
-Antes de abrir o jogo, o instalador valida o recibo do componente e descobre os
+Antes de abrir o jogo, o launcher valida o recibo do componente e descobre os
 mapas disponíveis em arquivos BSP soltos, PK3s e PAKs do gamedir e de `id1`.
 Ele oferece sugestões, aceita um nome instalado ou lista o acervo completo. Se
 stable e nightly coexistirem, pergunta qual cliente usar.
@@ -228,7 +230,7 @@ solta do nQuake fica em `prox/configs/nquake-legacy.cfg`. Assim eles continuam
 disponíveis como referência sem substituir automaticamente HUD, vídeo e binds
 do jogador.
 
-Todos os cinco modos do menu `play` carregam gameplay próprio. A base nQuake
+Todos os cinco modos do menu de `play-qw.py` carregam gameplay próprio. A base nQuake
 continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
 perfil do mod corrige conflitos e expõe suas mecânicas; o arquivo pessoal é
 executado por último:

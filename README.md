@@ -17,8 +17,8 @@ ou Windows:
 
 ```sh
 ./install-qw.py
-./install-qw.py play
 ./install-qw.py verify
+./play-qw.py
 ```
 
 Stable e nightly coexistem. No macOS, o instalador remove o entitlement de
@@ -34,10 +34,11 @@ O manual completo esta em [installer/docs/installer.md](installer/docs/installer
 ```text
 dist/                    produto final canonico e versionado
 maintenance/            manutencao, inventarios, receitas, testes e builds
-installer/               documentacao e testes do instalador da raiz
+installer/               documentacao e testes das ferramentas da raiz
 site/                    site inteiro: produto, design, deploy, assets e testes
 docs/                    arquitetura global da plataforma
-install-qw.py             unica entrada para instalar, jogar e remover
+install-qw.py             instala, atualiza, verifica e remove a distribuicao
+play-qw.py                seleciona e abre mods locais no ezQuake
 ROADMAP.md                roteiro global do produto
 ```
 
@@ -107,6 +108,7 @@ Abra <http://127.0.0.1:8787>. Instrucoes de deploy ficam em
 ```sh
 ./maintenance/manage.py verify
 ./install-qw.py --help
+./play-qw.py --help
 cd site && npx --yes wrangler@4.114.0 deploy --dry-run
 ```
 

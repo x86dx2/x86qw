@@ -19,6 +19,12 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = install_qw
 SPEC.loader.exec_module(install_qw)
 
+PLAY_SPEC = importlib.util.spec_from_file_location("play_qw_modern", ROOT / "play-qw.py")
+play_qw = importlib.util.module_from_spec(PLAY_SPEC)
+assert PLAY_SPEC.loader is not None
+sys.modules[PLAY_SPEC.name] = play_qw
+PLAY_SPEC.loader.exec_module(play_qw)
+
 
 class ModernComponentTests(unittest.TestCase):
     def setUp(self):
@@ -31,11 +37,27 @@ class ModernComponentTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(ROOT, target, cache), target, cache
 
+    def make_player(self, root):
+        target = root / "quake-world"
+        cache = root / "cache" / "x86-qw"
+        target.mkdir(parents=True)
+        cache.parent.mkdir()
+        return play_qw.Player(ROOT, target, cache), target, cache
+
     def test_new_actions_are_accepted(self):
-        for action in ("components", "presets", "play", "hub"):
+        for action in ("components", "presets", "hub"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
+
+    def test_play_has_its_own_command_line(self):
+        target = ROOT / "custom-quake"
+        parsed = play_qw.parse_arguments(["--no-color", str(target)], ROOT)
+        self.assertEqual(target, parsed.target)
+        self.assertTrue(parsed.no_color)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                install_qw.parse_arguments(["play"], ROOT)
 
     def test_component_overlay_preserves_unowned_files_and_is_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -414,8 +436,8 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
-            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
             runtime = target / "ezQuake Nightly.app"
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "check_paks"):
@@ -442,8 +464,8 @@ class ModernComponentTests(unittest.TestCase):
         }
         for key, (gamedir, map_name, profile) in expectations.items():
             with self.subTest(game=key), tempfile.TemporaryDirectory() as temporary:
-                installer, target, _ = self.make_installer(Path(temporary))
-                game = next(game for game in install_qw.LOCAL_GAMES if game.key == key)
+                installer, target, _ = self.make_player(Path(temporary))
+                game = next(game for game in play_qw.LOCAL_GAMES if game.key == key)
                 runtime = target / "ezQuake Stable.app"
                 with contextlib.redirect_stdout(io.StringIO()):
                     with mock.patch.object(installer, "check_paks"):
@@ -463,7 +485,7 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
+            installer, target, _ = self.make_player(Path(temporary))
             installer.stage = target / ".stage"
             installer.stage.mkdir()
             managed = installer.stage / "combined"
@@ -483,8 +505,8 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_local_play_support_is_managed_and_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
-            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
             gamecode = target / "td2/qwprogs.dat"
             gamecode.parent.mkdir(parents=True)
             gamecode.write_bytes(b"quakec")
@@ -513,8 +535,8 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_td2_upstream_update_rebuilds_gamecode_and_preserves_x86qw_user_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
-            game = next(game for game in install_qw.LOCAL_GAMES if game.key == "td2")
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
             upstream = target / "td2/qwprogs.dat"
             upstream.parent.mkdir(parents=True)
             upstream.write_bytes(b"td2-v1")
@@ -532,13 +554,13 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(3, installer.verify_component("play-support"))
             _, entries, receipt = installer.validate_component_pair("play-support")
             self.assertNotIn("td2/x86qw-td2-user.cfg", dict(entries))
-            self.assertEqual(install_qw.PLAY_SUPPORT_VERSION, receipt["selection"])
+            self.assertEqual(play_qw.PLAY_SUPPORT_VERSION, receipt["selection"])
 
     def test_arena_and_prox_profiles_update_gamecode_and_preserve_user_files(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
+            installer, target, _ = self.make_player(Path(temporary))
             games = [
-                next(game for game in install_qw.LOCAL_GAMES if game.key == key)
+                next(game for game in play_qw.LOCAL_GAMES if game.key == key)
                 for key in ("final-arena", "pro-x")
             ]
             for game in games:
@@ -665,8 +687,8 @@ class ModernComponentTests(unittest.TestCase):
             },
         }
         with tempfile.TemporaryDirectory() as temporary:
-            installer, _, _ = self.make_installer(Path(temporary))
-            for game in install_qw.LOCAL_GAMES:
+            installer, _, _ = self.make_player(Path(temporary))
+            for game in play_qw.LOCAL_GAMES:
                 with self.subTest(game=game.key):
                     sources = installer.game_project_sources(game)
                     profile = sources[f"{game.gamedir}/x86qw-{game.profile}.cfg"].decode()
@@ -682,7 +704,7 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
+            installer, target, _ = self.make_player(Path(temporary))
             maps = target / "td2/maps"
             maps.mkdir(parents=True)
             (maps / "custom.bsp").write_bytes(b"bsp")
