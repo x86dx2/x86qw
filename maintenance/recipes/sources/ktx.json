@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "upstream": "ktx",
+  "status": "documented",
+  "toolchain": "Compiler and build targets declared by KTX 1.47",
+  "instructions": "Extract ktx-1.47.tar.gz and use the upstream QVM build target.",
+  "outputs": ["qwprogs.qvm", "qwprogs.map"],
+  "verification": "Run the KTX package-integrity and local-game diagnostics before publishing."
+}

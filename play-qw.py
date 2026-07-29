@@ -55,7 +55,7 @@ LOCAL_GAMES = (
         "No console, gamedir e *gamedir devem mostrar arena.",
     ),
     LocalGameSpec(
-        "pro-x", "Pro-X", "prox", "prox", "pro-x", "prox/prox.pk3", "proxmap1",
+        "pro-x", "Pro-X", "prox", "prox", "pro-x", "prox/qwprogs.dat", "proxmap1",
         ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
         "Rounds e equipes com ready, break e votação.",
         "No console, gamedir e *gamedir devem mostrar prox.",
@@ -64,7 +64,7 @@ LOCAL_GAMES = (
         "team-fortress", "Team Fortress", "fortress", "fortress", "team-fortress",
         "fortress/misc.pak", "2fort5r", ("2fort5r", "well6", "bases", "mbasesr"),
         "Team Fortress clássico para QuakeWorld.",
-        "A inicialização deve mostrar Welcome to TeamFortress v2.8.",
+        "A inicialização deve mostrar Welcome to TeamFortress v2.9.",
     ),
     LocalGameSpec(
         "td2", "Total Destruction 2", "td2", "td2", "total-destruction-2",
@@ -151,10 +151,17 @@ class Player(core.Installer):
         available = []
         for game in LOCAL_GAMES:
             component = self.installed_component_for_game(game)
-            marker = self.target.joinpath(*PurePosixPath(game.marker).parts)
+            marker = self.game_marker_path(game)
             if component is not None and marker.is_file() and not marker.is_symlink():
                 available.append(game)
         return available
+
+    def game_marker_path(self, game: LocalGameSpec) -> Path:
+        marker = self.target.joinpath(*PurePosixPath(game.marker).parts)
+        if marker.is_file() or game.key != "pro-x":
+            return marker
+        legacy = self.target / "prox/prox.pk3"
+        return legacy if legacy.is_file() else marker
 
     def installed_component_for_game(self, game: LocalGameSpec) -> str | None:
         present, _, _ = self.validate_component_pair(game.component)
@@ -224,6 +231,8 @@ class Player(core.Installer):
 
     def play_local(self) -> None:
         self.check_paks()
+        self.migrate_saved_configs()
+        self.refresh_qw_package_order()
         games = self.available_local_games()
         if not games:
             raise InstallerError(
@@ -344,7 +353,7 @@ class Player(core.Installer):
             expected[f"{game.gamedir}/qw_server.cfg"] = "overlay"
         entries = [
             entry for entry in self.components[game.component].get("project_sources", [])
-            if str(entry.get("destination", "")).startswith(f"{game.gamedir}/")
+            if entry.get("destination") in expected
         ]
         actual = {entry["destination"]: entry["mode"] for entry in entries}
         if actual != expected:
@@ -364,7 +373,7 @@ class Player(core.Installer):
         return sources
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
-        package = self.target / game.marker
+        package = self.game_marker_path(game)
         suffix = package.suffix.casefold()
         if suffix == ".dat":
             return package.read_bytes()

@@ -42,6 +42,7 @@ from maintenance.tools.sync_distribution import (
 )
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
+from maintenance.tools.upstreams import load_upstreams, verify_preserved_sources
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -50,6 +51,7 @@ INVENTORY = MAINTENANCE / "inventory"
 COMPONENTS = INVENTORY / "components.json"
 RELEASES = INVENTORY / "component-releases.json"
 POLICY = INVENTORY / "component-policy.json"
+UPSTREAMS = INVENTORY / "upstreams.json"
 RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
@@ -385,7 +387,7 @@ def update_reference_releases(releases: dict[str, object], revision: str) -> boo
         if strategy == "reference-snapshot":
             suffix = version[len(old_short):] if version.startswith(old_short) else ""
             release["version"] = short + suffix
-        elif strategy == "upstream-overlay":
+        elif strategy in {"upstream-overlay", "reference-overlay"}:
             release["version"] = version.replace(f"nquake.{old_short}", f"nquake.{short}")
             if isinstance(release.get("distribution_tag"), str):
                 release["distribution_tag"] = str(release["distribution_tag"]).replace(
@@ -655,7 +657,7 @@ def command_check(options: argparse.Namespace) -> int:
         if head != pinned and not changed:
             assets = preserve_current_reference_assets(assets, manifest)
             for item in component_results:
-                if item["strategy"] == "reference-snapshot":
+                if item["strategy"] in {"reference-snapshot", "reference-overlay"}:
                     item["status"] = "current"
                     item["latest_source"] = item["installed"]
         delta = distribution_delta(assets, manifest)
@@ -667,7 +669,10 @@ def command_check(options: argparse.Namespace) -> int:
             "reference": reference_note,
         }, ensure_ascii=False, indent=2))
     else:
-        reference_updates = [item for item in outdated if item["strategy"] == "reference-snapshot"]
+        reference_updates = [
+            item for item in outdated
+            if item["strategy"] in {"reference-snapshot", "reference-overlay"}
+        ]
         for item in component_results:
             if item in reference_updates:
                 continue
@@ -695,6 +700,7 @@ def command_verify(options: argparse.Namespace) -> int:
     package_count = validate_catalog(catalog)
     component_catalog = load_component_catalog(COMPONENTS)
     load_releases(RELEASES, COMPONENTS)
+    upstream_registry = load_upstreams(UPSTREAMS)
     recipe_count = 0
     for path in recipe_paths(RECIPES):
         validate_recipe(load_json(path), str(path))
@@ -703,9 +709,11 @@ def command_verify(options: argparse.Namespace) -> int:
     paths = sorted(path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file())
     validate_tree_partition(component_catalog, paths)
     upstream_count = verify_distribution(DIST, load_manifest(DIST / "manifest.json"))
+    source_count = verify_preserved_sources(upstream_registry, DIST, PROJECT_ROOT)
     print(
         f"[OK] Catalogo: {package_count} pacotes; componentes: {len(component_catalog['components'])}; "
-        f"receitas: {recipe_count}; upstreams: {upstream_count}; nQuake: {revision[:12]}."
+        f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
+        f"nQuake: {revision[:12]}."
     )
     misplaced = [
         path for path in (
@@ -778,7 +786,8 @@ def command_update(options: argparse.Namespace) -> int:
         print(line)
     blocked = [
         item for item in results
-        if item["status"] != "current" and item["strategy"] not in {"reference-snapshot"}
+        if item["status"] != "current"
+        and item["strategy"] not in {"reference-snapshot", "reference-overlay"}
     ]
     if blocked:
         names = ", ".join(item["component"] for item in blocked)

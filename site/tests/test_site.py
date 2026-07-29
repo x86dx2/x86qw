@@ -1,5 +1,8 @@
 from html.parser import HTMLParser
+import hashlib
+import json
 from pathlib import Path
+import re
 import unittest
 
 
@@ -56,6 +59,20 @@ class SiteTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", home)
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
+
+    def test_public_bootstrap_matches_the_registered_installer_bundle(self):
+        catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
+        package = next(item for item in catalog["packages"] if item.get("package") == "x86qw-installer")
+        bundle = ROOT.parents[1] / "dist" / package["distribution_path"]
+        self.assertEqual(package["size"], bundle.stat().st_size)
+        self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
+        for name in ("install.sh", "install.ps1"):
+            script = (ROOT / name).read_text(encoding="utf-8")
+            self.assertIn(package["sha256"], script)
+            self.assertNotIn("__X86QW_INSTALLER_SHA256__", script)
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertRegex(home, re.escape('https://x86qw.x86.com.br/install.sh'))
+        self.assertIn("data-copy-install", home)
 
 
 if __name__ == "__main__":

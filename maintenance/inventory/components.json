@@ -5,10 +5,45 @@
     "id": "ezquake",
     "channels": ["stable", "nightly"]
   },
-  "content_namespaces": ["nquake", "ktx", "td2"],
+  "content_namespaces": ["nquake", "ktx", "pro-x", "team-fortress", "td2"],
   "reference_source": {
     "repository": "https://github.com/nQuake/distfiles.git",
     "ref": "master"
+  },
+  "compatibility": {
+    "policy": "common-baseline",
+    "clients": {
+      "stable": "3.6.9",
+      "nightly": "20260616-101233_a86996a"
+    },
+    "covered_components": [
+      "nquake-bootstrap",
+      "nquake-visual-core",
+      "nquake-ktx",
+      "nquake-player-skins",
+      "nquake-crosshairs",
+      "nquake-skyboxes",
+      "nquake-models",
+      "nquake-scoreboard-flags",
+      "nquake-sounds",
+      "nquake-external-textures",
+      "nquake-base-textures",
+      "nquake-maps",
+      "nquake-matchinfo",
+      "nquake-documentation",
+      "qrp-hires",
+      "final-arena",
+      "pro-x",
+      "team-fortress",
+      "total-destruction-2"
+    ],
+    "verified": [
+      "catalog",
+      "package-integrity",
+      "managed-file-integrity",
+      "launcher-command-generation",
+      "uninstall"
+    ]
   },
   "profiles": {
     "essential": [
@@ -29,7 +64,6 @@
       "nquake-external-textures",
       "nquake-base-textures",
       "nquake-maps",
-      "nquake-matchinfo",
       "nquake-documentation"
     ],
     "complete": [
@@ -59,14 +93,21 @@
       "id": "nquake-bootstrap",
       "label": "Configuração base nQuake",
       "kind": "core",
-      "description": "Inicialização, configuração padrão preservável, fragfile e exemplos de configuração.",
+      "description": "Inicialização x86QW, configuração padrão preservável, camada pessoal global e fragfile.",
       "requires": [],
       "sources": [
-        {"path": "gpl/ezquake/configs", "destination": "ezquake/configs", "mode": "overlay", "exclude": ["gpl/ezquake/configs/config.cfg"]},
+        {"path": "gpl/ezquake/configs", "destination": "ezquake/configs", "mode": "overlay", "exclude": ["gpl/ezquake/configs/config.cfg", "gpl/ezquake/configs/samples"]},
+        {"path": "gpl/ezquake/configs/samples", "destination": "ezquake/configs/samples", "mode": "preserve"},
         {"path": "gpl/ezquake/configs/config.cfg", "destination": "ezquake/configs/config.cfg", "mode": "default"},
         {"path": "non-gpl/qw/autoexec.cfg", "destination": "qw/autoexec.cfg", "mode": "overlay"},
         {"path": "non-gpl/qw/nquake_default.cfg", "destination": "qw/nquake_default.cfg", "mode": "overlay"},
         {"path": "non-gpl/qw/fragfile.dat", "destination": "qw/fragfile.dat", "mode": "overlay"}
+      ],
+      "project_overrides": [
+        {"path": "dist/mods/x86qw/core/bootstrap/autoexec.cfg", "target": "non-gpl/qw/autoexec.cfg"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/x86qw/core/bootstrap/user.cfg.example", "destination": "qw/x86qw-user.cfg", "mode": "default"}
       ]
     },
     {
@@ -82,9 +123,9 @@
     },
     {
       "id": "nquake-ktx",
-      "label": "KTX para servidores",
+      "label": "KTX competitivo",
       "kind": "gameplay",
-      "description": "Mod de servidor KTX preservado para instalações compatíveis; não é executado pelo cliente ezQuake.",
+      "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com perfil competitivo x86QW.",
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "overlay"}
@@ -188,7 +229,7 @@
       "id": "nquake-matchinfo",
       "label": "Informações de partidas",
       "kind": "content",
-      "description": "Arquivos de matchinfo mantidos pela distribuição nQuake.",
+      "description": "Demos históricas e de treinamento mantidas pelo nQuake; conteúdo opcional, não necessário para jogar.",
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/matchinfo", "destination": "qw/matchinfo", "mode": "overlay"}
@@ -198,14 +239,18 @@
       "id": "nquake-documentation",
       "label": "Documentação e licenças",
       "kind": "documentation",
-      "description": "Licenças, manuais e arquivos de leitura distribuídos pelo nQuake.",
+      "description": "Licenças upstream e documentação atual da distribuição x86QW.",
       "requires": [],
       "sources": [
         {"path": "gpl/LICENSE", "destination": "LICENSE", "mode": "overlay"},
         {"path": "gpl/ezquake/gnu.txt", "destination": "ezquake/gnu.txt", "mode": "overlay"},
-        {"path": "gpl/ezquake/Online Manual.url", "destination": "ezquake/Online Manual.url", "mode": "overlay"},
-        {"path": "non-gpl/readme.txt", "destination": "readme.txt", "mode": "overlay"},
-        {"path": "non-gpl/qw/readme.txt", "destination": "qw/readme.txt", "mode": "overlay"}
+        {"path": "gpl/ezquake/Online Manual.url", "destination": "ezquake/Online Manual.url", "mode": "preserve"},
+        {"path": "non-gpl/readme.txt", "destination": "readme.txt", "mode": "preserve"},
+        {"path": "non-gpl/qw/readme.txt", "destination": "qw/readme.txt", "mode": "preserve"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/x86qw/core/docs/README-X86QW.txt", "destination": "README-X86QW.txt", "mode": "overlay"},
+        {"path": "dist/mods/x86qw/core/docs/ONLINE-MANUAL.txt", "destination": "ezquake/ONLINE-MANUAL.txt", "mode": "overlay"}
       ]
     },
     {
@@ -215,7 +260,11 @@
       "description": "Texturas e brush models em alta resolução do Quake Retexturing Project.",
       "requires": ["nquake-visual-core"],
       "sources": [
-        {"path": "addon-textures/qw", "destination": "qw", "mode": "overlay"}
+        {"path": "addon-textures/qw", "destination": "qw", "mode": "overlay", "exclude": ["addon-textures/qw/readme-textures.txt"]},
+        {"path": "addon-textures/qw/readme-textures.txt", "destination": "qw/readme-textures.txt", "mode": "preserve"}
+      ],
+      "project_sources": [
+        {"path": "dist/mods/x86qw/qrp/README-QRP.txt", "destination": "qw/README-QRP.txt", "mode": "overlay"}
       ]
     },
     {
@@ -237,26 +286,27 @@
       "id": "pro-x",
       "label": "Pro-X",
       "kind": "addon",
-      "description": "Pro-X QW 0.8b, com rounds, equipes, votações e perfil próprio x86QW.",
+      "description": "Pro-X QW 1.1, com rounds, equipes, votações e perfil próprio x86QW.",
       "requires": ["nquake-bootstrap"],
       "sources": [
         {
           "path": "addon-clanarena/prox",
-          "destination": "prox",
-          "mode": "overlay",
-          "exclude": ["addon-clanarena/prox/configs/config.cfg"]
+          "destination": "prox-legacy",
+          "mode": "preserve"
         },
         {
-          "path": "addon-clanarena/prox/configs/config.cfg",
-          "destination": "prox/configs/nquake-legacy.cfg",
-          "mode": "overlay"
+          "path": "prox",
+          "destination": "prox",
+          "mode": "overlay",
+          "origin": "release",
+          "exclude": ["prox/qw_server.cfg"]
         }
       ],
       "project_sources": [
-        {"path": "dist/mods/pro-x/0.8b+x86qw.1/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
-        {"path": "dist/mods/pro-x/0.8b+x86qw.1/qw-server.cfg", "destination": "prox/qw_server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/pro-x/0.8b+x86qw.1/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
+        {"path": "dist/mods/pro-x/1.1/x86qw/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/1.1/x86qw/qw-server.cfg", "destination": "prox/qw_server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/1.1/x86qw/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/pro-x/1.1/x86qw/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
       ]
     },
     {
@@ -269,17 +319,18 @@
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}
       ],
       "project_sources": [
-        {"path": "dist/mods/team-fortress/2.8+x86qw.1/pre.cfg", "destination": "fortress/x86qw-fortress-pre.cfg", "mode": "overlay"},
-        {"path": "dist/mods/team-fortress/2.8+x86qw.1/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
-        {"path": "dist/mods/team-fortress/2.8+x86qw.1/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/team-fortress/2.8+x86qw.1/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"}
+        {"path": "dist/mods/team-fortress/2.9/upstream/qwprogs.dat", "destination": "fortress/qwprogs.dat", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/pre.cfg", "destination": "fortress/x86qw-fortress-pre.cfg", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"}
       ]
     },
     {
       "id": "total-destruction-2",
       "label": "Total Destruction 2",
       "kind": "addon",
-      "description": "TD2QW com armas, magias, runas, modelos, gamecode e fontes para servidores compatíveis.",
+      "description": "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode; fontes e manuais permanecem preservados no dist.",
       "requires": ["nquake-bootstrap"],
       "project_sources": [
         {"path": "dist/mods/td2/2.22/x86qw/client.cfg", "destination": "td2/x86qw-td2.cfg", "mode": "overlay"},
@@ -293,17 +344,20 @@
           "mode": "overlay",
           "origin": "release",
           "exclude": [
-            "td2/docs/licenÃ§a.txt",
+            "td2/docs",
             "td2/mvdsv.cfg",
             "td2/pwd.cfg",
             "td2/rotate.cfg",
-            "td2/server.cfg"
+            "td2/server.cfg",
+            "td2/src_td2_2.22"
           ]
         },
-        {"path": "td2/docs/licenÃ§a.txt", "destination": "td2/docs/licenca.txt", "mode": "overlay", "origin": "release"},
-        {"path": "td2/mvdsv.cfg", "destination": "td2/mvdsv.example.cfg", "mode": "overlay", "origin": "release"},
-        {"path": "td2/rotate.cfg", "destination": "td2/rotate.example.cfg", "mode": "overlay", "origin": "release"},
-        {"path": "td2/server.cfg", "destination": "td2/server.example.cfg", "mode": "overlay", "origin": "release"}
+        {"path": "td2/docs", "destination": "td2/docs", "mode": "preserve", "origin": "release"},
+        {"path": "td2/src_td2_2.22", "destination": "td2/src_td2_2.22", "mode": "preserve", "origin": "release"},
+        {"path": "td2/mvdsv.cfg", "destination": "td2/mvdsv.example.cfg", "mode": "preserve", "origin": "release"},
+        {"path": "td2/pwd.cfg", "destination": "td2/pwd.cfg", "mode": "preserve", "origin": "release"},
+        {"path": "td2/rotate.cfg", "destination": "td2/rotate.example.cfg", "mode": "preserve", "origin": "release"},
+        {"path": "td2/server.cfg", "destination": "td2/server.example.cfg", "mode": "preserve", "origin": "release"}
       ]
     }
   ]

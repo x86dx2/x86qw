@@ -12,8 +12,25 @@ Repositores: [GitHub](https://github.com/x86dx2/x86qw) e
 
 ## Instalar e jogar
 
-O instalador usa somente a biblioteca padrao do Python e prepara macOS, Linux
-ou Windows:
+Jogadores não precisam clonar este repositório. No macOS ou Linux:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+```
+
+No Windows PowerShell:
+
+```powershell
+irm https://x86qw.x86.com.br/install.ps1 | iex
+```
+
+O bootstrap valida seu bundle por SHA-256, consulta somente o catálogo público
+e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. Ao
+concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
+`components`, `cleanup`, `uninstall` e `purge`.
+
+Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
+fontes canônicas locais:
 
 ```sh
 ./install-qw.py
@@ -26,6 +43,8 @@ sandbox do bundle com a ferramenta nativa `codesign`, limpa bookmarks antigos
 e preserva recibos reversiveis. Os mods QuakeC usam nomes de gamecode exclusivos
 e os parametros `gamedir` corretos; arquivos pessoais e configuracoes que o
 cliente reescreve nao sao tratados como payload imutavel.
+Os launchers isolam a colecao com `-nohome`, e `qw/pak.lst` fixa a prioridade
+dos PK3 para que texturas e addons sejam carregados sempre na mesma ordem.
 
 O manual completo esta em [installer/docs/installer.md](installer/docs/installer.md).
 
@@ -64,6 +83,7 @@ dist/
 ├── nquake/               snapshot fixado e particionado pelo BOM
 ├── mods/                 KTX, Final Arena, Pro-X, Team Fortress, TD2 e perfis x86QW
 ├── id1/                  pak0.pak e pak1.pak registrados
+├── installer/            bundle versionado usado pelo bootstrap público
 └── manifest.json         origem, consumidor, tamanho e SHA-256 dos upstreams
 ```
 
@@ -121,7 +141,7 @@ instala dependencias adicionais.
 - somente arquivos com utilidade direta e consumidor declarado entram no Git;
 - o `dist/` preserva a copia exata do upstream e separa customizacoes x86QW;
 - versoes publicadas sao imutaveis e identificadas por tamanho e SHA-256;
-- mapas, LOCs, fontes e colecoes nao sao baixados em massa;
-- o instalador materializa primeiro as fontes locais e usa mirrors como fallback;
+- mapas e LOCs externos não são baixados em massa; entra apenas o acervo curado do nQuake;
+- o modo de desenvolvimento materializa fontes locais; o modo público usa apenas mirrors do catálogo;
 - binarios grandes usam Git LFS; R2 nao faz parte da arquitetura atual;
-- `id1` e tratado como material registrado e nunca entra nos pacotes publicos.
+- `id1` e tratado como material registrado, validado por SHA-256 e incorporado ao bundle público.

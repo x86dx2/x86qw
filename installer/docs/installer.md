@@ -6,6 +6,31 @@ Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
 
+## Instalação pública
+
+Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+```
+
+No Windows PowerShell:
+
+```powershell
+irm https://x86qw.x86.com.br/install.ps1 | iex
+```
+
+O bootstrap tenta os mirrors GitHub e GitLab, valida o SHA-256 do bundle antes
+de extrair e ativa o modo remoto estrito. Nesse modo, o catálogo e todos os
+pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é tratada
+como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
+destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
+
+Ao concluir, a raiz da instalação contém `x86qw` e `x86qw.cmd`. Esses comandos
+usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw play`,
+`./x86qw verify`, `./x86qw components` e `./x86qw cleanup`. O clone e os
+comandos `./install-qw.py` e `./play-qw.py` da raiz são o fluxo de desenvolvimento.
+
 ## Instalar
 
 Os PAKs registrados originais fazem parte da distribuição em:
@@ -69,6 +94,7 @@ quake-world/.install/
 ├── ezquake-windows-stable.receipt
 ├── ezquake-windows-nightly.receipt
 ├── presets.{receipt,inventory}
+├── package-order.{receipt,inventory}
 ├── nquake-bootstrap.{receipt,inventory}
 ├── nquake-visual-core.{receipt,inventory}
 ├── nquake-ktx.{receipt,inventory}
@@ -95,17 +121,17 @@ Deseja instalar/atualizar também os componentes x86QW? [s/N]
 
 O padrão é `N`. Se a resposta for positiva, há quatro opções:
 
-- `recomendado`: toda a experiência base nQuake, sem os três addons maiores;
+- `recomendado`: experiência base nQuake, sem matchinfo, QRP nem mods opcionais;
 - `essencial`: bootstrap, interface principal e KTX;
 - `completo`: os 19 componentes, incluindo QRP, Final Arena, Pro-X, Team Fortress e TD2;
 - `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
-O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Seus arquivos de
-servidor são exemplos inertes (`*.example.cfg`), e o `pwd.cfg` histórico com
-senha padrão não entra na instalação. O pacote x86QW incorpora o perfil de
-cliente, o servidor local e o modelo de configuração pessoal junto ao conteúdo
-original. A camada `play-support` mantém apenas a cópia isolada do gamecode.
+O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Documentação,
+fontes QuakeC, exemplos originais e o `pwd.cfg` histórico permanecem preservados
+somente no artefato upstream em `dist/`; não entram no runtime. O pacote x86QW
+incorpora gamecode, modelos, sons, perfil de cliente, servidor local e modelo de
+configuração pessoal. A camada `play-support` mantém apenas a cópia isolada do gamecode.
 Assim uma nova versão do TD2 pode substituir seu conteúdo upstream sem misturar
 ou perder os ajustes do x86QW. As fontes do perfil são arquivos normais em
 `dist/mods/td2/2.22/x86qw/`, declarados em `maintenance/inventory/components.json`; não ficam
@@ -115,6 +141,12 @@ O builder também recompõe `sound/weapons/saw_down.wav`, omitido pela distribui
 do mesmo artefato e conferindo tamanho e SHA-256 declarados no inventário.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.
+Customizações globais devem ficar em `qw/x86qw-user.cfg`, criado uma única vez
+e executado ao final do bootstrap. Os aliases fornecidos pelo x86QW são
+temporários e, durante uma atualização, cópias antigas desses aliases são
+removidas do `config.cfg` salvo sem tocar em aliases pessoais ou em
+`cfg_save_unchanged`. Antes dessa migração, cada arquivo alterado é copiado para
+`config.aliases-pre-x86qw.cfg` no mesmo diretório.
 
 - `stable`: releases estáveis aprovadas e espelhadas pelo x86QW;
 - `nightly`: snapshots de desenvolvimento aprovados e espelhados pelo x86QW.
@@ -156,7 +188,8 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 ezQuake stable/nightly. O catálogo atual oferece:
 
 - base: bootstrap, interface visual, KTX, skins, miras, skyboxes, modelos,
-  bandeiras, sons, texturas, mapas selecionados, matchinfo e documentação;
+  bandeiras, sons, texturas, mapas selecionados e documentação; matchinfo é
+  opcional e aparece no perfil completo ou na seleção personalizada;
 - addons: QRP em alta resolução, Final Arena, Pro-X, Team Fortress e TD2.
 
 Dependências são resolvidas antes do download. Na remoção, componentes que
@@ -196,7 +229,7 @@ No Windows, a entrada equivalente é `py -3 .\play-qw.py`.
 
 - KTX em `qw/ktx.pk3`;
 - Final Arena em `arena/arena.pk3`;
-- Pro-X em `prox/prox.pk3`;
+- Pro-X em `prox/qwprogs.dat`;
 - Team Fortress em `fortress/misc.pak`;
 - Total Destruction 2 em `td2/qwprogs.dat`.
 
@@ -211,27 +244,29 @@ A execução sempre configura os dois lados do servidor local, nesta ordem:
 -game <mod> +gamedir <mod> +sv_gamedir <mod> +map <mapa> +wait +exec perfil-x86qw.cfg
 ```
 
-`-game` prepara o caminho do cliente, `+gamedir` seleciona o gamecode e
+`-nohome` isola a execução de qualquer `~/.ezquake` externo. `-game` prepara o
+caminho do cliente, `+gamedir` seleciona o gamecode e
 `+sv_gamedir` publica o valor correto de `*gamedir` aos clientes. Isso impede
 que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
 mod. O mapa é iniciado antes do perfil; após um frame, o `exec` aplica os binds
 x86QW por último, impedindo que a configuração base do nQuake os restaure. O
 comando não baixa conteúdo nem transforma a máquina em servidor dedicado público.
 
-Final Arena e Pro-X são componentes completamente independentes no x86QW,
-embora o snapshot histórico do nQuake os armazene sob `addon-clanarena`:
+Final Arena e Pro-X são componentes completamente independentes no x86QW. O
+primeiro continua vindo do snapshot nQuake; o segundo substitui a cópia histórica
+armazenada em `addon-clanarena` pela release pública mais recente:
 
 - Final Arena 1.20 usa uma fila individual: o vencedor permanece na arena e o
   perdedor volta ao fim da fila;
-- Pro-X QW 0.8b organiza partidas por rounds e equipes, com ready, break,
+- Pro-X QW 1.1 organiza partidas por rounds e equipes, com ready, break,
   entrada, observação e votação de mapas próprios.
 
 Cada um possui pacote, versão, recibo, inventário e perfil próprios. O x86QW
-preserva os PK3 originais. O antigo `configs/config.cfg` embutido no Pro-X é
-renomeado para `configs/nquake-pk3-legacy.cfg` no pacote instalável; a cópia
-solta do nQuake fica em `prox/configs/nquake-legacy.cfg`. Assim eles continuam
-disponíveis como referência sem substituir automaticamente HUD, vídeo e binds
-do jogador.
+preserva o ZIP original do Pro-X 1.1 em `dist/`, mas não instala o antigo
+`configs/config.cfg` do nQuake para que HUD, vídeo e binds históricos não sejam
+executados. Se uma instalação anterior já tiver esse arquivo como configuração
+pessoal, a atualização cria `config.pre-x86qw.cfg` e migra o perfil ativo para
+a base moderna do jogador.
 
 Todos os cinco modos do menu de `play-qw.py` carregam gameplay próprio. A base nQuake
 continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
@@ -423,8 +458,10 @@ O recibo é a autoridade para a remoção: `uninstall` também conclui quando um
 
 `purge` é a remoção total: apaga tudo dentro de `quake-world`, incluindo arquivos pessoais e metadados desconhecidos, preservando somente a árvore `id1`. Também remove o cache nativo criado pelo instalador. A ação recusa alvos sem um diretório `id1` real.
 
-`cleanup` remove somente o cache criado pelo próprio instalador, incluindo
-downloads ezQuake e pacotes dos componentes x86QW. A remoção só
+`cleanup` remove o cache criado pelo próprio instalador, incluindo downloads
+ezQuake e pacotes dos componentes x86QW. Também elimina dados regeneráveis
+classificados dentro da instalação: cache do navegador de servidores, temporários
+e demos TD2 vazias. A remoção do cache externo só
 ocorre se o marcador de propriedade criado pelo instalador estiver presente. O
 diretório é resolvido conforme o host:
 
@@ -437,6 +474,19 @@ Para consultar o caminho neste Mac:
 ```sh
 printf '%s/x86-qw\n' "$(getconf DARWIN_USER_CACHE_DIR | sed 's#/$##')"
 ```
+
+Downloads recebidos de servidores Team Fortress e dados pessoais são classes
+separadas e permanecem preservados por padrão:
+
+```sh
+./install-qw.py cleanup --downloads
+./install-qw.py cleanup --personal-data
+./install-qw.py cleanup --downloads --personal-data
+```
+
+`--downloads` remove apenas arquivos não gerenciados sob `fortress/progs` e
+`fortress/sound`. `--personal-data` remove histórico, logs e demos locais
+válidas; por isso precisa ser solicitado explicitamente.
 
 ## Atualizar ou trocar de canal
 
@@ -459,10 +509,11 @@ Os builds oficiais atuais usam assinatura ad-hoc e podem não estar notarizados.
 
 ## O que permanece no projeto
 
-O repositório também guarda a fonte permanente dos dois PAKs registrados em
-`dist/id1`. Em `quake-world`, eles e as configurações pessoais permanecem quando
-o runtime for removido. Apps, executáveis, addons, texturas, fontes upstream e
-cache continuam reconstruíveis.
+O repositório guarda os dois PAKs registrados em `dist/id1` e as fontes
+disponíveis de ezQuake stable/nightly, KTX, Team Fortress e TD2 junto aos seus
+contextos em `dist/`. Em `quake-world`, PAKs e configurações pessoais permanecem
+quando o runtime for removido. Apps, executáveis, addons, texturas e cache
+continuam reconstruíveis.
 
 ## Testar o instalador
 

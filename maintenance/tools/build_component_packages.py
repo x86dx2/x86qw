@@ -154,6 +154,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
         if not (
             isinstance(package, dict)
             and package.get("channel") == "content"
+            and package.get("component") != "installer"
             and package.get("package", package.get("component")) not in current_components
         )
     ]

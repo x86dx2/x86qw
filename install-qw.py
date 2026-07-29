@@ -49,6 +49,17 @@ NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
 COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
+ONLINE_CLI_FILES = (
+    "install-qw.py",
+    "play-qw.py",
+    "maintenance/__init__.py",
+    "maintenance/tools/__init__.py",
+    "maintenance/tools/components.py",
+    "maintenance/tools/component_sources.py",
+    "maintenance/tools/component_releases.py",
+    "maintenance/inventory/components.json",
+    "maintenance/inventory/component-releases.json",
+)
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 BUNDLED_ID1_DIR = Path("dist/id1")
 CACHE_DIR_NAME = "x86-qw"
@@ -72,6 +83,20 @@ PRESETS_RECEIPT = ".install/presets.receipt"
 PRESETS_INVENTORY = ".install/presets.inventory"
 PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
+PACKAGE_ORDER_RECEIPT = ".install/package-order.receipt"
+PACKAGE_ORDER_INVENTORY = ".install/package-order.inventory"
+QW_PACKAGE_PRIORITY = (
+    "ktx.pk3",
+    "models.pk3",
+    "scoreboard_flags.pk3",
+    "nquake.pk3",
+    "textures.pk3",
+    "qrp_maps_textures_1.pk3",
+    "qrp_maps_textures_2.pk3",
+    "qrp_maps_textures_3.pk3",
+    "qrp_maps_textures_4.pk3",
+    "qrp_b-models.pk3",
+)
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
@@ -497,9 +522,17 @@ def write_table(path: Path, rows: list[tuple[str, str]]) -> None:
 
 
 class Installer:
-    def __init__(self, project_root: Path, target: Path, cache_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path,
+        target: Path,
+        cache_root: Path | None = None,
+        *,
+        online_only: bool = False,
+    ):
         self.project_root = project_root.resolve()
         self.target = target
+        self.online_only = online_only
         self._cache_root = cache_root
         self.cache_root: Path | None = None
         self.cache_bin: Path | None = None
@@ -737,6 +770,76 @@ class Installer:
         assert self.cache_root is not None
         remove_path(self.cache_root)
         console.success(f"Cache removido: {self.cache_root}")
+
+    def managed_runtime_paths(self) -> set[str]:
+        metadata = self.target / METADATA_DIR
+        if not metadata.is_dir() or metadata.is_symlink():
+            return set()
+        managed: set[str] = set()
+        for inventory in sorted(metadata.glob("*.inventory")):
+            managed.update(name for name, _ in self.validate_inventory(inventory))
+        return managed
+
+    def cleanup_runtime_data(self, *, downloads: bool, personal_data: bool) -> tuple[int, int]:
+        if not self.target.is_dir() or self.target.is_symlink():
+            console.info(f"Nenhuma instalação local foi encontrada em {self.target}.")
+            return 0, 0
+        removed_cache = 0
+        removed_personal = 0
+
+        for relative in ("ezquake/sb/cache", "ezquake/temp"):
+            path = self.target / relative
+            if lexists(path):
+                remove_path(path, self.target.stat().st_dev)
+                removed_cache += 1
+
+        fortress = self.target / "fortress"
+        if fortress.is_dir() and not fortress.is_symlink():
+            for temporary in sorted(fortress.rglob("*.tmp")):
+                if temporary.is_file() and not temporary.is_symlink():
+                    remove_path(temporary)
+                    removed_cache += 1
+
+        demos = self.target / "td2/demos"
+        if demos.is_dir() and not demos.is_symlink():
+            for artifact in sorted(demos.iterdir()):
+                if artifact.is_file() and not artifact.is_symlink() and artifact.stat().st_size == 0:
+                    remove_path(artifact)
+                    removed_cache += 1
+
+        if downloads and fortress.is_dir() and not fortress.is_symlink():
+            managed = self.managed_runtime_paths()
+            for root_name in ("fortress/progs", "fortress/sound"):
+                root = self.target / root_name
+                if not root.is_dir() or root.is_symlink():
+                    continue
+                for artifact in sorted(root.rglob("*")):
+                    if not artifact.is_file() or artifact.is_symlink():
+                        continue
+                    relative = artifact.relative_to(self.target).as_posix()
+                    if relative not in managed:
+                        remove_path(artifact)
+                        removed_cache += 1
+
+        if personal_data:
+            personal = (
+                "ezquake/.ezquake_history",
+                "qw/qconsole.log",
+                "logs",
+                "td2/demos",
+            )
+            for relative in personal:
+                path = self.target / relative
+                if lexists(path):
+                    remove_path(path, self.target.stat().st_dev)
+                    removed_personal += 1
+
+        for relative in (
+            "ezquake/sb", "ezquake", "fortress/progs", "fortress/sound",
+            "fortress", "td2/demos", "td2", "logs",
+        ):
+            remove_empty_directories(self.target / relative)
+        return removed_cache, removed_personal
 
     def validate_pak_file(self, pak: Path, expected: str, label: str = "PAK") -> None:
         if not pak.is_file() or pak.is_symlink():
@@ -1364,7 +1467,7 @@ class Installer:
             raise InstallerError(f"unsafe path in managed inventory: {value}")
         if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
             raise InstallerError(f"personal configuration must not be managed: {value}")
-        if value not in ("LICENSE", "readme.txt") and path.parts[0] not in (
+        if value not in ("LICENSE", "readme.txt", "README-X86QW.txt") and path.parts[0] not in (
             "ezquake", "qw", "arena", "prox", "fortress", "td2",
         ):
             raise InstallerError(f"unexpected path in managed inventory: {value}")
@@ -1403,6 +1506,7 @@ class Installer:
             "maps": (MAPS_RECEIPT, MAPS_INVENTORY),
             "presets": (PRESETS_RECEIPT, PRESETS_INVENTORY),
             "play-support": (PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY),
+            "package-order": (PACKAGE_ORDER_RECEIPT, PACKAGE_ORDER_INVENTORY),
         }
         if component in paths:
             return paths[component]
@@ -1525,6 +1629,64 @@ class Installer:
         self.remove_stale_component_files(component, entries)
         self.commit_component_metadata(component, inventory, receipt)
         return len(entries)
+
+    def expected_qw_package_order(self) -> list[str]:
+        directory = self.target / "qw"
+        if not directory.is_dir() or directory.is_symlink():
+            return []
+        available = {
+            path.name for path in directory.iterdir()
+            if path.is_file() and not path.is_symlink() and path.suffix.casefold() == ".pk3"
+        }
+        known = [name for name in QW_PACKAGE_PRIORITY if name in available]
+        custom = sorted(available - set(QW_PACKAGE_PRIORITY), key=str.casefold)
+        return [*known, *custom]
+
+    def refresh_qw_package_order(self) -> None:
+        packages = self.expected_qw_package_order()
+        if not packages:
+            present, _, _ = self.validate_component_pair("package-order")
+            if present:
+                self.remove_component("package-order")
+            return
+        previous_stage = self.stage
+        owned_stage = previous_stage is None
+        if owned_stage:
+            self.stage = Path(tempfile.mkdtemp(prefix=".quake-order.", dir=self.target))
+        assert self.stage is not None
+        try:
+            managed = self.stage / "package-order-managed"
+            if lexists(managed):
+                remove_path(managed, self.target.stat().st_dev)
+            target = managed / "qw/pak.lst"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("".join(f"{name}\n" for name in packages), encoding="utf-8")
+            count = self.install_component_overlay(
+                "package-order", managed, "1", "x86QW deterministic PK3 order",
+            )
+            console.detail(
+                f"Ordem determinística registrada para {len(packages)} PK3 em qw/pak.lst "
+                f"({file_count(count)})."
+            )
+        finally:
+            if owned_stage:
+                self.cleanup_stage()
+                self.stage = previous_stage
+
+    def verify_qw_package_order(self) -> None:
+        packages = self.expected_qw_package_order()
+        present, _, _ = self.validate_component_pair("package-order")
+        if not packages:
+            if present:
+                raise InstallerError("pak.lst gerenciado existe sem pacotes PK3 em qw.")
+            return
+        if not present:
+            raise InstallerError("Ordem de PK3 não registrada. Execute components para gerar qw/pak.lst.")
+        self.verify_component("package-order")
+        path = self.target / "qw/pak.lst"
+        expected = "".join(f"{name}\n" for name in packages)
+        if path.read_text(encoding="utf-8") != expected:
+            raise InstallerError("qw/pak.lst não representa os PK3 instalados. Execute components novamente.")
 
     def remove_component(self, component: str) -> int:
         present, entries, _ = self.validate_component_pair(component)
@@ -1762,7 +1924,7 @@ class Installer:
                 if catalog_url:
                     catalog = json.loads(self.http_get(catalog_url))
                     console.detail(f"Catálogo remoto explícito: {catalog_url}")
-                elif local_catalog.is_file() and not local_catalog.is_symlink():
+                elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
                     catalog = json.loads(local_catalog.read_text(encoding="utf-8"))
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
@@ -1798,6 +1960,8 @@ class Installer:
         expected_sha256: str,
     ) -> Path | None:
         self.validate_distribution_path(relative, filename)
+        if self.online_only:
+            return None
         root = self.project_root / "dist"
         candidate = root.joinpath(*PurePosixPath(relative).parts)
         if not lexists(candidate):
@@ -1859,6 +2023,8 @@ class Installer:
         raise InstallerError(f"Nenhum mirror entregou o pacote {identifier}: {last_error}")
 
     def component_source_context(self) -> ComponentSourceContext | None:
+        if self.online_only:
+            return None
         distribution = self.project_root / "dist"
         if not (distribution / "nquake").is_dir():
             return None
@@ -2135,6 +2301,8 @@ class Installer:
             if not preset.is_file():
                 preset.parent.mkdir(parents=True, exist_ok=True)
                 preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+        self.migrate_saved_configs()
+        self.refresh_qw_package_order()
 
     def migrate_nquake_texture_limit(self) -> None:
         migrated = 0
@@ -2169,6 +2337,86 @@ class Installer:
             console.info(
                 f"Limite de textura nQuake ajustado de 32768 para 16384 em {file_count(migrated)}; "
                 "demais preferências foram preservadas."
+            )
+
+    def managed_temporary_aliases(self) -> set[str]:
+        aliases: set[str] = set()
+        candidates = (
+            "qw/autoexec.cfg",
+            "qw/x86qw-ktx.cfg",
+            "arena/x86qw-arena.cfg",
+            "prox/x86qw-prox.cfg",
+            "fortress/x86qw-fortress.cfg",
+            "td2/x86qw-td2.cfg",
+        )
+        for relative in candidates:
+            path = self.target / relative
+            if not path.is_file() or path.is_symlink():
+                continue
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                match = re.match(r"^\s*tempalias\s+([^\s]+)", line, flags=re.IGNORECASE)
+                if match:
+                    aliases.add(match.group(1).casefold())
+        return aliases
+
+    def write_personal_config(self, path: Path, payload: bytes) -> None:
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(payload)
+            if os.name != "nt":
+                temporary.chmod(0o644)
+            temporary.replace(path)
+        finally:
+            if lexists(temporary):
+                remove_path(temporary)
+
+    def migrate_saved_configs(self) -> None:
+        aliases = self.managed_temporary_aliases()
+        configs = sorted(set(self.target.glob("*/configs/config.cfg")))
+        prox = self.target / "prox/configs/config.cfg"
+        base = self.target / "ezquake/configs/config.cfg"
+        prox_migrated = False
+        if prox.is_file() and not prox.is_symlink():
+            contents = prox.read_bytes()
+            if b"// Niclas's config" in contents:
+                backup = prox.with_name("config.pre-x86qw.cfg")
+                if not lexists(backup):
+                    shutil.copy2(prox, backup)
+                if not base.is_file() or base.is_symlink():
+                    raise InstallerError("A migração do Pro-X exige ezquake/configs/config.cfg válido.")
+                modern = (
+                    b"// x86QW: base Pro-X migrada; original preservado em config.pre-x86qw.cfg\n"
+                    + base.read_bytes()
+                )
+                self.write_personal_config(prox, modern)
+                prox_migrated = True
+
+        changed = 0
+        alias_pattern = re.compile(rb'^\s*alias\s+([^\s]+).*(?:\r?\n|$)', re.MULTILINE | re.IGNORECASE)
+        for config in configs:
+            if not config.is_file() or config.is_symlink():
+                raise InstallerError(f"Configuração pessoal inválida: {config}")
+            original = config.read_bytes()
+
+            def keep_personal_alias(match: re.Match[bytes]) -> bytes:
+                name = match.group(1).decode("utf-8", errors="replace").casefold()
+                return b"" if name in aliases else match.group(0)
+
+            updated = alias_pattern.sub(keep_personal_alias, original)
+            if updated != original:
+                backup = config.with_name("config.aliases-pre-x86qw.cfg")
+                if not lexists(backup):
+                    shutil.copy2(config, backup)
+                self.write_personal_config(config, updated)
+                changed += 1
+        if prox_migrated:
+            console.success("Configuração Pro-X migrada para a base x86QW atual; backup pessoal preservado.")
+        if changed:
+            console.success(
+                f"Configurações persistidas saneadas em {file_count(changed)}; "
+                "backups pessoais foram preservados e os aliases x86QW agora são temporários."
             )
 
     def choose_components_to_remove(self) -> list[str]:
@@ -2227,6 +2475,7 @@ class Installer:
                 console.detail(
                     f"Suporte local removido ({file_count(removed)}); play-qw.py o reconstruirá quando necessário."
                 )
+            self.refresh_qw_package_order()
             return
         selected = self.choose_components()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
@@ -2304,7 +2553,8 @@ class Installer:
 
     def launch_runtime(self, runtime: Path, quake_arguments: list[str]) -> None:
         system = host_platform.system()
-        base_arguments = ["-basedir", str(self.target)]
+        # A distribuição é autocontida: ~/.ezquake não pode sobrepor configs ou assets.
+        base_arguments = ["-nohome", "-basedir", str(self.target)]
         if system == "Darwin":
             command = ["open", "-n", str(runtime), "--args", *base_arguments, *quake_arguments]
         else:
@@ -2399,6 +2649,7 @@ class Installer:
         self.verify_component("maps")
         self.verify_component("presets")
         self.verify_component("play-support")
+        self.verify_qw_package_order()
         self.report_nquake_startup_state(installed)
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
@@ -2431,7 +2682,10 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
 
     def preflight_component_receipts(self) -> None:
-        for component in (*self.components, *LEGACY_COMPONENTS, "maps", "presets", "play-support"):
+        for component in (
+            *self.components, *LEGACY_COMPONENTS,
+            "maps", "presets", "play-support", "package-order",
+        ):
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
@@ -2439,6 +2693,7 @@ class Installer:
             NQUAKE_INVENTORY, NQUAKE_RECEIPT,
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
             PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY,
+            PACKAGE_ORDER_RECEIPT, PACKAGE_ORDER_INVENTORY,
         ]
         for component in self.components:
             metadata_names.extend(self.component_metadata(component))
@@ -2480,7 +2735,10 @@ class Installer:
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
                 remove_path(self.target / spec.runtime(channel))
                 remove_path(receipt_path)
-        for component in (*reversed(tuple(self.components)), *LEGACY_COMPONENTS, "maps", "presets", "play-support"):
+        for component in (
+            "package-order", "play-support", "presets", "maps",
+            *reversed(tuple(self.components)), *LEGACY_COMPONENTS,
+        ):
             self.remove_component(component)
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)
@@ -2562,6 +2820,63 @@ class Installer:
         if self.stage is not None and self.stage.is_dir():
             remove_path(self.stage)
 
+    def install_online_cli(self) -> None:
+        if not self.online_only:
+            return
+        cli_root = self.target / METADATA_DIR / "cli"
+        cli_root.mkdir(parents=True, exist_ok=True)
+        relative_files = list(ONLINE_CLI_FILES)
+        for component in self.components.values():
+            for entry in component.get("project_sources", []):
+                relative = entry.get("path")
+                if isinstance(relative, str) and relative not in relative_files:
+                    relative_files.append(relative)
+        for relative in relative_files:
+            source = self.project_root.joinpath(*PurePosixPath(relative).parts)
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(f"Arquivo da CLI pública ausente ou inválido: {source}")
+            destination = cli_root.joinpath(*PurePosixPath(relative).parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_name(destination.name + ".new")
+            temporary.write_bytes(source.read_bytes())
+            if os.name != "nt":
+                temporary.chmod(0o755 if relative in {"install-qw.py", "play-qw.py"} else 0o644)
+            temporary.replace(destination)
+
+        shell_launcher = self.target / "x86qw"
+        shell_launcher.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            "root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
+            "if [ \"${1:-}\" = play ]; then\n"
+            "  shift\n"
+            "  exec python3 \"$root/.install/cli/play-qw.py\" \"$root\" \"$@\"\n"
+            "fi\n"
+            "case \"${1:-}\" in\n"
+            "  install|components|presets|hub|verify|uninstall|purge|cleanup) action=$1; shift ;;\n"
+            "  *) action=install ;;\n"
+            "esac\n"
+            "exec python3 \"$root/.install/cli/install-qw.py\" --online-only \"$action\" \"$root\" \"$@\"\n",
+            encoding="utf-8",
+        )
+        if os.name != "nt":
+            shell_launcher.chmod(0o755)
+        (self.target / "x86qw.cmd").write_text(
+            "@echo off\r\n"
+            "set \"X86QW_ROOT=%~dp0\"\r\n"
+            "if \"%~1\"==\"\" (\r\n"
+            "  py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only install \"%X86QW_ROOT%\"\r\n"
+            "  exit /b %ERRORLEVEL%\r\n"
+            ")\r\n"
+            "if /I \"%~1\"==\"play\" (\r\n"
+            "  py -3 \"%X86QW_ROOT%.install\\cli\\play-qw.py\" \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
+            ") else (\r\n"
+            "  py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only %1 \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
+            ")\r\n",
+            encoding="utf-8",
+        )
+        console.success(f"Comando permanente instalado: {shell_launcher}")
+
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
@@ -2582,18 +2897,52 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
+        "--online-only", action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--downloads", action="store_true",
+        help="no cleanup, remove também arquivos não gerenciados baixados por servidores",
+    )
+    parser.add_argument(
+        "--personal-data", action="store_true",
+        help="no cleanup, remove também histórico, logs e demos locais",
+    )
+    parser.add_argument(
         "action", nargs="?", default="install",
         help="install, components, presets, hub, verify, uninstall, purge ou cleanup",
     )
-    parser.add_argument("target", nargs="?", type=Path, help="diretório de instalação (padrão: ./quake-world)")
+    parser.add_argument(
+        "target", nargs="?", type=Path,
+        help="diretório de instalação (o instalador público pergunta antes de iniciar)",
+    )
     namespace = parser.parse_args(arguments)
     valid_actions = ("install", "components", "presets", "hub", "verify", "uninstall", "purge", "cleanup")
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
-    if namespace.action == "cleanup" and namespace.target is not None:
-        parser.error("cleanup não aceita um diretório de destino")
-    namespace.target = namespace.target or project_root / "quake-world"
+    if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
+        parser.error("--downloads e --personal-data só podem ser usados com cleanup")
+    if namespace.target is None and not namespace.online_only:
+        namespace.target = project_root / "quake-world"
     return namespace
+
+
+def choose_public_target(suggested: Path | None = None) -> Path:
+    suggested = suggested or Path.home() / "Games" / "x86qw"
+    print("\nOnde deseja instalar o x86QW?")
+    print(f"Sugestão: {suggested}")
+    print("Pressione Enter para aceitar a sugestão ou informe outro diretório.")
+    try:
+        answer = input("Diretório de instalação: ").strip()
+    except EOFError as error:
+        raise InstallerError(
+            "Não foi possível ler o diretório de instalação. "
+            "Execute em um terminal interativo ou informe o caminho na linha de comando."
+        ) from error
+    target = Path(answer).expanduser() if answer else suggested
+    if not target.is_absolute():
+        target = Path.cwd() / target
+    return target
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -2602,17 +2951,33 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
+        if options.online_only and options.target is None:
+            options.target = choose_public_target()
         action_labels = {
             "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
             "presets": "gerenciar presets",
             "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
-            "purge": "remover tudo", "cleanup": "limpar cache",
+            "purge": "remover tudo", "cleanup": "limpar caches e dados locais",
         }
         console.banner(action_labels[options.action], options.target)
-        installer = Installer(project_root, options.target)
+        installer = Installer(project_root, options.target, online_only=options.online_only)
         if options.action == "cleanup":
-            console.section("Limpeza do cache")
+            console.section("Limpeza segura")
             installer.cleanup_cache()
+            cache_count, personal_count = installer.cleanup_runtime_data(
+                downloads=options.downloads,
+                personal_data=options.personal_data,
+            )
+            if cache_count:
+                console.success(f"Dados regeneráveis removidos ({file_count(cache_count)}).")
+            else:
+                console.info("Nenhum dado regenerável da instalação precisava ser removido.")
+            if personal_count:
+                console.success(f"Dados pessoais locais removidos ({file_count(personal_count)}).")
+            elif not options.personal_data:
+                console.info("Histórico, logs e demos válidas foram preservados; use --personal-data para removê-los.")
+            if not options.downloads:
+                console.info("Downloads de servidores foram preservados; use --downloads para removê-los.")
             return 0
         installer.validate_target(options.action)
         console.detail(f"Destino normalizado: {installer.target}")
@@ -2639,6 +3004,7 @@ def main(arguments: list[str] | None = None) -> int:
                     installer.manage_presets()
                 else:
                     installer.install()
+                installer.install_online_cli()
             finally:
                 installer.cleanup_stage()
         return 0

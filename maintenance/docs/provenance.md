@@ -4,18 +4,20 @@ Um arquivo estar disponível para download não significa que possa ser
 redistribuído. Nenhum componente entra no mirror antes de registrar licença,
 atribuição, origem imutável e checksum.
 
-## Auditoria inicial — 27 de julho de 2026
+## Auditoria inicial — atualizada em 29 de julho de 2026
 
 | Componente | Evidência | Estado do mirror |
 | --- | --- | --- |
 | ezQuake stable | [repositório](https://github.com/QW-Group/ezquake-source) identificado como GPL-2.0 | 3.6.9 preservado em `dist/ezquake` e replicado nos mirrors |
 | ezQuake nightly | binários em `builds.quakeworld.nu`, derivados do mesmo projeto | build `20260616-101233_a86996a` preservado em `dist/ezquake` |
-| 17 componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/nquake`; pacotes de entrega são builds reproduzíveis temporários |
+| componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/nquake`; pacotes de entrega são builds reproduzíveis temporários |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
+| Pro-X | [release pública 1.1](https://www.quakeworld.nu/forum/topic/3741/prox-11-released) recuperada do arquivo histórico do autor | ZIP original preservado em `dist/mods/pro-x/1.1`; código-fonte público não localizado |
+| Team Fortress | [runtime e fontes 2.9](https://www.frag-net.com/mod_quake_fortress.html) | ZIPs originais preservados em `dist/mods/team-fortress/2.9`; gamecode 2.9 aplicado sobre assets nQuake |
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte; `saw_down.wav` histórico é byte-idêntico ao `saw.wav` preservado | original preservado e pacote instalável independente, sem mapas nem senha padrão; nome de áudio omitido recomposto com hash fixado |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
-| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e copiados diretamente; fora do catálogo de pacotes |
+| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/id1` e incorporados somente ao bundle público do instalador |
 
 “Candidato” ainda não autoriza publicação. A licença do código-fonte não prova,
 sozinha, que todos os arquivos agregados ao pacote binário usam termos
@@ -37,8 +39,8 @@ com `checksums.txt` e com os digests publicados pela API do GitHub:
 
 As três receitas stable estão `ready`; seus artefatos ficam em `dist/ezquake`
 e também apontam para o mirror imutável no `x86qw-dist`. O catálogo registra os três binários nightly e o commit
-completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. A distribuição não mantém cópia do
-código-fonte ou dependências de build porque o instalador não os consome.
+completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. Os tarballs de fonte exatos de
+stable e nightly também ficam preservados em `dist/` para consulta e compilação.
 
 ### Atualização independente do KTX
 
@@ -50,7 +52,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
 QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
-`1.47+nquake.e4cb23d40aa2+x86qw.5`; fontes, override, gameplay e hashes ficam no inventário
+`1.47+nquake.e4cb23d40aa2+x86qw.6`; fontes, override, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

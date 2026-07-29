@@ -8,10 +8,10 @@
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.4",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "notes": "Preserva a configuração nQuake e limita o tamanho máximo de textura a 16384, compatível com o OpenGL 4.1 do Apple Silicon e suficiente para os recursos atuais do x86QW.",
+      "notes": "Preserva a base nQuake, aplica bootstrap x86QW com aliases temporários e camada pessoal e limita texturas a 16384. A configuração comum conserva comandos existentes no stable e no nightly.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
@@ -23,13 +23,13 @@
     },
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.5",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.6",
       "strategy": "upstream-overlay",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
       "distribution_tag": "nquake-ktx-1.47-nquake.e4cb23d40aa2",
       "embedded_version": "1.46-dev",
-      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake, inclui o mapa de símbolos oficial do QVM, neutraliza localmente a opção de profiling exclusiva do MVDSV e acrescenta gameplay x86QW com armas ergonômicas, comunicação competitiva e override pessoal.",
+      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -87,43 +87,91 @@
     "nquake-base-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-maps": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-matchinfo": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-documentation": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.1", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
     "qrp-hires": {
-      "version": "e4cb23d40aa2",
+      "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "embedded_version": "maps-1.00+items-0.73"
+      "embedded_version": "maps-1.00+items-0.73",
+      "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.3",
-      "strategy": "reference-snapshot",
-      "freshness": "reference-current",
-      "embedded_version": "Final Arena 1.20",
-      "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil de gameplay x86QW com armas, fila, estatísticas, votação, opções e override pessoal."
-    },
-    "pro-x": {
-      "version": "e4cb23d40aa2+x86qw.5",
-      "strategy": "reference-snapshot",
-      "freshness": "reference-current",
-      "embedded_version": "Pro-X QW 0.8b",
-      "archive_moves": [
-        {
-          "target_archive": "addon-clanarena/prox/prox.pk3",
-          "source": "configs/config.cfg",
-          "destination": "configs/nquake-pk3-legacy.cfg"
-        }
-      ],
-      "notes": "Preserva o prox.pk3 do nQuake, neutraliza a configuração histórica autocarregável, fornece a cvar de compatibilidade sv_aim esperada pelo gamecode e atende qw_server.cfg localmente para reaplicar gameplay x86QW após os binds remotos bloqueados pelo ezQuake."
-    },
-    "team-fortress": {
       "version": "e4cb23d40aa2+x86qw.4",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "embedded_version": "Team Fortress 2.8",
-      "notes": "Preserva o Team Fortress e seus binds do nQuake, acrescenta seleção coerente de armas, menus de classe e ajuda automática x86QW e libera somente as quatro cvars remotas exigidas pelos efeitos e velocidades do gamecode antigo; binds remotos permanecem bloqueados."
+      "embedded_version": "Final Arena 1.20",
+      "notes": "Preserva o arena.pk3 do nQuake e acrescenta gameplay x86QW com armas, fila, estatísticas, votação, ajuda, override pessoal e aliases temporários."
+    },
+    "pro-x": {
+      "version": "1.1+x86qw.1",
+      "strategy": "upstream-package",
+      "freshness": "upstream-current",
+      "distribution_component": "pro-x",
+      "distribution_tag": "pro-x-1.1",
+      "embedded_version": "Pro-X QW 1.1",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
+      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1 e reaplica o perfil de gameplay x86QW.",
+      "compatibility": {
+        "client_scope": [
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
+        ],
+        "verified": ["package-integrity", "managed-file-integrity", "uninstall"],
+        "gamecode_runtime": "QuakeWorld qwprogs.dat independente de sistema operacional"
+      },
+      "upstream": {
+        "name": "Pro-X",
+        "release": "1.1",
+        "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
+        "source_url": "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip"
+      },
+      "artifacts": [
+        {
+          "filename": "prox_11.zip",
+          "url": "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip",
+          "distribution_path": "mods/pro-x/1.1/prox_11.zip",
+          "size": 9095898,
+          "sha256": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010"
+        }
+      ]
+    },
+    "team-fortress": {
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-overlay",
+      "freshness": "upstream-current",
+      "distribution_component": "team-fortress",
+      "distribution_tag": "team-fortress-2.9",
+      "embedded_version": "Team Fortress 2.9",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
+      "notes": "Preserva os assets Team Fortress 2.8 do nQuake, aplica o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
+      "compatibility": {
+        "client_scope": [
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
+        ],
+        "verified": ["package-integrity", "managed-file-integrity", "uninstall"],
+        "gamecode_runtime": "QuakeWorld qwprogs.dat clássico independente de sistema operacional"
+      },
+      "upstream": {
+        "name": "Team Fortress",
+        "release": "2.9",
+        "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
+        "source_url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip"
+      },
+      "artifacts": [
+        {
+          "filename": "tf29qw.zip",
+          "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip",
+          "distribution_path": "mods/team-fortress/2.9/tf29qw.zip",
+          "size": 626175,
+          "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d"
+        }
+      ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.4",
+      "version": "2.22+x86qw.5",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
@@ -134,7 +182,7 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
       ],
-      "notes": "Última distribuição completa TD2QW localizada, com gamecode, modelos, sons, documentação e código-fonte. A camada x86QW expõe magia, armas, runas, votos e override pessoal; configurações de servidor são exemplos, a senha original é excluída e o som saw_down.wav omitido pelo pacote 2.22 é restaurado a partir do saw.wav byte-idêntico do próprio upstream.",
+      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

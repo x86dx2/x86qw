@@ -51,7 +51,7 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
         expected = str(release["version"])
         actual = expected
         status = "current"
-        if release["strategy"] == "reference-snapshot" and current_reference != reference_revision:
+        if release["strategy"] in {"reference-snapshot", "reference-overlay"} and current_reference != reference_revision:
             actual = current_reference[:12]
             status = "update-available"
         upstream = release.get("upstream")

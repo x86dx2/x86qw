@@ -45,7 +45,7 @@ class DistributionTests(unittest.TestCase):
         components = load_component_policy()
         catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
         self.assertGreater(len(source_roots(catalog)), 10)
-        for component in ("ezquake", "nquake", "ktx", "td2"):
+        for component in ("installer", "ezquake", "nquake", "ktx", "pro-x", "team-fortress", "td2"):
             require_component(components, component)
         for component in ("classicq", "unezquake", "gfx", "maps", "locs"):
             with self.subTest(component=component):
@@ -72,6 +72,16 @@ class DistributionTests(unittest.TestCase):
         self.assertIsNone(consumed_component("ezquake/3.6.9/stable/source/source.tar.gz"))
         self.assertIsNone(consumed_component("ezquake/3.6.9/stable/metadata/checksums.txt"))
         self.assertIsNone(consumed_component("ezquake/build/nightly/linux-x86_64/build.AppImage.md5"))
+        self.assertEqual("ezquake", consumed_component(
+            "ezquake/3.6.9/source/ezquake-source-3.6.9.tar.gz"
+        ))
+        self.assertEqual("ktx", consumed_component("mods/ktx/1.47/source/ktx-1.47.tar.gz"))
+        self.assertEqual("team-fortress", consumed_component(
+            "mods/team-fortress/2.9/source/tf_29src.zip"
+        ))
+        self.assertEqual("installer", consumed_component(
+            "installer/1.0.0/x86qw-installer-1.0.0.zip"
+        ))
         self.assertEqual("ktx", consumed_component(
             "mods/ktx/1.47/qwprogs-qvm.zip"
         ))

@@ -22,16 +22,20 @@ try:
     from .components import component_for_source, load_catalog as load_component_catalog, source_roots
     from .component_releases import component_for_artifact_path, load_releases
     from .public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from .upstreams import load_upstreams, source_owner
 except ImportError:  # Execucao direta
     from component_policy import component_for_distribution_path, load_component_policy, require_component
     from components import component_for_source, load_catalog as load_component_catalog, source_roots
     from component_releases import component_for_artifact_path, load_releases
     from public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from upstreams import load_upstreams, source_owner
 
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
+UPSTREAMS = ROOT / "maintenance/inventory/upstreams.json"
+PUBLIC_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 USER_AGENT = "x86qw-maintenance/1"
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
@@ -222,11 +226,56 @@ def discover_component_release_assets() -> list[Asset]:
     return assets
 
 
+def discover_preserved_sources() -> list[Asset]:
+    registry = load_upstreams(UPSTREAMS)
+    policy = load_component_policy()
+    assets: list[Asset] = []
+    entries = registry["upstreams"]
+    assert isinstance(entries, list)
+    for entry in entries:
+        assert isinstance(entry, dict)
+        source = entry["source"]
+        assert isinstance(source, dict)
+        if source.get("status") not in {"complete", "partial"} or "size" not in source:
+            continue
+        path = str(source["distribution_path"])
+        component = component_for_distribution_path(policy, path)
+        if component is None:
+            raise ValueError(f"preserved source has no distribution owner: {path}")
+        assets.append(Asset(
+            component, str(source["url"]), path, int(source["size"]),
+            str(entry["id"]), str(source["sha256"]),
+        ))
+    return assets
+
+
+def discover_installer_assets() -> list[Asset]:
+    catalog = json.loads(PUBLIC_CATALOG.read_text(encoding="utf-8"))
+    packages = catalog.get("packages")
+    if not isinstance(packages, list):
+        raise ValueError("public catalog has no packages")
+    assets: list[Asset] = []
+    for package in packages:
+        if not isinstance(package, dict) or package.get("component") != "installer":
+            continue
+        path = package.get("distribution_path")
+        if not isinstance(path, str):
+            raise ValueError("installer package has no distribution path")
+        assets.append(Asset(
+            "installer", str(package["origin_url"]), path, int(package["size"]),
+            str(package.get("package", "installer")), str(package["sha256"]),
+        ))
+    if not assets:
+        raise ValueError("public catalog has no installer package")
+    return assets
+
+
 def discover_assets() -> list[Asset]:
     components = load_component_policy()
     discovered = [
         *discover_release_assets(), *discover_nightlies(), *discover_nquake(),
-        *discover_component_release_assets(),
+        *discover_component_release_assets(), *discover_preserved_sources(),
+        *discover_installer_assets(),
     ]
     unique: dict[str, Asset] = {}
     for asset in discovered:
@@ -249,8 +298,16 @@ def consumed_component(
 ) -> str | None:
     components = load_component_policy(policy_path) if policy_path is not None else load_component_policy()
     component = component_for_distribution_path(components, path)
+    upstream = source_owner(load_upstreams(UPSTREAMS), path)
+    if upstream is not None:
+        return component
     releases = load_releases(component_releases, component_catalog)
-    if component in {"ktx", "td2"}:
+    if component == "installer":
+        return component if re.fullmatch(
+            r"installer/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
+            path,
+        ) else None
+    if component in {"ktx", "pro-x", "team-fortress", "td2"}:
         return component if component_for_artifact_path(releases, path) is not None else None
     if component == "nquake":
         parts = PurePosixPath(path).parts
@@ -342,8 +399,11 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 consumers = component["consumers"]
                 assert isinstance(consumers, list)
                 metadata["component"] = component_name
-                metadata["consumer"] = consumers[0]
-                if component_name in {"ktx", "td2"}:
+                upstream = source_owner(load_upstreams(UPSTREAMS), relative)
+                metadata["consumer"] = f"development:{upstream}" if upstream is not None else consumers[0]
+                if upstream is not None:
+                    metadata["package"] = upstream
+                elif component_name in {"ktx", "pro-x", "team-fortress", "td2"}:
                     releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
                     package = component_for_artifact_path(releases, relative)
                     metadata["package"] = package
@@ -473,7 +533,10 @@ def verify_distribution(
     allowed_project_files = {
         PurePosixPath(str(source["path"])).relative_to("dist").as_posix()
         for component_entry in component_document["components"]
-        for source in component_entry.get("project_sources", [])
+        for source in (
+            *component_entry.get("project_sources", []),
+            *component_entry.get("project_overrides", []),
+        )
     }
     allowed_unmanaged = {"id1/pak0.pak", "id1/pak1.pak", *allowed_project_files}
     unexpected = sorted(actual - expected - allowed_unmanaged)

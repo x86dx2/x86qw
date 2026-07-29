@@ -5,13 +5,13 @@ do nQuake corresponde a um projeto com releases: skins, miras, skyboxes, mapas e
 outros recursos são coleções curadas. Nesses casos, a versão correta é o commit
 imutável do `nQuake/distfiles`, não um número inventado.
 
-Estado verificado em 28 de julho de 2026:
+Estado verificado em 29 de julho de 2026:
 
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
-| Configuração base | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com compatibilidade gráfica x86QW | textura máxima coerente com OpenGL 4.1 do Apple Silicon |
+| Configuração base | `e4cb23d40aa2+x86qw.4` | snapshot nQuake com bootstrap x86QW | aliases temporários e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.5` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva e símbolos QVM preservados |
+| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.6` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva e símbolos QVM preservados |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -21,17 +21,19 @@ Estado verificado em 28 de julho de 2026:
 | Texturas externas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Texturas base | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Mapas selecionados | `e4cb23d40aa2` | coleção curada nQuake | sem download externo em massa |
-| Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Documentação | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| QRP alta resolução | `e4cb23d40aa2` | snapshot nQuake | contém mapas 1.00 e itens 0.73 |
-| Final Arena | `e4cb23d40aa2+x86qw.3` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis |
-| Pro-X | `e4cb23d40aa2+x86qw.5` | snapshot nQuake com configuração histórica neutralizada | perfil reaplicado pelo `qw_server.cfg`; `sv_aim` local compatível com o gamecode antigo |
-| Team Fortress | `e4cb23d40aa2+x86qw.4` | snapshot nQuake e gameplay x86QW próprio | efeitos e velocidades clássicos liberados por quatro capacidades remotas; binds remotos bloqueados |
-| Total Destruction 2 | `2.22+x86qw.4` | pacote independente do upstream e gameplay x86QW | magia, especial, runas, votação e áudio completo |
+| Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
+| Documentação | `e4cb23d40aa2+x86qw.1` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
+| QRP alta resolução | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
+| Final Arena | `e4cb23d40aa2+x86qw.4` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis |
+| Pro-X | `1.1+x86qw.1` | release pública 1.1 e gameplay x86QW | runtime oficial completo; perfil reaplicado pelo `qw_server.cfg`; configuração pessoal antiga migrada com backup |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.1` | gamecode e fontes oficiais 2.9 sobre assets nQuake | efeitos e velocidades clássicos liberados por quatro capacidades remotas; binds remotos bloqueados |
+| Total Destruction 2 | `2.22+x86qw.5` | pacote independente do upstream e gameplay x86QW | runtime mínimo com magia, especial, runas, votação e áudio completo |
 
 ## Contrato de atualização
 
 - `reference-snapshot`: acompanha o commit mais recente aprovado do nQuake;
+- `reference-overlay`: preserva assets do nQuake e substitui um runtime por uma
+  release independente comprovada;
 - `upstream-overlay`: um artefato oficial substitui somente membros declarados
   sobre a base nQuake;
 - `upstream-package`: um componente independente é validado e empacotado sem
@@ -43,10 +45,12 @@ Estado verificado em 28 de julho de 2026:
 - `maintenance/manage.py check` detecta novidades; `update` prepara apenas as
   atualizações seguras e `publish` permanece uma ação separada.
 
-O bootstrap preserva o snapshot nQuake original e troca somente seu padrão
-`gl_max_size` de 32768 para 16384 no pacote derivado. Ao atualizar uma
+O bootstrap preserva o snapshot nQuake original, troca seu padrão
+`gl_max_size` de 32768 para 16384 e instala um `autoexec.cfg` x86QW com aliases
+temporários. A base comum conserva opções reconhecidas por stable e nightly; ao atualizar uma
 instalação, o instalador migra o mesmo valor apenas quando a configuração
-pessoal ainda contém exatamente o padrão antigo.
+pessoal ainda contém exatamente o padrão antigo. O arquivo global
+`qw/x86qw-user.cfg` é carregado por último e nunca é sobrescrito.
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
@@ -71,9 +75,15 @@ pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod
 ajustes de compatibilidade do HUD e ajuda contextual. `F10` repete a ajuda
 automática mostrada ao carregar cada mod.
 
-Final Arena e Pro-X são consumidos de subdiretórios diferentes do snapshot
-nQuake e geram pacotes, versões, inventários e recibos independentes. O caminho
-histórico `addon-clanarena` não define a identidade dos componentes x86QW.
+O catálogo declara uma única política `common-baseline`: todos os 19 componentes
+usam arquivos de configuração comuns comprovados tanto com ezQuake stable 3.6.9
+quanto com a nightly `20260616-101233_a86996a`. Nenhum comando exclusivo da
+nightly é gravado globalmente; futuras otimizações específicas deverão entrar
+como overlay de cliente explícito, nunca como alteração silenciosa da base.
+
+Final Arena usa o subdiretório correspondente do snapshot nQuake. Pro-X usa a
+release pública 1.1; o subdiretório histórico 0.8b é mantido apenas como origem
+de migração. Ambos geram pacotes, versões, inventários e recibos independentes.
 
 O TD2 possui duas numerações públicas que não formam uma cronologia simples. A
 página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
@@ -81,8 +91,9 @@ versão não está mais disponível. O pacote incorporado é a distribuição
 QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
 com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
 no perfil `completo`, fica em `dist/mods/td2/2.22/` e não baixa mapas fora
-do acervo já aprovado do x86QW. O conteúdo upstream permanece preservado; binds,
-HUD e parâmetros do servidor vêm da camada versionada em
+do acervo já aprovado do x86QW. O artefato upstream completo permanece
+preservado em `dist/`; o runtime recebe somente gamecode, modelos, sons e os
+perfis x86QW. Binds, HUD e parâmetros do servidor vêm da camada versionada em
 `dist/mods/td2/2.22/x86qw/` e entram no próprio pacote do componente. Somente a
 cópia isolada do gamecode pertence a `.install/play-support.*`, enquanto
 `td2/x86qw-td2-user.cfg` permanece pessoal e fora do inventário imutável.

@@ -5,6 +5,7 @@ import json
 import os
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -246,6 +247,71 @@ class InstallerTests(unittest.TestCase):
                     installer.stable_catalog()
                     installer.component_package_record("nquake-bootstrap")
             get.assert_called_once_with(install_qw.CATALOG_URL)
+
+    def test_online_mode_asks_for_a_target_and_ignores_local_distribution(self):
+        online = install_qw.parse_arguments(["--online-only"], ROOT)
+        local = install_qw.parse_arguments([], ROOT)
+        self.assertIsNone(online.target)
+        self.assertEqual(ROOT / "quake-world", local.target)
+        with contextlib.redirect_stdout(io.StringIO()):
+            with mock.patch("builtins.input", return_value=""):
+                self.assertEqual(
+                    Path.home() / "Games/x86qw",
+                    install_qw.choose_public_target(),
+                )
+            with mock.patch("builtins.input", return_value="~/Games/meu-qw"):
+                self.assertEqual(
+                    Path.home() / "Games/meu-qw",
+                    install_qw.choose_public_target(),
+                )
+        explicit = install_qw.parse_arguments(
+            ["--online-only", "install", "/tmp/meu-x86qw"], ROOT,
+        )
+        self.assertEqual(Path("/tmp/meu-x86qw"), explicit.target)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "bundle"
+            target = root / "game"
+            (project / "site/public/api/v1").mkdir(parents=True)
+            (project / "site/public/api/v1/catalog.json").write_text(
+                '{"format":1,"project":"local-wrong","packages":[]}', encoding="utf-8",
+            )
+            artifact = project / "dist/test/file.zip"
+            artifact.parent.mkdir(parents=True)
+            artifact.write_bytes(b"local")
+            installer = install_qw.Installer(project, target, online_only=True)
+            remote = {"format": 1, "project": "x86qw", "packages": []}
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "http_get", return_value=json.dumps(remote).encode()) as get:
+                    self.assertEqual(remote, installer.public_catalog("remote"))
+            get.assert_called_once_with(install_qw.CATALOG_URL)
+            self.assertIsNone(installer.distribution_artifact(
+                "test/file.zip", "file.zip", expected_size=5,
+                expected_sha256=install_qw.hashlib.sha256(b"local").hexdigest(),
+            ))
+
+    def test_online_install_preserves_a_self_contained_cli(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "x86qw"
+            target.mkdir()
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_online_cli()
+            self.assertTrue((target / ".install/cli/install-qw.py").is_file())
+            self.assertTrue((target / ".install/cli/dist/mods/team-fortress/2.9/x86qw/client.cfg").is_file())
+            self.assertTrue((target / "x86qw.cmd").is_file())
+            launcher = target / "x86qw"
+            self.assertTrue(os.access(launcher, os.X_OK))
+            result = subprocess.run(
+                [str(launcher), "--help"], text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn("Instala e mantém", result.stdout)
+            play = subprocess.run(
+                [str(launcher), "play", "--help"], text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(0, play.returncode, play.stderr)
+            self.assertIn("Abre os mods locais", play.stdout)
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
         class FakeSocket:

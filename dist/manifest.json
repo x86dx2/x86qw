@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-27T17:15:57Z",
+  "captured_at": "2026-07-29T12:51:51Z",
   "files": {
     "ezquake/20260616-101233_a86996a/nightly/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -28,6 +28,22 @@
       "size": 10350080,
       "url": "https://builds.quakeworld.nu/ezquake/snapshots/windows/x64/20260616-101233_a86996a_ezquake.exe"
     },
+    "ezquake/20260616-101233_a86996a/source/ezquake-source-a86996a3d33dc1bc3fb15bfe7bcadd662b822557.tar.gz": {
+      "component": "ezquake",
+      "consumer": "development:ezquake",
+      "package": "ezquake-nightly",
+      "sha256": "7f8caaac70ea98838cf66d3de278d8dc993be6968cb4004bf29f88ac8f6f35ab",
+      "size": 2015304,
+      "url": "https://github.com/QW-Group/ezquake-source/archive/a86996a3d33dc1bc3fb15bfe7bcadd662b822557.tar.gz"
+    },
+    "ezquake/3.6.9/source/ezquake-source-3.6.9.tar.gz": {
+      "component": "ezquake",
+      "consumer": "development:ezquake",
+      "package": "ezquake-stable",
+      "sha256": "5408b0331c992f511736a5c85a8b135f6cf605d9483e03103dd0fdc267d3547a",
+      "size": 1962575,
+      "url": "https://github.com/QW-Group/ezquake-source/archive/refs/tags/3.6.9.tar.gz"
+    },
     "ezquake/3.6.9/stable/linux-x86_64/ezQuake-linux-x86_64.zip": {
       "component": "ezquake",
       "consumer": "install:ezquake",
@@ -55,6 +71,13 @@
       "size": 4135630,
       "url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip"
     },
+    "installer/1.0.1/x86qw-installer-1.0.1.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "49ce9a852617b13949e5951c7545ad6f3ecefbbec5b408cbef6c920ba15bdc53",
+      "size": 24161141,
+      "url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.1/x86qw-installer-1.0.1.zip"
+    },
     "mods/ktx/1.47/qwprogs-qvm.zip": {
       "component": "ktx",
       "consumer": "install:nquake-ktx",
@@ -63,6 +86,22 @@
       "size": 403006,
       "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip"
     },
+    "mods/ktx/1.47/source/ktx-1.47.tar.gz": {
+      "component": "ktx",
+      "consumer": "development:ktx",
+      "package": "ktx",
+      "sha256": "273553121b5ee37ff3d6463a40042374ba1f42aa54653490839f22e17ce8ec57",
+      "size": 1798431,
+      "url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz"
+    },
+    "mods/pro-x/1.1/prox_11.zip": {
+      "component": "pro-x",
+      "consumer": "install:pro-x",
+      "package": "pro-x",
+      "sha256": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
+      "size": 9095898,
+      "url": "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip"
+    },
     "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz": {
       "component": "td2",
       "consumer": "install:total-destruction-2",
@@ -70,6 +109,22 @@
       "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "size": 567029,
       "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+    },
+    "mods/team-fortress/2.9/source/tf_29src.zip": {
+      "component": "team-fortress",
+      "consumer": "development:team-fortress",
+      "package": "team-fortress",
+      "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff",
+      "size": 173536,
+      "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip"
+    },
+    "mods/team-fortress/2.9/tf29qw.zip": {
+      "component": "team-fortress",
+      "consumer": "install:team-fortress",
+      "package": "team-fortress",
+      "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d",
+      "size": 626175,
+      "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip"
     },
     "nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/arena/arena.pk3": {
       "component": "nquake",

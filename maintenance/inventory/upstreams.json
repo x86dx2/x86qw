@@ -1,0 +1,134 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "checked_at": "2026-07-29",
+  "upstreams": [
+    {
+      "id": "ezquake-stable",
+      "name": "ezQuake stable",
+      "kind": "client",
+      "version": "3.6.9",
+      "release_url": "https://github.com/QW-Group/ezquake-source/releases/tag/3.6.9",
+      "update": {"strategy": "github-release", "repository": "QW-Group/ezquake-source"},
+      "source": {
+        "status": "complete",
+        "url": "https://github.com/QW-Group/ezquake-source/archive/refs/tags/3.6.9.tar.gz",
+        "distribution_path": "ezquake/3.6.9/source/ezquake-source-3.6.9.tar.gz",
+        "size": 1962575,
+        "sha256": "5408b0331c992f511736a5c85a8b135f6cf605d9483e03103dd0fdc267d3547a"
+      },
+      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/ezquake.json"}
+    },
+    {
+      "id": "ezquake-nightly",
+      "name": "ezQuake nightly",
+      "kind": "client",
+      "version": "20260616-101233_a86996a",
+      "revision": "a86996a3d33dc1bc3fb15bfe7bcadd662b822557",
+      "release_url": "https://builds.quakeworld.nu/ezquake/snapshots/",
+      "update": {"strategy": "ezquake-nightly"},
+      "source": {
+        "status": "complete",
+        "url": "https://github.com/QW-Group/ezquake-source/archive/a86996a3d33dc1bc3fb15bfe7bcadd662b822557.tar.gz",
+        "distribution_path": "ezquake/20260616-101233_a86996a/source/ezquake-source-a86996a3d33dc1bc3fb15bfe7bcadd662b822557.tar.gz",
+        "size": 2015304,
+        "sha256": "7f8caaac70ea98838cf66d3de278d8dc993be6968cb4004bf29f88ac8f6f35ab"
+      },
+      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/ezquake.json"}
+    },
+    {
+      "id": "nquake",
+      "name": "nQuake distfiles",
+      "kind": "distribution",
+      "version": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "release_url": "https://github.com/nQuake/distfiles",
+      "update": {"strategy": "git-ref", "repository": "https://github.com/nQuake/distfiles.git", "ref": "refs/heads/master"},
+      "source": {
+        "status": "complete",
+        "url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+        "distribution_path": "nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      },
+      "build": {"status": "not-applicable"}
+    },
+    {
+      "id": "ktx",
+      "name": "KTX",
+      "kind": "mod",
+      "version": "1.47",
+      "revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
+      "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
+      "update": {"strategy": "github-release", "repository": "QW-Group/ktx"},
+      "source": {
+        "status": "complete",
+        "url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz",
+        "distribution_path": "mods/ktx/1.47/source/ktx-1.47.tar.gz",
+        "size": 1798431,
+        "sha256": "273553121b5ee37ff3d6463a40042374ba1f42aa54653490839f22e17ce8ec57"
+      },
+      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/ktx.json"}
+    },
+    {
+      "id": "qrp",
+      "name": "Quake Retexturing Project",
+      "kind": "assets",
+      "version": "maps-1.00+items-0.73",
+      "release_url": "https://qrp.quakeone.com/downloads/",
+      "update": {"strategy": "fixed-release"},
+      "source": {"status": "not-applicable"},
+      "build": {"status": "not-applicable"}
+    },
+    {
+      "id": "final-arena",
+      "name": "Final Arena",
+      "kind": "mod",
+      "version": "1.20",
+      "release_url": "https://www.quakeworld.nu/forum/topic/7320/108479/rockat-arena-server/",
+      "update": {"strategy": "manual"},
+      "source": {"status": "unavailable"},
+      "build": {"status": "unavailable"}
+    },
+    {
+      "id": "pro-x",
+      "name": "Pro-X",
+      "kind": "mod",
+      "version": "1.1",
+      "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
+      "update": {"strategy": "fixed-release"},
+      "source": {"status": "unavailable"},
+      "build": {"status": "unavailable"}
+    },
+    {
+      "id": "team-fortress",
+      "name": "Team Fortress",
+      "kind": "mod",
+      "version": "2.9",
+      "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
+      "update": {"strategy": "fixed-release"},
+      "source": {
+        "status": "complete",
+        "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip",
+        "distribution_path": "mods/team-fortress/2.9/source/tf_29src.zip",
+        "size": 173536,
+        "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff"
+      },
+      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/team-fortress.json"}
+    },
+    {
+      "id": "td2",
+      "name": "Total Destruction 2",
+      "kind": "mod",
+      "version": "2.22",
+      "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
+      "update": {"strategy": "artifact-fingerprint"},
+      "source": {
+        "status": "complete",
+        "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+        "distribution_path": "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+        "size": 567029,
+        "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
+      },
+      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/td2.json"}
+    }
+  ]
+}

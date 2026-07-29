@@ -101,9 +101,16 @@ class ModernComponentTests(unittest.TestCase):
             installer, _, _ = self.make_installer(Path(temporary))
             self.assertEqual("ezquake", installer.component_catalog["client"]["id"])
             self.assertEqual(["stable", "nightly"], installer.component_catalog["client"]["channels"])
-            self.assertEqual({"nquake", "ktx", "td2"}, installer.content_component_namespaces)
+            compatibility = installer.component_catalog["compatibility"]
+            self.assertEqual("common-baseline", compatibility["policy"])
+            self.assertEqual(set(installer.components), set(compatibility["covered_components"]))
+            self.assertEqual(
+                {"nquake", "ktx", "pro-x", "team-fortress", "td2"},
+                installer.content_component_namespaces,
+            )
             self.assertEqual(set(installer.components), set(installer.component_catalog["profiles"]["complete"]))
             self.assertNotIn("qrp-hires", installer.component_catalog["profiles"]["recommended"])
+            self.assertNotIn("nquake-matchinfo", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("qrp-hires", installer.component_catalog["profiles"]["complete"])
             self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
@@ -128,10 +135,10 @@ class ModernComponentTests(unittest.TestCase):
             pro_x = installer.components["pro-x"]
             self.assertEqual(
                 {
-                    "dist/mods/pro-x/0.8b+x86qw.1/client.cfg",
-                    "dist/mods/pro-x/0.8b+x86qw.1/qw-server.cfg",
-                    "dist/mods/pro-x/0.8b+x86qw.1/server.cfg",
-                    "dist/mods/pro-x/0.8b+x86qw.1/user.cfg.example",
+                    "dist/mods/pro-x/1.1/x86qw/client.cfg",
+                    "dist/mods/pro-x/1.1/x86qw/qw-server.cfg",
+                    "dist/mods/pro-x/1.1/x86qw/server.cfg",
+                    "dist/mods/pro-x/1.1/x86qw/user.cfg.example",
                 },
                 {source["path"] for source in pro_x["project_sources"]},
             )
@@ -439,6 +446,103 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(b'gl_max_size "16384"\nname "td2"\n', td2_config.read_bytes())
             self.assertEqual('gl_max_size "2048"\n', prox_config.read_text(encoding="utf-8"))
 
+    def test_package_order_is_deterministic_and_tracks_custom_pk3_last(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            qw = target / "qw"
+            qw.mkdir()
+            for name in ("textures.pk3", "ktx.pk3", "z-custom.pk3", "nquake.pk3", "a-custom.pk3"):
+                (qw / name).write_bytes(name.encode())
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.refresh_qw_package_order()
+            self.assertEqual(
+                "ktx.pk3\nnquake.pk3\ntextures.pk3\na-custom.pk3\nz-custom.pk3\n",
+                (qw / "pak.lst").read_text(encoding="utf-8"),
+            )
+            installer.verify_qw_package_order()
+            (qw / "middle-custom.pk3").write_bytes(b"custom")
+            with self.assertRaisesRegex(install_qw.InstallerError, "pak.lst"):
+                installer.verify_qw_package_order()
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.refresh_qw_package_order()
+            installer.verify_qw_package_order()
+
+    def test_saved_configs_drop_managed_aliases_and_migrate_legacy_pro_x(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            autoexec = target / "qw/autoexec.cfg"
+            autoexec.parent.mkdir()
+            autoexec.write_text('tempalias +zoom "fov 50"\n', encoding="utf-8")
+            base = target / "ezquake/configs/config.cfg"
+            base.parent.mkdir(parents=True)
+            base.write_text(
+                'alias +zoom "fov 50"\nalias personal "say oi"\ncfg_save_unchanged "1"\nname "x86"\n',
+                encoding="utf-8",
+            )
+            prox = target / "prox/configs/config.cfg"
+            prox.parent.mkdir(parents=True)
+            legacy = b"// Niclas's config\nalias +zoom \"fov 10\"\n"
+            prox.write_bytes(legacy)
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.migrate_saved_configs()
+            self.assertEqual(legacy, (prox.parent / "config.pre-x86qw.cfg").read_bytes())
+            self.assertNotIn('alias +zoom', base.read_text(encoding="utf-8"))
+            self.assertIn('alias personal "say oi"', base.read_text(encoding="utf-8"))
+            self.assertIn('cfg_save_unchanged "1"', base.read_text(encoding="utf-8"))
+            self.assertIn('alias +zoom', (base.parent / "config.aliases-pre-x86qw.cfg").read_text(encoding="utf-8"))
+            migrated = prox.read_text(encoding="utf-8")
+            self.assertIn("base Pro-X migrada", migrated)
+            self.assertNotIn('alias +zoom', migrated)
+            self.assertIn('alias personal "say oi"', migrated)
+            self.assertIn('alias +zoom', (prox.parent / "config.aliases-pre-x86qw.cfg").read_text(encoding="utf-8"))
+
+    def test_cleanup_separates_regenerable_downloaded_and_personal_data(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            sound = managed / "fortress/sound/managed.wav"
+            sound.parent.mkdir(parents=True)
+            sound.write_bytes(b"managed")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "team-fortress", managed, "test", "x86QW test package",
+                )
+            downloaded = target / "fortress/sound/server.wav"
+            downloaded.write_bytes(b"download")
+            temporary_file = target / "fortress/progs/partial.tmp"
+            temporary_file.parent.mkdir(parents=True)
+            temporary_file.write_bytes(b"partial")
+            cache = target / "ezquake/sb/cache/index"
+            cache.parent.mkdir(parents=True)
+            cache.write_bytes(b"cache")
+            zero_demo = target / "td2/demos/zero.qwd"
+            zero_demo.parent.mkdir(parents=True)
+            zero_demo.write_bytes(b"")
+            valid_demo = target / "td2/demos/match.qwd"
+            valid_demo.write_bytes(b"demo")
+            log = target / "qw/qconsole.log"
+            log.parent.mkdir(parents=True)
+            log.write_text("log", encoding="utf-8")
+
+            removed, personal = installer.cleanup_runtime_data(downloads=False, personal_data=False)
+            self.assertGreaterEqual(removed, 3)
+            self.assertEqual(0, personal)
+            self.assertTrue(downloaded.exists())
+            self.assertTrue(sound.exists())
+            self.assertTrue(valid_demo.exists())
+            self.assertTrue(log.exists())
+
+            installer.cleanup_runtime_data(downloads=True, personal_data=False)
+            self.assertFalse(downloaded.exists())
+            self.assertTrue(sound.exists())
+            installer.cleanup_runtime_data(downloads=False, personal_data=True)
+            self.assertFalse(valid_demo.exists())
+            self.assertFalse(log.exists())
+
     def test_hub_filters_bad_addresses_and_can_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -456,7 +560,10 @@ class ModernComponentTests(unittest.TestCase):
                 with mock.patch.object(install_qw.subprocess, "Popen") as popen:
                     installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
             command = popen.call_args.args[0]
-            self.assertEqual(["open", "-n", str(runtime), "--args", "-basedir", str(target), "+connect", "server.example:27500"], command)
+            self.assertEqual([
+                "open", "-n", str(runtime), "--args", "-nohome", "-basedir", str(target),
+                "+connect", "server.example:27500",
+            ], command)
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -612,8 +719,11 @@ class ModernComponentTests(unittest.TestCase):
             for game in games:
                 package = target / game.marker
                 package.parent.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(package, "w") as archive:
-                    archive.writestr("qwprogs.dat", f"{game.key}-v1".encode())
+                if package.suffix == ".dat":
+                    package.write_bytes(f"{game.key}-v1".encode())
+                else:
+                    with zipfile.ZipFile(package, "w") as archive:
+                        archive.writestr("qwprogs.dat", f"{game.key}-v1".encode())
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support(games)
 
@@ -627,7 +737,7 @@ class ModernComponentTests(unittest.TestCase):
                     (ROOT / (
                         "dist/mods/final-arena/1.20+x86qw.1/client.cfg"
                         if game.key == "final-arena"
-                        else "dist/mods/pro-x/0.8b+x86qw.1/client.cfg"
+                        else "dist/mods/pro-x/1.1/x86qw/client.cfg"
                     )).read_bytes(),
                     client.read_bytes(),
                 )
@@ -635,7 +745,7 @@ class ModernComponentTests(unittest.TestCase):
                     (ROOT / (
                         "dist/mods/final-arena/1.20+x86qw.1/server.cfg"
                         if game.key == "final-arena"
-                        else "dist/mods/pro-x/0.8b+x86qw.1/server.cfg"
+                        else "dist/mods/pro-x/1.1/x86qw/server.cfg"
                     )).read_bytes(),
                     server.read_bytes(),
                 )
@@ -644,8 +754,12 @@ class ModernComponentTests(unittest.TestCase):
                     self.assertIn('set sv_aim "0"', server.read_text())
                     self.assertEqual("exec x86qw-prox.cfg", compatibility.read_text().strip().splitlines()[-1])
                 user.write_text(f"// personal {game.key}\n", encoding="utf-8")
-                with zipfile.ZipFile(target / game.marker, "w") as archive:
-                    archive.writestr("qwprogs.dat", f"{game.key}-v2".encode())
+                package = target / game.marker
+                if package.suffix == ".dat":
+                    package.write_bytes(f"{game.key}-v2".encode())
+                else:
+                    with zipfile.ZipFile(package, "w") as archive:
+                        archive.writestr("qwprogs.dat", f"{game.key}-v2".encode())
 
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support(games)
@@ -670,7 +784,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_every_playable_mod_profile_prints_its_keys_and_binds_help(self):
         expected_gameplay = {
             "ktx": {
-                'alias sv_enableprofile ""',
+                'tempalias sv_enableprofile ""',
                 'bind 1 "x86qw_ktx_axe"',
                 'bind q "x86qw_ktx_gl"',
                 'bind e "x86qw_ktx_rl"',
@@ -680,14 +794,14 @@ class ModernComponentTests(unittest.TestCase):
                 'bind F7 "join"',
             },
             "final-arena": {
-                'alias arena_stats "impulse 68"',
-                'alias arena_position "impulse 69"',
-                'alias arena_break "impulse 70"',
-                'alias arena_commands "impulse 82"',
-                'alias arena_next "impulse 83"',
-                'alias arena_backpacks "impulse 85"',
-                'alias arena_status "impulse 86"',
-                'alias arena_airgib "impulse 88"',
+                'tempalias arena_stats "impulse 68"',
+                'tempalias arena_position "impulse 69"',
+                'tempalias arena_break "impulse 70"',
+                'tempalias arena_commands "impulse 82"',
+                'tempalias arena_next "impulse 83"',
+                'tempalias arena_backpacks "impulse 85"',
+                'tempalias arena_status "impulse 86"',
+                'tempalias arena_airgib "impulse 88"',
                 'bind 1 "impulse 1"',
                 'bind F1 "join"',
                 'bind F2 "arena_position"',
@@ -695,10 +809,10 @@ class ModernComponentTests(unittest.TestCase):
                 'bind F8 "arena_airgib"',
             },
             "pro-x": {
-                'alias prox_menu "menu"',
-                'alias prox_id "id"',
-                'alias prox_map1 "impulse 201"',
-                'alias prox_map5 "impulse 205"',
+                'tempalias prox_menu "menu"',
+                'tempalias prox_id "id"',
+                'tempalias prox_map1 "impulse 201"',
+                'tempalias prox_map5 "impulse 205"',
                 'bind 1 "impulse 1;weapon 1"',
                 'bind 9 "impulse 9"',
                 'bind 0 "impulse 10"',
@@ -722,11 +836,11 @@ class ModernComponentTests(unittest.TestCase):
                 'bind F3 "changeclass"',
             },
             "td2": {
-                'alias td2_magic "impulse 1"',
-                'alias td2_special "impulse 20"',
-                'alias td2_drop_rune "impulse 22"',
-                'alias td2_drop_special "impulse 23"',
-                'alias td2_vote_next "impulse 100"',
+                'tempalias td2_magic "impulse 1"',
+                'tempalias td2_special "impulse 20"',
+                'tempalias td2_drop_rune "impulse 22"',
+                'tempalias td2_drop_special "impulse 23"',
+                'tempalias td2_vote_next "impulse 100"',
                 'bind 1 "impulse 1"',
                 'bind 9 "impulse 20"',
                 'bind 0 "impulse 21"',
@@ -741,7 +855,7 @@ class ModernComponentTests(unittest.TestCase):
                     sources = installer.game_project_sources(game)
                     profile = sources[f"{game.gamedir}/x86qw-{game.profile}.cfg"].decode()
                     help_alias = f"x86qw_{game.profile}_help"
-                    self.assertIn(f"alias {help_alias}", profile)
+                    self.assertIn(f"tempalias {help_alias}", profile)
                     self.assertIn(f'bind F10 "{help_alias}', profile)
                     for expected in expected_gameplay[game.key]:
                         self.assertIn(expected, profile)

@@ -2,9 +2,18 @@
   "format": 1,
   "project": "x86qw",
   "components": {
+    "installer": {
+      "consumers": [
+        "bootstrap:installer"
+      ],
+      "distribution_prefixes": [
+        "installer/"
+      ]
+    },
     "ezquake": {
       "consumers": [
-        "install:ezquake"
+        "install:ezquake",
+        "development:ezquake"
       ],
       "distribution_prefixes": [
         "ezquake/"
@@ -12,7 +21,8 @@
     },
     "nquake": {
       "consumers": [
-        "install:nquake-reference"
+        "install:nquake-reference",
+        "development:nquake"
       ],
       "distribution_prefixes": [
         "nquake/"
@@ -20,15 +30,35 @@
     },
     "ktx": {
       "consumers": [
-        "install:nquake-ktx"
+        "install:nquake-ktx",
+        "development:ktx"
       ],
       "distribution_prefixes": [
         "mods/ktx/"
       ]
     },
+    "pro-x": {
+      "consumers": [
+        "install:pro-x",
+        "development:pro-x"
+      ],
+      "distribution_prefixes": [
+        "mods/pro-x/"
+      ]
+    },
+    "team-fortress": {
+      "consumers": [
+        "install:team-fortress",
+        "development:team-fortress"
+      ],
+      "distribution_prefixes": [
+        "mods/team-fortress/"
+      ]
+    },
     "td2": {
       "consumers": [
-        "install:total-destruction-2"
+        "install:total-destruction-2",
+        "development:td2"
       ],
       "distribution_prefixes": [
         "mods/td2/"

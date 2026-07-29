@@ -193,6 +193,30 @@ def move_zip_members(payload: bytes, moves: dict[str, str]) -> bytes:
     return output.getvalue()
 
 
+def remove_zip_members(payload: bytes, removals: set[str]) -> bytes:
+    source = io.BytesIO(payload)
+    output = io.BytesIO()
+    with zipfile.ZipFile(source) as original:
+        if original.testzip() is not None:
+            raise ValueError("base component archive contains a corrupt member")
+        original_files = {
+            info.filename: original.read(info.filename)
+            for info in original.infolist() if not info.is_dir()
+        }
+    missing = removals - set(original_files)
+    if missing:
+        raise ValueError(f"component archive removal target is missing: {sorted(missing)[0]}")
+    for name in removals:
+        del original_files[name]
+    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
+        for name, data in sorted(original_files.items()):
+            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            rebuilt.writestr(info, data)
+    return output.getvalue()
+
+
 def reference_component_payload(
     context: ComponentSourceContext,
     upstream_path: str,
@@ -200,17 +224,19 @@ def reference_component_payload(
 ) -> tuple[bytes, list[dict[str, str]]]:
     payload = verified_reference_payload(context, upstream_path)
     applied: list[dict[str, str]] = []
+    original_sha256 = file_sha256_bytes(payload)
     for replacement in release.get("text_replacements", []):
         assert isinstance(replacement, dict)
         if replacement["target"] != upstream_path:
             continue
-        if file_sha256_bytes(payload) != replacement["source_sha256"]:
+        if original_sha256 != replacement["source_sha256"]:
             raise ValueError(f"text replacement source failed integrity: {upstream_path}")
         before = str(replacement["before"]).encode("utf-8")
         after = str(replacement["after"]).encode("utf-8")
-        if payload.count(before) != 1:
+        count = int(replacement.get("count", 1))
+        if payload.count(before) != count:
             raise ValueError(f"text replacement is not uniquely applicable: {upstream_path}")
-        payload = payload.replace(before, after, 1)
+        payload = payload.replace(before, after, count)
         applied.append({
             "target": upstream_path,
             "source_sha256": str(replacement["source_sha256"]),
@@ -220,8 +246,11 @@ def reference_component_payload(
     additions: set[str] = set()
     for artifact in release.get("artifacts", []):
         assert isinstance(artifact, dict)
+        artifact_members = artifact.get("members", [])
+        if not artifact_members:
+            continue
         members = verified_artifact_members(context.distribution, artifact)
-        for member in artifact["members"]:
+        for member in artifact_members:
             assert isinstance(member, dict)
             if member["target_archive"] != upstream_path:
                 continue
@@ -245,6 +274,14 @@ def reference_component_payload(
     if moves:
         payload = move_zip_members(payload, moves)
         applied.extend({"source": old, "destination": new} for old, new in moves.items())
+    removals = {
+        str(removal["member"])
+        for removal in release.get("archive_removals", [])
+        if isinstance(removal, dict) and removal.get("target_archive") == upstream_path
+    }
+    if removals:
+        payload = remove_zip_members(payload, removals)
+        applied.extend({"removed": member} for member in sorted(removals))
     return payload, applied
 
 
@@ -267,6 +304,8 @@ def standalone_component_payloads(
             if component_for_source(context.catalog, upstream_path, "release") != identifier:
                 continue
             destination, mode = destination_for_source(component, upstream_path, "release")
+            if mode == "preserve":
+                continue
             member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
             selected.append((upstream_path, member, payload, []))
     for copy in release.get("package_copies", []):
@@ -283,6 +322,8 @@ def standalone_component_payloads(
         if component_for_source(context.catalog, destination_path, "release") != identifier:
             raise ValueError(f"standalone package copy destination belongs to another component: {destination_path}")
         destination, mode = destination_for_source(component, destination_path, "release")
+        if mode == "preserve":
+            continue
         member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
         selected.append((f"{source} -> {destination_path}", member, payload, [{
             "source": source,
@@ -315,6 +356,44 @@ def project_component_payloads(
     return selected
 
 
+def apply_project_overrides(
+    context: ComponentSourceContext,
+    component: dict[str, object],
+    payloads: list[Payload],
+) -> list[Payload]:
+    overrides = {
+        str(entry["target"]): str(entry["path"])
+        for entry in component.get("project_overrides", [])
+        if isinstance(entry, dict)
+    }
+    if not overrides:
+        return payloads
+    project_root = context.distribution.parent
+    updated: list[Payload] = []
+    applied: set[str] = set()
+    for upstream_path, member, payload, metadata in payloads:
+        source_name = overrides.get(upstream_path)
+        if source_name is None:
+            updated.append((upstream_path, member, payload, metadata))
+            continue
+        source = project_root.joinpath(*PurePosixPath(source_name).parts)
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(f"canonical x86QW override is missing or unsafe: {source}")
+        replacement = source.read_bytes()
+        if not replacement:
+            raise ValueError(f"canonical x86QW override is empty: {source}")
+        updated.append((source_name, member, replacement, [*metadata, {
+            "target": upstream_path,
+            "project_override": source_name,
+            "sha256": file_sha256_bytes(replacement),
+        }]))
+        applied.add(upstream_path)
+    missing = set(overrides) - applied
+    if missing:
+        raise ValueError(f"project override target is not consumed: {sorted(missing)[0]}")
+    return updated
+
+
 def resolve_component_payloads(
     context: ComponentSourceContext,
     identifier: str,
@@ -334,6 +413,8 @@ def resolve_component_payloads(
         payloads = []
         for upstream_path in context.partition[identifier]:
             destination, mode = destination_for_source(component, upstream_path, "reference")
+            if mode == "preserve":
+                continue
             payload, overrides = reference_component_payload(context, upstream_path, release)
             member = f"{'defaults' if mode == 'default' else 'payload'}/{destination}"
             payloads.append((upstream_path, member, payload, overrides))
@@ -353,6 +434,7 @@ def resolve_component_payloads(
             raise ValueError(
                 f"text replacement target is not consumed by {identifier}: {sorted(missing_replacements)[0]}"
             )
+    payloads = apply_project_overrides(context, component, payloads)
     payloads.extend(project_component_payloads(context, component))
     members = [member for _, member, _, _ in payloads]
     if len(members) != len(set(members)):

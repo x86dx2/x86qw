@@ -1,4 +1,19 @@
 const statusBox = document.querySelector('.catalog-status');
+const copyInstall = document.querySelector('[data-copy-install]');
+
+if (copyInstall) {
+  copyInstall.addEventListener('click', async () => {
+    const command = document.querySelector('[data-install-command]')?.textContent?.trim();
+    if (!command) return;
+    try {
+      await navigator.clipboard.writeText(command);
+      copyInstall.textContent = 'Copiado';
+    } catch {
+      copyInstall.textContent = 'Selecione o comando';
+    }
+    window.setTimeout(() => { copyInstall.textContent = 'Copiar'; }, 2400);
+  });
+}
 
 if (statusBox) {
   fetch('/api/v1/catalog.json', { cache: 'no-store' })
