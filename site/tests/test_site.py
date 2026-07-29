@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import unittest
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1] / "public"
@@ -66,6 +67,14 @@ class SiteTests(unittest.TestCase):
         bundle = ROOT.parents[1] / "dist" / package["distribution_path"]
         self.assertEqual(package["size"], bundle.stat().st_size)
         self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
+        with zipfile.ZipFile(bundle) as archive:
+            identity = json.loads(archive.read(
+                f"x86qw-installer-{package['version']}/_x86qw/installer.json"
+            ))
+        self.assertEqual(
+            {"format": 1, "project": "x86qw", "version": package["version"]},
+            identity,
+        )
         for name in ("install.sh", "install.ps1"):
             script = (ROOT / name).read_text(encoding="utf-8")
             self.assertIn(package["sha256"], script)
