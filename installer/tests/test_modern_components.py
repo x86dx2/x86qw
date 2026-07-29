@@ -431,7 +431,7 @@ class ModernComponentTests(unittest.TestCase):
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
                 "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
-                "+sv_progtype", "0", "+exec", "x86qw-td2.cfg", "+map", "dm6",
+                "+sv_progtype", "0", "+map", "dm6", "+wait", "+exec", "x86qw-td2.cfg",
             ])
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
@@ -457,7 +457,7 @@ class ModernComponentTests(unittest.TestCase):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
                     "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
-                    "+sv_progtype", "0", "+exec", profile, "+map", map_name,
+                    "+sv_progtype", "0", "+map", map_name, "+wait", "+exec", profile,
                 ])
 
     def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
@@ -604,6 +604,7 @@ class ModernComponentTests(unittest.TestCase):
                     help_alias = f"x86qw_{game.profile}_help"
                     self.assertIn(f"alias {help_alias}", profile)
                     self.assertIn(f'bind F10 "{help_alias}', profile)
+                    self.assertIn('bind 1 "impulse 1"', profile)
                     self.assertEqual(help_alias, profile.strip().splitlines()[-1])
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):

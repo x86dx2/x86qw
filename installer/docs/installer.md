@@ -203,14 +203,15 @@ stable e nightly coexistirem, pergunta qual cliente usar.
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
 ```text
--game <mod> +gamedir <mod> +sv_gamedir <mod> [+exec perfil-x86qw.cfg] +map <mapa>
+-game <mod> +gamedir <mod> +sv_gamedir <mod> +map <mapa> +wait +exec perfil-x86qw.cfg
 ```
 
 `-game` prepara o caminho do cliente, `+gamedir` seleciona o gamecode e
 `+sv_gamedir` publica o valor correto de `*gamedir` aos clientes. Isso impede
 que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
-mod. O comando não baixa conteúdo nem transforma a máquina em servidor dedicado
-público.
+mod. O mapa é iniciado antes do perfil; após um frame, o `exec` aplica os binds
+x86QW por último, impedindo que a configuração base do nQuake os restaure. O
+comando não baixa conteúdo nem transforma a máquina em servidor dedicado público.
 
 Final Arena e Pro-X são componentes completamente independentes no x86QW,
 embora o snapshot histórico do nQuake os armazene sob `addon-clanarena`:
@@ -230,6 +231,7 @@ do jogador.
 Controles acrescentados para Final Arena:
 
 ```text
+1 a 8       selecionar armas
 F3          estatísticas
 F4          posição na fila
 F5          entrar ou sair da pausa
@@ -241,6 +243,7 @@ F10         ajuda e comandos do mod
 Controles acrescentados para Pro-X:
 
 ```text
+1 a 8       selecionar armas
 F1          votar SIM
 F3          pronto
 F4          interromper ou pausar
@@ -268,7 +271,8 @@ quake-world/fortress/x86qw-fortress-user.cfg
 quake-world/td2/x86qw-td2-user.cfg
 ```
 
-No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` antes de `+map`. O arquivo
+No TD2, o instalador acrescenta `+exec x86qw-td2.cfg` depois de `+map` e de um
+`wait`. O arquivo
 gerenciado `td2/x86qw-td2.cfg` preserva os recursos modernos já configurados no
 ezQuake e substitui apenas os controles e a apresentação específicos do mod:
 

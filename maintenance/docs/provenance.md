@@ -48,7 +48,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência e troca
 somente esse QVM. O pacote x86QW resultante é
-`1.47+nquake.e4cb23d40aa2+x86qw.1`; fontes, override, perfil e hashes ficam no inventário
+`1.47+nquake.e4cb23d40aa2+x86qw.2`; fontes, override, perfil e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

@@ -10,7 +10,7 @@
     "nquake-bootstrap": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.1",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.2",
       "strategy": "upstream-overlay",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
@@ -74,14 +74,14 @@
       "embedded_version": "maps-1.00+items-0.73"
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Final Arena 1.20",
       "notes": "Preserva o arena.pk3 do nQuake e acrescenta um perfil x86QW independente com ajuda automática de controles."
     },
     "pro-x": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Pro-X QW 0.8b",
@@ -95,14 +95,14 @@
       "notes": "Preserva o prox.pk3 do nQuake, neutraliza somente a configuração histórica autocarregável e acrescenta um perfil x86QW independente."
     },
     "team-fortress": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Team Fortress 2.8",
       "notes": "Preserva o Team Fortress do nQuake e acrescenta perfil x86QW com ajuda automática dos controles."
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.1",
+      "version": "2.22+x86qw.2",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",

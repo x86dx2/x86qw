@@ -2412,9 +2412,9 @@ class Installer:
         ]
         if game.key != "ktx":
             arguments.extend(["+sv_progtype", "0"])
-        if game.key in PROFILED_LOCAL_GAMES:
-            arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
         arguments.extend(["+map", map_name])
+        if game.key in PROFILED_LOCAL_GAMES:
+            arguments.extend(["+wait", "+exec", f"x86qw-{game.profile}.cfg"])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
         console.success(f"{label} aberto com {game.label}.")
