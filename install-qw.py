@@ -237,6 +237,12 @@ PLATFORMS = {
     ),
 }
 
+HOST_PLATFORMS = {
+    "Darwin": "macos",
+    "Linux": "linux",
+    "Windows": "windows",
+}
+
 
 PRESETS = {
     "x86-qw-modern.cfg": """// x86-qw: visual moderno, carregamento manual com cfg_load x86-qw-modern
@@ -942,29 +948,29 @@ class Installer:
         if os.name != "nt":
             metadata.chmod(0o755)
 
-    def choose_platform(self, product: str = "ezQuake") -> PlatformSpec:
+    def select_platform(self, requested: str | None = None) -> PlatformSpec:
         host = host_platform.system() or "desconhecido"
         machine = host_platform.machine() or "arquitetura desconhecida"
         console.detail(f"Host detectado: {host} {machine}; Python {host_platform.python_version()}")
-        print(f"\nPara qual sistema operacional deseja preparar o {product}?")
-        print("  1) macOS         - universal arm64 + x86_64 (padrão)")
-        print("  2) Linux x86_64  - AppImage")
-        print("  3) Windows x64   - executável .exe")
-        aliases = {
-            "": "macos", "1": "macos", "mac": "macos", "macos": "macos",
-            "2": "linux", "linux": "linux", "3": "windows", "windows": "windows", "win": "windows",
-        }
-        while True:
-            try:
-                answer = input("Escolha [1/2/3] (padrão: 1): ").strip()
-            except EOFError:
-                answer = ""
-            key = aliases.get(answer.lower())
-            if key is not None:
-                self.spec = PLATFORMS[key]
-                console.success(f"Sistema selecionado: {self.spec.label}")
-                return self.spec
-            console.warning("Opção inválida. Digite 1, 2 ou 3.")
+        detected = HOST_PLATFORMS.get(host)
+        if requested is None and detected is None:
+            raise InstallerError(
+                f"O sistema {host} não é reconhecido automaticamente. "
+                "Use --platform macos, --platform linux ou --platform windows."
+            )
+        key = requested or detected
+        assert key is not None
+        self.spec = PLATFORMS[key]
+        if requested is None:
+            console.success(f"Sistema detectado automaticamente: {self.spec.label}.")
+        elif requested == detected:
+            console.success(f"Cliente solicitado por --platform: {self.spec.label}.")
+        else:
+            detected_label = PLATFORMS[detected].label if detected is not None else host
+            console.info(
+                f"Cliente solicitado por --platform: {self.spec.label}; host detectado: {detected_label}."
+            )
+        return self.spec
 
     def prompt_catalog(self, label: str, catalog: list[ReleaseRecord]) -> ReleaseRecord:
         preview_size = 12
@@ -2141,7 +2147,7 @@ class Installer:
             raise InstallerError(f"Identidade do bundle público inválida: {path}")
         return identity
 
-    def handoff_cli_update(self, action: str, *, dry_run: bool) -> bool:
+    def handoff_cli_update(self, action: str, *, dry_run: bool, assume_yes: bool = False) -> bool:
         package = self.installer_bundle_record()
         available = str(package["version"])
         current = self.installed_cli_version()
@@ -2153,13 +2159,6 @@ class Installer:
                 f"CLI x86QW instalada ({current}) é mais nova que o catálogo ({available}); preservada."
             )
             return False
-        if dry_run:
-            console.info(f"[SIMULAÇÃO] CLI x86QW seria atualizada: {current or 'não registrada'} → {available}.")
-            console.info(
-                "A simulação foi encerrada antes de interpretar o manifesto novo; "
-                "execute x86qw update e repita com --dry-run para obter o plano completo."
-            )
-            return True
         self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-update.", dir=self.target))
         try:
             artifact = self.download_component_package(package)
@@ -2177,7 +2176,7 @@ class Installer:
                 raise InstallerError("Metadados inválidos no bundle de atualização x86QW.") from error
             if identity != {"format": 1, "project": "x86qw", "version": available}:
                 raise InstallerError("A versão interna do bundle de atualização x86QW é inválida.")
-            console.success(f"Atualização da CLI disponível: {current or 'não registrada'} → {available}.")
+            console.info(f"CLI x86QW disponível: {current or 'não registrada'} → {available}.")
             command = [
                 sys.executable, str(script), "--online-only", "--installed-cli", "--skip-cli-update",
             ]
@@ -2185,6 +2184,10 @@ class Installer:
                 command.append("--verbose")
             if not console.color:
                 command.append("--no-color")
+            if dry_run:
+                command.append("--dry-run")
+            if assume_yes:
+                command.append("--yes")
             command.extend([action, str(self.target)])
             result = subprocess.run(command, check=False)
             if result.returncode:
@@ -2192,6 +2195,31 @@ class Installer:
             return True
         finally:
             self.cleanup_stage()
+
+    @staticmethod
+    def confirm_update_plan(action: str, *, assume_yes: bool) -> bool:
+        if assume_yes:
+            console.info("Plano confirmado automaticamente por --yes.")
+            return True
+        try:
+            answer = input(f"\nDigite yes para executar o {action}: ").strip().lower()
+        except EOFError as error:
+            raise InstallerError(
+                "A confirmação não pôde ser lida. Execute em um terminal interativo "
+                "ou use --yes para confirmar o plano automaticamente."
+            ) from error
+        if answer != "yes":
+            console.info("Operação cancelada; nenhum arquivo do jogo foi alterado.")
+            return False
+        console.success("Plano confirmado.")
+        return True
+
+    def show_cli_update_plan(self, *, dry_run: bool) -> None:
+        identity = self.installer_bundle_identity()
+        available = str(identity["version"])
+        current = self.installed_cli_version()
+        prefix = "[SIMULAÇÃO]" if dry_run else "[PLANO]"
+        console.info(f"{prefix} CLI x86QW: {current or 'não registrada'} → {available}.")
 
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
@@ -3086,9 +3114,9 @@ class Installer:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
         console.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
 
-    def install(self) -> None:
+    def install(self, *, platform: str | None = None) -> None:
         console.section("Fase 1/2 · ezQuake")
-        self.choose_platform()
+        self.select_platform(platform)
         self.choose_channel()
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
@@ -3144,6 +3172,7 @@ class Installer:
         receipt: dict[str, str],
         *,
         dry_run: bool,
+        preview: bool = False,
     ) -> bool:
         self.spec = spec
         self.channel = channel
@@ -3160,8 +3189,9 @@ class Installer:
             return False
 
         if dry_run:
+            prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
             console.info(
-                f"[SIMULAÇÃO] ezQuake {spec.label} {channel}: {installed} → {available}."
+                f"{prefix} ezQuake {spec.label} {channel}: {installed} → {available}."
             )
             return True
 
@@ -3196,7 +3226,9 @@ class Installer:
                 console.info(f"{self.components[identifier]['label']} já está atualizado ({available}).")
         return outdated
 
-    def update(self, *, dry_run: bool = False, profile_upgrade: bool = False) -> bool:
+    def update(
+        self, *, dry_run: bool = False, profile_upgrade: bool = False, preview: bool = False,
+    ) -> bool:
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
         self.check_paks()
@@ -3226,7 +3258,9 @@ class Installer:
         changed = False
         console.section("Clientes ezQuake instalados")
         for spec, channel, receipt in runtimes:
-            changed = self.update_runtime(spec, channel, receipt, dry_run=dry_run) or changed
+            changed = self.update_runtime(
+                spec, channel, receipt, dry_run=dry_run, preview=preview,
+            ) or changed
 
         console.section("Componentes instalados")
         outdated = self.outdated_installed_components()
@@ -3236,8 +3270,9 @@ class Installer:
                     _, _, receipt = self.validate_component_pair(identifier)
                     assert receipt is not None
                     available = self.component_package_record(identifier)["version"]
+                    prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
                     console.info(
-                        f"[SIMULAÇÃO] {self.components[identifier]['label']}: "
+                        f"{prefix} {self.components[identifier]['label']}: "
                         f"{receipt['selection']} → {available}."
                     )
             else:
@@ -3273,7 +3308,11 @@ class Installer:
             )
         console.section("Verificação final" if not dry_run else "Verificação da instalação atual")
         self.verify_installation()
-        if dry_run and changed:
+        if preview and changed:
+            console.success("Plano pronto; há atualizações disponíveis e nenhum arquivo foi alterado.")
+        elif preview:
+            console.success("Plano pronto; o conteúdo instalado já está atualizado.")
+        elif dry_run and changed:
             console.success("Simulação concluída; há atualizações disponíveis e nenhum arquivo foi alterado.")
         elif dry_run:
             console.success("Simulação concluída; o conteúdo instalado já está atualizado.")
@@ -3283,8 +3322,8 @@ class Installer:
             console.success("Clientes e componentes instalados já estão atualizados.")
         return changed
 
-    def upgrade(self, *, dry_run: bool = False) -> bool:
-        changed = self.update(dry_run=dry_run, profile_upgrade=True)
+    def upgrade(self, *, dry_run: bool = False, preview: bool = False) -> bool:
+        changed = self.update(dry_run=dry_run, profile_upgrade=True, preview=preview)
         state = self.load_install_state(persist_migration=not dry_run)
         desired = self.desired_components(state)
         installed = self.installed_components()
@@ -3301,8 +3340,9 @@ class Installer:
         elif dry_run:
             for identifier in missing:
                 package = self.component_package_record(identifier)
+                prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
                 console.info(
-                    f"[SIMULAÇÃO] Adicionar {self.components[identifier]['label']} ({package['version']})."
+                    f"{prefix} Adicionar {self.components[identifier]['label']} ({package['version']})."
                 )
             changed = True
         else:
@@ -3322,7 +3362,9 @@ class Installer:
             if missing:
                 console.section("Verificação final do perfil")
                 self.verify_installation()
-        if dry_run and missing:
+        if preview and missing:
+            console.success("Plano do upgrade pronto; nenhum arquivo foi alterado.")
+        elif dry_run and missing:
             console.success("Simulação do upgrade concluída; nenhum arquivo foi alterado.")
         elif changed:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
@@ -3381,8 +3423,8 @@ class Installer:
             "  play                 escolhe e inicia um mod local\n"
             "  hub                  lista servidores públicos para jogar ou observar\n\n"
             "Manutenção:\n"
-            "  update               atualiza somente clientes e componentes já instalados\n"
-            "  upgrade              incorpora novidades do perfil da instalação\n"
+            "  update [--yes]       atualiza somente clientes e componentes já instalados\n"
+            "  upgrade [--yes]      incorpora novidades do perfil da instalação\n"
             "  verify               verifica a integridade da instalação\n"
             "  cleanup              limpa o cache gerenciado pelo x86QW\n"
             "  uninstall            remove o x86QW e preserva PAKs e dados pessoais\n"
@@ -3439,8 +3481,8 @@ class Installer:
             "echo   hub                  lista servidores publicos\r\n"
             "echo.\r\n"
             "echo Manutencao:\r\n"
-            "echo   update               atualiza o conteudo ja instalado\r\n"
-            "echo   upgrade              incorpora novidades do perfil\r\n"
+            "echo   update [--yes]       atualiza o conteudo ja instalado\r\n"
+            "echo   upgrade [--yes]      incorpora novidades do perfil\r\n"
             "echo   verify               verifica a instalacao\r\n"
             "echo   cleanup              limpa o cache x86QW\r\n"
             "echo   uninstall            preserva PAKs e dados pessoais\r\n"
@@ -3476,6 +3518,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
+        "--platform", choices=tuple(PLATFORMS), metavar="SO",
+        help="instala um cliente para macos, linux ou windows em vez do SO detectado",
+    )
+    parser.add_argument(
         "--online-only", action="store_true",
         help=argparse.SUPPRESS,
     )
@@ -3490,6 +3536,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "--dry-run", action="store_true",
         help="simula update ou upgrade sem alterar arquivos",
+    )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="confirma automaticamente o plano de update ou upgrade",
     )
     parser.add_argument(
         "--downloads", action="store_true",
@@ -3527,6 +3577,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
     if namespace.dry_run and namespace.action not in {"update", "upgrade"}:
         parser.error("--dry-run só pode ser usado com update ou upgrade")
+    if namespace.yes and namespace.action not in {"update", "upgrade"}:
+        parser.error("--yes só pode ser usado com update ou upgrade")
+    if namespace.platform is not None and namespace.action != "install":
+        parser.error("--platform só pode ser usado com install")
     if namespace.target is None and not namespace.online_only:
         namespace.target = project_root / "quake-world"
     return namespace
@@ -3609,15 +3663,24 @@ def main(arguments: list[str] | None = None) -> int:
             if (
                 options.installed_cli
                 and not options.skip_cli_update
-                and installer.handoff_cli_update(options.action, dry_run=options.dry_run)
+                and installer.handoff_cli_update(
+                    options.action, dry_run=options.dry_run, assume_yes=options.yes,
+                )
             ):
                 return 0
             try:
-                if options.action == "upgrade":
-                    installer.upgrade(dry_run=options.dry_run)
-                else:
-                    installer.update(dry_run=options.dry_run)
-                if options.skip_cli_update and not options.dry_run:
+                console.section("Plano de execução")
+                if options.skip_cli_update:
+                    installer.show_cli_update_plan(dry_run=options.dry_run)
+                operation = installer.upgrade if options.action == "upgrade" else installer.update
+                operation(dry_run=True, preview=not options.dry_run)
+                if options.dry_run:
+                    return 0
+                if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
+                    return 0
+                console.section("Aplicação do plano")
+                operation(dry_run=False)
+                if options.skip_cli_update:
                     installer.install_online_cli()
             finally:
                 installer.cleanup_stage()
@@ -3628,7 +3691,7 @@ def main(arguments: list[str] | None = None) -> int:
                 elif options.action == "presets":
                     installer.manage_presets()
                 else:
-                    installer.install()
+                    installer.install(platform=options.platform)
                 installer.install_online_cli()
             finally:
                 installer.cleanup_stage()

@@ -34,7 +34,7 @@ mostra o help e não inicia instalação alguma. O clone e os comandos
 
 O contrato é intencionalmente separado:
 
-- `install.sh`/`install.ps1`: instalação inicial, escolha de SO, canal, versão e componentes;
+- `install.sh`/`install.ps1`: instalação inicial, detecção do SO, canal, versão e componentes;
 - `x86qw`: gameplay, servidores, atualização, verificação, limpeza e desinstalação.
 
 A CLI instalada rejeita `install`, `components` e `presets`. Para adicionar um
@@ -51,8 +51,8 @@ dist/id1/pak0.pak
 dist/id1/pak1.pak
 ```
 
-Uma instalação nova não exige que `quake-world/` exista. Depois da escolha de
-SO, canal e versão, o instalador valida os dois arquivos permanentes por
+Uma instalação nova não exige que `quake-world/` exista. Depois da detecção do
+SO e da escolha de canal e versão, o instalador valida os dois arquivos permanentes por
 SHA-256, cria `quake-world/id1/` e copia somente os PAKs ausentes. Um PAK já
 existente é preservado e precisa corresponder à versão registrada; o instalador
 nunca o substitui silenciosamente.
@@ -69,19 +69,40 @@ No Windows, execute:
 py -3 .\install-qw.py install
 ```
 
-A primeira pergunta escolhe o SO de destino:
+O SO do host é detectado sem perguntas:
 
 ```text
-1) macOS         - universal arm64 + x86_64 (padrão)
-2) Linux x86_64  - AppImage
-3) Windows x64   - executável .exe
+[OK] Sistema detectado automaticamente: macOS.
 ```
 
-Pressionar Enter seleciona macOS. Em seguida, escolha `stable` ou `nightly` e uma versão disponível para aquele SO. Entradas inválidas não encerram o instalador: ele explica o formato esperado e pergunta novamente.
+O mapeamento é `Darwin → macOS`, `Linux → Linux x86_64` e `Windows → Windows
+x64`. Em seguida, escolha `stable` ou `nightly` e uma versão disponível para
+aquele SO. Entradas inválidas não encerram o instalador: ele explica o formato
+esperado e pergunta novamente.
+
+Para preparar um cliente diferente do host, informe explicitamente
+`--platform macos`, `--platform linux` ou `--platform windows`:
+
+```sh
+./install-qw.py install --platform windows
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+```
+
+No PowerShell, o equivalente para preparar Linux a partir do Windows é:
+
+```powershell
+& ([scriptblock]::Create((irm https://x86qw.x86.com.br/install.ps1))) --platform linux
+```
+
+O argumento substitui apenas a detecção do cliente; não tenta executar o
+binário estrangeiro no host e não altera a seleção de canal, versão ou
+componentes. Um SO desconhecido exige `--platform` em vez de assumir macOS.
 
 Para manter a seleção legível, o instalador mostra inicialmente as 12 nightlies mais recentes. Digite `t` no prompt de versão para exibir o catálogo completo, ou informe diretamente o número ou identificador exato desejado.
 
-Cada execução instala somente o SO e o canal escolhidos. Execute novamente para adicionar outro SO ou canal; os anteriores permanecem instalados. Os nomes não colidem:
+Cada execução instala somente o SO detectado ou informado e o canal escolhido.
+Execute novamente com `--platform` para adicionar outro SO, ou selecione outro
+canal; os clientes anteriores permanecem instalados. Os nomes não colidem:
 
 ```text
 macOS stable:    quake-world/ezQuake Stable.app
@@ -123,7 +144,8 @@ demais componentes e arquivos pessoais.
 
 A execução continua dividida em duas fases:
 
-1. **ezQuake:** seleciona, baixa, valida e instala o artefato do SO escolhido.
+1. **ezQuake:** detecta o SO (ou respeita `--platform`), seleciona, baixa,
+   valida e instala o artefato correspondente.
 2. **componentes x86QW:** após confirmação explícita, escolhe um perfil ou
    componentes individuais e instala somente o conteúdo selecionado.
 
@@ -535,12 +557,26 @@ silenciosa de addons. Assinaturas históricas preservadas no manifesto permitem
 reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em `.install/state.json` e registra também
 os componentes conhecidos, permitindo detectar novidades publicadas.
 
-Antes de aplicar, ambos podem apresentar o plano sem alterar arquivos:
+Antes de alterar qualquer arquivo, os dois comandos sempre consultam o catálogo,
+mostram o plano completo e exigem a confirmação literal `yes`. Para automações,
+`--yes` aceita o plano sem abrir o prompt:
+
+```sh
+./x86qw update --yes
+./x86qw upgrade --yes
+```
+
+Para apresentar o mesmo plano e encerrar sem pedir confirmação nem alterar
+arquivos, use:
 
 ```sh
 ./x86qw update --dry-run
 ./x86qw upgrade --dry-run
 ```
+
+Qualquer resposta diferente de `yes` cancela a operação. Em um ambiente sem
+terminal interativo, `update` e `upgrade` falham com uma orientação explícita
+para usar `--yes`; não existe confirmação implícita.
 
 Uma versão local de ezQuake mais nova que o catálogo nunca sofre downgrade.
 PAKs e arquivos pessoais são preservados e a instalação passa por verificação

@@ -151,7 +151,7 @@
       <section class="platforms section" id="plataformas" aria-labelledby="platforms-title">
         <header class="section-heading">
           <h2 id="platforms-title">Um instalador.<br><strong>Três destinos.</strong></h2>
-          <p>Prepare o ambiente no sistema onde você está ou monte a pasta para outro computador. A escolha do destino vem primeiro; o host não decide por você.</p>
+          <p>O instalador detecta o sistema atual sem perguntar. Para montar a pasta de outro computador, use <code>--platform macos</code>, <code>linux</code> ou <code>windows</code>.</p>
         </header>
 
         <div class="platform-matrix" role="table" aria-label="Plataformas e formatos suportados">
@@ -197,7 +197,7 @@
         <ol class="install-flow" aria-label="Fluxo de instalação">
           <li>
             <span>1</span>
-            <div><strong>Escolha o destino</strong><p>macOS é o padrão, mas os três sistemas podem ser preparados de qualquer host.</p></div>
+            <div><strong>Confirme o destino</strong><p>O SO atual é detectado automaticamente; <code>--platform</code> prepara um cliente diferente.</p></div>
           </li>
           <li>
             <span>2</span>

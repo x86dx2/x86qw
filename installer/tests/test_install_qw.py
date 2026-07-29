@@ -103,19 +103,48 @@ class InstallerTests(unittest.TestCase):
                         installer.provision_install_target()
             self.assertEqual(b"PACKpersonal", existing.read_bytes())
 
-    def test_invalid_platform_and_channel_are_explained_and_reprompted(self):
+    def test_platform_is_detected_without_prompting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            for system, expected in install_qw.HOST_PLATFORMS.items():
+                with self.subTest(system=system):
+                    output = io.StringIO()
+                    with mock.patch.object(install_qw.host_platform, "system", return_value=system):
+                        with mock.patch("builtins.input") as prompt:
+                            with contextlib.redirect_stdout(output):
+                                self.assertEqual(expected, installer.select_platform().key)
+                    prompt.assert_not_called()
+                    self.assertIn("Sistema detectado automaticamente", output.getvalue())
+
+    def test_platform_override_prepares_a_cross_platform_client(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            output = io.StringIO()
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch("builtins.input") as prompt:
+                    with contextlib.redirect_stdout(output):
+                        self.assertEqual("windows", installer.select_platform("windows").key)
+            prompt.assert_not_called()
+            self.assertIn("Windows x64", output.getvalue())
+            self.assertIn("host detectado: macOS", output.getvalue())
+
+    def test_unknown_host_requires_an_explicit_platform(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Haiku"):
+                with self.assertRaisesRegex(install_qw.InstallerError, "--platform macos"):
+                    installer.select_platform()
+                self.assertEqual("linux", installer.select_platform("linux").key)
+
+    def test_invalid_channel_is_explained_and_reprompted(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                with mock.patch("builtins.input", side_effect=["outro", "2", "beta", "1"]):
-                    self.assertEqual("linux", installer.choose_platform().key)
+                with mock.patch("builtins.input", side_effect=["beta", "1"]):
                     self.assertEqual("stable", installer.choose_channel())
-            rendered = output.getvalue()
-            self.assertIn("Opção inválida. Digite 1, 2 ou 3.", rendered)
-            self.assertIn("Sistema selecionado: Linux x86_64", rendered)
-            self.assertIn("Opção inválida. Digite 1 para stable ou 2 para nightly.", rendered)
-            self.assertIn("Canal selecionado: stable", rendered)
+            self.assertIn("Opção inválida. Digite 1 para stable ou 2 para nightly.", output.getvalue())
+            self.assertIn("Canal selecionado: stable", output.getvalue())
 
     def test_native_macos_install_rejects_an_open_ezquake(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -344,6 +373,92 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertEqual("upgrade", upgrade.action)
         self.assertTrue(upgrade.dry_run)
+        confirmed = install_qw.parse_arguments(
+            ["--online-only", "--installed-cli", "update", "/tmp/x86qw", "--yes"], ROOT,
+        )
+        self.assertTrue(confirmed.yes)
+
+    def test_yes_is_reserved_for_update_and_upgrade(self):
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(io.StringIO()):
+                install_qw.parse_arguments(["verify", "--yes"], ROOT)
+        self.assertEqual(2, raised.exception.code)
+
+    def test_platform_override_is_available_only_during_installation(self):
+        parsed = install_qw.parse_arguments(["install", "--platform", "windows"], ROOT)
+        self.assertEqual("windows", parsed.platform)
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(io.StringIO()):
+                install_qw.parse_arguments(["verify", "--platform", "linux"], ROOT)
+        self.assertEqual(2, raised.exception.code)
+
+    def test_main_passes_platform_override_to_installation(self):
+        target = Path("/tmp/x86qw-platform-test")
+        installer = mock.Mock()
+        installer.target = target
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    0,
+                    install_qw.main(["install", str(target), "--platform", "linux"]),
+                )
+        installer.install.assert_called_once_with(platform="linux")
+
+    def test_update_shows_plan_and_requires_literal_yes_before_applying(self):
+        target = Path("/tmp/x86qw-confirmation-test")
+        confirm = install_qw.Installer.confirm_update_plan
+        installer = mock.Mock()
+        installer.target = target
+        installer.update.return_value = True
+        installer.confirm_update_plan.side_effect = confirm
+        output = io.StringIO()
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with mock.patch("builtins.input", return_value="no"):
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, install_qw.main(["update", str(target)]))
+        self.assertEqual(
+            [mock.call(dry_run=True, preview=True)], installer.update.call_args_list,
+        )
+        self.assertIn("Plano de execução", output.getvalue())
+        self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
+
+    def test_upgrade_yes_shows_plan_and_applies_without_prompting(self):
+        target = Path("/tmp/x86qw-confirmation-test")
+        confirm = install_qw.Installer.confirm_update_plan
+        installer = mock.Mock()
+        installer.target = target
+        installer.upgrade.return_value = True
+        installer.confirm_update_plan.side_effect = confirm
+        output = io.StringIO()
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with mock.patch("builtins.input") as prompt:
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, install_qw.main(["upgrade", str(target), "--yes"]))
+        prompt.assert_not_called()
+        self.assertEqual(
+            [mock.call(dry_run=True, preview=True), mock.call(dry_run=False)],
+            installer.upgrade.call_args_list,
+        )
+        self.assertIn("confirmado automaticamente por --yes", output.getvalue())
+
+    def test_update_dry_run_only_shows_plan_without_confirmation(self):
+        target = Path("/tmp/x86qw-confirmation-test")
+        installer = mock.Mock()
+        installer.target = target
+        installer.update.return_value = True
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with mock.patch("builtins.input") as prompt:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, install_qw.main(["update", str(target), "--dry-run"]))
+        prompt.assert_not_called()
+        self.assertEqual(
+            [mock.call(dry_run=True, preview=False)], installer.update.call_args_list,
+        )
+
+    def test_noninteractive_update_requires_yes(self):
+        with mock.patch("builtins.input", side_effect=EOFError):
+            with self.assertRaisesRegex(install_qw.InstallerError, "use --yes"):
+                install_qw.Installer.confirm_update_plan("update", assume_yes=False)
 
     def test_component_update_only_selects_already_installed_outdated_items(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -487,10 +602,13 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch.object(installer, "installer_bundle_record", return_value=record):
                     with mock.patch.object(installer, "download_component_package", return_value=archive):
                         with mock.patch.object(install_qw.subprocess, "run", return_value=completed) as run:
-                            self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=False))
+                            self.assertTrue(installer.handoff_cli_update(
+                                "upgrade", dry_run=False, assume_yes=True,
+                            ))
             command = run.call_args.args[0]
             self.assertIn("--installed-cli", command)
             self.assertIn("--skip-cli-update", command)
+            self.assertIn("--yes", command)
             self.assertEqual(["upgrade", str(target)], command[-2:])
             self.assertFalse(any(target.glob(".x86qw-update.*")))
 
@@ -507,23 +625,36 @@ class InstallerTests(unittest.TestCase):
                 ):
                     self.assertFalse(installer.handoff_cli_update("update", dry_run=False))
 
-    def test_cli_update_dry_run_reports_new_engine_without_downloading_it(self):
+    def test_cli_update_dry_run_uses_new_bundle_to_show_the_complete_plan(self):
         with tempfile.TemporaryDirectory() as temporary:
-            installer, target, _ = self.make_installer(Path(temporary))
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
             (target / ".install").mkdir()
             (target / install_qw.CLI_RECEIPT).write_text(
                 '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
             )
+            archive = root / "x86qw-installer-1.0.5.zip"
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr("x86qw-installer-1.0.5/install-qw.py", "# update\n")
+                package.writestr(
+                    "x86qw-installer-1.0.5/_x86qw/installer.json",
+                    '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
+                )
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 with mock.patch.object(
                     installer, "installer_bundle_record", return_value={"version": "1.0.5"},
                 ):
-                    with mock.patch.object(installer, "download_component_package") as download:
-                        self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=True))
-            download.assert_not_called()
-            self.assertIn("[SIMULAÇÃO] CLI", output.getvalue())
-            self.assertIn("plano completo", output.getvalue())
+                    with mock.patch.object(installer, "download_component_package", return_value=archive):
+                        with mock.patch.object(
+                            install_qw.subprocess, "run",
+                            return_value=subprocess.CompletedProcess([], 0),
+                        ) as run:
+                            self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=True))
+            command = run.call_args.args[0]
+            self.assertIn("--dry-run", command)
+            self.assertIn("--skip-cli-update", command)
+            self.assertIn("CLI x86QW disponível", output.getvalue())
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
         class FakeSocket:

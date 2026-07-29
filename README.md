@@ -25,7 +25,15 @@ irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
 O bootstrap valida seu bundle por SHA-256, consulta somente o catálogo público
-e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. Ao
+e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. O
+cliente do sistema atual é detectado automaticamente, sem perguntar o SO. Para
+preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+```
+
+Os valores aceitos são `macos`, `linux` e `windows`. Ao
 concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
 `hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `x86qw`
 sem argumentos mostra esse guia de uso; a ação principal é `./x86qw play`.
@@ -35,7 +43,9 @@ canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
 ao `install.ps1` no Windows). `x86qw update` atualiza a própria CLI e somente o
 que já está instalado. `x86qw upgrade` também incorpora componentes novos que
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
-registrado naquela instalação.
+registrado naquela instalação. Ambos mostram o plano completo e exigem que o
+jogador digite `yes` antes de alterar arquivos; `--yes` confirma o plano em
+automações e `--dry-run` encerra depois de apresentá-lo.
 
 Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
 fontes canônicas locais:
