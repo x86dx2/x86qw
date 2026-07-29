@@ -22,7 +22,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.28"
+VERSION = "0.1.0"
 FILES = (
     "dist/installer/bin/x86qw.sh",
     "dist/installer/bin/x86qw.cmd",
@@ -41,8 +41,6 @@ FILES = (
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
-LEGACY_GITHUB_REPOSITORY = "x86dx2/x86qw-dist"
-PRIMARY_RELEASE_SINCE = (1, 0, 28)
 
 
 def bundle_files() -> tuple[str, ...]:
@@ -182,16 +180,8 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
 def installer_record(result: dict[str, object], *, current: bool) -> dict[str, object]:
     version = str(result["version"])
     filename = str(result["filename"])
-    github_repository = (
-        PRIMARY_GITHUB_REPOSITORY
-        if version_key(version) >= PRIMARY_RELEASE_SINCE
-        else LEGACY_GITHUB_REPOSITORY
-    )
-    release_tag = (
-        f"x86qw-installer-{version}"
-        if github_repository == PRIMARY_GITHUB_REPOSITORY
-        else f"installer-{version}"
-    )
+    github_repository = PRIMARY_GITHUB_REPOSITORY
+    release_tag = f"x86qw-installer-{version}"
     github = (
         f"https://github.com/{github_repository}/releases/download/"
         f"{release_tag}/{filename}"
@@ -219,6 +209,7 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "urls": [github, gitlab],
         "distribution_path": result["distribution_path"],
         "release_url": f"https://github.com/{github_repository}/releases/tag/{release_tag}",
+        "release_title": f"x86QW Installer {version}",
         "release_notes": "Bootstrap autocontido do instalador público x86QW.",
     }
 

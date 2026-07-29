@@ -91,6 +91,10 @@ def validate_package(
         not isinstance(package["release_notes"], str) or not package["release_notes"].strip()
     ):
         raise ValueError(f"{label}.release_notes must be non-empty text")
+    if "release_title" in package and (
+        not isinstance(package["release_title"], str) or not package["release_title"].strip()
+    ):
+        raise ValueError(f"{label}.release_title must be non-empty text")
     if "upstream_version" in package and (
         not isinstance(package["upstream_version"], str)
         or not SAFE_SEGMENT.fullmatch(package["upstream_version"])

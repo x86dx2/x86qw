@@ -18,7 +18,7 @@ from build_component_packages import component_package_metadata, register_packag
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 34)
+        self.assertEqual(validate_catalog(catalog), 26)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
         self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
@@ -61,8 +61,8 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(9, len(installers))
-        self.assertEqual(["1.0.28"], [
+        self.assertEqual(1, len(installers))
+        self.assertEqual(["0.1.0"], [
             package["version"] for package in installers if package.get("current") is True
         ])
 
