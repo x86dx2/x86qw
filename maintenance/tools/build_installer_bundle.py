@@ -20,7 +20,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 FILES = (
     "install-qw.py",
     "play-qw.py",

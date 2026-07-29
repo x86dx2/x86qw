@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url  # noqa: E402
-from build_component_packages import register_packages  # noqa: E402
+from build_component_packages import component_package_metadata, register_packages  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("e4cb23d40aa2+x86qw.4", final_arena["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.5", final_arena["version"])
         self.assertEqual("1.1+x86qw.1", pro_x["version"])
         self.assertEqual("pro-x", pro_x["component"])
         team_fortress = next(
@@ -93,6 +93,20 @@ class CatalogTests(unittest.TestCase):
         package["redistribution_reviewed"] = False
         with self.assertRaises(ValueError):
             validate_catalog(catalog)
+
+    def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
+        metadata = component_package_metadata(
+            "nquake-bootstrap",
+            "e4cb23d40aa2+x86qw.5",
+            "reference-snapshot",
+            "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+            [],
+        )
+        self.assertEqual("e4cb23d40aa2+x86qw.5", metadata["version"])
+        self.assertEqual(
+            "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+            metadata["source_commit"],
+        )
 
     def test_reviewed_artifact_registration_is_atomic_and_immutable(self) -> None:
         import tempfile

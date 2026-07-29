@@ -34,6 +34,25 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def component_package_metadata(
+    identifier: str,
+    version: str,
+    strategy: str,
+    source_revision: str,
+    members: list[dict[str, object]],
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "format": 1,
+        "project": "x86qw",
+        "package": identifier,
+        "members": members,
+    }
+    metadata["source_revision" if strategy == "upstream-package" else "source_commit"] = source_revision
+    if version != source_revision[:12]:
+        metadata["version"] = version
+    return metadata
+
+
 def zip_member(name: str, payload: bytes) -> tuple[zipfile.ZipInfo, bytes]:
     info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
     info.compress_type = zipfile.ZIP_DEFLATED
@@ -75,15 +94,9 @@ def build_packages(
                 members.append(member_metadata)
                 info, data = zip_member(member_name, payload)
                 package.writestr(info, data)
-            metadata: dict[str, object] = {
-                "format": 1,
-                "project": "x86qw",
-                "package": identifier,
-                "members": members,
-            }
-            metadata["source_revision" if strategy == "upstream-package" else "source_commit"] = source_revision
-            if release_metadata["strategy"] != "reference-snapshot":
-                metadata["version"] = version
+            metadata = component_package_metadata(
+                identifier, version, strategy, source_revision, members,
+            )
             package_metadata = json.dumps(
                 metadata, ensure_ascii=False, indent=2, sort_keys=True,
             ).encode() + b"\n"

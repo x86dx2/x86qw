@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-29T12:51:51Z",
+  "captured_at": "2026-07-29T13:10:01Z",
   "files": {
     "ezquake/20260616-101233_a86996a/nightly/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -71,12 +71,12 @@
       "size": 4135630,
       "url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip"
     },
-    "installer/1.0.1/x86qw-installer-1.0.1.zip": {
+    "installer/1.0.2/x86qw-installer-1.0.2.zip": {
       "component": "installer",
       "consumer": "bootstrap:installer",
-      "sha256": "49ce9a852617b13949e5951c7545ad6f3ecefbbec5b408cbef6c920ba15bdc53",
-      "size": 24161141,
-      "url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.1/x86qw-installer-1.0.1.zip"
+      "sha256": "a72cfeddfc88ba1054b29c74f644b4baa33ad06d2e26a882513f1c8f6f80fa43",
+      "size": 24161146,
+      "url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.2/x86qw-installer-1.0.2.zip"
     },
     "mods/ktx/1.47/qwprogs-qvm.zip": {
       "component": "ktx",

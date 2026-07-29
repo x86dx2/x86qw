@@ -8,7 +8,7 @@
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.4",
+      "version": "e4cb23d40aa2+x86qw.5",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "notes": "Preserva a base nQuake, aplica bootstrap x86QW com aliases temporários e camada pessoal e limita texturas a 16384. A configuração comum conserva comandos existentes no stable e no nightly.",
@@ -87,16 +87,16 @@
     "nquake-base-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-maps": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-matchinfo": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.1", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
+    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.2", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
     "qrp-hires": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "maps-1.00+items-0.73",
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.4",
+      "version": "e4cb23d40aa2+x86qw.5",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Final Arena 1.20",
