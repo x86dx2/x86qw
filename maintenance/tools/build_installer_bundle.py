@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import tempfile
 import zipfile
@@ -20,7 +21,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.8"
+VERSION = "1.0.17"
 FILES = (
     "install-qw.py",
     "play-qw.py",
@@ -57,6 +58,16 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
+    content = path.read_text(encoding="utf-8")
+    for name, value in assignments.items():
+        pattern = rf"(?m)^({re.escape(name)}\s*=\s*)\"[^\"]*\"$"
+        content, count = re.subn(pattern, rf'\g<1>"{value}"', content)
+        if count != 1:
+            raise ValueError(f"public bootstrap assignment is missing or duplicated: {path}:{name}")
+    path.write_text(content, encoding="utf-8")
 
 
 def build(output: Path, version: str = VERSION) -> dict[str, object]:
@@ -199,6 +210,14 @@ def register(result: dict[str, object]) -> None:
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    update_public_bootstrap(ROOT / "site/public/install.sh", {
+        "INSTALLER_VERSION": version,
+        "INSTALLER_SHA256": str(result["sha256"]),
+    })
+    update_public_bootstrap(ROOT / "site/public/install.ps1", {
+        "$InstallerVersion": version,
+        "$InstallerSha256": str(result["sha256"]),
+    })
 
 
 def main() -> int:

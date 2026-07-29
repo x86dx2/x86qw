@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-29T15:10:30Z",
+  "captured_at": "2026-07-29T17:18:23Z",
   "files": {
     "ezquake/20260616-101233_a86996a/nightly/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -71,20 +71,12 @@
       "size": 4135630,
       "url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip"
     },
-    "installer/1.0.8/x86qw-installer-1.0.8.zip": {
+    "installer/1.0.17/x86qw-installer-1.0.17.zip": {
       "component": "installer",
       "consumer": "bootstrap:installer",
-      "sha256": "4c5531854dd3282f128c22f3c74547ca1792db4bebebc276d3be6df3cc0acaa3",
-      "size": 24168455,
-      "url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.8/x86qw-installer-1.0.8.zip"
-    },
-    "mods/ktx/1.47/qwprogs-qvm.zip": {
-      "component": "ktx",
-      "consumer": "install:nquake-ktx",
-      "package": "nquake-ktx",
-      "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
-      "size": 403006,
-      "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip"
+      "sha256": "6f31b1778504be198e198633e05d81d4880838ec9a173bff244322fabeadc4d5",
+      "size": 24170030,
+      "url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.17/x86qw-installer-1.0.17.zip"
     },
     "mods/ktx/1.47/source/ktx-1.47.tar.gz": {
       "component": "ktx",
@@ -94,7 +86,15 @@
       "size": 1798431,
       "url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz"
     },
-    "mods/pro-x/1.1/prox_11.zip": {
+    "mods/ktx/1.47/upstream/qwprogs-qvm.zip": {
+      "component": "ktx",
+      "consumer": "install:nquake-ktx",
+      "package": "nquake-ktx",
+      "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
+      "size": 403006,
+      "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip"
+    },
+    "mods/pro-x/1.1/upstream/prox_11.zip": {
       "component": "pro-x",
       "consumer": "install:pro-x",
       "package": "pro-x",
@@ -102,7 +102,7 @@
       "size": 9095898,
       "url": "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip"
     },
-    "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz": {
+    "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz": {
       "component": "td2",
       "consumer": "install:total-destruction-2",
       "package": "total-destruction-2",
@@ -118,7 +118,7 @@
       "size": 173536,
       "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip"
     },
-    "mods/team-fortress/2.9/tf29qw.zip": {
+    "mods/team-fortress/2.9/upstream/tf29qw.zip": {
       "component": "team-fortress",
       "consumer": "install:team-fortress",
       "package": "team-fortress",
