@@ -8,16 +8,28 @@
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.6",
+      "version": "e4cb23d40aa2+x86qw.7",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "notes": "Preserva a base nQuake, aplica bootstrap x86QW sem recarregar duas vezes o config.cfg, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome e limita texturas a 16384. A configuração comum conserva comandos existentes no stable e no nightly.",
+      "notes": "Preserva a base nQuake, aplica bootstrap global compartilhado por todos os mods, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes stable e nightly suportados.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
           "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
           "before": "gl_max_size                          \"32768\"",
           "after": "gl_max_size                          \"16384\""
+        },
+        {
+          "target": "non-gpl/qw/nquake_default.cfg",
+          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "before": "r_fx_geometry                        \"0\"",
+          "after": "// x86QW: r_fx_geometry is not exposed by the supported ezQuake clients."
+        },
+        {
+          "target": "non-gpl/qw/nquake_default.cfg",
+          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "before": "cl_verify_qwprotocol                 \"2\"",
+          "after": "// x86QW: keep the ezQuake cl_verify_qwprotocol default; it is registered after autoexec."
         }
       ]
     },

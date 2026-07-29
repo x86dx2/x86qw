@@ -24,7 +24,7 @@ file_count = core.file_count
 file_hash = core.file_hash
 lexists = core.lexists
 
-PLAY_SUPPORT_VERSION = "4"
+PLAY_SUPPORT_VERSION = "5"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
 LEGACY_LOCAL_CAPABILITIES = {
@@ -293,7 +293,7 @@ class Player(core.Installer):
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = [
-            "+set", "sb_listcache", "0",
+            "+sb_listcache", "0",
             "-game", game.gamedir,
             "+gamedir", game.gamedir,
             "+sv_gamedir", game.gamedir,
@@ -303,22 +303,17 @@ class Player(core.Installer):
         if game.key in PRECONNECT_LOCAL_GAMES:
             arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
         if capabilities := LEGACY_LOCAL_CAPABILITIES.get(game.key):
-            # ezQuake 3.6.9 probes for a QVM before falling back to the PR1
-            # gamecode used by these legacy mods. Keep that harmless internal
-            # probe out of the player's console, disable extensions their local
-            # servers cannot advertise and authorize only the commands each
+            # These PR1 gamecodes do not advertise the high-lag teleport extension.
+            # Disable that client warning and authorize only the commands each
             # verified gamecode actually sends to its local client.
             arguments.extend([
                 "+cl_remote_capabilities",
                 "$cl_remote_capabilities," + ",".join(capabilities),
-                "+set", "cl_pext_lagteleport", "0",
-                "+set", "con_suppress", "1",
+                "+cl_pext_lagteleport", "0",
             ])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
             arguments.append("+wait")
-            if game.key in LEGACY_LOCAL_CAPABILITIES:
-                arguments.extend(["+set", "con_suppress", "0"])
             arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
