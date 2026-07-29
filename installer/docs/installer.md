@@ -28,8 +28,19 @@ destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
 Ao concluir, a raiz da instalação contém `x86qw` e `x86qw.cmd`. Esses comandos
 usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw play`,
-`./x86qw verify`, `./x86qw components` e `./x86qw cleanup`. O clone e os
-comandos `./install-qw.py` e `./play-qw.py` da raiz são o fluxo de desenvolvimento.
+`./x86qw update`, `./x86qw upgrade`, `./x86qw verify` e `./x86qw cleanup`. Sem argumento, a CLI
+mostra o help e não inicia instalação alguma. O clone e os comandos
+`./install-qw.py` e `./play-qw.py` da raiz são o fluxo de desenvolvimento.
+
+O contrato é intencionalmente separado:
+
+- `install.sh`/`install.ps1`: instalação inicial, escolha de SO, canal, versão e componentes;
+- `x86qw`: gameplay, servidores, atualização, verificação, limpeza e desinstalação.
+
+A CLI instalada rejeita `install`, `components` e `presets`. Para adicionar um
+cliente, canal ou seleção arbitrária, execute novamente o bootstrap público.
+Novos componentes oficialmente incorporados ao perfil escolhido entram por
+`upgrade`, sem transformar a CLI em um instalador genérico.
 
 ## Instalar
 
@@ -87,6 +98,9 @@ O estado do instalador fica em um único diretório neutro, sem arquivos soltos 
 
 ```text
 quake-world/.install/
+├── state.json
+├── cli.receipt
+├── cli/
 ├── ezquake-macos-stable.receipt
 ├── ezquake-macos-nightly.receipt
 ├── ezquake-linux-stable.receipt
@@ -344,7 +358,7 @@ quake-world/td2/x86qw-td2-user.cfg
 Esse arquivo é criado somente quando não existe, é executado depois do preset
 x86QW e nunca entra em `.install/play-support.inventory`. Atualizar o TD2 ou o
 ezQuake reaplica a camada do projeto e preserva esse arquivo pessoal. Remover os
-componentes também o preserva; `purge` continua sendo a ação explícita que
+componentes também o preserva; `uninstall --purge` continua sendo a ação explícita que
 remove toda a instalação.
 
 ### Navegador de servidores
@@ -444,11 +458,11 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 
 ```sh
 ./install-qw.py uninstall
-./install-qw.py purge
+./install-qw.py uninstall --purge
 ./install-qw.py cleanup
 ```
 
-`uninstall` remove todos os binários macOS, Linux e Windows comprovadamente
+`uninstall` remove a CLI permanente, todos os binários macOS, Linux e Windows comprovadamente
 gerenciados, componentes x86QW, presets próprios do instalador, seus recibos e
 os arquivos cujo hash ainda corresponde ao inventário. Arquivos modificados são
 preservados. Os PAKs, `config.cfg`, demos, screenshots, logs, presets pessoais e
@@ -456,7 +470,11 @@ outros arquivos pessoais permanecem em `quake-world`.
 
 O recibo é a autoridade para a remoção: `uninstall` também conclui quando um app ou executável registrado já está ausente ou incompleto. Use `verify` quando quiser exigir e diagnosticar a integridade dos runtimes instalados.
 
-`purge` é a remoção total: apaga tudo dentro de `quake-world`, incluindo arquivos pessoais e metadados desconhecidos, preservando somente a árvore `id1`. Também remove o cache nativo criado pelo instalador. A ação recusa alvos sem um diretório `id1` real.
+`uninstall --purge` é a remoção total: apaga o próprio diretório da instalação,
+incluindo `id1`, PAKs, arquivos pessoais, configurações, CLI, recibos e conteúdo
+desconhecido. Também remove os caches nativos `x86qw` e o legado `x86-qw`, desde
+que seus marcadores comprovem que pertencem ao instalador. Um alvo existente sem
+identidade x86QW é recusado; se o diretório já não existir, os caches ainda são removidos.
 
 `cleanup` remove o cache criado pelo próprio instalador, incluindo downloads
 ezQuake e pacotes dos componentes x86QW. Também elimina dados regeneráveis
@@ -465,14 +483,14 @@ e demos TD2 vazias. A remoção do cache externo só
 ocorre se o marcador de propriedade criado pelo instalador estiver presente. O
 diretório é resolvido conforme o host:
 
-- macOS: `$(getconf DARWIN_USER_CACHE_DIR)/x86-qw`;
-- Linux: `$XDG_CACHE_HOME/x86-qw` ou `~/.cache/x86-qw`;
-- Windows: `%LOCALAPPDATA%\x86-qw`.
+- macOS: `$(getconf DARWIN_USER_CACHE_DIR)/x86qw`;
+- Linux: `$XDG_CACHE_HOME/x86qw` ou `~/.cache/x86qw`;
+- Windows: `%LOCALAPPDATA%\x86qw`.
 
 Para consultar o caminho neste Mac:
 
 ```sh
-printf '%s/x86-qw\n' "$(getconf DARWIN_USER_CACHE_DIR | sed 's#/$##')"
+printf '%s/x86qw\n' "$(getconf DARWIN_USER_CACHE_DIR | sed 's#/$##')"
 ```
 
 Downloads recebidos de servidores Team Fortress e dados pessoais são classes
@@ -488,12 +506,50 @@ separadas e permanecem preservados por padrão:
 `fortress/sound`. `--personal-data` remove histórico, logs e demos locais
 válidas; por isso precisa ser solicitado explicitamente.
 
-## Atualizar ou trocar de canal
+## Atualizar ou acrescentar conteúdo
 
-Execute a ação correspondente novamente: `install` para ezQuake e uma seleção
-x86QW, `components` para conteúdo adicional ou `presets` para configurações.
-Somente o componente escolhido é substituído; os demais binários e arquivos
-pessoais permanecem preservados.
+No diretório instalado, execute:
+
+```sh
+./x86qw update
+./x86qw upgrade
+```
+
+Os dois comandos atualizam primeiro a própria CLI por um bundle x86QW validado
+e consultam o catálogo atual. `update` é conservador: cada ezQuake
+stable/nightly já registrado avança no mesmo SO e canal, e somente componentes
+já instalados são atualizados. Itens ausentes são detectados e informados, mas
+não são adicionados.
+
+`upgrade` inclui todo o comportamento de `update` e converge os componentes para
+o perfil registrado na instalação. Assim, uma funcionalidade nova adicionada
+ao perfil `recommended` passa a ser instalada nos clientes desse perfil; o
+perfil `complete` recebe todos os componentes atuais. Em `custom`, somente as
+escolhas explícitas e suas dependências obrigatórias evoluem. Componentes fora
+do perfil são informados e preservados, nunca removidos implicitamente.
+
+Instalações anteriores ao registro de perfil são migradas automaticamente. Uma
+combinação exatamente igual a `essential`, `recommended` ou `complete` recupera
+esse perfil; qualquer combinação diferente vira `custom`, evitando a inclusão
+silenciosa de addons. Assinaturas históricas preservadas no manifesto permitem
+reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em `.install/state.json` e registra também
+os componentes conhecidos, permitindo detectar novidades publicadas.
+
+Antes de aplicar, ambos podem apresentar o plano sem alterar arquivos:
+
+```sh
+./x86qw update --dry-run
+./x86qw upgrade --dry-run
+```
+
+Uma versão local de ezQuake mais nova que o catálogo nunca sofre downgrade.
+PAKs e arquivos pessoais são preservados e a instalação passa por verificação
+integral ao final.
+
+Para acrescentar outro SO, canal, preset ou componente fora do perfil, execute novamente
+`install.sh`/`install.ps1`. Os comandos `install`, `components` e `presets`
+continuam existindo apenas nas ferramentas do checkout para desenvolvimento e
+montagem da distribuição; não fazem parte da CLI entregue aos jogadores.
 
 Não há uso silencioso do alias `latest`: uma nightly é sempre baixada pelo nome exato, com data, hora e commit.
 

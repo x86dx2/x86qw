@@ -32,23 +32,32 @@ class ModernComponentTests(unittest.TestCase):
 
     def make_installer(self, root):
         target = root / "quake-world"
-        cache = root / "cache" / "x86-qw"
+        cache = root / "cache" / "x86qw"
         target.mkdir(parents=True)
         cache.parent.mkdir()
         return install_qw.Installer(ROOT, target, cache), target, cache
 
     def make_player(self, root):
         target = root / "quake-world"
-        cache = root / "cache" / "x86-qw"
+        cache = root / "cache" / "x86qw"
         target.mkdir(parents=True)
         cache.parent.mkdir()
         return play_qw.Player(ROOT, target, cache), target, cache
 
     def test_new_actions_are_accepted(self):
-        for action in ("components", "presets", "hub"):
+        for action in ("components", "presets", "hub", "update", "upgrade"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
+        uninstall = install_qw.parse_arguments(["uninstall", "--purge"], ROOT)
+        self.assertTrue(uninstall.purge)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                install_qw.parse_arguments(["purge"], ROOT)
+            with self.assertRaises(SystemExit):
+                install_qw.parse_arguments(["install", "--purge"], ROOT)
+            with self.assertRaises(SystemExit):
+                install_qw.parse_arguments(["verify", "--dry-run"], ROOT)
 
     def test_play_has_its_own_command_line(self):
         target = ROOT / "custom-quake"

@@ -20,7 +20,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.2"
+VERSION = "1.0.6"
 FILES = (
     "install-qw.py",
     "play-qw.py",
@@ -77,6 +77,18 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
                 executable = relative in {"install-qw.py", "play-qw.py"}
                 info.external_attr = (stat.S_IFREG | (0o755 if executable else 0o644)) << 16
                 bundle.writestr(info, source.read_bytes())
+            identity = json.dumps(
+                {"format": 1, "project": "x86qw", "version": version},
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ).encode("utf-8") + b"\n"
+            info = zipfile.ZipInfo(
+                f"x86qw-installer-{version}/_x86qw/installer.json", FIXED_TIME,
+            )
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (stat.S_IFREG | 0o644) << 16
+            bundle.writestr(info, identity)
         if target.is_file() and sha256(target) != sha256(temporary):
             raise ValueError(f"installer version {version} is immutable; bump VERSION before rebuilding")
         if not target.exists():

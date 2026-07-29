@@ -27,7 +27,15 @@ irm https://x86qw.x86.com.br/install.ps1 | iex
 O bootstrap valida seu bundle por SHA-256, consulta somente o catálogo público
 e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. Ao
 concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
-`components`, `cleanup`, `uninstall` e `purge`.
+`hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `x86qw`
+sem argumentos mostra esse guia de uso; a ação principal é `./x86qw play`.
+
+Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
+canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
+ao `install.ps1` no Windows). `x86qw update` atualiza a própria CLI e somente o
+que já está instalado. `x86qw upgrade` também incorpora componentes novos que
+passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
+registrado naquela instalação.
 
 Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
 fontes canônicas locais:
@@ -56,7 +64,7 @@ maintenance/            manutencao, inventarios, receitas, testes e builds
 installer/               documentacao e testes das ferramentas da raiz
 site/                    site inteiro: produto, design, deploy, assets e testes
 docs/                    arquitetura global da plataforma
-install-qw.py             instala, atualiza, verifica e remove a distribuicao
+install-qw.py             motor interno de instalação, atualização e remoção
 play-qw.py                seleciona e abre mods locais no ezQuake
 ROADMAP.md                roteiro global do produto
 ```

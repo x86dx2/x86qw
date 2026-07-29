@@ -13,6 +13,7 @@ from maintenance.manage import (
     Asset,
     distribution_delta,
     parser,
+    preserve_profile_fingerprints,
     reference_content_changed,
     summarize_delta,
     update_inventory_lines,
@@ -22,6 +23,18 @@ from maintenance.manage import (
 
 
 class DistributionManagerTests(unittest.TestCase):
+    def test_profile_history_preserves_old_and_new_distribution_shapes(self) -> None:
+        catalog = {
+            "profiles": {"essential": ["base"], "recommended": ["base"], "complete": ["base"]},
+            "profile_history": {"essential": [], "recommended": [], "complete": []},
+        }
+        preserve_profile_fingerprints(catalog)
+        old = catalog["profile_history"]["recommended"][0]
+        catalog["profiles"]["recommended"].append("feature")
+        preserve_profile_fingerprints(catalog)
+        self.assertEqual(2, len(catalog["profile_history"]["recommended"]))
+        self.assertEqual(old, catalog["profile_history"]["recommended"][0])
+
     def test_distribution_delta_reports_new_and_obsolete_managed_files(self) -> None:
         manifest = {
             "files": {

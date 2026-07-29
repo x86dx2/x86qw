@@ -32,7 +32,12 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
-from maintenance.tools.components import components_by_id, load_catalog as load_component_catalog, resolve_dependencies
+from maintenance.tools.components import (
+    components_by_id,
+    load_catalog as load_component_catalog,
+    profile_fingerprint,
+    resolve_dependencies,
+)
 from maintenance.tools.component_sources import (
     ComponentSourceContext,
     load_source_context,
@@ -62,9 +67,10 @@ ONLINE_CLI_FILES = (
 )
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 BUNDLED_ID1_DIR = Path("dist/id1")
-CACHE_DIR_NAME = "x86-qw"
-CACHE_MARKER_NAME = ".x86-qw-cache"
-CACHE_MARKER_VALUE = "x86-qw-cache-v1"
+CACHE_DIR_NAME = "x86qw"
+CACHE_MARKER_NAME = ".x86qw-cache"
+CACHE_MARKER_VALUE = "x86qw-cache-v1"
+LEGACY_CACHE = ("x86-qw", ".x86-qw-cache", "x86-qw-cache-v1")
 MACOS_PREFERENCES_DOMAIN = "com.ezquake.ezQuake"
 MACOS_DIRECTORY_KEYS = ("basedir", "version", "NSOSPLastRootDirectory")
 DEFAULT_PRESET = 's_raw_volume "0.2"\n'
@@ -85,6 +91,9 @@ PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
 PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
 PACKAGE_ORDER_RECEIPT = ".install/package-order.receipt"
 PACKAGE_ORDER_INVENTORY = ".install/package-order.inventory"
+CLI_RECEIPT = ".install/cli.receipt"
+INSTALL_STATE = ".install/state.json"
+INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 QW_PACKAGE_PRIORITY = (
     "ktx.pk3",
     "models.pk3",
@@ -552,6 +561,8 @@ class Installer:
         self.cache_prefix = ""
         self._public_catalog: dict[str, object] | None = None
         self._component_source_context: ComponentSourceContext | None = None
+        self.selected_component_profile = "none"
+        self.requested_components: list[str] = []
         try:
             self.component_catalog = load_component_catalog(INSTALLER_ROOT / COMPONENT_CATALOG)
         except ValueError as error:
@@ -647,15 +658,15 @@ class Installer:
         console.success("Bundle macOS preparado sem a limitação de bookmark do sandbox.")
         return True
 
-    def validate_target(self, action: str) -> None:
+    def validate_target(self, action: str, *, purge: bool = False) -> None:
         target_exists = lexists(self.target)
         if target_exists and self.target.is_symlink():
             raise InstallerError(f"O diretório de destino não pode ser um link simbólico: {self.target}")
         if target_exists and not self.target.is_dir():
             raise InstallerError(f"O destino não é um diretório: {self.target}")
-        if not target_exists and action != "install":
+        if not target_exists and action != "install" and not (action == "uninstall" and purge):
             raise InstallerError(f"O diretório de destino não existe: {self.target}")
-        self.target = self.target.resolve()
+        self.target = self.target.resolve(strict=False)
         if self.target == Path(self.target.anchor):
             raise InstallerError("A raiz do sistema de arquivos não pode ser usada como destino.")
         if self.target == self.project_root:
@@ -714,14 +725,34 @@ class Installer:
         self.cache_bin = root / "bin"
         return root
 
+    def validate_cache_marker_at(self, root: Path, marker_name: str, marker_value: str) -> None:
+        marker = root / marker_name
+        if not marker.is_file() or marker.is_symlink():
+            raise InstallerError(f"O diretório de cache não pertence a este instalador e foi preservado: {root}")
+        first_line = marker.read_text(encoding="utf-8").splitlines()[:1]
+        if first_line != [marker_value]:
+            raise InstallerError(f"O marcador de propriedade do cache é inválido: {marker}")
+
     def validate_cache_marker(self) -> None:
         assert self.cache_root is not None
-        marker = self.cache_root / CACHE_MARKER_NAME
-        if not marker.is_file() or marker.is_symlink():
-            raise InstallerError(f"O diretório de cache não pertence a este instalador e foi preservado: {self.cache_root}")
-        first_line = marker.read_text(encoding="utf-8").splitlines()[:1]
-        if first_line != [CACHE_MARKER_VALUE]:
-            raise InstallerError(f"O marcador de propriedade do cache é inválido: {marker}")
+        self.validate_cache_marker_at(self.cache_root, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)
+
+    def owned_cache_roots(self, *, include_legacy: bool) -> list[Path]:
+        current = self.resolve_cache_root()
+        candidates = [(current, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)]
+        if include_legacy and self._cache_root is None:
+            legacy_name, legacy_marker, legacy_value = LEGACY_CACHE
+            candidates.append((current.parent / legacy_name, legacy_marker, legacy_value))
+        owned = []
+        for root, marker_name, marker_value in candidates:
+            if not lexists(root):
+                continue
+            ensure_no_symlink(root, "cache root")
+            if not root.is_dir():
+                raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
+            self.validate_cache_marker_at(root, marker_name, marker_value)
+            owned.append(root)
+        return owned
 
     def prepare_cache(self) -> None:
         root = self.resolve_cache_root()
@@ -764,12 +795,13 @@ class Installer:
         return True
 
     def cleanup_cache(self) -> None:
-        if not self.cache_is_present():
+        roots = self.owned_cache_roots(include_legacy=True)
+        if not roots:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
             return
-        assert self.cache_root is not None
-        remove_path(self.cache_root)
-        console.success(f"Cache removido: {self.cache_root}")
+        for root in roots:
+            remove_path(root)
+            console.success(f"Cache removido: {root}")
 
     def managed_runtime_paths(self) -> set[str]:
         metadata = self.target / METADATA_DIR
@@ -1142,7 +1174,11 @@ class Installer:
     def choose_release(self) -> None:
         assert self.spec is not None
         catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
-        selected = self.prompt_catalog(self.channel, catalog)
+        self.configure_release(self.prompt_catalog(self.channel, catalog))
+        console.success(f"Versão selecionada: {self.selected_version}")
+
+    def configure_release(self, selected: ReleaseRecord) -> None:
+        assert self.spec is not None
         self.selected_version, self.app_urls, self.app_expected_checksum = selected
         self.app_url = self.app_urls[0]
         self.app_archive_name = https_url_filename(self.app_url, "mirror selecionado")
@@ -1159,7 +1195,6 @@ class Installer:
             if len(selected_packages) != 1:
                 raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
             self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
-        console.success(f"Versão selecionada: {self.selected_version}")
         console.detail(f"Artefato: {self.app_url}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
@@ -1175,6 +1210,10 @@ class Installer:
             validate_hex(self.app_expected_checksum, HEX64, f"nightly archive SHA-256 for {self.selected_version}")
             self.app_checksum_kind = "sha256"
         console.detail(f"Checksum publicado ({self.app_checksum_kind}): {self.app_expected_checksum}")
+
+    def latest_release(self) -> ReleaseRecord:
+        catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
+        return catalog[0]
 
     def ensure_archive(self) -> Path:
         assert self.cache_bin is not None and self.stage is not None and self.spec is not None
@@ -1800,6 +1839,120 @@ class Installer:
                 installed.append(identifier)
         return installed
 
+    def validate_install_state(self, state: object) -> dict[str, object]:
+        path = self.target / INSTALL_STATE
+        if not isinstance(state, dict):
+            raise InstallerError(f"Estado da instalação inválido: {path}")
+        profiles = {"none", "custom", *self.component_catalog["profiles"]}
+        profile = state.get("profile")
+        if state.get("format") != 1 or state.get("project") != "x86qw" or profile not in profiles:
+            raise InstallerError(f"Estado da instalação inválido: {path}")
+        for field in ("requested_components", "recorded_components", "known_components"):
+            values = state.get(field)
+            if (
+                not isinstance(values, list)
+                or len(values) != len(set(values))
+                or not all(isinstance(value, str) and COMPONENT_VERSION.fullmatch(value) for value in values)
+            ):
+                raise InstallerError(f"Campo {field} inválido no estado da instalação: {path}")
+        requested = state["requested_components"]
+        if profile != "custom" and requested:
+            raise InstallerError(f"Somente o perfil custom pode registrar escolhas explícitas: {path}")
+        return state
+
+    def write_install_state(
+        self,
+        profile: str,
+        requested: list[str],
+        *,
+        known: list[str] | None = None,
+    ) -> dict[str, object]:
+        self.ensure_metadata_directory()
+        state = self.validate_install_state({
+            "format": 1,
+            "project": "x86qw",
+            "profile": profile,
+            "requested_components": list(requested),
+            "recorded_components": self.installed_components(),
+            "known_components": list(self.components) if known is None else list(known),
+        })
+        destination = self.target / INSTALL_STATE
+        descriptor, temporary_name = tempfile.mkstemp(prefix=".state-", suffix=".json", dir=destination.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                json.dump(state, output, ensure_ascii=False, indent=2, sort_keys=True)
+                output.write("\n")
+            if os.name != "nt":
+                temporary.chmod(0o644)
+            temporary.replace(destination)
+        finally:
+            if lexists(temporary):
+                remove_path(temporary)
+        return state
+
+    def infer_install_state(self) -> dict[str, object]:
+        installed = self.installed_components()
+        profile = "custom"
+        requested = list(installed)
+        if not installed:
+            profile = "none"
+            requested = []
+        else:
+            fingerprint = profile_fingerprint(installed)
+            for candidate in ("essential", "recommended", "complete"):
+                if fingerprint in self.component_catalog["profile_history"][candidate]:
+                    profile = candidate
+                    requested = []
+                    break
+        return self.validate_install_state({
+            "format": 1,
+            "project": "x86qw",
+            "profile": profile,
+            "requested_components": requested,
+            "recorded_components": installed,
+            "known_components": list(self.components),
+        })
+
+    def load_install_state(self, *, persist_migration: bool) -> dict[str, object]:
+        path = self.target / INSTALL_STATE
+        if path.is_file() and not path.is_symlink():
+            try:
+                return self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
+            except (OSError, json.JSONDecodeError) as error:
+                raise InstallerError(f"Estado da instalação inválido: {path}") from error
+        if lexists(path):
+            raise InstallerError(f"Estado da instalação inválido: {path}")
+        state = self.infer_install_state()
+        if persist_migration:
+            state = self.write_install_state(
+                str(state["profile"]), list(state["requested_components"]),
+                known=list(state["known_components"]),
+            )
+            console.success(f"Perfil da instalação registrado: {state['profile']}.")
+        else:
+            console.info(f"Perfil inferido para a simulação: {state['profile']}.")
+        return state
+
+    def desired_components(self, state: dict[str, object]) -> list[str]:
+        profile = str(state["profile"])
+        if profile == "none":
+            return []
+        requested = (
+            list(state["requested_components"])
+            if profile == "custom"
+            else list(self.component_catalog["profiles"][profile])
+        )
+        unknown = [identifier for identifier in requested if identifier not in self.components]
+        if unknown:
+            raise InstallerError(
+                "O perfil da instalação referencia componentes indisponíveis: " + ", ".join(unknown)
+            )
+        try:
+            return resolve_dependencies(self.component_catalog, requested)
+        except ValueError as error:
+            raise InstallerError(str(error)) from error
+
     def show_components(self) -> None:
         installed = set(self.installed_components())
         print("\nComponentes x86QW disponíveis:")
@@ -1834,6 +1987,7 @@ class Installer:
             console.warning("Opção inválida. Digite 1, 2, 3 ou 4.")
         if profile != "custom":
             selected = list(self.component_catalog["profiles"][profile])
+            requested: list[str] = []
         else:
             self.show_components()
             try:
@@ -1853,14 +2007,18 @@ class Installer:
                     selected.append(identifier)
             if not selected:
                 raise InstallerError("Nenhum componente x86QW foi selecionado.")
-            try:
-                resolved = resolve_dependencies(self.component_catalog, selected)
-            except ValueError as error:
-                raise InstallerError(str(error)) from error
+            requested = list(selected)
+        try:
+            resolved = resolve_dependencies(self.component_catalog, selected)
+        except ValueError as error:
+            raise InstallerError(str(error)) from error
+        if profile == "custom":
             added = [identifier for identifier in resolved if identifier not in selected]
             if added:
                 console.info("Dependências adicionadas automaticamente: " + ", ".join(added))
-            selected = resolved
+        selected = resolved
+        self.selected_component_profile = profile
+        self.requested_components = requested
         console.success(f"{len(selected)} componente(s) selecionado(s).")
         print("\nVersões que serão instaladas ou atualizadas:")
         for identifier in selected:
@@ -1914,6 +2072,126 @@ class Installer:
         if "release_notes" in package and not isinstance(package["release_notes"], str):
             raise InstallerError(f"Resumo da versão inválido do componente {identifier}.")
         return package
+
+    def installer_bundle_record(self) -> dict[str, object]:
+        catalog = self.public_catalog("Consultando atualizações do x86QW...")
+        matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
+            package.get("component"), package.get("package"), package.get("channel"),
+            package.get("platform"), package.get("architecture"),
+        ) == ("installer", "x86qw-installer", "content", "any", "any")]
+        if len(matches) != 1:
+            raise InstallerError("O catálogo deve publicar exatamente um bundle atual do x86QW.")
+        package = matches[0]
+        version = package.get("version")
+        filename = package.get("filename")
+        if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+            raise InstallerError("Versão inválida do bundle x86QW.")
+        if filename != f"x86qw-installer-{version}.zip":
+            raise InstallerError("Identidade inconsistente do bundle x86QW.")
+        digest = package.get("sha256")
+        if not isinstance(digest, str):
+            raise InstallerError("SHA-256 ausente do bundle x86QW.")
+        validate_hex(digest, HEX64, "SHA-256 do bundle x86QW")
+        if not isinstance(package.get("size"), int) or package["size"] <= 0:
+            raise InstallerError("Tamanho inválido do bundle x86QW.")
+        urls = package.get("urls")
+        if not isinstance(urls, list) or not urls or not all(isinstance(url, str) for url in urls):
+            raise InstallerError("Mirrors inválidos do bundle x86QW.")
+        for url in urls:
+            if https_url_filename(url, "mirror do bundle x86QW") != filename:
+                raise InstallerError("Nome inesperado em um mirror do bundle x86QW.")
+        if package.get("redistribution_reviewed") is not True:
+            raise InstallerError("O bundle x86QW ainda não foi liberado para atualização.")
+        return package
+
+    def installed_cli_version(self) -> str | None:
+        receipt = self.target / CLI_RECEIPT
+        if not receipt.is_file() or receipt.is_symlink():
+            return None
+        try:
+            metadata = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}") from error
+        if not isinstance(metadata, dict):
+            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
+        version = metadata.get("version")
+        if metadata.get("format") != 1 or metadata.get("project") != "x86qw" or not isinstance(version, str):
+            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
+        if not STABLE_VERSION.fullmatch(version):
+            raise InstallerError(f"Versão inválida no recibo da CLI x86QW: {version}")
+        return version
+
+    def installer_bundle_identity(self) -> dict[str, object]:
+        path = self.project_root / INSTALLER_BUNDLE_METADATA
+        if not path.is_file() or path.is_symlink():
+            raise InstallerError(f"Identidade do bundle público ausente ou inválida: {path}")
+        try:
+            identity = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise InstallerError(f"Identidade do bundle público inválida: {path}") from error
+        if not isinstance(identity, dict):
+            raise InstallerError(f"Identidade do bundle público inválida: {path}")
+        version = identity.get("version")
+        if (
+            identity.get("format") != 1
+            or identity.get("project") != "x86qw"
+            or not isinstance(version, str)
+            or not STABLE_VERSION.fullmatch(version)
+        ):
+            raise InstallerError(f"Identidade do bundle público inválida: {path}")
+        return identity
+
+    def handoff_cli_update(self, action: str, *, dry_run: bool) -> bool:
+        package = self.installer_bundle_record()
+        available = str(package["version"])
+        current = self.installed_cli_version()
+        if current == available:
+            console.info(f"CLI x86QW já está atualizada ({current}).")
+            return False
+        if current is not None and not self.release_is_newer(available, current, "stable"):
+            console.warning(
+                f"CLI x86QW instalada ({current}) é mais nova que o catálogo ({available}); preservada."
+            )
+            return False
+        if dry_run:
+            console.info(f"[SIMULAÇÃO] CLI x86QW seria atualizada: {current or 'não registrada'} → {available}.")
+            console.info(
+                "A simulação foi encerrada antes de interpretar o manifesto novo; "
+                "execute x86qw update e repita com --dry-run para obter o plano completo."
+            )
+            return True
+        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-update.", dir=self.target))
+        try:
+            artifact = self.download_component_package(package)
+            extracted = self.stage / "installer"
+            extracted.mkdir()
+            safe_extract_zip(artifact, extracted)
+            bundle = extracted / f"x86qw-installer-{available}"
+            script = bundle / "install-qw.py"
+            metadata = bundle / INSTALLER_BUNDLE_METADATA
+            if not script.is_file() or script.is_symlink() or not metadata.is_file() or metadata.is_symlink():
+                raise InstallerError("O bundle de atualização x86QW está incompleto.")
+            try:
+                identity = json.loads(metadata.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise InstallerError("Metadados inválidos no bundle de atualização x86QW.") from error
+            if identity != {"format": 1, "project": "x86qw", "version": available}:
+                raise InstallerError("A versão interna do bundle de atualização x86QW é inválida.")
+            console.success(f"Atualização da CLI disponível: {current or 'não registrada'} → {available}.")
+            command = [
+                sys.executable, str(script), "--online-only", "--installed-cli", "--skip-cli-update",
+            ]
+            if console.verbose:
+                command.append("--verbose")
+            if not console.color:
+                command.append("--no-color")
+            command.extend([action, str(self.target)])
+            result = subprocess.run(command, check=False)
+            if result.returncode:
+                raise InstallerError(f"A atualização x86QW terminou com código {result.returncode}.")
+            return True
+        finally:
+            self.cleanup_stage()
 
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
@@ -2476,16 +2754,19 @@ class Installer:
                     f"Suporte local removido ({file_count(removed)}); play-qw.py o reconstruirá quando necessário."
                 )
             self.refresh_qw_package_order()
+            self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
             return
         selected = self.choose_components()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
         self.install_components(selected)
+        self.write_install_state(self.selected_component_profile, self.requested_components)
 
     def install_component_phase(self) -> None:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
         selected = self.choose_components()
         self.install_components(selected)
+        self.write_install_state(self.selected_component_profile, self.requested_components)
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
@@ -2640,6 +2921,13 @@ class Installer:
         if legacy:
             raise InstallerError("Metadados nQuake antigos encontrados. Execute components para migrar a instalação.")
         installed = self.installed_components()
+        if lexists(self.target / INSTALL_STATE):
+            state = self.load_install_state(persist_migration=False)
+            recorded = set(state["recorded_components"])
+            if recorded != set(installed):
+                raise InstallerError(
+                    "O estado da instalação diverge dos componentes registrados. Execute update para reconciliar."
+                )
         if not installed:
             console.info("Nenhum componente x86QW está instalado.")
         for identifier in installed:
@@ -2694,6 +2982,7 @@ class Installer:
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
             PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY,
             PACKAGE_ORDER_RECEIPT, PACKAGE_ORDER_INVENTORY,
+            CLI_RECEIPT, INSTALL_STATE,
         ]
         for component in self.components:
             metadata_names.extend(self.component_metadata(component))
@@ -2703,6 +2992,7 @@ class Installer:
             metadata_names.extend((spec.stable_receipt, spec.nightly_receipt))
         if not any(lexists(self.target / name) for name in metadata_names):
             console.info(f"Nenhum runtime gerenciado está instalado em {self.target}.")
+            self.remove_installed_cli()
             return
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
@@ -2742,8 +3032,10 @@ class Installer:
             self.remove_component(component)
         remove_path(self.target / NQUAKE_RECEIPT)
         remove_path(self.target / NQUAKE_INVENTORY)
+        remove_path(self.target / INSTALL_STATE)
         for name in ("arena", "prox", "fortress", "qw", "ezquake"):
             remove_empty_directories(self.target / name)
+        self.remove_installed_cli()
         remove_empty_directories(self.target / METADATA_DIR)
         for relative, expected in preserved.items():
             if file_hash(self.target / relative) != expected:
@@ -2751,26 +3043,48 @@ class Installer:
         console.success(f"Componentes gerenciados removidos de {self.target}.")
         console.info("PAKs registrados e arquivos pessoais foram preservados.")
 
+    def remove_installed_cli(self) -> None:
+        removed = False
+        for path in (
+            self.target / METADATA_DIR / "cli",
+            self.target / CLI_RECEIPT,
+            self.target / "x86qw",
+        ):
+            if lexists(path):
+                remove_path(path)
+                removed = True
+        windows_launcher = self.target / "x86qw.cmd"
+        if os.name != "nt" and lexists(windows_launcher):
+            remove_path(windows_launcher)
+            removed = True
+        if removed:
+            console.success("CLI permanente x86QW removida.")
+
     def purge(self) -> None:
-        id1 = self.target / "id1"
-        if not id1.is_dir() or id1.is_symlink():
-            raise InstallerError(f"O purge exige um diretório id1 real: {id1}")
-        cache_present = self.cache_is_present()
-        root_device = self.target.stat().st_dev
-        for child in self.target.iterdir():
-            if child.name != "id1":
-                remove_path(child, root_device)
-        unexpected = [child for child in self.target.iterdir() if child.name != "id1"]
-        if unexpected:
-            raise InstallerError(f"purge left an unexpected path: {unexpected[0]}")
-        if cache_present:
-            assert self.cache_root is not None
-            remove_path(self.cache_root)
-            console.success(f"Cache removido: {self.cache_root}")
+        caches = self.owned_cache_roots(include_legacy=True)
+        if lexists(self.target):
+            identity = (
+                self.target / METADATA_DIR,
+                self.target / "x86qw",
+                self.target / "x86qw.cmd",
+            )
+            if not any(lexists(path) for path in identity):
+                raise InstallerError(
+                    f"A remoção total recusou um diretório sem identidade x86QW: {self.target}"
+                )
+            current = Path.cwd().resolve()
+            if current == self.target or self.target in current.parents:
+                os.chdir(self.target.parent)
+            remove_path(self.target)
+            console.success(f"Diretório da instalação removido: {self.target}")
         else:
+            console.info(f"Nenhum diretório de instalação foi encontrado em {self.target}.")
+        for root in caches:
+            remove_path(root)
+            console.success(f"Cache removido: {root}")
+        if not caches:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
-        console.success(f"Instalação removida de {self.target}.")
-        console.info("Somente o diretório id1 foi preservado.")
+        console.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
 
     def install(self) -> None:
         console.section("Fase 1/2 · ezQuake")
@@ -2802,6 +3116,7 @@ class Installer:
             self.install_component_phase()
         else:
             console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+            self.write_install_state("none", [])
         if file_hash(self.target / "id1/pak0.pak") != pak0_before or file_hash(self.target / "id1/pak1.pak") != pak1_before:
             raise InstallerError("Um PAK registrado foi alterado durante a instalação; a operação foi interrompida.")
         console.section("Verificação final")
@@ -2816,6 +3131,205 @@ class Installer:
         else:
             console.success(f"ezQuake pronto em {self.target / self.spec.runtime(self.channel)}")
 
+    @staticmethod
+    def release_is_newer(candidate: str, installed: str, channel: str) -> bool:
+        if channel == "stable":
+            return tuple(map(int, candidate.split("."))) > tuple(map(int, installed.split(".")))
+        return candidate > installed
+
+    def update_runtime(
+        self,
+        spec: PlatformSpec,
+        channel: str,
+        receipt: dict[str, str],
+        *,
+        dry_run: bool,
+    ) -> bool:
+        self.spec = spec
+        self.channel = channel
+        selected = self.latest_release()
+        available = selected[0]
+        installed = receipt["selection"]
+        if available == installed:
+            console.info(f"ezQuake {spec.label} {channel} já está atualizado ({installed}).")
+            return False
+        if not self.release_is_newer(available, installed, channel):
+            console.warning(
+                f"ezQuake {spec.label} {channel} instalado ({installed}) é mais novo que o catálogo ({available}); preservado."
+            )
+            return False
+
+        if dry_run:
+            console.info(
+                f"[SIMULAÇÃO] ezQuake {spec.label} {channel}: {installed} → {available}."
+            )
+            return True
+
+        self.ensure_macos_ezquake_closed()
+        self.check_runtime_destination_ownership()
+        self.configure_release(selected)
+        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-runtime-update.", dir=self.target))
+        try:
+            self.prepare_cache()
+            archive = self.ensure_archive()
+            console.info(f"Atualizando ezQuake {spec.label} {channel}: {installed} → {available}...")
+            prepared = self.prepare_runtime(archive)
+            staged_receipt = self.stage / "ezquake-receipt"
+            self.write_ezquake_receipt(staged_receipt)
+            self.commit_runtime(prepared, staged_receipt)
+            self.reset_macos_game_directory()
+        finally:
+            self.cleanup_stage()
+            self.stage = None
+        console.success(f"ezQuake {spec.label} {channel} atualizado para {available}.")
+        return True
+
+    def outdated_installed_components(self) -> list[str]:
+        outdated = []
+        for identifier in self.installed_components():
+            _, _, receipt = self.validate_component_pair(identifier)
+            assert receipt is not None
+            available = str(self.component_package_record(identifier)["version"])
+            if receipt["selection"] != available:
+                outdated.append(identifier)
+            else:
+                console.info(f"{self.components[identifier]['label']} já está atualizado ({available}).")
+        return outdated
+
+    def update(self, *, dry_run: bool = False, profile_upgrade: bool = False) -> bool:
+        self.preflight_ezquake_receipts()
+        self.preflight_component_receipts()
+        self.check_paks()
+        state = self.load_install_state(persist_migration=not dry_run)
+        known = set(state["known_components"])
+        newly_published = [identifier for identifier in self.components if identifier not in known]
+        if newly_published:
+            console.info("Novos componentes publicados: " + ", ".join(newly_published))
+        runtimes: list[tuple[PlatformSpec, str, dict[str, str]]] = []
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                receipt_path = self.target / spec.receipt(channel)
+                if not receipt_path.is_file():
+                    continue
+                receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+                self.check_runtime(spec, channel, receipt)
+                runtimes.append((spec, channel, receipt))
+        if not runtimes:
+            raise InstallerError(
+                f"Nenhum ezQuake gerenciado foi encontrado em {self.target}. Use install.sh para instalar o x86QW."
+            )
+
+        pak_hashes = {
+            name: file_hash(self.target / "id1" / name)
+            for name in ("pak0.pak", "pak1.pak")
+        }
+        changed = False
+        console.section("Clientes ezQuake instalados")
+        for spec, channel, receipt in runtimes:
+            changed = self.update_runtime(spec, channel, receipt, dry_run=dry_run) or changed
+
+        console.section("Componentes instalados")
+        outdated = self.outdated_installed_components()
+        if outdated:
+            if dry_run:
+                for identifier in outdated:
+                    _, _, receipt = self.validate_component_pair(identifier)
+                    assert receipt is not None
+                    available = self.component_package_record(identifier)["version"]
+                    console.info(
+                        f"[SIMULAÇÃO] {self.components[identifier]['label']}: "
+                        f"{receipt['selection']} → {available}."
+                    )
+            else:
+                self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-update.", dir=self.target))
+                try:
+                    self.install_components(outdated)
+                finally:
+                    self.cleanup_stage()
+                    self.stage = None
+            changed = True
+        elif not self.installed_components():
+            console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
+
+        desired = self.desired_components(state)
+        missing_from_profile = [identifier for identifier in desired if identifier not in self.installed_components()]
+        if missing_from_profile:
+            suffix = (
+                ". Elas serão incorporadas nesta operação."
+                if profile_upgrade
+                else ". Use x86qw upgrade para incorporá-las."
+            )
+            console.info(
+                "Novidades disponíveis para o perfil " + str(state["profile"]) + ": "
+                + ", ".join(missing_from_profile) + suffix
+            )
+
+        for name, expected in pak_hashes.items():
+            if file_hash(self.target / "id1" / name) != expected:
+                raise InstallerError(f"O PAK registrado {name} foi alterado durante a atualização.")
+        if not dry_run:
+            state = self.write_install_state(
+                str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+            )
+        console.section("Verificação final" if not dry_run else "Verificação da instalação atual")
+        self.verify_installation()
+        if dry_run and changed:
+            console.success("Simulação concluída; há atualizações disponíveis e nenhum arquivo foi alterado.")
+        elif dry_run:
+            console.success("Simulação concluída; o conteúdo instalado já está atualizado.")
+        elif changed:
+            console.success("Conteúdo instalado atualizado e validado.")
+        else:
+            console.success("Clientes e componentes instalados já estão atualizados.")
+        return changed
+
+    def upgrade(self, *, dry_run: bool = False) -> bool:
+        changed = self.update(dry_run=dry_run, profile_upgrade=True)
+        state = self.load_install_state(persist_migration=not dry_run)
+        desired = self.desired_components(state)
+        installed = self.installed_components()
+        missing = [identifier for identifier in desired if identifier not in installed]
+        extras = [identifier for identifier in installed if identifier not in desired]
+
+        console.section(f"Convergência do perfil {state['profile']}")
+        if extras:
+            console.warning(
+                "Componentes fora do perfil foram preservados: " + ", ".join(extras) + "."
+            )
+        if not missing:
+            console.info("Nenhum componente novo precisa ser incorporado ao perfil.")
+        elif dry_run:
+            for identifier in missing:
+                package = self.component_package_record(identifier)
+                console.info(
+                    f"[SIMULAÇÃO] Adicionar {self.components[identifier]['label']} ({package['version']})."
+                )
+            changed = True
+        else:
+            console.info("Novos componentes do perfil: " + ", ".join(missing))
+            self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-profile-upgrade.", dir=self.target))
+            try:
+                self.install_components(missing)
+            finally:
+                self.cleanup_stage()
+                self.stage = None
+            changed = True
+
+        if not dry_run:
+            self.write_install_state(
+                str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+            )
+            if missing:
+                console.section("Verificação final do perfil")
+                self.verify_installation()
+        if dry_run and missing:
+            console.success("Simulação do upgrade concluída; nenhum arquivo foi alterado.")
+        elif changed:
+            console.success("Distribuição atualizada conforme o perfil da instalação.")
+        else:
+            console.success("A distribuição já corresponde ao perfil atual.")
+        return changed
+
     def cleanup_stage(self) -> None:
         if self.stage is not None and self.stage.is_dir():
             remove_path(self.stage)
@@ -2823,6 +3337,8 @@ class Installer:
     def install_online_cli(self) -> None:
         if not self.online_only:
             return
+        identity = self.installer_bundle_identity()
+        cli_version = str(identity["version"])
         cli_root = self.target / METADATA_DIR / "cli"
         cli_root.mkdir(parents=True, exist_ok=True)
         relative_files = list(ONLINE_CLI_FILES)
@@ -2843,20 +3359,47 @@ class Installer:
                 temporary.chmod(0o755 if relative in {"install-qw.py", "play-qw.py"} else 0o644)
             temporary.replace(destination)
 
+        cli_receipt = self.target / CLI_RECEIPT
+        cli_receipt.parent.mkdir(parents=True, exist_ok=True)
+        temporary_receipt = cli_receipt.with_name(cli_receipt.name + ".new")
+        temporary_receipt.write_text(
+            json.dumps(identity, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary_receipt.replace(cli_receipt)
+
         shell_launcher = self.target / "x86qw"
         shell_launcher.write_text(
             "#!/bin/sh\n"
             "set -eu\n"
             "root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
-            "if [ \"${1:-}\" = play ]; then\n"
-            "  shift\n"
-            "  exec python3 \"$root/.install/cli/play-qw.py\" \"$root\" \"$@\"\n"
-            "fi\n"
+            "show_help() {\n"
+            "  cat <<'EOF'\n"
+            "x86QW · QuakeWorld moderno\n\n"
+            "Uso: ./x86qw <comando> [opções]\n\n"
+            "Gameplay:\n"
+            "  play                 escolhe e inicia um mod local\n"
+            "  hub                  lista servidores públicos para jogar ou observar\n\n"
+            "Manutenção:\n"
+            "  update               atualiza somente clientes e componentes já instalados\n"
+            "  upgrade              incorpora novidades do perfil da instalação\n"
+            "  verify               verifica a integridade da instalação\n"
+            "  cleanup              limpa o cache gerenciado pelo x86QW\n"
+            "  uninstall            remove o x86QW e preserva PAKs e dados pessoais\n"
+            "  uninstall --purge    remove completamente instalação, dados e cache\n"
+            "  help                 mostra esta ajuda\n\n"
+            "Exemplo: ./x86qw play\n\n"
+            "A instalação inicial e a adição de conteúdo são exclusivas do install.sh.\n"
+            "EOF\n"
+            "}\n"
             "case \"${1:-}\" in\n"
-            "  install|components|presets|hub|verify|uninstall|purge|cleanup) action=$1; shift ;;\n"
-            "  *) action=install ;;\n"
+            "  '') show_help; exit 0 ;;\n"
+            "  help|-h|--help) show_help; exit 0 ;;\n"
+            "  play) shift; exec python3 \"$root/.install/cli/play-qw.py\" \"$root\" \"$@\" ;;\n"
+            "  update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;\n"
+            "  *) printf 'x86qw: comando desconhecido: %s\\n\\n' \"$1\" >&2; show_help >&2; exit 2 ;;\n"
             "esac\n"
-            "exec python3 \"$root/.install/cli/install-qw.py\" --online-only \"$action\" \"$root\" \"$@\"\n",
+            "exec python3 \"$root/.install/cli/install-qw.py\" --online-only --installed-cli \"$action\" \"$root\" \"$@\"\n",
             encoding="utf-8",
         )
         if os.name != "nt":
@@ -2864,18 +3407,54 @@ class Installer:
         (self.target / "x86qw.cmd").write_text(
             "@echo off\r\n"
             "set \"X86QW_ROOT=%~dp0\"\r\n"
-            "if \"%~1\"==\"\" (\r\n"
-            "  py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only install \"%X86QW_ROOT%\"\r\n"
-            "  exit /b %ERRORLEVEL%\r\n"
-            ")\r\n"
-            "if /I \"%~1\"==\"play\" (\r\n"
-            "  py -3 \"%X86QW_ROOT%.install\\cli\\play-qw.py\" \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
-            ") else (\r\n"
-            "  py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only %1 \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
-            ")\r\n",
+            "if \"%~1\"==\"\" goto help\r\n"
+            "if /I \"%~1\"==\"help\" goto help\r\n"
+            "if /I \"%~1\"==\"-h\" goto help\r\n"
+            "if /I \"%~1\"==\"--help\" goto help\r\n"
+            "if /I \"%~1\"==\"play\" goto play\r\n"
+            "if /I \"%~1\"==\"update\" goto maintenance\r\n"
+            "if /I \"%~1\"==\"upgrade\" goto maintenance\r\n"
+            "if /I \"%~1\"==\"hub\" goto maintenance\r\n"
+            "if /I \"%~1\"==\"verify\" goto maintenance\r\n"
+            "if /I \"%~1\"==\"cleanup\" goto maintenance\r\n"
+            "if /I \"%~1\"==\"uninstall\" goto maintenance\r\n"
+            "echo x86qw: comando desconhecido: %~1 1>&2\r\n"
+            "goto help_error\r\n"
+            ":play\r\n"
+            "py -3 \"%X86QW_ROOT%.install\\cli\\play-qw.py\" \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
+            "exit /b %ERRORLEVEL%\r\n"
+            ":maintenance\r\n"
+            "set \"X86QW_ACTION=%~1\"\r\n"
+            "py -3 \"%X86QW_ROOT%.install\\cli\\install-qw.py\" --online-only --installed-cli %1 \"%X86QW_ROOT%\" %2 %3 %4 %5 %6 %7 %8 %9\r\n"
+            "set \"X86QW_EXIT=%ERRORLEVEL%\"\r\n"
+            "if /I \"%X86QW_ACTION%\"==\"uninstall\" if \"%X86QW_EXIT%\"==\"0\" del \"%~f0\"\r\n"
+            "exit /b %X86QW_EXIT%\r\n"
+            ":help\r\n"
+            "echo x86QW - QuakeWorld moderno\r\n"
+            "echo.\r\n"
+            "echo Uso: x86qw.cmd ^<comando^> [opcoes]\r\n"
+            "echo.\r\n"
+            "echo Gameplay:\r\n"
+            "echo   play                 escolhe e inicia um mod local\r\n"
+            "echo   hub                  lista servidores publicos\r\n"
+            "echo.\r\n"
+            "echo Manutencao:\r\n"
+            "echo   update               atualiza o conteudo ja instalado\r\n"
+            "echo   upgrade              incorpora novidades do perfil\r\n"
+            "echo   verify               verifica a instalacao\r\n"
+            "echo   cleanup              limpa o cache x86QW\r\n"
+            "echo   uninstall            preserva PAKs e dados pessoais\r\n"
+            "echo   uninstall --purge    remove completamente o x86QW\r\n"
+            "echo   help                 mostra esta ajuda\r\n"
+            "echo.\r\n"
+            "echo A instalacao e exclusiva do install.ps1.\r\n"
+            "exit /b 0\r\n"
+            ":help_error\r\n"
+            "call :help\r\n"
+            "exit /b 2\r\n",
             encoding="utf-8",
         )
-        console.success(f"Comando permanente instalado: {shell_launcher}")
+        console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
 
 
 class FriendlyArgumentParser(argparse.ArgumentParser):
@@ -2901,6 +3480,18 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--installed-cli", action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--skip-cli-update", action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="simula update ou upgrade sem alterar arquivos",
+    )
+    parser.add_argument(
         "--downloads", action="store_true",
         help="no cleanup, remove também arquivos não gerenciados baixados por servidores",
     )
@@ -2909,19 +3500,33 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="no cleanup, remove também histórico, logs e demos locais",
     )
     parser.add_argument(
+        "--purge", action="store_true",
+        help="com uninstall, remove a instalação inteira, dados pessoais e caches x86QW",
+    )
+    parser.add_argument(
         "action", nargs="?", default="install",
-        help="install, components, presets, hub, verify, uninstall, purge ou cleanup",
+        help="install, update, upgrade, components, presets, hub, verify, uninstall ou cleanup",
     )
     parser.add_argument(
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
     namespace = parser.parse_args(arguments)
-    valid_actions = ("install", "components", "presets", "hub", "verify", "uninstall", "purge", "cleanup")
+    valid_actions = ("install", "update", "upgrade", "components", "presets", "hub", "verify", "uninstall", "cleanup")
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
         parser.error("--downloads e --personal-data só podem ser usados com cleanup")
+    if namespace.purge and namespace.action != "uninstall":
+        parser.error("--purge só pode ser usado com uninstall")
+    if namespace.installed_cli and namespace.action in {"install", "components", "presets"}:
+        parser.error(
+            f"{namespace.action} não está disponível na CLI instalada; use install.sh para instalar ou adicionar conteúdo"
+        )
+    if namespace.skip_cli_update and not (namespace.installed_cli and namespace.action in {"update", "upgrade"}):
+        parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
+    if namespace.dry_run and namespace.action not in {"update", "upgrade"}:
+        parser.error("--dry-run só pode ser usado com update ou upgrade")
     if namespace.target is None and not namespace.online_only:
         namespace.target = project_root / "quake-world"
     return namespace
@@ -2957,9 +3562,11 @@ def main(arguments: list[str] | None = None) -> int:
             "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
             "presets": "gerenciar presets",
             "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
-            "purge": "remover tudo", "cleanup": "limpar caches e dados locais",
+            "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
+            "upgrade": "incorporar novidades da distribuição",
         }
-        console.banner(action_labels[options.action], options.target)
+        action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
+        console.banner(action_label, options.target)
         installer = Installer(project_root, options.target, online_only=options.online_only)
         if options.action == "cleanup":
             console.section("Limpeza segura")
@@ -2979,23 +3586,41 @@ def main(arguments: list[str] | None = None) -> int:
             if not options.downloads:
                 console.info("Downloads de servidores foram preservados; use --downloads para removê-los.")
             return 0
-        installer.validate_target(options.action)
+        installer.validate_target(options.action, purge=options.purge)
         console.detail(f"Destino normalizado: {installer.target}")
-        if options.action == "purge":
-            console.section("Remoção completa")
-            installer.purge()
-            return 0
-        installer.reject_target_symlinks()
+        if not options.purge:
+            installer.reject_target_symlinks()
         if options.action == "verify":
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
         elif options.action == "uninstall":
-            console.section("Desinstalação")
-            installer.uninstall()
+            if options.purge:
+                console.section("Desinstalação completa")
+                installer.purge()
+            else:
+                console.section("Desinstalação")
+                installer.uninstall()
         elif options.action == "hub":
             console.section("QuakeWorld Hub")
             installer.browse_hub()
+        elif options.action in {"update", "upgrade"}:
+            console.section("Atualização conservadora" if options.action == "update" else "Upgrade da distribuição")
+            if (
+                options.installed_cli
+                and not options.skip_cli_update
+                and installer.handoff_cli_update(options.action, dry_run=options.dry_run)
+            ):
+                return 0
+            try:
+                if options.action == "upgrade":
+                    installer.upgrade(dry_run=options.dry_run)
+                else:
+                    installer.update(dry_run=options.dry_run)
+                if options.skip_cli_update and not options.dry_run:
+                    installer.install_online_cli()
+            finally:
+                installer.cleanup_stage()
         else:
             try:
                 if options.action == "components":

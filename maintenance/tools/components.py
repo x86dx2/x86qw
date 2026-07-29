@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -11,6 +12,11 @@ COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_KINDS = {"core", "gameplay", "content", "addon", "documentation"}
 ALLOWED_MODES = {"overlay", "default", "preserve"}
 ALLOWED_ORIGINS = {"reference", "release"}
+
+
+def profile_fingerprint(selected: list[str]) -> str:
+    payload = "".join(identifier + "\n" for identifier in sorted(selected)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _safe_path(value: object, label: str) -> str:
@@ -166,6 +172,25 @@ def validate_catalog(catalog: object) -> None:
             raise ValueError(f"profile omits a dependency: {name}")
     if set(profiles["complete"]) != identifiers:
         raise ValueError("complete profile must contain every x86QW component")
+    history = catalog.get("profile_history")
+    if not isinstance(history, dict) or set(history) != set(profiles):
+        raise ValueError("catalog must preserve profile history")
+    claimed: dict[str, str] = {}
+    for name, fingerprints in history.items():
+        if (
+            not isinstance(fingerprints, list)
+            or not fingerprints
+            or len(fingerprints) != len(set(fingerprints))
+            or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in fingerprints)
+        ):
+            raise ValueError(f"invalid profile history: {name}")
+        current = profile_fingerprint(profiles[name])
+        if current not in fingerprints:
+            raise ValueError(f"profile history omits current definition: {name}")
+        for fingerprint in fingerprints:
+            previous = claimed.setdefault(fingerprint, name)
+            if previous != name:
+                raise ValueError(f"profile history is ambiguous: {previous} and {name}")
 
 
 def _validate_dependency_graph(dependencies: dict[str, list[str]]) -> None:

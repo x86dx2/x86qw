@@ -29,7 +29,7 @@ class InstallerTests(unittest.TestCase):
     def make_installer(self, root):
         project = root / "project"
         target = project / "quake-world"
-        cache = root / "cache" / "x86-qw"
+        cache = root / "cache" / "x86qw"
         target.mkdir(parents=True)
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
@@ -296,22 +296,234 @@ class InstallerTests(unittest.TestCase):
             target.mkdir()
             installer = install_qw.Installer(ROOT, target, online_only=True)
             with contextlib.redirect_stdout(io.StringIO()):
-                installer.install_online_cli()
+                with mock.patch.object(
+                    installer, "installer_bundle_identity",
+                    return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+                ):
+                    installer.install_online_cli()
             self.assertTrue((target / ".install/cli/install-qw.py").is_file())
             self.assertTrue((target / ".install/cli/dist/mods/team-fortress/2.9/x86qw/client.cfg").is_file())
             self.assertTrue((target / "x86qw.cmd").is_file())
+            self.assertEqual("1.0.6", installer.installed_cli_version())
             launcher = target / "x86qw"
             self.assertTrue(os.access(launcher, os.X_OK))
             result = subprocess.run(
-                [str(launcher), "--help"], text=True, capture_output=True, check=False,
+                [str(launcher)], text=True, capture_output=True, check=False,
             )
             self.assertEqual(0, result.returncode, result.stderr)
-            self.assertIn("Instala e mantém", result.stdout)
+            self.assertIn("Uso: ./x86qw <comando>", result.stdout)
+            self.assertIn("./x86qw play", result.stdout)
+            self.assertIn("upgrade", result.stdout)
+            self.assertNotIn("components", result.stdout)
+            rejected = subprocess.run(
+                [str(launcher), "install"], text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(2, rejected.returncode)
+            self.assertIn("comando desconhecido", rejected.stderr)
             play = subprocess.run(
                 [str(launcher), "play", "--help"], text=True, capture_output=True, check=False,
             )
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
+
+    def test_installed_cli_rejects_installation_actions(self):
+        for action in ("install", "components", "presets"):
+            with self.subTest(action=action):
+                with self.assertRaises(SystemExit) as raised:
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        install_qw.parse_arguments(
+                            ["--online-only", "--installed-cli", action, "/tmp/x86qw"], ROOT,
+                        )
+                self.assertEqual(2, raised.exception.code)
+        parsed = install_qw.parse_arguments(
+            ["--online-only", "--installed-cli", "update", "/tmp/x86qw"], ROOT,
+        )
+        self.assertEqual("update", parsed.action)
+        upgrade = install_qw.parse_arguments(
+            ["--online-only", "--installed-cli", "--dry-run", "upgrade", "/tmp/x86qw"], ROOT,
+        )
+        self.assertEqual("upgrade", upgrade.action)
+        self.assertTrue(upgrade.dry_run)
+
+    def test_component_update_only_selects_already_installed_outdated_items(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            receipts = {
+                "nquake-ktx": {"selection": "1.46"},
+                "total-destruction-2": {"selection": "2.22"},
+            }
+            packages = {
+                "nquake-ktx": {"version": "1.47"},
+                "total-destruction-2": {"version": "2.22"},
+            }
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(
+                    installer, "installed_components",
+                    return_value=["nquake-ktx", "total-destruction-2"],
+                ):
+                    with mock.patch.object(
+                        installer, "validate_component_pair",
+                        side_effect=lambda identifier: (True, [], receipts[identifier]),
+                    ):
+                        with mock.patch.object(
+                            installer, "component_package_record",
+                            side_effect=lambda identifier: packages[identifier],
+                        ):
+                            self.assertEqual(["nquake-ktx"], installer.outdated_installed_components())
+
+    def test_existing_installation_profile_is_inferred_and_persisted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            recommended = list(installer.component_catalog["profiles"]["recommended"])
+            with mock.patch.object(installer, "installed_components", return_value=recommended):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    state = installer.load_install_state(persist_migration=True)
+            self.assertEqual("recommended", state["profile"])
+            self.assertEqual([], state["requested_components"])
+            self.assertEqual(recommended, state["recorded_components"])
+            persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
+            self.assertEqual(state, persisted)
+
+    def test_historical_profile_fingerprint_recognizes_clients_that_skipped_releases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            old_recommended = list(installer.component_catalog["profiles"]["recommended"])
+            installer.component_catalog["profiles"]["recommended"] = [*old_recommended, "future-feature"]
+            with mock.patch.object(installer, "installed_components", return_value=old_recommended):
+                state = installer.infer_install_state()
+            self.assertEqual("recommended", state["profile"])
+            self.assertEqual([], state["requested_components"])
+
+    def test_nonstandard_existing_installation_becomes_a_safe_custom_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installed = ["nquake-bootstrap", "total-destruction-2"]
+            with mock.patch.object(installer, "installed_components", return_value=installed):
+                state = installer.infer_install_state()
+            self.assertEqual("custom", state["profile"])
+            self.assertEqual(installed, state["requested_components"])
+
+    def test_upgrade_adds_only_components_newly_required_by_the_recorded_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            desired = list(installer.component_catalog["profiles"]["essential"])
+            installed = desired[:-1]
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "essential",
+                "requested_components": [],
+                "recorded_components": list(installed),
+                "known_components": list(installer.components),
+            }
+
+            def install_missing(selected):
+                installed.extend(selected)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "update", return_value=False):
+                    with mock.patch.object(installer, "load_install_state", return_value=state):
+                        with mock.patch.object(installer, "installed_components", side_effect=lambda: list(installed)):
+                            with mock.patch.object(installer, "install_components", side_effect=install_missing) as apply:
+                                with mock.patch.object(installer, "verify_installation"):
+                                    self.assertTrue(installer.upgrade())
+            apply.assert_called_once_with([desired[-1]])
+            persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
+            self.assertEqual(desired, persisted["recorded_components"])
+
+    def test_upgrade_dry_run_reports_new_profile_components_without_applying_them(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            desired = list(installer.component_catalog["profiles"]["essential"])
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "essential",
+                "requested_components": [],
+                "recorded_components": desired[:-1],
+                "known_components": list(installer.components),
+            }
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                with mock.patch.object(installer, "update", return_value=False):
+                    with mock.patch.object(installer, "load_install_state", return_value=state):
+                        with mock.patch.object(installer, "installed_components", return_value=desired[:-1]):
+                            with mock.patch.object(
+                                installer, "component_package_record", return_value={"version": "nova"},
+                            ):
+                                with mock.patch.object(installer, "install_components") as apply:
+                                    self.assertTrue(installer.upgrade(dry_run=True))
+            apply.assert_not_called()
+            self.assertIn("[SIMULAÇÃO] Adicionar", output.getvalue())
+            self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
+    def test_release_update_never_downgrades_an_installed_client(self):
+        self.assertTrue(install_qw.Installer.release_is_newer("3.6.10", "3.6.9", "stable"))
+        self.assertFalse(install_qw.Installer.release_is_newer("3.6.8", "3.6.9", "stable"))
+        self.assertTrue(
+            install_qw.Installer.release_is_newer(
+                "20260729-120000_abcdef0", "20260728-120000_abcdef0", "nightly",
+            )
+        )
+
+    def test_cli_update_hands_off_to_the_validated_new_bundle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            (target / ".install").mkdir()
+            (target / install_qw.CLI_RECEIPT).write_text(
+                '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
+            )
+            archive = root / "x86qw-installer-1.0.5.zip"
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr("x86qw-installer-1.0.5/install-qw.py", "# update\n")
+                package.writestr(
+                    "x86qw-installer-1.0.5/_x86qw/installer.json",
+                    '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
+                )
+            record = {"version": "1.0.5"}
+            completed = subprocess.CompletedProcess([], 0)
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "installer_bundle_record", return_value=record):
+                    with mock.patch.object(installer, "download_component_package", return_value=archive):
+                        with mock.patch.object(install_qw.subprocess, "run", return_value=completed) as run:
+                            self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=False))
+            command = run.call_args.args[0]
+            self.assertIn("--installed-cli", command)
+            self.assertIn("--skip-cli-update", command)
+            self.assertEqual(["upgrade", str(target)], command[-2:])
+            self.assertFalse(any(target.glob(".x86qw-update.*")))
+
+    def test_cli_update_never_downgrades_itself(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / ".install").mkdir()
+            (target / install_qw.CLI_RECEIPT).write_text(
+                '{"format":1,"project":"x86qw","version":"1.0.6"}\n', encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(
+                    installer, "installer_bundle_record", return_value={"version": "1.0.4"},
+                ):
+                    self.assertFalse(installer.handoff_cli_update("update", dry_run=False))
+
+    def test_cli_update_dry_run_reports_new_engine_without_downloading_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / ".install").mkdir()
+            (target / install_qw.CLI_RECEIPT).write_text(
+                '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                with mock.patch.object(
+                    installer, "installer_bundle_record", return_value={"version": "1.0.5"},
+                ):
+                    with mock.patch.object(installer, "download_component_package") as download:
+                        self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=True))
+            download.assert_not_called()
+            self.assertIn("[SIMULAÇÃO] CLI", output.getvalue())
+            self.assertIn("plano completo", output.getvalue())
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
         class FakeSocket:
@@ -411,7 +623,7 @@ class InstallerTests(unittest.TestCase):
             root = Path(temporary)
             target = root / "quake-world"
             target.mkdir()
-            cache = root / "cache/x86-qw"
+            cache = root / "cache/x86qw"
             cache.parent.mkdir()
             installer = install_qw.Installer(ROOT, target, cache)
             installer.spec = install_qw.PLATFORMS["macos"]
@@ -453,6 +665,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("visível", output.getvalue())
 
     def test_cache_is_owned_and_cleanup_removes_only_it(self):
+        self.assertEqual("x86qw", install_qw.CACHE_DIR_NAME)
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, cache = self.make_installer(Path(temporary))
             installer.prepare_cache()
@@ -473,11 +686,12 @@ class InstallerTests(unittest.TestCase):
                 installer.prepare_cache()
             self.assertEqual("keep", (cache / "foreign").read_text(encoding="utf-8"))
 
-    def test_purge_preserves_id1_and_removes_owned_cache(self):
+    def test_purge_removes_the_entire_installation_and_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
+            (target / ".install").mkdir()
             (target / "id1").mkdir()
-            (target / "id1/pak0.pak").write_bytes(b"keep")
+            (target / "id1/pak0.pak").write_bytes(b"remove")
             (target / "qw").mkdir()
             (target / "qw/remove.txt").write_text("remove", encoding="utf-8")
             (target / "personal.txt").write_text("remove", encoding="utf-8")
@@ -485,9 +699,65 @@ class InstallerTests(unittest.TestCase):
             (cache / "payload").write_text("remove", encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.purge()
-            self.assertEqual([target / "id1"], list(target.iterdir()))
-            self.assertEqual(b"keep", (target / "id1/pak0.pak").read_bytes())
+            self.assertFalse(target.exists())
             self.assertFalse(cache.exists())
+
+    def test_regular_uninstall_removes_the_cli_and_preserves_id1(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / ".install/cli").mkdir(parents=True)
+            (target / ".install/cli/install-qw.py").write_text("# cli\n", encoding="utf-8")
+            (target / install_qw.CLI_RECEIPT).write_text(
+                '{"format":1,"project":"x86qw","version":"1.0.5"}\n', encoding="utf-8",
+            )
+            (target / "x86qw").write_text("#!/bin/sh\n", encoding="utf-8")
+            (target / "x86qw.cmd").write_text("@echo off\r\n", encoding="utf-8")
+            (target / "id1").mkdir()
+            (target / "id1/pak0.pak").write_bytes(b"preserve")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.uninstall()
+            self.assertFalse((target / "x86qw").exists())
+            self.assertFalse((target / "x86qw.cmd").exists())
+            self.assertFalse((target / ".install/cli").exists())
+            self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
+
+    def test_purge_without_an_installation_still_removes_owned_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            target.rmdir()
+            installer.prepare_cache()
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.purge()
+            self.assertFalse(cache.exists())
+
+    def test_purge_rejects_a_directory_without_x86qw_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / "unrelated.txt").write_text("preserve", encoding="utf-8")
+            with self.assertRaisesRegex(install_qw.InstallerError, "sem identidade x86QW"):
+                installer.purge()
+            self.assertTrue((target / "unrelated.txt").is_file())
+
+    def test_cleanup_removes_current_and_legacy_owned_native_caches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, _, _ = self.make_installer(root)
+            current = root / "native/x86qw"
+            legacy = root / "native/x86-qw"
+            current.mkdir(parents=True)
+            legacy.mkdir()
+            (current / install_qw.CACHE_MARKER_NAME).write_text(
+                install_qw.CACHE_MARKER_VALUE + "\n", encoding="utf-8",
+            )
+            legacy_name, legacy_marker, legacy_value = install_qw.LEGACY_CACHE
+            self.assertEqual("x86-qw", legacy_name)
+            (legacy / legacy_marker).write_text(legacy_value + "\n", encoding="utf-8")
+            installer._cache_root = None
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "resolve_cache_root", return_value=current):
+                    installer.cleanup_cache()
+            self.assertFalse(current.exists())
+            self.assertFalse(legacy.exists())
 
     def test_zip_traversal_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

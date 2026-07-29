@@ -107,6 +107,9 @@ O exemplo e apenas a forma do contrato; a validacao completa exige seletores,
 artefatos e metadados aceitos pelos inventarios reais. Um arquivo usa `source`
 relativo a definicao ou `url` HTTPS, nunca ambos. Tamanho e SHA-256 declarados
 sao conferidos antes de qualquer troca. Todos os destinos ficam sob `dist/`.
+Ao alterar um perfil, `add` preserva automaticamente sua assinatura anterior e
+registra a nova em `inventory/components.json`. Esse histórico permite que
+`x86qw upgrade` reconheça instalações que pularam releases intermediárias.
 
 Para atualizar um componente existente, envie o objeto completo com
 `"replace": true` e uma nova release imutavel. Configuracoes x86QW devem ficar

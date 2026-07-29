@@ -88,6 +88,17 @@
       "total-destruction-2"
     ]
   },
+  "profile_history": {
+    "essential": [
+      "2e2011fa531d9651c833984c994861212b3ff7e72dc95643bbbb55e391a729c2"
+    ],
+    "recommended": [
+      "95e1262410aa595cec380f7ec1ad160ffe2c0d42b74ad13364105b5c3de51288"
+    ],
+    "complete": [
+      "66a60d4cf678e67d132ca9cd17d7ab343b9fccd587adb5a37eb07e298095dd36"
+    ]
+  },
   "components": [
     {
       "id": "nquake-bootstrap",

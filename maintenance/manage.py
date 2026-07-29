@@ -28,7 +28,11 @@ from maintenance.tools.build_package import verify_artifact
 from maintenance.tools.check_component_updates import check_updates
 from maintenance.tools.component_releases import load_releases
 from maintenance.tools.component_sources import discover_snapshot
-from maintenance.tools.components import load_catalog as load_component_catalog, validate_tree_partition
+from maintenance.tools.components import (
+    load_catalog as load_component_catalog,
+    profile_fingerprint,
+    validate_tree_partition,
+)
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
 from maintenance.tools.sync_distribution import (
@@ -898,6 +902,20 @@ def upsert_component(catalog: dict[str, object], component: dict[str, object], r
     entries.sort(key=lambda item: str(item.get("id", "")))
 
 
+def preserve_profile_fingerprints(catalog: dict[str, object]) -> None:
+    profiles = catalog.get("profiles")
+    history = catalog.get("profile_history")
+    if not isinstance(profiles, dict) or not isinstance(history, dict) or set(profiles) != set(history):
+        raise ManagerError("historico de perfis de componentes invalido")
+    for name, selected in profiles.items():
+        fingerprints = history.get(name)
+        if not isinstance(selected, list) or not isinstance(fingerprints, list):
+            raise ManagerError(f"historico do perfil {name} invalido")
+        fingerprint = profile_fingerprint(selected)
+        if fingerprint not in fingerprints:
+            fingerprints.append(fingerprint)
+
+
 def command_add(options: argparse.Namespace) -> int:
     definition_path = options.definition.resolve()
     definition = load_json(definition_path)
@@ -920,6 +938,7 @@ def command_add(options: argparse.Namespace) -> int:
         if component is not None:
             if not isinstance(component, dict):
                 raise ManagerError("component precisa ser um objeto")
+            preserve_profile_fingerprints(staged_components)
             upsert_component(staged_components, component, bool(definition.get("replace")))
             identifier = str(component["id"])
             profiles = definition.get("profiles", [])
@@ -934,6 +953,7 @@ def command_add(options: argparse.Namespace) -> int:
                     raise ManagerError(f"perfil desconhecido: {profile}")
                 if identifier not in members:
                     members.append(identifier)
+            preserve_profile_fingerprints(staged_components)
             release = definition.get("release")
             release_entries = staged_releases.get("components")
             if not isinstance(release, dict) or not isinstance(release_entries, dict):
