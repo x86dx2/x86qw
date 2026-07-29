@@ -68,7 +68,10 @@ class SiteTests(unittest.TestCase):
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertIn("github.com/x86dx2/x86qw/releases/download/", package["urls"][0])
+        self.assertIn(
+            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.28/",
+            package["urls"][0],
+        )
         self.assertTrue(all(
             "github.com/x86dx2/x86qw-dist/releases/download/" in item["urls"][0]
             for item in installers if item["version"] != "1.0.28"
