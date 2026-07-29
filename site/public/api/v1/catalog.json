@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-29T14:41:08Z",
+  "generated_at": "2026-07-29T15:10:30Z",
   "packages": [
     {
       "component": "ezquake",
@@ -138,14 +138,14 @@
     {
       "component": "installer",
       "package": "x86qw-installer",
-      "version": "1.0.6",
+      "version": "1.0.8",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "x86qw-installer-1.0.6.zip",
-      "size": 24167882,
-      "sha256": "dec7cba5b669c788280805064b0107728dae4e1199ba8f41829164b31ba5cf9a",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.6/x86qw-installer-1.0.6.zip",
+      "filename": "x86qw-installer-1.0.8.zip",
+      "size": 24168455,
+      "sha256": "4c5531854dd3282f128c22f3c74547ca1792db4bebebc276d3be6df3cc0acaa3",
+      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.8/x86qw-installer-1.0.8.zip",
       "license": "x86qw-project-terms",
       "license_url": "https://github.com/x86dx2/x86qw",
       "source_urls": [
@@ -153,11 +153,11 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.6/x86qw-installer-1.0.6.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/1.0.6/x86qw-installer-1.0.6.zip"
+        "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.8/x86qw-installer-1.0.8.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/1.0.8/x86qw-installer-1.0.8.zip"
       ],
-      "distribution_path": "installer/1.0.6/x86qw-installer-1.0.6.zip",
-      "release_url": "https://github.com/x86dx2/x86qw-dist/releases/tag/installer-1.0.6",
+      "distribution_path": "installer/1.0.8/x86qw-installer-1.0.8.zip",
+      "release_url": "https://github.com/x86dx2/x86qw-dist/releases/tag/installer-1.0.8",
       "release_notes": "Bootstrap autocontido do instalador público x86QW."
     },
     {

@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "1.0.6"
+$InstallerVersion = "1.0.8"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "dec7cba5b669c788280805064b0107728dae4e1199ba8f41829164b31ba5cf9a"
+$InstallerSha256 = "4c5531854dd3282f128c22f3c74547ca1792db4bebebc276d3be6df3cc0acaa3"
 $InstallerUrls = @(
   "https://github.com/x86dx2/x86qw-dist/releases/download/installer-$InstallerVersion/$InstallerFile",
   "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/$InstallerVersion/$InstallerFile"
