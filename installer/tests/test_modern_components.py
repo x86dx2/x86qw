@@ -419,13 +419,14 @@ class ModernComponentTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "check_paks"):
                     with mock.patch.object(installer, "available_local_games", return_value=[game]):
-                        with mock.patch.object(installer, "verify_component") as verify:
-                            with mock.patch.object(installer, "local_map_names", return_value=["dm6", "dm2"]):
-                                with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
-                                    with mock.patch.object(installer, "launch_runtime") as launch:
-                                        with mock.patch.object(installer, "ensure_local_play_support") as support:
-                                            with mock.patch("builtins.input", side_effect=["", ""]):
-                                                installer.play_local()
+                        with mock.patch.object(installer, "installed_component_for_game", return_value=game.component):
+                            with mock.patch.object(installer, "verify_component") as verify:
+                                with mock.patch.object(installer, "local_map_names", return_value=["dm6", "dm2"]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support") as support:
+                                                with mock.patch("builtins.input", side_effect=["", ""]):
+                                                    installer.play_local()
             verify.assert_called_once_with("total-destruction-2")
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
@@ -446,17 +447,38 @@ class ModernComponentTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     with mock.patch.object(installer, "check_paks"):
                         with mock.patch.object(installer, "available_local_games", return_value=[game]):
-                            with mock.patch.object(installer, "verify_component"):
-                                with mock.patch.object(installer, "local_map_names", return_value=[map_name]):
-                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
-                                        with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support"):
-                                                with mock.patch("builtins.input", side_effect=["", ""]):
-                                                    installer.play_local()
+                            with mock.patch.object(installer, "installed_component_for_game", return_value=game.component):
+                                with mock.patch.object(installer, "verify_component"):
+                                    with mock.patch.object(installer, "local_map_names", return_value=[map_name]):
+                                        with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                            with mock.patch.object(installer, "launch_runtime") as launch:
+                                                with mock.patch.object(installer, "ensure_local_play_support"):
+                                                    with mock.patch("builtins.input", side_effect=["", ""]):
+                                                        installer.play_local()
                 launch.assert_called_once_with(runtime, [
                     "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", "+exec", profile, "+map", map_name,
                 ])
+
+    def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "combined"
+            for relative in ("arena/arena.pk3", "prox/prox.pk3"):
+                destination = managed / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(destination, "w") as package:
+                    package.writestr("qwprogs.dat", relative.encode())
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "clan-arena", managed, "legacy", "https://example.invalid/clan-arena.zip",
+                )
+            games = installer.available_local_games()
+            self.assertEqual(["final-arena", "pro-x"], [game.key for game in games])
+            self.assertEqual("clan-arena", installer.installed_component_for_game(games[0]))
+            self.assertEqual("clan-arena", installer.installed_component_for_game(games[1]))
 
     def test_local_play_support_is_managed_and_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -2317,11 +2317,21 @@ class Installer:
     def available_local_games(self) -> list[LocalGameSpec]:
         available = []
         for game in LOCAL_GAMES:
-            present, _, _ = self.validate_component_pair(game.component)
+            component = self.installed_component_for_game(game)
             marker = self.target.joinpath(*PurePosixPath(game.marker).parts)
-            if present and marker.is_file() and not marker.is_symlink():
+            if component is not None and marker.is_file() and not marker.is_symlink():
                 available.append(game)
         return available
+
+    def installed_component_for_game(self, game: LocalGameSpec) -> str | None:
+        present, _, _ = self.validate_component_pair(game.component)
+        if present:
+            return game.component
+        if game.key in {"final-arena", "pro-x"}:
+            legacy_present, _, _ = self.validate_component_pair("clan-arena")
+            if legacy_present:
+                return "clan-arena"
+        return None
 
     def choose_local_game(self, games: list[LocalGameSpec]) -> LocalGameSpec:
         print("\nQual mod deseja jogar localmente?")
@@ -2387,8 +2397,11 @@ class Installer:
                 "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
             )
         game = self.choose_local_game(games)
-        self.migrate_mutable_component_defaults(game.component)
-        self.verify_component(game.component)
+        installed_component = self.installed_component_for_game(game)
+        if installed_component is None:
+            raise InstallerError(f"O componente de {game.label} não está mais instalado.")
+        self.migrate_mutable_component_defaults(installed_component)
+        self.verify_component(installed_component)
         map_name = self.choose_local_map(game)
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
