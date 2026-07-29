@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import struct
 import sys
 import tempfile
@@ -67,6 +68,48 @@ class ModernComponentTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 install_qw.parse_arguments(["play"], ROOT)
+
+    def test_play_menu_shows_installed_versions_and_aligns_descriptions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            output = io.StringIO()
+            with mock.patch.object(
+                player, "installed_game_version", side_effect=lambda game: game.version,
+            ):
+                with mock.patch("builtins.input", return_value=""):
+                    with contextlib.redirect_stdout(output):
+                        selected = player.choose_local_game(list(play_qw.LOCAL_GAMES))
+            self.assertEqual("ktx", selected.key)
+            lines = [line for line in output.getvalue().splitlines() if re.match(r"^  \d+\)", line)]
+            self.assertEqual(len(play_qw.LOCAL_GAMES), len(lines))
+            description_columns = []
+            for line, game in zip(lines, play_qw.LOCAL_GAMES):
+                self.assertIn(f"v{game.version}", line)
+                description_columns.append(line.index(game.description))
+            self.assertEqual(1, len(set(description_columns)))
+            self.assertIn("KTX (padrão)", lines[0])
+
+    def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
+        cases = {
+            "ktx": ("1.48+nquake.abcdef+x86qw.1", "1.48"),
+            "final-arena": ("e4cb23d40aa2+x86qw.5", "1.20"),
+            "pro-x": ("1.1+x86qw.1", "1.1"),
+            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.1", "2.9"),
+            "td2": ("2.22+x86qw.5", "2.22"),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            for game in play_qw.LOCAL_GAMES:
+                selection, expected = cases[game.key]
+                with self.subTest(game=game.key):
+                    with mock.patch.object(
+                        player, "installed_component_for_game", return_value=game.component,
+                    ):
+                        with mock.patch.object(
+                            player, "validate_component_pair",
+                            return_value=(True, [], {"selection": selection}),
+                        ):
+                            self.assertEqual(expected, player.installed_game_version(game))
 
     def test_component_overlay_preserves_unowned_files_and_is_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -135,9 +178,9 @@ class ModernComponentTests(unittest.TestCase):
             final_arena = installer.components["final-arena"]
             self.assertEqual(
                 {
-                    "dist/mods/final-arena/1.20+x86qw.1/client.cfg",
-                    "dist/mods/final-arena/1.20+x86qw.1/server.cfg",
-                    "dist/mods/final-arena/1.20+x86qw.1/user.cfg.example",
+                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg",
+                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg",
+                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/user.cfg.example",
                 },
                 {source["path"] for source in final_arena["project_sources"]},
             )
@@ -552,7 +595,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse(valid_demo.exists())
             self.assertFalse(log.exists())
 
-    def test_hub_filters_bad_addresses_and_can_launch(self):
+    def test_hub_filters_bad_addresses_and_launches_macos_binary_with_arguments(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             payload = [
@@ -564,15 +607,19 @@ class ModernComponentTests(unittest.TestCase):
                     servers = installer.hub_servers()
             self.assertEqual(["server.example:27500"], [item["address"] for item in servers])
             runtime = target / "ezQuake Stable.app"
-            runtime.mkdir()
+            executable = runtime / "Contents/MacOS/ezQuake"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"mach-o")
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
                 with mock.patch.object(install_qw.subprocess, "Popen") as popen:
                     installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
             command = popen.call_args.args[0]
             self.assertEqual([
-                "open", "-n", str(runtime), "--args", "-nohome", "-basedir", str(target),
+                str(executable), "-nohome", "-basedir", str(target),
                 "+connect", "server.example:27500",
             ], command)
+            self.assertIs(popen.call_args.kwargs["stdin"], install_qw.subprocess.DEVNULL)
+            self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -593,16 +640,37 @@ class ModernComponentTests(unittest.TestCase):
             verify.assert_called_once_with("total-destruction-2")
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
+                "+set", "sb_listcache", "0",
                 "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
-                "+sv_progtype", "0", "+map", "dm6", "+wait", "+exec", "x86qw-td2.cfg",
+                "+sv_progtype", "0",
+                "+cl_remote_capabilities", "$cl_remote_capabilities,bind,scr_centertime",
+                "+set", "cl_pext_lagteleport", "0", "+set", "con_suppress", "1",
+                "+map", "dm6", "+wait", "+set", "con_suppress", "0",
+                "+exec", "x86qw-td2.cfg",
             ])
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
         expectations = {
-            "final-arena": ("arena", "23ar-a", "x86qw-arena.cfg"),
-            "pro-x": ("prox", "proxmap1", "x86qw-prox.cfg"),
+            "final-arena": (
+                "arena", "23ar-a", "x86qw-arena.cfg",
+                [
+                    "+cl_remote_capabilities", "$cl_remote_capabilities,noaim",
+                    "+set", "cl_pext_lagteleport", "0",
+                    "+set", "con_suppress", "1",
+                ],
+                ["+set", "con_suppress", "0"],
+            ),
+            "pro-x": (
+                "prox", "proxmap1", "x86qw-prox.cfg",
+                [
+                    "+cl_remote_capabilities", "$cl_remote_capabilities,setinfo,bind",
+                    "+set", "cl_pext_lagteleport", "0",
+                    "+set", "con_suppress", "1",
+                ],
+                ["+set", "con_suppress", "0"],
+            ),
         }
-        for key, (gamedir, map_name, profile) in expectations.items():
+        for key, (gamedir, map_name, profile, before_map, after_wait) in expectations.items():
             with self.subTest(game=key), tempfile.TemporaryDirectory() as temporary:
                 installer, target, _ = self.make_player(Path(temporary))
                 game = next(game for game in play_qw.LOCAL_GAMES if game.key == key)
@@ -619,8 +687,10 @@ class ModernComponentTests(unittest.TestCase):
                                                     with mock.patch("builtins.input", side_effect=["", ""]):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
+                    "+set", "sb_listcache", "0",
                     "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
-                    "+sv_progtype", "0", "+map", map_name, "+wait", "+exec", profile,
+                    "+sv_progtype", "0", *before_map, "+map", map_name, "+wait",
+                    *after_wait, "+exec", profile,
                 ])
 
     def test_team_fortress_loads_legacy_capabilities_before_the_map(self):
@@ -640,9 +710,13 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", side_effect=["", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
+                "+set", "sb_listcache", "0",
                 "-game", "fortress", "+gamedir", "fortress", "+sv_gamedir", "fortress",
-                "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg", "+map", "2fort5r",
-                "+wait", "+exec", "x86qw-fortress.cfg",
+                "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg",
+                "+cl_remote_capabilities", "$cl_remote_capabilities,bind",
+                "+set", "cl_pext_lagteleport", "0", "+set", "con_suppress", "1",
+                "+map", "2fort5r", "+wait", "+set", "con_suppress", "0",
+                "+exec", "x86qw-fortress.cfg",
             ])
 
     def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
@@ -695,6 +769,27 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse(client_config.exists())
             self.assertTrue(user_config.exists())
 
+    def test_team_fortress_uses_29_gamecode_instead_of_misc_pak_28(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "team-fortress")
+            fortress = target / "fortress"
+            fortress.mkdir(parents=True)
+            (fortress / "qwprogs.dat").write_bytes(b"team-fortress-2.9")
+            (fortress / "misc.pak").write_bytes(b"legacy-team-fortress-2.8")
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.ensure_local_play_support([game])
+
+            self.assertEqual(
+                b"team-fortress-2.9",
+                (fortress / "x86qw_fortress.dat").read_bytes(),
+            )
+            self.assertNotEqual(
+                (fortress / "misc.pak").read_bytes(),
+                (fortress / "x86qw_fortress.dat").read_bytes(),
+            )
+
     def test_td2_upstream_update_rebuilds_gamecode_and_preserves_x86qw_user_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
@@ -744,7 +839,7 @@ class ModernComponentTests(unittest.TestCase):
                 user = gamedir / f"x86qw-{game.profile}-user.cfg"
                 self.assertEqual(
                     (ROOT / (
-                        "dist/mods/final-arena/1.20+x86qw.1/client.cfg"
+                        "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg"
                         if game.key == "final-arena"
                         else "dist/mods/pro-x/1.1/x86qw/client.cfg"
                     )).read_bytes(),
@@ -752,7 +847,7 @@ class ModernComponentTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     (ROOT / (
-                        "dist/mods/final-arena/1.20+x86qw.1/server.cfg"
+                        "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg"
                         if game.key == "final-arena"
                         else "dist/mods/pro-x/1.1/x86qw/server.cfg"
                     )).read_bytes(),

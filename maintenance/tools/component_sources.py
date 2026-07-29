@@ -266,6 +266,39 @@ def reference_component_payload(
             })
     if replacements:
         payload = rewrite_zip_members(payload, replacements, additions)
+    archive_text_replacements = [
+        replacement
+        for replacement in release.get("archive_text_replacements", [])
+        if isinstance(replacement, dict) and replacement.get("target_archive") == upstream_path
+    ]
+    if archive_text_replacements:
+        member_payloads: dict[str, bytes] = {}
+        with zipfile.ZipFile(io.BytesIO(payload)) as package:
+            for replacement in archive_text_replacements:
+                member = str(replacement["member"])
+                if member in member_payloads:
+                    member_payload = member_payloads[member]
+                else:
+                    try:
+                        member_payload = package.read(member)
+                    except KeyError as error:
+                        raise ValueError(f"archive text replacement member is missing: {member}") from error
+                source_sha256 = file_sha256_bytes(member_payload)
+                if source_sha256 != replacement["source_sha256"]:
+                    raise ValueError(f"archive member source failed integrity: {member}")
+                before = str(replacement["before"]).encode("utf-8")
+                after = str(replacement["after"]).encode("utf-8")
+                count = int(replacement.get("count", 1))
+                if member_payload.count(before) != count:
+                    raise ValueError(f"archive text replacement is not uniquely applicable: {member}")
+                member_payloads[member] = member_payload.replace(before, after, count)
+                applied.append({
+                    "target_archive": upstream_path,
+                    "member": member,
+                    "source_sha256": source_sha256,
+                    "replacement_sha256": file_sha256_bytes(after),
+                })
+        payload = rewrite_zip_members(payload, member_payloads)
     moves = {
         str(move["source"]): str(move["destination"])
         for move in release.get("archive_moves", [])

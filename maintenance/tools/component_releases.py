@@ -179,6 +179,33 @@ def validate_releases(
             if (target, member) in removal_identities:
                 raise ValueError(f"duplicate archive removal: {identifier}")
             removal_identities.add((target, member))
+        archive_text_replacements = release.get("archive_text_replacements", [])
+        if not isinstance(archive_text_replacements, list):
+            raise ValueError(f"invalid archive text replacements: {identifier}")
+        archive_replacement_identities: set[tuple[str, str, str]] = set()
+        for replacement in archive_text_replacements:
+            if not isinstance(replacement, dict):
+                raise ValueError(f"invalid archive text replacement: {identifier}")
+            target = _safe_path(replacement.get("target_archive"), "archive text replacement target")
+            member = _safe_path(replacement.get("member"), "archive text replacement member")
+            before = replacement.get("before")
+            after = replacement.get("after")
+            if (
+                not isinstance(before, str)
+                or not before
+                or not isinstance(after, str)
+                or before == after
+            ):
+                raise ValueError(f"ineffective archive text replacement: {identifier}")
+            if not HEX64.fullmatch(str(replacement.get("source_sha256", ""))):
+                raise ValueError(f"invalid archive member source hash: {identifier}")
+            identity = (target, member, before)
+            if identity in archive_replacement_identities:
+                raise ValueError(f"duplicate archive text replacement: {identifier}")
+            archive_replacement_identities.add(identity)
+            count = replacement.get("count", 1)
+            if not isinstance(count, int) or count <= 0:
+                raise ValueError(f"invalid archive text replacement count: {identifier}")
         package_copies = release.get("package_copies", [])
         if not isinstance(package_copies, list):
             raise ValueError(f"invalid package copies: {identifier}")

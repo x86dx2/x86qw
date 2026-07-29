@@ -2865,12 +2865,25 @@ class Installer:
         # A distribuição é autocontida: ~/.ezquake não pode sobrepor configs ou assets.
         base_arguments = ["-nohome", "-basedir", str(self.target)]
         if system == "Darwin":
-            command = ["open", "-n", str(runtime), "--args", *base_arguments, *quake_arguments]
+            executable = runtime / "Contents/MacOS/ezQuake"
+            if not executable.is_file() or executable.is_symlink():
+                raise InstallerError(f"Executável do bundle macOS não encontrado: {executable}")
+            # LaunchServices can drop command-line arguments from an already known
+            # app bundle, which makes ezQuake reopen its game-directory picker.
+            command = [str(executable), *base_arguments, *quake_arguments]
         else:
             command = [str(runtime), *base_arguments, *quake_arguments]
         console.detail("$ " + " ".join(command))
         try:
-            subprocess.Popen(command, cwd=self.target, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            options: dict[str, object] = {
+                "cwd": self.target,
+                "stdin": subprocess.DEVNULL,
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
+            if system != "Windows":
+                options["start_new_session"] = True
+            subprocess.Popen(command, **options)
         except OSError as error:
             raise InstallerError(f"Não foi possível abrir {runtime}: {error}") from error
 

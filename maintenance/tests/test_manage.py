@@ -159,9 +159,9 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.1", output)
         self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.1", output)
         self.assertIn("KTX competitivo", output)
-        self.assertIn("dist/mods/ktx/1.47/qwprogs-qvm.zip", output)
+        self.assertIn("dist/mods/ktx/1.47/upstream/qwprogs-qvm.zip", output)
         self.assertIn("Total Destruction 2", output)
-        self.assertIn("dist/mods/td2/2.22/", output)
+        self.assertIn("dist/mods/td2/2.22/source/", output)
 
     def test_contextual_layout_has_no_legacy_root_directories(self) -> None:
         for name in ("distribution", "inventory", "recipes", "tools", "tests"):

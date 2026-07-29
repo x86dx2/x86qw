@@ -165,7 +165,7 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
 O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Documentação,
 fontes QuakeC, exemplos originais e o `pwd.cfg` histórico permanecem preservados
-somente no artefato upstream em `dist/`; não entram no runtime. O pacote x86QW
+somente no artefato upstream em `dist/mods/td2/2.22/source/`; não entram no runtime. O pacote x86QW
 incorpora gamecode, modelos, sons, perfil de cliente, servidor local e modelo de
 configuração pessoal. A camada `play-support` mantém apenas a cópia isolada do gamecode.
 Assim uma nova versão do TD2 pode substituir seu conteúdo upstream sem misturar

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "project": "x86qw",
-  "checked_at": "2026-07-28",
+  "checked_at": "2026-07-29",
   "reference": {
     "repository": "https://github.com/nQuake/distfiles",
     "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.5",
+      "version": "e4cb23d40aa2+x86qw.6",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
-      "notes": "Preserva a base nQuake, aplica bootstrap x86QW com aliases temporários e camada pessoal e limita texturas a 16384. A configuração comum conserva comandos existentes no stable e no nightly.",
+      "notes": "Preserva a base nQuake, aplica bootstrap x86QW sem recarregar duas vezes o config.cfg, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome e limita texturas a 16384. A configuração comum conserva comandos existentes no stable e no nightly.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
@@ -23,13 +23,13 @@
     },
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.6",
+      "version": "1.47+nquake.e4cb23d40aa2+x86qw.7",
       "strategy": "upstream-overlay",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
       "distribution_tag": "nquake-ktx-1.47-nquake.e4cb23d40aa2",
       "embedded_version": "1.46-dev",
-      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
+      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, seleciona diretamente o QVM no servidor local do ezQuake, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -50,11 +50,20 @@
         "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
         "source_url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz"
       },
+      "archive_text_replacements": [
+        {
+          "target_archive": "gpl/qw/ktx.pk3",
+          "member": "mvdsv.cfg",
+          "source_sha256": "829eb2de57c500e535b171632ecf2b06193902a9b7393885aa7ad056302a1d22",
+          "before": "sv_progtype                   1         // progtype (0 = .dat, 1 = .so/.dll, 2 = .qvm)",
+          "after": "sv_progtype                   2         // x86QW local: load the packaged QVM directly"
+        }
+      ],
       "artifacts": [
         {
           "filename": "qwprogs-qvm.zip",
           "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip",
-          "distribution_path": "mods/ktx/1.47/qwprogs-qvm.zip",
+          "distribution_path": "mods/ktx/1.47/upstream/qwprogs-qvm.zip",
           "size": 403006,
           "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
           "members": [
@@ -130,7 +139,7 @@
         {
           "filename": "prox_11.zip",
           "url": "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip",
-          "distribution_path": "mods/pro-x/1.1/prox_11.zip",
+          "distribution_path": "mods/pro-x/1.1/upstream/prox_11.zip",
           "size": 9095898,
           "sha256": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010"
         }
@@ -164,7 +173,7 @@
         {
           "filename": "tf29qw.zip",
           "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip",
-          "distribution_path": "mods/team-fortress/2.9/tf29qw.zip",
+          "distribution_path": "mods/team-fortress/2.9/upstream/tf29qw.zip",
           "size": 626175,
           "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d"
         }
@@ -205,7 +214,7 @@
         {
           "filename": "quakeworld-TD2.22QW-server_PTBR.tar.gz",
           "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-          "distribution_path": "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+          "distribution_path": "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz",
           "size": 567029,
           "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
         }

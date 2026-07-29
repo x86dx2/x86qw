@@ -288,9 +288,9 @@
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"}
       ],
       "project_sources": [
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
       ]
     },
     {

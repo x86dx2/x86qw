@@ -40,7 +40,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["nquake-ktx"]
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.6", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
         self.assertEqual("1.46-dev", ktx["embedded_version"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -106,6 +106,9 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(members["payload/qw/ktx.pk3"])) as package:
             self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
             self.assertEqual(112_973, len(package.read("qwprogs.map")))
+            server_runtime = package.read("mvdsv.cfg")
+            self.assertIn(b"sv_progtype                   2", server_runtime)
+            self.assertNotIn(b"sv_progtype                   1", server_runtime)
 
     def test_bootstrap_limits_textures_without_changing_the_preserved_snapshot(self) -> None:
         context = load_source_context(
@@ -146,6 +149,8 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertTrue({"_startup_message_10", "_startup_message_11", "_startup_message_12"} <= set(aliases))
         self.assertNotIn('spectator 0', autoexec)
         self.assertNotIn('maxspectators 8', autoexec)
+        self.assertNotIn('exec configs/config.cfg', autoexec)
+        self.assertIn('sb_listcache 0', autoexec)
 
     def test_td2_runtime_package_excludes_reference_material(self) -> None:
         context = load_source_context(

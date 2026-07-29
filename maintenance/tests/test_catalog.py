@@ -21,7 +21,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(validate_catalog(catalog), 26)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.6", ktx["version"])
+        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))

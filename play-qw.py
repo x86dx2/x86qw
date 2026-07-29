@@ -25,6 +25,12 @@ lexists = core.lexists
 PLAY_SUPPORT_VERSION = "4"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
+LEGACY_LOCAL_CAPABILITIES = {
+    "final-arena": ("noaim",),
+    "pro-x": ("setinfo", "bind"),
+    "team-fortress": ("bind",),
+    "td2": ("bind", "scr_centertime"),
+}
 
 
 @dataclass(frozen=True)
@@ -35,41 +41,51 @@ class LocalGameSpec:
     profile: str
     component: str
     marker: str
+    program: str
     default_map: str
     suggested_maps: tuple[str, ...]
+    version: str
     description: str
     confirmation: str
 
 
 LOCAL_GAMES = (
     LocalGameSpec(
-        "ktx", "KTX", "qw", "ktx", "nquake-ktx", "qw/ktx.pk3", "dm6",
+        "ktx", "KTX", "qw", "ktx", "nquake-ktx", "qw/ktx.pk3", "qw/ktx.pk3", "dm6",
         ("dm6", "dm2", "dm4", "aerowalk"),
+        "1.47",
         "QuakeWorld competitivo com o QVM oficial do KTX.",
         "No console, ktxver deve mostrar a versão carregada.",
     ),
     LocalGameSpec(
-        "final-arena", "Final Arena", "arena", "arena", "final-arena", "arena/arena.pk3", "23ar-a",
+        "final-arena", "Final Arena", "arena", "arena", "final-arena",
+        "arena/arena.pk3", "arena/arena.pk3", "23ar-a",
         ("23ar-a", "arenarg2", "arenarg4", "dm2arena"),
+        "1.20",
         "Duelos individuais em fila: o vencedor permanece na arena.",
         "No console, gamedir e *gamedir devem mostrar arena.",
     ),
     LocalGameSpec(
-        "pro-x", "Pro-X", "prox", "prox", "pro-x", "prox/qwprogs.dat", "proxmap1",
+        "pro-x", "Pro-X", "prox", "prox", "pro-x",
+        "prox/qwprogs.dat", "prox/qwprogs.dat", "proxmap1",
         ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
+        "1.1",
         "Rounds e equipes com ready, break e votação.",
         "No console, gamedir e *gamedir devem mostrar prox.",
     ),
     LocalGameSpec(
         "team-fortress", "Team Fortress", "fortress", "fortress", "team-fortress",
-        "fortress/misc.pak", "2fort5r", ("2fort5r", "well6", "bases", "mbasesr"),
+        "fortress/misc.pak", "fortress/qwprogs.dat", "2fort5r",
+        ("2fort5r", "well6", "bases", "mbasesr"),
+        "2.9",
         "Team Fortress clássico para QuakeWorld.",
-        "A inicialização deve mostrar Welcome to TeamFortress v2.9.",
+        "A inicialização deve mostrar TeamFortress QuakeWorld v2.9 Beta.",
     ),
     LocalGameSpec(
         "td2", "Total Destruction 2", "td2", "td2", "total-destruction-2",
-        "td2/qwprogs.dat", "dm6", ("dm6", "dm2", "dm4", "e1m2"),
-        "TD2 2.22 com armas, magias, runas e poderes.",
+        "td2/qwprogs.dat", "td2/qwprogs.dat", "dm6", ("dm6", "dm2", "dm4", "e1m2"),
+        "2.22",
+        "Armas, magias, runas e poderes.",
         "No serverinfo, *gamedir deve ser td2 e td2qw deve ser 2.22.",
     ),
 )
@@ -163,6 +179,16 @@ class Player(core.Installer):
         legacy = self.target / "prox/prox.pk3"
         return legacy if legacy.is_file() else marker
 
+    def game_program_path(self, game: LocalGameSpec) -> Path:
+        program = self.target.joinpath(*PurePosixPath(game.program).parts)
+        if not program.is_file() and game.key == "pro-x":
+            legacy = self.target / "prox/prox.pk3"
+            if legacy.is_file():
+                program = legacy
+        if not program.is_file() or program.is_symlink():
+            raise InstallerError(f"Gamecode local não encontrado: {program}")
+        return program
+
     def installed_component_for_game(self, game: LocalGameSpec) -> str | None:
         present, _, _ = self.validate_component_pair(game.component)
         if present:
@@ -173,11 +199,28 @@ class Player(core.Installer):
                 return "clan-arena"
         return None
 
+    def installed_game_version(self, game: LocalGameSpec) -> str:
+        component = self.installed_component_for_game(game)
+        if component is None:
+            return game.version
+        present, _, receipt = self.validate_component_pair(component)
+        if not present or receipt is None:
+            return game.version
+        match = re.match(r"^(\d+(?:\.\d+)+)", receipt["selection"])
+        return match.group(1) if match is not None else game.version
+
     def choose_local_game(self, games: list[LocalGameSpec]) -> LocalGameSpec:
         print("\nQual mod deseja jogar localmente?")
-        for index, game in enumerate(games, 1):
-            default = " (padrão)" if index == 1 else ""
-            print(f"  {index}) {game.label}{default} - {game.description}")
+        labels = [game.label + (" (padrão)" if index == 1 else "") for index, game in enumerate(games, 1)]
+        versions = [self.installed_game_version(game) for game in games]
+        label_width = max(map(len, labels))
+        version_width = max(map(len, versions))
+        index_width = len(str(len(games)))
+        for index, (game, label, version) in enumerate(zip(games, labels, versions), 1):
+            print(
+                f"  {index:>{index_width}}) {label:<{label_width}}  "
+                f"v{version:<{version_width}}  {game.description}"
+            )
         while True:
             try:
                 answer = input(f"Escolha [1-{len(games)}] (padrão: 1): ").strip()
@@ -248,6 +291,7 @@ class Player(core.Installer):
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = [
+            "+set", "sb_listcache", "0",
             "-game", game.gamedir,
             "+gamedir", game.gamedir,
             "+sv_gamedir", game.gamedir,
@@ -256,9 +300,24 @@ class Player(core.Installer):
             arguments.extend(["+sv_progtype", "0"])
         if game.key in PRECONNECT_LOCAL_GAMES:
             arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
+        if capabilities := LEGACY_LOCAL_CAPABILITIES.get(game.key):
+            # ezQuake 3.6.9 probes for a QVM before falling back to the PR1
+            # gamecode used by these legacy mods. Keep that harmless internal
+            # probe out of the player's console, disable extensions their local
+            # servers cannot advertise and authorize only the commands each
+            # verified gamecode actually sends to its local client.
+            arguments.extend([
+                "+cl_remote_capabilities",
+                "$cl_remote_capabilities," + ",".join(capabilities),
+                "+set", "cl_pext_lagteleport", "0",
+                "+set", "con_suppress", "1",
+            ])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
-            arguments.extend(["+wait", "+exec", f"x86qw-{game.profile}.cfg"])
+            arguments.append("+wait")
+            if game.key in LEGACY_LOCAL_CAPABILITIES:
+                arguments.extend(["+set", "con_suppress", "0"])
+            arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
         console.info(f"Abrindo {game.label} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
         console.success(f"{label} aberto com {game.label}.")
@@ -373,7 +432,7 @@ class Player(core.Installer):
         return sources
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
-        package = self.game_marker_path(game)
+        package = self.game_program_path(game)
         suffix = package.suffix.casefold()
         if suffix == ".dat":
             return package.read_bytes()

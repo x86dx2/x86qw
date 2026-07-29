@@ -7,11 +7,24 @@ imutável do `nQuake/distfiles`, não um número inventado.
 
 Estado verificado em 29 de julho de 2026:
 
+## Layout dos mods versionados
+
+Cada mod externo usa a mesma estrutura sob `dist/mods/<mod>/<versao>/`:
+
+- `upstream/`: pacotes binários oficiais consumidos pelo runtime;
+- `source/`: código-fonte ou distribuição original que contém as fontes;
+- `x86qw/`: configurações, perfis e overlays mantidos pelo x86QW.
+
+As pastas são criadas somente quando há conteúdo correspondente. Por isso o
+Pro-X, cujo código-fonte público não foi localizado, possui `upstream/` e
+`x86qw/`, mas não uma pasta `source/` vazia. `dist/mods/x86qw/` é reservado aos
+componentes autorais da própria distribuição e não representa um upstream.
+
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.4` | snapshot nQuake com bootstrap x86QW | aliases temporários e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.6` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva e símbolos QVM preservados |
+| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.7` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados e carregamento QVM direto no servidor local |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -55,7 +68,8 @@ pessoal ainda contém exatamente o padrão antigo. O arquivo global
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
 `qwprogs.map` oficiais da versão 1.47, mas o artefato do upstream é preservado
-em `dist/mods/ktx/`. Ele não é
+em `dist/mods/ktx/1.47/upstream/` e as fontes em
+`dist/mods/ktx/1.47/source/`. Ele não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
 
 ## Contrato dos perfis de gameplay
@@ -90,9 +104,9 @@ página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
 versão não está mais disponível. O pacote incorporado é a distribuição
 QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
 com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
-no perfil `completo`, fica em `dist/mods/td2/2.22/` e não baixa mapas fora
-do acervo já aprovado do x86QW. O artefato upstream completo permanece
-preservado em `dist/`; o runtime recebe somente gamecode, modelos, sons e os
+no perfil `completo` e não baixa mapas fora do acervo já aprovado do x86QW. A
+distribuição original completa permanece preservada em
+`dist/mods/td2/2.22/source/`; o runtime recebe somente gamecode, modelos, sons e os
 perfis x86QW. Binds, HUD e parâmetros do servidor vêm da camada versionada em
 `dist/mods/td2/2.22/x86qw/` e entram no próprio pacote do componente. Somente a
 cópia isolada do gamecode pertence a `.install/play-support.*`, enquanto

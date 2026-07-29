@@ -124,7 +124,7 @@
       "source": {
         "status": "complete",
         "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-        "distribution_path": "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
+        "distribution_path": "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz",
         "size": 567029,
         "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
       },

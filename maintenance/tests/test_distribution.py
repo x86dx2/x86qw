@@ -41,6 +41,28 @@ SPEC.loader.exec_module(install_qw)
 
 
 class DistributionTests(unittest.TestCase):
+    def test_versioned_mods_use_contextual_source_upstream_and_x86qw_directories(self) -> None:
+        versions = {
+            "final-arena": "1.20+x86qw.1",
+            "ktx": "1.47",
+            "pro-x": "1.1",
+            "td2": "2.22",
+            "team-fortress": "2.9",
+        }
+        allowed = {"source", "upstream", "x86qw"}
+        for mod, version in versions.items():
+            with self.subTest(mod=mod):
+                root = ROOT / "dist/mods" / mod / version
+                self.assertTrue(root.is_dir())
+                self.assertFalse([path.name for path in root.iterdir() if path.is_file()])
+                self.assertLessEqual({path.name for path in root.iterdir()}, allowed)
+                self.assertTrue((root / "x86qw").is_dir())
+
+        self.assertTrue((ROOT / "dist/mods/td2/2.22/source").is_dir())
+        self.assertTrue((ROOT / "dist/mods/ktx/1.47/source").is_dir())
+        self.assertTrue((ROOT / "dist/mods/team-fortress/2.9/source").is_dir())
+        self.assertFalse((ROOT / "dist/mods/clan-arena").exists())
+
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()
         catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
@@ -83,10 +105,10 @@ class DistributionTests(unittest.TestCase):
             "installer/1.0.0/x86qw-installer-1.0.0.zip"
         ))
         self.assertEqual("ktx", consumed_component(
-            "mods/ktx/1.47/qwprogs-qvm.zip"
+            "mods/ktx/1.47/upstream/qwprogs-qvm.zip"
         ))
         self.assertEqual("td2", consumed_component(
-            "mods/td2/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+            "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz"
         ))
 
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
