@@ -1120,9 +1120,19 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
     for (repository, tag), artifacts in releases.items():
         release = github_release(repository, tag)
         if release is None:
-            print(f"[GITHUB {repository}] criar release {tag}")
+            titles = {
+                str(package.get("release_title", tag))
+                for package, _, _ in artifacts
+            }
+            if len(titles) != 1:
+                raise ManagerError(f"release {tag} possui titulos conflitantes")
+            title = titles.pop()
+            print(f"[GITHUB {repository}] criar release {tag} ({title})")
             if not dry_run:
-                run(["gh", "release", "create", tag, "--repo", repository, "--title", tag, "--notes", "x86QW distribution artifact mirror."])
+                run([
+                    "gh", "release", "create", tag, "--repo", repository,
+                    "--title", title, "--notes", "x86QW distribution artifact mirror.",
+                ])
                 release = github_release(repository, tag)
         remote_assets = {
             item.get("name"): item for item in (release or {}).get("assets", []) if isinstance(item, dict)

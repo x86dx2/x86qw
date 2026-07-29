@@ -24,16 +24,15 @@ O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consu
 o catálogo publicado e grava uma CLI permanente em `.install/cli` na instalação.
 Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
 no bundle e apenas copiadas para a raiz da instalação.
-Os bundles históricos ficam em `dist/installer/packages/<versão>/`; o link
+Os bundles publicados ficam em `dist/installer/packages/<versão>/`; o link
 relativo `dist/installer/packages/latest` aponta para a maior versão disponível. O
-catálogo conserva todas as versões, marca exatamente uma como `current` e os
-bootstraps permanecem fixados nessa versão e em seu SHA-256.
-O marco inicial desse catálogo é a versão `1.0.20`.
+catálogo conserva as versões oficiais iniciadas em `0.1.0`, marca exatamente uma
+como `current` e os bootstraps permanecem fixados nessa versão e em seu SHA-256.
 
 ## Repositórios
 
 - `x86dx2/x86qw`: distribuição completa em `dist/`, catálogo, instalador, site,
-  validações e GitHub Releases a partir do instalador `1.0.28`;
+  validações e GitHub Releases oficiais a partir do instalador `0.1.0`;
 - `x86dx2/x86qw-dist`: arquivo legado das releases anteriores, preservado sem
   copiar seu histórico para o repositório principal. O GitLab Generic Packages
   continua como segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
@@ -46,8 +45,8 @@ contingência do código. `maintenance/manage.py publish` respeita o repositóri
 registrado em cada URL do catálogo: verifica o histórico em `x86qw-dist` e cria
 as releases novas em `x86qw`. Ele envia somente artefatos já catalogados, baixa
 cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
-As releases do instalador no repositório principal usam a convenção
-`x86qw-installer-X.Y.Z`; as tags legadas em `x86qw-dist` não são renomeadas.
+O pacote usa a identidade `x86qw-installer`, os assets e tags seguem a convenção
+`x86qw-installer-X.Y.Z` e os títulos humanos usam `x86QW Installer X.Y.Z`.
 
 Customizações próprias fazem parte da distribuição, não são constantes
 escondidas no instalador. Para o TD2, elas ficam em
