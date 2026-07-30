@@ -47,6 +47,17 @@ class ModernComponentTests(unittest.TestCase):
         cache.parent.mkdir()
         return play_qw.Player(ROOT, target, cache), target, cache
 
+    @staticmethod
+    def seed_game_profile(player, target, game):
+        for entry in player.components[game.component].get("project_sources", []):
+            destination = str(entry["destination"])
+            if not destination.endswith((".cfg", ".example")):
+                continue
+            source = ROOT / str(entry["path"])
+            output = target / destination
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(source.read_bytes())
+
     def test_new_actions_are_accepted(self):
         for action in ("components", "presets", "hub", "update", "upgrade"):
             with self.subTest(action=action):
@@ -748,6 +759,7 @@ class ModernComponentTests(unittest.TestCase):
             gamecode = target / "td2/qwprogs.dat"
             gamecode.parent.mkdir(parents=True)
             gamecode.write_bytes(b"quakec")
+            self.seed_game_profile(installer, target, game)
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support([game])
             server_config = target / "td2/server.cfg"
@@ -765,10 +777,10 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual((ROOT / "dist/mods/td2/2.22/x86qw/user.cfg.example").read_bytes(), user_config.read_bytes())
             self.assertEqual(b"quakec", (target / "td2/x86qw_td2.dat").read_bytes())
             self.assertTrue(user_config.is_file())
-            self.assertEqual(3, installer.verify_component("play-support"))
-            self.assertEqual(3, installer.remove_component("play-support"))
-            self.assertFalse(server_config.exists())
-            self.assertFalse(client_config.exists())
+            self.assertEqual(1, installer.verify_component("play-support"))
+            self.assertEqual(1, installer.remove_component("play-support"))
+            self.assertTrue(server_config.exists())
+            self.assertTrue(client_config.exists())
             self.assertTrue(user_config.exists())
 
     def test_team_fortress_uses_29_gamecode_instead_of_misc_pak_28(self):
@@ -799,6 +811,7 @@ class ModernComponentTests(unittest.TestCase):
             upstream = target / "td2/qwprogs.dat"
             upstream.parent.mkdir(parents=True)
             upstream.write_bytes(b"td2-v1")
+            self.seed_game_profile(installer, target, game)
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support([game])
 
@@ -810,7 +823,7 @@ class ModernComponentTests(unittest.TestCase):
 
             self.assertEqual(b"td2-v2", (target / "td2/x86qw_td2.dat").read_bytes())
             self.assertEqual('bind MOUSE4 "impulse 23"\n', user_config.read_text(encoding="utf-8"))
-            self.assertEqual(3, installer.verify_component("play-support"))
+            self.assertEqual(1, installer.verify_component("play-support"))
             _, entries, receipt = installer.validate_component_pair("play-support")
             self.assertNotIn("td2/x86qw-td2-user.cfg", dict(entries))
             self.assertEqual(play_qw.PLAY_SUPPORT_VERSION, receipt["selection"])
@@ -830,6 +843,7 @@ class ModernComponentTests(unittest.TestCase):
                 else:
                     with zipfile.ZipFile(package, "w") as archive:
                         archive.writestr("qwprogs.dat", f"{game.key}-v1".encode())
+                self.seed_game_profile(installer, target, game)
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.ensure_local_play_support(games)
 
@@ -880,8 +894,8 @@ class ModernComponentTests(unittest.TestCase):
                     f"// personal {game.key}\n",
                     (gamedir / f"x86qw-{game.profile}-user.cfg").read_text(),
                 )
-            self.assertEqual(7, installer.verify_component("play-support"))
-            self.assertEqual(7, installer.remove_component("play-support"))
+            self.assertEqual(2, installer.verify_component("play-support"))
+            self.assertEqual(2, installer.remove_component("play-support"))
             for game in games:
                 self.assertTrue((
                     target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
@@ -958,8 +972,12 @@ class ModernComponentTests(unittest.TestCase):
             installer, _, _ = self.make_player(Path(temporary))
             for game in play_qw.LOCAL_GAMES:
                 with self.subTest(game=game.key):
-                    sources = installer.game_project_sources(game)
-                    profile = sources[f"{game.gamedir}/x86qw-{game.profile}.cfg"].decode()
+                    destination = f"{game.gamedir}/x86qw-{game.profile}.cfg"
+                    entry = next(
+                        item for item in installer.components[game.component].get("project_sources", [])
+                        if item.get("destination") == destination
+                    )
+                    profile = (ROOT / str(entry["path"])).read_text(encoding="utf-8")
                     help_alias = f"x86qw_{game.profile}_help"
                     self.assertIn(f"tempalias {help_alias}", profile)
                     self.assertIn(f'bind F10 "{help_alias}', profile)

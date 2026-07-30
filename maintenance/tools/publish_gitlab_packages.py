@@ -125,6 +125,7 @@ def main() -> int:
     packages = catalog["packages"]
     assert isinstance(packages, list)
     verified = 0
+    catalog_changed = False
     for index, package in enumerate(packages, 1):
         assert isinstance(package, dict)
         path = local_artifact(package, arguments.dist, arguments.builds)
@@ -140,12 +141,16 @@ def main() -> int:
             raise ValueError(f"GitLab mirror differs from catalog: {package['filename']}")
         if url not in package["urls"]:
             package["urls"].append(url)
+            catalog_changed = True
         verified += 1
         print(f"[{index}/{len(packages)}] verificado {package['filename']}", flush=True)
     if arguments.register:
-        catalog["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        write_catalog(arguments.catalog, catalog)
-        print(f"catálogo atualizado com {verified} mirrors GitLab")
+        if catalog_changed:
+            catalog["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            write_catalog(arguments.catalog, catalog)
+            print(f"catálogo atualizado com {verified} mirrors GitLab")
+        else:
+            print(f"catálogo já continha os {verified} mirrors GitLab")
     else:
         print(f"{verified} mirrors GitLab verificados; catálogo não alterado")
     return 0

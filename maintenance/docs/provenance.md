@@ -17,7 +17,7 @@ atribuição, origem imutável e checksum.
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte; `saw_down.wav` histórico é byte-idêntico ao `saw.wav` preservado | original completo em `dist/mods/td2/2.22/source/` e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
-| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | versionados em `dist/game-data/id1` e incorporados somente ao bundle público do instalador |
+| PAKs de `id1` | cópia registrada fornecida pelo mantenedor, fixada por SHA-256 | fontes canônicas em `dist/game-data/id1`; pacote público separado `x86qw-core-id1`, nunca incorporado ao instalador |
 
 “Candidato” ainda não autoriza publicação. A licença do código-fonte não prova,
 sozinha, que todos os arquivos agregados ao pacote binário usam termos

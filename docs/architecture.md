@@ -37,8 +37,9 @@ como `current` e os bootstraps permanecem fixados nessa versão e em seu SHA-256
   copiar seu histórico para o repositório principal. O GitLab Generic Packages
   continua como segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
   das fontes canônicas e não são versionados novamente no repositório principal.
-  Os dois PAKs registrados permanecem em `dist/game-data/id1` e entram somente no bundle
-  público versionado do instalador, que possui tamanho e SHA-256 no catálogo.
+  Os dois PAKs registrados permanecem em `dist/game-data/id1`; o builder produz
+  `x86qw-core-id1` como pacote de dados-base separado, com tamanho e SHA-256 no
+  catálogo. Eles não entram no bundle do instalador.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
 contingência do código. `maintenance/manage.py publish` respeita o repositório
@@ -47,6 +48,10 @@ as releases novas em `x86qw`. Ele envia somente artefatos já catalogados, baixa
 cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
 O pacote usa a identidade `x86qw-installer`, os assets e tags seguem a convenção
 `x86qw-installer-X.Y.Z` e os títulos humanos usam `x86QW Installer X.Y.Z`.
+Somente a release do instalador marcada como `current` recebe o selo **Latest**
+do GitHub. Clientes, dados-base e mods usam títulos `x86QW Content · ...` e são
+sempre publicados com `make_latest=false`; continuam acessíveis por suas tags e
+pelo catálogo, sem se apresentar como uma nova versão do instalador.
 
 Customizações próprias fazem parte da distribuição, não são constantes
 escondidas no instalador. Para o TD2, elas ficam em
@@ -106,7 +111,8 @@ pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
 ```text
 fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
                      -> maintenance/build/packages/ -> mirrors -> instalador público
-dist/game-data/id1 + CLI -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
+CLI + catálogo runtime mínimo -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
+dist/game-data/id1 -> pacote x86qw-core-id1 -> GitHub/GitLab -> instalação inicial
 ```
 
 As receitas versionadas ficam em `maintenance/recipes/`. O gerenciador valida
@@ -114,7 +120,9 @@ origem, tamanho, SHA-256 e membros mínimos. Atualizações são montadas em sta
 e somente substituem a árvore canônica quando catálogo, inventários, receitas e
 payloads formam um estado coerente.
 
-O Worker serve o site e o catálogo. Para componentes, o instalador valida e
+O Worker serve o site e o catálogo. O bundle público contém somente a CLI e
+um manifesto runtime mínimo: não leva PAKs, pacotes de mods, fontes, gamecodes
+nem os inventários de desenvolvimento. Para componentes, o instalador valida e
 materializa as fontes em `dist/` quando presentes; caso contrário, baixa o ZIP
 derivado de uma URL registrada. Nos dois caminhos, gera o mesmo inventário de
 arquivos gerenciados antes de alterar `quake-world/`.

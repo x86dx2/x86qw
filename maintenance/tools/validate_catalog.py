@@ -95,6 +95,13 @@ def validate_package(
         not isinstance(package["release_title"], str) or not package["release_title"].strip()
     ):
         raise ValueError(f"{label}.release_title must be non-empty text")
+    for key in ("mirror_title", "mirror_notes"):
+        if key in package and (
+            not isinstance(package[key], str) or not package[key].strip()
+        ):
+            raise ValueError(f"{label}.{key} must be non-empty text")
+    if "mirror_latest" in package and not isinstance(package["mirror_latest"], bool):
+        raise ValueError(f"{label}.mirror_latest must be a boolean")
     if "upstream_version" in package and (
         not isinstance(package["upstream_version"], str)
         or not SAFE_SEGMENT.fullmatch(package["upstream_version"])

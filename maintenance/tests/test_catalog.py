@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -13,12 +14,13 @@ from add_package import register_package  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url  # noqa: E402
 from build_component_packages import component_package_metadata, register_packages  # noqa: E402
+from build_core_package import build_core_package  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 28)
+        self.assertEqual(validate_catalog(catalog), 30)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
         self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
@@ -34,6 +36,11 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(all("distribution_path" not in package for package in derived_content))
         self.assertEqual(ktx["origin_url"], ktx["urls"][0])
         self.assertTrue(set(ktx["urls"]) <= {ktx["origin_url"], artifact_url(ktx)})
+        core = next(package for package in catalog["packages"] if package.get("package") == "x86qw-core-id1")
+        self.assertEqual("core", core["component"])
+        self.assertEqual("1.0.0", core["version"])
+        self.assertEqual(64, len(core["source_revision"]))
+        self.assertFalse(core["mirror_latest"])
         self.assertEqual(
             {package["package"] for package in catalog["packages"] if package["component"] == "nquake"},
             {
@@ -61,10 +68,18 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(3, len(installers))
-        self.assertEqual(["0.1.2"], [
+        self.assertEqual(4, len(installers))
+        self.assertEqual(["0.1.3"], [
             package["version"] for package in installers if package.get("current") is True
         ])
+        latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
+        self.assertEqual([("x86qw-installer", "0.1.3")], [
+            (package.get("package"), package["version"]) for package in latest
+        ])
+        self.assertTrue(all(
+            str(package.get("mirror_title", "")).startswith("x86QW Content · ")
+            for package in catalog["packages"] if package["component"] != "installer"
+        ))
 
         package = {
             "component": "ezquake",
@@ -112,6 +127,34 @@ class CatalogTests(unittest.TestCase):
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
             metadata["source_commit"],
         )
+
+    def test_core_game_data_is_built_as_a_separate_deterministic_package(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            distribution = root / "dist"
+            id1 = distribution / "game-data/id1"
+            id1.mkdir(parents=True)
+            (id1 / "pak0.pak").write_bytes(b"PACKzero")
+            (id1 / "pak1.pak").write_bytes(b"PACKone")
+            first = build_core_package(distribution, root / "one")
+            second = build_core_package(distribution, root / "two")
+            self.assertEqual(first["sha256"], second["sha256"])
+            self.assertEqual(first["size"], second["size"])
+            self.assertEqual("x86qw-core-id1", first["package"])
+            self.assertEqual(2, len(first["urls"]))
+            self.assertIn("gitlab.com/api/v4/projects/84856335", first["urls"][1])
+            archive = next((root / "one").rglob(str(first["filename"])))
+            with zipfile.ZipFile(archive) as package:
+                self.assertEqual(
+                    {
+                        "_x86qw/component.json",
+                        "payload/id1/pak0.pak",
+                        "payload/id1/pak1.pak",
+                    },
+                    set(package.namelist()),
+                )
 
     def test_reviewed_artifact_registration_is_atomic_and_immutable(self) -> None:
         import tempfile

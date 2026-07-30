@@ -37,6 +37,121 @@ def load_catalog(path: Path) -> dict[str, object]:
     return catalog
 
 
+def runtime_catalog(catalog: dict[str, object]) -> dict[str, object]:
+    """Project the development inventory into the player-facing runtime contract."""
+    validate_catalog(catalog)
+    return {
+        "format": 1,
+        "project": "x86qw-runtime",
+        "content_namespaces": list(catalog["content_namespaces"]),
+        "profiles": catalog["profiles"],
+        "profile_history": catalog["profile_history"],
+        "components": [
+            {
+                "id": component["id"],
+                "label": component["label"],
+                "kind": component["kind"],
+                "description": component["description"],
+                "requires": component["requires"],
+                "managed_files": [
+                    entry["destination"]
+                    for entry in component.get("project_sources", [])
+                    if entry.get("mode") == "overlay"
+                ],
+            }
+            for component in catalog["components"]
+        ],
+    }
+
+
+def load_runtime_catalog(path: Path) -> dict[str, object]:
+    try:
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read runtime component catalog: {path}") from error
+    validate_runtime_catalog(catalog)
+    return catalog
+
+
+def validate_runtime_catalog(catalog: object) -> None:
+    if (
+        not isinstance(catalog, dict)
+        or catalog.get("format") != 1
+        or catalog.get("project") != "x86qw-runtime"
+    ):
+        raise ValueError("invalid runtime component catalog identity")
+    components = catalog.get("components")
+    if not isinstance(components, list) or not components:
+        raise ValueError("runtime component catalog is empty")
+    identifiers: set[str] = set()
+    dependencies: dict[str, list[str]] = {}
+    for component in components:
+        if not isinstance(component, dict):
+            raise ValueError("invalid runtime component entry")
+        identifier = component.get("id")
+        if (
+            not isinstance(identifier, str)
+            or not COMPONENT_ID.fullmatch(identifier)
+            or identifier in identifiers
+        ):
+            raise ValueError(f"invalid or duplicate runtime component id: {identifier}")
+        identifiers.add(identifier)
+        if component.get("kind") not in ALLOWED_KINDS:
+            raise ValueError(f"invalid runtime component kind: {identifier}")
+        if not all(
+            isinstance(component.get(field), str) and component[field]
+            for field in ("label", "description")
+        ):
+            raise ValueError(f"runtime component lacks user-facing metadata: {identifier}")
+        requires = component.get("requires")
+        if not isinstance(requires, list) or not all(isinstance(item, str) for item in requires):
+            raise ValueError(f"invalid runtime dependencies: {identifier}")
+        dependencies[identifier] = requires
+        managed_files = component.get("managed_files")
+        if (
+            not isinstance(managed_files, list)
+            or len(managed_files) != len(set(managed_files))
+        ):
+            raise ValueError(f"invalid runtime managed files: {identifier}")
+        for path in managed_files:
+            _safe_path(path, "runtime managed path")
+    for identifier, requires in dependencies.items():
+        missing = set(requires) - identifiers
+        if missing or identifier in requires:
+            raise ValueError(f"invalid runtime dependency for {identifier}")
+    _validate_dependency_graph(dependencies)
+    namespaces = catalog.get("content_namespaces")
+    if (
+        not isinstance(namespaces, list)
+        or not namespaces
+        or len(namespaces) != len(set(namespaces))
+        or not all(isinstance(item, str) and COMPONENT_ID.fullmatch(item) for item in namespaces)
+    ):
+        raise ValueError("invalid runtime content namespaces")
+    profiles = catalog.get("profiles")
+    if not isinstance(profiles, dict) or set(profiles) != {"essential", "recommended", "complete"}:
+        raise ValueError("invalid runtime profiles")
+    for name, selected in profiles.items():
+        if not isinstance(selected, list) or len(selected) != len(set(selected)) or set(selected) - identifiers:
+            raise ValueError(f"invalid runtime profile: {name}")
+        if set(resolve_dependencies(catalog, selected)) != set(selected):
+            raise ValueError(f"runtime profile omits a dependency: {name}")
+    if set(profiles["complete"]) != identifiers:
+        raise ValueError("runtime complete profile must contain every component")
+    history = catalog.get("profile_history")
+    if not isinstance(history, dict) or set(history) != set(profiles):
+        raise ValueError("invalid runtime profile history")
+    for name, fingerprints in history.items():
+        if (
+            not isinstance(fingerprints, list)
+            or not fingerprints
+            or len(fingerprints) != len(set(fingerprints))
+            or not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in fingerprints)
+            or profile_fingerprint(profiles[name]) not in fingerprints
+        ):
+            raise ValueError(f"invalid runtime profile history: {name}")
+
+
 def validate_catalog(catalog: object) -> None:
     if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
         raise ValueError("invalid component catalog identity")

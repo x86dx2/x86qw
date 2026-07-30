@@ -21,9 +21,21 @@ Os bootstraps públicos continuam gravando versão e SHA-256 concretos: links
 simbólicos não são portáveis nos mirrors HTTP nem substituem a verificação de
 integridade feita no computador do jogador.
 
+No GitHub, o selo **Latest** pertence exclusivamente ao bundle corrente do
+instalador. Releases de ezQuake, dados-base e componentes usam a família de
+títulos `x86QW Content · ...` e nunca alteram esse selo.
+
 Os launchers permanentes são arquivos normais deste diretório e entram no
 bundle. A instalação apenas copia seus bytes para a raiz escolhida; nenhum
 script de launcher é montado ou escrito a partir de strings em runtime.
+
+O bundle é deliberadamente enxuto: contém a CLI, os launchers e uma projeção
+runtime mínima do catálogo de componentes. PAKs, pacotes de mods, configurações,
+gamecodes, fontes e inventários de desenvolvimento não entram nele. A instalação
+obtém cada payload pelo pacote independente registrado no catálogo; os PAKs
+obrigatórios usam o pacote `x86qw-core-id1`.
+Ao atualizar uma instalação antiga, a pasta interna da CLI é substituída como
+uma unidade, removendo as cópias legadas de PAKs, configurações e gamecodes.
 
 `site/public/install.sh` e `site/public/install.ps1` são projeções byte a byte
 das fontes em `bin/` para publicação pelo Worker. O construtor atualiza primeiro

@@ -14,6 +14,7 @@ from maintenance.manage import (
     distribution_delta,
     github_release_coordinates,
     parser,
+    publish_github,
     preserve_profile_fingerprints,
     reference_content_changed,
     summarize_delta,
@@ -146,6 +147,34 @@ class DistributionManagerTests(unittest.TestCase):
                 filename,
             ),
         )
+
+    def test_component_release_is_created_without_taking_latest(self) -> None:
+        package = {
+            "component": "core",
+            "package": "x86qw-core-id1",
+            "version": "1.0.0",
+            "filename": "x86qw-core-id1-1.0.0.zip",
+            "size": 1,
+            "sha256": "0" * 64,
+            "urls": [
+                "https://github.com/x86dx2/x86qw/releases/download/"
+                "x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip"
+            ],
+            "mirror_title": "x86QW Content · Dados base 1.0.0",
+            "mirror_notes": "Dados base.",
+            "mirror_latest": False,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = Path(temporary) / package["filename"]
+            artifact.write_bytes(b"x")
+            with mock.patch("maintenance.manage.local_artifact", return_value=artifact):
+                with mock.patch("maintenance.manage.github_release", return_value=None):
+                    with mock.patch("maintenance.manage.github_latest_release_tag", return_value=None):
+                        with mock.patch("maintenance.manage.run") as run:
+                            publish_github({"packages": [package]}, dry_run=False)
+        create = run.call_args_list[0].args[0]
+        self.assertIn("--latest=false", create)
+        self.assertIn("x86QW Content · Dados base 1.0.0", create)
         self.assertEqual(
             ("x86dx2/x86qw-dist", "installer-1.0.27"),
             github_release_coordinates(
