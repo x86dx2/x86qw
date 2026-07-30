@@ -1,8 +1,34 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-30T01:14:53Z",
+  "generated_at": "2026-07-30T10:18:10Z",
   "packages": [
+    {
+      "component": "core",
+      "package": "x86qw-core-id1",
+      "version": "1.0.0",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-core-id1-1.0.0.zip",
+      "size": 23817305,
+      "sha256": "48c5701190054946099383c6a833b9e2c9ada745dc6bdb1c0224c939a7ca4f2b",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip",
+      "license": "id-software-registered-game-data",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw/tree/main/dist/game-data/id1"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-core-id1/1.0.0/x86qw-core-id1-1.0.0.zip"
+      ],
+      "source_revision": "ca32377ea9050dd50f9a71147cbe16c35d698765fd57a826651b4d608e20f07f",
+      "mirror_title": "x86QW Content · Dados base 1.0.0",
+      "mirror_notes": "Dados base obrigatórios usados pelo instalador x86QW.",
+      "mirror_latest": false
+    },
     {
       "component": "ezquake",
       "version": "20260616-101233_a86996a",
@@ -23,7 +49,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
       ],
-      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
+      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
+      "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
+      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "ezquake",
@@ -45,7 +74,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
       ],
-      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
+      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
+      "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
+      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "ezquake",
@@ -67,7 +99,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe"
       ],
-      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/windows-x64/20260616-101233_a86996a_ezquake.exe"
+      "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/windows-x64/20260616-101233_a86996a_ezquake.exe",
+      "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
+      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "ezquake",
@@ -89,7 +124,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-linux-x86_64.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-linux-x86_64.zip"
       ],
-      "distribution_path": "clients/ezquake/stable/3.6.9/linux-x86_64/ezQuake-linux-x86_64.zip"
+      "distribution_path": "clients/ezquake/stable/3.6.9/linux-x86_64/ezQuake-linux-x86_64.zip",
+      "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
+      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "ezquake",
@@ -111,7 +149,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-macOS-universal.zip"
       ],
-      "distribution_path": "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
+      "distribution_path": "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip",
+      "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
+      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "ezquake",
@@ -133,7 +174,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-windows-x64.zip"
       ],
-      "distribution_path": "clients/ezquake/stable/3.6.9/windows-x64/ezQuake-windows-x64.zip"
+      "distribution_path": "clients/ezquake/stable/3.6.9/windows-x64/ezQuake-windows-x64.zip",
+      "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
+      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "installer",
@@ -160,7 +204,10 @@
       "distribution_path": "installer/packages/0.1.0/x86qw-installer-0.1.0.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.0",
       "release_title": "x86QW Installer 0.1.0",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW."
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.0",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "installer",
@@ -187,13 +234,16 @@
       "distribution_path": "installer/packages/0.1.1/x86qw-installer-0.1.1.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.1",
       "release_title": "x86QW Installer 0.1.1",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW."
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.1",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.2",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -214,7 +264,40 @@
       "distribution_path": "installer/packages/0.1.2/x86qw-installer-0.1.2.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.2",
       "release_title": "x86QW Installer 0.1.2",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW."
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.2",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.3",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.3.zip",
+      "size": 55527,
+      "sha256": "fcedd03497ce8a10f4f8d7c57c38b2f21cd44a11d2f9e09ee4085a4fe43311a6",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.3/x86qw-installer-0.1.3.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.3/x86qw-installer-0.1.3.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.3",
+      "release_title": "x86QW Installer 0.1.3",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.3",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": true
     },
     {
       "component": "ktx",
@@ -242,7 +325,10 @@
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
       "release_notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, seleciona diretamente o QVM no servidor local do ezQuake, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
-      "upstream_version": "1.47"
+      "upstream_version": "1.47",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+nquake.e4cb23d40aa2+x86qw.7",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -265,7 +351,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.6.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/final-arena/e4cb23d40aa2+x86qw.6/final-arena-e4cb23d40aa2+x86qw.6.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -288,7 +377,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-base-textures/e4cb23d40aa2/nquake-base-textures-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -311,7 +403,10 @@
         "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-bootstrap/e4cb23d40aa2+x86qw.7/nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -334,7 +429,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-crosshairs/e4cb23d40aa2/nquake-crosshairs-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -357,7 +455,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2+x86qw.3.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-documentation/e4cb23d40aa2+x86qw.3/nquake-documentation-e4cb23d40aa2+x86qw.3.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -380,7 +481,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-external-textures/e4cb23d40aa2/nquake-external-textures-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -403,7 +507,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-maps/e4cb23d40aa2/nquake-maps-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -426,7 +533,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-matchinfo/e4cb23d40aa2/nquake-matchinfo-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -449,7 +559,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-models/e4cb23d40aa2/nquake-models-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -472,7 +585,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-player-skins/e4cb23d40aa2/nquake-player-skins-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -495,7 +611,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-scoreboard-flags/e4cb23d40aa2/nquake-scoreboard-flags-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -518,7 +637,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-skyboxes/e4cb23d40aa2/nquake-skyboxes-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -541,7 +663,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-sounds/e4cb23d40aa2/nquake-sounds-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -564,7 +689,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-visual-core/e4cb23d40aa2/nquake-visual-core-e4cb23d40aa2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "nquake",
@@ -587,7 +715,10 @@
         "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2+x86qw.2.zip",
         "https://gitlab.com/api/v4/projects/84856335/packages/generic/qrp-hires/e4cb23d40aa2+x86qw.2/qrp-hires-e4cb23d40aa2+x86qw.2.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "pro-x",
@@ -614,7 +745,10 @@
       "source_revision": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1 e reaplica o perfil de gameplay x86QW.",
-      "upstream_version": "1.1"
+      "upstream_version": "1.1",
+      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "td2",
@@ -643,7 +777,10 @@
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
       "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
-      "upstream_version": "2.22"
+      "upstream_version": "2.22",
+      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.5",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "team-fortress",
@@ -671,7 +808,10 @@
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "release_notes": "Preserva os assets Team Fortress 2.8 do nQuake, aplica o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
-      "upstream_version": "2.9"
+      "upstream_version": "2.9",
+      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false
     }
   ]
 }

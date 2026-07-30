@@ -25,8 +25,8 @@ No Windows PowerShell:
 irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
-O bootstrap valida seu bundle por SHA-256, consulta somente o catálogo público
-e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. O
+O bootstrap valida o bundle enxuto do instalador por SHA-256, consulta somente
+o catálogo público e pergunta onde instalar, oferecendo `~/Games/x86qw` apenas como sugestão. O
 cliente do sistema atual é detectado automaticamente, sem perguntar o SO. Para
 preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 
@@ -105,7 +105,7 @@ dist/
 ├── distributions/
 │   └── nquake/           snapshot fixado e particionado pelo BOM
 ├── game-data/
-│   └── id1/              pak0.pak e pak1.pak registrados
+│   └── id1/              fontes canônicas de pak0.pak e pak1.pak registrados
 ├── mods/                 KTX, Final Arena, Pro-X, Team Fortress, TD2 e perfis x86QW
 ├── installer/            bundle versionado usado pelo bootstrap público
 │   ├── README.md         contrato e manutenção deste contexto
@@ -181,4 +181,5 @@ instala dependencias adicionais.
 - mapas e LOCs externos não são baixados em massa; entra apenas o acervo curado do nQuake;
 - o modo de desenvolvimento materializa fontes locais; o modo público usa apenas mirrors do catálogo;
 - binarios grandes usam Git LFS; R2 nao faz parte da arquitetura atual;
-- `id1` e tratado como material registrado, validado por SHA-256 e incorporado ao bundle público.
+- `id1` e tratado como material registrado e validado por SHA-256; seu ZIP de
+  dados-base é publicado separadamente e nunca incorporado ao bundle do instalador.

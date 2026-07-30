@@ -27,10 +27,12 @@ Use apenas o gerenciador da raiz do contexto:
 - `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
   definicao local revisada;
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
-- `build`: valida os binarios stable e gera os 19 ZIPs derivados em
-  `maintenance/build/packages/`;
+- `build`: valida os binarios stable e gera 19 ZIPs de componentes mais o
+  pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages; URLs
-  históricas continuam em `x86qw-dist`, enquanto releases novas usam `x86qw`;
+  históricas continuam em `x86qw-dist`, enquanto releases novas usam `x86qw`.
+  Somente o instalador corrente recebe o selo Latest; os demais artefatos são
+  identificados como conteúdo;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
 `update --commit --push` existe para automacao, mas a rotina recomendada e

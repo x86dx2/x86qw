@@ -105,6 +105,11 @@ def build_packages(
             package.writestr(info, data)
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
+        mirror_title = (
+            f"x86QW Content · nQuake {commit[:12]}"
+            if distribution_tag == reference_release
+            else f"x86QW Content · {components[identifier]['label']} {version}"
+        )
         source_urls = [] if strategy == "upstream-package" else [f"https://github.com/nQuake/distfiles/tree/{commit}"]
         upstream = release_metadata.get("upstream")
         if isinstance(upstream, dict):
@@ -128,6 +133,9 @@ def build_packages(
             "source_urls": source_urls,
             "redistribution_reviewed": True,
             "urls": [mirror_url],
+            "mirror_title": mirror_title,
+            "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+            "mirror_latest": False,
         }
         if strategy == "upstream-package":
             package_record["source_revision"] = source_revision
@@ -179,7 +187,10 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
         ) == identity]
         if existing:
             candidate = existing[0]
-            publication_fields = {"component", "origin_url", "release_url", "urls"}
+            publication_fields = {
+                "component", "origin_url", "release_url", "urls",
+                "mirror_title", "mirror_notes", "mirror_latest",
+            }
             same_payload = all(
                 candidate.get(key) == value
                 for key, value in package.items() if key not in publication_fields
@@ -187,6 +198,9 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
             if len(existing) != 1 or not same_payload:
                 raise ValueError(f"published package identity changed: {identity}")
             candidate["component"] = package["component"]
+            for field in ("mirror_title", "mirror_notes", "mirror_latest"):
+                if field in package:
+                    candidate[field] = package[field]
             candidate.pop("distribution_path", None)
             continue
         packages[:] = [item for item in packages if not isinstance(item, dict) or (

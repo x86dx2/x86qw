@@ -43,13 +43,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from maintenance.tools.components import (
     components_by_id,
     load_catalog as load_component_catalog,
+    load_runtime_catalog,
     profile_fingerprint,
     resolve_dependencies,
-)
-from maintenance.tools.component_sources import (
-    ComponentSourceContext,
-    load_source_context,
-    resolve_component_payloads,
+    runtime_catalog as project_runtime_catalog,
 )
 
 
@@ -60,21 +57,20 @@ METADATA_DIR = ".install"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
-COMPONENT_CATALOG = "maintenance/inventory/components.json"
+DEVELOPMENT_COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
+RUNTIME_COMPONENT_CATALOG = "_x86qw/components.json"
 ONLINE_CLI_FILES = (
     "dist/installer/bin/manager.py",
     "dist/installer/bin/gameplay.py",
     "maintenance/__init__.py",
     "maintenance/tools/__init__.py",
     "maintenance/tools/components.py",
-    "maintenance/tools/component_sources.py",
-    "maintenance/tools/component_releases.py",
-    "maintenance/inventory/components.json",
-    "maintenance/inventory/component-releases.json",
+    RUNTIME_COMPONENT_CATALOG,
 )
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
-BUNDLED_ID1_DIR = Path("dist/game-data/id1")
+DEVELOPMENT_ID1_DIR = Path("dist/game-data/id1")
+CORE_ID1_PACKAGE = "x86qw-core-id1"
 CACHE_DIR_NAME = "x86qw"
 CACHE_MARKER_NAME = ".x86qw-cache"
 CACHE_MARKER_VALUE = "x86qw-cache-v1"
@@ -604,11 +600,17 @@ class Installer:
         self.app_distribution_path = ""
         self.cache_prefix = ""
         self._public_catalog: dict[str, object] | None = None
-        self._component_source_context: ComponentSourceContext | None = None
+        self._component_source_context: object | None = None
         self.selected_component_profile = "none"
         self.requested_components: list[str] = []
+        runtime_catalog_path = INSTALLER_ROOT / RUNTIME_COMPONENT_CATALOG
+        development_catalog_path = INSTALLER_ROOT / DEVELOPMENT_COMPONENT_CATALOG
         try:
-            self.component_catalog = load_component_catalog(INSTALLER_ROOT / COMPONENT_CATALOG)
+            self.component_catalog = (
+                load_runtime_catalog(runtime_catalog_path)
+                if runtime_catalog_path.is_file() and not runtime_catalog_path.is_symlink()
+                else load_component_catalog(development_catalog_path)
+            )
         except ValueError as error:
             raise InstallerError(str(error)) from error
         self.components = components_by_id(self.component_catalog)
@@ -934,16 +936,7 @@ class Installer:
         self.check_pak("id1/pak1.pak", ID1_PAK1_SHA256)
         console.detail("PAKs registrados validados por SHA-256.")
 
-    def provision_install_target(self) -> None:
-        bundled = self.project_root / BUNDLED_ID1_DIR
-        ensure_no_symlink(bundled, "bundled id1 directory")
-        sources = (
-            ("pak0.pak", ID1_PAK0_SHA256),
-            ("pak1.pak", ID1_PAK1_SHA256),
-        )
-        for name, expected in sources:
-            self.validate_pak_file(bundled / name, expected, "PAK permanente da distribuição")
-
+    def prepare_install_target(self) -> None:
         ensure_no_symlink(self.target, "installation target")
         if lexists(self.target) and not self.target.is_dir():
             raise InstallerError(f"O destino não é um diretório: {self.target}")
@@ -954,16 +947,55 @@ class Installer:
             raise InstallerError(f"O caminho id1 não é um diretório: {id1}")
         id1.mkdir(exist_ok=True)
 
-        copied = 0
-        for name, expected in sources:
-            destination = id1 / name
+    def provision_install_target(self) -> None:
+        self.prepare_install_target()
+        requirements = (
+            ("pak0.pak", ID1_PAK0_SHA256),
+            ("pak1.pak", ID1_PAK1_SHA256),
+        )
+        missing: list[str] = []
+        for name, expected in requirements:
+            destination = self.target / "id1" / name
             if lexists(destination):
                 self.validate_pak_file(destination, expected, "PAK existente")
+            else:
+                missing.append(name)
+        if not missing:
+            return
+
+        local_id1 = self.project_root / DEVELOPMENT_ID1_DIR
+        local_sources = not self.online_only and local_id1.is_dir() and not local_id1.is_symlink()
+        if local_sources:
+            sources = {name: local_id1 / name for name, _ in requirements}
+            for name, expected in requirements:
+                self.validate_pak_file(sources[name], expected, "PAK permanente da distribuição")
+        else:
+            if self.stage is None:
+                raise InstallerError("A preparação dos dados base exige uma área temporária ativa.")
+            package = self.core_id1_package_record()
+            artifact = self.download_component_package(package)
+            managed, defaults = self.prepare_component_package(package, artifact)
+            if defaults:
+                raise InstallerError("O pacote de dados base contém defaults inesperados.")
+            sources = {name: managed / "id1" / name for name, _ in requirements}
+            actual = {
+                path.relative_to(managed).as_posix()
+                for path in managed.rglob("*") if path.is_file()
+            }
+            if actual != {f"id1/{name}" for name, _ in requirements}:
+                raise InstallerError("O pacote de dados base contém arquivos inesperados.")
+            for name, expected in requirements:
+                self.validate_pak_file(sources[name], expected, "PAK do pacote de dados base")
+
+        copied = 0
+        for name, expected in requirements:
+            destination = self.target / "id1" / name
+            if name not in missing:
                 continue
-            temporary = id1 / f".{name}.x86qw-part"
+            temporary = self.target / "id1" / f".{name}.x86qw-part"
             ensure_no_symlink(temporary, "temporary PAK")
             try:
-                shutil.copyfile(bundled / name, temporary)
+                shutil.copyfile(sources[name], temporary)
                 if os.name != "nt":
                     temporary.chmod(0o644)
                 self.validate_pak_file(temporary, expected, "Cópia temporária do PAK")
@@ -973,7 +1005,9 @@ class Installer:
                     remove_path(temporary)
             copied += 1
         if copied:
-            console.success(f"PAKs registrados preparados em {id1} ({file_count(copied)} copiados).")
+            console.success(
+                f"Dados base preparados em {self.target / 'id1'} ({file_count(copied)} copiados)."
+            )
         else:
             console.detail("PAKs registrados já estavam presentes e foram preservados.")
 
@@ -2117,6 +2151,41 @@ class Installer:
             raise InstallerError(f"Resumo da versão inválido do componente {identifier}.")
         return package
 
+    def core_id1_package_record(self) -> dict[str, object]:
+        catalog = self.public_catalog("Consultando o pacote de dados base x86QW...")
+        matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
+            package.get("component"), package.get("package"), package.get("channel"),
+            package.get("platform"), package.get("architecture"),
+        ) == ("core", CORE_ID1_PACKAGE, "content", "any", "any")]
+        if len(matches) != 1:
+            raise InstallerError("O catálogo deve publicar exatamente um pacote de dados base.")
+        package = matches[0]
+        version = package.get("version")
+        filename = package.get("filename")
+        if not isinstance(version, str) or not COMPONENT_VERSION.fullmatch(version):
+            raise InstallerError("Versão inválida do pacote de dados base.")
+        if filename != f"{CORE_ID1_PACKAGE}-{version}.zip":
+            raise InstallerError("Identidade inconsistente do pacote de dados base.")
+        source_revision = package.get("source_revision")
+        if not isinstance(source_revision, str):
+            raise InstallerError("Revisão de origem ausente do pacote de dados base.")
+        validate_hex(source_revision, HEX64, "revisão do pacote de dados base")
+        digest = package.get("sha256")
+        if not isinstance(digest, str):
+            raise InstallerError("SHA-256 ausente do pacote de dados base.")
+        validate_hex(digest, HEX64, "SHA-256 do pacote de dados base")
+        if not isinstance(package.get("size"), int) or package["size"] <= 0:
+            raise InstallerError("Tamanho inválido do pacote de dados base.")
+        urls = package.get("urls")
+        if not isinstance(urls, list) or not urls or not all(isinstance(url, str) for url in urls):
+            raise InstallerError("Mirrors inválidos do pacote de dados base.")
+        for url in urls:
+            if https_url_filename(url, "mirror do pacote de dados base") != filename:
+                raise InstallerError("Nome inesperado em um mirror do pacote de dados base.")
+        if package.get("redistribution_reviewed") is not True:
+            raise InstallerError("O pacote de dados base ainda não foi liberado pelo x86QW.")
+        return package
+
     def installer_bundle_record(self) -> dict[str, object]:
         catalog = self.public_catalog("Consultando atualizações do x86QW...")
         matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
@@ -2368,7 +2437,7 @@ class Installer:
                     console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
         raise InstallerError(f"Nenhum mirror entregou o pacote {identifier}: {last_error}")
 
-    def component_source_context(self) -> ComponentSourceContext | None:
+    def component_source_context(self) -> object | None:
         if self.online_only:
             return None
         distribution = self.project_root / "dist"
@@ -2376,9 +2445,11 @@ class Installer:
             return None
         if self._component_source_context is None:
             try:
+                from maintenance.tools.component_sources import load_source_context
+
                 self._component_source_context = load_source_context(
                     distribution,
-                    self.project_root / COMPONENT_CATALOG,
+                    self.project_root / DEVELOPMENT_COMPONENT_CATALOG,
                     self.project_root / COMPONENT_RELEASES,
                 )
             except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
@@ -2397,6 +2468,8 @@ class Installer:
             return None
         identifier = str(package["package"])
         try:
+            from maintenance.tools.component_sources import resolve_component_payloads
+
             release, source_revision, payloads = resolve_component_payloads(context, identifier)
         except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
             raise InstallerError(
@@ -2570,10 +2643,16 @@ class Installer:
         if not present:
             return
         released = {
-            str(source["destination"])
+            str(path)
             for identifier in selected
-            for source in self.components[identifier].get("project_sources", [])
-            if source.get("mode") == "overlay"
+            for path in self.components[identifier].get(
+                "managed_files",
+                [
+                    source["destination"]
+                    for source in self.components[identifier].get("project_sources", [])
+                    if source.get("mode") == "overlay"
+                ],
+            )
         }
         if not released:
             return
@@ -3174,9 +3253,10 @@ class Installer:
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
         self.choose_release()
-        self.provision_install_target()
+        self.prepare_install_target()
         self.reject_target_symlinks()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self.provision_install_target()
         self.check_paks()
         pak0_before = file_hash(self.target / "id1/pak0.pak")
         pak1_before = file_hash(self.target / "id1/pak1.pak")
@@ -3427,29 +3507,49 @@ class Installer:
             return
         identity = self.installer_bundle_identity()
         cli_version = str(identity["version"])
-        cli_root = self.target / METADATA_DIR / "cli"
-        cli_root.mkdir(parents=True, exist_ok=True)
-        relative_files = list(ONLINE_CLI_FILES)
-        for component in self.components.values():
-            for entry in component.get("project_sources", []):
-                relative = entry.get("path")
-                if isinstance(relative, str) and relative not in relative_files:
-                    relative_files.append(relative)
-        for relative in relative_files:
-            source = self.project_root.joinpath(*PurePosixPath(relative).parts)
-            if not source.is_file() or source.is_symlink():
-                raise InstallerError(f"Arquivo da CLI pública ausente ou inválido: {source}")
-            destination = cli_root.joinpath(*PurePosixPath(relative).parts)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            temporary = destination.with_name(destination.name + ".new")
-            temporary.write_bytes(source.read_bytes())
-            if os.name != "nt":
-                temporary.chmod(
-                    0o755
-                    if relative in {"dist/installer/bin/manager.py", "dist/installer/bin/gameplay.py"}
-                    else 0o644
-                )
-            temporary.replace(destination)
+        metadata_root = self.target / METADATA_DIR
+        metadata_root.mkdir(parents=True, exist_ok=True)
+        cli_root = metadata_root / "cli"
+        replacement = Path(tempfile.mkdtemp(prefix=".cli-new.", dir=metadata_root))
+        backup = metadata_root / f".cli-old.{os.getpid()}"
+        try:
+            for relative in ONLINE_CLI_FILES:
+                source = self.project_root.joinpath(*PurePosixPath(relative).parts)
+                if relative == RUNTIME_COMPONENT_CATALOG and not source.is_file():
+                    payload = json.dumps(
+                        project_runtime_catalog(self.component_catalog),
+                        ensure_ascii=False, indent=2, sort_keys=True,
+                    ).encode("utf-8") + b"\n"
+                else:
+                    if not source.is_file() or source.is_symlink():
+                        raise InstallerError(f"Arquivo da CLI pública ausente ou inválido: {source}")
+                    payload = source.read_bytes()
+                destination = replacement.joinpath(*PurePosixPath(relative).parts)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(payload)
+                if os.name != "nt":
+                    destination.chmod(
+                        0o755
+                        if relative in {"dist/installer/bin/manager.py", "dist/installer/bin/gameplay.py"}
+                        else 0o644
+                    )
+            if lexists(cli_root):
+                if not cli_root.is_dir() or cli_root.is_symlink():
+                    raise InstallerError(f"Diretório da CLI instalada inválido: {cli_root}")
+                if lexists(backup):
+                    raise InstallerError(f"Backup temporário inesperado da CLI: {backup}")
+                os.replace(cli_root, backup)
+            try:
+                os.replace(replacement, cli_root)
+            except OSError:
+                if lexists(backup) and not lexists(cli_root):
+                    os.replace(backup, cli_root)
+                raise
+            if lexists(backup):
+                remove_path(backup)
+        finally:
+            if lexists(replacement):
+                remove_path(replacement)
 
         cli_receipt = self.target / CLI_RECEIPT
         cli_receipt.parent.mkdir(parents=True, exist_ok=True)

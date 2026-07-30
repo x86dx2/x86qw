@@ -34,7 +34,7 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
-    def test_repository_bundles_the_registered_paks(self):
+    def test_repository_preserves_the_registered_paks_as_core_sources(self):
         expected = {
             "pak0.pak": install_qw.ID1_PAK0_SHA256,
             "pak1.pak": install_qw.ID1_PAK1_SHA256,
@@ -59,7 +59,7 @@ class InstallerTests(unittest.TestCase):
             installer.cleanup_stage()
             self.assertFalse(target.exists())
 
-    def test_new_install_target_receives_bundled_registered_paks(self):
+    def test_development_install_receives_registered_paks_from_core_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             target.rmdir()
@@ -74,6 +74,56 @@ class InstallerTests(unittest.TestCase):
                     installer.validate_target("install")
                     with contextlib.redirect_stdout(io.StringIO()):
                         installer.provision_install_target()
+                    installer.check_paks()
+            self.assertEqual(pak0, (target / "id1/pak0.pak").read_bytes())
+            self.assertEqual(pak1, (target / "id1/pak1.pak").read_bytes())
+
+    def test_public_install_downloads_registered_paks_as_a_separate_core_package(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "quake-world"
+            installer = install_qw.Installer(ROOT, target, root / "cache", online_only=True)
+            pak0 = b"PACK" + b"public-pak0"
+            pak1 = b"PACK" + b"public-pak1"
+            revision = "a" * 64
+            version = "1.0.0"
+            archive = root / f"{install_qw.CORE_ID1_PACKAGE}-{version}.zip"
+            members = []
+            with zipfile.ZipFile(archive, "w") as package:
+                for name, payload in (("pak0.pak", pak0), ("pak1.pak", pak1)):
+                    member = f"payload/id1/{name}"
+                    members.append({
+                        "path": member,
+                        "sha256": install_qw.hashlib.sha256(payload).hexdigest(),
+                    })
+                    package.writestr(member, payload)
+                package.writestr("_x86qw/component.json", json.dumps({
+                    "format": 1,
+                    "project": "x86qw",
+                    "package": install_qw.CORE_ID1_PACKAGE,
+                    "version": version,
+                    "source_revision": revision,
+                    "members": members,
+                }))
+            record = {
+                "package": install_qw.CORE_ID1_PACKAGE,
+                "version": version,
+                "source_revision": revision,
+                "origin_url": "https://example.invalid/core.zip",
+            }
+            with mock.patch.object(
+                install_qw, "ID1_PAK0_SHA256", install_qw.hashlib.sha256(pak0).hexdigest(),
+            ):
+                with mock.patch.object(
+                    install_qw, "ID1_PAK1_SHA256", install_qw.hashlib.sha256(pak1).hexdigest(),
+                ):
+                    installer.prepare_install_target()
+                    installer.stage = target / ".stage"
+                    installer.stage.mkdir()
+                    with mock.patch.object(installer, "core_id1_package_record", return_value=record):
+                        with mock.patch.object(installer, "download_component_package", return_value=archive):
+                            with contextlib.redirect_stdout(io.StringIO()):
+                                installer.provision_install_target()
                     installer.check_paks()
             self.assertEqual(pak0, (target / "id1/pak0.pak").read_bytes())
             self.assertEqual(pak1, (target / "id1/pak1.pak").read_bytes())
@@ -323,6 +373,9 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "x86qw"
             target.mkdir()
+            stale = target / ".install/cli/dist/game-data/id1/pak0.pak"
+            stale.parent.mkdir(parents=True)
+            stale.write_bytes(b"legacy bundled PAK")
             installer = install_qw.Installer(ROOT, target, online_only=True)
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
@@ -331,7 +384,9 @@ class InstallerTests(unittest.TestCase):
                 ):
                     installer.install_online_cli()
             self.assertTrue((target / ".install/cli/dist/installer/bin/manager.py").is_file())
-            self.assertTrue((target / ".install/cli/dist/mods/team-fortress/2.9/x86qw/client.cfg").is_file())
+            self.assertTrue((target / ".install/cli/_x86qw/components.json").is_file())
+            self.assertFalse((target / ".install/cli/dist/mods").exists())
+            self.assertFalse((target / ".install/cli/dist/game-data").exists())
             self.assertTrue((target / "x86qw.cmd").is_file())
             self.assertEqual(
                 (ROOT / "dist/installer/bin/x86qw.sh").read_bytes(),

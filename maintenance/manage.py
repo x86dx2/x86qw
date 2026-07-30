@@ -24,6 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from maintenance.tools.build_component_packages import build_packages, register_packages
+from maintenance.tools.build_core_package import build_core_package
 from maintenance.tools.build_package import verify_artifact
 from maintenance.tools.check_component_updates import check_updates
 from maintenance.tools.component_releases import load_releases
@@ -502,6 +503,11 @@ def update_ezquake_catalog(
             f"https://github.com/{github_repository}/releases/download/{tag}/{record['filename']}"
         ]
         record["urls"].append(artifact_url(record))
+        record["mirror_title"] = f"x86QW Content · ezQuake {channel} {version}"
+        record["mirror_notes"] = (
+            f"Cliente ezQuake {channel} {version} preservado pela distribuição x86QW."
+        )
+        record["mirror_latest"] = False
         replacements.append(record)
         if channel == "stable":
             stable_version = version
@@ -544,6 +550,33 @@ def update_ezquake_catalog(
     for path in recipe_paths(recipes):
         validate_recipe(load_json(path), str(path))
     return stable_version, nightly_version
+
+
+def normalize_catalog_release_metadata(catalog: dict[str, object]) -> None:
+    """Keep GitHub's Latest badge exclusive to the current installer release."""
+    packages = catalog.get("packages")
+    if not isinstance(packages, list):
+        raise ManagerError("catalogo invalido ao normalizar metadados de release")
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        component = str(package.get("component", ""))
+        version = str(package.get("version", ""))
+        if component == "installer":
+            package.setdefault("mirror_title", f"x86QW Installer {version}")
+            package.setdefault("mirror_notes", "Instalador público e atualizador da distribuição x86QW.")
+            package["mirror_latest"] = package.get("current") is True
+        elif component == "ezquake":
+            channel = str(package.get("channel", ""))
+            package.setdefault("mirror_title", f"x86QW Content · ezQuake {channel} {version}")
+            package.setdefault(
+                "mirror_notes",
+                f"Cliente ezQuake {channel} {version} preservado pela distribuição x86QW.",
+            )
+            package["mirror_latest"] = False
+        else:
+            package["mirror_latest"] = False
+    validate_catalog(catalog)
 
 
 def update_client_compatibility(releases: dict[str, object], stable: str, nightly: str) -> None:
@@ -797,11 +830,16 @@ def command_build(options: argparse.Namespace) -> int:
     temporary = Path(tempfile.mkdtemp(prefix="packages-", dir=BUILDS.parent))
     try:
         manifest = build_packages(DIST, temporary)
+        core_package = build_core_package(DIST, temporary)
+        manifest["packages"].append(core_package)
         if BUILDS.exists():
             shutil.rmtree(BUILDS)
         os.replace(temporary, BUILDS)
         if options.register:
             register_packages(CATALOG, manifest)
+            catalog = load_json(CATALOG)
+            normalize_catalog_release_metadata(catalog)
+            write_json(CATALOG, catalog)
         print(f"[OK] {len(manifest['packages'])} pacote(s) gerado(s) em {BUILDS}.")
     finally:
         if temporary.exists():
@@ -1095,6 +1133,21 @@ def github_release(repository: str, tag: str) -> dict[str, object] | None:
     return value if isinstance(value, dict) else None
 
 
+def github_latest_release_tag(repository: str) -> str | None:
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repository}/releases/latest", "--jq", ".tag_name"],
+        cwd=PROJECT_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode:
+        if "HTTP 404" in result.stderr or "Not Found" in result.stderr:
+            return None
+        raise ManagerError(result.stderr.strip() or f"falha ao consultar latest de {repository}")
+    return result.stdout.strip() or None
+
+
 def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
     packages = catalog["packages"]
     assert isinstance(packages, list)
@@ -1117,23 +1170,60 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
         releases.setdefault((repository, tag), []).append(
             (package, local_artifact(package, DIST, BUILDS), primary)
         )
+    latest_by_repository = {
+        repository: github_latest_release_tag(repository)
+        for repository, _ in releases
+    }
     for (repository, tag), artifacts in releases.items():
+        titles = {
+            str(package.get("mirror_title", package.get("release_title", f"x86QW Content · {tag}")))
+            for package, _, _ in artifacts
+        }
+        notes = {
+            str(package.get("mirror_notes", "Pacotes versionados da distribuição x86QW."))
+            for package, _, _ in artifacts
+        }
+        latest_values = {
+            bool(package.get(
+                "mirror_latest",
+                package.get("component") == "installer" and package.get("current") is True,
+            ))
+            for package, _, _ in artifacts
+        }
+        if len(titles) != 1 or len(notes) != 1 or len(latest_values) != 1:
+            raise ManagerError(f"release {tag} possui metadados de espelho conflitantes")
+        title = titles.pop()
+        release_notes = notes.pop()
+        make_latest = latest_values.pop()
         release = github_release(repository, tag)
         if release is None:
-            titles = {
-                str(package.get("release_title", tag))
-                for package, _, _ in artifacts
-            }
-            if len(titles) != 1:
-                raise ManagerError(f"release {tag} possui titulos conflitantes")
-            title = titles.pop()
             print(f"[GITHUB {repository}] criar release {tag} ({title})")
             if not dry_run:
                 run([
                     "gh", "release", "create", tag, "--repo", repository,
-                    "--title", title, "--notes", "x86QW distribution artifact mirror.",
+                    "--title", title, "--notes", release_notes,
+                    "--latest" if make_latest else "--latest=false",
                 ])
                 release = github_release(repository, tag)
+                latest_by_repository[repository] = tag if make_latest else latest_by_repository[repository]
+        else:
+            is_latest = latest_by_repository[repository] == tag
+            if (
+                release.get("name") != title
+                or release.get("body") != release_notes
+                or is_latest != make_latest
+            ):
+                print(f"[GITHUB {repository}] atualizar metadados de {tag}")
+                if not dry_run:
+                    run([
+                        "gh", "api", "--method", "PATCH",
+                        f"repos/{repository}/releases/{release['id']}",
+                        "-f", f"name={title}", "-f", f"body={release_notes}",
+                        "-f", f"make_latest={'true' if make_latest else 'false'}",
+                    ])
+                    latest_by_repository[repository] = tag if make_latest else (
+                        None if is_latest else latest_by_repository[repository]
+                    )
         remote_assets = {
             item.get("name"): item for item in (release or {}).get("assets", []) if isinstance(item, dict)
         }

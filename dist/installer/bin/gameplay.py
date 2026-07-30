@@ -24,7 +24,7 @@ file_count = core.file_count
 file_hash = core.file_hash
 lexists = core.lexists
 
-PLAY_SUPPORT_VERSION = "5"
+PLAY_SUPPORT_VERSION = "6"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
 LEGACY_LOCAL_CAPABILITIES = {
@@ -321,10 +321,6 @@ class Player(core.Installer):
         console.info(game.confirmation)
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
-        profile_sources = {
-            game.key: self.game_project_sources(game)
-            for game in games if game.key in PROFILED_LOCAL_GAMES
-        }
         present, old_entries, _ = self.validate_component_pair("play-support")
         if not games:
             if present:
@@ -338,17 +334,7 @@ class Player(core.Installer):
             managed = self.stage / "managed"
             prepared = 0
             for game in games:
-                sources = profile_sources.get(game.key)
-                if sources is not None:
-                    component_present, component_entries, _ = self.validate_component_pair(game.component)
-                    component_owned = set(dict(component_entries)) if component_present else set()
-                    files = {
-                        relative: payload
-                        for relative, payload in sources.items()
-                        if not relative.endswith("-user.cfg") and relative not in component_owned
-                    }
-                else:
-                    files = {}
+                files: dict[str, bytes] = {}
                 if game.key != "ktx":
                     program_name = f"x86qw_{game.gamedir}"
                     files[f"{game.gamedir}/{program_name}.dat"] = self.local_game_program(game)
@@ -373,60 +359,26 @@ class Player(core.Installer):
                 removed = self.remove_component("play-support")
                 console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
             for game in games:
-                sources = profile_sources.get(game.key)
-                if sources is not None:
-                    self.ensure_game_user_profile(
-                        game,
-                        sources[f"{game.gamedir}/x86qw-{game.profile}-user.cfg"],
-                    )
+                if game.key in PROFILED_LOCAL_GAMES:
+                    self.ensure_game_user_profile(game)
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
 
-    def ensure_game_user_profile(self, game: LocalGameSpec, initial: bytes) -> None:
+    def ensure_game_user_profile(self, game: LocalGameSpec) -> None:
         destination = self.target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
                 raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")
             return
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(initial)
+        destination.write_text(
+            f"// x86QW: personalizações locais de {game.label}\n",
+            encoding="utf-8",
+        )
         if os.name != "nt":
             destination.chmod(0o644)
         console.info(f"Configuração pessoal de {game.label} criada: {destination}")
-
-    def game_project_sources(self, game: LocalGameSpec) -> dict[str, bytes]:
-        stem = f"x86qw-{game.profile}"
-        expected = {
-            f"{game.gamedir}/{stem}.cfg": "overlay",
-            f"{game.gamedir}/{stem}-user.cfg": "default",
-        }
-        if game.key != "ktx":
-            expected[f"{game.gamedir}/server.cfg"] = "overlay"
-        if game.key in PRECONNECT_LOCAL_GAMES:
-            expected[f"{game.gamedir}/{stem}-pre.cfg"] = "overlay"
-        if game.key == "pro-x":
-            expected[f"{game.gamedir}/qw_server.cfg"] = "overlay"
-        entries = [
-            entry for entry in self.components[game.component].get("project_sources", [])
-            if entry.get("destination") in expected
-        ]
-        actual = {entry["destination"]: entry["mode"] for entry in entries}
-        if actual != expected:
-            raise InstallerError(f"A camada de {game.label} no repositório diverge do contrato x86QW.")
-        sources: dict[str, bytes] = {}
-        for entry in entries:
-            source = self.project_root.joinpath(*PurePosixPath(entry["path"]).parts)
-            if not source.is_file() or source.is_symlink():
-                raise InstallerError(f"Arquivo-fonte de {game.label} não encontrado no repositório: {source}")
-            try:
-                payload = source.read_bytes()
-            except OSError as error:
-                raise InstallerError(f"Não foi possível ler a camada de {game.label}: {source}") from error
-            if not payload:
-                raise InstallerError(f"Arquivo-fonte de {game.label} vazio: {source}")
-            sources[entry["destination"]] = payload
-        return sources
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
         package = self.game_program_path(game)

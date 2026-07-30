@@ -26,6 +26,13 @@ pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é trata
 como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
+O bundle contém somente a CLI, os launchers e um catálogo runtime mínimo. PAKs,
+mods, configurações, gamecodes, fontes e inventários de manutenção são pacotes
+separados; isso evita duplicação e permite atualizar cada conteúdo sem republicar
+o instalador.
+Ao migrar de um bundle antigo, a atualização troca integralmente `.install/cli`
+por essa árvore mínima e elimina payloads legados que haviam sido duplicados ali.
+
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw.sh play`,
 `./x86qw.sh update`, `./x86qw.sh upgrade`, `./x86qw.sh verify` e `./x86qw.sh cleanup`. Sem argumento, a CLI
@@ -53,8 +60,13 @@ dist/game-data/id1/pak0.pak
 dist/game-data/id1/pak1.pak
 ```
 
+Esses arquivos são as fontes canônicas do repositório. O build gera o pacote
+obrigatório e independente `x86qw-core-id1`; eles não entram no ZIP do instalador.
+Em um checkout de desenvolvimento, os arquivos canônicos são usados diretamente.
+Na instalação pública, o pacote-base é baixado de um mirror registrado e validado.
+
 Uma instalação nova não exige que `quake-world/` exista. Depois da detecção do
-SO e da escolha de canal e versão, o instalador valida os dois arquivos permanentes por
+SO e da escolha de canal e versão, o instalador valida os dois arquivos por
 SHA-256, cria `quake-world/id1/` e copia somente os PAKs ausentes. Um PAK já
 existente é preservado e precisa corresponder à versão registrada; o instalador
 nunca o substitui silenciosamente.

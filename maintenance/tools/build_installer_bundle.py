@@ -16,13 +16,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from .components import load_catalog as load_component_catalog, runtime_catalog
     from .validate_catalog import validate_catalog
 except ImportError:
+    from components import load_catalog as load_component_catalog, runtime_catalog
     from validate_catalog import validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 FILES = (
     "dist/installer/bin/x86qw.sh",
     "dist/installer/bin/x86qw.cmd",
@@ -31,12 +33,6 @@ FILES = (
     "maintenance/__init__.py",
     "maintenance/tools/__init__.py",
     "maintenance/tools/components.py",
-    "maintenance/tools/component_sources.py",
-    "maintenance/tools/component_releases.py",
-    "maintenance/inventory/components.json",
-    "maintenance/inventory/component-releases.json",
-    "dist/game-data/id1/pak0.pak",
-    "dist/game-data/id1/pak1.pak",
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -44,17 +40,14 @@ PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 
 
 def bundle_files() -> tuple[str, ...]:
-    files = list(FILES)
-    catalog = json.loads((ROOT / "maintenance/inventory/components.json").read_text(encoding="utf-8"))
-    for component in catalog.get("components", []):
-        if not isinstance(component, dict):
-            continue
-        for entry in component.get("project_sources", []):
-            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
-                raise ValueError("component project source is invalid")
-            if entry["path"] not in files:
-                files.append(entry["path"])
-    return tuple(files)
+    return FILES
+
+
+def runtime_catalog_bytes() -> bytes:
+    source = load_component_catalog(ROOT / "maintenance/inventory/components.json")
+    return json.dumps(
+        runtime_catalog(source), ensure_ascii=False, indent=2, sort_keys=True,
+    ).encode("utf-8") + b"\n"
 
 
 def sha256(path: Path) -> str:
@@ -159,10 +152,18 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = (stat.S_IFREG | 0o644) << 16
             bundle.writestr(info, identity)
+            info = zipfile.ZipInfo(
+                f"x86qw-installer-{version}/_x86qw/components.json", FIXED_TIME,
+            )
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (stat.S_IFREG | 0o644) << 16
+            bundle.writestr(info, runtime_catalog_bytes())
         if target.is_file() and sha256(target) != sha256(temporary):
             raise ValueError(f"installer version {version} is immutable; bump VERSION before rebuilding")
         if not target.exists():
             os.replace(temporary, target)
+        if os.name != "nt":
+            target.chmod(0o644)
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -211,6 +212,9 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "release_url": f"https://github.com/{github_repository}/releases/tag/{release_tag}",
         "release_title": f"x86QW Installer {version}",
         "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+        "mirror_title": f"x86QW Installer {version}",
+        "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+        "mirror_latest": current,
     }
 
 

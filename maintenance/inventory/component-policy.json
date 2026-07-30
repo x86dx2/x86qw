@@ -10,6 +10,15 @@
         "installer/"
       ]
     },
+    "core": {
+      "consumers": [
+        "install:core-game-data",
+        "development:core-game-data"
+      ],
+      "distribution_prefixes": [
+        "game-data/"
+      ]
+    },
     "ezquake": {
       "consumers": [
         "install:ezquake",
