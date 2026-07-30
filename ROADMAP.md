@@ -135,8 +135,8 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [ ] adicionar smoke headless ou com logs capturados para stable e nightly onde o runner suportar;
 - [ ] impedir publicação se catálogo, origem, hashes, builds ou changelogs estiverem inconsistentes;
 - [ ] gerar relatório estruturado com arquivos adicionados, removidos, recompilados e não resolvidos;
-- [ ] testar instalação por `curl`, update conservador, upgrade distributivo, uninstall e uninstall `--purge` em ambiente limpo;
-- [ ] verificar que `update`/`upgrade` não executam quando não há mudanças e exibem plano tabulado antes da confirmação.
+- [x] testar a publicação `0.1.1` por `curl` em ambientes limpos: perfil completo, `verify`, update conservador, upgrade distributivo, uninstall preservando `id1` e uninstall `--purge` removendo instalação e cache;
+- [x] verificar que `update`/`upgrade` não executam quando não há mudanças e exibem plano tabulado antes da confirmação.
 
 ## 7. Upstreams e contribuição pública
 
@@ -153,11 +153,11 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [ ] criar `LICENSE` do projeto e `THIRD_PARTY_NOTICES` com origem e termos de cada componente;
 - [ ] decidir e documentar política pública para `id1/pak0.pak` e `id1/pak1.pak` antes do lançamento amplo;
 - [ ] revisar redistribuição de todos os artefatos, inclusive nQuake, QRP, Final Arena, Pro-X, TF e TD2;
-- [ ] publicar instalador e artefatos exclusivamente no repositório `x86dx2/x86qw`;
-- [ ] oferecer comando de instalação por `curl` com URL estável e checksum verificável;
+- [x] publicar o instalador `0.1.1` e os 27 artefatos exclusivamente nos projetos `x86dx2/x86qw` do GitHub e GitLab;
+- [x] oferecer comando de instalação por `curl` em `https://x86qw.x86.com.br/install.sh`, com versão e SHA-256 fixados;
 - [ ] redirecionar `x86.com.br/x86qw` para `x86qw.x86.com.br` com 308;
-- [ ] corrigir contagens e versões exibidas no site a partir do catálogo real;
-- [ ] validar a página publicada e todos os links de download após cada release;
+- [x] servir no site o catálogo real com 27 pacotes e instalador corrente `0.1.1`;
+- [x] validar a página, catálogo, bootstrap, mirrors, checksums e instalação completa após a release `0.1.1`;
 - [ ] manter R2 fora da arquitetura até uma decisão explícita.
 
 ## 9. Servidor e infraestrutura futura
