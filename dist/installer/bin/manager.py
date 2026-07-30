@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import traceback
 import urllib.error
@@ -55,6 +56,12 @@ from maintenance.tools.components import (
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
 ID1_PAK1_SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
 CATALOG_URL = "https://x86qw.x86.com.br/api/v1/catalog.json"
+CATALOG_URLS = (
+    CATALOG_URL,
+    "https://raw.githubusercontent.com/x86dx2/x86qw/main/site/public/api/v1/catalog.json",
+    "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
+)
+CATALOG_TIMEOUT = 10.0
 METADATA_DIR = ".install"
 COMPONENT_METADATA_DIR = ".install/components"
 EZQUAKE_METADATA_DIR = ".install/clients/ezquake"
@@ -141,11 +148,32 @@ def create_resilient_connection(
 ) -> socket.socket:
     """Connect to the first reachable DNS address without waiting on a dead first result."""
     host, port = address
-    candidates = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    effective_timeout = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+    started = time.monotonic()
+    if effective_timeout is None:
+        candidates = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    else:
+        resolved: list[list[tuple[object, ...]]] = []
+        resolution_errors: list[Exception] = []
+        finished = threading.Event()
+
+        def resolve() -> None:
+            try:
+                resolved.append(socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM))
+            except Exception as error:  # propagated in the caller thread below
+                resolution_errors.append(error)
+            finally:
+                finished.set()
+
+        threading.Thread(target=resolve, name="x86qw-dns", daemon=True).start()
+        if not finished.wait(float(effective_timeout)):
+            raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
+        if resolution_errors:
+            raise resolution_errors[0]
+        candidates = resolved[0]
     if not candidates:
         raise OSError(f"Nenhum endereço foi encontrado para {host}.")
-    effective_timeout = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
-    deadline = None if effective_timeout is None else time.monotonic() + float(effective_timeout)
+    deadline = None if effective_timeout is None else started + float(effective_timeout)
     pending: list[socket.socket] = []
     errors: list[OSError] = []
     selector = selectors.DefaultSelector()
@@ -1165,15 +1193,23 @@ class Installer:
                 return False
             console.warning("Resposta inválida. Digite s para sim ou n para não.")
 
-    def http_get(self, url: str, destination: Path | None = None, headers: dict[str, str] | None = None) -> bytes:
+    def http_get(
+        self,
+        url: str,
+        destination: Path | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        timeout: float = 60.0,
+        attempts: int = 3,
+    ) -> bytes:
         validate_https_url(url, "URL de download")
         request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
         request = urllib.request.Request(url, headers=request_headers)
         console.detail(f"GET {url}")
         last_error: Exception | None = None
-        for attempt in range(1, 4):
+        for attempt in range(1, attempts + 1):
             try:
-                with HTTPS_OPENER.open(request, timeout=60) as response:
+                with HTTPS_OPENER.open(request, timeout=timeout) as response:
                     validate_https_url(response.geturl(), "redirecionamento de download")
                     if destination is None:
                         return response.read()
@@ -1199,13 +1235,17 @@ class Installer:
                     ) from error
                 last_error = error
                 console.detail(f"Tentativa de download falhou: {last_error}")
-                if attempt < 3:
-                    console.warning(f"Falha temporária no download. Tentando novamente ({attempt + 1}/3)...")
+                if attempt < attempts:
+                    console.warning(
+                        f"Falha temporária no download. Tentando novamente ({attempt + 1}/{attempts})..."
+                    )
             except (OSError, urllib.error.URLError) as error:
                 last_error = error
                 console.detail(f"Tentativa de download falhou: {last_error}")
-                if attempt < 3:
-                    console.warning(f"Falha temporária no download. Tentando novamente ({attempt + 1}/3)...")
+                if attempt < attempts:
+                    console.warning(
+                        f"Falha temporária no download. Tentando novamente ({attempt + 1}/{attempts})..."
+                    )
         raise InstallerError(f"Não foi possível baixar {url}: {last_error}")
 
     def catalog_records(
@@ -2555,7 +2595,9 @@ class Installer:
             catalog_status = "Loaded"
             try:
                 if catalog_url:
-                    catalog_payload = self.http_get(catalog_url)
+                    catalog_payload = self.http_get(
+                        catalog_url, timeout=CATALOG_TIMEOUT, attempts=2,
+                    )
                     catalog = json.loads(catalog_payload)
                     catalog_status = "Downloaded"
                     console.detail(f"Catálogo remoto explícito: {catalog_url}")
@@ -2564,10 +2606,30 @@ class Installer:
                     catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    catalog_payload = self.http_get(CATALOG_URL)
+                    last_error: InstallerError | None = None
+                    selected_url: str | None = None
+                    for index, url in enumerate(CATALOG_URLS):
+                        try:
+                            catalog_payload = self.http_get(
+                                url, timeout=CATALOG_TIMEOUT, attempts=1,
+                            )
+                            selected_url = url
+                            break
+                        except InstallerError as error:
+                            last_error = error
+                            console.detail(str(error))
+                            if index + 1 < len(CATALOG_URLS):
+                                host = urllib.parse.urlsplit(url).hostname or url
+                                console.warning(
+                                    f"Catálogo indisponível em {host}; tentando o próximo mirror..."
+                                )
+                    if catalog_payload is None or selected_url is None:
+                        raise InstallerError(
+                            f"Nenhum mirror do catálogo x86QW respondeu: {last_error}"
+                        )
                     catalog = json.loads(catalog_payload)
                     catalog_status = "Downloaded"
-                    console.detail(f"Catálogo público: {CATALOG_URL}")
+                    console.detail(f"Catálogo público: {selected_url}")
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):

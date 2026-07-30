@@ -8,6 +8,8 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -354,7 +356,9 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()) as get:
                     installer.stable_catalog()
                     installer.component_package_record("nquake-bootstrap")
-            get.assert_called_once_with(install_qw.CATALOG_URL)
+            get.assert_called_once_with(
+                install_qw.CATALOG_URL, timeout=install_qw.CATALOG_TIMEOUT, attempts=1,
+            )
 
     def test_online_mode_asks_for_a_target_and_ignores_local_distribution(self):
         online = install_qw.parse_arguments(["--online-only"], ROOT)
@@ -392,7 +396,9 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "http_get", return_value=json.dumps(remote).encode()) as get:
                     self.assertEqual(remote, installer.public_catalog("remote"))
-            get.assert_called_once_with(install_qw.CATALOG_URL)
+            get.assert_called_once_with(
+                install_qw.CATALOG_URL, timeout=install_qw.CATALOG_TIMEOUT, attempts=1,
+            )
             self.assertIsNone(installer.distribution_artifact(
                 "test/file.zip", "file.zip", expected_size=5,
                 expected_sha256=install_qw.hashlib.sha256(b"local").hexdigest(),
@@ -987,6 +993,32 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(sockets[0].closed)
         self.assertFalse(sockets[1].closed)
         self.assertEqual(2, sockets[1].timeout)
+
+    def test_resilient_connection_limits_dns_resolution_time(self):
+        blocked = threading.Event()
+        started = time.monotonic()
+        with mock.patch.object(install_qw.socket, "getaddrinfo", side_effect=lambda *args: blocked.wait(1)):
+            with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                install_qw.create_resilient_connection(("example.invalid", 443), timeout=0.01)
+        self.assertLess(time.monotonic() - started, 0.5)
+
+    def test_public_catalog_falls_back_to_the_next_mirror(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.online_only = True
+            catalog = {"format": 1, "project": "x86qw", "packages": []}
+            payload = json.dumps(catalog).encode()
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(
+                    installer,
+                    "http_get",
+                    side_effect=[install_qw.InstallerError("timeout"), payload],
+                ) as get:
+                    self.assertEqual(catalog, installer.public_catalog("remote"))
+            self.assertEqual(2, get.call_count)
+            self.assertEqual(
+                install_qw.CATALOG_URLS[1], get.call_args_list[1].args[0],
+            )
 
     def test_download_falls_back_to_the_next_catalog_mirror(self):
         with tempfile.TemporaryDirectory() as temporary:
