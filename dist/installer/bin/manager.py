@@ -56,6 +56,8 @@ ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b95996
 ID1_PAK1_SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
 CATALOG_URL = "https://x86qw.x86.com.br/api/v1/catalog.json"
 METADATA_DIR = ".install"
+COMPONENT_METADATA_DIR = ".install/components"
+EZQUAKE_METADATA_DIR = ".install/clients/ezquake"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".install/nquake.receipt"
 NQUAKE_INVENTORY = ".install/nquake.inventory"
@@ -83,15 +85,16 @@ COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
-MAPS_RECEIPT = ".install/maps.receipt"
-MAPS_INVENTORY = ".install/maps.inventory"
-PRESETS_RECEIPT = ".install/presets.receipt"
-PRESETS_INVENTORY = ".install/presets.inventory"
-PLAY_SUPPORT_RECEIPT = ".install/play-support.receipt"
-PLAY_SUPPORT_INVENTORY = ".install/play-support.inventory"
-PACKAGE_ORDER_RECEIPT = ".install/package-order.receipt"
-PACKAGE_ORDER_INVENTORY = ".install/package-order.inventory"
-CLI_RECEIPT = ".install/cli.receipt"
+MAPS_RECEIPT = ".install/components/maps/receipt"
+MAPS_INVENTORY = ".install/components/maps/inventory"
+PRESETS_RECEIPT = ".install/components/presets/receipt"
+PRESETS_INVENTORY = ".install/components/presets/inventory"
+PLAY_SUPPORT_RECEIPT = ".install/components/play-support/receipt"
+PLAY_SUPPORT_INVENTORY = ".install/components/play-support/inventory"
+PACKAGE_ORDER_RECEIPT = ".install/components/package-order/receipt"
+PACKAGE_ORDER_INVENTORY = ".install/components/package-order/inventory"
+CLI_RECEIPT = ".install/cli/receipt"
+LEGACY_CLI_RECEIPT = ".install/cli.receipt"
 INSTALL_STATE = ".install/state.json"
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 QW_PACKAGE_PRIORITY = (
@@ -226,25 +229,31 @@ class PlatformSpec:
     def receipt(self, channel: str) -> str:
         return self.stable_receipt if channel == "stable" else self.nightly_receipt
 
+    def legacy_receipt(self, channel: str) -> str:
+        return f".install/ezquake-{self.key}-{channel}.receipt"
+
 
 PLATFORMS = {
     "macos": PlatformSpec(
         "macos", "macOS", "universal", "ezQuake-macOS-universal.zip",
         "_ezQuake-macOS-universal.zip", "ezQuake.app",
         "ezQuake Stable.app", "ezQuake Nightly.app",
-        ".install/ezquake-macos-stable.receipt", ".install/ezquake-macos-nightly.receipt",
+        ".install/clients/ezquake/macos/stable.receipt",
+        ".install/clients/ezquake/macos/nightly.receipt",
     ),
     "linux": PlatformSpec(
         "linux", "Linux x86_64", "x86_64", "ezQuake-linux-x86_64.zip",
         "_ezQuake-x86_64.AppImage", "ezQuake-x86_64.AppImage",
         "ezquake-stable-x86_64.AppImage", "ezquake-nightly-x86_64.AppImage",
-        ".install/ezquake-linux-stable.receipt", ".install/ezquake-linux-nightly.receipt",
+        ".install/clients/ezquake/linux/stable.receipt",
+        ".install/clients/ezquake/linux/nightly.receipt",
     ),
     "windows": PlatformSpec(
         "windows", "Windows x64", "x64", "ezQuake-windows-x64.zip",
         "_ezquake.exe", "ezquake.exe",
         "ezquake-stable.exe", "ezquake-nightly.exe",
-        ".install/ezquake-windows-stable.receipt", ".install/ezquake-windows-nightly.receipt",
+        ".install/clients/ezquake/windows/stable.receipt",
+        ".install/clients/ezquake/windows/nightly.receipt",
     ),
 }
 
@@ -865,7 +874,11 @@ class Installer:
         if not metadata.is_dir() or metadata.is_symlink():
             return set()
         managed: set[str] = set()
-        for inventory in sorted(metadata.glob("*.inventory")):
+        inventories = {
+            *metadata.glob("*.inventory"),
+            *(metadata / "components").glob("*/inventory"),
+        }
+        for inventory in sorted(inventories):
             managed.update(name for name, _ in self.validate_inventory(inventory))
         return managed
 
@@ -1538,27 +1551,45 @@ class Installer:
         if binary_hash != receipt["binary_sha256"]:
             raise InstallerError(f"unexpected ezQuake executable hash: {runtime}")
 
+    def ezquake_receipt_path(self, spec: PlatformSpec, channel: str) -> Path | None:
+        canonical = self.target / spec.receipt(channel)
+        legacy = self.target / spec.legacy_receipt(channel)
+        canonical_exists, legacy_exists = lexists(canonical), lexists(legacy)
+        if canonical_exists:
+            canonical_receipt = self.validate_ezquake_receipt(canonical, spec, channel)
+            if legacy_exists:
+                legacy_receipt = self.validate_ezquake_receipt(legacy, spec, channel)
+                if canonical_receipt != legacy_receipt:
+                    raise InstallerError(
+                        f"Os recibos novo e legado do ezQuake {spec.key} {channel} divergem."
+                    )
+            return canonical
+        if legacy_exists:
+            self.validate_ezquake_receipt(legacy, spec, channel)
+            return legacy
+        return None
+
     def check_runtime_destination_ownership(self) -> None:
         assert self.spec is not None
         runtime = self.target / self.spec.runtime(self.channel)
-        receipt_path = self.target / self.spec.receipt(self.channel)
-        if lexists(receipt_path) and not receipt_path.is_file():
-            raise InstallerError(f"ezQuake receipt is not a regular file: {receipt_path}")
+        receipt_path = self.ezquake_receipt_path(self.spec, self.channel)
         if lexists(runtime):
             expected_type = runtime.is_dir() if self.spec.key == "macos" else runtime.is_file()
             if not expected_type:
                 raise InstallerError(f"invalid managed runtime path: {runtime}")
-            if not receipt_path.is_file():
+            if receipt_path is None:
                 raise InstallerError(f"refusing to replace an unmanaged {self.spec.label} runtime: {runtime}")
             receipt = self.validate_ezquake_receipt(receipt_path, self.spec, self.channel)
             self.check_runtime(self.spec, self.channel, receipt)
-        elif receipt_path.is_file():
+        elif receipt_path is not None:
             self.validate_ezquake_receipt(receipt_path, self.spec, self.channel)
 
     def commit_runtime(self, prepared: Path, staged_receipt: Path) -> None:
         assert self.spec is not None and self.stage is not None
         runtime = self.target / self.spec.runtime(self.channel)
         receipt = self.target / self.spec.receipt(self.channel)
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        existing_receipt = self.ezquake_receipt_path(self.spec, self.channel)
         previous_runtime = self.stage / "previous-runtime"
         previous_receipt = self.stage / "previous-receipt"
         moved_runtime = moved_receipt = installed_runtime = installed_receipt = False
@@ -1566,13 +1597,16 @@ class Installer:
             if lexists(runtime):
                 runtime.replace(previous_runtime)
                 moved_runtime = True
-            if lexists(receipt):
-                receipt.replace(previous_receipt)
+            if existing_receipt is not None:
+                existing_receipt.replace(previous_receipt)
                 moved_receipt = True
             prepared.replace(runtime)
             installed_runtime = True
             shutil.copy2(staged_receipt, receipt)
             installed_receipt = True
+            legacy_receipt = self.target / self.spec.legacy_receipt(self.channel)
+            if legacy_receipt != receipt and lexists(legacy_receipt):
+                remove_path(legacy_receipt)
         except Exception as error:
             try:
                 if installed_receipt and lexists(receipt):
@@ -1581,8 +1615,9 @@ class Installer:
                     remove_path(runtime)
                 if moved_runtime:
                     previous_runtime.replace(runtime)
-                if moved_receipt:
-                    previous_receipt.replace(receipt)
+                if moved_receipt and existing_receipt is not None:
+                    existing_receipt.parent.mkdir(parents=True, exist_ok=True)
+                    previous_receipt.replace(existing_receipt)
             except Exception as rollback_error:
                 raise InstallerError(f"automatic rollback failed; recovery files kept in {self.stage}: {rollback_error}") from error
             raise InstallerError(f"could not commit {runtime} and its receipt") from error
@@ -1630,30 +1665,40 @@ class Installer:
         return entries
 
     def component_metadata(self, component: str) -> tuple[str, str]:
-        paths = {
-            "maps": (MAPS_RECEIPT, MAPS_INVENTORY),
-            "presets": (PRESETS_RECEIPT, PRESETS_INVENTORY),
-            "play-support": (PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY),
-            "package-order": (PACKAGE_ORDER_RECEIPT, PACKAGE_ORDER_INVENTORY),
+        known = {
+            *self.components, *LEGACY_COMPONENTS,
+            "maps", "presets", "play-support", "package-order",
         }
-        if component in paths:
-            return paths[component]
-        if component in self.components:
-            return f".install/{component}.receipt", f".install/{component}.inventory"
-        if component in LEGACY_COMPONENTS:
-            return f".install/{component}.receipt", f".install/{component}.inventory"
-        raise InstallerError(f"Componente desconhecido: {component}")
+        if component not in known:
+            raise InstallerError(f"Componente desconhecido: {component}")
+        return (
+            f"{COMPONENT_METADATA_DIR}/{component}/receipt",
+            f"{COMPONENT_METADATA_DIR}/{component}/inventory",
+        )
 
-    def validate_component_pair(self, component: str, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
-        receipt_relative, inventory_relative = self.component_metadata(component)
-        metadata = metadata or self.target / METADATA_DIR
-        receipt_path = metadata / Path(receipt_relative).name
-        inventory_path = metadata / Path(inventory_relative).name
-        receipt_exists, inventory_exists = lexists(receipt_path), lexists(inventory_path)
-        if not receipt_exists and not inventory_exists:
-            return False, [], None
-        if not receipt_exists or not inventory_exists:
-            raise InstallerError(f"Metadados incompletos do componente {component}.")
+    def legacy_component_metadata(self, component: str) -> tuple[str, str]:
+        self.component_metadata(component)
+        return f".install/{component}.receipt", f".install/{component}.inventory"
+
+    @staticmethod
+    def metadata_path(metadata: Path, relative: str) -> Path:
+        parts = PurePosixPath(relative).parts
+        if not parts or parts[0] != METADATA_DIR:
+            raise InstallerError(f"Caminho de metadados inválido: {relative}")
+        return metadata.joinpath(*parts[1:])
+
+    def component_pair_paths(
+        self, component: str, metadata: Path, *, legacy: bool = False,
+    ) -> tuple[Path, Path]:
+        relative = (
+            self.legacy_component_metadata(component)
+            if legacy else self.component_metadata(component)
+        )
+        return tuple(self.metadata_path(metadata, path) for path in relative)  # type: ignore[return-value]
+
+    def validate_component_paths(
+        self, component: str, receipt_path: Path, inventory_path: Path,
+    ) -> tuple[list[tuple[str, str]], dict[str, str]]:
         receipt = read_table(
             receipt_path, {"format", "component", "selection", "source", "inventory_sha256"},
             f"recibo do componente {component}",
@@ -1668,6 +1713,30 @@ class Installer:
         entries = self.validate_inventory(inventory_path)
         if file_hash(inventory_path) != receipt["inventory_sha256"]:
             raise InstallerError(f"O inventário do componente {component} diverge do recibo.")
+        return entries, receipt
+
+    def validate_component_pair(self, component: str, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
+        metadata = metadata or self.target / METADATA_DIR
+        canonical = self.component_pair_paths(component, metadata)
+        legacy = self.component_pair_paths(component, metadata, legacy=True)
+        canonical_exists = tuple(lexists(path) for path in canonical)
+        legacy_exists = tuple(lexists(path) for path in legacy)
+        if not any(canonical_exists) and not any(legacy_exists):
+            return False, [], None
+        if any(canonical_exists) and not all(canonical_exists):
+            raise InstallerError(f"Metadados incompletos do componente {component}.")
+        if any(legacy_exists) and not all(legacy_exists):
+            raise InstallerError(f"Metadados legados incompletos do componente {component}.")
+        if all(canonical_exists):
+            entries, receipt = self.validate_component_paths(component, *canonical)
+            if all(legacy_exists):
+                legacy_entries, legacy_receipt = self.validate_component_paths(component, *legacy)
+                if entries != legacy_entries or receipt != legacy_receipt:
+                    raise InstallerError(
+                        f"Os metadados novo e legado do componente {component} divergem."
+                    )
+            return True, entries, receipt
+        entries, receipt = self.validate_component_paths(component, *legacy)
         return True, entries, receipt
 
     def filter_component_conflicts(self, component: str, managed: Path) -> None:
@@ -1714,26 +1783,29 @@ class Installer:
     def commit_component_metadata(self, component: str, inventory: Path, receipt: Path) -> None:
         assert self.stage is not None
         self.ensure_metadata_directory()
-        destination = self.target / METADATA_DIR
+        metadata = self.target / METADATA_DIR
+        destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
+            raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
         prepared = self.stage / f"{component}-metadata.next"
         previous = self.stage / f"{component}-metadata.previous"
-        shutil.copytree(destination, prepared)
-        receipt_relative, inventory_relative = self.component_metadata(component)
-        for name, source in (
-            (Path(receipt_relative).name, receipt),
-            (Path(inventory_relative).name, inventory),
-        ):
-            candidate = prepared / name
-            if lexists(candidate):
-                remove_path(candidate)
-            shutil.copy2(source, candidate)
-        self.validate_component_pair(component, prepared)
+        prepared.mkdir()
+        shutil.copy2(receipt, prepared / "receipt")
+        shutil.copy2(inventory, prepared / "inventory")
+        self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
         moved_previous = installed = False
         try:
-            destination.replace(previous)
-            moved_previous = True
+            if lexists(destination):
+                destination.replace(previous)
+                moved_previous = True
             prepared.replace(destination)
             installed = True
+            for legacy in self.component_pair_paths(component, metadata, legacy=True):
+                if lexists(legacy):
+                    remove_path(legacy)
+            if lexists(previous):
+                remove_path(previous)
         except Exception as error:
             try:
                 if installed and lexists(destination):
@@ -1832,11 +1904,14 @@ class Installer:
                 removed += 1
             else:
                 console.warning(f"Arquivo modificado preservado: {managed}")
-        receipt_relative, inventory_relative = self.component_metadata(component)
-        remove_path(self.target / receipt_relative)
-        remove_path(self.target / inventory_relative)
+        metadata = self.target / METADATA_DIR
+        canonical = self.component_pair_paths(component, metadata)
+        remove_path(canonical[0].parent)
+        for path in self.component_pair_paths(component, metadata, legacy=True):
+            remove_path(path)
         for name in ("qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2"):
             remove_empty_directories(self.target / name)
+        remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
         remove_empty_directories(self.target / METADATA_DIR)
         return removed
 
@@ -2229,10 +2304,9 @@ class Installer:
             raise InstallerError("O bundle x86QW ainda não foi liberado para atualização.")
         return package
 
-    def installed_cli_version(self) -> str | None:
-        receipt = self.target / CLI_RECEIPT
+    def validate_cli_receipt(self, receipt: Path) -> dict[str, object]:
         if not receipt.is_file() or receipt.is_symlink():
-            return None
+            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
         try:
             metadata = json.loads(receipt.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
@@ -2244,7 +2318,30 @@ class Installer:
             raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
         if not STABLE_VERSION.fullmatch(version):
             raise InstallerError(f"Versão inválida no recibo da CLI x86QW: {version}")
-        return version
+        return metadata
+
+    def cli_receipt_path(self) -> Path | None:
+        canonical = self.target / CLI_RECEIPT
+        legacy = self.target / LEGACY_CLI_RECEIPT
+        canonical_exists, legacy_exists = lexists(canonical), lexists(legacy)
+        if canonical_exists:
+            canonical_metadata = self.validate_cli_receipt(canonical)
+            if legacy_exists:
+                legacy_metadata = self.validate_cli_receipt(legacy)
+                if canonical_metadata != legacy_metadata:
+                    raise InstallerError("Os recibos novo e legado da CLI x86QW divergem.")
+            return canonical
+        if legacy_exists:
+            self.validate_cli_receipt(legacy)
+            return legacy
+        return None
+
+    def installed_cli_version(self) -> str | None:
+        receipt = self.cli_receipt_path()
+        if receipt is None:
+            return None
+        metadata = self.validate_cli_receipt(receipt)
+        return str(metadata["version"])
 
     def installer_bundle_identity(self) -> dict[str, object]:
         if ZIPAPP_PATH is not None:
@@ -2698,9 +2795,11 @@ class Installer:
         if not changed:
             return
         if not remaining:
-            receipt_path, inventory_path = self.component_metadata("play-support")
-            remove_path(self.target / receipt_path)
-            remove_path(self.target / inventory_path)
+            metadata = self.target / METADATA_DIR
+            canonical = self.component_pair_paths("play-support", metadata)
+            remove_path(canonical[0].parent)
+            for path in self.component_pair_paths("play-support", metadata, legacy=True):
+                remove_path(path)
             return
         assert self.stage is not None and receipt is not None
         inventory = self.stage / "play-support-migrated.inventory"
@@ -2975,8 +3074,8 @@ class Installer:
         choices: list[tuple[str, Path]] = []
         spec = PLATFORMS[platform_key]
         for channel in ("stable", "nightly"):
-            receipt_path = self.target / spec.receipt(channel)
-            if not receipt_path.is_file():
+            receipt_path = self.ezquake_receipt_path(spec, channel)
+            if receipt_path is None:
                 continue
             receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
             receipt = self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
@@ -3083,8 +3182,8 @@ class Installer:
         verified = 0
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
-                receipt_path = self.target / spec.receipt(channel)
-                if not receipt_path.is_file():
+                receipt_path = self.ezquake_receipt_path(spec, channel)
+                if receipt_path is None:
                     continue
                 receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
                 runtime = self.target / spec.runtime(channel)
@@ -3144,35 +3243,106 @@ class Installer:
         else:
             console.info("Configurações nQuake instaladas e aguardando a primeira execução do ezQuake.")
 
+    def metadata_component_ids(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys((
+            *self.components, *LEGACY_COMPONENTS,
+            "maps", "presets", "play-support", "package-order",
+        )))
+
+    def legacy_metadata_present(self) -> bool:
+        if lexists(self.target / LEGACY_CLI_RECEIPT):
+            return True
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                if lexists(self.target / spec.legacy_receipt(channel)):
+                    return True
+        metadata = self.target / METADATA_DIR
+        return any(
+            lexists(path)
+            for component in self.metadata_component_ids()
+            for path in self.component_pair_paths(component, metadata, legacy=True)
+        )
+
+    def migrate_metadata_layout(self) -> bool:
+        if not self.legacy_metadata_present():
+            return False
+        metadata = self.target / METADATA_DIR
+        self.ensure_metadata_directory()
+
+        legacy_cli = self.target / LEGACY_CLI_RECEIPT
+        if lexists(legacy_cli):
+            self.cli_receipt_path()
+            canonical_cli = self.target / CLI_RECEIPT
+            canonical_cli.parent.mkdir(parents=True, exist_ok=True)
+            if not lexists(canonical_cli):
+                temporary = canonical_cli.with_name(".receipt.new")
+                shutil.copy2(legacy_cli, temporary)
+                self.validate_cli_receipt(temporary)
+                temporary.replace(canonical_cli)
+            remove_path(legacy_cli)
+
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                legacy = self.target / spec.legacy_receipt(channel)
+                if not lexists(legacy):
+                    continue
+                self.ezquake_receipt_path(spec, channel)
+                canonical = self.target / spec.receipt(channel)
+                canonical.parent.mkdir(parents=True, exist_ok=True)
+                if not lexists(canonical):
+                    temporary = canonical.with_name(f".{channel}.receipt.new")
+                    shutil.copy2(legacy, temporary)
+                    self.validate_ezquake_receipt(temporary, spec, channel)
+                    temporary.replace(canonical)
+                remove_path(legacy)
+
+        previous_stage = self.stage
+        migration_stage = Path(tempfile.mkdtemp(prefix=".x86qw-metadata.", dir=self.target))
+        self.stage = migration_stage
+        try:
+            for component in self.metadata_component_ids():
+                canonical = self.component_pair_paths(component, metadata)
+                legacy = self.component_pair_paths(component, metadata, legacy=True)
+                if not any(lexists(path) for path in legacy):
+                    continue
+                self.validate_component_pair(component)
+                if not all(lexists(path) for path in canonical):
+                    self.commit_component_metadata(component, legacy[1], legacy[0])
+                else:
+                    for path in legacy:
+                        remove_path(path)
+        finally:
+            self.cleanup_stage()
+            self.stage = previous_stage
+        remove_empty_directories(metadata / "clients/ezquake")
+        console.success("Metadados da instalação reorganizados por contexto.")
+        return True
+
     def preflight_ezquake_receipts(self) -> None:
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
-                receipt_path = self.target / spec.receipt(channel)
-                if not lexists(receipt_path):
+                receipt_path = self.ezquake_receipt_path(spec, channel)
+                if receipt_path is None:
                     continue
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
 
     def preflight_component_receipts(self) -> None:
-        for component in (
-            *self.components, *LEGACY_COMPONENTS,
-            "maps", "presets", "play-support", "package-order",
-        ):
+        for component in self.metadata_component_ids():
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
         metadata_names = [
             NQUAKE_INVENTORY, NQUAKE_RECEIPT,
-            MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
-            PLAY_SUPPORT_RECEIPT, PLAY_SUPPORT_INVENTORY,
-            PACKAGE_ORDER_RECEIPT, PACKAGE_ORDER_INVENTORY,
-            CLI_RECEIPT, INSTALL_STATE,
+            CLI_RECEIPT, LEGACY_CLI_RECEIPT, INSTALL_STATE,
         ]
-        for component in self.components:
+        for component in self.metadata_component_ids():
             metadata_names.extend(self.component_metadata(component))
-        for component in LEGACY_COMPONENTS:
-            metadata_names.extend(self.component_metadata(component))
+            metadata_names.extend(self.legacy_component_metadata(component))
         for spec in PLATFORMS.values():
-            metadata_names.extend((spec.stable_receipt, spec.nightly_receipt))
+            metadata_names.extend((
+                spec.stable_receipt, spec.nightly_receipt,
+                spec.legacy_receipt("stable"), spec.legacy_receipt("nightly"),
+            ))
         if not any(lexists(self.target / name) for name in metadata_names):
             console.info(f"Nenhum runtime gerenciado está instalado em {self.target}.")
             self.remove_installed_cli()
@@ -3202,8 +3372,8 @@ class Installer:
             console.info("Os componentes x86QW não estão instalados; arquivos pessoais serão preservados.")
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
-                receipt_path = self.target / spec.receipt(channel)
-                if not receipt_path.is_file():
+                receipt_path = self.ezquake_receipt_path(spec, channel)
+                if receipt_path is None:
                     continue
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
                 remove_path(self.target / spec.runtime(channel))
@@ -3230,7 +3400,7 @@ class Installer:
         removed = False
         for path in (
             self.target / METADATA_DIR / "cli",
-            self.target / CLI_RECEIPT,
+            self.target / LEGACY_CLI_RECEIPT,
             self.target / "x86qw.sh",
         ):
             if lexists(path):
@@ -3386,6 +3556,13 @@ class Installer:
     ) -> bool:
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
+        layout_change = self.legacy_metadata_present()
+        if dry_run and layout_change and plan_rows is not None:
+            plan_rows.append(UpdatePlanRow(
+                "Sistema", "Metadados da instalação", "formato plano", "por contexto", "Reorganizar",
+            ))
+        if not dry_run and layout_change:
+            self.migrate_metadata_layout()
         self.check_paks()
         state = self.load_install_state(persist_migration=not dry_run)
         known = set(state["known_components"])
@@ -3395,8 +3572,8 @@ class Installer:
         runtimes: list[tuple[PlatformSpec, str, dict[str, str]]] = []
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
-                receipt_path = self.target / spec.receipt(channel)
-                if not receipt_path.is_file():
+                receipt_path = self.ezquake_receipt_path(spec, channel)
+                if receipt_path is None:
                     continue
                 receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
                 self.check_runtime(spec, channel, receipt)
@@ -3410,7 +3587,7 @@ class Installer:
             name: file_hash(self.target / "id1" / name)
             for name in ("pak0.pak", "pak1.pak")
         }
-        changed = False
+        changed = layout_change
         if not dry_run:
             console.section("Clientes ezQuake instalados")
         for spec, channel, receipt in runtimes:
@@ -3573,7 +3750,9 @@ class Installer:
             json.dumps(identity, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        self.validate_cli_receipt(temporary_receipt)
         temporary_receipt.replace(cli_receipt)
+        remove_path(self.target / LEGACY_CLI_RECEIPT)
 
         launchers = (
             ("x86qw.sh", 0o755),

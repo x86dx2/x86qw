@@ -21,8 +21,7 @@ componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `dist
 somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
 HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
 O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
-o catálogo publicado e grava a CLI permanente como o único arquivo
-`.install/cli/x86qw.pyz` na instalação.
+o catálogo publicado e grava a CLI permanente e seu recibo em `.install/cli/`.
 Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
 no bundle e apenas copiadas para a raiz da instalação.
 Os bundles publicados ficam em `dist/installer/packages/<versão>/`; o link

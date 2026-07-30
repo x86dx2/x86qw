@@ -132,31 +132,42 @@ Windows nightly: quake-world/ezquake-nightly.exe
 
 Os builds oficiais Linux e Windows são somente x86-64/x64. Eles não executam nativamente em Linux ARM ou Windows ARM sem uma camada de compatibilidade. O AppImage requer um Linux desktop compatível, Bash e o suporte AppImage/FUSE oferecido pela distribuição.
 
-O estado do instalador fica em um único diretório neutro, sem arquivos soltos na raiz nem subpastas por produto:
+O estado do instalador fica agrupado por contexto em um único diretório neutro:
 
 ```text
 quake-world/.install/
 ├── state.json
-├── cli.receipt
 ├── cli/
-│   └── x86qw.pyz
-├── ezquake-macos-stable.receipt
-├── ezquake-macos-nightly.receipt
-├── ezquake-linux-stable.receipt
-├── ezquake-linux-nightly.receipt
-├── ezquake-windows-stable.receipt
-├── ezquake-windows-nightly.receipt
-├── presets.{receipt,inventory}
-├── package-order.{receipt,inventory}
-├── nquake-bootstrap.{receipt,inventory}
-├── nquake-visual-core.{receipt,inventory}
-├── nquake-ktx.{receipt,inventory}
-└── <demais componentes x86QW>.{receipt,inventory}
+│   ├── x86qw.pyz
+│   └── receipt
+├── clients/
+│   └── ezquake/
+│       ├── macos/
+│       │   ├── stable.receipt
+│       │   └── nightly.receipt
+│       ├── linux/
+│       │   ├── stable.receipt
+│       │   └── nightly.receipt
+│       └── windows/
+│           ├── stable.receipt
+│           └── nightly.receipt
+└── components/
+    ├── nquake-bootstrap/
+    │   ├── receipt
+    │   └── inventory
+    ├── total-destruction-2/
+    │   ├── receipt
+    │   └── inventory
+    └── <demais componentes x86QW>/
+        ├── receipt
+        └── inventory
 ```
 
 Cada componente possui inventário e recibo independentes. Assim ele pode ser
 instalado, atualizado, verificado ou removido sem assumir propriedade sobre os
-demais componentes e arquivos pessoais.
+demais componentes e arquivos pessoais. `update` reconhece o formato plano das
+versões anteriores, inclui a reorganização no plano e só remove os arquivos
+legados depois de validar as cópias contextuais.
 
 ### Fases
 
@@ -396,7 +407,7 @@ quake-world/td2/x86qw-td2-user.cfg
 ```
 
 Esse arquivo é criado somente quando não existe, é executado depois do preset
-x86QW e nunca entra em `.install/play-support.inventory`. Atualizar o TD2 ou o
+x86QW e nunca entra em `.install/components/play-support/inventory`. Atualizar o TD2 ou o
 ezQuake reaplica a camada do projeto e preserva esse arquivo pessoal. Remover os
 componentes também o preserva; `uninstall --purge` continua sendo a ação explícita que
 remove toda a instalação.
