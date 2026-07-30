@@ -49,23 +49,23 @@ class CatalogTests(unittest.TestCase):
                 "nquake-models", "nquake-scoreboard-flags",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
-                "final-arena",
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22+x86qw.1", td2["version"])
+        self.assertEqual("2.22+x86qw.2", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("e4cb23d40aa2+x86qw.1", final_arena["version"])
-        self.assertEqual("1.1+x86qw.1", pro_x["version"])
+        self.assertEqual("1.20+nquake.e4cb23d40aa2+x86qw.1", final_arena["version"])
+        self.assertEqual("final-arena", final_arena["component"])
+        self.assertEqual("1.1+x86qw.2", pro_x["version"])
         self.assertEqual("pro-x", pro_x["component"])
         team_fortress = next(
             package for package in catalog["packages"] if package.get("package") == "team-fortress"
         )
-        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
+        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.2", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
         self.assertEqual(1, len(installers))

@@ -2,9 +2,31 @@
   "format": 1,
   "project": "x86qw",
   "upstream": "team-fortress",
-  "status": "documented",
-  "toolchain": "Historical QuakeC compiler compatible with the supplied Makefile and PROGS.SRC",
-  "instructions": "Extract tf_29src.zip in an isolated directory, preserve filename case and follow its Makefile. Do not replace the mirrored official qwprogs.dat until gameplay parity is verified.",
-  "outputs": ["qwprogs.dat"],
-  "verification": "Compare behavior with the official Team Fortress 2.9 qwprogs.dat on ezQuake stable and nightly."
+  "status": "unverified",
+  "source": {
+    "archive": "dist/mods/team-fortress/2.9/source/tf_29src.zip",
+    "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff"
+  },
+  "toolchain": {
+    "name": "FTEQCC",
+    "version": "3343+svn3400",
+    "source_url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
+    "source_size": 196098,
+    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe"
+  },
+  "patches": [
+    {
+      "path": "dist/mods/team-fortress/2.9/x86qw/source/0001-preserve-client-controls.patch",
+      "sha256": "fe1c80ce4cb8d9339581ed183713ba6afe063a51b03e959816e10286e3a0a64b"
+    }
+  ],
+  "preprocess": "Para cada *.QC, execute clang -E -P -nostdinc -imacros DEFS.H -x c e grave o resultado no *.pqc minúsculo correspondente, respeitando a ordem de PROGS.SRC.",
+  "compile": "fteqcc.bin -O0 PROGS.SRC após trocar somente a primeira linha de PROGS.SRC para qwprogs.dat.",
+  "output": {
+    "path": "dist/mods/team-fortress/2.9/x86qw/runtime/qwprogs.dat",
+    "size": 828268,
+    "sha256": "bf6bd491fe7c4a74c6d02cf525cd838dba86ebf251623a770180423bee02665b",
+    "warnings": 187
+  },
+  "verification": "Comparar com o qwprogs.dat oficial 2.9 e executar smoke de 2fort5r em ezQuake stable e nightly antes de promover."
 }

@@ -12,6 +12,7 @@ from maintenance.manage import (
     PROJECT_ROOT,
     Asset,
     distribution_delta,
+    ezquake_source_revision,
     github_release_coordinates,
     parser,
     publish_github,
@@ -25,6 +26,20 @@ from maintenance.manage import (
 
 
 class DistributionManagerTests(unittest.TestCase):
+    def test_registered_nightly_revision_does_not_require_github_lookup(self) -> None:
+        asset = Asset(
+            "ezquake",
+            "https://example.invalid/ezquake.zip",
+            "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/ezQuake.zip",
+            1,
+        )
+
+        with mock.patch("maintenance.manage.github_commit_revision") as lookup:
+            revision = ezquake_source_revision(asset)
+
+        self.assertEqual("a86996a3d33dc1bc3fb15bfe7bcadd662b822557", revision)
+        lookup.assert_not_called()
+
     def test_profile_history_preserves_old_and_new_distribution_shapes(self) -> None:
         catalog = {
             "profiles": {"essential": ["base"], "recommended": ["base"], "complete": ["base"]},
@@ -80,8 +95,11 @@ class DistributionManagerTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(releases["reference"]["revision"], new)
-        self.assertEqual(releases["components"]["final-arena"]["version"], "bbbbbbbbbbbb+x86qw.1")
-        self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.1")
+        self.assertEqual(
+            releases["components"]["final-arena"]["version"],
+            "1.20+nquake.bbbbbbbbbbbb+x86qw.1",
+        )
+        self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.2")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["team-fortress"]["version"])
         self.assertEqual("1.47+x86qw.1", releases["components"]["ktx"]["version"])
         self.assertEqual("ktx-1.47-x86qw.1", releases["components"]["ktx"]["distribution_tag"])
@@ -220,9 +238,9 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
         self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
         self.assertIn("QRP alta resolução: e4cb23d40aa2+x86qw.1", output)
-        self.assertIn("Final Arena: e4cb23d40aa2+x86qw.1", output)
-        self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.1", output)
-        self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.1", output)
+        self.assertIn("Final Arena: upstream 1.20; pacote x86QW 1.20+nquake.e4cb23d40aa2+x86qw.1", output)
+        self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.2", output)
+        self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.2", output)
         self.assertIn("KTX competitivo", output)
         self.assertIn("dist/mods/ktx/1.47/upstream/qwprogs-qvm.zip", output)
         self.assertIn("Total Destruction 2", output)

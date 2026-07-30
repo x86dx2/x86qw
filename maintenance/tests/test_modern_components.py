@@ -107,10 +107,10 @@ class ModernComponentTests(unittest.TestCase):
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
             "ktx": ("1.48+x86qw.1", "1.48"),
-            "final-arena": ("e4cb23d40aa2+x86qw.1", "1.20"),
-            "pro-x": ("1.1+x86qw.1", "1.1"),
-            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.1", "2.9"),
-            "td2": ("2.22+x86qw.1", "2.22"),
+            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.1", "1.20"),
+            "pro-x": ("1.1+x86qw.2", "1.1"),
+            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.2", "2.9"),
+            "td2": ("2.22+x86qw.2", "2.22"),
         }
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -172,7 +172,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("common-baseline", compatibility["policy"])
             self.assertEqual(set(installer.components), set(compatibility["covered_components"]))
             self.assertEqual(
-                {"nquake", "ktx", "pro-x", "team-fortress", "td2"},
+                {"nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"},
                 installer.content_component_namespaces,
             )
             self.assertEqual(set(installer.components), set(installer.component_catalog["profiles"]["complete"]))
@@ -206,6 +206,7 @@ class ModernComponentTests(unittest.TestCase):
                     "dist/mods/pro-x/1.1/x86qw/qw-server.cfg",
                     "dist/mods/pro-x/1.1/x86qw/server.cfg",
                     "dist/mods/pro-x/1.1/x86qw/user.cfg.example",
+                    "dist/mods/pro-x/1.1/x86qw/runtime/maps/proxmap1.ent",
                 },
                 {source["path"] for source in pro_x["project_sources"]},
             )
@@ -693,7 +694,6 @@ class ModernComponentTests(unittest.TestCase):
                 "+sb_listcache", "0",
                 "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
                 "+sv_progtype", "0",
-                "+cl_remote_capabilities", "$cl_remote_capabilities,bind,scr_centertime",
                 "+cl_pext_lagteleport", "0",
                 "+map", "dm6", "+wait",
                 "+exec", "x86qw-td2.cfg",
@@ -741,7 +741,7 @@ class ModernComponentTests(unittest.TestCase):
                     *after_wait, "+exec", profile,
                 ])
 
-    def test_team_fortress_loads_legacy_capabilities_before_the_map(self):
+    def test_team_fortress_loads_only_required_legacy_settings_before_the_map(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "team-fortress")
@@ -761,7 +761,6 @@ class ModernComponentTests(unittest.TestCase):
                 "+sb_listcache", "0",
                 "-game", "fortress", "+gamedir", "fortress", "+sv_gamedir", "fortress",
                 "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg",
-                "+cl_remote_capabilities", "$cl_remote_capabilities,bind",
                 "+cl_pext_lagteleport", "0",
                 "+map", "2fort5r", "+wait",
                 "+exec", "x86qw-fortress.cfg",

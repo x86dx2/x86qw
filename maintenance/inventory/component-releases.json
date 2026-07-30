@@ -114,14 +114,48 @@
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.1",
-      "strategy": "reference-snapshot",
-      "freshness": "reference-current",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-overlay",
+      "freshness": "upstream-current",
+      "distribution_component": "final-arena",
+      "distribution_tag": "final-arena-1.20",
       "embedded_version": "Final Arena 1.20",
-      "notes": "Preserva o arena.pk3 do nQuake e acrescenta gameplay x86QW com armas, fila, estatísticas, votação, ajuda, override pessoal e aliases temporários."
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
+      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW.",
+      "compatibility": {
+        "client_scope": [
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
+        ],
+        "verified": ["package-integrity", "managed-file-integrity", "source-provenance", "uninstall"],
+        "gamecode_runtime": "QuakeWorld qwprogs.dat derivado por Rakk e preservado do nQuake; a fonte oficial 1.20 foi reconstruída separadamente"
+      },
+      "upstream": {
+        "name": "Final Arena",
+        "release": "1.20",
+        "release_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
+        "source_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/fasrv12.zip"
+      },
+      "artifacts": [
+        {
+          "filename": "fasrv12.zip",
+          "url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/fasrv12.zip",
+          "distribution_path": "mods/final-arena/1.20/upstream/fasrv12.zip",
+          "size": 278932,
+          "sha256": "a250816fc3ffa461e21fc0c85cb286751b2bb22de2fd7d7bc42add7d0fd6ca70"
+        },
+        {
+          "filename": "farena12.zip",
+          "url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/farena12.zip",
+          "distribution_path": "mods/final-arena/1.20/upstream/farena12.zip",
+          "size": 7018988,
+          "sha256": "88dac7c3b7982deaddd3970a5c3293eeee8a30e18ddf9fd404c1504c6ab519dd"
+        }
+      ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.1",
+      "version": "1.1+x86qw.2",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "pro-x",
@@ -129,7 +163,7 @@
       "embedded_version": "Pro-X QW 1.1",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1 e reaplica o perfil de gameplay x86QW.",
+      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -155,7 +189,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.1",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.2",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "team-fortress",
@@ -163,7 +197,7 @@
       "embedded_version": "Team Fortress 2.9",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, remove do misc.pak o gamecode 2.8 substituído, elimina do pak0.pak o detpack.wav byte-idêntico já fornecido pelo pak1.pak, aplica diretamente do ZIP original o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
+      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -179,6 +213,13 @@
         "source_url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip"
       },
       "artifacts": [
+        {
+          "filename": "tf28.zip",
+          "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf28.zip",
+          "distribution_path": "mods/team-fortress/2.9/upstream/tf28.zip",
+          "size": 4204316,
+          "sha256": "56a6767b7944f2ce54423f18f1cd59239ae37a7c7456f684227d6f5310c76291"
+        },
         {
           "filename": "tf29qw.zip",
           "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip",
@@ -199,14 +240,14 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.1",
+      "version": "2.22+x86qw.2",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
+      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

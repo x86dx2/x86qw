@@ -19,3 +19,5 @@ dist/installer/bin/x86qw diff merge text
 dist/installer/**/*.cmd diff merge text
 dist/mods/**/*.cfg diff merge text
 dist/mods/**/*.example diff merge text
+dist/mods/**/*.md diff merge text
+dist/mods/**/*.patch diff merge text

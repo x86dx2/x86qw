@@ -24,14 +24,12 @@ file_count = core.file_count
 file_hash = core.file_hash
 lexists = core.lexists
 
-PLAY_SUPPORT_VERSION = "6"
+PLAY_SUPPORT_VERSION = "7"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
 LEGACY_LOCAL_CAPABILITIES = {
     "final-arena": ("noaim",),
     "pro-x": ("setinfo", "bind"),
-    "team-fortress": ("bind",),
-    "td2": ("bind", "scr_centertime"),
 }
 
 
@@ -303,14 +301,15 @@ class Player(core.Installer):
         if game.key in PRECONNECT_LOCAL_GAMES:
             arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
         if capabilities := LEGACY_LOCAL_CAPABILITIES.get(game.key):
-            # These PR1 gamecodes do not advertise the high-lag teleport extension.
-            # Disable that client warning and authorize only the commands each
-            # verified gamecode actually sends to its local client.
             arguments.extend([
                 "+cl_remote_capabilities",
                 "$cl_remote_capabilities," + ",".join(capabilities),
-                "+cl_pext_lagteleport", "0",
             ])
+        if game.key != "ktx":
+            # PR1 gamecodes do not advertise the high-lag teleport extension.
+            arguments.extend(["+cl_pext_lagteleport", "0"])
+        if game.key == "ktx":
+            arguments.extend(["+set", "k_defmap", map_name])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
             arguments.append("+wait")

@@ -130,7 +130,13 @@ def copy_tree(source: Path, destination: Path) -> None:
         except OSError:
             return shutil.copy2(origin, target)
 
-    shutil.copytree(source, destination, copy_function=link_or_copy)
+    shutil.copytree(
+        source,
+        destination,
+        copy_function=link_or_copy,
+        symlinks=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
 
 
 def safe_relative(value: object, prefix: str) -> str:
@@ -442,6 +448,16 @@ def ezquake_source_revision(asset: Asset) -> str:
     channel, version, _ = coordinates
     if channel == "stable":
         return version
+    registry = load_upstreams(UPSTREAMS)
+    entries = registry["upstreams"]
+    assert isinstance(entries, list)
+    for upstream in entries:
+        assert isinstance(upstream, dict)
+        if upstream.get("id") != "ezquake-nightly" or upstream.get("version") != version:
+            continue
+        revision = upstream.get("revision")
+        if isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision):
+            return revision
     short = version.rsplit("_", 1)[-1]
     return github_commit_revision("QW-Group/ezquake-source", short)
 

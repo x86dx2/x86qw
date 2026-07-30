@@ -52,7 +52,7 @@ class ComponentReleaseTests(unittest.TestCase):
 
         self.assertEqual("upstream-composed", releases["ktx"]["strategy"])
         self.assertEqual({("reference", "archive-base"), ("release", "archive")}, origins("ktx"))
-        self.assertEqual("reference-snapshot", releases["final-arena"]["strategy"])
+        self.assertEqual("reference-overlay", releases["final-arena"]["strategy"])
         self.assertEqual({("reference", "overlay")}, origins("final-arena"))
         self.assertEqual("upstream-package", releases["pro-x"]["strategy"])
         self.assertEqual({("reference", "preserve"), ("release", "overlay")}, origins("pro-x"))
@@ -112,7 +112,7 @@ class ComponentReleaseTests(unittest.TestCase):
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.1", td2["version"])
+        self.assertEqual("2.22+x86qw.2", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -120,6 +120,9 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertTrue(td2_path.startswith("mods/td2/"))
         self.assertEqual("ktx", ktx["distribution_component"])
         self.assertEqual("td2", td2["distribution_component"])
+        arena = releases["components"]["final-arena"]
+        self.assertEqual("final-arena", arena["distribution_component"])
+        self.assertEqual(2, len(arena["artifacts"]))
 
     def test_td2_restores_the_omitted_original_chainsaw_down_sound(self) -> None:
         context = load_source_context(
@@ -137,6 +140,33 @@ class ComponentReleaseTests(unittest.TestCase):
             hashlib.sha256(saw_down).hexdigest(),
         )
         self.assertEqual(saw, saw_down)
+
+    def test_compatibility_payloads_are_explicit_and_byte_verified(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        expected = {
+            "pro-x": (
+                "payload/prox/maps/proxmap1.ent", 42181,
+                "276fbb5d2ed499ad90c50b9e7bd0d3da734b2d8bdc976e56f67cfd846d5909cc",
+            ),
+            "team-fortress": (
+                "payload/fortress/qwprogs.dat", 828268,
+                "bf6bd491fe7c4a74c6d02cf525cd838dba86ebf251623a770180423bee02665b",
+            ),
+            "total-destruction-2": (
+                "payload/td2/qwprogs.dat", 377488,
+                "4553b62ec28109efdecc95bb4b40487e014063dd0bb59aad9301d03b09ee1ff1",
+            ),
+        }
+        for component, (member, size, digest) in expected.items():
+            with self.subTest(component=component):
+                _, _, payloads = resolve_component_payloads(context, component)
+                payload = {name: data for _, name, data, _ in payloads}[member]
+                self.assertEqual(size, len(payload))
+                self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
 
     def test_nested_pk3_rewrite_changes_only_the_selected_member(self) -> None:
         original = io.BytesIO()
@@ -306,9 +336,14 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         _, _, payloads = resolve_component_payloads(context, "team-fortress")
         members = {member: (source, payload, overrides) for source, member, payload, overrides in payloads}
-        source, gamecode, _ = members["payload/fortress/qwprogs.dat"]
-        self.assertEqual("qwprogs.dat", source)
-        self.assertEqual(835_756, len(gamecode))
+        source, gamecode, overrides = members["payload/fortress/qwprogs.dat"]
+        self.assertEqual("dist/mods/team-fortress/2.9/x86qw/runtime/qwprogs.dat", source)
+        self.assertEqual(828_268, len(gamecode))
+        self.assertEqual(
+            "bf6bd491fe7c4a74c6d02cf525cd838dba86ebf251623a770180423bee02665b",
+            hashlib.sha256(gamecode).hexdigest(),
+        )
+        self.assertEqual("qwprogs.dat", overrides[-1]["target"])
         misc_source, misc_pak, overrides = members["payload/fortress/misc.pak"]
         self.assertEqual("addon-fortress/fortress/misc.pak", misc_source)
         pak_members = dict(read_pak_members(misc_pak))

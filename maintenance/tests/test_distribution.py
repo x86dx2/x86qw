@@ -82,7 +82,7 @@ class DistributionTests(unittest.TestCase):
         components = load_component_policy()
         catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
         self.assertGreater(len(source_roots(catalog)), 10)
-        for component in ("installer", "ezquake", "nquake", "ktx", "pro-x", "team-fortress", "td2"):
+        for component in ("installer", "ezquake", "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"):
             require_component(components, component)
         for component in ("classicq", "unezquake", "gfx", "maps", "locs"):
             with self.subTest(component=component):
