@@ -25,7 +25,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 BUNDLE_FILES = (
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
@@ -40,6 +40,14 @@ ZIPAPP_FILES = (
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+LEGACY_HANDOFF_SHIM = b"""#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[3]
+os.execv(sys.executable, [sys.executable, str(root / "x86qw.pyz"), *sys.argv[1:]])
+"""
 
 
 def bundle_files() -> tuple[str, ...]:
@@ -177,6 +185,17 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
             write_member(
                 bundle,
                 f"{prefix}/installer.json",
+                json_bytes({"format": 1, "project": "x86qw", "version": version}),
+            )
+            write_member(
+                bundle,
+                f"{prefix}/dist/installer/bin/manager.py",
+                LEGACY_HANDOFF_SHIM,
+                0o755,
+            )
+            write_member(
+                bundle,
+                f"{prefix}/_x86qw/installer.json",
                 json_bytes({"format": 1, "project": "x86qw", "version": version}),
             )
         if target.is_file() and sha256(target) != sha256(temporary):

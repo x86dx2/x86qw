@@ -26,8 +26,10 @@ pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é trata
 como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
-O bundle contém somente `x86qw.pyz`, os launchers e `installer.json`. O zipapp
-incorpora a CLI e um catálogo runtime mínimo. PAKs, mods, configurações,
+O bundle contém `x86qw.pyz`, os launchers, `installer.json` e uma ponte mínima
+para a atualização iniciada pela CLI 0.1.3. Essa ponte encaminha a execução ao
+zipapp e permanece apenas no diretório temporário. O zipapp incorpora a CLI e
+um catálogo runtime mínimo. PAKs, mods, configurações,
 gamecodes, fontes e inventários de manutenção são pacotes
 separados; isso evita duplicação e permite atualizar cada conteúdo sem republicar
 o instalador.

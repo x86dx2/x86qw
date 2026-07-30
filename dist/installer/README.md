@@ -29,9 +29,11 @@ Os launchers permanentes são arquivos normais deste diretório e entram no
 bundle. A instalação apenas copia seus bytes para a raiz escolhida; nenhum
 script de launcher é montado ou escrito a partir de strings em runtime.
 
-O bundle é deliberadamente enxuto: contém `x86qw.pyz`, os dois launchers,
-`installer.json` e nada mais. O zipapp reúne a implementação da CLI e uma projeção
-runtime mínima do catálogo de componentes. PAKs, pacotes de mods, configurações,
+O bundle é deliberadamente enxuto: contém `x86qw.pyz`, os dois launchers e
+`installer.json`. Uma ponte mínima formada por `dist/installer/bin/manager.py`
+e `_x86qw/installer.json` permite que a CLI 0.1.3 entregue o controle ao zipapp;
+ela existe apenas na extração temporária e nunca é instalada. O zipapp reúne a
+implementação da CLI e uma projeção runtime mínima do catálogo. PAKs, pacotes de mods, configurações,
 gamecodes, fontes e inventários de desenvolvimento não entram nele. A instalação
 obtém cada payload pelo pacote independente registrado no catálogo; os PAKs
 obrigatórios usam o pacote `x86qw-core-id1`.
