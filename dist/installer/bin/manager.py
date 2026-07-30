@@ -317,6 +317,15 @@ class InstallerError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class UpdatePlanRow:
+    kind: str
+    item: str
+    installed: str
+    available: str
+    action: str
+
+
 class LinkCollector(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -366,6 +375,27 @@ class Console:
     def error(self, message: str) -> None:
         label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
         print(f"{label} {message}", file=sys.stderr, flush=True)
+
+    def update_plan(self, rows: list[UpdatePlanRow]) -> None:
+        headers = ("TIPO", "ITEM", "INSTALADO", "DISPONÍVEL", "AÇÃO")
+        values = [
+            (row.kind, row.item, row.installed, row.available, row.action)
+            for row in rows
+        ]
+        widths = [
+            max(len(headers[index]), *(len(row[index]) for row in values))
+            for index in range(len(headers))
+        ]
+
+        def line(columns: tuple[str, ...]) -> str:
+            return "  ".join(
+                value.ljust(widths[index]) for index, value in enumerate(columns)
+            ).rstrip()
+
+        print(line(headers), flush=True)
+        print(line(tuple("-" * width for width in widths)), flush=True)
+        for row in values:
+            print(line(row), flush=True)
 
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
         if not sys.stdout.isatty():
@@ -2161,7 +2191,6 @@ class Installer:
         available = str(package["version"])
         current = self.installed_cli_version()
         if current == available:
-            console.info(f"CLI x86QW já está atualizada ({current}).")
             return False
         if current is not None and not self.release_is_newer(available, current, "stable"):
             console.warning(
@@ -2185,7 +2214,6 @@ class Installer:
                 raise InstallerError("Metadados inválidos no bundle de atualização x86QW.") from error
             if identity != {"format": 1, "project": "x86qw", "version": available}:
                 raise InstallerError("A versão interna do bundle de atualização x86QW é inválida.")
-            console.info(f"CLI x86QW disponível: {current or 'não registrada'} → {available}.")
             command = [
                 sys.executable, str(script), "--online-only", "--installed-cli", "--skip-cli-update",
             ]
@@ -2223,12 +2251,15 @@ class Installer:
         console.success("Plano confirmado.")
         return True
 
-    def show_cli_update_plan(self, *, dry_run: bool) -> None:
+    def cli_update_plan_row(self) -> UpdatePlanRow | None:
         identity = self.installer_bundle_identity()
         available = str(identity["version"])
         current = self.installed_cli_version()
-        prefix = "[SIMULAÇÃO]" if dry_run else "[PLANO]"
-        console.info(f"{prefix} CLI x86QW: {current or 'não registrada'} → {available}.")
+        if current == available:
+            return None
+        return UpdatePlanRow(
+            "CLI", "x86QW", current or "não instalada", available, "Atualizar",
+        )
 
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
@@ -3195,6 +3226,7 @@ class Installer:
         *,
         dry_run: bool,
         preview: bool = False,
+        plan_rows: list[UpdatePlanRow] | None = None,
     ) -> bool:
         self.spec = spec
         self.channel = channel
@@ -3202,7 +3234,6 @@ class Installer:
         available = selected[0]
         installed = receipt["selection"]
         if available == installed:
-            console.info(f"ezQuake {spec.label} {channel} já está atualizado ({installed}).")
             return False
         if not self.release_is_newer(available, installed, channel):
             console.warning(
@@ -3211,10 +3242,10 @@ class Installer:
             return False
 
         if dry_run:
-            prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
-            console.info(
-                f"{prefix} ezQuake {spec.label} {channel}: {installed} → {available}."
-            )
+            if plan_rows is not None:
+                plan_rows.append(UpdatePlanRow(
+                    "Cliente", f"ezQuake {spec.label} {channel}", installed, available, "Atualizar",
+                ))
             return True
 
         self.ensure_macos_ezquake_closed()
@@ -3244,12 +3275,11 @@ class Installer:
             available = str(self.component_package_record(identifier)["version"])
             if receipt["selection"] != available:
                 outdated.append(identifier)
-            else:
-                console.info(f"{self.components[identifier]['label']} já está atualizado ({available}).")
         return outdated
 
     def update(
         self, *, dry_run: bool = False, profile_upgrade: bool = False, preview: bool = False,
+        plan_rows: list[UpdatePlanRow] | None = None,
     ) -> bool:
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
@@ -3257,7 +3287,7 @@ class Installer:
         state = self.load_install_state(persist_migration=not dry_run)
         known = set(state["known_components"])
         newly_published = [identifier for identifier in self.components if identifier not in known]
-        if newly_published:
+        if newly_published and not dry_run:
             console.info("Novos componentes publicados: " + ", ".join(newly_published))
         runtimes: list[tuple[PlatformSpec, str, dict[str, str]]] = []
         for spec in PLATFORMS.values():
@@ -3278,25 +3308,27 @@ class Installer:
             for name in ("pak0.pak", "pak1.pak")
         }
         changed = False
-        console.section("Clientes ezQuake instalados")
+        if not dry_run:
+            console.section("Clientes ezQuake instalados")
         for spec, channel, receipt in runtimes:
             changed = self.update_runtime(
-                spec, channel, receipt, dry_run=dry_run, preview=preview,
+                spec, channel, receipt, dry_run=dry_run, preview=preview, plan_rows=plan_rows,
             ) or changed
 
-        console.section("Componentes instalados")
+        if not dry_run:
+            console.section("Componentes instalados")
         outdated = self.outdated_installed_components()
         if outdated:
             if dry_run:
                 for identifier in outdated:
                     _, _, receipt = self.validate_component_pair(identifier)
                     assert receipt is not None
-                    available = self.component_package_record(identifier)["version"]
-                    prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
-                    console.info(
-                        f"{prefix} {self.components[identifier]['label']}: "
-                        f"{receipt['selection']} → {available}."
-                    )
+                    available = str(self.component_package_record(identifier)["version"])
+                    if plan_rows is not None:
+                        plan_rows.append(UpdatePlanRow(
+                            "Componente", str(self.components[identifier]["label"]),
+                            str(receipt["selection"]), available, "Atualizar",
+                        ))
             else:
                 self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-update.", dir=self.target))
                 try:
@@ -3305,12 +3337,12 @@ class Installer:
                     self.cleanup_stage()
                     self.stage = None
             changed = True
-        elif not self.installed_components():
+        elif not dry_run and not self.installed_components():
             console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
 
         desired = self.desired_components(state)
         missing_from_profile = [identifier for identifier in desired if identifier not in self.installed_components()]
-        if missing_from_profile:
+        if missing_from_profile and not dry_run:
             suffix = (
                 ". Elas serão incorporadas nesta operação."
                 if profile_upgrade
@@ -3328,44 +3360,42 @@ class Installer:
             state = self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]), known=list(self.components),
             )
-        console.section("Verificação final" if not dry_run else "Verificação da instalação atual")
-        self.verify_installation()
-        if preview and changed:
-            console.success("Plano pronto; há atualizações disponíveis e nenhum arquivo foi alterado.")
-        elif preview:
-            console.success("Plano pronto; o conteúdo instalado já está atualizado.")
-        elif dry_run and changed:
-            console.success("Simulação concluída; há atualizações disponíveis e nenhum arquivo foi alterado.")
-        elif dry_run:
-            console.success("Simulação concluída; o conteúdo instalado já está atualizado.")
-        elif changed:
+            if changed and not profile_upgrade:
+                console.section("Verificação final")
+                self.verify_installation()
+        if not dry_run and changed and not profile_upgrade:
             console.success("Conteúdo instalado atualizado e validado.")
-        else:
-            console.success("Clientes e componentes instalados já estão atualizados.")
         return changed
 
-    def upgrade(self, *, dry_run: bool = False, preview: bool = False) -> bool:
-        changed = self.update(dry_run=dry_run, profile_upgrade=True, preview=preview)
+    def upgrade(
+        self, *, dry_run: bool = False, preview: bool = False,
+        plan_rows: list[UpdatePlanRow] | None = None,
+    ) -> bool:
+        changed = self.update(
+            dry_run=dry_run, profile_upgrade=True, preview=preview, plan_rows=plan_rows,
+        )
         state = self.load_install_state(persist_migration=not dry_run)
         desired = self.desired_components(state)
         installed = self.installed_components()
         missing = [identifier for identifier in desired if identifier not in installed]
         extras = [identifier for identifier in installed if identifier not in desired]
 
-        console.section(f"Convergência do perfil {state['profile']}")
-        if extras:
+        if not dry_run:
+            console.section(f"Convergência do perfil {state['profile']}")
+        if extras and not dry_run:
             console.warning(
                 "Componentes fora do perfil foram preservados: " + ", ".join(extras) + "."
             )
         if not missing:
-            console.info("Nenhum componente novo precisa ser incorporado ao perfil.")
+            pass
         elif dry_run:
             for identifier in missing:
                 package = self.component_package_record(identifier)
-                prefix = "[PLANO]" if preview else "[SIMULAÇÃO]"
-                console.info(
-                    f"{prefix} Adicionar {self.components[identifier]['label']} ({package['version']})."
-                )
+                if plan_rows is not None:
+                    plan_rows.append(UpdatePlanRow(
+                        "Componente", str(self.components[identifier]["label"]),
+                        "não instalado", str(package["version"]), "Adicionar",
+                    ))
             changed = True
         else:
             console.info("Novos componentes do perfil: " + ", ".join(missing))
@@ -3381,17 +3411,11 @@ class Installer:
             self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]), known=list(self.components),
             )
-            if missing:
+            if changed:
                 console.section("Verificação final do perfil")
                 self.verify_installation()
-        if preview and missing:
-            console.success("Plano do upgrade pronto; nenhum arquivo foi alterado.")
-        elif dry_run and missing:
-            console.success("Simulação do upgrade concluída; nenhum arquivo foi alterado.")
-        elif changed:
+        if not dry_run and changed:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
-        else:
-            console.success("A distribuição já corresponde ao perfil atual.")
         return changed
 
     def cleanup_stage(self) -> None:
@@ -3640,17 +3664,34 @@ def main(arguments: list[str] | None = None) -> int:
             ):
                 return 0
             try:
-                console.section("Plano de execução")
+                plan_rows: list[UpdatePlanRow] = []
                 if options.skip_cli_update:
-                    installer.show_cli_update_plan(dry_run=options.dry_run)
+                    cli_row = installer.cli_update_plan_row()
+                    if cli_row is not None:
+                        plan_rows.append(cli_row)
                 operation = installer.upgrade if options.action == "upgrade" else installer.update
-                operation(dry_run=True, preview=not options.dry_run)
+                content_changed = operation(
+                    dry_run=True, preview=not options.dry_run, plan_rows=plan_rows,
+                )
+                if not plan_rows:
+                    message = (
+                        "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
+                        if options.action == "upgrade"
+                        else "Nenhuma atualização disponível; o conteúdo instalado já está atualizado."
+                    )
+                    console.success(message)
+                    return 0
+                console.section("Atualizações disponíveis")
+                console.update_plan(plan_rows)
+                print(f"\nTotal: {len(plan_rows)} alteração(ões).", flush=True)
                 if options.dry_run:
+                    console.success("Simulação concluída; nenhum arquivo foi alterado.")
                     return 0
                 if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
                     return 0
                 console.section("Aplicação do plano")
-                operation(dry_run=False)
+                if content_changed:
+                    operation(dry_run=False)
                 if options.skip_cli_update:
                     installer.install_online_cli()
             finally:

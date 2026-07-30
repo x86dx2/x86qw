@@ -46,7 +46,10 @@ que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novo
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
 registrado naquela instalação. Ambos mostram o plano completo e exigem que o
 jogador digite `yes` antes de alterar arquivos; `--yes` confirma o plano em
-automações e `--dry-run` encerra depois de apresentá-lo.
+automações e `--dry-run` encerra depois de apresentá-lo. O plano é uma tabela
+com somente as mudanças reais — tipo, item, versão instalada, versão disponível
+e ação. Quando não há mudanças, o comando informa isso e termina sem confirmação,
+aplicação ou verificação integral.
 
 Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
 fontes canônicas locais:

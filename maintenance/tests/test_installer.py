@@ -418,17 +418,24 @@ class InstallerTests(unittest.TestCase):
         confirm = install_qw.Installer.confirm_update_plan
         installer = mock.Mock()
         installer.target = target
-        installer.update.return_value = True
+        def update(*, dry_run, preview=False, plan_rows=None):
+            del preview
+            if dry_run and plan_rows is not None:
+                plan_rows.append(install_qw.UpdatePlanRow(
+                    "Componente", "Configuração base nQuake", "1", "2", "Atualizar",
+                ))
+            return True
+        installer.update.side_effect = update
         installer.confirm_update_plan.side_effect = confirm
         output = io.StringIO()
         with mock.patch.object(install_qw, "Installer", return_value=installer):
             with mock.patch("builtins.input", return_value="no"):
                 with contextlib.redirect_stdout(output):
                     self.assertEqual(0, install_qw.main(["update", str(target)]))
-        self.assertEqual(
-            [mock.call(dry_run=True, preview=True)], installer.update.call_args_list,
-        )
-        self.assertIn("Plano de execução", output.getvalue())
+        self.assertEqual(1, installer.update.call_count)
+        self.assertTrue(installer.update.call_args.kwargs["dry_run"])
+        self.assertIn("Atualizações disponíveis", output.getvalue())
+        self.assertIn("Configuração base nQuake", output.getvalue())
         self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
 
     def test_upgrade_yes_shows_plan_and_applies_without_prompting(self):
@@ -436,7 +443,14 @@ class InstallerTests(unittest.TestCase):
         confirm = install_qw.Installer.confirm_update_plan
         installer = mock.Mock()
         installer.target = target
-        installer.upgrade.return_value = True
+        def upgrade(*, dry_run, preview=False, plan_rows=None):
+            del preview
+            if dry_run and plan_rows is not None:
+                plan_rows.append(install_qw.UpdatePlanRow(
+                    "Componente", "Total Destruction 2", "2.21", "2.22", "Atualizar",
+                ))
+            return True
+        installer.upgrade.side_effect = upgrade
         installer.confirm_update_plan.side_effect = confirm
         output = io.StringIO()
         with mock.patch.object(install_qw, "Installer", return_value=installer):
@@ -444,25 +458,62 @@ class InstallerTests(unittest.TestCase):
                 with contextlib.redirect_stdout(output):
                     self.assertEqual(0, install_qw.main(["upgrade", str(target), "--yes"]))
         prompt.assert_not_called()
-        self.assertEqual(
-            [mock.call(dry_run=True, preview=True), mock.call(dry_run=False)],
-            installer.upgrade.call_args_list,
-        )
+        self.assertEqual(2, installer.upgrade.call_count)
+        self.assertTrue(installer.upgrade.call_args_list[0].kwargs["dry_run"])
+        self.assertFalse(installer.upgrade.call_args_list[1].kwargs["dry_run"])
         self.assertIn("confirmado automaticamente por --yes", output.getvalue())
 
     def test_update_dry_run_only_shows_plan_without_confirmation(self):
         target = Path("/tmp/x86qw-confirmation-test")
         installer = mock.Mock()
         installer.target = target
-        installer.update.return_value = True
+        def update(*, dry_run, preview=False, plan_rows=None):
+            del preview
+            if dry_run and plan_rows is not None:
+                plan_rows.append(install_qw.UpdatePlanRow(
+                    "Cliente", "ezQuake macOS stable", "3.6.9", "3.6.10", "Atualizar",
+                ))
+            return True
+        installer.update.side_effect = update
         with mock.patch.object(install_qw, "Installer", return_value=installer):
             with mock.patch("builtins.input") as prompt:
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(0, install_qw.main(["update", str(target), "--dry-run"]))
         prompt.assert_not_called()
-        self.assertEqual(
-            [mock.call(dry_run=True, preview=False)], installer.update.call_args_list,
-        )
+        self.assertEqual(1, installer.update.call_count)
+        self.assertTrue(installer.update.call_args.kwargs["dry_run"])
+
+    def test_update_without_changes_exits_before_confirmation_and_application(self):
+        target = Path("/tmp/x86qw-no-update-test")
+        installer = mock.Mock()
+        installer.target = target
+        installer.update.return_value = False
+        output = io.StringIO()
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with mock.patch("builtins.input") as prompt:
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, install_qw.main(["update", str(target)]))
+        prompt.assert_not_called()
+        installer.confirm_update_plan.assert_not_called()
+        self.assertEqual(1, installer.update.call_count)
+        self.assertIn("Nenhuma atualização disponível", output.getvalue())
+        self.assertNotIn("Aplicação do plano", output.getvalue())
+
+    def test_upgrade_without_changes_exits_before_confirmation_and_application(self):
+        target = Path("/tmp/x86qw-no-upgrade-test")
+        installer = mock.Mock()
+        installer.target = target
+        installer.upgrade.return_value = False
+        output = io.StringIO()
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with mock.patch("builtins.input") as prompt:
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, install_qw.main(["upgrade", str(target)]))
+        prompt.assert_not_called()
+        installer.confirm_update_plan.assert_not_called()
+        self.assertEqual(1, installer.upgrade.call_count)
+        self.assertIn("Nenhuma novidade disponível", output.getvalue())
+        self.assertNotIn("Aplicação do plano", output.getvalue())
 
     def test_noninteractive_update_requires_yes(self):
         with mock.patch("builtins.input", side_effect=EOFError):
@@ -568,6 +619,7 @@ class InstallerTests(unittest.TestCase):
                 "known_components": list(installer.components),
             }
             output = io.StringIO()
+            plan_rows = []
             with contextlib.redirect_stdout(output):
                 with mock.patch.object(installer, "update", return_value=False):
                     with mock.patch.object(installer, "load_install_state", return_value=state):
@@ -576,10 +628,36 @@ class InstallerTests(unittest.TestCase):
                                 installer, "component_package_record", return_value={"version": "nova"},
                             ):
                                 with mock.patch.object(installer, "install_components") as apply:
-                                    self.assertTrue(installer.upgrade(dry_run=True))
+                                    self.assertTrue(installer.upgrade(
+                                        dry_run=True, plan_rows=plan_rows,
+                                    ))
             apply.assert_not_called()
-            self.assertIn("[SIMULAÇÃO] Adicionar", output.getvalue())
+            self.assertEqual("Adicionar", plan_rows[0].action)
+            self.assertEqual("não instalado", plan_rows[0].installed)
             self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
+    def test_upgrade_dry_run_with_complete_profile_does_not_open_an_install_stage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            desired = list(installer.component_catalog["profiles"]["essential"])
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "essential",
+                "requested_components": [],
+                "recorded_components": desired,
+                "known_components": list(installer.components),
+            }
+            plan_rows = []
+            with mock.patch.object(installer, "update", return_value=False):
+                with mock.patch.object(installer, "load_install_state", return_value=state):
+                    with mock.patch.object(installer, "installed_components", return_value=desired):
+                        with mock.patch.object(installer, "install_components") as apply:
+                            self.assertFalse(installer.upgrade(
+                                dry_run=True, plan_rows=plan_rows,
+                            ))
+            apply.assert_not_called()
+            self.assertEqual([], plan_rows)
 
     def test_release_update_never_downgrades_an_installed_client(self):
         self.assertTrue(install_qw.Installer.release_is_newer("3.6.10", "3.6.9", "stable"))
@@ -692,7 +770,7 @@ class InstallerTests(unittest.TestCase):
             command = run.call_args.args[0]
             self.assertIn("--dry-run", command)
             self.assertIn("--skip-cli-update", command)
-            self.assertIn("CLI x86QW disponível", output.getvalue())
+            self.assertNotIn("CLI x86QW disponível", output.getvalue())
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
         class FakeSocket:

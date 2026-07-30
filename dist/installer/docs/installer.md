@@ -559,9 +559,13 @@ silenciosa de addons. Assinaturas históricas preservadas no manifesto permitem
 reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em `.install/state.json` e registra também
 os componentes conhecidos, permitindo detectar novidades publicadas.
 
-Antes de alterar qualquer arquivo, os dois comandos sempre consultam o catálogo,
-mostram o plano completo e exigem a confirmação literal `yes`. Para automações,
-`--yes` aceita o plano sem abrir o prompt:
+Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
+mostram somente as mudanças reais em uma tabela com tipo, item, versão
+instalada, versão disponível e ação. Itens já atualizados não poluem o plano.
+Se a tabela estiver vazia, o comando termina imediatamente, sem confirmação,
+segunda passagem de atualização ou verificação integral. Quando há mudanças,
+a confirmação literal `yes` é obrigatória. Para automações, `--yes` aceita o
+plano sem abrir o prompt:
 
 ```sh
 ./x86qw.sh update --yes
