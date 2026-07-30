@@ -688,6 +688,23 @@ class InstallerTests(unittest.TestCase):
                         ):
                             self.assertEqual(["ktx"], installer.outdated_installed_components())
 
+    def test_component_update_never_downgrades_a_newer_x86qw_overlay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            output = io.StringIO()
+            with mock.patch.object(installer, "installed_components", return_value=["ktx"]):
+                with mock.patch.object(
+                    installer, "validate_component_pair",
+                    return_value=(True, [], {"selection": "1.47+x86qw.3"}),
+                ):
+                    with mock.patch.object(
+                        installer, "component_package_record",
+                        return_value={"version": "1.47+x86qw.2"},
+                    ):
+                        with contextlib.redirect_stdout(output):
+                            self.assertEqual([], installer.outdated_installed_components())
+            self.assertIn("é mais novo que o catálogo", output.getvalue())
+
     def test_existing_installation_profile_is_inferred_and_persisted(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

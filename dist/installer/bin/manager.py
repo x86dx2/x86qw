@@ -3696,8 +3696,23 @@ class Installer:
             _, _, receipt = self.validate_component_pair(identifier)
             assert receipt is not None
             available = str(self.component_package_record(identifier)["version"])
-            if receipt["selection"] != available:
-                outdated.append(identifier)
+            installed = str(receipt["selection"])
+            if installed == available:
+                continue
+            installed_overlay = re.fullmatch(r"(.+)\+x86qw\.(\d+)", installed)
+            available_overlay = re.fullmatch(r"(.+)\+x86qw\.(\d+)", available)
+            if (
+                installed_overlay is not None
+                and available_overlay is not None
+                and installed_overlay.group(1) == available_overlay.group(1)
+                and int(installed_overlay.group(2)) > int(available_overlay.group(2))
+            ):
+                console.warning(
+                    f"{self.components[identifier]['label']} instalado ({installed}) é mais novo "
+                    f"que o catálogo ({available}); preservado."
+                )
+                continue
+            outdated.append(identifier)
         return outdated
 
     def update(
