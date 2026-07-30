@@ -20,6 +20,7 @@
   `$cl_remote_capabilities,...` produzido pelo perfil anterior;
 - inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
   separadamente, sem recarregar o filesystem durante o startup;
+- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
 - `runtime/sound/weapons/bounce2.wav` restaura o som diretamente referenciado em `TRIGGERS.QC`, usando o arquivo oficial presente no KTX 1.47: 7960 bytes, SHA-256 `d2da688ec5fc64f24b798b645eb80b8cdd60c6e7d44cb68a7e05e2264e1e69d5`.
 
 ## Lacunas conhecidas

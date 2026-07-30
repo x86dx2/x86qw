@@ -27,7 +27,7 @@ como fonte da distribuição. Antes de criar a instalação, o programa pergunta
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
 O bundle contém `x86qw.pyz`, os launchers, `installer.json` e uma ponte mínima
-para a atualização iniciada pela CLI 0.1.4. Essa ponte encaminha a execução ao
+para a atualização iniciada pela CLI 0.1.5. Essa ponte encaminha a execução ao
 zipapp e permanece apenas no diretório temporário. O zipapp incorpora a CLI e
 um catálogo runtime mínimo. PAKs, mods, configurações,
 gamecodes, fontes e inventários de manutenção são pacotes
@@ -333,6 +333,12 @@ o comando somente depois que o KTX está ativo. CTF existe no gamecode KTX 1.47,
 mas ainda não aparece no launcher porque
 o acervo curado atual do x86QW não contém um mapa ou ENT com as duas bandeiras.
 
+O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
+console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;
+`cmd rules` mostra o estado de regras publicado pelo próprio KTX. Essa distinção é
+importante nos presets especiais, que partem de uma base `1on1` ou `ffa` e ativam
+Midair, Race ou Practice durante a entrada no mapa.
+
 Antes de abrir o jogo, o launcher valida o recibo do componente e descobre os
 mapas disponíveis em arquivos BSP soltos, PK3s e PAKs do gamedir e de `id1`.
 Ele oferece sugestões, aceita um nome instalado ou lista o acervo completo. Se
@@ -377,7 +383,8 @@ executado por último:
 configuração nQuake -> x86qw-<mod>.cfg -> x86qw-<mod>-user.cfg
 ```
 
-O console imprime os binds padrão ao carregar, e `F10` repete a ajuda. Os
+O console inicia sem imprimir quadros de ajuda. `F10` exibe os binds do mod sob
+demanda, depois que o jogador precisar consultá-los. Os
 perfis não são cópias entre si:
 
 - **KTX:** `1-8` selecionam armas com fallback; `Q`, `E` e `Mouse2` dão acesso

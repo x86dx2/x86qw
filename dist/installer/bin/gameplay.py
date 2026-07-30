@@ -50,7 +50,6 @@ class LocalGameSpec:
     suggested_maps: tuple[str, ...]
     version: str
     description: str
-    confirmation: str
 
 
 @dataclass(frozen=True)
@@ -64,7 +63,6 @@ class KtxModeSpec:
     default_map: str
     suggested_maps: tuple[str, ...]
     entry_config: str | None
-    confirmation: str
 
 
 LOCAL_GAMES = (
@@ -73,7 +71,6 @@ LOCAL_GAMES = (
         ("dm6", "dm2", "dm4", "aerowalk"),
         "1.47",
         "QuakeWorld competitivo com o QVM oficial do KTX.",
-        "No console, ktxver deve mostrar a versão carregada.",
     ),
     LocalGameSpec(
         "final-arena", "Final Arena", "arena", "arena", "final-arena",
@@ -81,7 +78,6 @@ LOCAL_GAMES = (
         ("23ar-a", "arenarg2", "arenarg4", "dm2arena"),
         "1.20",
         "Duelos individuais em fila: o vencedor permanece na arena.",
-        "No console, gamedir e *gamedir devem mostrar arena.",
     ),
     LocalGameSpec(
         "pro-x", "Pro-X", "prox", "prox", "pro-x",
@@ -89,7 +85,6 @@ LOCAL_GAMES = (
         ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
         "1.1",
         "Rounds e equipes com ready, break e votação.",
-        "No console, gamedir e *gamedir devem mostrar prox.",
     ),
     LocalGameSpec(
         "team-fortress", "Team Fortress", "fortress", "fortress", "team-fortress",
@@ -97,14 +92,12 @@ LOCAL_GAMES = (
         ("2fort5r", "well6", "bases", "mbasesr"),
         "2.9",
         "Team Fortress clássico para QuakeWorld.",
-        "A inicialização deve mostrar TeamFortress QuakeWorld v2.9 Beta.",
     ),
     LocalGameSpec(
         "td2", "Total Destruction 2", "td2", "td2", "total-destruction-2",
         "td2/qwprogs.dat", "td2/qwprogs.dat", "dm6", ("dm6", "dm2", "dm4", "e1m2"),
         "2.22",
         "Armas, magias, runas e poderes.",
-        "No serverinfo, *gamedir deve ser td2 e td2qw deve ser 2.22.",
     ),
 )
 
@@ -136,7 +129,7 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         entry_config = raw.get("entry_config")
         text_fields = (
             "label", "description", "recommended_players", "usermode",
-            "default_map", "confirmation",
+            "default_map",
         )
         if (
             not isinstance(key, str)
@@ -179,7 +172,6 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
             default_map=str(raw["default_map"]),
             suggested_maps=tuple(suggested_maps),
             entry_config=entry_config,
-            confirmation=str(raw["confirmation"]),
         ))
     return tuple(modes)
 
@@ -486,15 +478,22 @@ class Player(core.Installer):
             # PR1 gamecodes do not advertise the high-lag teleport extension.
             arguments.extend(["+cl_pext_lagteleport", "0"])
         if game.key == "ktx":
+            for event in ("on_enter", "on_enter_ffa", "on_enter_ctf"):
+                arguments.extend(["+tempalias", event, "wait"])
             if ktx_mode.entry_config is not None:
                 event = {
                     "ffa": "on_enter_ffa",
                     "ctf": "on_enter_ctf",
                 }.get(ktx_mode.usermode, "on_enter")
-                arguments.extend(["+alias", event, f"exec {ktx_mode.entry_config}"])
+                arguments.extend(["+tempalias", event, f"exec {ktx_mode.entry_config}"])
             arguments.extend(["+set", "k_defmap", map_name])
             assert ktx_mode is not None
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
+            arguments.extend(["+set", "x86qw_ktx_preset", ktx_mode.key])
+            arguments.extend([
+                "+tempalias", "ktx_mode",
+                f"echo x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
+            ])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
             arguments.append("+wait")
@@ -503,9 +502,6 @@ class Player(core.Installer):
         console.info(f"Abrindo {selection} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
         console.success(f"{label} aberto com {selection}.")
-        console.info(game.confirmation)
-        if ktx_mode is not None:
-            console.info(ktx_mode.confirmation)
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
         present, old_entries, _ = self.validate_component_pair("play-support")

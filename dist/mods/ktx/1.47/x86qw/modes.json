@@ -12,8 +12,7 @@
       "usermode": "1on1",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar 1 on 1 settings enabled."
+      "entry_config": null
     },
     {
       "id": "2on2",
@@ -24,8 +23,7 @@
       "usermode": "2on2",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar 2 on 2 settings enabled."
+      "entry_config": null
     },
     {
       "id": "4on4",
@@ -36,8 +34,7 @@
       "usermode": "4on4",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt1b", "cmt3", "cmt4"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar 4 on 4 settings enabled."
+      "entry_config": null
     },
     {
       "id": "ffa",
@@ -48,8 +45,7 @@
       "usermode": "ffa",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk", "death32c"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar ffa settings enabled."
+      "entry_config": null
     },
     {
       "id": "clan-arena",
@@ -60,8 +56,7 @@
       "usermode": "ca",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar Clan Arena settings enabled."
+      "entry_config": null
     },
     {
       "id": "hoony",
@@ -72,8 +67,7 @@
       "usermode": "hoonymode",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
-      "entry_config": null,
-      "confirmation": "KTX deve anunciar HoonyMode settings enabled."
+      "entry_config": null
     },
     {
       "id": "midair",
@@ -84,8 +78,7 @@
       "usermode": "1on1",
       "default_map": "povdmm4",
       "suggested_maps": ["povdmm4", "dm4", "dm6"],
-      "entry_config": "x86qw-ktx-mode-midair.cfg",
-      "confirmation": "KTX deve confirmar deathmatch 4 e Midair enabled."
+      "entry_config": "x86qw-ktx-mode-midair.cfg"
     },
     {
       "id": "race",
@@ -96,8 +89,7 @@
       "usermode": "ffa",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "aerowalk", "slide1", "slide7", "ztndm3", "ztricks"],
-      "entry_config": "x86qw-ktx-mode-race.cfg",
-      "confirmation": "KTX deve confirmar Race enabled e carregar uma rota do mapa."
+      "entry_config": "x86qw-ktx-mode-race.cfg"
     },
     {
       "id": "practice",
@@ -108,8 +100,7 @@
       "usermode": "1on1",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk"],
-      "entry_config": "x86qw-ktx-mode-practice.cfg",
-      "confirmation": "KTX deve anunciar Server in practice mode."
+      "entry_config": "x86qw-ktx-mode-practice.cfg"
     }
   ],
   "not_exposed": [

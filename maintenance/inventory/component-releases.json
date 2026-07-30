@@ -8,10 +8,10 @@
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
-      "notes": "Preserva a base nQuake, aplica bootstrap global compartilhado por todos os mods, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes stable e nightly suportados.",
+      "notes": "Preserva a base nQuake, aplica bootstrap global compartilhado por todos os mods, mantém aliases temporários e camada pessoal sem imprimir ajuda automaticamente, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes stable e nightly suportados.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.3",
+      "version": "1.47+x86qw.4",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.3",
+      "distribution_tag": "ktx-1.47-x86qw.4",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o perfil de gameplay x86QW.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o perfil de gameplay x86QW com ajuda somente sob demanda.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -173,7 +173,7 @@
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.1",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.2",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "final-arena",
@@ -181,7 +181,7 @@
       "embedded_version": "Final Arena 1.20",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW.",
+      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com ajuda somente sob demanda.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -219,7 +219,7 @@
       ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.2",
+      "version": "1.1+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "pro-x",
@@ -227,7 +227,7 @@
       "embedded_version": "Pro-X QW 1.1",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com ajuda somente sob demanda e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -257,7 +257,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.3",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.4",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "team-fortress",
@@ -265,7 +265,7 @@
       "embedded_version": "Team Fortress 2.9",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW.",
+      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW e a ajuda aparece somente sob demanda.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -312,14 +312,14 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.2",
+      "version": "2.22+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, ajuda somente sob demanda e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

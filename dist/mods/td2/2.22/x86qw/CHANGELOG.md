@@ -14,6 +14,7 @@
 - remove o ramo morto de `monster_vomit` que chamava `vomitus/v_sight1.wav`, arquivo inexistente também no código-base Quake 1.06;
 - inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
   separadamente, sem recarregar o filesystem durante o startup;
+- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
 - `runtime/qwprogs.dat` foi recompilado com FTEQCC e promovido após smoke em stable e nightly.
 
 ## Lacunas conhecidas

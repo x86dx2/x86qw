@@ -106,13 +106,13 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.3", ktx["version"])
+        self.assertEqual("1.47+x86qw.4", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.2", td2["version"])
+        self.assertEqual("2.22+x86qw.3", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -281,6 +281,12 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertNotIn('exec configs/config.cfg', autoexec)
         self.assertIn('sb_listcache 0', autoexec)
         self.assertIn('cfg_use_gamedir 0', autoexec)
+        executable_lines = [
+            line.strip() for line in autoexec.splitlines()
+            if line.strip() and not line.lstrip().startswith("//")
+        ]
+        self.assertNotIn("_startup_message", executable_lines)
+        self.assertEqual("exec x86qw-user.cfg", executable_lines[-1])
 
     def test_td2_runtime_package_excludes_reference_material(self) -> None:
         context = load_source_context(

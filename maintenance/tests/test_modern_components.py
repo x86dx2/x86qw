@@ -144,10 +144,10 @@ class ModernComponentTests(unittest.TestCase):
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
             "ktx": ("1.48+x86qw.1", "1.48"),
-            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.1", "1.20"),
-            "pro-x": ("1.1+x86qw.2", "1.1"),
-            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.3", "2.9"),
-            "td2": ("2.22+x86qw.2", "2.22"),
+            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.2", "1.20"),
+            "pro-x": ("1.1+x86qw.3", "1.1"),
+            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.4", "2.9"),
+            "td2": ("2.22+x86qw.3", "2.22"),
         }
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -767,8 +767,14 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", side_effect=["", "", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
-                "+sb_listcache", "0", "+set", "k_defmap", "dm6",
+                "+sb_listcache", "0",
+                "+tempalias", "on_enter", "wait",
+                "+tempalias", "on_enter_ffa", "wait",
+                "+tempalias", "on_enter_ctf", "wait",
+                "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
+                "+set", "x86qw_ktx_preset", "duel",
+                "+tempalias", "ktx_mode", "echo x86QW KTX preset: Duel [duel]",
                 "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
             ])
 
@@ -790,9 +796,14 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
                 "+sb_listcache", "0",
-                "+alias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
+                "+tempalias", "on_enter", "wait",
+                "+tempalias", "on_enter_ffa", "wait",
+                "+tempalias", "on_enter_ctf", "wait",
+                "+tempalias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
                 "+set", "k_defmap", "povdmm4",
                 "+set", "k_defmode", "1on1",
+                "+set", "x86qw_ktx_preset", "midair",
+                "+tempalias", "ktx_mode", "echo x86QW KTX preset: Midair [midair]",
                 "+map", "povdmm4", "+wait", "+exec", "x86qw-ktx.cfg",
             ])
 
@@ -819,9 +830,15 @@ class ModernComponentTests(unittest.TestCase):
                                                         installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
                     "+sb_listcache", "0",
-                    "+alias", event, f"exec {entry_config}",
+                    "+tempalias", "on_enter", "wait",
+                    "+tempalias", "on_enter_ffa", "wait",
+                    "+tempalias", "on_enter_ctf", "wait",
+                    "+tempalias", event, f"exec {entry_config}",
                     "+set", "k_defmap", "dm6",
                     "+set", "k_defmode", usermode,
+                    "+set", "x86qw_ktx_preset", mode,
+                    "+tempalias", "ktx_mode",
+                    f"echo x86QW KTX preset: {mode.title()} [{mode}]",
                     "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
                 ])
 
@@ -1062,7 +1079,7 @@ class ModernComponentTests(unittest.TestCase):
                     target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
                 ).is_file())
 
-    def test_every_playable_mod_profile_prints_its_keys_and_binds_help(self):
+    def test_every_playable_mod_profile_keeps_help_on_demand_without_startup_noise(self):
         expected_gameplay = {
             "ktx": {
                 'tempalias sv_enableprofile ""',
@@ -1146,8 +1163,12 @@ class ModernComponentTests(unittest.TestCase):
                         self.assertIn(expected, profile)
                     user_exec = f"exec x86qw-{game.profile}-user.cfg"
                     self.assertIn(user_exec, profile)
-                    self.assertLess(profile.index(user_exec), profile.rindex(help_alias))
-                    self.assertEqual(help_alias, profile.strip().splitlines()[-1])
+                    executable_lines = [
+                        line.strip() for line in profile.splitlines()
+                        if line.strip() and not line.lstrip().startswith("//")
+                    ]
+                    self.assertEqual(user_exec, executable_lines[-1])
+                    self.assertNotIn(help_alias, executable_lines)
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:

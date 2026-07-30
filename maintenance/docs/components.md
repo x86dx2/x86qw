@@ -22,9 +22,9 @@ componentes autorais da própria distribuição e não representa um upstream.
 
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
-| Configuração base | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com bootstrap x86QW | aliases temporários e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
+| Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.3` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados, carregamento QVM direto e nove modos locais declarativos |
+| KTX | `1.47+x86qw.4` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados, carregamento QVM direto, nove modos locais declarativos e confirmação explícita do preset |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -36,10 +36,10 @@ componentes autorais da própria distribuição e não representa um upstream.
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
 | Documentação | `e4cb23d40aa2+x86qw.1` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
 | QRP alta resolução | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
-| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.1` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; originais 1.20 e fonte-base preservados |
-| Pro-X | `1.1+x86qw.2` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.3` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos |
-| Total Destruction 2 | `2.22+x86qw.2` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados sem gravação, binds ou gamma forçados |
+| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.2` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; originais 1.20 e fonte-base preservados; ajuda somente sob demanda |
+| Pro-X | `1.1+x86qw.3` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; ajuda somente sob demanda |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.4` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; ajuda somente sob demanda |
+| Total Destruction 2 | `2.22+x86qw.3` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados sem gravação, binds, gamma ou ajuda automática |
 
 ## Contrato de atualização
 

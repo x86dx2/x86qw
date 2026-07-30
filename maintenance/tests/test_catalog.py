@@ -20,10 +20,10 @@ from build_core_package import build_core_package  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 30)
+        self.assertEqual(validate_catalog(catalog), 31)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
-        self.assertEqual("1.47+x86qw.3", ktx["version"])
+        self.assertEqual("1.47+x86qw.4", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -52,28 +52,28 @@ class CatalogTests(unittest.TestCase):
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22+x86qw.2", td2["version"])
+        self.assertEqual("2.22+x86qw.3", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("1.20+nquake.e4cb23d40aa2+x86qw.1", final_arena["version"])
+        self.assertEqual("1.20+nquake.e4cb23d40aa2+x86qw.2", final_arena["version"])
         self.assertEqual("final-arena", final_arena["component"])
-        self.assertEqual("1.1+x86qw.2", pro_x["version"])
+        self.assertEqual("1.1+x86qw.3", pro_x["version"])
         self.assertEqual("pro-x", pro_x["component"])
         team_fortress = next(
             package for package in catalog["packages"] if package.get("package") == "team-fortress"
         )
-        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.3", team_fortress["version"])
+        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.4", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(5, len(installers))
-        self.assertEqual(["0.1.4"], [
+        self.assertEqual(6, len(installers))
+        self.assertEqual(["0.1.5"], [
             package["version"] for package in installers if package.get("current") is True
         ])
         latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
-        self.assertEqual([("x86qw-installer", "0.1.4")], [
+        self.assertEqual([("x86qw-installer", "0.1.5")], [
             (package.get("package"), package["version"]) for package in latest
         ])
         self.assertTrue(all(

@@ -14,7 +14,8 @@ Os 93 membros do `pak0.pak` oficial foram comparados com o conteúdo nQuake e es
 - separa perfil de cliente, configuração de servidor e arquivo pessoal;
 - inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
   separadamente, sem recarregar o filesystem durante o startup;
-- expõe controles e ajuda sem alterar as regras do mod.
+- expõe controles e ajuda sem alterar as regras do mod;
+- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda.
 
 ## Lacunas conhecidas
 

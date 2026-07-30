@@ -15,7 +15,8 @@ O autor informou publicamente que não liberaria a fonte. O x86QW preserva o bin
   uma configuração pessoal antiga deixou `sv_loadentfiles` desativado;
 - inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
   separadamente, sem recarregar o filesystem durante o startup;
-- separa configurações de cliente, servidor e usuário.
+- separa configurações de cliente, servidor e usuário;
+- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda.
 
 ## Dependências opcionais
 
