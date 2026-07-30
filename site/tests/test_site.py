@@ -1,5 +1,6 @@
 from html.parser import HTMLParser
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -68,13 +69,13 @@ class SiteTests(unittest.TestCase):
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertEqual("x86QW Installer 0.1.3", package["release_title"])
+        self.assertEqual("x86QW Installer 0.1.4", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/",
+            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.4/",
             package["urls"][0],
         )
         self.assertEqual(
-            ["0.1.0", "0.1.1", "0.1.2", "0.1.3"],
+            ["0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4"],
             sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
         )
         for historical in installers:
@@ -86,16 +87,26 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
         with zipfile.ZipFile(bundle) as archive:
             names = archive.namelist()
+            prefix = f"x86qw-installer-{package['version']}"
             identity = json.loads(archive.read(
-                f"x86qw-installer-{package['version']}/_x86qw/installer.json"
+                f"{prefix}/installer.json"
             ))
-            runtime = json.loads(archive.read(
-                f"x86qw-installer-{package['version']}/_x86qw/components.json"
-            ))
+            application = archive.read(f"{prefix}/x86qw.pyz")
+        self.assertEqual(
+            {
+                f"{prefix}/installer.json", f"{prefix}/x86qw.pyz",
+                f"{prefix}/x86qw.sh", f"{prefix}/x86qw.cmd",
+            },
+            set(names),
+        )
+        with zipfile.ZipFile(io.BytesIO(application)) as zipapp:
+            embedded_identity = json.loads(zipapp.read("_x86qw/installer.json"))
+            runtime = json.loads(zipapp.read("_x86qw/components.json"))
         self.assertEqual(
             {"format": 1, "project": "x86qw", "version": package["version"]},
             identity,
         )
+        self.assertEqual(identity, embedded_identity)
         self.assertLess(package["size"], 1024 * 1024)
         self.assertFalse(any(name.endswith((".pak", ".pk3", "qwprogs.dat")) for name in names))
         self.assertFalse(any("/dist/mods/" in name or "/maintenance/inventory/" in name for name in names))

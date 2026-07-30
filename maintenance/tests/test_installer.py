@@ -13,6 +13,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from maintenance.tools.build_installer_bundle import zipapp_bytes
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("install_qw", ROOT / "dist/installer/bin/manager.py")
@@ -33,6 +35,14 @@ class InstallerTests(unittest.TestCase):
         target.mkdir(parents=True)
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
+
+    @staticmethod
+    def write_installer_bundle(path: Path, version: str) -> None:
+        identity = json.dumps({"format": 1, "project": "x86qw", "version": version})
+        with zipfile.ZipFile(path, "w") as package:
+            prefix = f"x86qw-installer-{version}"
+            package.writestr(f"{prefix}/x86qw.pyz", zipapp_bytes(version))
+            package.writestr(f"{prefix}/installer.json", identity)
 
     def test_repository_preserves_the_registered_paks_as_core_sources(self):
         expected = {
@@ -376,17 +386,24 @@ class InstallerTests(unittest.TestCase):
             stale = target / ".install/cli/dist/game-data/id1/pak0.pak"
             stale.parent.mkdir(parents=True)
             stale.write_bytes(b"legacy bundled PAK")
+            bundle = Path(temporary) / "bundle"
+            bundle.mkdir()
+            application = bundle / "x86qw.pyz"
+            application.write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes((ROOT / "dist/installer/bin" / name).read_bytes())
             installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer, "installer_bundle_identity",
                     return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
                 ):
                     installer.install_online_cli()
-            self.assertTrue((target / ".install/cli/dist/installer/bin/manager.py").is_file())
-            self.assertTrue((target / ".install/cli/_x86qw/components.json").is_file())
-            self.assertFalse((target / ".install/cli/dist/mods").exists())
-            self.assertFalse((target / ".install/cli/dist/game-data").exists())
+            self.assertEqual(
+                [target / ".install/cli/x86qw.pyz"],
+                sorted(path for path in (target / ".install/cli").rglob("*") if path.is_file()),
+            )
             self.assertTrue((target / "x86qw.cmd").is_file())
             self.assertEqual(
                 (ROOT / "dist/installer/bin/x86qw.sh").read_bytes(),
@@ -732,12 +749,7 @@ class InstallerTests(unittest.TestCase):
                 '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
             )
             archive = root / "x86qw-installer-1.0.5.zip"
-            with zipfile.ZipFile(archive, "w") as package:
-                package.writestr("x86qw-installer-1.0.5/dist/installer/bin/manager.py", "# update\n")
-                package.writestr(
-                    "x86qw-installer-1.0.5/_x86qw/installer.json",
-                    '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
-                )
+            self.write_installer_bundle(archive, "1.0.5")
             record = {"version": "1.0.5"}
             completed = subprocess.CompletedProcess([], 0)
             with contextlib.redirect_stdout(io.StringIO()):
@@ -805,12 +817,7 @@ class InstallerTests(unittest.TestCase):
                 '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
             )
             archive = root / "x86qw-installer-1.0.5.zip"
-            with zipfile.ZipFile(archive, "w") as package:
-                package.writestr("x86qw-installer-1.0.5/dist/installer/bin/manager.py", "# update\n")
-                package.writestr(
-                    "x86qw-installer-1.0.5/_x86qw/installer.json",
-                    '{"format":1,"project":"x86qw","version":"1.0.5"}\n',
-                )
+            self.write_installer_bundle(archive, "1.0.5")
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 with mock.patch.object(
@@ -1007,7 +1014,7 @@ class InstallerTests(unittest.TestCase):
     def test_regular_uninstall_removes_the_cli_and_preserves_id1(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            cli = target / ".install/cli/dist/installer/bin/manager.py"
+            cli = target / ".install/cli/x86qw.pyz"
             cli.parent.mkdir(parents=True)
             cli.write_text("# cli\n", encoding="utf-8")
             (target / install_qw.CLI_RECEIPT).write_text(

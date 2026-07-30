@@ -21,7 +21,8 @@ componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `dist
 somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
 HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
 O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
-o catálogo publicado e grava uma CLI permanente em `.install/cli` na instalação.
+o catálogo publicado e grava a CLI permanente como o único arquivo
+`.install/cli/x86qw.pyz` na instalação.
 Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
 no bundle e apenas copiadas para a raiz da instalação.
 Os bundles publicados ficam em `dist/installer/packages/<versão>/`; o link
@@ -120,8 +121,9 @@ origem, tamanho, SHA-256 e membros mínimos. Atualizações são montadas em sta
 e somente substituem a árvore canônica quando catálogo, inventários, receitas e
 payloads formam um estado coerente.
 
-O Worker serve o site e o catálogo. O bundle público contém somente a CLI e
-um manifesto runtime mínimo: não leva PAKs, pacotes de mods, fontes, gamecodes
+O Worker serve o site e o catálogo. O bundle público contém `x86qw.pyz`, os
+launchers e `installer.json`. O zipapp incorpora um manifesto runtime mínimo:
+não leva PAKs, pacotes de mods, fontes, gamecodes
 nem os inventários de desenvolvimento. Para componentes, o instalador valida e
 materializa as fontes em `dist/` quando presentes; caso contrário, baixa o ZIP
 derivado de uma URL registrada. Nos dois caminhos, gera o mesmo inventário de

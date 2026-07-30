@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -24,15 +25,17 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.3"
-FILES = (
-    "dist/installer/bin/x86qw.sh",
-    "dist/installer/bin/x86qw.cmd",
-    "dist/installer/bin/manager.py",
-    "dist/installer/bin/gameplay.py",
-    "maintenance/__init__.py",
-    "maintenance/tools/__init__.py",
-    "maintenance/tools/components.py",
+VERSION = "0.1.4"
+BUNDLE_FILES = (
+    ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
+    ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
+)
+ZIPAPP_FILES = (
+    ("dist/installer/bin/manager.py", "manager.py"),
+    ("dist/installer/bin/gameplay.py", "gameplay.py"),
+    ("maintenance/__init__.py", "maintenance/__init__.py"),
+    ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),
+    ("maintenance/tools/components.py", "maintenance/tools/components.py"),
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -40,7 +43,9 @@ PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 
 
 def bundle_files() -> tuple[str, ...]:
-    return FILES
+    return tuple(source for source, _, _ in BUNDLE_FILES) + tuple(
+        source for source, _ in ZIPAPP_FILES
+    )
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -48,6 +53,40 @@ def runtime_catalog_bytes() -> bytes:
     return json.dumps(
         runtime_catalog(source), ensure_ascii=False, indent=2, sort_keys=True,
     ).encode("utf-8") + b"\n"
+
+
+def json_bytes(value: object) -> bytes:
+    return json.dumps(
+        value, ensure_ascii=False, indent=2, sort_keys=True,
+    ).encode("utf-8") + b"\n"
+
+
+def write_member(
+    archive: zipfile.ZipFile, name: str, payload: bytes, mode: int = 0o644,
+) -> None:
+    info = zipfile.ZipInfo(name, FIXED_TIME)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = (stat.S_IFREG | mode) << 16
+    archive.writestr(info, payload)
+
+
+def zipapp_bytes(version: str) -> bytes:
+    output = io.BytesIO()
+    identity = {"format": 1, "project": "x86qw", "version": version}
+    with zipfile.ZipFile(output, "w", allowZip64=True) as application:
+        write_member(
+            application,
+            "__main__.py",
+            b"from manager import main\nraise SystemExit(main())\n",
+        )
+        for source_name, member in ZIPAPP_FILES:
+            source = ROOT / source_name
+            if not source.is_file() or source.is_symlink():
+                raise ValueError(f"zipapp input is missing or unsafe: {source}")
+            write_member(application, member, source.read_bytes())
+        write_member(application, "_x86qw/installer.json", json_bytes(identity))
+        write_member(application, "_x86qw/components.json", runtime_catalog_bytes())
+    return output.getvalue()
 
 
 def sha256(path: Path) -> str:
@@ -128,36 +167,18 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
     temporary = Path(temporary_name)
     try:
         with zipfile.ZipFile(temporary, "w", allowZip64=True) as bundle:
-            for relative in bundle_files():
-                source = ROOT / relative
+            prefix = f"x86qw-installer-{version}"
+            write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_bytes(version))
+            for source_name, member, mode in BUNDLE_FILES:
+                source = ROOT / source_name
                 if not source.is_file() or source.is_symlink():
                     raise ValueError(f"installer input is missing or unsafe: {source}")
-                info = zipfile.ZipInfo(f"x86qw-installer-{version}/{relative}", FIXED_TIME)
-                info.compress_type = zipfile.ZIP_DEFLATED
-                executable = relative in {
-                    "dist/installer/bin/x86qw.sh", "dist/installer/bin/manager.py",
-                    "dist/installer/bin/gameplay.py",
-                }
-                info.external_attr = (stat.S_IFREG | (0o755 if executable else 0o644)) << 16
-                bundle.writestr(info, source.read_bytes())
-            identity = json.dumps(
-                {"format": 1, "project": "x86qw", "version": version},
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            ).encode("utf-8") + b"\n"
-            info = zipfile.ZipInfo(
-                f"x86qw-installer-{version}/_x86qw/installer.json", FIXED_TIME,
+                write_member(bundle, f"{prefix}/{member}", source.read_bytes(), mode)
+            write_member(
+                bundle,
+                f"{prefix}/installer.json",
+                json_bytes({"format": 1, "project": "x86qw", "version": version}),
             )
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = (stat.S_IFREG | 0o644) << 16
-            bundle.writestr(info, identity)
-            info = zipfile.ZipInfo(
-                f"x86qw-installer-{version}/_x86qw/components.json", FIXED_TIME,
-            )
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = (stat.S_IFREG | 0o644) << 16
-            bundle.writestr(info, runtime_catalog_bytes())
         if target.is_file() and sha256(target) != sha256(temporary):
             raise ValueError(f"installer version {version} is immutable; bump VERSION before rebuilding")
         if not target.exists():

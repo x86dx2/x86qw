@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-INSTALLER_VERSION="0.1.3"
+INSTALLER_VERSION="0.1.4"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
-INSTALLER_SHA256="fcedd03497ce8a10f4f8d7c57c38b2f21cd44a11d2f9e09ee4085a4fe43311a6"
+INSTALLER_SHA256="98f5c3015b10df05c1d8bddbb73eaf31ca2fbcaf5e42ce6e066c8d190de44906"
 INSTALLER_URLS=(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-${INSTALLER_VERSION}/${INSTALLER_FILE}"
   "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/${INSTALLER_VERSION}/${INSTALLER_FILE}"
@@ -37,4 +37,4 @@ actual=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"
 
 unzip -q "$archive" -d "$work_dir"
 root="$work_dir/x86qw-installer-$INSTALLER_VERSION"
-python3 "$root/dist/installer/bin/manager.py" --online-only "$@"
+python3 "$root/x86qw.pyz" --online-only "$@"
