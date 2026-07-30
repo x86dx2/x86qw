@@ -11,6 +11,10 @@
     "filename": "ezQuake-windows-x64.zip",
     "size": 4135630,
     "sha256": "1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d",
+    "urls": [
+      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip",
+      "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/3.6.9/ezQuake-windows-x64.zip"
+    ],
     "origin_url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip",
     "license": "GPL-2.0-only",
     "license_url": "https://github.com/QW-Group/ezquake-source/blob/3.6.9/LICENSE",
@@ -18,9 +22,6 @@
       "https://github.com/QW-Group/ezquake-source/archive/refs/tags/3.6.9.tar.gz"
     ],
     "redistribution_reviewed": true,
-    "urls": [
-      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip"
-    ],
     "artifact_format": "zip",
     "expected_members": [
       "ezquake.exe"
@@ -28,6 +29,6 @@
   },
   "review": {
     "status": "ready",
-    "notes": "Artefato oficial espelhado byte a byte no x86qw e registrado por SHA-256."
+    "notes": "Artefato oficial preservado byte a byte no dist e validado por SHA-256."
   }
 }

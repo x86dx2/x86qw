@@ -1,0 +1,45 @@
+diff --git a/MENU.QC b/MENU.QC
+--- a/MENU.QC
++++ b/MENU.QC
+@@ -351,29 +351,11 @@
+     if (inp < 4) {
+ 	self.impulse = 0;
+ 	if (inp == 1) {
+-	    stuffcmd (self, "bind q \"impulse 23\"\n");
+-	    stuffcmd (self, "bind e \"impulse 22\"\n");
+-	    stuffcmd (self, "bind r \"+gren1\"\n");
+-	    stuffcmd (self, "bind f \"+gren2\"\n");
+-	    stuffcmd (self, "bind v \"detpipe\"\n");
+-	    stuffcmd (self, "bind c \"dropammo\"\n");
+-	    stuffcmd (self, "bind x \"autoscan\"\n");
+-	    stuffcmd (self, "bind g \"showclasses\"\n");
+-	    stuffcmd (self, "bind z \"inv\"\n");
+ 	    self.menu_count = 25;
+ 	    self.current_menu = 10;
+ 	    self.menu_displaytime = 0;
+ 	    return;
+ 	} else if (inp == 2) {
+-            stuffcmd (self, "bind s \"impulse 23\"\n");
+-            stuffcmd (self, "bind x \"impulse 22\"\n");
+-            stuffcmd (self, "bind d \"+gren1\"\n");
+-            stuffcmd (self, "bind c \"+gren2\"\n");
+-            stuffcmd (self, "bind f \"detpipe\"\n");
+-            stuffcmd (self, "bind v \"dropammo\"\n");
+-            stuffcmd (self, "bind b \"autoscan\"\n");
+-            stuffcmd (self, "bind g \"showclasses\"\n");
+-            stuffcmd (self, "bind n \"inv\"\n");
+             self.menu_count = 25;
+             self.current_menu = 11;
+             self.menu_displaytime = 0;
+diff --git a/TFORTHLP.QC b/TFORTHLP.QC
+--- a/TFORTHLP.QC
++++ b/TFORTHLP.QC
+@@ -100,8 +100,6 @@
+ 	TeamFortress_Alias ("flaginfo", FLAG_INFO, 0);
+ 	TeamFortress_Alias ("maphelp", TF_HELP_MAP, 0);
+ 	TeamFortress_Alias ("showids", TF_SHOW_IDS, 0);
+-	stuffcmd (self, "bind 9 \"impulse 9\"\n");
+-	stuffcmd (self, "bind 0 \"impulse 10\"\n");
+ 	return;
+     }
+     if (self.motd == 65) {

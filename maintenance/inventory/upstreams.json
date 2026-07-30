@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "checked_at": "2026-07-29",
+  "checked_at": "2026-07-30",
   "upstreams": [
     {
       "id": "ezquake-stable",
@@ -42,6 +42,9 @@
       "kind": "distribution",
       "version": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "observed_upstream_revision": "721b2c9cb8f4881450ff70c2189faa8304ac9339",
+      "consumed_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "payload_status": "current-for-consumed-files",
       "release_url": "https://github.com/nQuake/distfiles",
       "update": {"strategy": "git-ref", "repository": "https://github.com/nQuake/distfiles.git", "ref": "refs/heads/master"},
       "source": {
@@ -69,6 +72,22 @@
       "build": {"status": "documented", "recipe": "maintenance/recipes/sources/ktx.json"}
     },
     {
+      "id": "fteqcc",
+      "name": "FTEQCC",
+      "kind": "toolchain",
+      "version": "3343+svn3400",
+      "release_url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
+      "update": {"strategy": "fixed-release"},
+      "source": {
+        "status": "complete",
+        "url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
+        "distribution_path": "toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz",
+        "size": 196098,
+        "sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe"
+      },
+      "build": {"status": "not-applicable"}
+    },
+    {
       "id": "qrp",
       "name": "Quake Retexturing Project",
       "kind": "assets",
@@ -85,8 +104,21 @@
       "version": "1.20",
       "release_url": "https://www.quakeworld.nu/forum/topic/7320/108479/rockat-arena-server/",
       "update": {"strategy": "manual"},
-      "source": {"status": "unavailable"},
-      "build": {"status": "unavailable"}
+      "source": {
+        "status": "complete",
+        "url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/fasrv12.zip",
+        "distribution_path": "mods/final-arena/1.20/upstream/fasrv12.zip",
+        "size": 278932,
+        "sha256": "a250816fc3ffa461e21fc0c85cb286751b2bb22de2fd7d7bc42add7d0fd6ca70",
+        "embedded_source": {
+          "member": "qwrasrc12.zip",
+          "distribution_path": "mods/final-arena/1.20/source/qwrasrc12.zip",
+          "size": 70227,
+          "sha256": "b83684390e6c68e2cdb39e9d22312df798b4c4b27ff3d816f75cfb27a7f67de7"
+        },
+        "note": "Fonte oficial 1.20 completa; a derivação posterior de Rakk usada pelo nQuake continua sem fonte pública localizada."
+      },
+      "build": {"status": "unverified", "recipe": "maintenance/recipes/sources/final-arena.json"}
     },
     {
       "id": "pro-x",
@@ -95,7 +127,10 @@
       "version": "1.1",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "update": {"strategy": "fixed-release"},
-      "source": {"status": "unavailable"},
+      "source": {
+        "status": "unavailable",
+        "note": "O autor declarou no anúncio público da versão 1.1 que não liberaria a fonte; o pacote binário completo foi preservado."
+      },
       "build": {"status": "unavailable"}
     },
     {
@@ -110,9 +145,10 @@
         "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip",
         "distribution_path": "mods/team-fortress/2.9/source/tf_29src.zip",
         "size": 173536,
-        "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff"
+        "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff",
+        "note": "Fonte publica preservada; a copia atual e byte a byte identica a arquivada no Internet Archive, mas a publicacao original do ZIP-fonte nao foi comprovada."
       },
-      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/team-fortress.json"}
+      "build": {"status": "reproducible", "recipe": "maintenance/recipes/sources/team-fortress.json"}
     },
     {
       "id": "td2",
@@ -128,7 +164,7 @@
         "size": 567029,
         "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93"
       },
-      "build": {"status": "documented", "recipe": "maintenance/recipes/sources/td2.json"}
+      "build": {"status": "reproducible", "recipe": "maintenance/recipes/sources/td2.json"}
     }
   ]
 }

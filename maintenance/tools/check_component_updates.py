@@ -51,10 +51,14 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
         expected = str(release["version"])
         actual = expected
         status = "current"
-        if release["strategy"] in {"reference-snapshot", "reference-overlay"} and current_reference != reference_revision:
+        if release["strategy"] == "reference-snapshot" and current_reference != reference_revision:
             actual = current_reference[:12]
             status = "update-available"
         upstream = release.get("upstream")
+        if release["strategy"] == "reference-overlay" and isinstance(upstream, dict):
+            actual = str(upstream["release"])
+            if current_reference != reference_revision:
+                status = "update-available"
         if online and isinstance(upstream, dict) and isinstance(upstream.get("repository"), str):
             actual = github_latest_release(str(upstream["repository"]))
             if actual != upstream["release"]:

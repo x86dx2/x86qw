@@ -318,7 +318,7 @@ def consumed_component(
             r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
             path,
         ) else None
-    if component in {"ktx", "pro-x", "team-fortress", "td2"}:
+    if component in {"ktx", "final-arena", "pro-x", "team-fortress", "td2"}:
         return component if component_for_artifact_path(releases, path) is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
@@ -436,7 +436,7 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 elif upstream is not None:
                     metadata["consumer"] = f"development:{upstream}"
                     metadata["package"] = upstream
-                elif component_name in {"ktx", "pro-x", "team-fortress", "td2"}:
+                elif component_name in {"ktx", "final-arena", "pro-x", "team-fortress", "td2"}:
                     metadata["consumer"] = consumers[0]
                     releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
                     package = component_for_artifact_path(releases, relative)

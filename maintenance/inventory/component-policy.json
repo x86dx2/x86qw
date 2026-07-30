@@ -46,6 +46,15 @@
         "mods/ktx/"
       ]
     },
+    "final-arena": {
+      "consumers": [
+        "install:final-arena",
+        "development:final-arena"
+      ],
+      "distribution_prefixes": [
+        "mods/final-arena/"
+      ]
+    },
     "pro-x": {
       "consumers": [
         "install:pro-x",
@@ -71,6 +80,14 @@
       ],
       "distribution_prefixes": [
         "mods/td2/"
+      ]
+    },
+    "toolchains": {
+      "consumers": [
+        "development:source-builds"
+      ],
+      "distribution_prefixes": [
+        "toolchains/"
       ]
     }
   }

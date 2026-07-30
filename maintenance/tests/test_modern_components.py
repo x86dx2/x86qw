@@ -107,10 +107,10 @@ class ModernComponentTests(unittest.TestCase):
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
             "ktx": ("1.48+x86qw.1", "1.48"),
-            "final-arena": ("e4cb23d40aa2+x86qw.1", "1.20"),
-            "pro-x": ("1.1+x86qw.1", "1.1"),
-            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.1", "2.9"),
-            "td2": ("2.22+x86qw.1", "2.22"),
+            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.1", "1.20"),
+            "pro-x": ("1.1+x86qw.2", "1.1"),
+            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.3", "2.9"),
+            "td2": ("2.22+x86qw.2", "2.22"),
         }
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -172,7 +172,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("common-baseline", compatibility["policy"])
             self.assertEqual(set(installer.components), set(compatibility["covered_components"]))
             self.assertEqual(
-                {"nquake", "ktx", "pro-x", "team-fortress", "td2"},
+                {"nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"},
                 installer.content_component_namespaces,
             )
             self.assertEqual(set(installer.components), set(installer.component_catalog["profiles"]["complete"]))
@@ -206,6 +206,7 @@ class ModernComponentTests(unittest.TestCase):
                     "dist/mods/pro-x/1.1/x86qw/qw-server.cfg",
                     "dist/mods/pro-x/1.1/x86qw/server.cfg",
                     "dist/mods/pro-x/1.1/x86qw/user.cfg.example",
+                    "dist/mods/pro-x/1.1/x86qw/runtime/maps/proxmap1.ent",
                 },
                 {source["path"] for source in pro_x["project_sources"]},
             )
@@ -219,7 +220,7 @@ class ModernComponentTests(unittest.TestCase):
                 package.writestr("progs.dat", b"ktx")
             payload = inner.getvalue()
             revision = "a" * 40
-            version = "1.47+x86qw.1"
+            version = "1.47+x86qw.2"
             artifact = root / f"ktx-{version}.zip"
             metadata = {
                 "format": 1, "project": "x86qw", "package": "ktx",
@@ -254,7 +255,7 @@ class ModernComponentTests(unittest.TestCase):
             root = Path(temporary)
             installer, _, _ = self.make_installer(root)
             revision = "a" * 40
-            version = "1.47+x86qw.1"
+            version = "1.47+x86qw.2"
             filename = f"ktx-{version}.zip"
             package = {
                 "component": "ktx", "package": "ktx", "version": version,
@@ -580,7 +581,9 @@ class ModernComponentTests(unittest.TestCase):
             base = target / "ezquake/configs/config.cfg"
             base.parent.mkdir(parents=True)
             base.write_text(
-                'alias +zoom "fov 50"\nalias personal "say oi"\ncfg_save_unchanged "1"\nname "x86"\n',
+                'alias +zoom "fov 50"\nalias personal "say oi"\n'
+                'cl_remote_capabilities "$cl_remote_capabilities,cl_movespeedkey"\n'
+                'cfg_save_unchanged "1"\nname "x86"\n',
                 encoding="utf-8",
             )
             prox = target / "prox/configs/config.cfg"
@@ -592,6 +595,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(legacy, (prox.parent / "config.pre-x86qw.cfg").read_bytes())
             self.assertNotIn('alias +zoom', base.read_text(encoding="utf-8"))
             self.assertIn('alias personal "say oi"', base.read_text(encoding="utf-8"))
+            self.assertNotIn('$cl_remote_capabilities', base.read_text(encoding="utf-8"))
             self.assertIn('cfg_save_unchanged "1"', base.read_text(encoding="utf-8"))
             self.assertIn('alias +zoom', (base.parent / "config.aliases-pre-x86qw.cfg").read_text(encoding="utf-8"))
             migrated = prox.read_text(encoding="utf-8")
@@ -691,12 +695,32 @@ class ModernComponentTests(unittest.TestCase):
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
                 "+sb_listcache", "0",
-                "-game", "td2", "+gamedir", "td2", "+sv_gamedir", "td2",
+                "-game", "td2", "+sv_gamedir", "td2",
                 "+sv_progtype", "0",
-                "+cl_remote_capabilities", "$cl_remote_capabilities,bind,scr_centertime",
                 "+cl_pext_lagteleport", "0",
                 "+map", "dm6", "+wait",
                 "+exec", "x86qw-td2.cfg",
+            ])
+
+    def test_ktx_uses_the_native_qw_gamedir_only_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "installed_component_for_game", return_value=game.component):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch("builtins.input", side_effect=["", ""]):
+                                                    installer.play_local()
+            launch.assert_called_once_with(runtime, [
+                "+sb_listcache", "0", "+set", "k_defmap", "dm6",
+                "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
             ])
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
@@ -713,6 +737,7 @@ class ModernComponentTests(unittest.TestCase):
                 "prox", "proxmap1", "x86qw-prox.cfg",
                 [
                     "+cl_remote_capabilities", "$cl_remote_capabilities,setinfo,bind",
+                    "+sv_loadentfiles", "1",
                     "+cl_pext_lagteleport", "0",
                 ],
                 [],
@@ -736,12 +761,12 @@ class ModernComponentTests(unittest.TestCase):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
                     "+sb_listcache", "0",
-                    "-game", gamedir, "+gamedir", gamedir, "+sv_gamedir", gamedir,
+                    "-game", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", *before_map, "+map", map_name, "+wait",
                     *after_wait, "+exec", profile,
                 ])
 
-    def test_team_fortress_loads_legacy_capabilities_before_the_map(self):
+    def test_team_fortress_loads_only_required_legacy_settings_before_the_map(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "team-fortress")
@@ -759,9 +784,8 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
                 "+sb_listcache", "0",
-                "-game", "fortress", "+gamedir", "fortress", "+sv_gamedir", "fortress",
+                "-game", "fortress", "+sv_gamedir", "fortress",
                 "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg",
-                "+cl_remote_capabilities", "$cl_remote_capabilities,bind",
                 "+cl_pext_lagteleport", "0",
                 "+map", "2fort5r", "+wait",
                 "+exec", "x86qw-fortress.cfg",

@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-30T16:03:31Z",
+  "captured_at": "2026-07-30T19:25:36Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4257,10 +4257,33 @@
     },
     "installer/packages/0.1.0/x86qw-installer-0.1.0.zip": {
       "component": "installer",
-      "consumer": "bootstrap:installer",
+      "consumer": "archive:installer-history",
       "sha256": "9e9ca4cd531b9f71194ca943a9f284a56768d8c9e2d0c3308b85cab8702f330a",
       "size": 58767,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip"
+    },
+    "installer/packages/0.1.1/x86qw-installer-0.1.1.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "7678f82f9b55f231256e8a1cc64928f9207894f5259f1b4fb4f02c03e83cf4df",
+      "size": 58816,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.1/x86qw-installer-0.1.1.zip"
+    },
+    "mods/final-arena/1.20/upstream/farena12.zip": {
+      "component": "final-arena",
+      "consumer": "install:final-arena",
+      "package": "final-arena",
+      "sha256": "88dac7c3b7982deaddd3970a5c3293eeee8a30e18ddf9fd404c1504c6ab519dd",
+      "size": 7018988,
+      "url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/farena12.zip"
+    },
+    "mods/final-arena/1.20/upstream/fasrv12.zip": {
+      "component": "final-arena",
+      "consumer": "install:final-arena",
+      "package": "final-arena",
+      "sha256": "a250816fc3ffa461e21fc0c85cb286751b2bb22de2fd7d7bc42add7d0fd6ca70",
+      "size": 278932,
+      "url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/fasrv12.zip"
     },
     "mods/ktx/1.47/source/ktx-1.47.tar.gz": {
       "component": "ktx",
@@ -4289,7 +4312,7 @@
     "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz": {
       "component": "td2",
       "consumer": "development:td2",
-      "package": "td2",
+      "package": "total-destruction-2",
       "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "size": 567029,
       "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz"
@@ -4302,6 +4325,14 @@
       "size": 173536,
       "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip"
     },
+    "mods/team-fortress/2.9/upstream/tf28.zip": {
+      "component": "team-fortress",
+      "consumer": "install:team-fortress",
+      "package": "team-fortress",
+      "sha256": "56a6767b7944f2ce54423f18f1cd59239ae37a7c7456f684227d6f5310c76291",
+      "size": 4204316,
+      "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf28.zip"
+    },
     "mods/team-fortress/2.9/upstream/tf29qw.zip": {
       "component": "team-fortress",
       "consumer": "install:team-fortress",
@@ -4309,6 +4340,14 @@
       "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d",
       "size": 626175,
       "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip"
+    },
+    "toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz": {
+      "component": "toolchains",
+      "consumer": "development:source-builds",
+      "package": "fteqcc",
+      "sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe",
+      "size": 196098,
+      "url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz"
     }
   },
   "format": 1,

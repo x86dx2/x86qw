@@ -13,7 +13,7 @@ atribuição, origem imutável e checksum.
 | componentes de referência nQuake | [distfiles](https://github.com/nQuake/distfiles) fixado por commit e decomposto por `maintenance/inventory/components.json` | originais em `dist/distributions/nquake`; pacotes de entrega são builds reproduzíveis temporários |
 | KTX | `1.46-dev` identificado no QVM embarcado; [release oficial 1.47](https://github.com/QW-Group/ktx/releases/tag/1.47) com checksums | QVM 1.47 aplicado sobre os recursos nQuake e publicado como pacote independente |
 | Pro-X | [release pública 1.1](https://www.quakeworld.nu/forum/topic/3741/prox-11-released) recuperada do arquivo histórico do autor | ZIP original em `dist/mods/pro-x/1.1/upstream/`; código-fonte público não localizado |
-| Team Fortress | [runtime e fontes 2.9](https://www.frag-net.com/mod_quake_fortress.html) | runtime em `upstream/`, fontes em `source/` e gamecode 2.9 aplicado sobre assets nQuake |
+| Team Fortress | [runtime 2.9 e cópia pública das fontes](https://www.frag-net.com/mod_quake_fortress.html) | runtime em `upstream/`; fonte pública preservada em `source/`, idêntica à cópia do Internet Archive, mas sem comprovação da publicação original; gamecode 2.9 aplicado sobre assets nQuake |
 | Total Destruction 2 | [distribuição TD2QW 2.22](https://arenacamper.ddns.net/repo/quakeworld/) completa, com código-fonte; `saw_down.wav` histórico é byte-idêntico ao `saw.wav` preservado | original completo em `dist/mods/td2/2.22/source/` e pacote instalável independente, sem mapas nem senha padrão |
 | mapas e LOCs | `maps.quakeworld.nu` e autores individuais | fora do mirror; adicionar somente itens incorporados pontualmente ao x86QW |
 | presets x86QW | autoria deste projeto | liberado após definirmos a licença do próprio x86QW |
@@ -52,7 +52,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
 QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
-`1.47+x86qw.1`; fontes, override, gameplay e hashes ficam no inventário
+`1.47+x86qw.2`; fontes, override, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

@@ -1,0 +1,190 @@
+diff --git a/ai.qc b/ai.qc
+index f8b372f..bc5b486 100644
+--- a/ai.qc
++++ b/ai.qc
+@@ -297,4 +297,2 @@ local float	rsnd;
+ 		sound (self, CHAN_VOICE, "blob/sight1.wav", 1, ATTN_NORM);
+-	else if (self.classname == "monster_vomit")
+-		sound (self, CHAN_VOICE, "vomitus/v_sight1.wav", 1, ATTN_NORM);
+ 	else if (self.classname == "monster_enforcer")
+diff --git a/client.qc b/client.qc
+index ab6211e..20bc113 100644
+--- a/client.qc
++++ b/client.qc
+@@ -203,25 +203,3 @@ void() execute_changelevel =
+ 	pos = FindIntermission ();
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-     localcmd("stop\n"); // Gravação de demos 2.21
+-
++     // x86QW: nao interrompe gravacoes iniciadas pelo jogador.
+ 
+diff --git a/defs.qc b/defs.qc
+index a5b7213..3366e9e 100644
+--- a/defs.qc
++++ b/defs.qc
+@@ -536,3 +536,3 @@ var float           rj                      =       1; //adicionado var
+ //
+-//.string         wad; //comentado por falta de uso
++.string          wad; // x86QW: campo worldspawn padrao exigido por mapas Quake
+ .string         map;
+diff --git a/magic.qc b/magic.qc
+index f5488f4..90ee5b6 100644
+--- a/magic.qc
++++ b/magic.qc
+@@ -326,8 +326,5 @@ void()   Executa_Clarao =
+ {
+-        local   string  g;
+-
+         if (self.owner.health <= 0)
+            {
+-                stuffcmd(self.owner, "gamma 0.8\n");
+-                self.effects = self.effects - (self.effects & (EF_BRIGHTLIGHT | EF_DIMLIGHT));
++                self.owner.effects = self.owner.effects - (self.owner.effects & (EF_BRIGHTLIGHT | EF_DIMLIGHT));
+                 self.think = SUB_Remove;
+@@ -339,58 +336,16 @@ void()   Executa_Clarao =
+ 
+-        stuffcmd(self.owner, "gamma ");
+-
+-        if (self.health < 0)
+-           { g = "0"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.02)
+-           { g = "0.02"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.04)
+-           { g = "0.04"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.06)
+-           { g = "0.06"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.08)
+-           { g = "0.08"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.10)
+-           { g = "0.1"; self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT; }
+-        else if (self.health <= 0.12)
+-           { g = "0.12";
+-             self.owner.effects = self.owner.effects - (self.owner.effects & EF_BRIGHTLIGHT);
+-             self.owner.effects = self.owner.effects | EF_DIMLIGHT;
+-           }
+-        else if (self.health <= 0.14)
+-           { g = "0.14"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.16)
+-           { g = "0.16"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.18)
+-           { g = "0.18"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.20)
+-           { g = "0.2"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.22)
+-           { g = "0.22"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.24)
+-           { g = "0.24"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.26)
+-           { g = "0.26"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.28)
+-           { g = "0.28"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
++        if (self.health <= 0.10)
++           self.owner.effects = self.owner.effects | EF_BRIGHTLIGHT;
+         else if (self.health <= 0.30)
+-           { g = "0.3"; self.owner.effects = self.owner.effects | EF_DIMLIGHT; }
+-        else if (self.health <= 0.32)
+-           { g = "0.32"; self.owner.effects = self.owner.effects - (self.owner.effects & EF_DIMLIGHT); }
+-        else if (self.health <= 0.34)
+-             g = "0.34";
+-        else if (self.health <= 0.36)
+-             g = "0.36";
+-        else if (self.health <= 0.38)
+-             g = "0.38";
++           {
++                self.owner.effects = self.owner.effects - (self.owner.effects & EF_BRIGHTLIGHT);
++                self.owner.effects = self.owner.effects | EF_DIMLIGHT;
++           }
+         else if (self.health <= 0.40)
+-             g = "0.4";
++           self.owner.effects = self.owner.effects - (self.owner.effects & EF_DIMLIGHT);
+         else
+-            {
+-                g = "0.5";
+-                self.effects = self.effects - (self.effects & (EF_BRIGHTLIGHT | EF_DIMLIGHT));
++           {
++                self.owner.effects = self.owner.effects - (self.owner.effects & (EF_BRIGHTLIGHT | EF_DIMLIGHT));
+                 self.think = SUB_Remove;
+-            }
+-
+-        stuffcmd(self.owner, g);
+-        stuffcmd(self.owner, "\n");
++           }
+ 
+@@ -1041,4 +996,2 @@ void() W_FireMagic =
+                                                 luz = spawn();
+-                                                stuffcmd(vitima, "gamma 0.15\n");
+-
+                                                 luz.owner = vitima;
+diff --git a/player.qc b/player.qc
+index fb1c104..ceb4d8c 100644
+--- a/player.qc
++++ b/player.qc
+@@ -838,6 +838,2 @@ void() PlayerDie =
+ 
+-                        if (tmp.owner == self)   // restaura gamma ao tomar uma paulada
+-                        if (tmp.magic == 15)
+-                           stuffcmd(self, "gamma 0.5\n");
+-
+                         e = find(e, classname, "td_temp");
+diff --git a/status.qc b/status.qc
+index e1111e6..17ec5d7 100644
+--- a/status.qc
++++ b/status.qc
+@@ -12,5 +12,2 @@ void() StatusThink =
+            {
+-                stuffcmd (self, "scr_centertime 20\n");
+-                stuffcmd (self, "bind 9 \"impulse 20\"\n");
+-                stuffcmd (self, "bind 0 \"impulse 21\"\n");
+ 
+@@ -21,5 +18,2 @@ void() StatusThink =
+            {
+-                stuffcmd (self, "scr_centertime 20\n");
+-                stuffcmd (self, "bind 9 \"impulse 20\"\n");
+-                stuffcmd (self, "bind 0 \"impulse 21\"\n");
+ 
+diff --git a/world.qc b/world.qc
+index 30a4f30..50e53d1 100644
+--- a/world.qc
++++ b/world.qc
+@@ -354,20 +354,4 @@ void() worldspawn =
+ 
+-        //PATH -- Gravação de Demos
+-
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait; wait\n");
+-        localcmd("easyrecord\n");
++        // x86QW: gravacao de demos permanece sob controle do jogador.
+ 
+-        // ENDPAT
+ 

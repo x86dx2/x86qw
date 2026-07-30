@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "upstream": "final-arena",
+  "status": "unverified",
+  "source": {
+    "archive": "dist/mods/final-arena/1.20/source/qwrasrc12.zip",
+    "sha256": "b83684390e6c68e2cdb39e9d22312df798b4c4b27ff3d816f75cfb27a7f67de7"
+  },
+  "toolchain": {
+    "name": "FTEQCC",
+    "version": "3343+svn3400",
+    "source_url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
+    "source_size": 196098,
+    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe",
+    "distribution_path": "dist/toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz"
+  },
+  "patches": [],
+  "compile": "fteqcc.bin -O0 progs.src",
+  "baseline": {
+    "official_qwprogs_size": 207376,
+    "official_qwprogs_sha256": "df4d3494167f3cff99307fd00c822c380623709ad14bcaaccdd03a7bdd2c3bcc",
+    "fteqcc_output_size": 208252
+  },
+  "verification": "O build-base compila, mas ainda precisa de paridade funcional. A derivação Rakk do nQuake tem 225196 bytes e não deve ser substituída sem sua fonte ou reimplementação comprovadamente equivalente."
+}

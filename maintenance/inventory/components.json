@@ -5,7 +5,7 @@
     "id": "ezquake",
     "channels": ["stable", "nightly"]
   },
-  "content_namespaces": ["nquake", "ktx", "pro-x", "team-fortress", "td2"],
+  "content_namespaces": ["nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"],
   "reference_source": {
     "repository": "https://github.com/nQuake/distfiles.git",
     "ref": "master"
@@ -151,7 +151,8 @@
         {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"}
       ],
       "project_inputs": [
-        {"path": "dist/mods/ktx/1.47/x86qw/merge-policy.json", "purpose": "archive-layer-policy"}
+        {"path": "dist/mods/ktx/1.47/x86qw/merge-policy.json", "purpose": "archive-layer-policy"},
+        {"path": "dist/mods/ktx/1.47/x86qw/CHANGELOG.md", "purpose": "mod-change-log"}
       ]
     },
     {
@@ -289,6 +290,10 @@
         {"path": "dist/mods/final-arena/1.20/x86qw/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
         {"path": "dist/mods/final-arena/1.20/x86qw/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
         {"path": "dist/mods/final-arena/1.20/x86qw/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
+      ],
+      "project_inputs": [
+        {"path": "dist/mods/final-arena/1.20/source/qwrasrc12.zip", "purpose": "extracted-upstream-source"},
+        {"path": "dist/mods/final-arena/1.20/x86qw/CHANGELOG.md", "purpose": "mod-change-log"}
       ]
     },
     {
@@ -315,7 +320,11 @@
         {"path": "dist/mods/pro-x/1.1/x86qw/client.cfg", "destination": "prox/x86qw-prox.cfg", "mode": "overlay"},
         {"path": "dist/mods/pro-x/1.1/x86qw/qw-server.cfg", "destination": "prox/qw_server.cfg", "mode": "overlay"},
         {"path": "dist/mods/pro-x/1.1/x86qw/server.cfg", "destination": "prox/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/pro-x/1.1/x86qw/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"}
+        {"path": "dist/mods/pro-x/1.1/x86qw/user.cfg.example", "destination": "prox/x86qw-prox-user.cfg", "mode": "default"},
+        {"path": "dist/mods/pro-x/1.1/x86qw/runtime/maps/proxmap1.ent", "destination": "prox/maps/proxmap1.ent", "mode": "overlay"}
+      ],
+      "project_inputs": [
+        {"path": "dist/mods/pro-x/1.1/x86qw/CHANGELOG.md", "purpose": "mod-change-log"}
       ]
     },
     {
@@ -328,11 +337,19 @@
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"},
         {"path": "qwprogs.dat", "destination": "fortress/qwprogs.dat", "mode": "overlay", "origin": "release"}
       ],
+      "project_overrides": [
+        {"path": "dist/mods/team-fortress/2.9/x86qw/runtime/qwprogs.dat", "target": "qwprogs.dat"}
+      ],
       "project_sources": [
         {"path": "dist/mods/team-fortress/2.9/x86qw/pre.cfg", "destination": "fortress/x86qw-fortress-pre.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.9/x86qw/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.9/x86qw/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/team-fortress/2.9/x86qw/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"}
+        {"path": "dist/mods/team-fortress/2.9/x86qw/user.cfg.example", "destination": "fortress/x86qw-fortress-user.cfg", "mode": "default"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/runtime/sound/weapons/bounce2.wav", "destination": "fortress/sound/weapons/bounce2.wav", "mode": "overlay"}
+      ],
+      "project_inputs": [
+        {"path": "dist/mods/team-fortress/2.9/x86qw/CHANGELOG.md", "purpose": "mod-change-log"},
+        {"path": "dist/mods/team-fortress/2.9/x86qw/source/0001-preserve-client-controls.patch", "purpose": "source-patch"}
       ]
     },
     {
@@ -341,6 +358,9 @@
       "kind": "addon",
       "description": "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode; fontes e manuais permanecem preservados no dist.",
       "requires": ["nquake-bootstrap"],
+      "project_overrides": [
+        {"path": "dist/mods/td2/2.22/x86qw/runtime/qwprogs.dat", "target": "td2/qwprogs.dat"}
+      ],
       "project_sources": [
         {"path": "dist/mods/td2/2.22/x86qw/client.cfg", "destination": "td2/x86qw-td2.cfg", "mode": "overlay"},
         {"path": "dist/mods/td2/2.22/x86qw/server.cfg", "destination": "td2/server.cfg", "mode": "overlay"},
@@ -367,6 +387,10 @@
         {"path": "td2/pwd.cfg", "destination": "td2/pwd.cfg", "mode": "preserve", "origin": "release"},
         {"path": "td2/rotate.cfg", "destination": "td2/rotate.example.cfg", "mode": "preserve", "origin": "release"},
         {"path": "td2/server.cfg", "destination": "td2/server.example.cfg", "mode": "preserve", "origin": "release"}
+      ],
+      "project_inputs": [
+        {"path": "dist/mods/td2/2.22/x86qw/CHANGELOG.md", "purpose": "mod-change-log"},
+        {"path": "dist/mods/td2/2.22/x86qw/source/0001-runtime-compatibility.patch", "purpose": "source-patch"}
       ]
     }
   ]
