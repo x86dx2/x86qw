@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-INSTALLER_VERSION="0.1.1"
+INSTALLER_VERSION="0.1.2"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
-INSTALLER_SHA256="7678f82f9b55f231256e8a1cc64928f9207894f5259f1b4fb4f02c03e83cf4df"
+INSTALLER_SHA256="0b93ae9e3dd3cf2d83ff584e22d7c0e7a3e779fd3654d27d7fc494c40390dbaa"
 INSTALLER_URLS=(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-${INSTALLER_VERSION}/${INSTALLER_FILE}"
   "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/${INSTALLER_VERSION}/${INSTALLER_FILE}"

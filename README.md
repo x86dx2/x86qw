@@ -45,11 +45,13 @@ ao `install.ps1` no Windows). `./x86qw.sh update` atualiza a própria CLI e some
 que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novos que
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
 registrado naquela instalação. Ambos mostram o plano completo e exigem que o
-jogador digite `yes` antes de alterar arquivos; `--yes` confirma o plano em
-automações e `--dry-run` encerra depois de apresentá-lo. O plano é uma tabela
-com somente as mudanças reais — tipo, item, versão instalada, versão disponível
-e ação. Quando não há mudanças, o comando informa isso e termina sem confirmação,
-aplicação ou verificação integral.
+jogador confirme em um prompt `[y/n]` antes de alterar arquivos; `--yes` confirma
+o plano em automações e `--dry-run` encerra depois de apresentá-lo. A saída segue
+o fluxo do Homebrew: baixa e valida o manifesto, mostra somente os pacotes
+desatualizados em linhas tabuladas com versão instalada, versão disponível e
+tamanho, pede confirmação e então informa o progresso de cada pacote. Quando não
+há mudanças, o comando informa isso e termina sem confirmação, aplicação ou
+verificação integral.
 
 Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
 fontes canônicas locais:

@@ -342,6 +342,7 @@ class UpdatePlanRow:
     installed: str
     available: str
     action: str
+    size: int | None = None
 
 
 class LinkCollector(HTMLParser):
@@ -377,6 +378,9 @@ class Console:
     def section(self, title: str) -> None:
         print(f"\n{self.paint(title, '1;36')}", flush=True)
 
+    def heading(self, title: str) -> None:
+        print(f"\n{self.paint('==>', '1;36')} {self.paint(title, '1')}", flush=True)
+
     def info(self, message: str) -> None:
         print(f"{self.paint('[INFO]', '36')} {message}", flush=True)
 
@@ -394,26 +398,31 @@ class Console:
         label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
-    def update_plan(self, rows: list[UpdatePlanRow]) -> None:
-        headers = ("TIPO", "ITEM", "INSTALADO", "DISPONÍVEL", "AÇÃO")
-        values = [
-            (row.kind, row.item, row.installed, row.available, row.action)
-            for row in rows
-        ]
-        widths = [
-            max(len(headers[index]), *(len(row[index]) for row in values))
-            for index in range(len(headers))
-        ]
+    def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
+        verb = "update" if action == "update" else "upgrade"
+        noun = "package" if len(rows) == 1 else "packages"
+        self.heading(f"Would {verb} {len(rows)} outdated {noun}")
+        names = [row.item for row in rows]
+        installed = [row.installed for row in rows]
+        available = [row.available for row in rows]
+        name_width = max(map(len, names))
+        installed_width = max(map(len, installed))
+        available_width = max(map(len, available))
+        for row in rows:
+            size = f" ({format_bytes_compact(row.size)})" if row.size is not None else ""
+            print(
+                f"{row.item.ljust(name_width)}  "
+                f"{row.installed.ljust(installed_width)} -> "
+                f"{row.available.ljust(available_width)}{size}",
+                flush=True,
+            )
 
-        def line(columns: tuple[str, ...]) -> str:
-            return "  ".join(
-                value.ljust(widths[index]) for index, value in enumerate(columns)
-            ).rstrip()
-
-        print(line(headers), flush=True)
-        print(line(tuple("-" * width for width in widths)), flush=True)
-        for row in values:
-            print(line(row), flush=True)
+    def download_result(
+        self, label: str, *, size: int, status: str = "Downloaded",
+    ) -> None:
+        amount = format_bytes_compact(size)
+        check = self.paint("✔︎", "32")
+        print(f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}", flush=True)
 
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
         if not sys.stdout.isatty():
@@ -439,6 +448,20 @@ def format_bytes(size: int) -> str:
             return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} GiB"
+
+
+def format_bytes_compact(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1000 or unit == "GB":
+            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
+        value /= 1000
+    return f"{value:.1f}GB"
+
+
+def package_size(package: dict[str, object]) -> int | None:
+    size = package.get("size")
+    return size if isinstance(size, int) and size > 0 else None
 
 
 def file_count(count: int) -> str:
@@ -617,10 +640,12 @@ class Installer:
         self.app_expected_checksum = ""
         self.app_checksum_kind = ""
         self.app_archive_sha256 = ""
+        self.app_expected_size = 0
         self.app_bundle_version = ""
         self.app_binary_sha256 = ""
         self.app_distribution_path = ""
         self.cache_prefix = ""
+        self.update_ui = False
         self._public_catalog: dict[str, object] | None = None
         self._component_source_context: object | None = None
         self.selected_component_profile = "none"
@@ -1303,6 +1328,7 @@ class Installer:
             if len(selected_packages) != 1:
                 raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
             self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
+            self.app_expected_size = int(selected_packages[0]["size"])
         console.detail(f"Artefato: {self.app_url}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
@@ -1334,22 +1360,33 @@ class Installer:
         archive = self.cache_bin / cache_name
         ensure_no_symlink(archive, "cached archive")
         if archive.is_file():
-            console.info(f"Usando arquivo já disponível no cache: {self.app_archive_name}")
             if file_hash(archive, self.app_checksum_kind) != self.app_expected_checksum:
                 raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
-            console.success("Arquivo do cache validado.")
+            if self.update_ui:
+                console.download_result(
+                    f"ezQuake {self.selected_version}", size=archive.stat().st_size, status="Cached",
+                )
+            else:
+                console.info(f"Usando arquivo já disponível no cache: {self.app_archive_name}")
+                console.success("Arquivo do cache validado.")
         else:
             local = self.distribution_artifact(
                 self.app_distribution_path, self.app_archive_name,
-                expected_size=None, expected_sha256=self.app_expected_checksum,
+                expected_size=self.app_expected_size or None, expected_sha256=self.app_expected_checksum,
             ) if self.app_distribution_path else None
             if local is not None:
                 shutil.copy2(local, archive)
-                console.success(f"Artefato carregado da distribuição local: {self.app_distribution_path}")
+                if self.update_ui:
+                    console.download_result(
+                        f"ezQuake {self.selected_version}", size=archive.stat().st_size, status="Loaded",
+                    )
+                else:
+                    console.success(f"Artefato carregado da distribuição local: {self.app_distribution_path}")
                 self.app_archive_sha256 = file_hash(archive)
                 return archive
             download = self.stage / f"{self.app_archive_name}.download"
-            console.info(f"Baixando {self.app_archive_name}...")
+            if not self.update_ui:
+                console.info(f"Baixando {self.app_archive_name}...")
             last_error: InstallerError | None = None
             for index, mirror_url in enumerate(self.app_urls or (self.app_url,)):
                 if lexists(download):
@@ -1371,7 +1408,12 @@ class Installer:
                     remove_path(download)
                 raise InstallerError(f"Nenhum mirror entregou um pacote válido: {last_error}")
             download.replace(archive)
-            console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
+            if self.update_ui:
+                console.download_result(
+                    f"ezQuake {self.selected_version}", size=archive.stat().st_size,
+                )
+            else:
+                console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
         self.app_archive_sha256 = file_hash(archive)
         console.detail(f"SHA-256 local: {self.app_archive_sha256}")
         return archive
@@ -2425,6 +2467,8 @@ class Installer:
             return False
         self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-update.", dir=self.target))
         try:
+            if self.update_ui:
+                console.heading("Downloading x86QW installer")
             artifact = self.download_component_package(package)
             extracted = self.stage / "installer"
             extracted.mkdir()
@@ -2469,18 +2513,22 @@ class Installer:
         if assume_yes:
             console.info("Plano confirmado automaticamente por --yes.")
             return True
-        try:
-            answer = input(f"\nDigite yes para executar o {action}: ").strip().lower()
-        except EOFError as error:
-            raise InstallerError(
-                "A confirmação não pôde ser lida. Execute em um terminal interativo "
-                "ou use --yes para confirmar o plano automaticamente."
-            ) from error
-        if answer != "yes":
-            console.info("Operação cancelada; nenhum arquivo do jogo foi alterado.")
-            return False
-        console.success("Plano confirmado.")
-        return True
+        while True:
+            try:
+                answer = input(
+                    f"\n==> Do you want to proceed with the {action}? [y/n] "
+                ).strip().lower()
+            except EOFError as error:
+                raise InstallerError(
+                    "A confirmação não pôde ser lida. Execute em um terminal interativo "
+                    "ou use --yes para confirmar o plano automaticamente."
+                ) from error
+            if answer in ("y", "yes", "s", "sim"):
+                return True
+            if answer in ("n", "no", "nao", "não", ""):
+                console.info("Operação cancelada; nenhum arquivo do jogo foi alterado.")
+                return False
+            console.warning("Resposta inválida. Digite y para prosseguir ou n para cancelar.")
 
     def cli_update_plan_row(self) -> UpdatePlanRow | None:
         identity = self.installer_bundle_identity()
@@ -2488,24 +2536,37 @@ class Installer:
         current = self.installed_cli_version()
         if current == available:
             return None
+        package = self.installer_bundle_record()
+        if package["version"] != available:
+            raise InstallerError("A versão da CLI não corresponde ao catálogo público.")
         return UpdatePlanRow(
-            "CLI", "x86QW", current or "não instalada", available, "Atualizar",
+            "CLI", "x86QW", current or "não instalada", available, "Atualizar", package_size(package),
         )
 
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
-            console.info(message)
+            if self.update_ui:
+                console.heading("Downloading package manifests")
+            else:
+                console.info(message)
             catalog_url = os.environ.get("X86_QW_CATALOG_URL")
             local_catalog = self.project_root / PUBLIC_CATALOG
+            catalog_payload: bytes | None = None
+            catalog_status = "Loaded"
             try:
                 if catalog_url:
-                    catalog = json.loads(self.http_get(catalog_url))
+                    catalog_payload = self.http_get(catalog_url)
+                    catalog = json.loads(catalog_payload)
+                    catalog_status = "Downloaded"
                     console.detail(f"Catálogo remoto explícito: {catalog_url}")
                 elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
-                    catalog = json.loads(local_catalog.read_text(encoding="utf-8"))
+                    catalog_payload = local_catalog.read_bytes()
+                    catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    catalog = json.loads(self.http_get(CATALOG_URL))
+                    catalog_payload = self.http_get(CATALOG_URL)
+                    catalog = json.loads(catalog_payload)
+                    catalog_status = "Downloaded"
                     console.detail(f"Catálogo público: {CATALOG_URL}")
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
@@ -2515,6 +2576,10 @@ class Installer:
                 raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
             if not isinstance(catalog.get("packages"), list):
                 raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
+            if self.update_ui and catalog_payload is not None:
+                console.download_result(
+                    "x86QW Package Manifest", size=len(catalog_payload), status=catalog_status,
+                )
             self._public_catalog = catalog
         return self._public_catalog
 
@@ -2569,7 +2634,12 @@ class Installer:
         if artifact.is_file():
             if artifact.stat().st_size != package["size"] or file_hash(artifact) != digest:
                 raise InstallerError(f"O pacote {identifier} em cache é inválido. Execute cleanup e tente novamente.")
-            console.detail(f"Pacote validado no cache: {artifact}")
+            if self.update_ui:
+                console.download_result(
+                    f"{identifier} {package['version']}", size=artifact.stat().st_size, status="Cached",
+                )
+            else:
+                console.detail(f"Pacote validado no cache: {artifact}")
             return artifact
         distribution_path = package.get("distribution_path")
         if isinstance(distribution_path, str) and distribution_path:
@@ -2579,7 +2649,12 @@ class Installer:
             )
             if local is not None:
                 shutil.copy2(local, artifact)
-                console.success(f"Pacote carregado da distribuição local: {distribution_path}")
+                if self.update_ui:
+                    console.download_result(
+                        f"{identifier} {package['version']}", size=artifact.stat().st_size, status="Loaded",
+                    )
+                else:
+                    console.success(f"Pacote carregado da distribuição local: {distribution_path}")
                 return artifact
         temporary = self.stage / f"{identifier}.download"
         last_error: InstallerError | None = None
@@ -2589,7 +2664,12 @@ class Installer:
                 if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
                     raise InstallerError(f"O mirror entregou um pacote inválido: {url}")
                 temporary.replace(artifact)
-                console.success(f"Pacote baixado e validado: {filename}")
+                if self.update_ui:
+                    console.download_result(
+                        f"{identifier} {package['version']}", size=artifact.stat().st_size,
+                    )
+                else:
+                    console.success(f"Pacote baixado e validado: {filename}")
                 return artifact
             except InstallerError as error:
                 last_error = error
@@ -3582,16 +3662,18 @@ class Installer:
             )
             return False
 
+        self.configure_release(selected)
+
         if dry_run:
             if plan_rows is not None:
                 plan_rows.append(UpdatePlanRow(
                     "Cliente", f"ezQuake {spec.label} {channel}", installed, available, "Atualizar",
+                    self.app_expected_size or None,
                 ))
             return True
 
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
-        self.configure_release(selected)
         self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-runtime-update.", dir=self.target))
         try:
             self.prepare_cache()
@@ -3696,6 +3778,7 @@ class Installer:
                         plan_rows.append(UpdatePlanRow(
                             "Componente", str(self.components[replacement]["label"]),
                             str(receipt["selection"]), str(package["version"]), "Migrar",
+                            package_size(package),
                         ))
             else:
                 self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-migrate.", dir=self.target))
@@ -3711,11 +3794,12 @@ class Installer:
                 for identifier in outdated:
                     _, _, receipt = self.validate_component_pair(identifier)
                     assert receipt is not None
-                    available = str(self.component_package_record(identifier)["version"])
+                    package = self.component_package_record(identifier)
+                    available = str(package["version"])
                     if plan_rows is not None:
                         plan_rows.append(UpdatePlanRow(
                             "Componente", str(self.components[identifier]["label"]),
-                            str(receipt["selection"]), available, "Atualizar",
+                            str(receipt["selection"]), available, "Atualizar", package_size(package),
                         ))
             else:
                 self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-update.", dir=self.target))
@@ -3787,7 +3871,7 @@ class Installer:
                 if plan_rows is not None:
                     plan_rows.append(UpdatePlanRow(
                         "Componente", str(self.components[identifier]["label"]),
-                        "não instalado", str(package["version"]), "Adicionar",
+                        "não instalado", str(package["version"]), "Adicionar", package_size(package),
                     ))
             changed = True
         else:
@@ -4068,7 +4152,7 @@ def main(arguments: list[str] | None = None) -> int:
             console.section("QuakeWorld Hub")
             installer.browse_hub()
         elif options.action in {"update", "upgrade"}:
-            console.section("Atualização conservadora" if options.action == "update" else "Upgrade da distribuição")
+            installer.update_ui = True
             if (
                 options.installed_cli
                 and not options.skip_cli_update
@@ -4093,17 +4177,18 @@ def main(arguments: list[str] | None = None) -> int:
                         if options.action == "upgrade"
                         else "Nenhuma atualização disponível; o conteúdo instalado já está atualizado."
                     )
+                    console.heading("Already up-to-date")
                     console.success(message)
                     return 0
-                console.section("Atualizações disponíveis")
-                console.update_plan(plan_rows)
-                print(f"\nTotal: {len(plan_rows)} alteração(ões).", flush=True)
+                console.update_plan(plan_rows, options.action)
                 if options.dry_run:
-                    console.success("Simulação concluída; nenhum arquivo foi alterado.")
+                    console.heading("Dry run complete; no files were changed")
                     return 0
                 if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
                     return 0
-                console.section("Aplicação do plano")
+                console.heading(
+                    "Updating packages" if options.action == "update" else "Upgrading packages"
+                )
                 if content_changed:
                     operation(dry_run=False)
                 if options.skip_cli_update:

@@ -601,12 +601,12 @@ reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em `.ins
 os componentes conhecidos, permitindo detectar novidades publicadas.
 
 Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
-mostram somente as mudanças reais em uma tabela com tipo, item, versão
-instalada, versão disponível e ação. Itens já atualizados não poluem o plano.
-Se a tabela estiver vazia, o comando termina imediatamente, sem confirmação,
-segunda passagem de atualização ou verificação integral. Quando há mudanças,
-a confirmação literal `yes` é obrigatória. Para automações, `--yes` aceita o
-plano sem abrir o prompt:
+mostram somente as mudanças reais no formato do Homebrew: manifesto baixado,
+pacotes tabulados, versão instalada, versão disponível e tamanho do download.
+Itens já atualizados não poluem o plano. Se a tabela estiver vazia, o comando
+termina imediatamente, sem confirmação, segunda passagem de atualização ou
+verificação integral. Quando há mudanças, o prompt `[y/n]` aceita `y`/`yes` e
+também `s`/`sim`. Para automações, `--yes` aceita o plano sem abrir o prompt:
 
 ```sh
 ./x86qw.sh update --yes
@@ -621,9 +621,10 @@ arquivos, use:
 ./x86qw.sh upgrade --dry-run
 ```
 
-Qualquer resposta diferente de `yes` cancela a operação. Em um ambiente sem
-terminal interativo, `update` e `upgrade` falham com uma orientação explícita
-para usar `--yes`; não existe confirmação implícita.
+`n`, `no`, `não` ou uma resposta vazia cancelam a operação; respostas inválidas
+são solicitadas novamente. Em um ambiente sem terminal interativo, `update` e
+`upgrade` falham com uma orientação explícita para usar `--yes`; não existe
+confirmação implícita.
 
 Uma versão local de ezQuake mais nova que o catálogo nunca sofre downgrade.
 PAKs e arquivos pessoais são preservados e a instalação passa por verificação
