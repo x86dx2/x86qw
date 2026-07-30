@@ -539,7 +539,7 @@ class InstallerTests(unittest.TestCase):
                 )
         installer.install.assert_called_once_with(platform="linux")
 
-    def test_update_shows_plan_and_requires_literal_yes_before_applying(self):
+    def test_update_shows_homebrew_style_plan_and_requires_confirmation(self):
         target = Path("/tmp/x86qw-confirmation-test")
         confirm = install_qw.Installer.confirm_update_plan
         installer = mock.Mock()
@@ -548,7 +548,7 @@ class InstallerTests(unittest.TestCase):
             del preview
             if dry_run and plan_rows is not None:
                 plan_rows.append(install_qw.UpdatePlanRow(
-                    "Componente", "Configuração base nQuake", "1", "2", "Atualizar",
+                    "Componente", "Configuração base nQuake", "1", "2", "Atualizar", 15360,
                 ))
             return True
         installer.update.side_effect = update
@@ -560,8 +560,9 @@ class InstallerTests(unittest.TestCase):
                     self.assertEqual(0, install_qw.main(["update", str(target)]))
         self.assertEqual(1, installer.update.call_count)
         self.assertTrue(installer.update.call_args.kwargs["dry_run"])
-        self.assertIn("Atualizações disponíveis", output.getvalue())
+        self.assertIn("==> Would update 1 outdated package", output.getvalue())
         self.assertIn("Configuração base nQuake", output.getvalue())
+        self.assertIn("1 -> 2 (15.4KB)", output.getvalue())
         self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
 
     def test_upgrade_yes_shows_plan_and_applies_without_prompting(self):
@@ -645,6 +646,13 @@ class InstallerTests(unittest.TestCase):
         with mock.patch("builtins.input", side_effect=EOFError):
             with self.assertRaisesRegex(install_qw.InstallerError, "use --yes"):
                 install_qw.Installer.confirm_update_plan("update", assume_yes=False)
+
+    def test_update_confirmation_accepts_homebrew_y_prompt(self):
+        with mock.patch("builtins.input", return_value="y") as prompt:
+            self.assertTrue(
+                install_qw.Installer.confirm_update_plan("update", assume_yes=False)
+            )
+        self.assertIn("[y/n]", prompt.call_args.args[0])
 
     def test_component_update_only_selects_already_installed_outdated_items(self):
         with tempfile.TemporaryDirectory() as temporary:
