@@ -26,15 +26,16 @@ pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é trata
 como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
-O bundle contém somente a CLI, os launchers e um catálogo runtime mínimo. PAKs,
-mods, configurações, gamecodes, fontes e inventários de manutenção são pacotes
+O bundle contém somente `x86qw.pyz`, os launchers e `installer.json`. O zipapp
+incorpora a CLI e um catálogo runtime mínimo. PAKs, mods, configurações,
+gamecodes, fontes e inventários de manutenção são pacotes
 separados; isso evita duplicação e permite atualizar cada conteúdo sem republicar
 o instalador.
 Ao migrar de um bundle antigo, a atualização troca integralmente `.install/cli`
 por essa árvore mínima e elimina payloads legados que haviam sido duplicados ali.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
-usam a CLI preservada em `.install/cli`; por exemplo: `./x86qw.sh play`,
+usam a aplicação única `.install/cli/x86qw.pyz`; por exemplo: `./x86qw.sh play`,
 `./x86qw.sh update`, `./x86qw.sh upgrade`, `./x86qw.sh verify` e `./x86qw.sh cleanup`. Sem argumento, a CLI
 mostra o help e não inicia instalação alguma. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
@@ -136,6 +137,7 @@ quake-world/.install/
 ├── state.json
 ├── cli.receipt
 ├── cli/
+│   └── x86qw.pyz
 ├── ezquake-macos-stable.receipt
 ├── ezquake-macos-nightly.receipt
 ├── ezquake-linux-stable.receipt

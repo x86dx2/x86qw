@@ -124,6 +124,10 @@ dist/
 └── manifest.json         origem, consumidor, tamanho e SHA-256 dos upstreams
 ```
 
+`manager.py`, `gameplay.py` e os módulos auxiliares são fontes do repositório.
+O builder os empacota em `x86qw.pyz`; na instalação do jogador, a CLI inteira
+ocupa somente `.install/cli/x86qw.pyz`.
+
 ## Manter a distribuicao
 
 `maintenance/manage.py` e a unica interface oficial de manutencao:

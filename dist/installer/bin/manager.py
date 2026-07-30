@@ -36,7 +36,9 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 sys.modules.setdefault("manager", sys.modules[__name__])
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_argv0 = Path(sys.argv[0]).expanduser().resolve()
+ZIPAPP_PATH = _argv0 if _argv0.suffix.casefold() == ".pyz" and _argv0.is_file() else None
+PROJECT_ROOT = ZIPAPP_PATH.parent if ZIPAPP_PATH is not None else Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -46,7 +48,7 @@ from maintenance.tools.components import (
     load_runtime_catalog,
     profile_fingerprint,
     resolve_dependencies,
-    runtime_catalog as project_runtime_catalog,
+    validate_runtime_catalog,
 )
 
 
@@ -60,14 +62,8 @@ NQUAKE_INVENTORY = ".install/nquake.inventory"
 DEVELOPMENT_COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
 RUNTIME_COMPONENT_CATALOG = "_x86qw/components.json"
-ONLINE_CLI_FILES = (
-    "dist/installer/bin/manager.py",
-    "dist/installer/bin/gameplay.py",
-    "maintenance/__init__.py",
-    "maintenance/tools/__init__.py",
-    "maintenance/tools/components.py",
-    RUNTIME_COMPONENT_CATALOG,
-)
+CLI_ARCHIVE_NAME = "x86qw.pyz"
+OUTER_INSTALLER_METADATA = "installer.json"
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 DEVELOPMENT_ID1_DIR = Path("dist/game-data/id1")
 CORE_ID1_PACKAGE = "x86qw-core-id1"
@@ -116,6 +112,17 @@ MUTABLE_COMPONENT_DEFAULTS = {
 LEGACY_COMPONENTS = frozenset({"clan-arena"})
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = PROJECT_ROOT
+
+
+def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object]:
+    try:
+        with zipfile.ZipFile(archive) as package:
+            value = json.loads(package.read(member))
+    except (OSError, KeyError, UnicodeDecodeError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+        raise InstallerError(f"{label} ausente ou inválido em {archive}") from error
+    if not isinstance(value, dict):
+        raise InstallerError(f"{label} inválido em {archive}")
+    return value
 
 
 def create_resilient_connection(
@@ -606,12 +613,16 @@ class Installer:
         runtime_catalog_path = INSTALLER_ROOT / RUNTIME_COMPONENT_CATALOG
         development_catalog_path = INSTALLER_ROOT / DEVELOPMENT_COMPONENT_CATALOG
         try:
-            self.component_catalog = (
-                load_runtime_catalog(runtime_catalog_path)
-                if runtime_catalog_path.is_file() and not runtime_catalog_path.is_symlink()
-                else load_component_catalog(development_catalog_path)
-            )
-        except ValueError as error:
+            if ZIPAPP_PATH is not None:
+                self.component_catalog = read_zipapp_json(
+                    ZIPAPP_PATH, RUNTIME_COMPONENT_CATALOG, "Catálogo runtime da CLI",
+                )
+                validate_runtime_catalog(self.component_catalog)
+            elif runtime_catalog_path.is_file() and not runtime_catalog_path.is_symlink():
+                self.component_catalog = load_runtime_catalog(runtime_catalog_path)
+            else:
+                self.component_catalog = load_component_catalog(development_catalog_path)
+        except (InstallerError, ValueError) as error:
             raise InstallerError(str(error)) from error
         self.components = components_by_id(self.component_catalog)
         self.content_component_namespaces = set(self.component_catalog["content_namespaces"])
@@ -2236,15 +2247,22 @@ class Installer:
         return version
 
     def installer_bundle_identity(self) -> dict[str, object]:
-        path = self.project_root / INSTALLER_BUNDLE_METADATA
-        if not path.is_file() or path.is_symlink():
-            raise InstallerError(f"Identidade do bundle público ausente ou inválida: {path}")
-        try:
-            identity = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise InstallerError(f"Identidade do bundle público inválida: {path}") from error
-        if not isinstance(identity, dict):
-            raise InstallerError(f"Identidade do bundle público inválida: {path}")
+        if ZIPAPP_PATH is not None:
+            identity = read_zipapp_json(
+                ZIPAPP_PATH, INSTALLER_BUNDLE_METADATA, "Identidade da CLI pública",
+            )
+            location = ZIPAPP_PATH
+        else:
+            path = self.project_root / INSTALLER_BUNDLE_METADATA
+            if not path.is_file() or path.is_symlink():
+                raise InstallerError(f"Identidade do bundle público ausente ou inválida: {path}")
+            try:
+                identity = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise InstallerError(f"Identidade do bundle público inválida: {path}") from error
+            if not isinstance(identity, dict):
+                raise InstallerError(f"Identidade do bundle público inválida: {path}")
+            location = path
         version = identity.get("version")
         if (
             identity.get("format") != 1
@@ -2252,7 +2270,7 @@ class Installer:
             or not isinstance(version, str)
             or not STABLE_VERSION.fullmatch(version)
         ):
-            raise InstallerError(f"Identidade do bundle público inválida: {path}")
+            raise InstallerError(f"Identidade do bundle público inválida: {location}")
         return identity
 
     def handoff_cli_update(self, action: str, *, dry_run: bool, assume_yes: bool = False) -> bool:
@@ -2273,9 +2291,9 @@ class Installer:
             extracted.mkdir()
             safe_extract_zip(artifact, extracted)
             bundle = extracted / f"x86qw-installer-{available}"
-            script = bundle / "dist/installer/bin/manager.py"
-            metadata = bundle / INSTALLER_BUNDLE_METADATA
-            if not script.is_file() or script.is_symlink() or not metadata.is_file() or metadata.is_symlink():
+            application = bundle / CLI_ARCHIVE_NAME
+            metadata = bundle / OUTER_INSTALLER_METADATA
+            if not application.is_file() or application.is_symlink() or not metadata.is_file() or metadata.is_symlink():
                 raise InstallerError("O bundle de atualização x86QW está incompleto.")
             try:
                 identity = json.loads(metadata.read_text(encoding="utf-8"))
@@ -2283,8 +2301,13 @@ class Installer:
                 raise InstallerError("Metadados inválidos no bundle de atualização x86QW.") from error
             if identity != {"format": 1, "project": "x86qw", "version": available}:
                 raise InstallerError("A versão interna do bundle de atualização x86QW é inválida.")
+            embedded = read_zipapp_json(
+                application, INSTALLER_BUNDLE_METADATA, "Identidade interna da CLI",
+            )
+            if embedded != identity:
+                raise InstallerError("A identidade do aplicativo x86QW diverge do bundle.")
             command = [
-                sys.executable, str(script), "--online-only", "--installed-cli", "--skip-cli-update",
+                sys.executable, str(application), "--online-only", "--installed-cli", "--skip-cli-update",
             ]
             if console.verbose:
                 command.append("--verbose")
@@ -3513,26 +3536,18 @@ class Installer:
         replacement = Path(tempfile.mkdtemp(prefix=".cli-new.", dir=metadata_root))
         backup = metadata_root / f".cli-old.{os.getpid()}"
         try:
-            for relative in ONLINE_CLI_FILES:
-                source = self.project_root.joinpath(*PurePosixPath(relative).parts)
-                if relative == RUNTIME_COMPONENT_CATALOG and not source.is_file():
-                    payload = json.dumps(
-                        project_runtime_catalog(self.component_catalog),
-                        ensure_ascii=False, indent=2, sort_keys=True,
-                    ).encode("utf-8") + b"\n"
-                else:
-                    if not source.is_file() or source.is_symlink():
-                        raise InstallerError(f"Arquivo da CLI pública ausente ou inválido: {source}")
-                    payload = source.read_bytes()
-                destination = replacement.joinpath(*PurePosixPath(relative).parts)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(payload)
-                if os.name != "nt":
-                    destination.chmod(
-                        0o755
-                        if relative in {"dist/installer/bin/manager.py", "dist/installer/bin/gameplay.py"}
-                        else 0o644
-                    )
+            application = ZIPAPP_PATH or self.project_root / CLI_ARCHIVE_NAME
+            if not application.is_file() or application.is_symlink():
+                raise InstallerError(f"Aplicativo da CLI pública ausente ou inválido: {application}")
+            embedded = read_zipapp_json(
+                application, INSTALLER_BUNDLE_METADATA, "Identidade interna da CLI",
+            )
+            if embedded != identity:
+                raise InstallerError("A identidade do aplicativo x86QW diverge do recibo do bundle.")
+            destination = replacement / CLI_ARCHIVE_NAME
+            shutil.copyfile(application, destination)
+            if os.name != "nt":
+                destination.chmod(0o644)
             if lexists(cli_root):
                 if not cli_root.is_dir() or cli_root.is_symlink():
                     raise InstallerError(f"Diretório da CLI instalada inválido: {cli_root}")
@@ -3561,11 +3576,13 @@ class Installer:
         temporary_receipt.replace(cli_receipt)
 
         launchers = (
-            ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
-            ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
+            ("x86qw.sh", 0o755),
+            ("x86qw.cmd", 0o644),
         )
-        for relative, name, mode in launchers:
-            source = self.project_root.joinpath(*PurePosixPath(relative).parts)
+        for name, mode in launchers:
+            source = self.project_root / name
+            if not source.is_file() and ZIPAPP_PATH is None:
+                source = self.project_root / "dist/installer/bin" / name
             if not source.is_file() or source.is_symlink():
                 raise InstallerError(f"Launcher público ausente ou inválido: {source}")
             destination = self.target / name

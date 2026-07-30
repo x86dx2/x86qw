@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "0.1.3"
+$InstallerVersion = "0.1.4"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "fcedd03497ce8a10f4f8d7c57c38b2f21cd44a11d2f9e09ee4085a4fe43311a6"
+$InstallerSha256 = "98f5c3015b10df05c1d8bddbb73eaf31ca2fbcaf5e42ce6e066c8d190de44906"
 $InstallerUrls = @(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-$InstallerVersion/$InstallerFile",
   "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/$InstallerVersion/$InstallerFile"
@@ -31,7 +31,7 @@ try {
   if ($Actual -ne $InstallerSha256) { throw "x86QW: o instalador baixado falhou na verificação SHA-256." }
   Expand-Archive -Path $Archive -DestinationPath $WorkDir
   $Root = Join-Path $WorkDir "x86qw-installer-$InstallerVersion"
-  & python (Join-Path $Root "dist/installer/bin/manager.py") --online-only @args
+  & python (Join-Path $Root "x86qw.pyz") --online-only @args
   exit $LASTEXITCODE
 } finally {
   Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue

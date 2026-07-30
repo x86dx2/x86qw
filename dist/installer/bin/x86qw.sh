@@ -2,6 +2,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+app="$root/.install/cli/x86qw.pyz"
 
 show_help() {
   cat <<'EOF'
@@ -31,9 +32,9 @@ EOF
 case "${1:-}" in
   '') show_help; exit 0 ;;
   help|-h|--help) show_help; exit 0 ;;
-  play) shift; exec python3 "$root/.install/cli/dist/installer/bin/gameplay.py" "$root" "$@" ;;
+  play) shift; exec python3 "$app" play "$root" "$@" ;;
   update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac
 
-exec python3 "$root/.install/cli/dist/installer/bin/manager.py" --online-only --installed-cli "$action" "$root" "$@"
+exec python3 "$app" --online-only --installed-cli "$action" "$root" "$@"
