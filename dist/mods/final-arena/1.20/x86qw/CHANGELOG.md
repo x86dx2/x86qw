@@ -27,6 +27,13 @@ Os 93 membros do `pak0.pak` oficial foram comparados com o conteúdo nQuake e es
 - gamecode Rakk carregado, mapa correto aberto e jogador entrou na fila;
 - nenhum arquivo obrigatório ausente, comando bloqueado ou erro do mod.
 
+## Correções encaminhadas ao cliente
+
+- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+  [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
+- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
+  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+
 ## Deliberadamente não alterado
 
 - nenhuma alteração Rakk foi reimplementada por inferência;

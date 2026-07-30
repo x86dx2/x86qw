@@ -28,6 +28,13 @@ O autor informou publicamente que não liberaria a fonte. O x86QW preserva o bin
 - gamecode 1.1 carregado, jogador entrou e as quatro mensagens `noname is not a field` desapareceram;
 - nenhum arquivo obrigatório ausente, comando bloqueado ou erro do mod.
 
+## Correções encaminhadas ao cliente
+
+- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+  [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
+- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
+  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+
 ## Deliberadamente não alterado
 
 - nenhum código, regra, mapa ou conteúdo visual foi criado.

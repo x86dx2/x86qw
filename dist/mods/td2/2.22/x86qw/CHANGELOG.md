@@ -27,6 +27,13 @@
 - jogador entrou, armas e efeitos carregaram e o `td2qw 2.22` foi preservado;
 - nenhuma demo automática, `stop`, gamma persistente, bind remoto ou erro `wad`/`vomitus`.
 
+## Correções encaminhadas ao cliente
+
+- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+  [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
+- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
+  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+
 ## Deliberadamente não alterado
 
 - `temp1 65560` e as regras de armas, magias, runas e poderes foram mantidos;

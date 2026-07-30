@@ -35,6 +35,13 @@
 - gamecode PR1 carregado, jogador entrou e `TeamFortress QuakeWorld v2.9` foi confirmado;
 - nenhum bind remoto, comando bloqueado, arquivo obrigatório ausente ou erro do mod.
 
+## Correções encaminhadas ao cliente
+
+- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+  [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
+- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
+  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+
 ## Deliberadamente não alterado
 
 - execuções e screenshot opt-in do mod não foram removidos porque não ocorrem automaticamente;

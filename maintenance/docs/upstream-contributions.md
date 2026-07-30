@@ -4,8 +4,8 @@ O x86QW preserva upstreams sem misturar correções independentes. Um PR só é 
 
 | Projeto | Git público | Mudança x86QW | Destino |
 | --- | --- | --- | --- |
-| ezQuake | `QW-Group/ezquake-source` | pular a tentativa QVM quando `sv_progtype` seleciona PR1 explicitamente | PR separado com reprodução em mod PR1 |
-| ezQuake | `QW-Group/ezquake-source` | duplicação de log durante `vid_restart` | PR separado somente após validar todos os usos de `con_suppress` |
+| ezQuake | `QW-Group/ezquake-source` | pular a tentativa QVM quando `sv_progtype` seleciona PR1 explicitamente | [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149), draft, aguardando CI/review |
+| ezQuake | `QW-Group/ezquake-source` | tornar idempotente o registro do mesmo objeto/função durante `vid_restart` | [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150), draft, aguardando CI/review |
 | KTX | `QW-Group/ktx` | definição antecipada de `k_defmap` | não enviar; a correção pertence ao launcher x86QW |
 | nQuake | `nQuake/distfiles` | `bounce2.wav` ausente após modularização | não enviar; o arquivo já existe no KTX do snapshot e a correção pertence à composição x86QW |
 | Final Arena | não localizado | patches futuros de fonte | manter no x86QW até surgir upstream oficial |
@@ -22,3 +22,15 @@ O x86QW preserva upstreams sem misturar correções independentes. Um PR só é 
 - não combinar limpeza, formatação e mudança funcional;
 - referenciar o changelog do mod no x86QW como histórico, não como justificativa exclusiva;
 - acompanhar CI e review até merge ou decisão explícita do mantenedor.
+
+## Estado em 30 de julho de 2026
+
+- os dois PRs partem do `master` atual `a86996a3` e não contêm branding,
+  configuração ou arquivos x86QW;
+- ambos passaram por inspeção de diff e `git diff --check`;
+- o host de reprodução não possui CMake, portanto a compilação será validada
+  pelo CI do upstream; o GitHub ainda não havia iniciado checks no momento do
+  envio;
+- os demais mods não receberam PR porque não foi localizado um Git público que
+  represente exatamente a versão distribuída. `QW-Group/Quake-Custom-Team-Fortress`
+  é Custom TF, não o Team Fortress 2.9 preservado aqui.

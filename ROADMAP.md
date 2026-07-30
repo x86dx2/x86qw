@@ -105,9 +105,9 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] manter workaround macOS de assinatura somente para o nightly quando necessário;
 - [x] executar smoke real de todos os mods em stable e nightly, não apenas testes simulados de argumentos;
 - [x] corrigir no launcher o `k_defmap` do KTX antes do primeiro frame;
-- [ ] propor ao ezQuake a execução direta de `PR1_LoadProgs()` quando `sv_progtype == VMI_NONE`, evitando a tentativa e o erro falsos de QVM nos mods PR1;
+- [x] propor ao ezQuake a execução direta de `PR1_LoadProgs()` quando `sv_progtype == VMI_NONE`, evitando a tentativa e o erro falsos de QVM nos mods PR1 ([PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149));
 - [x] reproduzir as 291 linhas duplicadas no primeiro `vid_restart`, provar que somem após o primeiro encerramento normal e isolar a causa no novo registro dos mesmos objetos;
-- [ ] propor correção upstream para as linhas duplicadas durante `vid_restart`, sem silenciar logs legítimos;
+- [x] propor correção upstream para as linhas duplicadas durante `vid_restart`, silenciando somente o mesmo objeto/função e preservando colisões legítimas ([PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150));
 - [-] não distribuir cliente ezQuake modificado como stable/nightly oficial;
 - [ ] se um cliente modificado se tornar necessário, criar canal explícito `x86qw-patched`, opt-in e separado;
 - [-] tratar avisos OpenGL 4.6 -> 4.1, compute shader e hardware lighting no macOS como limitações informativas, salvo falha visual real;
@@ -140,12 +140,12 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 
 ## 7. Upstreams e contribuição pública
 
-- [ ] abrir PR no `QW-Group/ezquake-source` para pular a tentativa QVM quando PR1 foi selecionado explicitamente;
-- [ ] abrir PR separado no ezQuake para duplicação de log em `vid_restart` somente após teste de todos os caminhos de `con_suppress`;
+- [x] abrir [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149) no `QW-Group/ezquake-source` para pular a tentativa QVM quando PR1 foi selecionado explicitamente;
+- [x] abrir [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150) separado no ezQuake para tornar idempotente apenas o novo registro do mesmo objeto/função durante `vid_restart`;
 - [-] não abrir PR ao nQuake para `bounce2.wav`: o snapshot já fornece o arquivo no KTX; a ausência surgiu apenas da separação modular do x86QW e foi corrigida na composição local;
 - [-] não abrir PR de gameplay para KTX: a correção de `k_defmap` pertence ao launcher x86QW;
 - [-] Final Arena, Team Fortress, TD2 e Pro-X não possuem Git público de fonte identificado para receber estes patches;
-- [ ] documentar nos changelogs a ausência de upstream Git e manter patches prontos para envio se um repositório oficial surgir;
+- [x] documentar nos changelogs a ausência de upstream Git e manter patches prontos para envio se um repositório oficial surgir;
 - [ ] acompanhar CI, review e ajustes dos PRs sem misturar correções independentes.
 
 ## 8. Publicação e governança

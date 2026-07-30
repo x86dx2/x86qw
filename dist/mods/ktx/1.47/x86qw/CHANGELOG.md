@@ -25,6 +25,12 @@
 - houve uma única carga do QVM 1.47, o mapa escolhido foi preservado e o jogador entrou;
 - nenhum `SV_PreSpawn_f from different level`, erro de QVM ou comando desconhecido.
 
+## Correção encaminhada ao cliente
+
+- o ruído de registros duplicados após `vid_restart` não pertence ao KTX; a
+  correção genérica foi enviada ao ezQuake no
+  [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+
 ## Deliberadamente não alterado
 
 - nenhum modo, votação, arma, regra, bot ou mapa foi criado;
