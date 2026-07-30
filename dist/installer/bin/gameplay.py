@@ -429,10 +429,15 @@ class Player(core.Installer):
 
 
 def parse_arguments(arguments: list[str], project_root: Path):
+    public_cli = core.ZIPAPP_PATH is not None
     parser = core.FriendlyArgumentParser(
-        prog="dist/installer/bin/gameplay.py",
+        prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
         description="Abre os mods locais da distribuição x86QW no ezQuake.",
-        epilog="Exemplo: ./dist/installer/bin/gameplay.py ./quake-world",
+        epilog=(
+            "Exemplo: x86qw play"
+            if public_cli
+            else "Exemplo: ./dist/installer/bin/gameplay.py ./quake-world"
+        ),
         add_help=False,
     )
     parser._positionals.title = "argumentos"

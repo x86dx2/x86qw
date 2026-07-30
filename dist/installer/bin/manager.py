@@ -3603,10 +3603,15 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
 
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
+    public_cli = ZIPAPP_PATH is not None
     parser = FriendlyArgumentParser(
-        prog="dist/installer/bin/manager.py",
+        prog="x86qw" if public_cli else "dist/installer/bin/manager.py",
         description="Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido.",
-        epilog="Exemplo: ./dist/installer/bin/manager.py install ./quake-world",
+        epilog=(
+            "Exemplo: x86qw update"
+            if public_cli
+            else "Exemplo: ./dist/installer/bin/manager.py install ./quake-world"
+        ),
         add_help=False,
     )
     parser._positionals.title = "argumentos"

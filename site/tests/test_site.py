@@ -5,6 +5,9 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 import zipfile
 
@@ -69,13 +72,13 @@ class SiteTests(unittest.TestCase):
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertEqual("x86QW Installer 0.1.4", package["release_title"])
+        self.assertEqual("x86QW Installer 0.1.5", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.4/",
+            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.5/",
             package["urls"][0],
         )
         self.assertEqual(
-            ["0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4"],
+            ["0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5"],
             sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
         )
         for historical in installers:
@@ -92,10 +95,20 @@ class SiteTests(unittest.TestCase):
                 f"{prefix}/installer.json"
             ))
             application = archive.read(f"{prefix}/x86qw.pyz")
+            legacy_identity = json.loads(archive.read(f"{prefix}/_x86qw/installer.json"))
+            with tempfile.TemporaryDirectory() as temporary:
+                archive.extractall(temporary)
+                legacy_entrypoint = Path(temporary) / prefix / "dist/installer/bin/manager.py"
+                legacy_result = subprocess.run(
+                    [sys.executable, str(legacy_entrypoint), "--help"],
+                    check=False, capture_output=True, text=True,
+                )
         self.assertEqual(
             {
                 f"{prefix}/installer.json", f"{prefix}/x86qw.pyz",
                 f"{prefix}/x86qw.sh", f"{prefix}/x86qw.cmd",
+                f"{prefix}/dist/installer/bin/manager.py",
+                f"{prefix}/_x86qw/installer.json",
             },
             set(names),
         )
@@ -107,6 +120,9 @@ class SiteTests(unittest.TestCase):
             identity,
         )
         self.assertEqual(identity, embedded_identity)
+        self.assertEqual(identity, legacy_identity)
+        self.assertEqual(0, legacy_result.returncode, legacy_result.stderr)
+        self.assertIn("usage: x86qw", legacy_result.stdout)
         self.assertLess(package["size"], 1024 * 1024)
         self.assertFalse(any(name.endswith((".pak", ".pk3", "qwprogs.dat")) for name in names))
         self.assertFalse(any("/dist/mods/" in name or "/maintenance/inventory/" in name for name in names))

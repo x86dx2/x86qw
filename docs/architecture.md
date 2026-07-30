@@ -122,7 +122,8 @@ e somente substituem a árvore canônica quando catálogo, inventários, receita
 payloads formam um estado coerente.
 
 O Worker serve o site e o catálogo. O bundle público contém `x86qw.pyz`, os
-launchers e `installer.json`. O zipapp incorpora um manifesto runtime mínimo:
+launchers, `installer.json` e a ponte mínima que permite à CLI 0.1.3 iniciar o
+zipapp. A ponte só existe na extração temporária; o zipapp incorpora um manifesto runtime mínimo:
 não leva PAKs, pacotes de mods, fontes, gamecodes
 nem os inventários de desenvolvimento. Para componentes, o instalador valida e
 materializa as fontes em `dist/` quando presentes; caso contrário, baixa o ZIP
