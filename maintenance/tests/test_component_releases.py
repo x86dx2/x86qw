@@ -106,7 +106,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.2", ktx["version"])
+        self.assertEqual("1.47+x86qw.3", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -210,7 +210,10 @@ class ComponentReleaseTests(unittest.TestCase):
             self.assertEqual(382, sum(name.startswith("locs/") for name in names))
             self.assertIn("configs/usermodes/dmm4base.cfg", names)
             self.assertIn("sound/ca/sffinal.wav", names)
-            self.assertIn(b"set sv_maxrate                500000", package.read("ktx.cfg"))
+            ktx_config = package.read("ktx.cfg")
+            self.assertIn(b"set sv_maxrate                500000", ktx_config)
+            self.assertIn(b"k_defmode is selected by the launcher", ktx_config)
+            self.assertNotIn(b"set k_defmode                 4on4", ktx_config)
             server_runtime = package.read("mvdsv.cfg")
             self.assertIn(b"sv_progtype                   2", server_runtime)
             self.assertNotIn(b"sv_progtype                   1", server_runtime)

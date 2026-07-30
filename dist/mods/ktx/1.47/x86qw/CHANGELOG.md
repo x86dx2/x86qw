@@ -12,6 +12,15 @@
 - configura o servidor local para `sv_progtype 2`;
 - deixa `k_defmap` sob controle do launcher, evitando a troca automática para
   `dm3`, a segunda carga do QVM e o aviso `SV_PreSpawn_f from different level`;
+- deixa `k_defmode` sob controle do launcher e inicia diretamente no usermode
+  selecionado, sem aplicar primeiro o padrão 4on4;
+- declara em `modes.json` Duel, 2on2, 4on4, FFA, Clan Arena, HoonyMode,
+  Midair, Race e Practice, com mapas e entradas compatíveis com KTX 1.47;
+- ativa Midair, Race e Practice por perfis estáticos de entrada única, somente
+  depois que o KTX confirma a conexão local; a remoção imediata do alias evita
+  alternância ou recarga em ciclo;
+- mantém CTF fora do launcher enquanto a distribuição não possuir um mapa ou
+  ENT CTF curado com as duas bandeiras;
 - fornece binds, ajuda e arquivo pessoal separados da configuração upstream;
 - preserva a ordem determinística de pacotes.
 
@@ -24,6 +33,9 @@
 - 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `dm6`;
 - houve uma única carga do QVM 1.47, o mapa escolhido foi preservado e o jogador entrou;
 - nenhum `SV_PreSpawn_f from different level`, erro de QVM ou comando desconhecido.
+- 30/07/2026: Duel iniciou diretamente em `1on1`; Midair foi ativado uma vez
+  em `povdmm4`; Race carregou a rota de `dm6` sem ciclo de alternância; Practice
+  confirmou o servidor destravado. Todos os processos encerraram sem órfãos.
 
 ## Correção encaminhada ao cliente
 
@@ -33,5 +45,5 @@
 
 ## Deliberadamente não alterado
 
-- nenhum modo, votação, arma, regra, bot ou mapa foi criado;
-- o menu de modos sugerido na auditoria foi descartado por ser recurso novo.
+- nenhum modo, votação, arma, regra, bot ou mapa foi criado no gamecode;
+- o launcher apenas expõe usermodes e comandos já existentes no KTX 1.47.

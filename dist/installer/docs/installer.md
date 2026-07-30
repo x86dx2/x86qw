@@ -312,6 +312,27 @@ No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play
 - Team Fortress em `fortress/misc.pak`;
 - Total Destruction 2 em `td2/qwprogs.dat`.
 
+Ao selecionar KTX, um segundo menu oferece os modos curados pela distribuição:
+
+```text
+duel  2on2  4on4  ffa  clan-arena  hoony  midair  race  practice
+```
+
+O mesmo fluxo pode ser automatizado, sem atravessar os menus:
+
+```sh
+./x86qw.sh play ktx --mode duel
+./x86qw.sh play ktx --mode 4on4
+./x86qw.sh play ktx --mode race
+```
+
+Cada entrada declara seu modo KTX, mapa padrão, sugestões compatíveis e perfil
+de entrada quando necessário. O launcher define `k_defmode` antes de iniciar o
+mapa; Midair, Race e Practice usam um evento de entrada descartável para aplicar
+o comando somente depois que o KTX está ativo. CTF existe no gamecode KTX 1.47,
+mas ainda não aparece no launcher porque
+o acervo curado atual do x86QW não contém um mapa ou ENT com as duas bandeiras.
+
 Antes de abrir o jogo, o launcher valida o recibo do componente e descobre os
 mapas disponíveis em arquivos BSP soltos, PK3s e PAKs do gamedir e de `id1`.
 Ele oferece sugestões, aceita um nome instalado ou lista o acervo completo. Se
@@ -347,7 +368,7 @@ executados. Se uma instalação anterior já tiver esse arquivo como configuraç
 pessoal, a atualização cria `config.pre-x86qw.cfg` e migra o perfil ativo para
 a base moderna do jogador.
 
-Todos os cinco modos do menu de `x86qw.sh play` carregam gameplay próprio. A base nQuake
+Todos os cinco jogos do menu de `x86qw.sh play` carregam gameplay próprio. A base nQuake
 continua responsável por movimento, mouse, rede, vídeo e comunicação geral. O
 perfil do mod corrige conflitos e expõe suas mecânicas; o arquivo pessoal é
 executado por último:

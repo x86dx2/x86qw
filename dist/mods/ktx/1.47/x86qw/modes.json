@@ -1,0 +1,121 @@
+{
+  "format": 1,
+  "game": "ktx",
+  "upstream_version": "1.47",
+  "modes": [
+    {
+      "id": "duel",
+      "aliases": ["1on1"],
+      "label": "Duel",
+      "description": "Duelo competitivo entre dois jogadores.",
+      "recommended_players": "2",
+      "usermode": "1on1",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar 1 on 1 settings enabled."
+    },
+    {
+      "id": "2on2",
+      "aliases": ["2v2"],
+      "label": "2on2",
+      "description": "Teamplay competitivo com duas duplas.",
+      "recommended_players": "4",
+      "usermode": "2on2",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar 2 on 2 settings enabled."
+    },
+    {
+      "id": "4on4",
+      "aliases": ["4v4"],
+      "label": "4on4",
+      "description": "Teamplay clássico com duas equipes de quatro.",
+      "recommended_players": "8",
+      "usermode": "4on4",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt1b", "cmt3", "cmt4"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar 4 on 4 settings enabled."
+    },
+    {
+      "id": "ffa",
+      "aliases": ["free-for-all"],
+      "label": "Free For All",
+      "description": "Todos contra todos com respawn contínuo.",
+      "recommended_players": "2+",
+      "usermode": "ffa",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk", "death32c"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar ffa settings enabled."
+    },
+    {
+      "id": "clan-arena",
+      "aliases": ["ca", "carena"],
+      "label": "Clan Arena",
+      "description": "Rounds eliminatórios sem coleta de itens.",
+      "recommended_players": "4+",
+      "usermode": "ca",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar Clan Arena settings enabled."
+    },
+    {
+      "id": "hoony",
+      "aliases": ["hoonymode"],
+      "label": "HoonyMode",
+      "description": "Duelo em rounds com alternância de spawns.",
+      "recommended_players": "2",
+      "usermode": "hoonymode",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "entry_config": null,
+      "confirmation": "KTX deve anunciar HoonyMode settings enabled."
+    },
+    {
+      "id": "midair",
+      "aliases": [],
+      "label": "Midair",
+      "description": "Combate aéreo com rockets e pontuação por altura.",
+      "recommended_players": "2+",
+      "usermode": "1on1",
+      "default_map": "povdmm4",
+      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "entry_config": "x86qw-ktx-mode-midair.cfg",
+      "confirmation": "KTX deve confirmar deathmatch 4 e Midair enabled."
+    },
+    {
+      "id": "race",
+      "aliases": [],
+      "label": "Race",
+      "description": "Percursos cronometrados usando rotas oficiais do KTX.",
+      "recommended_players": "1+",
+      "usermode": "ffa",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "aerowalk", "slide1", "slide7", "ztndm3", "ztricks"],
+      "entry_config": "x86qw-ktx-mode-race.cfg",
+      "confirmation": "KTX deve confirmar Race enabled e carregar uma rota do mapa."
+    },
+    {
+      "id": "practice",
+      "aliases": ["treino"],
+      "label": "Practice",
+      "description": "Servidor destravado para praticar itens, armas e movimento.",
+      "recommended_players": "1+",
+      "usermode": "1on1",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk"],
+      "entry_config": "x86qw-ktx-mode-practice.cfg",
+      "confirmation": "KTX deve anunciar Server in practice mode."
+    }
+  ],
+  "not_exposed": [
+    {
+      "id": "ctf",
+      "reason": "A distribuição atual ainda não possui mapa ou ENT CTF curado com as duas bandeiras."
+    }
+  ]
+}

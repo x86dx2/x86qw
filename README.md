@@ -39,6 +39,25 @@ concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
 `hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
 sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
 
+O KTX possui seleção própria de modo no menu. Também pode ser aberto
+diretamente, sem perder a escolha interativa de mapa:
+
+```sh
+./x86qw.sh play ktx --mode duel
+./x86qw.sh play ktx --mode 2on2
+./x86qw.sh play ktx --mode 4on4
+./x86qw.sh play ktx --mode ffa
+./x86qw.sh play ktx --mode clan-arena
+./x86qw.sh play ktx --mode hoony
+./x86qw.sh play ktx --mode midair
+./x86qw.sh play ktx --mode race
+./x86qw.sh play ktx --mode practice
+```
+
+Essas entradas usam modos e comandos existentes no KTX 1.47. CTF só será
+exposto quando o catálogo incorporar pontualmente um mapa ou ENT compatível com
+as duas bandeiras; o launcher não oferece uma opção incompleta.
+
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
 ao `install.ps1` no Windows). `./x86qw.sh update` atualiza a própria CLI e somente o

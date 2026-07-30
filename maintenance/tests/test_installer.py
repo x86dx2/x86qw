@@ -36,6 +36,14 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    def test_public_zipapp_embeds_the_declarative_ktx_mode_catalog(self):
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
+        self.assertEqual(1, catalog["format"])
+        self.assertEqual("ktx", catalog["game"])
+        self.assertEqual("duel", catalog["modes"][0]["id"])
+        self.assertIn("race", [mode["id"] for mode in catalog["modes"]])
+
     @staticmethod
     def write_installer_bundle(path: Path, version: str) -> None:
         identity = json.dumps({"format": 1, "project": "x86qw", "version": version})

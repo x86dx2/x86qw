@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib
+import json
 import os
 import re
 import struct
@@ -25,6 +27,8 @@ file_hash = core.file_hash
 lexists = core.lexists
 
 PLAY_SUPPORT_VERSION = "7"
+DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
+RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
 PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
 LEGACY_LOCAL_CAPABILITIES = {
@@ -46,6 +50,20 @@ class LocalGameSpec:
     suggested_maps: tuple[str, ...]
     version: str
     description: str
+    confirmation: str
+
+
+@dataclass(frozen=True)
+class KtxModeSpec:
+    key: str
+    aliases: tuple[str, ...]
+    label: str
+    description: str
+    recommended_players: str
+    usermode: str
+    default_map: str
+    suggested_maps: tuple[str, ...]
+    entry_config: str | None
     confirmation: str
 
 
@@ -89,6 +107,81 @@ LOCAL_GAMES = (
         "No serverinfo, *gamedir deve ser td2 e td2qw deve ser 2.22.",
     ),
 )
+
+
+def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
+    if core.ZIPAPP_PATH is not None:
+        catalog = core.read_zipapp_json(
+            core.ZIPAPP_PATH, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
+        )
+    else:
+        path = project_root / DEVELOPMENT_KTX_MODE_CATALOG
+        try:
+            catalog = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise InstallerError(f"Catálogo de modos KTX inválido: {path}") from error
+    if catalog.get("format") != 1 or catalog.get("game") != "ktx":
+        raise InstallerError("Catálogo de modos KTX possui identidade inválida.")
+    raw_modes = catalog.get("modes")
+    if not isinstance(raw_modes, list) or not raw_modes:
+        raise InstallerError("Catálogo de modos KTX não declara nenhum modo.")
+    modes: list[KtxModeSpec] = []
+    identities: set[str] = set()
+    for raw in raw_modes:
+        if not isinstance(raw, dict):
+            raise InstallerError("Entrada inválida no catálogo de modos KTX.")
+        key = raw.get("id")
+        aliases = raw.get("aliases")
+        suggested_maps = raw.get("suggested_maps")
+        entry_config = raw.get("entry_config")
+        text_fields = (
+            "label", "description", "recommended_players", "usermode",
+            "default_map", "confirmation",
+        )
+        if (
+            not isinstance(key, str)
+            or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", key) is None
+            or not isinstance(aliases, list)
+            or not all(
+                isinstance(alias, str)
+                and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", alias)
+                for alias in aliases
+            )
+            or not isinstance(suggested_maps, list)
+            or not suggested_maps
+            or not all(
+                isinstance(name, str)
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", name)
+                for name in suggested_maps
+            )
+            or entry_config not in {
+                None,
+                "x86qw-ktx-mode-midair.cfg",
+                "x86qw-ktx-mode-race.cfg",
+                "x86qw-ktx-mode-practice.cfg",
+            }
+            or any(not isinstance(raw.get(field), str) or not raw[field] for field in text_fields)
+        ):
+            raise InstallerError(f"Definição inválida do modo KTX: {key!r}.")
+        if raw["default_map"].casefold() not in {name.casefold() for name in suggested_maps}:
+            raise InstallerError(f"Mapa padrão ausente nas sugestões do modo KTX {key}.")
+        mode_identities = {key.casefold(), *(alias.casefold() for alias in aliases)}
+        if identities & mode_identities:
+            raise InstallerError(f"Identidade duplicada no catálogo de modos KTX: {key}.")
+        identities.update(mode_identities)
+        modes.append(KtxModeSpec(
+            key=key,
+            aliases=tuple(aliases),
+            label=str(raw["label"]),
+            description=str(raw["description"]),
+            recommended_players=str(raw["recommended_players"]),
+            usermode=str(raw["usermode"]),
+            default_map=str(raw["default_map"]),
+            suggested_maps=tuple(suggested_maps),
+            entry_config=entry_config,
+            confirmation=str(raw["confirmation"]),
+        ))
+    return tuple(modes)
 
 
 class Player(core.Installer):
@@ -209,7 +302,23 @@ class Player(core.Installer):
         match = re.match(r"^(\d+(?:\.\d+)+)", receipt["selection"])
         return match.group(1) if match is not None else game.version
 
-    def choose_local_game(self, games: list[LocalGameSpec]) -> LocalGameSpec:
+    def choose_local_game(
+        self, games: list[LocalGameSpec], requested: str | None = None,
+    ) -> LocalGameSpec:
+        if requested is not None:
+            matches = [game for game in games if game.key.casefold() == requested.casefold()]
+            if len(matches) == 1:
+                return matches[0]
+            known = next(
+                (game for game in LOCAL_GAMES if game.key.casefold() == requested.casefold()), None,
+            )
+            if known is not None:
+                raise InstallerError(
+                    f"{known.label} não está instalado. "
+                    f"Adicione o componente {known.component} pelo bootstrap x86QW."
+                )
+            available = ", ".join(game.key for game in games)
+            raise InstallerError(f"Jogo local desconhecido: {requested}. Disponíveis: {available}.")
         print("\nQual mod deseja jogar localmente?")
         labels = [game.label + (" (padrão)" if index == 1 else "") for index, game in enumerate(games, 1)]
         versions = [self.installed_game_version(game) for game in games]
@@ -235,23 +344,77 @@ class Player(core.Installer):
                 return matches[0]
             console.warning(f"Escolha inválida. Use um número entre 1 e {len(games)}.")
 
+    def choose_ktx_mode(
+        self, modes: tuple[KtxModeSpec, ...], requested: str | None = None,
+    ) -> KtxModeSpec:
+        if requested is not None:
+            answer = requested.casefold()
+            matches = [
+                mode for mode in modes
+                if answer == mode.key.casefold()
+                or answer in {alias.casefold() for alias in mode.aliases}
+            ]
+            if len(matches) == 1:
+                return matches[0]
+            available = ", ".join(mode.key for mode in modes)
+            raise InstallerError(f"Modo KTX desconhecido: {requested}. Disponíveis: {available}.")
+        print("\nQual modo KTX deseja jogar?")
+        labels = [mode.label + (" (padrão)" if index == 1 else "") for index, mode in enumerate(modes, 1)]
+        label_width = max(map(len, labels))
+        players_width = max(len(mode.recommended_players) for mode in modes)
+        index_width = len(str(len(modes)))
+        for index, (mode, label) in enumerate(zip(modes, labels), 1):
+            print(
+                f"  {index:>{index_width}}) {label:<{label_width}}  "
+                f"{mode.recommended_players:>{players_width}} jogador(es)  {mode.description}"
+            )
+        while True:
+            try:
+                answer = input(f"Escolha [1-{len(modes)}] (padrão: 1): ").strip()
+            except EOFError as error:
+                raise InstallerError("Nenhum modo KTX foi selecionado.") from error
+            if not answer:
+                return modes[0]
+            if answer.isdigit() and 1 <= int(answer) <= len(modes):
+                return modes[int(answer) - 1]
+            matches = [
+                mode for mode in modes
+                if answer.casefold() == mode.key.casefold()
+                or answer.casefold() in {alias.casefold() for alias in mode.aliases}
+            ]
+            if len(matches) == 1:
+                return matches[0]
+            console.warning(f"Escolha inválida. Use um número entre 1 e {len(modes)}.")
+
     @staticmethod
     def show_map_names(maps: list[str]) -> None:
         print("\nTodos os mapas disponíveis:")
         for offset in range(0, len(maps), 6):
             print("  " + "  ".join(f"{name:<16}" for name in maps[offset:offset + 6]).rstrip())
 
-    def choose_local_map(self, game: LocalGameSpec) -> str:
+    def choose_local_map(
+        self,
+        game: LocalGameSpec,
+        *,
+        default_map: str | None = None,
+        suggested_maps: tuple[str, ...] | None = None,
+        label: str | None = None,
+    ) -> str:
         maps = self.local_map_names(game.gamedir)
         lookup = {name.casefold(): name for name in maps}
-        default = lookup.get(game.default_map.casefold())
+        requested_default = default_map or game.default_map
+        requested_suggestions = suggested_maps or game.suggested_maps
+        display_label = label or game.label
+        default = lookup.get(requested_default.casefold())
         if default is None:
             raise InstallerError(
-                f"O mapa padrão {game.default_map} não está disponível para {game.label}. "
+                f"O mapa padrão {requested_default} não está disponível para {display_label}. "
                 "Execute components para reparar o conteúdo."
             )
-        suggestions = [lookup[name.casefold()] for name in game.suggested_maps if name.casefold() in lookup]
-        print(f"\nMapas sugeridos para {game.label}:")
+        suggestions = [
+            lookup[name.casefold()] for name in requested_suggestions if name.casefold() in lookup
+        ]
+        print(f"\nMapas sugeridos para {display_label}:")
         for index, name in enumerate(suggestions, 1):
             suffix = " (padrão)" if name.casefold() == default.casefold() else ""
             print(f"  {index}) {name}{suffix}")
@@ -272,7 +435,7 @@ class Player(core.Installer):
                 return lookup[answer.casefold()]
             console.warning(f"Mapa não encontrado: {answer}. Digite t para listar os mapas instalados.")
 
-    def play_local(self) -> None:
+    def play_local(self, game_key: str | None = None, mode_key: str | None = None) -> None:
         self.check_paks()
         self.migrate_saved_configs()
         self.refresh_qw_package_order()
@@ -281,13 +444,26 @@ class Player(core.Installer):
             raise InstallerError(
                 "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
             )
-        game = self.choose_local_game(games)
+        game = self.choose_local_game(games, game_key)
+        if mode_key is not None and game.key != "ktx":
+            raise InstallerError("--mode só pode ser usado com o jogo KTX.")
         installed_component = self.installed_component_for_game(game)
         if installed_component is None:
             raise InstallerError(f"O componente de {game.label} não está mais instalado.")
         self.migrate_mutable_component_defaults(installed_component)
         self.verify_component(installed_component)
-        map_name = self.choose_local_map(game)
+        ktx_mode = None
+        if game.key == "ktx":
+            ktx_mode = self.choose_ktx_mode(load_ktx_modes(self.project_root), mode_key)
+            console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
+            map_name = self.choose_local_map(
+                game,
+                default_map=ktx_mode.default_map,
+                suggested_maps=ktx_mode.suggested_maps,
+                label=f"KTX · {ktx_mode.label}",
+            )
+        else:
+            map_name = self.choose_local_map(game)
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = ["+sb_listcache", "0"]
@@ -310,15 +486,26 @@ class Player(core.Installer):
             # PR1 gamecodes do not advertise the high-lag teleport extension.
             arguments.extend(["+cl_pext_lagteleport", "0"])
         if game.key == "ktx":
+            if ktx_mode.entry_config is not None:
+                event = {
+                    "ffa": "on_enter_ffa",
+                    "ctf": "on_enter_ctf",
+                }.get(ktx_mode.usermode, "on_enter")
+                arguments.extend(["+alias", event, f"exec {ktx_mode.entry_config}"])
             arguments.extend(["+set", "k_defmap", map_name])
+            assert ktx_mode is not None
+            arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
         arguments.extend(["+map", map_name])
         if game.key in PROFILED_LOCAL_GAMES:
             arguments.append("+wait")
             arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
-        console.info(f"Abrindo {game.label} no mapa {map_name}...")
+        selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
+        console.info(f"Abrindo {selection} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
-        console.success(f"{label} aberto com {game.label}.")
+        console.success(f"{label} aberto com {selection}.")
         console.info(game.confirmation)
+        if ktx_mode is not None:
+            console.info(ktx_mode.confirmation)
 
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
         present, old_entries, _ = self.validate_component_pair("play-support")
@@ -452,10 +639,28 @@ def parse_arguments(arguments: list[str], project_root: Path):
         help="desativa cores mesmo em um terminal interativo",
     )
     parser.add_argument(
-        "target", nargs="?", type=Path,
-        help="diretório da instalação (padrão: ./quake-world)",
+        "--mode", metavar="MODO",
+        help="seleciona diretamente um modo quando o jogo for KTX",
+    )
+    parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "selection", nargs="?",
+        help="jogo local: ktx, final-arena, pro-x, team-fortress ou td2",
     )
     namespace = parser.parse_args(arguments)
+    namespace.game = None
+    if namespace.selection is not None:
+        game_keys = {game.key for game in LOCAL_GAMES}
+        if namespace.selection.casefold() in game_keys:
+            namespace.game = namespace.selection.casefold()
+        elif namespace.target is None:
+            namespace.target = Path(namespace.selection)
+        else:
+            parser.error(f"jogo local desconhecido: {namespace.selection}")
+    if namespace.mode is not None:
+        if namespace.game not in {None, "ktx"}:
+            parser.error("--mode só pode ser usado com o jogo KTX")
+        namespace.game = "ktx"
     namespace.target = namespace.target or project_root / "quake-world"
     return namespace
 
@@ -479,7 +684,7 @@ def main(arguments: list[str] | None = None) -> int:
         console.detail(f"Destino normalizado: {player.target}")
         player.reject_target_symlinks()
         console.section("Jogo local")
-        player.play_local()
+        player.play_local(options.game, options.mode)
         return 0
     except KeyboardInterrupt:
         console.error("Operação cancelada. O jogo não foi iniciado.")

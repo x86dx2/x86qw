@@ -148,11 +148,15 @@
       ],
       "project_sources": [
         {"path": "dist/mods/ktx/1.47/x86qw/client.cfg", "destination": "qw/x86qw-ktx.cfg", "mode": "overlay"},
-        {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"}
+        {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-midair.cfg", "destination": "qw/x86qw-ktx-mode-midair.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-race.cfg", "destination": "qw/x86qw-ktx-mode-race.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-practice.cfg", "destination": "qw/x86qw-ktx-mode-practice.cfg", "mode": "overlay"}
       ],
       "project_inputs": [
         {"path": "dist/mods/ktx/1.47/x86qw/merge-policy.json", "purpose": "archive-layer-policy"},
-        {"path": "dist/mods/ktx/1.47/x86qw/CHANGELOG.md", "purpose": "mod-change-log"}
+        {"path": "dist/mods/ktx/1.47/x86qw/CHANGELOG.md", "purpose": "mod-change-log"},
+        {"path": "dist/mods/ktx/1.47/x86qw/modes.json", "purpose": "launcher-mode-catalog"}
       ]
     },
     {

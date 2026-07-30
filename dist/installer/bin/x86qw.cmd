@@ -16,7 +16,7 @@ echo x86qw: comando desconhecido: %~1 1>&2
 goto help_error
 
 :play
-py -3 "%X86QW_APP%" play "%X86QW_ROOT%" %2 %3 %4 %5 %6 %7 %8 %9
+py -3 "%X86QW_APP%" play %2 %3 %4 %5 %6 %7 %8 %9 --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :maintenance
@@ -32,7 +32,8 @@ echo.
 echo Uso: x86qw.cmd ^<comando^> [opcoes]
 echo.
 echo Gameplay:
-echo   play                 escolhe e inicia um mod local
+echo   play                 escolhe e inicia um mod ou modo KTX local
+echo   play ktx --mode MODO inicia KTX diretamente no modo informado
 echo   hub                  lista servidores publicos
 echo.
 echo Manutencao:

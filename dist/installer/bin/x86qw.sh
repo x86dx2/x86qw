@@ -11,7 +11,8 @@ x86QW · QuakeWorld moderno
 Uso: ./x86qw.sh <comando> [opções]
 
 Gameplay:
-  play                 escolhe e inicia um mod local
+  play                 escolhe e inicia um mod ou modo KTX local
+  play ktx --mode MODO inicia KTX diretamente em duel, 2on2, 4on4 e outros
   hub                  lista servidores públicos para jogar ou observar
 
 Manutenção:
@@ -23,7 +24,9 @@ Manutenção:
   uninstall --purge    remove completamente instalação, dados e cache
   help                 mostra esta ajuda
 
-Exemplo: ./x86qw.sh play
+Exemplos:
+  ./x86qw.sh play
+  ./x86qw.sh play ktx --mode duel
 
 A instalação inicial e a adição de conteúdo são exclusivas do install.sh.
 EOF
@@ -32,7 +35,7 @@ EOF
 case "${1:-}" in
   '') show_help; exit 0 ;;
   help|-h|--help) show_help; exit 0 ;;
-  play) shift; exec python3 "$app" play "$root" "$@" ;;
+  play) shift; exec python3 "$app" play "$@" --target "$root" ;;
   update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac

@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.2",
+      "version": "1.47+x86qw.3",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.2",
+      "distribution_tag": "ktx-1.47-x86qw.3",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o perfil de gameplay x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -88,6 +88,13 @@
           "source_sha256": "823095d26fe1c69af8b7b8dd0c2dca2315da595bef3642d540a1c534751e83a5",
           "before": "set k_defmap                  dm3       // server homemap. server will change to this when last player leaves the server",
           "after": "// x86QW local: k_defmap is selected by the launcher before the server starts"
+        },
+        {
+          "target_archive": "qw/ktx.pk3",
+          "member": "ktx.cfg",
+          "source_sha256": "25fa1a84949700c7a7ff35c14b206d5cc30b967a350339819f50a072a53e0808",
+          "before": "set k_defmode                 4on4      // default mode on server",
+          "after": "// x86QW local: k_defmode is selected by the launcher before the server starts"
         }
       ],
       "artifacts": [

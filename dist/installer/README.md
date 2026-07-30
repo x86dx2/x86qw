@@ -10,7 +10,7 @@ documentação e pacotes imutáveis:
 - `bin/x86qw.sh`: launcher permanente para macOS e Linux;
 - `bin/x86qw.cmd`: launcher permanente para Windows;
 - `bin/manager.py`: gerenciador principal de instalação e manutenção;
-- `bin/gameplay.py`: implementação interna de gameplay e seleção de mods;
+- `bin/gameplay.py`: implementação interna de gameplay, jogos e modos KTX;
 - `docs/installer.md`: manual completo;
 - `packages/<versão>/`: histórico de bundles públicos imutáveis;
 - `packages/latest`: link simbólico relativo para a versão corrente.
@@ -33,7 +33,8 @@ O bundle é deliberadamente enxuto: contém `x86qw.pyz`, os dois launchers e
 `installer.json`. Uma ponte mínima formada por `dist/installer/bin/manager.py`
 e `_x86qw/installer.json` permite que instaladores antigos entreguem o controle ao zipapp;
 ela existe apenas na extração temporária e nunca é instalada. O zipapp reúne a
-implementação da CLI e uma projeção runtime mínima do catálogo. PAKs, pacotes de mods, configurações,
+implementação da CLI, uma projeção runtime mínima do catálogo e o manifesto
+de modos KTX. PAKs, pacotes de mods, configurações,
 gamecodes, fontes e inventários de desenvolvimento não entram nele. A instalação
 obtém cada payload pelo pacote independente registrado no catálogo; os PAKs
 obrigatórios usam o pacote `x86qw-core-id1`.

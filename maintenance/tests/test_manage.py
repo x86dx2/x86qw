@@ -101,8 +101,8 @@ class DistributionManagerTests(unittest.TestCase):
         )
         self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.2")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["team-fortress"]["version"])
-        self.assertEqual("1.47+x86qw.2", releases["components"]["ktx"]["version"])
-        self.assertEqual("ktx-1.47-x86qw.2", releases["components"]["ktx"]["distribution_tag"])
+        self.assertEqual("1.47+x86qw.3", releases["components"]["ktx"]["version"])
+        self.assertEqual("ktx-1.47-x86qw.3", releases["components"]["ktx"]["distribution_tag"])
 
     def test_reference_advance_without_consumed_byte_changes_is_ignored(self) -> None:
         payload = b"same product bytes"

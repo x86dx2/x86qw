@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-30T20:00:19Z",
+  "generated_at": "2026-07-30T21:06:51Z",
   "packages": [
     {
       "component": "core",
@@ -274,7 +274,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.2",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -298,19 +298,49 @@
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.2",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.3",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.3.zip",
+      "size": 62577,
+      "sha256": "e99bcd7b19a0a47058c652323ff31afcab4c4292de3c72d311970b1c8935b59f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.3/x86qw-installer-0.1.3.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.3/x86qw-installer-0.1.3.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.3",
+      "release_title": "x86QW Installer 0.1.3",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.3",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": true
     },
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.2",
+      "version": "1.47+x86qw.3",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.2.zip",
-      "size": 2497680,
-      "sha256": "68997574161022b6c65f65199509f645df38a4d3b4c121f7f4e49503c75e1588",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.2/ktx-1.47+x86qw.2.zip",
+      "filename": "ktx-1.47+x86qw.3.zip",
+      "size": 2498694,
+      "sha256": "e436010af215cac5f3f8b57579db12fc5752e8d73dfdbf86b0bc515ef5090426",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.3/ktx-1.47+x86qw.3.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -320,16 +350,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.2/ktx-1.47+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.2/ktx-1.47+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.3/ktx-1.47+x86qw.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.3/ktx-1.47+x86qw.3.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.2",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.3",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o perfil de gameplay x86QW.",
       "upstream_version": "1.47"
     },
     {

@@ -77,12 +77,49 @@ class ModernComponentTests(unittest.TestCase):
         target = ROOT / "custom-quake"
         parsed = play_qw.parse_arguments(["--no-color", str(target)], ROOT)
         self.assertEqual(target, parsed.target)
+        self.assertIsNone(parsed.game)
         self.assertTrue(parsed.no_color)
+        direct = play_qw.parse_arguments(["ktx", "--mode", "duel", "--target", str(target)], ROOT)
+        self.assertEqual("ktx", direct.game)
+        self.assertEqual("duel", direct.mode)
+        self.assertEqual(target, direct.target)
         main = install_qw.parse_arguments(["play", str(target)], ROOT)
         self.assertEqual("play", main.action)
         with mock.patch.object(play_qw, "main", return_value=0) as delegated:
             self.assertEqual(0, install_qw.main(["play", str(target), "--no-color"]))
         delegated.assert_called_once_with([str(target), "--no-color"])
+
+    def test_ktx_mode_catalog_is_declarative_and_uses_only_supported_commands(self):
+        modes = play_qw.load_ktx_modes(ROOT)
+        self.assertEqual(
+            [
+                "duel", "2on2", "4on4", "ffa", "clan-arena",
+                "hoony", "midair", "race", "practice",
+            ],
+            [mode.key for mode in modes],
+        )
+        self.assertEqual("1on1", modes[0].usermode)
+        self.assertEqual("x86qw-ktx-mode-midair.cfg", next(
+            mode.entry_config for mode in modes if mode.key == "midair"
+        ))
+        self.assertEqual("x86qw-ktx-mode-race.cfg", next(
+            mode.entry_config for mode in modes if mode.key == "race"
+        ))
+
+    def test_ktx_mode_menu_aligns_players_and_accepts_aliases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            modes = play_qw.load_ktx_modes(ROOT)
+            output = io.StringIO()
+            with mock.patch("builtins.input", return_value="ca"):
+                with contextlib.redirect_stdout(output):
+                    selected = player.choose_ktx_mode(modes)
+            self.assertEqual("clan-arena", selected.key)
+            lines = [line for line in output.getvalue().splitlines() if re.match(r"^  \d+\)", line)]
+            self.assertEqual(len(modes), len(lines))
+            self.assertIn("Duel (padrão)", lines[0])
+            description_columns = [line.index(mode.description) for line, mode in zip(lines, modes)]
+            self.assertEqual(1, len(set(description_columns)))
 
     def test_play_menu_shows_installed_versions_and_aligns_descriptions(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -181,6 +218,17 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("qrp-hires", installer.component_catalog["profiles"]["complete"])
             self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
+            ktx = installer.components["ktx"]
+            self.assertEqual(
+                {
+                    "dist/mods/ktx/1.47/x86qw/client.cfg",
+                    "dist/mods/ktx/1.47/x86qw/user.cfg.example",
+                    "dist/mods/ktx/1.47/x86qw/mode-midair.cfg",
+                    "dist/mods/ktx/1.47/x86qw/mode-race.cfg",
+                    "dist/mods/ktx/1.47/x86qw/mode-practice.cfg",
+                },
+                {source["path"] for source in ktx["project_sources"]},
+            )
             td2 = installer.components["total-destruction-2"]
             self.assertEqual(
                 {
@@ -716,12 +764,66 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
                                             with mock.patch.object(installer, "ensure_local_play_support"):
-                                                with mock.patch("builtins.input", side_effect=["", ""]):
+                                                with mock.patch("builtins.input", side_effect=["", "", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
                 "+sb_listcache", "0", "+set", "k_defmap", "dm6",
+                "+set", "k_defmode", "1on1",
                 "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
             ])
+
+    def test_ktx_direct_midair_mode_installs_a_one_shot_entry_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "local_map_names", return_value=["povdmm4"]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch("builtins.input", return_value=""):
+                                                    installer.play_local("ktx", "midair")
+            launch.assert_called_once_with(runtime, [
+                "+sb_listcache", "0",
+                "+alias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
+                "+set", "k_defmap", "povdmm4",
+                "+set", "k_defmode", "1on1",
+                "+map", "povdmm4", "+wait", "+exec", "x86qw-ktx.cfg",
+            ])
+
+    def test_ktx_race_and_practice_use_the_correct_one_shot_entry_event(self):
+        cases = {
+            "race": ("on_enter_ffa", "x86qw-ktx-mode-race.cfg", "ffa"),
+            "practice": ("on_enter", "x86qw-ktx-mode-practice.cfg", "1on1"),
+        }
+        for mode, (event, entry_config, usermode) in cases.items():
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_player(Path(temporary))
+                game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+                runtime = target / "ezQuake Stable.app"
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with mock.patch.object(installer, "check_paks"):
+                        with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                            with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
+                                with mock.patch.object(installer, "verify_component"):
+                                    with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
+                                        with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                            with mock.patch.object(installer, "launch_runtime") as launch:
+                                                with mock.patch.object(installer, "ensure_local_play_support"):
+                                                    with mock.patch("builtins.input", return_value=""):
+                                                        installer.play_local("ktx", mode)
+                launch.assert_called_once_with(runtime, [
+                    "+sb_listcache", "0",
+                    "+alias", event, f"exec {entry_config}",
+                    "+set", "k_defmap", "dm6",
+                    "+set", "k_defmode", usermode,
+                    "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
+                ])
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
         expectations = {
