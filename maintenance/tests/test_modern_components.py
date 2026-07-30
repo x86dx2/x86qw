@@ -163,6 +163,60 @@ class ModernComponentTests(unittest.TestCase):
                         ):
                             self.assertEqual(expected, player.installed_game_version(game))
 
+    def test_macos_video_layout_uses_real_window_area_and_preserves_later_personal_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            config = target / "ezquake/configs/config.cfg"
+            config.parent.mkdir(parents=True)
+            initial = b"set _nquake_first_startup 1\n"
+            config.write_bytes(initial)
+            geometries = [
+                '{"x":0,"y":0,"width":1800,"height":1169,"top":39}',
+                '{"x":0,"y":0,"width":1728,"height":1117,"top":37}',
+                '{"x":0,"y":0,"width":1728,"height":1117,"top":37}',
+            ]
+
+            def detected(*_args, **_kwargs):
+                return mock.Mock(stdout=geometries.pop(0))
+
+            with mock.patch.object(play_qw.sys, "platform", "darwin"):
+                with mock.patch.object(play_qw.subprocess, "run", side_effect=detected):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        player.configure_macos_video_layout()
+                    values = player.config_cvars(config.read_bytes())
+                    self.assertEqual("0", values["vid_fullscreen"])
+                    self.assertEqual("1", values["vid_win_borderless"])
+                    self.assertEqual("1800", values["vid_win_width"])
+                    self.assertEqual("1130", values["vid_win_height"])
+                    self.assertEqual("39", values["vid_ypos"])
+                    self.assertEqual(initial, (config.parent / "config.video-pre-x86qw.cfg").read_bytes())
+
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        player.configure_macos_video_layout()
+                    values = player.config_cvars(config.read_bytes())
+                    self.assertEqual("1728", values["vid_win_width"])
+                    self.assertEqual("1080", values["vid_win_height"])
+                    self.assertEqual("37", values["vid_ypos"])
+
+                    personal = player.set_config_cvars(config.read_bytes(), {"vid_fullscreen": "1"})
+                    config.write_bytes(personal)
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        player.configure_macos_video_layout()
+                    self.assertEqual("1", player.config_cvars(config.read_bytes())["vid_fullscreen"])
+
+            marker = json.loads(
+                (target / ".install/launcher/macos-video-layout.json").read_text(encoding="utf-8")
+            )
+            self.assertFalse(marker["managed"])
+            self.assertEqual({}, marker["settings"])
+
+    def test_macos_video_layout_is_not_applied_on_other_platforms(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            with mock.patch.object(play_qw.sys, "platform", "linux"):
+                player.configure_macos_video_layout()
+            self.assertFalse((target / ".install/launcher/macos-video-layout.json").exists())
+
     def test_component_overlay_preserves_unowned_files_and_is_reversible(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

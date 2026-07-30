@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-30T22:25:11Z",
+  "generated_at": "2026-07-30T23:11:16Z",
   "packages": [
     {
       "component": "core",
@@ -394,7 +394,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.6",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -417,6 +417,36 @@
       "release_title": "x86QW Installer 0.1.6",
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.6",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.7",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.7.zip",
+      "size": 64976,
+      "sha256": "5d490ed3ac2679b1b8b1536e977990d889d1805a2237caffc2b74ebeaf7403a7",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.7/x86qw-installer-0.1.7.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.7/x86qw-installer-0.1.7.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.7/x86qw-installer-0.1.7.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.7/x86qw-installer-0.1.7.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.7",
+      "release_title": "x86QW Installer 0.1.7",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.7",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": true
     },
