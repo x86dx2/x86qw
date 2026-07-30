@@ -44,6 +44,17 @@ class InstallerTests(unittest.TestCase):
             package.writestr(f"{prefix}/x86qw.pyz", zipapp_bytes(version))
             package.writestr(f"{prefix}/installer.json", identity)
 
+    @staticmethod
+    def write_cli_receipt(target: Path, version: str, *, legacy: bool = False) -> Path:
+        relative = install_qw.LEGACY_CLI_RECEIPT if legacy else install_qw.CLI_RECEIPT
+        receipt = target / relative
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(
+            json.dumps({"format": 1, "project": "x86qw", "version": version}) + "\n",
+            encoding="utf-8",
+        )
+        return receipt
+
     def test_repository_preserves_the_registered_paks_as_core_sources(self):
         expected = {
             "pak0.pak": install_qw.ID1_PAK0_SHA256,
@@ -401,7 +412,7 @@ class InstallerTests(unittest.TestCase):
                 ):
                     installer.install_online_cli()
             self.assertEqual(
-                [target / ".install/cli/x86qw.pyz"],
+                [target / ".install/cli/receipt", target / ".install/cli/x86qw.pyz"],
                 sorted(path for path in (target / ".install/cli").rglob("*") if path.is_file()),
             )
             self.assertTrue((target / "x86qw.cmd").is_file())
@@ -435,6 +446,49 @@ class InstallerTests(unittest.TestCase):
             )
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
+
+    def test_flat_metadata_is_migrated_into_contextual_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / ".install"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
+            self.write_cli_receipt(target, "1.0.5", legacy=True)
+
+            spec = install_qw.PLATFORMS["macos"]
+            legacy_client = target / spec.legacy_receipt("stable")
+            installer.write_ezquake_receipt_record(legacy_client, {
+                "format": "1", "platform": "macos", "architecture": "universal",
+                "channel": "stable", "selection": "3.6.9",
+                "install_name": spec.runtime("stable"), "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": f"https://example.invalid/{spec.stable_archive}",
+                "artifact_sha256": "a" * 64, "binary_sha256": "b" * 64,
+            })
+
+            legacy_receipt, legacy_inventory = (
+                target / relative
+                for relative in installer.legacy_component_metadata("nquake-bootstrap")
+            )
+            legacy_inventory.write_text(f"qw/test.cfg\t{'c' * 64}\n", encoding="utf-8")
+            installer.write_component_receipt(
+                "nquake-bootstrap", "test", "https://example.invalid/component.zip",
+                legacy_inventory, legacy_receipt,
+            )
+
+            self.assertTrue(installer.legacy_metadata_present())
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertTrue(installer.migrate_metadata_layout())
+            self.assertFalse(installer.legacy_metadata_present())
+            self.assertEqual("1.0.5", installer.installed_cli_version())
+            self.assertTrue((metadata / "cli/receipt").is_file())
+            self.assertTrue((metadata / "clients/ezquake/macos/stable.receipt").is_file())
+            self.assertTrue((metadata / "components/nquake-bootstrap/receipt").is_file())
+            self.assertTrue((metadata / "components/nquake-bootstrap/inventory").is_file())
+            self.assertFalse(legacy_client.exists())
+            self.assertFalse(legacy_receipt.exists())
+            self.assertFalse(legacy_inventory.exists())
+            self.assertFalse(installer.migrate_metadata_layout())
 
     def test_installed_cli_rejects_installation_actions(self):
         for action in ("install", "components", "presets"):
@@ -744,10 +798,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             installer, target, _ = self.make_installer(root)
-            (target / ".install").mkdir()
-            (target / install_qw.CLI_RECEIPT).write_text(
-                '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
-            )
+            self.write_cli_receipt(target, "1.0.4")
             archive = root / "x86qw-installer-1.0.5.zip"
             self.write_installer_bundle(archive, "1.0.5")
             record = {"version": "1.0.5"}
@@ -798,10 +849,7 @@ class InstallerTests(unittest.TestCase):
     def test_cli_update_never_downgrades_itself(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            (target / ".install").mkdir()
-            (target / install_qw.CLI_RECEIPT).write_text(
-                '{"format":1,"project":"x86qw","version":"1.0.6"}\n', encoding="utf-8",
-            )
+            self.write_cli_receipt(target, "1.0.6")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer, "installer_bundle_record", return_value={"version": "1.0.4"},
@@ -812,10 +860,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             installer, target, _ = self.make_installer(root)
-            (target / ".install").mkdir()
-            (target / install_qw.CLI_RECEIPT).write_text(
-                '{"format":1,"project":"x86qw","version":"1.0.4"}\n', encoding="utf-8",
-            )
+            self.write_cli_receipt(target, "1.0.4")
             archive = root / "x86qw-installer-1.0.5.zip"
             self.write_installer_bundle(archive, "1.0.5")
             output = io.StringIO()
@@ -1017,9 +1062,7 @@ class InstallerTests(unittest.TestCase):
             cli = target / ".install/cli/x86qw.pyz"
             cli.parent.mkdir(parents=True)
             cli.write_text("# cli\n", encoding="utf-8")
-            (target / install_qw.CLI_RECEIPT).write_text(
-                '{"format":1,"project":"x86qw","version":"1.0.5"}\n', encoding="utf-8",
-            )
+            self.write_cli_receipt(target, "1.0.5")
             (target / "x86qw.sh").write_text("#!/bin/sh\n", encoding="utf-8")
             (target / "x86qw.cmd").write_text("@echo off\r\n", encoding="utf-8")
             (target / "id1").mkdir()

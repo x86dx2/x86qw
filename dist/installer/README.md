@@ -39,8 +39,10 @@ obtém cada payload pelo pacote independente registrado no catálogo; os PAKs
 obrigatórios usam o pacote `x86qw-core-id1`.
 Ao atualizar uma instalação antiga, a pasta interna da CLI é substituída como
 uma unidade, removendo as cópias legadas de PAKs, configurações e gamecodes.
-No computador do jogador, `.install/cli/` contém somente `x86qw.pyz`; os caminhos
-de desenvolvimento `dist/` e `maintenance/` nunca são materializados.
+No computador do jogador, `.install/cli/` contém somente `x86qw.pyz` e seu
+`receipt`; os caminhos de desenvolvimento `dist/` e `maintenance/` nunca são
+materializados. Clientes e componentes mantêm seus metadados em contextos
+próprios sob `.install/clients/` e `.install/components/`.
 
 `site/public/install.sh` e `site/public/install.ps1` são projeções byte a byte
 das fontes em `bin/` para publicação pelo Worker. O construtor atualiza primeiro

@@ -375,7 +375,7 @@ class ModernComponentTests(unittest.TestCase):
                 installer.migrate_mutable_component_defaults("clan-arena")
             self.assertEqual("personal\n", installed_config.read_text(encoding="utf-8"))
             self.assertEqual(2, installer.verify_component("clan-arena"))
-            inventory = (target / ".install/clan-arena.inventory").read_text(encoding="utf-8")
+            inventory = (target / ".install/components/clan-arena/inventory").read_text(encoding="utf-8")
             self.assertNotIn("prox/configs/config.cfg", inventory)
 
     def test_combined_clan_arena_receipt_is_removed_before_the_split_components(self):
@@ -396,8 +396,8 @@ class ModernComponentTests(unittest.TestCase):
                     "clan-arena", managed, "legacy", "https://example.invalid/clan-arena.zip",
                 )
                 installer.migrate_legacy_clan_arena(["final-arena", "pro-x"])
-            self.assertFalse((target / ".install/clan-arena.receipt").exists())
-            self.assertFalse((target / ".install/clan-arena.inventory").exists())
+            self.assertFalse((target / ".install/components/clan-arena/receipt").exists())
+            self.assertFalse((target / ".install/components/clan-arena/inventory").exists())
             self.assertFalse((target / "arena/arena.pk3").exists())
             self.assertFalse((target / "prox/prox.pk3").exists())
 
@@ -485,7 +485,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue((target / "qw/autoexec.cfg").is_file())
             self.assertTrue((target / "ezquake/configs/config.cfg").is_file())
             self.assertGreater(installer.verify_component("nquake-bootstrap"), 0)
-            receipt = (target / ".install/nquake-bootstrap.receipt").read_text(encoding="utf-8")
+            receipt = (target / ".install/components/nquake-bootstrap/receipt").read_text(encoding="utf-8")
             self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
             self.assertFalse(cache.exists())
 

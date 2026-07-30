@@ -125,8 +125,8 @@ dist/
 ```
 
 `manager.py`, `gameplay.py` e os módulos auxiliares são fontes do repositório.
-O builder os empacota em `x86qw.pyz`; na instalação do jogador, a CLI inteira
-ocupa somente `.install/cli/x86qw.pyz`.
+O builder os empacota em `x86qw.pyz`; na instalação do jogador, a aplicação e
+seu recibo ficam juntos em `.install/cli/`.
 
 ## Manter a distribuicao
 
