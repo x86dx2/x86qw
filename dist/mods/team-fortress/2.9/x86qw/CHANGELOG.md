@@ -4,7 +4,9 @@
 
 - `upstream/tf28.zip`: cliente completo oficial 2.8, 4204316 bytes, SHA-256 `56a6767b7944f2ce54423f18f1cd59239ae37a7c7456f684227d6f5310c76291`;
 - `upstream/tf29qw.zip`: atualização oficial QuakeWorld 2.9, somente servidor;
-- `source/tf_29src.zip`: fonte oficial 2.9;
+- `source/tf_29src.zip`: fonte pública preservada da versão 2.9, byte a byte
+  idêntica à cópia do Internet Archive; a origem da primeira publicação não
+  pôde ser comprovada e, por isso, não é rotulada como release oficial;
 - os assets e mapas úteis selecionados pelo nQuake continuam como base da distribuição.
 
 ## Alterações x86QW

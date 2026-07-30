@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-30T18:34:47Z",
+  "captured_at": "2026-07-30T19:15:28Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4334,6 +4334,14 @@
       "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d",
       "size": 626175,
       "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip"
+    },
+    "toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz": {
+      "component": "toolchains",
+      "consumer": "development:source-builds",
+      "package": "fteqcc",
+      "sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe",
+      "size": 196098,
+      "url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz"
     }
   },
   "format": 1,

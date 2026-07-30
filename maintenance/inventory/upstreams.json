@@ -145,7 +145,8 @@
         "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf_29src.zip",
         "distribution_path": "mods/team-fortress/2.9/source/tf_29src.zip",
         "size": 173536,
-        "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff"
+        "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff",
+        "note": "Fonte publica preservada; a copia atual e byte a byte identica a arquivada no Internet Archive, mas a publicacao original do ZIP-fonte nao foi comprovada."
       },
       "build": {"status": "reproducible", "recipe": "maintenance/recipes/sources/team-fortress.json"}
     },

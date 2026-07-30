@@ -52,7 +52,7 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 ### Team Fortress 2.9
 
 - [x] preservar o cliente completo oficial 2.8 (`tf28.zip`), necessário porque 2.9 foi publicado como atualização apenas de servidor;
-- [x] preservar a atualização QuakeWorld 2.9 (`tf29qw.zip`) e a fonte oficial (`tf_29src.zip`);
+- [x] preservar a atualização QuakeWorld 2.9 (`tf29qw.zip`) e a fonte pública preservada (`tf_29src.zip`), cuja cópia atual é idêntica à arquivada no Internet Archive; a publicação original do ZIP-fonte não pôde ser comprovada;
 - [x] preservar os assets e mapas úteis do nQuake e substituir somente o gamecode 2.8 pelo 2.9;
 - [x] localizar `weapons/bounce2.wav` oficial, referenciado pelo QuakeC mas ausente nos pacotes TF, dentro dos recursos KTX 1.47, com hash registrado;
 - [x] compilar uma camada de compatibilidade removendo apenas binds remotos forçados; os binds passam a ser propriedade do perfil local x86QW;
