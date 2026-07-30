@@ -27,7 +27,7 @@ if (statusBox) {
       }
 
       const count = catalog.packages.length;
-      const ktx = catalog.packages.find((item) => item.package === 'nquake-ktx');
+      const ktx = catalog.packages.find((item) => item.package === 'ktx');
       const ktxVersion = ktx && (ktx.upstream_version || ktx.version);
       statusBox.dataset.state = count ? 'ready' : 'pending';
       statusBox.querySelector('.catalog-label').textContent = count ? 'Catálogo publicado' : 'Distribuição em preparação';

@@ -53,7 +53,7 @@ class LocalGameSpec:
 
 LOCAL_GAMES = (
     LocalGameSpec(
-        "ktx", "KTX", "qw", "ktx", "nquake-ktx", "qw/ktx.pk3", "qw/ktx.pk3", "dm6",
+        "ktx", "KTX", "qw", "ktx", "ktx", "qw/ktx.pk3", "qw/ktx.pk3", "dm6",
         ("dm6", "dm2", "dm4", "aerowalk"),
         "1.47",
         "QuakeWorld competitivo com o QVM oficial do KTX.",

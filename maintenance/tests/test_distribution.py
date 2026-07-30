@@ -58,7 +58,7 @@ class DistributionTests(unittest.TestCase):
 
     def test_versioned_mods_use_contextual_source_upstream_and_x86qw_directories(self) -> None:
         versions = {
-            "final-arena": "1.20+x86qw.1",
+            "final-arena": "1.20",
             "ktx": "1.47",
             "pro-x": "1.1",
             "td2": "2.22",
@@ -95,8 +95,9 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
         partition = validate_tree_partition(catalog, paths)
-        self.assertEqual(535, sum(map(len, partition.values())))
-        self.assertEqual("nquake-ktx", component_for_source(catalog, "gpl/qw/ktx.pk3"))
+        self.assertEqual(523, sum(map(len, partition.values())))
+        self.assertEqual("ktx", component_for_source(catalog, "gpl/qw/ktx.pk3"))
+        self.assertTrue((snapshots[0] / "gpl/qw/ktx.pk3").is_file())
         self.assertIsNone(component_for_source(catalog, "gpl/qw/skins/player_orange.png"))
 
     def test_only_runtime_assets_have_consumers(self) -> None:
@@ -127,13 +128,31 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual("td2", consumed_component(
             "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz"
         ))
+        self.assertIsNone(consumed_component(
+            "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/"
+            "non-gpl/qw/sound/ca/sf1.wav"
+        ))
 
     def test_policy_prunes_unconsumed_files_and_legacy_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             kept = "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
+            kept_nquake = (
+                "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/"
+                "gpl/qw/ktx.pk3"
+            )
+            historical_installer = (
+                "installer/packages/0.9.0/x86qw-installer-0.9.0.zip"
+            )
+            current_installer = (
+                "installer/packages/1.0.0/x86qw-installer-1.0.0.zip"
+            )
             removed = "content/gfx/packages/theme.download"
-            for relative, payload in ((kept, b"zip"), (removed, b"gfx")):
+            for relative, payload in (
+                (kept, b"zip"), (kept_nquake, b"pk3"),
+                (historical_installer, b"old"), (current_installer, b"new"),
+                (removed, b"gfx"),
+            ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(payload)
@@ -145,6 +164,13 @@ class DistributionTests(unittest.TestCase):
                 "layout": "component-owned-v1", "repositories": {"ezquake": {}},
                 "files": {
                     kept: {"size": 3, "sha256": hashlib.sha256(b"zip").hexdigest()},
+                    kept_nquake: {"size": 3, "sha256": hashlib.sha256(b"pk3").hexdigest()},
+                    historical_installer: {
+                        "size": 3, "sha256": hashlib.sha256(b"old").hexdigest(),
+                    },
+                    current_installer: {
+                        "size": 3, "sha256": hashlib.sha256(b"new").hexdigest(),
+                    },
                     removed: {"size": 3, "sha256": hashlib.sha256(b"gfx").hexdigest()},
                 },
             }
@@ -154,6 +180,19 @@ class DistributionTests(unittest.TestCase):
             self.assertFalse(repository_file.exists())
             self.assertEqual({}, manifest["repositories"])
             self.assertEqual("distribution-v1", manifest["layout"])
+            self.assertEqual("ktx", manifest["files"][kept_nquake]["package"])
+            self.assertEqual(
+                "install:nquake-reference",
+                manifest["files"][kept_nquake]["consumer"],
+            )
+            self.assertEqual(
+                "archive:installer-history",
+                manifest["files"][historical_installer]["consumer"],
+            )
+            self.assertEqual(
+                "bootstrap:installer",
+                manifest["files"][current_installer]["consumer"],
+            )
 
     def test_case_collisions_are_collapsed_only_for_identical_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -216,13 +255,13 @@ class DistributionTests(unittest.TestCase):
                 "https://example.invalid/qwprogs-qvm.zip",
                 target.relative_to(root).as_posix(),
                 None,
-                "nquake-ktx",
+                "ktx",
                 hashlib.sha256(expected).hexdigest(),
                 git_identity,
             )
             known = {
                 "component": "ktx",
-                "consumer": "install:nquake-ktx",
+                "consumer": "install:ktx",
                 "url": "https://example.invalid/old.zip",
                 "size": len(expected),
                 "sha256": hashlib.sha256(b"old").hexdigest(),

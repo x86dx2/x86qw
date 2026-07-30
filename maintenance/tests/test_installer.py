@@ -650,17 +650,17 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             receipts = {
-                "nquake-ktx": {"selection": "1.46"},
+                "ktx": {"selection": "1.46"},
                 "total-destruction-2": {"selection": "2.22"},
             }
             packages = {
-                "nquake-ktx": {"version": "1.47"},
+                "ktx": {"version": "1.47+x86qw.1"},
                 "total-destruction-2": {"version": "2.22"},
             }
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer, "installed_components",
-                    return_value=["nquake-ktx", "total-destruction-2"],
+                    return_value=["ktx", "total-destruction-2"],
                 ):
                     with mock.patch.object(
                         installer, "validate_component_pair",
@@ -670,7 +670,7 @@ class InstallerTests(unittest.TestCase):
                             installer, "component_package_record",
                             side_effect=lambda identifier: packages[identifier],
                         ):
-                            self.assertEqual(["nquake-ktx"], installer.outdated_installed_components())
+                            self.assertEqual(["ktx"], installer.outdated_installed_components())
 
     def test_existing_installation_profile_is_inferred_and_persisted(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -703,6 +703,22 @@ class InstallerTests(unittest.TestCase):
                 state = installer.infer_install_state()
             self.assertEqual("custom", state["profile"])
             self.assertEqual(installed, state["requested_components"])
+
+    def test_obsolete_nquake_sounds_is_removed_from_saved_component_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": ["ktx", "nquake-sounds"],
+                "recorded_components": ["ktx", "nquake-sounds"],
+                "known_components": [*installer.components, "nquake-sounds"],
+            }
+            migrated = installer.current_install_state(state)
+            self.assertEqual(["ktx"], migrated["requested_components"])
+            self.assertEqual(["ktx"], migrated["recorded_components"])
+            self.assertNotIn("nquake-sounds", migrated["known_components"])
 
     def test_upgrade_adds_only_components_newly_required_by_the_recorded_profile(self):
         with tempfile.TemporaryDirectory() as temporary:

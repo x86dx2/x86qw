@@ -25,7 +25,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.6"
+VERSION = "0.1.0"
 BUNDLE_FILES = (
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
@@ -40,6 +40,7 @@ ZIPAPP_FILES = (
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+GITLAB_PROJECT_ID = "84813414"
 LEGACY_HANDOFF_SHIM = b"""#!/usr/bin/env python3
 import os
 import sys
@@ -166,6 +167,47 @@ def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def reset_history(package_root: Path) -> None:
+    """Remove the local installer release history before a deliberate version reset."""
+    if package_root != ROOT / "dist/installer/packages":
+        raise ValueError("installer history reset is restricted to the canonical package directory")
+    if package_root.exists():
+        for entry in package_root.iterdir():
+            if entry.name == "latest" and entry.is_symlink():
+                entry.unlink()
+            elif entry.is_dir() and VERSION_PATTERN.fullmatch(entry.name):
+                shutil.rmtree(entry)
+            else:
+                raise ValueError(f"unexpected entry blocks installer history reset: {entry}")
+
+    catalog_path = ROOT / "site/public/api/v1/catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    packages = catalog.get("packages")
+    if not isinstance(packages, list):
+        raise ValueError("catalog packages must be a list")
+    packages[:] = [
+        package for package in packages
+        if not isinstance(package, dict) or package.get("component") != "installer"
+    ]
+    catalog_path.write_text(
+        json.dumps(catalog, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    manifest_path = ROOT / "dist/manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise ValueError("distribution manifest files must be an object")
+    for path, metadata in dict(files).items():
+        if isinstance(metadata, dict) and metadata.get("component") == "installer":
+            del files[path]
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def build(output: Path, version: str = VERSION) -> dict[str, object]:
     filename = f"x86qw-installer-{version}.zip"
     target = output / version / filename
@@ -228,7 +270,7 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         f"{release_tag}/{filename}"
     )
     gitlab = (
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/"
+        f"https://gitlab.com/api/v4/projects/{GITLAB_PROJECT_ID}/packages/generic/"
         f"x86qw-installer/{version}/{filename}"
     )
     return {
@@ -356,7 +398,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=ROOT / "dist/installer/packages")
     parser.add_argument("--version", default=VERSION)
     parser.add_argument("--register", action="store_true")
+    parser.add_argument(
+        "--reset-history",
+        action="store_true",
+        help="descarta todas as versões locais antes de reconstruir a versão informada",
+    )
     options = parser.parse_args()
+    if options.reset_history:
+        reset_history(options.output.resolve())
     result = build(options.output.resolve(), options.version)
     if options.register:
         register(result)

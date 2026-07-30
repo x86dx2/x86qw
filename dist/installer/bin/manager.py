@@ -112,7 +112,13 @@ QW_PACKAGE_PRIORITY = (
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
-LEGACY_COMPONENTS = frozenset({"clan-arena"})
+LEGACY_COMPONENT_REPLACEMENTS = {"nquake-ktx": "ktx"}
+LEGACY_COMPONENT_REMOVALS = {
+    "nquake-sounds": "sons de Clan Arena incorporados ao KTX",
+}
+LEGACY_COMPONENTS = frozenset({
+    "clan-arena", *LEGACY_COMPONENT_REPLACEMENTS, *LEGACY_COMPONENT_REMOVALS,
+})
 ReleaseRecord = tuple[str, tuple[str, ...], str]
 INSTALLER_ROOT = PROJECT_ROOT
 
@@ -2003,6 +2009,38 @@ class Installer:
                 installed.append(identifier)
         return installed
 
+    def installed_legacy_component_replacements(self) -> dict[str, str]:
+        installed: dict[str, str] = {}
+        for legacy, replacement in LEGACY_COMPONENT_REPLACEMENTS.items():
+            present, _, _ = self.validate_component_pair(legacy)
+            if present:
+                installed[legacy] = replacement
+        return installed
+
+    def installed_legacy_component_removals(self) -> list[str]:
+        return [
+            identifier
+            for identifier in LEGACY_COMPONENT_REMOVALS
+            if self.validate_component_pair(identifier)[0]
+        ]
+
+    @staticmethod
+    def replace_legacy_component_ids(values: list[str]) -> list[str]:
+        replaced: list[str] = []
+        for identifier in values:
+            if identifier in LEGACY_COMPONENT_REMOVALS:
+                continue
+            current = LEGACY_COMPONENT_REPLACEMENTS.get(identifier, identifier)
+            if current not in replaced:
+                replaced.append(current)
+        return replaced
+
+    def current_install_state(self, state: dict[str, object]) -> dict[str, object]:
+        migrated = dict(state)
+        for field in ("requested_components", "recorded_components", "known_components"):
+            migrated[field] = self.replace_legacy_component_ids(list(state[field]))
+        return self.validate_install_state(migrated)
+
     def validate_install_state(self, state: object) -> dict[str, object]:
         path = self.target / INSTALL_STATE
         if not isinstance(state, dict):
@@ -2057,6 +2095,9 @@ class Installer:
 
     def infer_install_state(self) -> dict[str, object]:
         installed = self.installed_components()
+        for replacement in self.installed_legacy_component_replacements().values():
+            if replacement not in installed:
+                installed.append(replacement)
         profile = "custom"
         requested = list(installed)
         if not installed:
@@ -2082,7 +2123,8 @@ class Installer:
         path = self.target / INSTALL_STATE
         if path.is_file() and not path.is_symlink():
             try:
-                return self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
+                state = self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
+                return self.current_install_state(state)
             except (OSError, json.JSONDecodeError) as error:
                 raise InstallerError(f"Estado da instalação inválido: {path}") from error
         if lexists(path):
@@ -2758,6 +2800,26 @@ class Installer:
             f"Recibo combinado removido ({file_count(removed)}); arquivos modificados foram preservados."
         )
 
+    def migrate_legacy_component_replacements(self, selected: list[str]) -> None:
+        selected_set = set(selected)
+        for legacy, replacement in LEGACY_COMPONENT_REPLACEMENTS.items():
+            if replacement not in selected_set:
+                continue
+            present, _, _ = self.validate_component_pair(legacy)
+            if not present:
+                continue
+            current_present, _, _ = self.validate_component_pair(replacement)
+            if current_present:
+                raise InstallerError(
+                    f"Os componentes antigo ({legacy}) e atual ({replacement}) estão registrados ao mesmo tempo."
+                )
+            console.info(f"Migrando a identidade do componente {legacy} para {replacement}...")
+            removed = self.remove_component(legacy)
+            console.success(
+                f"Componente legado {legacy} removido ({file_count(removed)}); "
+                "arquivos modificados foram preservados."
+            )
+
     def release_play_support_profiles(self, selected: list[str]) -> None:
         present, entries, receipt = self.validate_component_pair("play-support")
         if not present:
@@ -2820,6 +2882,7 @@ class Installer:
         assert self.stage is not None
         self.migrate_legacy_nquake()
         self.migrate_legacy_clan_arena(selected)
+        self.migrate_legacy_component_replacements(selected)
         self.release_play_support_profiles(selected)
         for index, identifier in enumerate(selected, 1):
             component = self.components[identifier]
@@ -3565,6 +3628,8 @@ class Installer:
             self.migrate_metadata_layout()
         self.check_paks()
         state = self.load_install_state(persist_migration=not dry_run)
+        legacy_replacements = self.installed_legacy_component_replacements()
+        legacy_removals = self.installed_legacy_component_removals()
         known = set(state["known_components"])
         newly_published = [identifier for identifier in self.components if identifier not in known]
         if newly_published and not dry_run:
@@ -3597,6 +3662,44 @@ class Installer:
 
         if not dry_run:
             console.section("Componentes instalados")
+        if legacy_removals:
+            if dry_run:
+                for identifier in legacy_removals:
+                    _, _, receipt = self.validate_component_pair(identifier)
+                    assert receipt is not None
+                    if plan_rows is not None:
+                        plan_rows.append(UpdatePlanRow(
+                            "Componente", "Sons redundantes nQuake",
+                            str(receipt["selection"]), "incorporado ao KTX", "Remover",
+                        ))
+            else:
+                for identifier in legacy_removals:
+                    removed = self.remove_component(identifier)
+                    console.success(
+                        f"Componente obsoleto {identifier} removido ({file_count(removed)}); "
+                        f"{LEGACY_COMPONENT_REMOVALS[identifier]}."
+                    )
+            changed = True
+        if legacy_replacements:
+            replacements = list(dict.fromkeys(legacy_replacements.values()))
+            if dry_run:
+                for legacy, replacement in legacy_replacements.items():
+                    _, _, receipt = self.validate_component_pair(legacy)
+                    assert receipt is not None
+                    package = self.component_package_record(replacement)
+                    if plan_rows is not None:
+                        plan_rows.append(UpdatePlanRow(
+                            "Componente", str(self.components[replacement]["label"]),
+                            str(receipt["selection"]), str(package["version"]), "Migrar",
+                        ))
+            else:
+                self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-migrate.", dir=self.target))
+                try:
+                    self.install_components(replacements)
+                finally:
+                    self.cleanup_stage()
+                    self.stage = None
+            changed = True
         outdated = self.outdated_installed_components()
         if outdated:
             if dry_run:
@@ -3621,7 +3724,10 @@ class Installer:
             console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
 
         desired = self.desired_components(state)
-        missing_from_profile = [identifier for identifier in desired if identifier not in self.installed_components()]
+        installed_or_planned = {
+            *self.installed_components(), *legacy_replacements.values(),
+        }
+        missing_from_profile = [identifier for identifier in desired if identifier not in installed_or_planned]
         if missing_from_profile and not dry_run:
             suffix = (
                 ". Elas serão incorporadas nesta operação."
@@ -3657,7 +3763,9 @@ class Installer:
         state = self.load_install_state(persist_migration=not dry_run)
         desired = self.desired_components(state)
         installed = self.installed_components()
-        missing = [identifier for identifier in desired if identifier not in installed]
+        legacy_replacements = self.installed_legacy_component_replacements()
+        installed_or_planned = {*installed, *legacy_replacements.values()}
+        missing = [identifier for identifier in desired if identifier not in installed_or_planned]
         extras = [identifier for identifier in installed if identifier not in desired]
 
         if not dry_run:

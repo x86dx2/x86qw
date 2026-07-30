@@ -29,8 +29,8 @@ Use apenas o gerenciador da raiz do contexto:
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
 - `build`: valida os binarios stable e gera 19 ZIPs de componentes mais o
   pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
-- `publish`: publica/verifica GitHub Releases e GitLab Generic Packages; URLs
-  históricas continuam em `x86qw-dist`, enquanto releases novas usam `x86qw`.
+- `publish`: publica/verifica GitHub Releases e GitLab Generic Packages nos
+  repositórios `x86qw`, que são os únicos destinos da distribuição.
   Somente o instalador corrente recebe o selo Latest; os demais artefatos são
   identificados como conteúdo;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
@@ -60,6 +60,12 @@ tem dono no BOM. O mesmo nao vale para uma release nova de KTX, TD2 ou outro
 mod: membros, compatibilidade, versao e customizacoes precisam de revisao. O
 gerenciador detecta a novidade e interrompe `update` com a orientacao de usar
 `add`; ele nunca sobrescreve uma versao publicada.
+
+O KTX e montado em tres camadas: `gpl/qw/ktx.pk3` do snapshot nQuake, recursos
+e QVM da release oficial e, por ultimo, ajustes x86QW. A politica em
+`dist/mods/ktx/<versao>/x86qw/merge-policy.json` preserva arquivos exclusivos e
+registra cada conflito compartilhado com os hashes das duas origens. Qualquer
+conflito novo ou alterado interrompe o build para revisao humana.
 
 ## Definicao de inclusao
 

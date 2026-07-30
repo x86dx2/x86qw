@@ -188,7 +188,7 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 
 - `recomendado`: experiência base nQuake, sem matchinfo, QRP nem mods opcionais;
 - `essencial`: bootstrap, interface principal e KTX;
-- `completo`: os 19 componentes, incluindo QRP, Final Arena, Pro-X, Team Fortress e TD2;
+- `completo`: os 18 componentes, incluindo QRP, Final Arena, Pro-X, Team Fortress e TD2;
 - `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
@@ -225,12 +225,25 @@ incorreto, o instalador tenta a próxima automaticamente.
 
 Cada componente possui versão própria. Coleções sem release oficial continuam
 fixadas no commit exato de `nQuake/distfiles`; componentes com upstream
-verificável podem receber overlays independentes. O KTX atual combina os
-recursos nQuake com o `qwprogs.qvm` oficial 1.47, substituindo o `1.46-dev`
-embarcado. O catálogo publica uma versão atual por componente e o recibo
+verificável são construídos de forma independente. O KTX atual parte do
+`ktx.pk3` curado pelo nQuake, preserva seus LOCs, modos e sons exclusivos, atualiza
+os arquivos compartilhados, o `qwprogs.qvm` e o mapa de símbolos pela versão
+oficial 1.47 e aplica a compatibilidade e o perfil x86QW por último. A política
+de merge registra todas as divergências; uma colisão nova bloqueia o build até
+ser revisada.
+
+Os demais mods seguem contratos próprios. Final Arena conserva seu pacote 1.20
+integral; Pro-X usa a cópia nQuake 0.8b somente como referência e instala a
+distribuição completa 1.1; Team Fortress combina mapas, mídia e LOCs nQuake com
+o gamecode oficial 2.9, removendo do pacote montado o gamecode 2.8 e a cópia
+inferior byte-idêntica de `detpack.wav`; TD2 não herda conteúdo do nQuake e é
+montado diretamente da distribuição 2.22. Em todos os casos, o perfil x86QW e o
+arquivo pessoal entram depois do conteúdo do mod.
+
+O catálogo publica uma versão atual por componente e o recibo
 individual grava sua versão. Antes do download, o instalador mostra as versões
 escolhidas e, quando disponível, o link das notas de release. Em um checkout,
-ele materializa o componente diretamente de `dist/distributions/nquake` e `dist/mods`; sem
+ele materializa o componente diretamente de `dist/distributions/nquake` ou `dist/mods`; sem
 essas fontes, recorre aos pacotes dos mirrors externos. Servidores e shareware
 ficam de fora. Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
@@ -253,7 +266,8 @@ Cada recurso tem uma ação explícita. Nada abaixo é instalado silenciosamente
 ezQuake stable/nightly. O catálogo atual oferece:
 
 - base: bootstrap, interface visual, KTX, skins, miras, skyboxes, modelos,
-  bandeiras, sons, texturas, mapas selecionados e documentação; matchinfo é
+  bandeiras, texturas, mapas selecionados e documentação; os sons de Clan Arena
+  pertencem ao próprio pacote KTX, e matchinfo é
   opcional e aparece no perfil completo ou na seleção personalizada;
 - addons: QRP em alta resolução, Final Arena, Pro-X, Team Fortress e TD2.
 

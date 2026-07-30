@@ -106,11 +106,11 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
-            "ktx": ("1.48+nquake.abcdef+x86qw.1", "1.48"),
-            "final-arena": ("e4cb23d40aa2+x86qw.6", "1.20"),
+            "ktx": ("1.48+x86qw.1", "1.48"),
+            "final-arena": ("e4cb23d40aa2+x86qw.1", "1.20"),
             "pro-x": ("1.1+x86qw.1", "1.1"),
             "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.1", "2.9"),
-            "td2": ("2.22+x86qw.5", "2.22"),
+            "td2": ("2.22+x86qw.1", "2.22"),
         }
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -193,9 +193,9 @@ class ModernComponentTests(unittest.TestCase):
             final_arena = installer.components["final-arena"]
             self.assertEqual(
                 {
-                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg",
-                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg",
-                    "dist/mods/final-arena/1.20+x86qw.1/x86qw/user.cfg.example",
+                    "dist/mods/final-arena/1.20/x86qw/client.cfg",
+                    "dist/mods/final-arena/1.20/x86qw/server.cfg",
+                    "dist/mods/final-arena/1.20/x86qw/user.cfg.example",
                 },
                 {source["path"] for source in final_arena["project_sources"]},
             )
@@ -210,7 +210,7 @@ class ModernComponentTests(unittest.TestCase):
                 {source["path"] for source in pro_x["project_sources"]},
             )
 
-    def test_nquake_component_is_prepared_and_receipted_from_a_fixed_commit(self):
+    def test_ktx_component_is_prepared_and_receipted_from_its_upstream_revision(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             installer, target, _ = self.make_installer(root)
@@ -218,23 +218,24 @@ class ModernComponentTests(unittest.TestCase):
             with zipfile.ZipFile(inner, "w") as package:
                 package.writestr("progs.dat", b"ktx")
             payload = inner.getvalue()
-            commit = "a" * 40
-            artifact = root / "nquake-ktx-aaaaaaaaaaaa.zip"
+            revision = "a" * 40
+            version = "1.47+x86qw.1"
+            artifact = root / f"ktx-{version}.zip"
             metadata = {
-                "format": 1, "project": "x86qw", "package": "nquake-ktx",
-                "source_commit": commit,
+                "format": 1, "project": "x86qw", "package": "ktx",
+                "version": version, "source_revision": revision,
                 "members": [{
                     "path": "payload/qw/ktx.pk3",
                     "sha256": hashlib.sha256(payload).hexdigest(),
-                    "source": "gpl/qw/ktx.pk3",
+                    "source": "official upstream archive: qw/ktx.pk3",
                 }],
             }
             with zipfile.ZipFile(artifact, "w") as package:
                 package.writestr("payload/qw/ktx.pk3", payload)
                 package.writestr("_x86qw/component.json", json.dumps(metadata))
             catalog_package = {
-                "package": "nquake-ktx", "version": commit[:12],
-                "source_commit": commit,
+                "package": "ktx", "version": version,
+                "source_revision": revision,
                 "origin_url": f"https://example.invalid/{artifact.name}",
             }
             installer.stage = target / ".stage"
@@ -243,29 +244,29 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual([], defaults)
             self.assertTrue((managed / "qw/ktx.pk3").is_file())
             count = installer.install_component_overlay(
-                "nquake-ktx", managed, commit[:12], str(catalog_package["origin_url"]),
+                "ktx", managed, version, str(catalog_package["origin_url"]),
             )
             self.assertEqual(1, count)
-            self.assertEqual(1, installer.verify_component("nquake-ktx"))
+            self.assertEqual(1, installer.verify_component("ktx"))
 
-    def test_nquake_component_accepts_an_independent_upstream_version(self):
+    def test_ktx_component_accepts_an_independent_upstream_version(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             installer, _, _ = self.make_installer(root)
-            commit = "a" * 40
-            version = "1.47+nquake.aaaaaaaaaaaa"
-            filename = f"nquake-ktx-{version}.zip"
+            revision = "a" * 40
+            version = "1.47+x86qw.1"
+            filename = f"ktx-{version}.zip"
             package = {
-                "component": "ktx", "package": "nquake-ktx", "version": version,
+                "component": "ktx", "package": "ktx", "version": version,
                 "channel": "content", "platform": "any", "architecture": "any",
                 "filename": filename, "size": 123, "sha256": "b" * 64,
-                "source_commit": commit, "redistribution_reviewed": True,
+                "source_revision": revision, "redistribution_reviewed": True,
                 "urls": [f"https://example.invalid/{filename}"],
                 "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
                 "release_notes": "KTX atualizado.",
             }
             installer._public_catalog = {"format": 1, "project": "x86qw", "packages": [package]}
-            self.assertEqual(version, installer.component_package_record("nquake-ktx")["version"])
+            self.assertEqual(version, installer.component_package_record("ktx")["version"])
 
             artifact = root / filename
             payload = io.BytesIO()
@@ -273,8 +274,8 @@ class ModernComponentTests(unittest.TestCase):
                 inner.writestr("qwprogs.qvm", b"new qvm")
             data = payload.getvalue()
             metadata = {
-                "format": 1, "project": "x86qw", "package": "nquake-ktx",
-                "version": version, "source_commit": commit,
+                "format": 1, "project": "x86qw", "package": "ktx",
+                "version": version, "source_revision": revision,
                 "members": [{
                     "path": "payload/qw/ktx.pk3",
                     "sha256": hashlib.sha256(data).hexdigest(),
@@ -288,6 +289,40 @@ class ModernComponentTests(unittest.TestCase):
             managed, defaults = installer.prepare_component_package(package, artifact)
             self.assertEqual([], defaults)
             self.assertTrue((managed / "qw/ktx.pk3").is_file())
+
+    def test_legacy_nquake_ktx_is_replaced_by_the_harmonized_ktx_component(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            installer.stage = target / ".legacy-stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "legacy-managed"
+            (managed / "qw").mkdir(parents=True)
+            legacy_pk3 = io.BytesIO()
+            with zipfile.ZipFile(legacy_pk3, "w") as package:
+                package.writestr("legacy.txt", b"nquake")
+            (managed / "qw/ktx.pk3").write_bytes(legacy_pk3.getvalue())
+            (managed / "qw/x86qw-ktx.cfg").write_text("legacy\n", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-ktx", managed, "1.47+nquake.old+x86qw.1", "legacy mirror",
+            )
+            installer.cleanup_stage()
+
+            installer.stage = target / ".migration-stage"
+            installer.stage.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_components(["ktx"])
+
+            self.assertFalse(installer.validate_component_pair("nquake-ktx")[0])
+            self.assertTrue(installer.validate_component_pair("ktx")[0])
+            self.assertEqual(["ktx"], installer.installed_components())
+            installer.verify_component("ktx")
+            with zipfile.ZipFile(target / "qw/ktx.pk3") as package:
+                names = set(package.namelist())
+                self.assertIn("bots/maps/anarena.bot", names)
+                self.assertIn("qwprogs.qvm", names)
+                self.assertIn("locs/dm6.loc", names)
+                self.assertIn("configs/usermodes/dmm4base.cfg", names)
 
     def test_nquake_component_accepts_a_standalone_source_revision(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -434,9 +469,9 @@ class ModernComponentTests(unittest.TestCase):
             installer.stage.mkdir()
             installer.prepare_cache()
             payload = b"verified package"
-            filename = "nquake-ktx-1.47.zip"
+            filename = "ktx-1.47.zip"
             package = {
-                "package": "nquake-ktx", "filename": filename,
+                "package": "ktx", "filename": filename,
                 "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest(),
                 "urls": [
                     f"https://github.com/example/{filename}",
@@ -855,7 +890,7 @@ class ModernComponentTests(unittest.TestCase):
                 user = gamedir / f"x86qw-{game.profile}-user.cfg"
                 self.assertEqual(
                     (ROOT / (
-                        "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg"
+                        "dist/mods/final-arena/1.20/x86qw/client.cfg"
                         if game.key == "final-arena"
                         else "dist/mods/pro-x/1.1/x86qw/client.cfg"
                     )).read_bytes(),
@@ -863,7 +898,7 @@ class ModernComponentTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     (ROOT / (
-                        "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg"
+                        "dist/mods/final-arena/1.20/x86qw/server.cfg"
                         if game.key == "final-arena"
                         else "dist/mods/pro-x/1.1/x86qw/server.cfg"
                     )).read_bytes(),
@@ -1037,7 +1072,7 @@ class ModernComponentTests(unittest.TestCase):
             managed = installer.stage / "managed"
             (managed / "qw").mkdir(parents=True)
             (managed / "qw/ktx.pk3").write_bytes(b"pk3")
-            installer.install_component_overlay("nquake-ktx", managed, "a" * 40, "https://example.invalid")
+            installer.install_component_overlay("ktx", managed, "a" * 40, "https://example.invalid")
             (target / "qw/ktx.pk3").unlink()
             output = io.StringIO()
             with contextlib.redirect_stdout(output):

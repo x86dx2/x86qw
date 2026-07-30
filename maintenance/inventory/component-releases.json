@@ -8,7 +8,7 @@
   },
   "components": {
     "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.7",
+      "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "notes": "Preserva a base nQuake, aplica bootstrap global compartilhado por todos os mods, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes stable e nightly suportados.",
@@ -34,14 +34,15 @@
       ]
     },
     "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-ktx": {
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.7",
-      "strategy": "upstream-overlay",
+    "ktx": {
+      "version": "1.47+x86qw.1",
+      "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "nquake-ktx-1.47-nquake.e4cb23d40aa2",
-      "embedded_version": "1.46-dev",
-      "notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, seleciona diretamente o QVM no servidor local do ezQuake, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
+      "distribution_tag": "ktx-1.47-x86qw.1",
+      "license": "GPL-2.0",
+      "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -53,7 +54,7 @@
           "managed-file-integrity",
           "uninstall"
         ],
-        "gamecode_runtime": "MVDSV-compatible QVM according to the KTX upstream; server runtime is not distributed by x86QW"
+        "gamecode_runtime": "Official KTX 1.47 QVM running in the ezQuake local server; MVDSV is not distributed by x86QW"
       },
       "upstream": {
         "repository": "QW-Group/ktx",
@@ -62,39 +63,36 @@
         "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
         "source_url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz"
       },
+      "archive_layers": [
+        {
+          "target_archive": "qw/ktx.pk3",
+          "reference_source": "gpl/qw/ktx.pk3",
+          "policy": "dist/mods/ktx/1.47/x86qw/merge-policy.json"
+        }
+      ],
       "archive_text_replacements": [
         {
-          "target_archive": "gpl/qw/ktx.pk3",
+          "target_archive": "qw/ktx.pk3",
           "member": "mvdsv.cfg",
-          "source_sha256": "829eb2de57c500e535b171632ecf2b06193902a9b7393885aa7ad056302a1d22",
+          "source_sha256": "f0f0a04b294c0157e16b5bc632c406d1a97221c5e432d3ea8eeb1d3af7f26152",
           "before": "sv_progtype                   1         // progtype (0 = .dat, 1 = .so/.dll, 2 = .qvm)",
           "after": "sv_progtype                   2         // x86QW local: load the packaged QVM directly"
         }
       ],
       "artifacts": [
         {
+          "filename": "ktx-1.47.tar.gz",
+          "url": "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz",
+          "distribution_path": "mods/ktx/1.47/source/ktx-1.47.tar.gz",
+          "size": 1798431,
+          "sha256": "273553121b5ee37ff3d6463a40042374ba1f42aa54653490839f22e17ce8ec57"
+        },
+        {
           "filename": "qwprogs-qvm.zip",
           "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip",
           "distribution_path": "mods/ktx/1.47/upstream/qwprogs-qvm.zip",
           "size": 403006,
-          "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
-          "members": [
-            {
-              "path": "qwprogs.qvm",
-              "size": 1578544,
-              "sha256": "a1987546d3b00453e5a0e1e7e89d75edd2a6779997436d5dac6a7d741bdcc79c",
-              "target_archive": "gpl/qw/ktx.pk3",
-              "target_member": "qwprogs.qvm"
-            },
-            {
-              "path": "qwprogs.map",
-              "size": 112973,
-              "sha256": "71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96",
-              "target_archive": "gpl/qw/ktx.pk3",
-              "target_member": "qwprogs.map",
-              "target_mode": "add"
-            }
-          ]
+          "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed"
         }
       ]
     },
@@ -103,21 +101,20 @@
     "nquake-skyboxes": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-models": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-scoreboard-flags": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-sounds": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-external-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-base-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-maps": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
     "nquake-matchinfo": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.3", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
+    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.1", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
     "qrp-hires": {
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "maps-1.00+items-0.73",
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "e4cb23d40aa2+x86qw.6",
+      "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
       "freshness": "reference-current",
       "embedded_version": "Final Arena 1.20",
@@ -166,7 +163,7 @@
       "embedded_version": "Team Fortress 2.9",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "notes": "Preserva os assets Team Fortress 2.8 do nQuake, aplica o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
+      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, remove do misc.pak o gamecode 2.8 substituído, elimina do pak0.pak o detpack.wav byte-idêntico já fornecido pelo pak1.pak, aplica diretamente do ZIP original o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -189,20 +186,26 @@
           "size": 626175,
           "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d"
         }
+      ],
+      "archive_removals": [
+        {
+          "target_archive": "addon-fortress/fortress/misc.pak",
+          "member": "qwprogs.dat"
+        },
+        {
+          "target_archive": "addon-fortress/fortress/pak0.pak",
+          "member": "sound/weapons/detpack.wav"
+        }
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.5",
+      "version": "2.22+x86qw.1",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "source_mirrors": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
-      ],
       "notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
       "compatibility": {
         "client_scope": [

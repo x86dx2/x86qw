@@ -25,6 +25,7 @@ COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+GITLAB_PROJECT_ID = "84813414"
 
 
 def file_sha256(path: Path) -> str:
@@ -41,6 +42,7 @@ def component_package_metadata(
     strategy: str,
     source_revision: str,
     members: list[dict[str, object]],
+    reference_revision: str | None = None,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {
         "format": 1,
@@ -48,7 +50,11 @@ def component_package_metadata(
         "package": identifier,
         "members": members,
     }
-    metadata["source_revision" if strategy == "upstream-package" else "source_commit"] = source_revision
+    metadata[
+        "source_revision" if strategy in {"upstream-package", "upstream-composed"} else "source_commit"
+    ] = source_revision
+    if reference_revision is not None:
+        metadata["source_commit"] = reference_revision
     if version != source_revision[:12]:
         metadata["version"] = version
     return metadata
@@ -96,7 +102,12 @@ def build_packages(
                 info, data = zip_member(member_name, payload)
                 package.writestr(info, data)
             metadata = component_package_metadata(
-                identifier, version, strategy, source_revision, members,
+                identifier,
+                version,
+                strategy,
+                source_revision,
+                members,
+                commit if release_metadata.get("archive_layers") else None,
             )
             package_metadata = json.dumps(
                 metadata, ensure_ascii=False, indent=2, sort_keys=True,
@@ -105,12 +116,19 @@ def build_packages(
             package.writestr(info, data)
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
+        gitlab_url = (
+            f"https://gitlab.com/api/v4/projects/{GITLAB_PROJECT_ID}/packages/generic/"
+            f"{identifier}/{version}/{filename}"
+        )
         mirror_title = (
             f"x86QW Content · nQuake {commit[:12]}"
             if distribution_tag == reference_release
             else f"x86QW Content · {components[identifier]['label']} {version}"
         )
-        source_urls = [] if strategy == "upstream-package" else [f"https://github.com/nQuake/distfiles/tree/{commit}"]
+        uses_reference = strategy not in {"upstream-package", "upstream-composed"} or bool(
+            release_metadata.get("archive_layers")
+        )
+        source_urls = [f"https://github.com/nQuake/distfiles/tree/{commit}"] if uses_reference else []
         upstream = release_metadata.get("upstream")
         if isinstance(upstream, dict):
             source_url = upstream.get("source_url")
@@ -132,13 +150,15 @@ def build_packages(
             "license_url": str(release_metadata.get("license_url", f"https://github.com/nQuake/distfiles/tree/{commit}")),
             "source_urls": source_urls,
             "redistribution_reviewed": True,
-            "urls": [mirror_url],
+            "urls": [mirror_url, gitlab_url],
             "mirror_title": mirror_title,
             "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
             "mirror_latest": False,
         }
-        if strategy == "upstream-package":
+        if strategy in {"upstream-package", "upstream-composed"}:
             package_record["source_revision"] = source_revision
+            if release_metadata.get("archive_layers"):
+                package_record["source_commit"] = commit
         else:
             package_record["source_commit"] = commit
         if isinstance(upstream, dict):
@@ -198,7 +218,7 @@ def register_packages(catalog_path: Path, manifest: dict[str, object]) -> None:
             if len(existing) != 1 or not same_payload:
                 raise ValueError(f"published package identity changed: {identity}")
             candidate["component"] = package["component"]
-            for field in ("mirror_title", "mirror_notes", "mirror_latest"):
+            for field in publication_fields:
                 if field in package:
                     candidate[field] = package[field]
             candidate.pop("distribution_path", None)

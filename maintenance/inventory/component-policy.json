@@ -39,7 +39,7 @@
     },
     "ktx": {
       "consumers": [
-        "install:nquake-ktx",
+        "install:ktx",
         "development:ktx"
       ],
       "distribution_prefixes": [

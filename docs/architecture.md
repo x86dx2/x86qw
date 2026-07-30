@@ -12,8 +12,8 @@ https://x86qw.x86.com.br/install.sh          bootstrap macOS/Linux
 https://x86qw.x86.com.br/install.ps1         bootstrap Windows
 https://x86qw.x86.com.br/api/v1/catalog.json catálogo do instalador
 https://github.com/x86dx2/x86qw/tree/main/dist distribuição canônica
-https://github.com/x86dx2/x86qw/releases      releases atuais e futuras
-https://github.com/x86dx2/x86qw-dist/releases histórico legado, sem migração
+https://github.com/x86dx2/x86qw/releases      releases oficiais
+https://gitlab.com/x86dx2/x86qw               código e pacotes de contingência
 ```
 
 Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
@@ -32,19 +32,16 @@ como `current` e os bootstraps permanecem fixados nessa versão e em seu SHA-256
 ## Repositórios
 
 - `x86dx2/x86qw`: distribuição completa em `dist/`, catálogo, instalador, site,
-  validações e GitHub Releases oficiais a partir do instalador `0.1.0`;
-- `x86dx2/x86qw-dist`: arquivo legado das releases anteriores, preservado sem
-  copiar seu histórico para o repositório principal. O GitLab Generic Packages
-  continua como segundo mirror de entrega. Os pacotes de componentes são builds reproduzíveis
-  das fontes canônicas e não são versionados novamente no repositório principal.
+  validações, GitHub Releases e GitLab Generic Packages. Não existe repositório
+  de distribuição paralelo. Os pacotes de componentes são builds reproduzíveis
+  das fontes canônicas e não são versionados novamente na árvore Git.
   Os dois PAKs registrados permanecem em `dist/game-data/id1`; o builder produz
   `x86qw-core-id1` como pacote de dados-base separado, com tamanho e SHA-256 no
   catálogo. Eles não entram no bundle do instalador.
 
 O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
-contingência do código. `maintenance/manage.py publish` respeita o repositório
-registrado em cada URL do catálogo: verifica o histórico em `x86qw-dist` e cria
-as releases novas em `x86qw`. Ele envia somente artefatos já catalogados, baixa
+contingência do código e dos pacotes. `maintenance/manage.py publish` envia
+todos os artefatos exclusivamente aos projetos `x86qw`. Ele envia somente artefatos já catalogados, baixa
 cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
 O pacote usa a identidade `x86qw-installer`, os assets e tags seguem a convenção
 `x86qw-installer-X.Y.Z` e os títulos humanos usam `x86QW Installer X.Y.Z`.
@@ -101,10 +98,17 @@ acervo.
 
 Atualizações são detectadas por `maintenance/manage.py check`. O comando
 `update` aplica apenas atualizações mecanicamente seguras; releases independentes
-exigem uma definição revisada em `add` e `publish` continua explícito. Um adaptador deve preservar o pacote de referência,
-aplicar somente membros declarados, verificar hashes internos e produzir um novo
-pacote imutável. KTX 1.47 inaugura esse fluxo substituindo apenas
-`qwprogs.qvm` dentro de `ktx.pk3`.
+exigem uma definição revisada em `add` e `publish` continua explícito. Um adaptador
+deve consumir somente arquivos declarados, verificar hashes internos e produzir
+um novo pacote imutável. Cada mod escolhe uma composição verificável: merge de
+arquivos para KTX, snapshot integral para Final Arena, substituição completa
+para Pro-X, assets de referência com gamecode atualizado para Team Fortress e
+pacote independente para TD2. As harmonizações x86QW são sempre aplicadas por
+último. No KTX, toda divergência compartilhada precisa constar, com hashes e
+resolução, em `dist/mods/ktx/1.47/x86qw/merge-policy.json`; em Team Fortress, o
+builder retira do PAK montado o gamecode 2.8 e a mídia estritamente duplicada
+antes de adicionar o `qwprogs.dat` 2.9 extraído do ZIP original. Uma mudança não
+declarada interrompe o build.
 
 ## Fluxo de publicação
 
