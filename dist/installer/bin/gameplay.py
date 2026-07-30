@@ -9,6 +9,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -47,6 +48,23 @@ LEGACY_MACOS_VIDEO_CVARS = (
     "vid_xpos",
     "vid_ypos",
 )
+MACOS_FULLSCREEN_LAYOUT = Path(".install/launcher/macos-fullscreen-layout.json")
+MACOS_FULLSCREEN_CVARS = (
+    "vid_fullscreen",
+    "vid_usedesktopres",
+    "vid_width",
+    "vid_height",
+    "vid_displayfrequency",
+)
+MACOS_SAFE_AREA_SCRIPT = """
+ObjC.import("AppKit");
+var screen = $.NSScreen.mainScreen;
+JSON.stringify({
+    top: Number(screen.safeAreaInsets.top),
+    width: Number(screen.frame.size.width),
+    height: Number(screen.frame.size.height)
+});
+"""
 
 
 @dataclass(frozen=True)
@@ -189,6 +207,36 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
 
 
 class Player(core.Installer):
+    @staticmethod
+    def config_cvars(payload: bytes, names: tuple[str, ...]) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for name in names:
+            match = re.search(
+                rb"(?mi)^[ \t]*" + re.escape(name.encode("ascii"))
+                + rb"[ \t]+\"?([^\"\r\n]+?)\"?[ \t]*$",
+                payload,
+            )
+            if match is not None:
+                values[name] = match.group(1).decode("ascii", errors="strict").strip()
+        return values
+
+    @staticmethod
+    def set_config_cvars(payload: bytes, settings: dict[str, str]) -> bytes:
+        newline = b"\r\n" if b"\r\n" in payload else b"\n"
+        updated = payload
+        for name, value in settings.items():
+            pattern = re.compile(
+                rb"(?mi)^([ \t]*" + re.escape(name.encode("ascii"))
+                + rb"[ \t]+)\"?[^\"\r\n]+?\"?([ \t]*)(\r?)$"
+            )
+            replacement = rb'\g<1>"' + value.encode("ascii") + rb'"\g<2>\g<3>'
+            updated, count = pattern.subn(replacement, updated, count=1)
+            if count == 0:
+                if updated and not updated.endswith((b"\n", b"\r")):
+                    updated += newline
+                updated += name.encode("ascii") + b' "' + value.encode("ascii") + b'"' + newline
+        return updated
+
     def remove_legacy_macos_video_layout(self) -> None:
         """Remove the short-lived 0.1.7 borderless workaround without touching personal video settings."""
         if sys.platform != "darwin":
@@ -212,22 +260,156 @@ class Player(core.Installer):
             and all(isinstance(value, str) for value in settings.values())
         )
         if managed and valid_settings and config.is_file() and backup.is_file():
-            current = config.read_bytes()
-            values: dict[str, str] = {}
-            for name in LEGACY_MACOS_VIDEO_CVARS:
-                match = re.search(
-                    rb"(?mi)^[ \t]*" + re.escape(name.encode("ascii"))
-                    + rb"[ \t]+\"?([^\"\r\n]+?)\"?[ \t]*$",
-                    current,
-                )
-                if match is not None:
-                    values[name] = match.group(1).decode("ascii", errors="strict").strip()
+            values = self.config_cvars(config.read_bytes(), LEGACY_MACOS_VIDEO_CVARS)
             if values == settings:
                 self.write_personal_config(config, backup.read_bytes())
                 remove_path(backup)
                 console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
         remove_path(marker)
         console.info("Ajuste legado de janela sem bordas removido; o ezQuake continuará em fullscreen.")
+
+    def macos_notched_fullscreen_settings(self) -> dict[str, str] | None:
+        try:
+            safe_area = subprocess.run(
+                ["osascript", "-l", "JavaScript", "-e", MACOS_SAFE_AREA_SCRIPT],
+                check=True, capture_output=True, text=True, timeout=3,
+            )
+            geometry = json.loads(safe_area.stdout)
+            top = int(geometry["top"])
+            if top <= 0:
+                return None
+            profile = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType", "-json"],
+                check=True, capture_output=True, text=True, timeout=8,
+            )
+            displays = json.loads(profile.stdout).get("SPDisplaysDataType")
+            if not isinstance(displays, list):
+                raise ValueError("lista de monitores ausente")
+            main: dict[str, object] | None = None
+            for gpu in displays:
+                if not isinstance(gpu, dict) or not isinstance(gpu.get("spdisplays_ndrvs"), list):
+                    continue
+                for display in gpu["spdisplays_ndrvs"]:
+                    if isinstance(display, dict) and display.get("spdisplays_main") == "spdisplays_yes":
+                        main = display
+                        break
+                if main is not None:
+                    break
+            if main is None:
+                raise ValueError("monitor principal ausente")
+            native = str(main.get("spdisplays_pixelresolution", ""))
+            resolution = re.fullmatch(r"spdisplays_(\d+)x(\d+)Retina", native)
+            refresh = re.search(r"@\s*([0-9]+(?:\.[0-9]+)?)Hz", str(main.get("_spdisplays_resolution", "")))
+            if resolution is None or refresh is None:
+                raise ValueError("resolução física ou frequência ausente")
+            width, panel_height = (int(value) for value in resolution.groups())
+            height = round(width * 10 / 16)
+            frequency = round(float(refresh.group(1)))
+        except (
+            OSError, subprocess.SubprocessError, json.JSONDecodeError,
+            KeyError, TypeError, ValueError,
+        ) as error:
+            raise InstallerError(f"Não foi possível detectar o modo fullscreen seguro do macOS: {error}") from error
+        if width < 1280 or height < 800 or panel_height <= height or panel_height - height > 256:
+            raise InstallerError(
+                f"Geometria inesperada na tela com notch: {width}x{panel_height}; modo seguro {width}x{height}."
+            )
+        return {
+            "vid_fullscreen": "1",
+            "vid_usedesktopres": "0",
+            "vid_width": str(width),
+            "vid_height": str(height),
+            "vid_displayfrequency": str(frequency),
+        }
+
+    def write_macos_fullscreen_marker(
+        self, marker: Path, *, managed: bool, settings: dict[str, str],
+    ) -> None:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({
+            "format": 1,
+            "project": "x86qw",
+            "mode": "notched-fullscreen",
+            "managed": managed,
+            "settings": settings,
+        }, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+        self.write_personal_config(marker, payload)
+
+    def configure_macos_fullscreen(self) -> None:
+        if sys.platform != "darwin":
+            return
+        config = self.target / "ezquake/configs/config.cfg"
+        if not lexists(config):
+            return
+        if not config.is_file() or config.is_symlink():
+            raise InstallerError(f"Configuração global do ezQuake inválida: {config}")
+        marker = self.target / MACOS_FULLSCREEN_LAYOUT
+        current_payload = config.read_bytes()
+        current = self.config_cvars(current_payload, MACOS_FULLSCREEN_CVARS)
+        managed = False
+        previous: dict[str, str] = {}
+        if lexists(marker):
+            if not marker.is_file() or marker.is_symlink():
+                raise InstallerError(f"Estado de fullscreen do launcher inválido: {marker}")
+            try:
+                state = json.loads(marker.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise InstallerError(f"Estado de fullscreen do launcher inválido: {marker}") from error
+            settings = state.get("settings") if isinstance(state, dict) else None
+            valid = (
+                isinstance(state, dict)
+                and state.get("format") == 1
+                and state.get("project") == "x86qw"
+                and state.get("mode") == "notched-fullscreen"
+                and isinstance(state.get("managed"), bool)
+                and isinstance(settings, dict)
+                and (
+                    set(settings) == set(MACOS_FULLSCREEN_CVARS)
+                    if state.get("managed") is True else settings == {}
+                )
+                and all(isinstance(value, str) for value in settings.values())
+            )
+            if not valid:
+                raise InstallerError(f"Estado de fullscreen do launcher inválido: {marker}")
+            managed = state["managed"]
+            previous = dict(settings)
+        if managed and current != previous:
+            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            console.info("Configuração de vídeo pessoal detectada; o fullscreen automático foi desativado.")
+            return
+        if lexists(marker) and not managed:
+            return
+
+        desired = self.macos_notched_fullscreen_settings()
+        if desired is None:
+            if managed:
+                updated = self.set_config_cvars(current_payload, {
+                    "vid_fullscreen": "1", "vid_usedesktopres": "1",
+                })
+                self.write_personal_config(config, updated)
+                remove_path(marker)
+                console.success("Fullscreen desktop restaurado para o monitor sem notch.")
+            return
+        default_fullscreen = (
+            not current
+            or (
+                current.get("vid_fullscreen", "1") == "1"
+                and current.get("vid_usedesktopres", "1") == "1"
+            )
+        )
+        if not managed and not default_fullscreen:
+            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            console.info("Configuração de vídeo pessoal preservada; nenhum modo fullscreen foi alterado.")
+            return
+        updated = self.set_config_cvars(current_payload, desired)
+        if updated != current_payload:
+            self.write_personal_config(config, updated)
+        self.write_macos_fullscreen_marker(marker, managed=True, settings=desired)
+        if not managed:
+            console.success(
+                f"Fullscreen macOS ajustado para {desired['vid_width']}x{desired['vid_height']} "
+                f"a {desired['vid_displayfrequency']} Hz; menus permanecem abaixo do notch."
+            )
 
     @staticmethod
     def map_name_from_member(member: str) -> str | None:
@@ -483,6 +665,7 @@ class Player(core.Installer):
         self.check_paks()
         self.migrate_saved_configs()
         self.remove_legacy_macos_video_layout()
+        self.configure_macos_fullscreen()
         self.refresh_qw_package_order()
         games = self.available_local_games()
         if not games:

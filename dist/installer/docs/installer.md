@@ -27,7 +27,7 @@ como fonte da distribuição. Antes de criar a instalação, o programa pergunta
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
 O bundle contém `x86qw.pyz`, os launchers, `installer.json` e uma ponte mínima
-para a atualização iniciada pela CLI 0.1.8. Essa ponte encaminha a execução ao
+para a atualização iniciada pela CLI 0.1.9. Essa ponte encaminha a execução ao
 zipapp e permanece apenas no diretório temporário. O zipapp incorpora a CLI e
 um catálogo runtime mínimo. PAKs, mods, configurações,
 gamecodes, fontes e inventários de manutenção são pacotes
@@ -348,10 +348,14 @@ No macOS com notch, o modo de compatibilidade de área segura pode reduzir a
 janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
 **Options**. Durante a instalação ou o primeiro reparo, o x86QW registra
 `NSPrefersDisplaySafeAreaCompatibilityMode=false` no `Info.plist` e assina
-novamente o bundle com `codesign`. O ezQuake permanece em fullscreen real e
-passa a ocupar a tela inteira; nenhuma resolução ou configuração pessoal de
-vídeo é substituída. A migração da CLI 0.1.7 remove o ajuste temporário de janela
-sem bordas e restaura a configuração anterior quando ela ainda estiver intacta.
+novamente o bundle com `codesign`. Ao abrir o jogo, o launcher consulta a área
+segura e a resolução física do monitor principal. Em telas com notch, seleciona
+o modo fullscreen nativo 16:10 correspondente — por exemplo, `3024x1890` no
+painel `3024x1964` — mantendo `vid_fullscreen 1` e reservando apenas a faixa da
+câmera. Em monitores sem notch, mantém o fullscreen desktop. Alterações pessoais
+de vídeo desativam o gerenciamento automático e são preservadas. A migração da
+CLI 0.1.7 remove o ajuste temporário de janela sem bordas e restaura a
+configuração anterior quando ela ainda estiver intacta.
 
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
