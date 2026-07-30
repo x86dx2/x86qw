@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import plistlib
 import socket
 import struct
 import subprocess
@@ -267,13 +268,18 @@ class InstallerTests(unittest.TestCase):
                     installer.reset_macos_game_directory()
             run.assert_not_called()
 
-    def test_macos_sandbox_is_removed_with_native_codesign(self):
+    def test_macos_bundle_removes_sandbox_and_uses_the_full_display(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             app = target / "ezQuake.app"
-            with mock.patch.object(installer, "macos_app_is_sandboxed", side_effect=[True, False]):
-                with mock.patch.object(installer, "run_command") as command:
-                    self.assertTrue(installer.remove_macos_app_sandbox(app))
+            plist = app / "Contents/Info.plist"
+            plist.parent.mkdir(parents=True)
+            with plist.open("wb") as destination:
+                plistlib.dump({"CFBundleName": "ezQuake"}, destination)
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "macos_app_is_sandboxed", side_effect=[True, False]):
+                    with mock.patch.object(installer, "run_command") as command:
+                        self.assertTrue(installer.prepare_macos_app(app))
             self.assertEqual(
                 ["codesign", "--force", "--deep", "--sign", "-", str(app)],
                 command.call_args_list[0].args[0],
@@ -282,6 +288,26 @@ class InstallerTests(unittest.TestCase):
                 ["codesign", "--verify", "--deep", "--strict", str(app)],
                 command.call_args_list[1].args[0],
             )
+            with plist.open("rb") as source:
+                metadata = plistlib.load(source)
+            self.assertIs(False, metadata[install_qw.MACOS_SAFE_AREA_KEY])
+
+    def test_macos_fullscreen_repair_is_visible_in_the_update_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            rows = []
+            with mock.patch.object(installer, "latest_release", return_value=(
+                "3.6.9", ("https://example.invalid/ezQuake-macOS-universal.zip",), "a" * 64,
+            )):
+                with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
+                    self.assertTrue(installer.update_runtime(
+                        spec, "stable", {"selection": "3.6.9"}, dry_run=True, plan_rows=rows,
+                    ))
+            self.assertEqual(1, len(rows))
+            self.assertEqual("Reparar", rows[0].action)
+            self.assertEqual("área segura", rows[0].installed)
+            self.assertEqual("tela inteira", rows[0].available)
 
     def test_nquake_startup_state_reports_pending_and_loaded(self):
         with tempfile.TemporaryDirectory() as temporary:

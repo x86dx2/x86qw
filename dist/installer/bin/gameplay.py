@@ -9,7 +9,6 @@ import json
 import os
 import re
 import struct
-import subprocess
 import sys
 import tempfile
 import traceback
@@ -26,6 +25,7 @@ console = core.console
 file_count = core.file_count
 file_hash = core.file_hash
 lexists = core.lexists
+remove_path = core.remove_path
 
 PLAY_SUPPORT_VERSION = "7"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
@@ -36,8 +36,8 @@ LEGACY_LOCAL_CAPABILITIES = {
     "final-arena": ("noaim",),
     "pro-x": ("setinfo", "bind"),
 }
-MACOS_VIDEO_LAYOUT = Path(".install/launcher/macos-video-layout.json")
-MACOS_VIDEO_CVARS = (
+LEGACY_MACOS_VIDEO_LAYOUT = Path(".install/launcher/macos-video-layout.json")
+LEGACY_MACOS_VIDEO_CVARS = (
     "vid_fullscreen",
     "vid_usedesktopres",
     "vid_win_borderless",
@@ -47,19 +47,6 @@ MACOS_VIDEO_CVARS = (
     "vid_xpos",
     "vid_ypos",
 )
-MACOS_DISPLAY_SCRIPT = """
-ObjC.import("AppKit");
-var screen = $.NSScreen.mainScreen;
-var frame = screen.frame;
-var visible = screen.visibleFrame;
-JSON.stringify({
-    x: Number(frame.origin.x),
-    y: Number(frame.origin.y),
-    width: Number(frame.size.width),
-    height: Number(frame.size.height),
-    top: Number(frame.size.height - visible.size.height - visible.origin.y)
-});
-"""
 
 
 @dataclass(frozen=True)
@@ -202,150 +189,45 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
 
 
 class Player(core.Installer):
-    @staticmethod
-    def config_cvars(payload: bytes) -> dict[str, str]:
-        values: dict[str, str] = {}
-        for name in MACOS_VIDEO_CVARS:
-            match = re.search(
-                rb"(?mi)^[ \t]*" + re.escape(name.encode("ascii")) + rb"[ \t]+\"?([^\"\r\n]+?)\"?[ \t]*$",
-                payload,
-            )
-            if match is not None:
-                values[name] = match.group(1).decode("ascii", errors="strict").strip()
-        return values
-
-    @staticmethod
-    def set_config_cvars(payload: bytes, settings: dict[str, str]) -> bytes:
-        newline = b"\r\n" if b"\r\n" in payload else b"\n"
-        updated = payload
-        for name, value in settings.items():
-            pattern = re.compile(
-                rb"(?mi)^([ \t]*" + re.escape(name.encode("ascii")) + rb"[ \t]+)\"?[^\"\r\n]+?\"?([ \t]*)(\r?)$"
-            )
-            replacement = rb'\g<1>"' + value.encode("ascii") + rb'"\g<2>\g<3>'
-            updated, count = pattern.subn(replacement, updated, count=1)
-            if count == 0:
-                if updated and not updated.endswith((b"\n", b"\r")):
-                    updated += newline
-                updated += name.encode("ascii") + b' "' + value.encode("ascii") + b'"' + newline
-        return updated
-
-    def macos_desktop_layout(self) -> dict[str, str]:
-        try:
-            result = subprocess.run(
-                ["osascript", "-l", "JavaScript", "-e", MACOS_DISPLAY_SCRIPT],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            geometry = json.loads(result.stdout)
-            x = int(geometry["x"])
-            width = int(geometry["width"])
-            full_height = int(geometry["height"])
-            top = int(geometry["top"])
-        except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
-            raise InstallerError(f"Não foi possível detectar a área útil do monitor no macOS: {error}") from error
-        height = full_height - top
-        if width < 640 or height < 480 or top < 0 or top > 256:
-            raise InstallerError(
-                f"Geometria de monitor inválida detectada no macOS: {width}x{full_height}, topo {top}."
-            )
-        return {
-            "vid_fullscreen": "0",
-            "vid_usedesktopres": "1",
-            "vid_win_borderless": "1",
-            "vid_win_displaynumber": "0",
-            "vid_win_width": str(width),
-            "vid_win_height": str(height),
-            "vid_xpos": str(x),
-            "vid_ypos": str(top),
-        }
-
-    def write_macos_video_marker(self, marker: Path, *, managed: bool, settings: dict[str, str]) -> None:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(
-            {
-                "format": 1,
-                "project": "x86qw",
-                "mode": "borderless-desktop",
-                "managed": managed,
-                "settings": settings,
-            },
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ).encode("utf-8") + b"\n"
-        self.write_personal_config(marker, payload)
-
-    def configure_macos_video_layout(self) -> None:
+    def remove_legacy_macos_video_layout(self) -> None:
+        """Remove the short-lived 0.1.7 borderless workaround without touching personal video settings."""
         if sys.platform != "darwin":
             return
+        marker = self.target / LEGACY_MACOS_VIDEO_LAYOUT
+        if not lexists(marker):
+            return
+        if not marker.is_file() or marker.is_symlink():
+            raise InstallerError(f"Estado legado de vídeo do launcher inválido: {marker}")
+        try:
+            state = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise InstallerError(f"Estado legado de vídeo do launcher inválido: {marker}") from error
+        settings = state.get("settings") if isinstance(state, dict) else None
+        managed = state.get("managed") is True if isinstance(state, dict) else False
         config = self.target / "ezquake/configs/config.cfg"
-        if not lexists(config):
-            return
-        if not config.is_file() or config.is_symlink():
-            raise InstallerError(f"Configuração global do ezQuake inválida: {config}")
-        marker = self.target / MACOS_VIDEO_LAYOUT
-        current_payload = config.read_bytes()
-        current = self.config_cvars(current_payload)
-        desired = self.macos_desktop_layout()
-
-        managed = False
-        previous: dict[str, str] = {}
-        if lexists(marker):
-            if not marker.is_file() or marker.is_symlink():
-                raise InstallerError(f"Estado de vídeo do launcher inválido: {marker}")
-            try:
-                state = json.loads(marker.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-                raise InstallerError(f"Estado de vídeo do launcher inválido: {marker}") from error
-            if (
-                not isinstance(state, dict)
-                or state.get("format") != 1
-                or state.get("project") != "x86qw"
-                or state.get("mode") != "borderless-desktop"
-                or not isinstance(state.get("managed"), bool)
-                or not isinstance(state.get("settings"), dict)
-                or not all(isinstance(key, str) and isinstance(value, str) for key, value in state["settings"].items())
-                or (state["managed"] and set(state["settings"]) != set(MACOS_VIDEO_CVARS))
-                or (not state["managed"] and state["settings"] != {})
-            ):
-                raise InstallerError(f"Estado de vídeo do launcher inválido: {marker}")
-            managed = bool(state["managed"])
-            previous = dict(state["settings"])
-
-        if managed and any(current.get(name) != value for name, value in previous.items()):
-            self.write_macos_video_marker(marker, managed=False, settings={})
-            console.info("Configuração de vídeo pessoal detectada; o ajuste automático do macOS foi desativado.")
-            return
-        if lexists(marker) and not managed:
-            return
-
-        default_layout = (
-            not current
-            or (
-                current.get("vid_fullscreen", "1") == "1"
-                and current.get("vid_usedesktopres", "1") == "1"
-            )
+        backup = config.with_name("config.video-pre-x86qw.cfg")
+        valid_settings = (
+            isinstance(settings, dict)
+            and set(settings) == set(LEGACY_MACOS_VIDEO_CVARS)
+            and all(isinstance(value, str) for value in settings.values())
         )
-        if not managed and not default_layout:
-            self.write_macos_video_marker(marker, managed=False, settings={})
-            console.info("Configuração de vídeo pessoal preservada; nenhum ajuste automático foi aplicado.")
-            return
-
-        updated = self.set_config_cvars(current_payload, desired)
-        if updated != current_payload:
-            backup = config.with_name("config.video-pre-x86qw.cfg")
-            if not lexists(backup):
-                self.write_personal_config(backup, current_payload)
-            self.write_personal_config(config, updated)
-        self.write_macos_video_marker(marker, managed=True, settings=desired)
-        if not managed:
-            console.success(
-                f"Área útil do macOS detectada: {desired['vid_win_width']}x{desired['vid_win_height']} "
-                "em janela sem bordas; menus e HUD permanecem totalmente visíveis."
-            )
+        if managed and valid_settings and config.is_file() and backup.is_file():
+            current = config.read_bytes()
+            values: dict[str, str] = {}
+            for name in LEGACY_MACOS_VIDEO_CVARS:
+                match = re.search(
+                    rb"(?mi)^[ \t]*" + re.escape(name.encode("ascii"))
+                    + rb"[ \t]+\"?([^\"\r\n]+?)\"?[ \t]*$",
+                    current,
+                )
+                if match is not None:
+                    values[name] = match.group(1).decode("ascii", errors="strict").strip()
+            if values == settings:
+                self.write_personal_config(config, backup.read_bytes())
+                remove_path(backup)
+                console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
+        remove_path(marker)
+        console.info("Ajuste legado de janela sem bordas removido; o ezQuake continuará em fullscreen.")
 
     @staticmethod
     def map_name_from_member(member: str) -> str | None:
@@ -600,7 +482,7 @@ class Player(core.Installer):
     def play_local(self, game_key: str | None = None, mode_key: str | None = None) -> None:
         self.check_paks()
         self.migrate_saved_configs()
-        self.configure_macos_video_layout()
+        self.remove_legacy_macos_video_layout()
         self.refresh_qw_package_order()
         games = self.available_local_games()
         if not games:

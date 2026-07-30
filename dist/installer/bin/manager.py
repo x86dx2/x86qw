@@ -82,6 +82,7 @@ CACHE_MARKER_VALUE = "x86qw-cache-v1"
 LEGACY_CACHE = ("x86-qw", ".x86-qw-cache", "x86-qw-cache-v1")
 MACOS_PREFERENCES_DOMAIN = "com.ezquake.ezQuake"
 MACOS_DIRECTORY_KEYS = ("basedir", "version", "NSOSPLastRootDirectory")
+MACOS_SAFE_AREA_KEY = "NSPrefersDisplaySafeAreaCompatibilityMode"
 DEFAULT_PRESET = 's_raw_volume "0.2"\n'
 NQUAKE_TEXTURE_LIMIT = re.compile(
     rb'^([ \t]*gl_max_size[ \t]+)"?32768"?([ \t]*)(\r?)$', re.MULTILINE,
@@ -772,16 +773,57 @@ class Installer:
             raise InstallerError(f"Não foi possível ler os entitlements do ezQuake: {detail.strip()}")
         return "com.apple.security.app-sandbox" in detail
 
-    def remove_macos_app_sandbox(self, app: Path) -> bool:
-        if not self.macos_app_is_sandboxed(app):
+    def macos_app_uses_full_display(self, app: Path) -> bool:
+        plist = app / "Contents/Info.plist"
+        if not plist.is_file() or plist.is_symlink():
+            raise InstallerError(f"Info.plist inválido no bundle macOS: {app}")
+        try:
+            with plist.open("rb") as source:
+                metadata = plistlib.load(source)
+        except (OSError, plistlib.InvalidFileException) as error:
+            raise InstallerError(f"Info.plist inválido no bundle macOS: {app}") from error
+        return metadata.get(MACOS_SAFE_AREA_KEY) is False
+
+    def prepare_macos_app(self, app: Path) -> bool:
+        if host_platform.system() != "Darwin":
             return False
-        console.info("Ajustando o bundle macOS para acessar diretamente o diretório x86QW...")
+        sandboxed = self.macos_app_is_sandboxed(app)
+        full_display = self.macos_app_uses_full_display(app)
+        if not full_display:
+            plist = app / "Contents/Info.plist"
+            original = plist.read_bytes()
+            file_format = plistlib.FMT_BINARY if original.startswith(b"bplist00") else plistlib.FMT_XML
+            metadata = plistlib.loads(original)
+            metadata[MACOS_SAFE_AREA_KEY] = False
+            descriptor, temporary_name = tempfile.mkstemp(prefix=".Info.plist.", dir=plist.parent)
+            os.close(descriptor)
+            temporary = Path(temporary_name)
+            try:
+                with temporary.open("wb") as destination:
+                    plistlib.dump(metadata, destination, fmt=file_format, sort_keys=False)
+                temporary.chmod(stat.S_IMODE(plist.stat().st_mode))
+                temporary.replace(plist)
+            finally:
+                if lexists(temporary):
+                    remove_path(temporary)
+        if sandboxed:
+            console.info("Ajustando o bundle macOS para acessar diretamente o diretório x86QW...")
+        if not full_display:
+            console.info("Preparando o fullscreen do ezQuake para utilizar toda a tela no macOS...")
         self.run_command(["codesign", "--force", "--deep", "--sign", "-", str(app)])
         self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
         if self.macos_app_is_sandboxed(app):
             raise InstallerError(f"Não foi possível remover o sandbox incompatível de {app}.")
-        console.success("Bundle macOS preparado sem a limitação de bookmark do sandbox.")
+        if not self.macos_app_uses_full_display(app):
+            raise InstallerError(f"Não foi possível habilitar o fullscreen integral em {app}.")
+        console.success("Bundle macOS preparado para acesso direto e fullscreen integral.")
         return True
+
+    def macos_app_needs_preparation(self, app: Path) -> bool:
+        return (
+            host_platform.system() == "Darwin"
+            and (self.macos_app_is_sandboxed(app) or not self.macos_app_uses_full_display(app))
+        )
 
     def validate_target(self, action: str, *, purge: bool = False) -> None:
         target_exists = lexists(self.target)
@@ -1526,7 +1568,7 @@ class Installer:
                 raise InstallerError(f"stable bundle version is {version}, expected {self.selected_version}")
             if self.channel == "nightly" and f"-g{self.selected_version.rsplit('_', 1)[-1]}" not in version:
                 raise InstallerError(f"nightly bundle {version} does not match {self.selected_version}")
-            if self.remove_macos_app_sandbox(source):
+            if self.prepare_macos_app(source):
                 version, binary_hash = self.inspect_macos_app(source)
             source.replace(prepared)
             self.app_bundle_version = version
@@ -1607,10 +1649,10 @@ class Installer:
         receipt: dict[str, str],
     ) -> dict[str, str]:
         runtime = self.target / spec.runtime(channel)
-        if spec.key != "macos" or not self.macos_app_is_sandboxed(runtime):
+        if spec.key != "macos" or not self.macos_app_needs_preparation(runtime):
             return receipt
         self.ensure_macos_ezquake_closed()
-        self.remove_macos_app_sandbox(runtime)
+        self.prepare_macos_app(runtime)
         _, binary_hash = self.inspect_macos_app(runtime)
         updated = dict(receipt)
         updated["binary_sha256"] = binary_hash
@@ -3400,6 +3442,10 @@ class Installer:
                 if not lexists(runtime):
                     raise InstallerError(f"missing ezQuake runtime: {runtime}")
                 self.check_runtime(spec, channel, receipt)
+                if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
+                    raise InstallerError(
+                        f"O fullscreen integral ainda não foi aplicado em {runtime}. Execute update."
+                    )
                 console.success(f"ezQuake {spec.label} {channel} {receipt['selection']} íntegro.")
                 verified += 1
         return verified
@@ -3716,8 +3762,22 @@ class Installer:
         selected = self.latest_release()
         available = selected[0]
         installed = receipt["selection"]
-        if available == installed:
+        runtime = self.target / spec.runtime(channel)
+        needs_macos_repair = spec.key == "macos" and self.macos_app_needs_preparation(runtime)
+        if available == installed and not needs_macos_repair:
             return False
+        if available == installed:
+            if dry_run:
+                if plan_rows is not None:
+                    plan_rows.append(UpdatePlanRow(
+                        "Cliente", f"ezQuake {spec.label} {channel}",
+                        "área segura", "tela inteira", "Reparar",
+                    ))
+                return True
+            receipt_path = self.ezquake_receipt_path(spec, channel)
+            assert receipt_path is not None
+            self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
+            return True
         if not self.release_is_newer(available, installed, channel):
             console.warning(
                 f"ezQuake {spec.label} {channel} instalado ({installed}) é mais novo que o catálogo ({available}); preservado."
