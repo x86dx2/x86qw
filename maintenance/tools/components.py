@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 
 COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_KINDS = {"core", "gameplay", "content", "addon", "documentation"}
-ALLOWED_MODES = {"overlay", "default", "preserve"}
+ALLOWED_MODES = {"overlay", "default", "preserve", "archive", "archive-base"}
 ALLOWED_ORIGINS = {"reference", "release"}
 
 
@@ -181,6 +181,7 @@ def validate_catalog(catalog: object) -> None:
     selectors: list[tuple[str, str, set[str]]] = []
     dependencies: dict[str, list[str]] = {}
     project_destinations: set[str] = set()
+    project_inputs: set[str] = set()
     for component in components:
         if not isinstance(component, dict):
             raise ValueError("invalid component entry")
@@ -204,10 +205,25 @@ def validate_catalog(catalog: object) -> None:
                 raise ValueError(f"invalid source entry: {identifier}")
             source_path = _safe_path(source_entry.get("path"), "source path")
             _safe_path(source_entry.get("destination"), "destination path")
-            if source_entry.get("mode") not in ALLOWED_MODES:
+            mode = source_entry.get("mode")
+            origin = source_entry.get("origin", "reference")
+            if mode not in ALLOWED_MODES:
                 raise ValueError(f"invalid install mode in {identifier}: {source_path}")
-            if source_entry.get("origin", "reference") not in ALLOWED_ORIGINS:
+            if origin not in ALLOWED_ORIGINS:
                 raise ValueError(f"invalid source origin in {identifier}: {source_path}")
+            if mode == "archive" and (
+                origin != "release"
+                or not str(source_entry["destination"]).casefold().endswith((".pk3", ".zip"))
+            ):
+                raise ValueError(f"archive source must build a release ZIP/PK3 in {identifier}: {source_path}")
+            if mode == "archive-base" and (
+                origin != "reference"
+                or not source_path.casefold().endswith((".pk3", ".zip"))
+                or not str(source_entry["destination"]).casefold().endswith((".pk3", ".zip"))
+            ):
+                raise ValueError(
+                    f"archive base must use a reference ZIP/PK3 in {identifier}: {source_path}"
+                )
             exclusions = source_entry.get("exclude", [])
             if not isinstance(exclusions, list):
                 raise ValueError(f"invalid exclusions in {identifier}: {source_path}")
@@ -231,6 +247,18 @@ def validate_catalog(catalog: object) -> None:
             if folded in project_destinations:
                 raise ValueError(f"duplicate project destination: {destination}")
             project_destinations.add(folded)
+        component_inputs = component.get("project_inputs", [])
+        if not isinstance(component_inputs, list):
+            raise ValueError(f"invalid project inputs: {identifier}")
+        for source_entry in component_inputs:
+            if not isinstance(source_entry, dict):
+                raise ValueError(f"invalid project input: {identifier}")
+            source_path = _safe_path(source_entry.get("path"), "project input path")
+            if not source_path.startswith("dist/") or source_path in project_inputs:
+                raise ValueError(f"invalid or duplicate project input: {source_path}")
+            if not isinstance(source_entry.get("purpose"), str) or not source_entry["purpose"]:
+                raise ValueError(f"project input has no purpose: {source_path}")
+            project_inputs.add(source_path)
         project_overrides = component.get("project_overrides", [])
         if not isinstance(project_overrides, list):
             raise ValueError(f"invalid project overrides: {identifier}")
@@ -393,7 +421,10 @@ def destination_for_source(
             continue
         suffix = path.removeprefix(root).lstrip("/")
         destination = entry["destination"]
-        matches.append((f"{destination}/{suffix}" if suffix else destination, entry["mode"]))
+        if entry["mode"] in {"archive", "archive-base"}:
+            matches.append((destination, entry["mode"]))
+        else:
+            matches.append((f"{destination}/{suffix}" if suffix else destination, entry["mode"]))
     if len(matches) != 1:
         raise ValueError(f"source has no unique destination: {path}")
     return matches[0]

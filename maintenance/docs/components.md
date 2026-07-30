@@ -5,7 +5,7 @@ do nQuake corresponde a um projeto com releases: skins, miras, skyboxes, mapas e
 outros recursos são coleções curadas. Nesses casos, a versão correta é o commit
 imutável do `nQuake/distfiles`, não um número inventado.
 
-Estado verificado em 29 de julho de 2026:
+Estado verificado em 30 de julho de 2026:
 
 ## Layout dos mods versionados
 
@@ -22,25 +22,24 @@ componentes autorais da própria distribuição e não representa um upstream.
 
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
-| Configuração base | `e4cb23d40aa2+x86qw.4` | snapshot nQuake com bootstrap x86QW | aliases temporários e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
+| Configuração base | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com bootstrap x86QW | aliases temporários e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+nquake.e4cb23d40aa2+x86qw.7` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados e carregamento QVM direto no servidor local |
+| KTX | `1.47+x86qw.1` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados e carregamento QVM direto no servidor local |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Modelos | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Bandeiras do placar | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Sons | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Texturas externas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Texturas base | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Mapas selecionados | `e4cb23d40aa2` | coleção curada nQuake | sem download externo em massa |
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
 | Documentação | `e4cb23d40aa2+x86qw.1` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
 | QRP alta resolução | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
-| Final Arena | `e4cb23d40aa2+x86qw.4` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis |
+| Final Arena | `e4cb23d40aa2+x86qw.1` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis |
 | Pro-X | `1.1+x86qw.1` | release pública 1.1 e gameplay x86QW | runtime oficial completo; perfil reaplicado pelo `qw_server.cfg`; configuração pessoal antiga migrada com backup |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.1` | gamecode e fontes oficiais 2.9 sobre assets nQuake | efeitos e velocidades clássicos liberados por quatro capacidades remotas; binds remotos bloqueados |
-| Total Destruction 2 | `2.22+x86qw.5` | pacote independente do upstream e gameplay x86QW | runtime mínimo com magia, especial, runas, votação e áudio completo |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.1` | gamecode e fontes oficiais 2.9 sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; binds remotos bloqueados |
+| Total Destruction 2 | `2.22+x86qw.1` | pacote independente do upstream e gameplay x86QW | runtime mínimo com magia, especial, runas, votação e áudio completo |
 
 ## Contrato de atualização
 
@@ -51,6 +50,8 @@ componentes autorais da própria distribuição e não representa um upstream.
   sobre a base nQuake;
 - `upstream-package`: um componente independente é validado e empacotado sem
   fingir que pertence ao snapshot do nQuake;
+- `upstream-composed`: uma base curada do nQuake é mesclada membro a membro com
+  uma release oficial completa mediante política de conflitos versionada;
 - todo download possui tamanho e SHA-256 antes de entrar no acervo;
 - o pacote interno registra origem, membros substituídos e hashes resultantes;
 - o catálogo mantém somente a versão atual, enquanto releases antigas continuam
@@ -72,16 +73,34 @@ em `dist/mods/ktx/1.47/upstream/` e as fontes em
 `dist/mods/ktx/1.47/source/`. Ele não é
 executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
 
+## Composição característica de cada mod
+
+Todos os mods herdam a configuração geral do jogador, mas não fingem possuir a
+mesma proveniência. O pipeline é declarado conforme o conteúdo real:
+
+| Mod | Referência nQuake | Atualização independente | Harmonização x86QW |
+| --- | --- | --- | --- |
+| KTX | `ktx.pk3`, incluindo conteúdo exclusivo e sons de Clan Arena | recursos, QVM e símbolos oficiais 1.47 substituem conflitos declarados | compatibilidade do servidor local, gameplay e configuração pessoal |
+| Final Arena | pacote integral Final Arena 1.20 com mapas, mídia e gamecode | não há release mais nova comprovada no acervo | servidor local, binds, fila, estatísticas e ajuda |
+| Pro-X | 0.8b é mantido apenas como referência histórica, sem entrar no runtime | o pacote completo 1.1 substitui a versão do nQuake | `qw_server.cfg`, servidor local, binds e configuração pessoal |
+| Team Fortress | mapas, modelos, sons e 34 LOCs; o gamecode 2.8 é retirado do `misc.pak` montado e o `detpack.wav` idêntico permanece apenas no `pak1.pak` | `qwprogs.dat` oficial 2.9 é extraído e validado diretamente de `tf29qw.zip` | capacidades compatíveis, servidor local, binds e configuração pessoal |
+| Total Destruction 2 | não usa conteúdo do nQuake | distribuição completa 2.22; `saw_down.wav` ausente é recomposto do som idêntico validado | servidor local, armas, magias, runas, votação e configuração pessoal |
+
+Arquivos byte-idênticos só são eliminados quando têm também a mesma função e o
+mesmo caminho de runtime. Sons parecidos dentro de `arena.pk3`, `prox/` e
+`ktx.pk3` permanecem quando o gamecode de cada gamedir os procura em namespaces
+distintos. Foi por isso que os WAVs soltos `qw/sound/ca` puderam ser removidos,
+mas a mídia interna de Final Arena e Pro-X não foi descartada.
+
 ## Contrato dos perfis de gameplay
 
-Cada mod parte da configuração geral do nQuake. A camada x86QW substitui apenas
-binds que conflitam com a mecânica do mod, mantém os recursos coerentes do
-nQuake e acrescenta acesso às funções confirmadas no manual, na configuração
-original ou no gamecode correspondente. O arquivo pessoal é executado por
-último e nunca é sobrescrito:
+A camada x86QW substitui apenas binds que conflitam com a mecânica do mod,
+mantém os recursos coerentes da composição acima e acrescenta acesso às funções
+confirmadas no manual, na configuração original ou no gamecode correspondente.
+O arquivo pessoal é executado por último e nunca é sobrescrito:
 
 ```text
-nQuake -> x86QW do mod -> x86qw-<mod>-user.cfg
+base composta do mod -> x86QW do mod -> x86qw-<mod>-user.cfg
 ```
 
 As teclas de movimento, sensibilidade, rede e preferências visuais continuam
@@ -89,7 +108,7 @@ pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod
 ajustes de compatibilidade do HUD e ajuda contextual. `F10` repete a ajuda
 automática mostrada ao carregar cada mod.
 
-O catálogo declara uma única política `common-baseline`: todos os 19 componentes
+O catálogo declara uma única política `common-baseline`: todos os 18 componentes
 usam arquivos de configuração comuns comprovados tanto com ezQuake stable 3.6.9
 quanto com a nightly `20260616-101233_a86996a`. Nenhum comando exclusivo da
 nightly é gravado globalmente; futuras otimizações específicas deverão entrar

@@ -1,19 +1,19 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-30T11:17:54Z",
+  "generated_at": "2026-07-30T16:08:38Z",
   "packages": [
     {
       "component": "core",
       "package": "x86qw-core-id1",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "x86qw-core-id1-1.0.0.zip",
+      "filename": "x86qw-core-id1-0.1.0.zip",
       "size": 23817305,
-      "sha256": "48c5701190054946099383c6a833b9e2c9ada745dc6bdb1c0224c939a7ca4f2b",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip",
+      "sha256": "484e2243a2592a53d28bd39771c0e8128bb251e70742a6f2f132dcce4d9ad52a",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-0.1.0/x86qw-core-id1-0.1.0.zip",
       "license": "id-software-registered-game-data",
       "license_url": "https://github.com/x86dx2/x86qw",
       "source_urls": [
@@ -21,11 +21,11 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-core-id1/1.0.0/x86qw-core-id1-1.0.0.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-core-0.1.0/x86qw-core-id1-0.1.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-core-id1/0.1.0/x86qw-core-id1-0.1.0.zip"
       ],
       "source_revision": "ca32377ea9050dd50f9a71147cbe16c35d698765fd57a826651b4d608e20f07f",
-      "mirror_title": "x86QW Content · Dados base 1.0.0",
+      "mirror_title": "x86QW Content · Dados base 0.1.0",
       "mirror_notes": "Dados base obrigatórios usados pelo instalador x86QW.",
       "mirror_latest": false
     },
@@ -46,8 +46,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-x86_64.AppImage"
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
@@ -71,8 +71,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezQuake-macOS-universal.zip"
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
@@ -96,8 +96,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-nightly-20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/20260616-101233_a86996a/20260616-101233_a86996a_ezquake.exe"
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/windows-x64/20260616-101233_a86996a_ezquake.exe",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
@@ -121,8 +121,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-linux-x86_64.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-linux-x86_64.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-linux-x86_64.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/3.6.9/ezQuake-linux-x86_64.zip"
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/linux-x86_64/ezQuake-linux-x86_64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
@@ -146,8 +146,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-macOS-universal.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/3.6.9/ezQuake-macOS-universal.zip"
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
@@ -171,8 +171,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/ezquake/3.6.9/ezQuake-windows-x64.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-windows-x64.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ezquake/3.6.9/ezQuake-windows-x64.zip"
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/windows-x64/ezQuake-windows-x64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
@@ -183,13 +183,13 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.0",
-      "current": false,
+      "current": true,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
       "filename": "x86qw-installer-0.1.0.zip",
-      "size": 24171125,
-      "sha256": "61d008c48ca55ea8faec263df48775dfa9a3e72df66607efed4ea052b15234b3",
+      "size": 58767,
+      "sha256": "9e9ca4cd531b9f71194ca943a9f284a56768d8c9e2d0c3308b85cab8702f330a",
       "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip",
       "license": "x86qw-project-terms",
       "license_url": "https://github.com/x86dx2/x86qw",
@@ -199,7 +199,7 @@
       "redistribution_reviewed": true,
       "urls": [
         "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.0/x86qw-installer-0.1.0.zip"
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.0/x86qw-installer-0.1.0.zip"
       ],
       "distribution_path": "installer/packages/0.1.0/x86qw-installer-0.1.0.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.0",
@@ -207,201 +207,21 @@
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.0",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.1",
-      "current": false,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.1.zip",
-      "size": 24171129,
-      "sha256": "dfc078b8be8d0bdbce23baddcc75c4c08c0f971ac596fc62d1678a61b9787d6b",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.1/x86qw-installer-0.1.1.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.1/x86qw-installer-0.1.1.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.1/x86qw-installer-0.1.1.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.1/x86qw-installer-0.1.1.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.1",
-      "release_title": "x86QW Installer 0.1.1",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.1",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.2",
-      "current": false,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.2.zip",
-      "size": 24171420,
-      "sha256": "d70e2faf2108d823eac600076e7edee805ebe43707591586b10f29d34fbf6d20",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.2/x86qw-installer-0.1.2.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.2/x86qw-installer-0.1.2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.2/x86qw-installer-0.1.2.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.2/x86qw-installer-0.1.2.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.2",
-      "release_title": "x86QW Installer 0.1.2",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.2",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.3",
-      "current": false,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.3.zip",
-      "size": 55527,
-      "sha256": "fcedd03497ce8a10f4f8d7c57c38b2f21cd44a11d2f9e09ee4085a4fe43311a6",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.3/x86qw-installer-0.1.3.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.3/x86qw-installer-0.1.3.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.3",
-      "release_title": "x86QW Installer 0.1.3",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.3",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.4",
-      "current": false,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.4.zip",
-      "size": 55518,
-      "sha256": "98f5c3015b10df05c1d8bddbb73eaf31ca2fbcaf5e42ce6e066c8d190de44906",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.4/x86qw-installer-0.1.4.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.4/x86qw-installer-0.1.4.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.4/x86qw-installer-0.1.4.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.4/x86qw-installer-0.1.4.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.4",
-      "release_title": "x86QW Installer 0.1.4",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.4",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.5",
-      "current": false,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.5.zip",
-      "size": 56158,
-      "sha256": "ea2fa6ffbc0b8f7f2203f46962617ed36db0d56a3cc5a3b407d7bf66dfdc5c45",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.5/x86qw-installer-0.1.5.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.5/x86qw-installer-0.1.5.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.5/x86qw-installer-0.1.5.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.5/x86qw-installer-0.1.5.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.5",
-      "release_title": "x86QW Installer 0.1.5",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.5",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "installer",
-      "package": "x86qw-installer",
-      "version": "0.1.6",
-      "current": true,
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-installer-0.1.6.zip",
-      "size": 57530,
-      "sha256": "e29bb7ca8c36d07b63473c4657ed3cf130bcade7f512cf627f799ed0a8440f53",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.6/x86qw-installer-0.1.6.zip",
-      "license": "x86qw-project-terms",
-      "license_url": "https://github.com/x86dx2/x86qw",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.6/x86qw-installer-0.1.6.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.6/x86qw-installer-0.1.6.zip"
-      ],
-      "distribution_path": "installer/packages/0.1.6/x86qw-installer-0.1.6.zip",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.6",
-      "release_title": "x86QW Installer 0.1.6",
-      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
-      "mirror_title": "x86QW Installer 0.1.6",
-      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": true
     },
     {
       "component": "ktx",
-      "package": "nquake-ktx",
-      "version": "1.47+nquake.e4cb23d40aa2+x86qw.7",
+      "package": "ktx",
+      "version": "1.47+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.7.zip",
-      "size": 2388584,
-      "sha256": "53c08cf071cc044c5d745ec7db911eb161d58ec50694d3a517014d8a3a93a89a",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.7.zip",
-      "license": "upstream-distfiles-terms",
-      "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "filename": "ktx-1.47+x86qw.1.zip",
+      "size": 2497621,
+      "sha256": "b4534b68a683b8b8398a1799409c8531c7569edfc3b2f7677654384cd1cf019b",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.1/ktx-1.47+x86qw.1.zip",
+      "license": "GPL-2.0",
+      "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
         "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
         "https://github.com/QW-Group/ktx/archive/refs/tags/1.47.tar.gz",
@@ -409,28 +229,29 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-ktx-1.47-nquake.e4cb23d40aa2/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.7.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-ktx/1.47+nquake.e4cb23d40aa2+x86qw.7/nquake-ktx-1.47+nquake.e4cb23d40aa2+x86qw.7.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.1/ktx-1.47+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.1/ktx-1.47+x86qw.1.zip"
       ],
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Atualiza o código de jogo KTX para 1.47, preserva os recursos nQuake e o mapa de símbolos QVM, seleciona diretamente o QVM no servidor local do ezQuake, neutraliza o profiling exclusivo do MVDSV e usa aliases temporários no gameplay x86QW.",
-      "upstream_version": "1.47",
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+nquake.e4cb23d40aa2+x86qw.7",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
+      "upstream_version": "1.47"
     },
     {
       "component": "nquake",
       "package": "final-arena",
-      "version": "e4cb23d40aa2+x86qw.6",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "final-arena-e4cb23d40aa2+x86qw.6.zip",
-      "size": 6984543,
-      "sha256": "750500388858e899b3f0149ecc037cd1c034f18325e4b6c82ba5c04e2e7196da",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.6.zip",
+      "filename": "final-arena-e4cb23d40aa2+x86qw.1.zip",
+      "size": 6984541,
+      "sha256": "19be0f576e34d808bef8ec06f449e8daac897c3f832497b28388180b44e14d6d",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -438,13 +259,13 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.6.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/final-arena/e4cb23d40aa2+x86qw.6/final-arena-e4cb23d40aa2+x86qw.6.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/e4cb23d40aa2+x86qw.1/final-arena-e4cb23d40aa2+x86qw.1.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -456,7 +277,7 @@
       "filename": "nquake-base-textures-e4cb23d40aa2.zip",
       "size": 21149469,
       "sha256": "a0cf3404714019d5d554b1e0369346c481b11a15815933b75b41dc232106b532",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -464,8 +285,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-base-textures/e4cb23d40aa2/nquake-base-textures-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-base-textures-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-base-textures/e4cb23d40aa2/nquake-base-textures-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -475,14 +296,14 @@
     {
       "component": "nquake",
       "package": "nquake-bootstrap",
-      "version": "e4cb23d40aa2+x86qw.7",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip",
+      "filename": "nquake-bootstrap-e4cb23d40aa2+x86qw.1.zip",
       "size": 27721,
-      "sha256": "d2a25120052f91489d7da126431bcc72485033056dab565542fac6afdadd6c7c",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip",
+      "sha256": "03638699b124d74c9a627f02d76b73a5cce01b3563f07344b78a834260f67840",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -490,13 +311,13 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-bootstrap/e4cb23d40aa2+x86qw.7/nquake-bootstrap-e4cb23d40aa2+x86qw.7.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-bootstrap-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-bootstrap/e4cb23d40aa2+x86qw.1/nquake-bootstrap-e4cb23d40aa2+x86qw.1.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -508,7 +329,7 @@
       "filename": "nquake-crosshairs-e4cb23d40aa2.zip",
       "size": 14979,
       "sha256": "b20e7dff56aac2da3f7098760f51f19392c8982e17d5566420dab6928517fd21",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -516,8 +337,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-crosshairs/e4cb23d40aa2/nquake-crosshairs-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-crosshairs-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-crosshairs/e4cb23d40aa2/nquake-crosshairs-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -527,14 +348,14 @@
     {
       "component": "nquake",
       "package": "nquake-documentation",
-      "version": "e4cb23d40aa2+x86qw.3",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "nquake-documentation-e4cb23d40aa2+x86qw.3.zip",
+      "filename": "nquake-documentation-e4cb23d40aa2+x86qw.1.zip",
       "size": 12936,
-      "sha256": "b021ca04bdc8f41d48b3daa345fe960ae42b3e85387ab5c5010d5c5bc28d6287",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2+x86qw.3.zip",
+      "sha256": "356c69c496d9e9c733f0893d85a8aff6408f80e9a6adc194352a63a5dbf6bdda",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -542,13 +363,13 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2+x86qw.3.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-documentation/e4cb23d40aa2+x86qw.3/nquake-documentation-e4cb23d40aa2+x86qw.3.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-documentation-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-documentation/e4cb23d40aa2+x86qw.1/nquake-documentation-e4cb23d40aa2+x86qw.1.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -560,7 +381,7 @@
       "filename": "nquake-external-textures-e4cb23d40aa2.zip",
       "size": 3835861,
       "sha256": "80122cac09d35c2a350112329baff2c2c8243c328ad31871db7eb7db041bf0ea",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -568,8 +389,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-external-textures/e4cb23d40aa2/nquake-external-textures-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-external-textures-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-external-textures/e4cb23d40aa2/nquake-external-textures-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -586,7 +407,7 @@
       "filename": "nquake-maps-e4cb23d40aa2.zip",
       "size": 20471003,
       "sha256": "e714bec79c0ceda06924fd20ede9b1a0982f8687f44757333ea08a708b5408a2",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -594,8 +415,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-maps/e4cb23d40aa2/nquake-maps-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-maps-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-maps/e4cb23d40aa2/nquake-maps-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -612,7 +433,7 @@
       "filename": "nquake-matchinfo-e4cb23d40aa2.zip",
       "size": 7411045,
       "sha256": "4128bf78da99a9721987c01719d7cf7d7013f2020ce3183ee35901be29a7fd01",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -620,8 +441,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-matchinfo/e4cb23d40aa2/nquake-matchinfo-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-matchinfo-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-matchinfo/e4cb23d40aa2/nquake-matchinfo-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -638,7 +459,7 @@
       "filename": "nquake-models-e4cb23d40aa2.zip",
       "size": 4045436,
       "sha256": "dd265bc63b6e3ab92190cecc71d0250283629415a9bd8dda468e56dc1f674be5",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -646,8 +467,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-models/e4cb23d40aa2/nquake-models-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-models-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-models/e4cb23d40aa2/nquake-models-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -664,7 +485,7 @@
       "filename": "nquake-player-skins-e4cb23d40aa2.zip",
       "size": 14552089,
       "sha256": "01a6db7b338efebb723c7be62c22f1adc56eb43c7d35471f6d1ca4a59f07d6f4",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -672,8 +493,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-player-skins/e4cb23d40aa2/nquake-player-skins-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-player-skins-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-player-skins/e4cb23d40aa2/nquake-player-skins-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -690,7 +511,7 @@
       "filename": "nquake-scoreboard-flags-e4cb23d40aa2.zip",
       "size": 368135,
       "sha256": "404f6d6d91cb3969d3a6e162fc804469f6814b59bed71902095dcd0208a9a44e",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -698,8 +519,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-scoreboard-flags/e4cb23d40aa2/nquake-scoreboard-flags-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-scoreboard-flags-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-scoreboard-flags/e4cb23d40aa2/nquake-scoreboard-flags-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -716,7 +537,7 @@
       "filename": "nquake-skyboxes-e4cb23d40aa2.zip",
       "size": 3988263,
       "sha256": "e9eed3c75b1019c71ef8c180f643db7defb774ffea2373baf35c1bed4f30f8ba",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -724,34 +545,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-skyboxes/e4cb23d40aa2/nquake-skyboxes-e4cb23d40aa2.zip"
-      ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
-    },
-    {
-      "component": "nquake",
-      "package": "nquake-sounds",
-      "version": "e4cb23d40aa2",
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "nquake-sounds-e4cb23d40aa2.zip",
-      "size": 162373,
-      "sha256": "e87c26260eee589f173f6055305faadc6ebfa341df809da7871af6117fe7203f",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip",
-      "license": "upstream-distfiles-terms",
-      "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "source_urls": [
-        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-sounds-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-sounds/e4cb23d40aa2/nquake-sounds-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-skyboxes-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-skyboxes/e4cb23d40aa2/nquake-skyboxes-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -768,7 +563,7 @@
       "filename": "nquake-visual-core-e4cb23d40aa2.zip",
       "size": 15351608,
       "sha256": "9d9544519e639ba7d9684a76e2ddab7aea50e3a80fb338100b3bd070e1c5e212",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -776,8 +571,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/nquake-visual-core/e4cb23d40aa2/nquake-visual-core-e4cb23d40aa2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/nquake-visual-core-e4cb23d40aa2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/nquake-visual-core/e4cb23d40aa2/nquake-visual-core-e4cb23d40aa2.zip"
       ],
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
@@ -787,14 +582,14 @@
     {
       "component": "nquake",
       "package": "qrp-hires",
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "qrp-hires-e4cb23d40aa2+x86qw.2.zip",
+      "filename": "qrp-hires-e4cb23d40aa2+x86qw.1.zip",
       "size": 404142106,
-      "sha256": "311099c209d8ed7fdc1c0feee93cee6d227bdb62ceb30f2360eca956de5f204e",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2+x86qw.2.zip",
+      "sha256": "8c03ca97533e2532b0c4dc9b4b4c7f08040a3295f4d99f7210ac043d2457f328",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
@@ -802,13 +597,13 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/qrp-hires/e4cb23d40aa2+x86qw.2/qrp-hires-e4cb23d40aa2+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/qrp-hires-e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qrp-hires/e4cb23d40aa2+x86qw.1/qrp-hires-e4cb23d40aa2+x86qw.1.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "pro-x",
@@ -820,7 +615,7 @@
       "filename": "pro-x-1.1+x86qw.1.zip",
       "size": 9076007,
       "sha256": "d002bfcf4500e4f47e440778b4d6744cb60f32bea173818c7622ba253325195d",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "source_urls": [
@@ -829,8 +624,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/pro-x/1.1+x86qw.1/pro-x-1.1+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.1/pro-x-1.1+x86qw.1.zip"
       ],
       "source_revision": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
@@ -843,34 +638,32 @@
     {
       "component": "td2",
       "package": "total-destruction-2",
-      "version": "2.22+x86qw.5",
+      "version": "2.22+x86qw.1",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "total-destruction-2-2.22+x86qw.5.zip",
+      "filename": "total-destruction-2-2.22+x86qw.1.zip",
       "size": 447925,
-      "sha256": "7335e0a1535c63811254d01adda3bdfbb783ef8e4eaea9f44b461db9e5268131",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.5.zip",
+      "sha256": "c7145120fb4607ee9e62b8381dd0fbbf903d0a8d07aa004d657863506a3b9c0c",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
       "source_urls": [
         "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-        "https://arenacamper.ddns.net/repo/quakeworld/",
-        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2-source/2.22/quakeworld-TD2.22QW-server_PTBR.tar.gz"
+        "https://arenacamper.ddns.net/repo/quakeworld/"
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.5.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/total-destruction-2/2.22+x86qw.5/total-destruction-2-2.22+x86qw.5.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.1/total-destruction-2-2.22+x86qw.1.zip"
       ],
+      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
       "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
-      "upstream_version": "2.22",
-      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.5",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "upstream_version": "2.22"
     },
     {
       "component": "team-fortress",
@@ -880,9 +673,9 @@
       "platform": "any",
       "architecture": "any",
       "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
-      "size": 8850986,
-      "sha256": "769e0f72d41003f7f4c2c63abab52c699425a422dd3e5a7333720c70495fe98c",
-      "origin_url": "https://github.com/x86dx2/x86qw-dist/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
+      "size": 8563383,
+      "sha256": "010b544f117a884d514b8589e6f68d8d5fc7b47665efc506eeb6ee4ea40262c5",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "source_urls": [
@@ -892,16 +685,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw-dist/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84856335/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.1/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.1/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip"
       ],
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "release_notes": "Preserva os assets Team Fortress 2.8 do nQuake, aplica o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
-      "upstream_version": "2.9",
       "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.1",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
+      "release_notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, remove do misc.pak o gamecode 2.8 substituído, elimina do pak0.pak o detpack.wav byte-idêntico já fornecido pelo pak1.pak, aplica diretamente do ZIP original o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
+      "upstream_version": "2.9"
     }
   ]
 }

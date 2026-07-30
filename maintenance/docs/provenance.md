@@ -38,8 +38,7 @@ com `checksums.txt` e com os digests publicados pela API do GitHub:
 | Windows | `ezQuake-windows-x64.zip` | 4.135.630 | `1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d` |
 
 As três receitas stable estão `ready`; seus artefatos ficam em `dist/clients/ezquake/stable/3.6.9`
-e preservam o mirror histórico imutável no `x86qw-dist`. Releases novas são publicadas em
-`x86dx2/x86qw`, sem migrar as anteriores. O catálogo registra os três binários nightly e o commit
+e são publicados exclusivamente nos projetos `x86qw`. O catálogo registra os três binários nightly e o commit
 completo `a86996a3d33dc1bc3fb15bfe7bcadd662b822557`. Os tarballs de fonte exatos de
 stable e nightly também ficam preservados em `dist/` para consulta e compilação.
 
@@ -53,7 +52,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
 QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
-`1.47+nquake.e4cb23d40aa2+x86qw.7`; fontes, override, gameplay e hashes ficam no inventário
+`1.47+x86qw.1`; fontes, override, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

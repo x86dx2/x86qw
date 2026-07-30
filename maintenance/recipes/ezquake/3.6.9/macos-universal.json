@@ -19,7 +19,7 @@
     ],
     "redistribution_reviewed": true,
     "urls": [
-      "https://github.com/x86dx2/x86qw-dist/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip"
+      "https://github.com/x86dx2/x86qw/releases/download/ezquake-3.6.9/ezQuake-macOS-universal.zip"
     ],
     "artifact_format": "zip",
     "expected_members": [
@@ -28,6 +28,6 @@
   },
   "review": {
     "status": "ready",
-    "notes": "Artefato oficial espelhado byte a byte no x86qw-dist e registrado por SHA-256."
+    "notes": "Artefato oficial espelhado byte a byte no x86qw e registrado por SHA-256."
   }
 }

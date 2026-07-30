@@ -299,16 +299,6 @@ def consumed_component(
     components = load_component_policy(policy_path) if policy_path is not None else load_component_policy()
     component = component_for_distribution_path(components, path)
     upstream = source_owner(load_upstreams(UPSTREAMS), path)
-    if upstream is not None:
-        return component
-    releases = load_releases(component_releases, component_catalog)
-    if component == "installer":
-        return component if re.fullmatch(
-            r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
-            path,
-        ) else None
-    if component in {"ktx", "pro-x", "team-fortress", "td2"}:
-        return component if component_for_artifact_path(releases, path) is not None else None
     if component == "nquake":
         parts = PurePosixPath(path).parts
         if (
@@ -320,6 +310,16 @@ def consumed_component(
         upstream_path = PurePosixPath(*parts[3:]).as_posix()
         catalog = load_component_catalog(component_catalog)
         return component if component_for_source(catalog, upstream_path, "reference") is not None else None
+    if upstream is not None:
+        return component
+    releases = load_releases(component_releases, component_catalog)
+    if component == "installer":
+        return component if re.fullmatch(
+            r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
+            path,
+        ) else None
+    if component in {"ktx", "pro-x", "team-fortress", "td2"}:
+        return component if component_for_artifact_path(releases, path) is not None else None
     name = PurePosixPath(path).name
     if component == "ezquake":
         if "/nightly/" in path:
@@ -393,6 +393,22 @@ def collapse_case_duplicates(root: Path, files: dict[str, object]) -> int:
 def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]:
     files = manifest["files"]
     assert isinstance(files, dict)
+    installer_paths = [
+        relative
+        for relative in files
+        if re.fullmatch(
+            r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/"
+            r"x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
+            relative,
+        )
+    ]
+    current_installer = max(
+        installer_paths,
+        key=lambda relative: tuple(
+            int(part) for part in PurePosixPath(relative).parts[2].split(".")
+        ),
+        default=None,
+    )
     removed_files = collapse_case_duplicates(root, files)
     for relative in sorted(tuple(files)):
         component_name = consumed_component(relative)
@@ -404,19 +420,29 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
                 assert isinstance(consumers, list)
                 metadata["component"] = component_name
                 upstream = source_owner(load_upstreams(UPSTREAMS), relative)
-                metadata["consumer"] = f"development:{upstream}" if upstream is not None else consumers[0]
-                if upstream is not None:
-                    metadata["package"] = upstream
-                elif component_name in {"ktx", "pro-x", "team-fortress", "td2"}:
-                    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
-                    package = component_for_artifact_path(releases, relative)
-                    metadata["package"] = package
+                if component_name == "installer":
+                    metadata["consumer"] = (
+                        "bootstrap:installer"
+                        if relative == current_installer
+                        else "archive:installer-history"
+                    )
                 elif component_name == "nquake":
                     parts = PurePosixPath(relative).parts
                     upstream_path = PurePosixPath(*parts[3:]).as_posix()
+                    metadata["consumer"] = consumers[0]
                     metadata["package"] = component_for_source(
                         load_component_catalog(COMPONENT_CATALOG), upstream_path, "reference",
                     )
+                elif upstream is not None:
+                    metadata["consumer"] = f"development:{upstream}"
+                    metadata["package"] = upstream
+                elif component_name in {"ktx", "pro-x", "team-fortress", "td2"}:
+                    metadata["consumer"] = consumers[0]
+                    releases = load_releases(COMPONENT_RELEASES, COMPONENT_CATALOG)
+                    package = component_for_artifact_path(releases, relative)
+                    metadata["package"] = package
+                else:
+                    metadata["consumer"] = consumers[0]
             continue
         target = root / relative
         if target.is_file() or target.is_symlink():
@@ -540,6 +566,7 @@ def verify_distribution(
         for source in (
             *component_entry.get("project_sources", []),
             *component_entry.get("project_overrides", []),
+            *component_entry.get("project_inputs", []),
         )
     }
     allowed_unmanaged = {

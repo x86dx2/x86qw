@@ -1,10 +1,10 @@
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "0.1.6"
+$InstallerVersion = "0.1.0"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "e29bb7ca8c36d07b63473c4657ed3cf130bcade7f512cf627f799ed0a8440f53"
+$InstallerSha256 = "9e9ca4cd531b9f71194ca943a9f284a56768d8c9e2d0c3308b85cab8702f330a"
 $InstallerUrls = @(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-$InstallerVersion/$InstallerFile",
-  "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/$InstallerVersion/$InstallerFile"
+  "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/$InstallerVersion/$InstallerFile"
 )
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {

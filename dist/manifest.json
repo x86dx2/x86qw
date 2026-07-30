@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-30T11:17:54Z",
+  "captured_at": "2026-07-30T16:03:31Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -21,7 +21,7 @@
     },
     "clients/ezquake/nightly/20260616-101233_a86996a/source/ezquake-source-a86996a3d33dc1bc3fb15bfe7bcadd662b822557.tar.gz": {
       "component": "ezquake",
-      "consumer": "development:ezquake",
+      "consumer": "development:ezquake-nightly",
       "package": "ezquake-nightly",
       "sha256": "7f8caaac70ea98838cf66d3de278d8dc993be6968cb4004bf29f88ac8f6f35ab",
       "size": 2015304,
@@ -56,7 +56,7 @@
     },
     "clients/ezquake/stable/3.6.9/source/ezquake-source-3.6.9.tar.gz": {
       "component": "ezquake",
-      "consumer": "development:ezquake",
+      "consumer": "development:ezquake-stable",
       "package": "ezquake-stable",
       "sha256": "5408b0331c992f511736a5c85a8b135f6cf605d9483e03103dd0fdc267d3547a",
       "size": 1962575,
@@ -370,7 +370,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/qw/ktx.pk3": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-ktx",
+      "package": "ktx",
       "sha256": "eee2262fb372767afcb38c22aec7e872bef18c79dad6b13ab748df490eade478",
       "size": 2363039,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/qw/ktx.pk3"
@@ -2959,102 +2959,6 @@
       "size": 14782,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/skins/yellow.png"
     },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf1.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "1a24b0ae739a6d635fc826fb22d27c7826bbb3b287a39f52f4c527584389676d",
-      "size": 10008,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf1.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf2.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "4d10d6b34a0eac103ce4826e662351e634b7990852037a9fe6fd24815d18bb0c",
-      "size": 11982,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf2.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf3.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "5e742c7b623ba5589c8a173d929a0ff74e4baae682d295bf639145a911db4f5e",
-      "size": 10502,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf3.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf4.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "b7a8b3eb8c0723221ad2a0be16b1908a4c13a5a8e6d1e61436c5fb929aa2d112",
-      "size": 10666,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf4.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf5.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "e61c2fd6cd1599ac68993c5e4b3976e54835181f40bf09d35a78e01abcf2f9cb",
-      "size": 14246,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf5.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf6.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "e48c72f0eeca6e48f0a330ec5539f1d4131a2d498d182f1d16dc677400a99780",
-      "size": 16336,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf6.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf7.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "146089da07a45c2691736014d36aea63aa63a03af2ad17e29d0b79d0d3fec3bb",
-      "size": 15576,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf7.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf8.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "c189d2f8feaca6625080d053aea377df6363f8eb9ea14877d0370eaa81e52c79",
-      "size": 17476,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf8.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf9.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "20343ae55d8d7cc8c33ecde107bbc8da546be48215c3f10a996982fc5563a2cb",
-      "size": 19662,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sf9.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sfdraw.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "3d8a9d4b1aaef4243aa9615cab0da23c76f821e16ec23060639527ca46c8deb7",
-      "size": 14960,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sfdraw.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sffight.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "0e82262820794c033bd37cca38b3ac909718b8d81362a0a7554043d761a47f53",
-      "size": 19852,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sffight.wav"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sfround.wav": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "nquake-sounds",
-      "sha256": "a5001b30c3d46fccb0d6c1e9eb0f816585c1c3be2581ad325f9ce4c6b935f39a",
-      "size": 22416,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/sound/ca/sfround.wav"
-    },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/textures/bmodels/simple_b_batt0_0.tga": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
@@ -4353,52 +4257,10 @@
     },
     "installer/packages/0.1.0/x86qw-installer-0.1.0.zip": {
       "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "61d008c48ca55ea8faec263df48775dfa9a3e72df66607efed4ea052b15234b3",
-      "size": 24171125,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip"
-    },
-    "installer/packages/0.1.1/x86qw-installer-0.1.1.zip": {
-      "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "dfc078b8be8d0bdbce23baddcc75c4c08c0f971ac596fc62d1678a61b9787d6b",
-      "size": 24171129,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.1/x86qw-installer-0.1.1.zip"
-    },
-    "installer/packages/0.1.2/x86qw-installer-0.1.2.zip": {
-      "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "d70e2faf2108d823eac600076e7edee805ebe43707591586b10f29d34fbf6d20",
-      "size": 24171420,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.2/x86qw-installer-0.1.2.zip"
-    },
-    "installer/packages/0.1.3/x86qw-installer-0.1.3.zip": {
-      "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "fcedd03497ce8a10f4f8d7c57c38b2f21cd44a11d2f9e09ee4085a4fe43311a6",
-      "size": 55527,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.3/x86qw-installer-0.1.3.zip"
-    },
-    "installer/packages/0.1.4/x86qw-installer-0.1.4.zip": {
-      "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "98f5c3015b10df05c1d8bddbb73eaf31ca2fbcaf5e42ce6e066c8d190de44906",
-      "size": 55518,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.4/x86qw-installer-0.1.4.zip"
-    },
-    "installer/packages/0.1.5/x86qw-installer-0.1.5.zip": {
-      "component": "installer",
-      "consumer": "archive:installer-history",
-      "sha256": "ea2fa6ffbc0b8f7f2203f46962617ed36db0d56a3cc5a3b407d7bf66dfdc5c45",
-      "size": 56158,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.5/x86qw-installer-0.1.5.zip"
-    },
-    "installer/packages/0.1.6/x86qw-installer-0.1.6.zip": {
-      "component": "installer",
       "consumer": "bootstrap:installer",
-      "sha256": "e29bb7ca8c36d07b63473c4657ed3cf130bcade7f512cf627f799ed0a8440f53",
-      "size": 57530,
-      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.6/x86qw-installer-0.1.6.zip"
+      "sha256": "9e9ca4cd531b9f71194ca943a9f284a56768d8c9e2d0c3308b85cab8702f330a",
+      "size": 58767,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.0/x86qw-installer-0.1.0.zip"
     },
     "mods/ktx/1.47/source/ktx-1.47.tar.gz": {
       "component": "ktx",
@@ -4410,8 +4272,8 @@
     },
     "mods/ktx/1.47/upstream/qwprogs-qvm.zip": {
       "component": "ktx",
-      "consumer": "install:nquake-ktx",
-      "package": "nquake-ktx",
+      "consumer": "install:ktx",
+      "package": "ktx",
       "sha256": "e7b6382197a31b8cbf010b1e3a3b20c19dc56d57290015ebba306f0e7ab5c6ed",
       "size": 403006,
       "url": "https://github.com/QW-Group/ktx/releases/download/1.47/qwprogs-qvm.zip"
@@ -4426,8 +4288,8 @@
     },
     "mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz": {
       "component": "td2",
-      "consumer": "install:total-destruction-2",
-      "package": "total-destruction-2",
+      "consumer": "development:td2",
+      "package": "td2",
       "sha256": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "size": 567029,
       "url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz"

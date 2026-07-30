@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import sys
 import tarfile
 import tempfile
@@ -15,8 +16,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from component_sources import (  # noqa: E402
+    build_pak_members,
     load_source_context,
     move_zip_members,
+    read_pak_members,
+    remove_pak_members,
     remove_zip_members,
     resolve_component_payloads,
     rewrite_zip_members,
@@ -32,6 +36,68 @@ from component_releases import (  # noqa: E402
 
 
 class ComponentReleaseTests(unittest.TestCase):
+    def test_each_playable_mod_declares_its_characteristic_composition(self) -> None:
+        catalog = load_catalog(ROOT / "maintenance/inventory/components.json")
+        components = components_by_id(catalog)
+        releases = load_releases(
+            ROOT / "maintenance/inventory/component-releases.json",
+            ROOT / "maintenance/inventory/components.json",
+        )["components"]
+
+        def origins(identifier: str) -> set[tuple[str, str]]:
+            return {
+                (str(source.get("origin", "reference")), str(source["mode"]))
+                for source in components[identifier]["sources"]
+            }
+
+        self.assertEqual("upstream-composed", releases["ktx"]["strategy"])
+        self.assertEqual({("reference", "archive-base"), ("release", "archive")}, origins("ktx"))
+        self.assertEqual("reference-snapshot", releases["final-arena"]["strategy"])
+        self.assertEqual({("reference", "overlay")}, origins("final-arena"))
+        self.assertEqual("upstream-package", releases["pro-x"]["strategy"])
+        self.assertEqual({("reference", "preserve"), ("release", "overlay")}, origins("pro-x"))
+        self.assertEqual("reference-overlay", releases["team-fortress"]["strategy"])
+        self.assertEqual({("reference", "overlay"), ("release", "overlay")}, origins("team-fortress"))
+        self.assertEqual("upstream-package", releases["total-destruction-2"]["strategy"])
+        self.assertEqual({("release", "overlay"), ("release", "preserve")}, origins("total-destruction-2"))
+        for identifier in ("ktx", "final-arena", "pro-x", "team-fortress", "total-destruction-2"):
+            self.assertTrue(components[identifier].get("project_sources"), identifier)
+
+    def test_playable_mods_have_no_duplicate_virtual_runtime_paths(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        for identifier in (
+            "ktx", "final-arena", "pro-x", "team-fortress", "total-destruction-2",
+        ):
+            with self.subTest(component=identifier):
+                _, _, payloads = resolve_component_payloads(context, identifier)
+                virtual_paths: list[str] = []
+                for _, member, payload, _ in payloads:
+                    if not member.startswith("payload/"):
+                        continue
+                    runtime_path = member.removeprefix("payload/")
+                    gamedir = runtime_path.split("/", 1)[0]
+                    if runtime_path.casefold().endswith((".pk3", ".zip")):
+                        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                            virtual_paths.extend(
+                                f"{gamedir}/{name}".casefold()
+                                for name in archive.namelist() if not name.endswith("/")
+                            )
+                    elif runtime_path.casefold().endswith(".pak"):
+                        virtual_paths.extend(
+                            f"{gamedir}/{name}".casefold()
+                            for name, _ in read_pak_members(payload)
+                        )
+                    else:
+                        virtual_paths.append(runtime_path.casefold())
+                self.assertEqual(
+                    len(virtual_paths), len(set(virtual_paths)),
+                    f"{identifier} contains two files for the same virtual runtime path",
+                )
+
     def test_release_inventory_covers_every_component_and_tracks_independent_origins(self) -> None:
         components = load_catalog(ROOT / "maintenance/inventory/components.json")
         releases = load_releases(
@@ -39,14 +105,14 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
-        ktx = releases["components"]["nquake-ktx"]
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
-        self.assertEqual("1.46-dev", ktx["embedded_version"])
+        ktx = releases["components"]["ktx"]
+        self.assertEqual("1.47+x86qw.1", ktx["version"])
+        self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
-        self.assertEqual("nquake-ktx", component_for_artifact_path(releases, path))
+        self.assertEqual("ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.5", td2["version"])
+        self.assertEqual("2.22+x86qw.1", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -101,14 +167,38 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
             ROOT / "maintenance/inventory/component-releases.json",
         )
-        _, _, payloads = resolve_component_payloads(context, "nquake-ktx")
+        release, source_revision, payloads = resolve_component_payloads(context, "ktx")
+        self.assertEqual("upstream-composed", release["strategy"])
+        self.assertEqual("ce329889f97cc5bacf85b6388d3c5d8f242769fd", source_revision)
         members = {member: payload for _, member, payload, _ in payloads}
         with zipfile.ZipFile(io.BytesIO(members["payload/qw/ktx.pk3"])) as package:
+            names = set(package.namelist())
+            self.assertEqual(710, len(names))
             self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
             self.assertEqual(112_973, len(package.read("qwprogs.map")))
+            self.assertIn("bots/maps/anarena.bot", names)
+            self.assertEqual(382, sum(name.startswith("locs/") for name in names))
+            self.assertIn("configs/usermodes/dmm4base.cfg", names)
+            self.assertIn("sound/ca/sffinal.wav", names)
+            self.assertIn(b"set sv_maxrate                500000", package.read("ktx.cfg"))
             server_runtime = package.read("mvdsv.cfg")
             self.assertIn(b"sv_progtype                   2", server_runtime)
             self.assertNotIn(b"sv_progtype                   1", server_runtime)
+
+    def test_ktx_layer_policy_rejects_an_unreviewed_conflict(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        policy = ROOT / "dist/mods/ktx/1.47/x86qw/merge-policy.json"
+        altered = json.loads(policy.read_text(encoding="utf-8"))
+        altered["conflicts"] = [
+            conflict for conflict in altered["conflicts"] if conflict["member"] != "server.cfg"
+        ]
+        with mock.patch("component_sources.json.loads", return_value=altered):
+            with self.assertRaisesRegex(ValueError, "conflict"):
+                resolve_component_payloads(context, "ktx")
 
     def test_bootstrap_limits_textures_without_changing_the_preserved_snapshot(self) -> None:
         context = load_source_context(
@@ -196,6 +286,42 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(rebuilt)) as package:
             self.assertNotIn("configs/config.cfg", package.namelist())
             self.assertEqual(b"gamecode", package.read("qwprogs.dat"))
+
+    def test_pak_member_can_be_removed_without_changing_other_assets(self) -> None:
+        original = build_pak_members([
+            ("qwprogs.dat", b"2.8"),
+            ("locs/2fort5r.loc", b"location data"),
+        ])
+        rebuilt = remove_pak_members(original, {"qwprogs.dat"})
+        self.assertEqual(
+            [("locs/2fort5r.loc", b"location data")],
+            read_pak_members(rebuilt),
+        )
+
+    def test_team_fortress_replaces_legacy_gamecode_but_keeps_nquake_locs(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "team-fortress")
+        members = {member: (source, payload, overrides) for source, member, payload, overrides in payloads}
+        source, gamecode, _ = members["payload/fortress/qwprogs.dat"]
+        self.assertEqual("qwprogs.dat", source)
+        self.assertEqual(835_756, len(gamecode))
+        misc_source, misc_pak, overrides = members["payload/fortress/misc.pak"]
+        self.assertEqual("addon-fortress/fortress/misc.pak", misc_source)
+        pak_members = dict(read_pak_members(misc_pak))
+        self.assertNotIn("qwprogs.dat", pak_members)
+        self.assertEqual(34, sum(name.startswith("locs/") for name in pak_members))
+        self.assertIn({"removed": "qwprogs.dat"}, overrides)
+        _, pak0, pak0_overrides = members["payload/fortress/pak0.pak"]
+        _, pak1, _ = members["payload/fortress/pak1.pak"]
+        pak0_members = dict(read_pak_members(pak0))
+        pak1_members = dict(read_pak_members(pak1))
+        self.assertNotIn("sound/weapons/detpack.wav", pak0_members)
+        self.assertIn("sound/weapons/detpack.wav", pak1_members)
+        self.assertIn({"removed": "sound/weapons/detpack.wav"}, pak0_overrides)
 
     def test_pro_x_package_keeps_legacy_configs_out_of_the_runtime_path(self) -> None:
         context = load_source_context(

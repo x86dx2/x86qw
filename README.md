@@ -149,6 +149,14 @@ unica transacao. KTX, TD2 ou outro componente independente nunca recebem uma
 versao inventada: quando o upstream muda, o comando exige uma definicao
 revisada via `add`.
 
+Cada mod declara sua composicao real. KTX mescla a base curada do nQuake com a
+release oficial; Final Arena preserva integralmente a unica versao comprovada;
+Pro-X substitui a referencia 0.8b pelo pacote completo 1.1; Team Fortress mantem
+os assets nQuake, elimina o gamecode 2.8 incorporado e aplica o 2.9 oficial; TD2
+parte somente de sua distribuicao 2.22. Em todos os casos a harmonizacao x86QW
+e aplicada por ultimo. Conteudo exclusivo e preservado; conflitos ou remocoes
+precisam de decisao e hashes registrados antes de um novo pacote ser gerado.
+
 O contrato completo, incluindo o formato de inclusao de pacotes e
 configuracoes, esta em [maintenance/README.md](maintenance/README.md).
 

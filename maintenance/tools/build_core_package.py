@@ -10,10 +10,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.0"
+VERSION = "0.1.0"
 PACKAGE = "x86qw-core-id1"
 RELEASE_TAG = f"x86qw-content-core-{VERSION}"
-GITLAB_PROJECT_ID = 84856335
+GITLAB_PROJECT_ID = 84813414
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 PAKS = ("pak0.pak", "pak1.pak")
 

@@ -74,25 +74,24 @@ class DistributionManagerTests(unittest.TestCase):
         releases = json.loads(
             (PROJECT_ROOT / "maintenance/inventory/component-releases.json").read_text(encoding="utf-8")
         )
-        old = str(releases["reference"]["revision"])
         new = "b" * 40
 
         changed = update_reference_releases(releases, new)
 
         self.assertTrue(changed)
         self.assertEqual(releases["reference"]["revision"], new)
-        self.assertEqual(releases["components"]["final-arena"]["version"], "bbbbbbbbbbbb+x86qw.6")
+        self.assertEqual(releases["components"]["final-arena"]["version"], "bbbbbbbbbbbb+x86qw.1")
         self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.1")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["team-fortress"]["version"])
-        self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["nquake-ktx"]["version"])
-        self.assertNotIn(old[:12], releases["components"]["nquake-ktx"]["distribution_tag"])
+        self.assertEqual("1.47+x86qw.1", releases["components"]["ktx"]["version"])
+        self.assertEqual("ktx-1.47-x86qw.1", releases["components"]["ktx"]["distribution_tag"])
 
     def test_reference_advance_without_consumed_byte_changes_is_ignored(self) -> None:
         payload = b"same product bytes"
         digest = hashlib.sha1(f"blob {len(payload)}\0".encode() + payload).hexdigest()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            relative = f"distributions/nquake/{'a' * 40}/gpl/qw/ktx.pk3"
+            relative = f"distributions/nquake/{'a' * 40}/non-gpl/qw/autoexec.cfg"
             path = root / relative
             path.parent.mkdir(parents=True)
             path.write_bytes(payload)
@@ -100,11 +99,11 @@ class DistributionManagerTests(unittest.TestCase):
                 "url": "https://example.invalid/old",
                 "size": len(payload),
                 "sha256": hashlib.sha256(payload).hexdigest(),
-                "package": "nquake-ktx",
+                "package": "nquake-bootstrap",
             }}}
             assets = [Asset(
-                "nquake", "https://example.invalid/new", f"distributions/nquake/{'b' * 40}/gpl/qw/ktx.pk3",
-                None, "nquake-ktx", None, digest,
+                "nquake", "https://example.invalid/new", f"distributions/nquake/{'b' * 40}/non-gpl/qw/autoexec.cfg",
+                None, "nquake-bootstrap", None, digest,
             )]
 
             self.assertFalse(reference_content_changed(assets, manifest, root=root))
@@ -136,7 +135,7 @@ class DistributionManagerTests(unittest.TestCase):
             self.assertEqual(nightly, "20260616-101233_a86996a")
             self.assertEqual(len(list(recipes.rglob("*.json"))), 3)
             generated = json.loads(next(recipes.rglob("macos-universal.json")).read_text())
-            self.assertIn("x86dx2/x86qw-dist/releases", generated["package"]["urls"][0])
+            self.assertIn("x86dx2/x86qw/releases", generated["package"]["urls"][0])
 
     def test_github_release_coordinates_support_current_and_legacy_repositories(self) -> None:
         filename = "x86qw-installer-0.1.0.zip"
@@ -152,15 +151,15 @@ class DistributionManagerTests(unittest.TestCase):
         package = {
             "component": "core",
             "package": "x86qw-core-id1",
-            "version": "1.0.0",
-            "filename": "x86qw-core-id1-1.0.0.zip",
+            "version": "0.1.0",
+            "filename": "x86qw-core-id1-0.1.0.zip",
             "size": 1,
             "sha256": "0" * 64,
             "urls": [
                 "https://github.com/x86dx2/x86qw/releases/download/"
-                "x86qw-content-core-1.0.0/x86qw-core-id1-1.0.0.zip"
+                "x86qw-content-core-0.1.0/x86qw-core-id1-0.1.0.zip"
             ],
-            "mirror_title": "x86QW Content · Dados base 1.0.0",
+            "mirror_title": "x86QW Content · Dados base 0.1.0",
             "mirror_notes": "Dados base.",
             "mirror_latest": False,
         }
@@ -174,13 +173,13 @@ class DistributionManagerTests(unittest.TestCase):
                             publish_github({"packages": [package]}, dry_run=False)
         create = run.call_args_list[0].args[0]
         self.assertIn("--latest=false", create)
-        self.assertIn("x86QW Content · Dados base 1.0.0", create)
+        self.assertIn("x86QW Content · Dados base 0.1.0", create)
         self.assertEqual(
-            ("x86dx2/x86qw-dist", "installer-1.0.27"),
+            ("x86dx2/x86qw", "x86qw-content-test-0.1.0"),
             github_release_coordinates(
-                "https://github.com/x86dx2/x86qw-dist/releases/download/installer-1.0.27/"
-                "x86qw-installer-1.0.27.zip",
-                "x86qw-installer-1.0.27.zip",
+                "https://github.com/x86dx2/x86qw/releases/download/x86qw-content-test-0.1.0/"
+                "x86qw-test-0.1.0.zip",
+                "x86qw-test-0.1.0.zip",
             ),
         )
 
@@ -220,8 +219,8 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("ezQuake stable: 3.6.9 (3 plataformas)", output)
         self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
         self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
-        self.assertIn("QRP alta resolução: e4cb23d40aa2+x86qw.2", output)
-        self.assertIn("Final Arena: e4cb23d40aa2+x86qw.6", output)
+        self.assertIn("QRP alta resolução: e4cb23d40aa2+x86qw.1", output)
+        self.assertIn("Final Arena: e4cb23d40aa2+x86qw.1", output)
         self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.1", output)
         self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.1", output)
         self.assertIn("KTX competitivo", output)

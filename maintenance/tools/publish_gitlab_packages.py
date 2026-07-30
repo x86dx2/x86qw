@@ -22,7 +22,7 @@ except ImportError:  # Execucao direta
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PROJECT_ID = 84856335
+PROJECT_ID = 84813414
 API_ROOT = f"https://gitlab.com/api/v4/projects/{PROJECT_ID}/packages/generic"
 USER_AGENT = "x86qw-gitlab-mirror/1"
 

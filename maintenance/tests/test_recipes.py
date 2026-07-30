@@ -24,7 +24,7 @@ class RecipeTests(unittest.TestCase):
             with self.subTest(path=path):
                 recipe = json.loads(path.read_text(encoding="utf-8"))
                 self.assertEqual("ready", validate_recipe(recipe, str(path)))
-                self.assertIn("x86dx2/x86qw-dist/releases", recipe["package"]["urls"][0])
+                self.assertIn("x86dx2/x86qw/releases", recipe["package"]["urls"][0])
 
     def test_ready_recipe_builds_identical_mirror_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

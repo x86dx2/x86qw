@@ -20,10 +20,10 @@ from build_core_package import build_core_package  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 33)
+        self.assertEqual(validate_catalog(catalog), 26)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
-        ktx = next(package for package in catalog["packages"] if package.get("package") == "nquake-ktx")
-        self.assertEqual("1.47+nquake.e4cb23d40aa2+x86qw.7", ktx["version"])
+        ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
+        self.assertEqual("1.47+x86qw.1", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -38,7 +38,7 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(set(ktx["urls"]) <= {ktx["origin_url"], artifact_url(ktx)})
         core = next(package for package in catalog["packages"] if package.get("package") == "x86qw-core-id1")
         self.assertEqual("core", core["component"])
-        self.assertEqual("1.0.0", core["version"])
+        self.assertEqual("0.1.0", core["version"])
         self.assertEqual(64, len(core["source_revision"]))
         self.assertFalse(core["mirror_latest"])
         self.assertEqual(
@@ -46,20 +46,20 @@ class CatalogTests(unittest.TestCase):
             {
                 "nquake-bootstrap", "nquake-visual-core",
                 "nquake-player-skins", "nquake-crosshairs", "nquake-skyboxes",
-                "nquake-models", "nquake-scoreboard-flags", "nquake-sounds",
+                "nquake-models", "nquake-scoreboard-flags",
                 "nquake-external-textures", "nquake-base-textures", "nquake-maps",
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
                 "final-arena",
             },
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
-        self.assertEqual("2.22+x86qw.5", td2["version"])
+        self.assertEqual("2.22+x86qw.1", td2["version"])
         self.assertEqual("td2", td2["component"])
         self.assertEqual(64, len(td2["source_revision"]))
         self.assertEqual("2.22", td2["upstream_version"])
         final_arena = next(package for package in catalog["packages"] if package.get("package") == "final-arena")
         pro_x = next(package for package in catalog["packages"] if package.get("package") == "pro-x")
-        self.assertEqual("e4cb23d40aa2+x86qw.6", final_arena["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.1", final_arena["version"])
         self.assertEqual("1.1+x86qw.1", pro_x["version"])
         self.assertEqual("pro-x", pro_x["component"])
         team_fortress = next(
@@ -68,12 +68,12 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.1", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(7, len(installers))
-        self.assertEqual(["0.1.6"], [
+        self.assertEqual(1, len(installers))
+        self.assertEqual(["0.1.0"], [
             package["version"] for package in installers if package.get("current") is True
         ])
         latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
-        self.assertEqual([("x86qw-installer", "0.1.6")], [
+        self.assertEqual([("x86qw-installer", "0.1.0")], [
             (package.get("package"), package["version"]) for package in latest
         ])
         self.assertTrue(all(
@@ -117,12 +117,12 @@ class CatalogTests(unittest.TestCase):
     def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
         metadata = component_package_metadata(
             "nquake-bootstrap",
-            "e4cb23d40aa2+x86qw.6",
+            "e4cb23d40aa2+x86qw.1",
             "reference-snapshot",
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
             [],
         )
-        self.assertEqual("e4cb23d40aa2+x86qw.6", metadata["version"])
+        self.assertEqual("e4cb23d40aa2+x86qw.1", metadata["version"])
         self.assertEqual(
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
             metadata["source_commit"],
@@ -144,7 +144,7 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(first["size"], second["size"])
             self.assertEqual("x86qw-core-id1", first["package"])
             self.assertEqual(2, len(first["urls"]))
-            self.assertIn("gitlab.com/api/v4/projects/84856335", first["urls"][1])
+            self.assertIn("gitlab.com/api/v4/projects/84813414", first["urls"][1])
             archive = next((root / "one").rglob(str(first["filename"])))
             with zipfile.ZipFile(archive) as package:
                 self.assertEqual(
@@ -182,24 +182,24 @@ class CatalogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 register_package(catalog_path, artifact, **arguments)
 
-    def test_component_registration_reclassifies_origin_and_preserves_fallback_mirrors(self) -> None:
+    def test_component_registration_reclassifies_origin_and_updates_publication_mirrors(self) -> None:
         import tempfile
 
         package = {
-            "component": "ktx", "package": "nquake-ktx", "version": "1.47",
+            "component": "ktx", "package": "ktx", "version": "1.47",
             "channel": "content", "platform": "any", "architecture": "any",
-            "filename": "nquake-ktx-1.47.zip", "size": 1, "sha256": "0" * 64,
-            "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/nquake-ktx-1.47.zip",
+            "filename": "ktx-1.47.zip", "size": 1, "sha256": "0" * 64,
+            "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/ktx-1.47.zip",
             "license": "GPL-2.0", "license_url": "https://github.com/example/LICENSE",
             "source_urls": ["https://github.com/example/source.tar.gz"],
             "redistribution_reviewed": True,
-            "urls": ["https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/nquake-ktx-1.47.zip"],
+            "urls": ["https://github.com/x86dx2/x86qw/releases/download/ktx-1.47/ktx-1.47.zip"],
             "source_commit": "a" * 40,
         }
-        fallback = "https://gitlab.com/example/nquake-ktx-1.47.zip"
+        fallback = "https://gitlab.com/example/ktx-1.47.zip"
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "catalog.json"
-            legacy = "https://github.com/x86dx2/x86qw-dist/releases/download/ktx-1.47/nquake-ktx-1.47.zip"
+            legacy = "https://github.com/example/legacy/releases/download/ktx-1.47/ktx-1.47.zip"
             catalog_package = dict(
                 package, component="nquake", origin_url=legacy, urls=[legacy, fallback],
             )
@@ -209,8 +209,8 @@ class CatalogTests(unittest.TestCase):
             }))
             register_packages(path, {"packages": [package]})
             saved = json.loads(path.read_text())
-            self.assertEqual([legacy, fallback], saved["packages"][0]["urls"])
-            self.assertEqual(legacy, saved["packages"][0]["origin_url"])
+            self.assertEqual(package["urls"], saved["packages"][0]["urls"])
+            self.assertEqual(package["origin_url"], saved["packages"][0]["origin_url"])
             self.assertEqual("ktx", saved["packages"][0]["component"])
 
 

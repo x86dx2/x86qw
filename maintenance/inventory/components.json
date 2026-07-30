@@ -19,13 +19,12 @@
     "covered_components": [
       "nquake-bootstrap",
       "nquake-visual-core",
-      "nquake-ktx",
+      "ktx",
       "nquake-player-skins",
       "nquake-crosshairs",
       "nquake-skyboxes",
       "nquake-models",
       "nquake-scoreboard-flags",
-      "nquake-sounds",
       "nquake-external-textures",
       "nquake-base-textures",
       "nquake-maps",
@@ -49,18 +48,17 @@
     "essential": [
       "nquake-bootstrap",
       "nquake-visual-core",
-      "nquake-ktx"
+      "ktx"
     ],
     "recommended": [
       "nquake-bootstrap",
       "nquake-visual-core",
-      "nquake-ktx",
+      "ktx",
       "nquake-player-skins",
       "nquake-crosshairs",
       "nquake-skyboxes",
       "nquake-models",
       "nquake-scoreboard-flags",
-      "nquake-sounds",
       "nquake-external-textures",
       "nquake-base-textures",
       "nquake-maps",
@@ -69,13 +67,12 @@
     "complete": [
       "nquake-bootstrap",
       "nquake-visual-core",
-      "nquake-ktx",
+      "ktx",
       "nquake-player-skins",
       "nquake-crosshairs",
       "nquake-skyboxes",
       "nquake-models",
       "nquake-scoreboard-flags",
-      "nquake-sounds",
       "nquake-external-textures",
       "nquake-base-textures",
       "nquake-maps",
@@ -90,13 +87,18 @@
   },
   "profile_history": {
     "essential": [
-      "2e2011fa531d9651c833984c994861212b3ff7e72dc95643bbbb55e391a729c2"
+      "2e2011fa531d9651c833984c994861212b3ff7e72dc95643bbbb55e391a729c2",
+      "05c4455e3e34e62b088277915fef5ae0f0106191c1a964fca6fb0a23dee06b6e"
     ],
     "recommended": [
-      "95e1262410aa595cec380f7ec1ad160ffe2c0d42b74ad13364105b5c3de51288"
+      "95e1262410aa595cec380f7ec1ad160ffe2c0d42b74ad13364105b5c3de51288",
+      "edf1a6c1aec45e490d333b7ca9e916e82151ff5a39aaef6f341ec7c053ccb4ac",
+      "542fa6f2c66d43aa6a88ac2ad2577fa661d4bc3349bd811d1f8888969253d438"
     ],
     "complete": [
-      "66a60d4cf678e67d132ca9cd17d7ab343b9fccd587adb5a37eb07e298095dd36"
+      "66a60d4cf678e67d132ca9cd17d7ab343b9fccd587adb5a37eb07e298095dd36",
+      "f29290d2b77f98eb1380d1c6dc7ee2894793539f1fc5c8fdf2e9219e410ad325",
+      "c95442f034bd5d4b904fe94baab829e76a5fc3a6cd253aa110da323806ae3e4e"
     ]
   },
   "components": [
@@ -133,17 +135,23 @@
       ]
     },
     {
-      "id": "nquake-ktx",
+      "id": "ktx",
       "label": "KTX competitivo",
       "kind": "gameplay",
       "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com perfil competitivo x86QW.",
       "requires": ["nquake-bootstrap"],
       "sources": [
-        {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "overlay"}
+        {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "archive-base"},
+        {"path": "ktx-1.47/resources/example-configs/ktx", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
+        {"path": "qwprogs.qvm", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
+        {"path": "qwprogs.map", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"}
       ],
       "project_sources": [
         {"path": "dist/mods/ktx/1.47/x86qw/client.cfg", "destination": "qw/x86qw-ktx.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"}
+      ],
+      "project_inputs": [
+        {"path": "dist/mods/ktx/1.47/x86qw/merge-policy.json", "purpose": "archive-layer-policy"}
       ]
     },
     {
@@ -194,16 +202,6 @@
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/scoreboard_flags.pk3", "destination": "qw/scoreboard_flags.pk3", "mode": "overlay"}
-      ]
-    },
-    {
-      "id": "nquake-sounds",
-      "label": "Sons",
-      "kind": "content",
-      "description": "Sons adicionais usados pela distribuição nQuake.",
-      "requires": ["nquake-visual-core"],
-      "sources": [
-        {"path": "non-gpl/qw/sound", "destination": "qw/sound", "mode": "overlay"}
       ]
     },
     {
@@ -288,9 +286,9 @@
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"}
       ],
       "project_sources": [
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
-        {"path": "dist/mods/final-arena/1.20+x86qw.1/x86qw/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
+        {"path": "dist/mods/final-arena/1.20/x86qw/client.cfg", "destination": "arena/x86qw-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20/x86qw/server.cfg", "destination": "arena/server.cfg", "mode": "overlay"},
+        {"path": "dist/mods/final-arena/1.20/x86qw/user.cfg.example", "destination": "arena/x86qw-arena-user.cfg", "mode": "default"}
       ]
     },
     {
@@ -302,7 +300,7 @@
       "sources": [
         {
           "path": "addon-clanarena/prox",
-          "destination": "prox-legacy",
+          "destination": "prox",
           "mode": "preserve"
         },
         {
@@ -324,13 +322,13 @@
       "id": "team-fortress",
       "label": "Team Fortress",
       "kind": "addon",
-      "description": "Conteúdo Team Fortress fornecido pelo nQuake.",
+      "description": "Team Fortress 2.9 com assets e mapas nQuake harmonizados pelo x86QW.",
       "requires": ["nquake-bootstrap"],
       "sources": [
-        {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"}
+        {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"},
+        {"path": "qwprogs.dat", "destination": "fortress/qwprogs.dat", "mode": "overlay", "origin": "release"}
       ],
       "project_sources": [
-        {"path": "dist/mods/team-fortress/2.9/upstream/qwprogs.dat", "destination": "fortress/qwprogs.dat", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.9/x86qw/pre.cfg", "destination": "fortress/x86qw-fortress-pre.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.9/x86qw/client.cfg", "destination": "fortress/x86qw-fortress.cfg", "mode": "overlay"},
         {"path": "dist/mods/team-fortress/2.9/x86qw/server.cfg", "destination": "fortress/server.cfg", "mode": "overlay"},

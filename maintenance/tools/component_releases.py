@@ -18,7 +18,10 @@ except ImportError:  # Executado diretamente por ferramentas em tools/.
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-STRATEGIES = {"reference-snapshot", "reference-overlay", "upstream-overlay", "upstream-package"}
+STRATEGIES = {
+    "reference-snapshot", "reference-overlay", "upstream-overlay",
+    "upstream-package", "upstream-composed",
+}
 FRESHNESS = {"reference-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 DISTRIBUTION_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -76,14 +79,16 @@ def validate_releases(
         ):
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
         upstream = release.get("upstream")
-        if release["strategy"] in {"reference-overlay", "upstream-overlay", "upstream-package"}:
+        if release["strategy"] in {
+            "reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed",
+        }:
             if not isinstance(upstream, dict):
                 raise ValueError(f"upstream release has no upstream metadata: {identifier}")
-            if release["strategy"] == "upstream-overlay" and not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
+            if release["strategy"] in {"upstream-overlay", "upstream-composed"} and not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
                 raise ValueError(f"invalid upstream repository: {identifier}")
             if not VERSION.fullmatch(str(upstream.get("release", ""))):
                 raise ValueError(f"invalid upstream release: {identifier}")
-            if release["strategy"] == "upstream-overlay" and not HEX40.fullmatch(str(upstream.get("source_revision", ""))):
+            if release["strategy"] in {"upstream-overlay", "upstream-composed"} and not HEX40.fullmatch(str(upstream.get("source_revision", ""))):
                 raise ValueError(f"invalid upstream source revision: {identifier}")
             for field in ("release_url", "source_url"):
                 if not isinstance(upstream.get(field), str) or not upstream[field].startswith("https://"):
@@ -115,7 +120,9 @@ def validate_releases(
         artifacts = release.get("artifacts", [])
         if not isinstance(artifacts, list):
             raise ValueError(f"invalid artifacts: {identifier}")
-        if release["strategy"] in {"reference-overlay", "upstream-overlay", "upstream-package"} and not artifacts:
+        if release["strategy"] in {
+            "reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed",
+        } and not artifacts:
             raise ValueError(f"upstream release has no artifact: {identifier}")
         for artifact in artifacts:
             if not isinstance(artifact, dict):
@@ -140,7 +147,7 @@ def validate_releases(
             members = artifact.get("members", [])
             if not isinstance(members, list) or (release["strategy"] == "upstream-overlay" and not members):
                 raise ValueError(f"artifact has invalid consumed members: {identifier}")
-            if release["strategy"] == "upstream-package" and members:
+            if release["strategy"] in {"upstream-package", "upstream-composed"} and members:
                 raise ValueError(f"standalone artifact members are selected by the component catalog: {identifier}")
             for member in members:
                 if not isinstance(member, dict):
@@ -206,6 +213,31 @@ def validate_releases(
             count = replacement.get("count", 1)
             if not isinstance(count, int) or count <= 0:
                 raise ValueError(f"invalid archive text replacement count: {identifier}")
+        archive_layers = release.get("archive_layers", [])
+        if not isinstance(archive_layers, list):
+            raise ValueError(f"invalid archive layers: {identifier}")
+        if archive_layers and release["strategy"] != "upstream-composed":
+            raise ValueError(f"archive layers require an upstream-composed release: {identifier}")
+        layer_targets: set[str] = set()
+        layer_references: set[str] = set()
+        for layer in archive_layers:
+            if not isinstance(layer, dict):
+                raise ValueError(f"invalid archive layer: {identifier}")
+            target = _safe_path(layer.get("target_archive"), "archive layer target")
+            reference_source = _safe_path(
+                layer.get("reference_source"), "archive layer reference source",
+            )
+            policy = _safe_path(layer.get("policy"), "archive layer policy")
+            if not target.casefold().endswith((".pk3", ".zip")):
+                raise ValueError(f"archive layer target is not a ZIP/PK3: {identifier}")
+            if not reference_source.casefold().endswith((".pk3", ".zip")):
+                raise ValueError(f"archive layer reference is not a ZIP/PK3: {identifier}")
+            if not policy.startswith("dist/") or not policy.casefold().endswith(".json"):
+                raise ValueError(f"archive layer policy is outside the distribution: {identifier}")
+            if target in layer_targets or reference_source in layer_references:
+                raise ValueError(f"duplicate archive layer: {identifier}")
+            layer_targets.add(target)
+            layer_references.add(reference_source)
         package_copies = release.get("package_copies", [])
         if not isinstance(package_copies, list):
             raise ValueError(f"invalid package copies: {identifier}")
