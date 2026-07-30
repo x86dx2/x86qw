@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-29T20:43:09Z",
+  "generated_at": "2026-07-30T01:14:53Z",
   "packages": [
     {
       "component": "ezquake",
@@ -166,7 +166,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.1",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -187,6 +187,33 @@
       "distribution_path": "installer/packages/0.1.1/x86qw-installer-0.1.1.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.1",
       "release_title": "x86QW Installer 0.1.1",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW."
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.2",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.2.zip",
+      "size": 24171420,
+      "sha256": "d70e2faf2108d823eac600076e7edee805ebe43707591586b10f29d34fbf6d20",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.2/x86qw-installer-0.1.2.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.2/x86qw-installer-0.1.2.zip",
+        "https://gitlab.com/api/v4/projects/84856335/packages/generic/x86qw-installer/0.1.2/x86qw-installer-0.1.2.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.2/x86qw-installer-0.1.2.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.2",
+      "release_title": "x86QW Installer 0.1.2",
       "release_notes": "Bootstrap autocontido do instalador público x86QW."
     },
     {

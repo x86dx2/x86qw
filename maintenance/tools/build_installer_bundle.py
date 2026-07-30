@@ -22,7 +22,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 FILES = (
     "dist/installer/bin/x86qw.sh",
     "dist/installer/bin/x86qw.cmd",
