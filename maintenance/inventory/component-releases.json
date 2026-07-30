@@ -10,7 +10,7 @@
     "nquake-bootstrap": {
       "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
-      "freshness": "reference-current",
+      "freshness": "reference-payload-current",
       "notes": "Preserva a base nQuake, aplica bootstrap global compartilhado por todos os mods, mantém aliases temporários e camada pessoal, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes stable e nightly suportados.",
       "text_replacements": [
         {
@@ -33,13 +33,17 @@
         }
       ]
     },
-    "nquake-visual-core": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
+    "nquake-visual-core": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
     "ktx": {
-      "version": "1.47+x86qw.1",
+      "version": "1.47+x86qw.2",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.1",
+      "distribution_tag": "ktx-1.47-x86qw.2",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
@@ -77,6 +81,13 @@
           "source_sha256": "f0f0a04b294c0157e16b5bc632c406d1a97221c5e432d3ea8eeb1d3af7f26152",
           "before": "sv_progtype                   1         // progtype (0 = .dat, 1 = .so/.dll, 2 = .qvm)",
           "after": "sv_progtype                   2         // x86QW local: load the packaged QVM directly"
+        },
+        {
+          "target_archive": "qw/ktx.pk3",
+          "member": "ktx.cfg",
+          "source_sha256": "823095d26fe1c69af8b7b8dd0c2dca2315da595bef3642d540a1c534751e83a5",
+          "before": "set k_defmap                  dm3       // server homemap. server will change to this when last player leaves the server",
+          "after": "// x86QW local: k_defmap is selected by the launcher before the server starts"
         }
       ],
       "artifacts": [
@@ -96,20 +107,61 @@
         }
       ]
     },
-    "nquake-player-skins": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-crosshairs": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-skyboxes": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-models": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-scoreboard-flags": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-external-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-base-textures": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-maps": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-matchinfo": {"version": "e4cb23d40aa2", "strategy": "reference-snapshot", "freshness": "reference-current"},
-    "nquake-documentation": {"version": "e4cb23d40aa2+x86qw.1", "strategy": "reference-snapshot", "freshness": "reference-current", "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."},
+    "nquake-player-skins": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-crosshairs": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-skyboxes": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-models": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-scoreboard-flags": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-external-textures": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-base-textures": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-maps": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-matchinfo": {
+      "version": "e4cb23d40aa2",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current"
+    },
+    "nquake-documentation": {
+      "version": "e4cb23d40aa2+x86qw.1",
+      "strategy": "reference-snapshot",
+      "freshness": "reference-payload-current",
+      "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."
+    },
     "qrp-hires": {
       "version": "e4cb23d40aa2+x86qw.1",
       "strategy": "reference-snapshot",
-      "freshness": "reference-current",
+      "freshness": "reference-payload-current",
       "embedded_version": "maps-1.00+items-0.73",
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
@@ -128,7 +180,12 @@
           "ezquake-stable:3.6.9",
           "ezquake-nightly:20260616-101233_a86996a"
         ],
-        "verified": ["package-integrity", "managed-file-integrity", "source-provenance", "uninstall"],
+        "verified": [
+          "package-integrity",
+          "managed-file-integrity",
+          "source-provenance",
+          "uninstall"
+        ],
         "gamecode_runtime": "QuakeWorld qwprogs.dat derivado por Rakk e preservado do nQuake; a fonte oficial 1.20 foi reconstruída separadamente"
       },
       "upstream": {
@@ -169,7 +226,11 @@
           "ezquake-stable:3.6.9",
           "ezquake-nightly:20260616-101233_a86996a"
         ],
-        "verified": ["package-integrity", "managed-file-integrity", "uninstall"],
+        "verified": [
+          "package-integrity",
+          "managed-file-integrity",
+          "uninstall"
+        ],
         "gamecode_runtime": "QuakeWorld qwprogs.dat independente de sistema operacional"
       },
       "upstream": {
@@ -189,7 +250,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.2",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.3",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "team-fortress",
@@ -203,7 +264,11 @@
           "ezquake-stable:3.6.9",
           "ezquake-nightly:20260616-101233_a86996a"
         ],
-        "verified": ["package-integrity", "managed-file-integrity", "uninstall"],
+        "verified": [
+          "package-integrity",
+          "managed-file-integrity",
+          "uninstall"
+        ],
         "gamecode_runtime": "QuakeWorld qwprogs.dat clássico independente de sistema operacional"
       },
       "upstream": {

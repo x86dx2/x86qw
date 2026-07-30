@@ -7,7 +7,7 @@ O x86QW preserva upstreams sem misturar correções independentes. Um PR só é 
 | ezQuake | `QW-Group/ezquake-source` | pular a tentativa QVM quando `sv_progtype` seleciona PR1 explicitamente | PR separado com reprodução em mod PR1 |
 | ezQuake | `QW-Group/ezquake-source` | duplicação de log durante `vid_restart` | PR separado somente após validar todos os usos de `con_suppress` |
 | KTX | `QW-Group/ktx` | definição antecipada de `k_defmap` | não enviar; a correção pertence ao launcher x86QW |
-| nQuake | `nQuake/distfiles` | `bounce2.wav` ausente no conteúdo TF | avaliar PR com origem, hash e reprodução do som ausente |
+| nQuake | `nQuake/distfiles` | `bounce2.wav` ausente após modularização | não enviar; o arquivo já existe no KTX do snapshot e a correção pertence à composição x86QW |
 | Final Arena | não localizado | patches futuros de fonte | manter no x86QW até surgir upstream oficial |
 | Pro-X | não existe fonte pública | ENT de compatibilidade | não enviar como código; o autor reteve a fonte deliberadamente |
 | Team Fortress 2.9 | não localizado | remoção de binds remotos forçados | manter patch pronto e documentado |

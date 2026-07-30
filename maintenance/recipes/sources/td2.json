@@ -2,7 +2,7 @@
   "format": 1,
   "project": "x86qw",
   "upstream": "td2",
-  "status": "unverified",
+  "status": "runtime-verified",
   "source": {
     "archive": "dist/mods/td2/2.22/source/quakeworld-TD2.22QW-server_PTBR.tar.gz",
     "root": "td2/src_td2_2.22",
@@ -14,7 +14,8 @@
     "version": "3343+svn3400",
     "source_url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
     "source_size": 196098,
-    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe"
+    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe",
+    "distribution_path": "dist/toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz"
   },
   "patches": [
     {
@@ -29,5 +30,5 @@
     "sha256": "4553b62ec28109efdecc95bb4b40487e014063dd0bb59aad9301d03b09ee1ff1",
     "warnings": 14
   },
-  "verification": "Executar dm6 com temp1 65560 em ezQuake stable e nightly; verificar ausência de gravação automática, stop, gamma persistente, binds remotos e erros wad/vomitus."
+  "verification": "Promovido após smoke de dm6 com temp1 65560 em ezQuake 3.6.9 e nightly 20260616-101233_a86996a: jogador entrou, armas carregaram e não houve gravação automática, stop, gamma persistente, binds remotos nem erros wad/vomitus."
 }

@@ -3005,6 +3005,10 @@ class Installer:
 
         changed = 0
         alias_pattern = re.compile(rb'^\s*alias\s+([^\s]+).*(?:\r?\n|$)', re.MULTILINE | re.IGNORECASE)
+        broken_remote_capabilities = re.compile(
+            rb'^\s*cl_remote_capabilities\s+"\$cl_remote_capabilities,[^"]*"\s*(?:\r?\n|$)',
+            re.MULTILINE | re.IGNORECASE,
+        )
         for config in configs:
             if not config.is_file() or config.is_symlink():
                 raise InstallerError(f"Configuração pessoal inválida: {config}")
@@ -3015,6 +3019,7 @@ class Installer:
                 return b"" if name in aliases else match.group(0)
 
             updated = alias_pattern.sub(keep_personal_alias, original)
+            updated = broken_remote_capabilities.sub(b"", updated)
             if updated != original:
                 backup = config.with_name("config.aliases-pre-x86qw.cfg")
                 if not lexists(backup):

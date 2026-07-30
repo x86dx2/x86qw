@@ -22,7 +22,7 @@ STRATEGIES = {
     "reference-snapshot", "reference-overlay", "upstream-overlay",
     "upstream-package", "upstream-composed",
 }
-FRESHNESS = {"reference-current", "upstream-current"}
+FRESHNESS = {"reference-payload-current", "upstream-current"}
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 DISTRIBUTION_COMPONENT = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 

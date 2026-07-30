@@ -290,13 +290,12 @@ class Player(core.Installer):
         map_name = self.choose_local_map(game)
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
-        arguments = [
-            "+sb_listcache", "0",
-            "-game", game.gamedir,
-            "+gamedir", game.gamedir,
-            "+sv_gamedir", game.gamedir,
-        ]
+        arguments = ["+sb_listcache", "0"]
         if game.key != "ktx":
+            arguments.extend([
+                "-game", game.gamedir,
+                "+sv_gamedir", game.gamedir,
+            ])
             arguments.extend(["+sv_progtype", "0"])
         if game.key in PRECONNECT_LOCAL_GAMES:
             arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
@@ -305,6 +304,8 @@ class Player(core.Installer):
                 "+cl_remote_capabilities",
                 "$cl_remote_capabilities," + ",".join(capabilities),
             ])
+        if game.key == "pro-x":
+            arguments.extend(["+sv_loadentfiles", "1"])
         if game.key != "ktx":
             # PR1 gamecodes do not advertise the high-lag teleport extension.
             arguments.extend(["+cl_pext_lagteleport", "0"])

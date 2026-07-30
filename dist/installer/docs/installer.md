@@ -320,11 +320,11 @@ stable e nightly coexistirem, pergunta qual cliente usar.
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
 ```text
--game <mod> +gamedir <mod> +sv_gamedir <mod> +map <mapa> +wait +exec perfil-x86qw.cfg
+-game <mod> +sv_gamedir <mod> +map <mapa> +wait +exec perfil-x86qw.cfg
 ```
 
-`-nohome` isola a execução de qualquer `~/.ezquake` externo. `-game` prepara o
-caminho do cliente, `+gamedir` seleciona o gamecode e
+`-nohome` isola a execução de qualquer `~/.ezquake` externo. `-game` seleciona
+o diretório de arquivos e o gamecode antes da inicialização;
 `+sv_gamedir` publica o valor correto de `*gamedir` aos clientes. Isso impede
 que o servidor local permaneça em `qw` e carregue KTX ao tentar iniciar outro
 mod. O mapa é iniciado antes do perfil; após um frame, o `exec` aplica os binds

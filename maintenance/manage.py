@@ -937,6 +937,7 @@ def command_update(options: argparse.Namespace) -> int:
             component_catalog=work / "components.json",
             component_releases=work / "component-releases.json",
         )
+        package_manifest["packages"].append(build_core_package(work / "dist", work / "packages"))
         register_packages(work / "catalog.json", package_manifest)
         validate_catalog(load_json(work / "catalog.json"))
         apply_workspace(work)

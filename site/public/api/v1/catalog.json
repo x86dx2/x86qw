@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-30T16:08:38Z",
+  "generated_at": "2026-07-30T18:54:22Z",
   "packages": [
     {
       "component": "core",
@@ -180,6 +180,37 @@
       "mirror_latest": false
     },
     {
+      "component": "final-arena",
+      "package": "final-arena",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.1",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "final-arena-1.20+nquake.e4cb23d40aa2+x86qw.1.zip",
+      "size": 6984551,
+      "sha256": "92fd51db900883fb4d2f37f4464d532520850c5efc46b937e0370d24a9165129",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.1.zip",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
+      "source_urls": [
+        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+        "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/fasrv12.zip",
+        "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/1.20+nquake.e4cb23d40aa2+x86qw.1/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.1.zip"
+      ],
+      "mirror_title": "x86QW Content · Final Arena 1.20+nquake.e4cb23d40aa2+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "release_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
+      "release_notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW.",
+      "upstream_version": "1.20"
+    },
+    {
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.0",
@@ -212,14 +243,14 @@
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.1",
+      "version": "1.47+x86qw.2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.1.zip",
-      "size": 2497621,
-      "sha256": "b4534b68a683b8b8398a1799409c8531c7569edfc3b2f7677654384cd1cf019b",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.1/ktx-1.47+x86qw.1.zip",
+      "filename": "ktx-1.47+x86qw.2.zip",
+      "size": 2497680,
+      "sha256": "68997574161022b6c65f65199509f645df38a4d3b4c121f7f4e49503c75e1588",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.2/ktx-1.47+x86qw.2.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -229,10 +260,10 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.1/ktx-1.47+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.1/ktx-1.47+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.2/ktx-1.47+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.2/ktx-1.47+x86qw.2.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.1",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
@@ -240,32 +271,6 @@
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
       "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade e o perfil de gameplay x86QW.",
       "upstream_version": "1.47"
-    },
-    {
-      "component": "nquake",
-      "package": "final-arena",
-      "version": "e4cb23d40aa2+x86qw.1",
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "final-arena-e4cb23d40aa2+x86qw.1.zip",
-      "size": 6984541,
-      "sha256": "19be0f576e34d808bef8ec06f449e8daac897c3f832497b28388180b44e14d6d",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
-      "license": "upstream-distfiles-terms",
-      "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "source_urls": [
-        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/final-arena-e4cb23d40aa2+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/e4cb23d40aa2+x86qw.1/final-arena-e4cb23d40aa2+x86qw.1.zip"
-      ],
-      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false,
-      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
     },
     {
       "component": "nquake",
@@ -608,14 +613,14 @@
     {
       "component": "pro-x",
       "package": "pro-x",
-      "version": "1.1+x86qw.1",
+      "version": "1.1+x86qw.2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "pro-x-1.1+x86qw.1.zip",
-      "size": 9076007,
-      "sha256": "d002bfcf4500e4f47e440778b4d6744cb60f32bea173818c7622ba253325195d",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
+      "filename": "pro-x-1.1+x86qw.2.zip",
+      "size": 9080961,
+      "sha256": "74c50e563db82486be574e676cef935a6552ae0c603044e3342408f331de6357",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.2.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "source_urls": [
@@ -624,28 +629,28 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.1/pro-x-1.1+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.2/pro-x-1.1+x86qw.2.zip"
       ],
+      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
       "source_revision": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1 e reaplica o perfil de gameplay x86QW.",
-      "upstream_version": "1.1",
-      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.1",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false
+      "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "upstream_version": "1.1"
     },
     {
       "component": "td2",
       "package": "total-destruction-2",
-      "version": "2.22+x86qw.1",
+      "version": "2.22+x86qw.2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "total-destruction-2-2.22+x86qw.1.zip",
-      "size": 447925,
-      "sha256": "c7145120fb4607ee9e62b8381dd0fbbf903d0a8d07aa004d657863506a3b9c0c",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
+      "filename": "total-destruction-2-2.22+x86qw.2.zip",
+      "size": 502564,
+      "sha256": "0204f76088fd0ddcb61410610e75f53b8645716c583dc19d7af4b52299b56b67",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.2.zip",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
       "source_urls": [
@@ -654,28 +659,28 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.1/total-destruction-2-2.22+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.2/total-destruction-2-2.22+x86qw.2.zip"
       ],
-      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.1",
+      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
-      "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime recebe somente gamecode, modelos, sons e configuração x86QW com aliases temporários; fontes, manuais e exemplos permanecem no artefato original, e saw_down.wav é restaurado do saw.wav byte-idêntico.",
+      "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
       "upstream_version": "2.22"
     },
     {
       "component": "team-fortress",
       "package": "team-fortress",
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.1",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.3",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
-      "size": 8563383,
-      "sha256": "010b544f117a884d514b8589e6f68d8d5fc7b47665efc506eeb6ee4ea40262c5",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
+      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.3.zip",
+      "size": 8566753,
+      "sha256": "73d082ce70adb8829ea466f4849c998cec136c05935e9dc34434da670bb8c419",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.3.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "source_urls": [
@@ -685,15 +690,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.1/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.3/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.3.zip"
       ],
-      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.1",
+      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.3",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "release_notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, remove do misc.pak o gamecode 2.8 substituído, elimina do pak0.pak o detpack.wav byte-idêntico já fornecido pelo pak1.pak, aplica diretamente do ZIP original o gamecode oficial 2.9 e mantém os binds e o perfil x86QW.",
+      "release_notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW.",
       "upstream_version": "2.9"
     }
   ]

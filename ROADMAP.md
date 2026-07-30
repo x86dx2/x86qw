@@ -25,7 +25,7 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] compor `nQuake -> KTX oficial -> x86QW`, mantendo somente recursos nQuake que ainda agregam valor;
 - [x] confirmar que `1.47` é a última release oficial; `1.48-dev` não substitui uma release na distribuição;
 - [x] manter bots, LOCs, configurações, sons e recursos oficiais presentes no pacote 1.47;
-- [ ] corrigir o primeiro carregamento local para definir `k_defmap` antes do mapa e eliminar a troca `dm6 -> dm3` e o aviso `SV_PreSpawn_f from different level`;
+- [x] corrigir o primeiro carregamento local para definir `k_defmap` antes do mapa e eliminar a troca `dm6 -> dm3` e o aviso `SV_PreSpawn_f from different level`;
 - [-] não criar menu x86QW de modos KTX: seria recurso novo.
 
 ### Final Arena 1.20
@@ -56,8 +56,8 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] preservar os assets e mapas úteis do nQuake e substituir somente o gamecode 2.8 pelo 2.9;
 - [x] localizar `weapons/bounce2.wav` oficial, referenciado pelo QuakeC mas ausente nos pacotes TF, dentro dos recursos KTX 1.47, com hash registrado;
 - [x] compilar uma camada de compatibilidade removendo apenas binds remotos forçados; os binds passam a ser propriedade do perfil local x86QW;
-- [ ] reduzir `cl_remote_capabilities` ao conjunto realmente exigido por velocidade de classe e efeitos, sem conceder `bind`;
-- [ ] testar o gamecode recompilado contra o oficial 2.9 em stable e nightly antes de promovê-lo;
+- [x] reduzir `cl_remote_capabilities` ao conjunto realmente exigido por velocidade de classe e efeitos, sem conceder `bind`;
+- [x] testar o gamecode recompilado contra o oficial 2.9 em stable e nightly antes de promovê-lo;
 - [-] manter `clan1.wav` a `clan5.wav` como extensão administrativa opcional não resolvida: não aparecem nos pacotes oficiais e só são usados quando `localinfo clanmsgs on`;
 - [-] não inventar sons substitutos para `clan1.wav` a `clan5.wav`.
 
@@ -68,7 +68,7 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] preparar patch QuakeC apenas de compatibilidade: restaurar o campo padrão `wad`, remover controle forçado de demos, binds, `scr_centertime`, gamma persistente e a referência morta a `vomitus/v_sight1.wav`;
 - [x] preservar o efeito da bomba de luz com `EF_BRIGHTLIGHT`/`EF_DIMLIGHT`, sem sobrescrever a preferência de gamma do jogador;
 - [x] recompilar o patch com FTEQCC preservando o arquivo upstream intacto;
-- [ ] testar gamecode recompilado em stable e nightly antes de promovê-lo;
+- [x] testar gamecode recompilado em stable e nightly antes de promovê-lo;
 - [-] não adicionar o som `vomitus/v_sight1.wav`: a referência morta já existia no Quake 1.06 e não há arquivo original verificável;
 - [-] não baixar os 30 mapas externos codificados na votação; documentá-los como opcionais e manter a política de mapas escolhidos;
 - [-] não criar menu de modos nem alterar `temp1 65560`, que continua selecionando pipeheads, luz e revenants como antes.
@@ -80,7 +80,7 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] registrar hash, tamanho, origem e finalidade de cada arquivo reconstruído;
 - [ ] implementar a cadeia `fonte imutável -> normalização declarada -> patches x86QW -> toolchain fixada -> build determinístico -> comparação de baseline -> smoke stable/nightly -> promoção`;
 - [ ] adicionar `maintenance/manage.py source-build` para KTX, Final Arena, Team Fortress e TD2;
-- [ ] fixar e espelhar a fonte da toolchain FTEQCC usada nas compilações históricas;
+- [x] fixar e espelhar a fonte da toolchain FTEQCC usada nas compilações históricas;
 - [ ] registrar imagem/ambiente de build por plataforma e hashes dos outputs;
 - [ ] zerar ou justificar individualmente os 14 warnings do TD2 sem alterar gameplay;
 - [ ] classificar e reduzir os 187 warnings do TF 2.9 sem modernização ampla do código;
@@ -103,10 +103,11 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] manter ezQuake stable 3.6.9 e nightly `20260616-101233_a86996a` oficiais e coexistentes;
 - [x] preservar fontes correspondentes às duas versões;
 - [x] manter workaround macOS de assinatura somente para o nightly quando necessário;
-- [ ] executar smoke real de todos os mods em stable e nightly, não apenas testes simulados de argumentos;
-- [ ] corrigir no launcher o `k_defmap` do KTX antes do primeiro frame;
+- [x] executar smoke real de todos os mods em stable e nightly, não apenas testes simulados de argumentos;
+- [x] corrigir no launcher o `k_defmap` do KTX antes do primeiro frame;
 - [ ] propor ao ezQuake a execução direta de `PR1_LoadProgs()` quando `sv_progtype == VMI_NONE`, evitando a tentativa e o erro falsos de QVM nos mods PR1;
-- [ ] investigar e propor correção upstream para as aproximadamente 295 linhas duplicadas durante `vid_restart`, sem silenciar logs legítimos;
+- [x] reproduzir as 291 linhas duplicadas no primeiro `vid_restart`, provar que somem após o primeiro encerramento normal e isolar a causa no novo registro dos mesmos objetos;
+- [ ] propor correção upstream para as linhas duplicadas durante `vid_restart`, sem silenciar logs legítimos;
 - [-] não distribuir cliente ezQuake modificado como stable/nightly oficial;
 - [ ] se um cliente modificado se tornar necessário, criar canal explícito `x86qw-patched`, opt-in e separado;
 - [-] tratar avisos OpenGL 4.6 -> 4.1, compute shader e hardware lighting no macOS como limitações informativas, salvo falha visual real;
@@ -117,8 +118,8 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 - [x] preservar a sequência `nQuake -> upstream atual do mod -> harmonização x86QW`;
 - [x] decompor o snapshot nQuake em componentes com recibos e inventários próprios;
 - [x] preservar somente arquivos realmente consumidos;
-- [ ] registrar separadamente `observed_upstream_revision`, `consumed_revision` e estado do payload nQuake;
-- [ ] corrigir o rótulo `reference-current`: o master observado `721b2c9cb8f4` altera somente arquivo não consumido, enquanto o payload permanece em `e4cb23d40aa2`;
+- [x] registrar separadamente `observed_upstream_revision`, `consumed_revision` e estado do payload nQuake;
+- [x] substituir o rótulo ambíguo `reference-current` por `reference-payload-current`: o master observado `721b2c9cb8f4` altera somente arquivo não consumido, enquanto o payload permanece em `e4cb23d40aa2`;
 - [ ] migrar Pro-X `configs/config.cfg` sem perder dados pessoais e impedir que arquivos mutáveis sejam tratados como gerenciados;
 - [x] manter `pak.lst`, aliases temporários, `-nohome` e configurações comuns compatíveis;
 - [ ] validar dinamicamente a ordem completa de PK3/PAK em stable e nightly;
@@ -141,7 +142,7 @@ Legenda: `[x]` concluído e verificado; `[-]` decisão permanente ou fora do esc
 
 - [ ] abrir PR no `QW-Group/ezquake-source` para pular a tentativa QVM quando PR1 foi selecionado explicitamente;
 - [ ] abrir PR separado no ezQuake para duplicação de log em `vid_restart` somente após teste de todos os caminhos de `con_suppress`;
-- [ ] avaliar PR ao nQuake para `bounce2.wav` ausente no pacote TF, apontando a origem oficial verificável no KTX;
+- [-] não abrir PR ao nQuake para `bounce2.wav`: o snapshot já fornece o arquivo no KTX; a ausência surgiu apenas da separação modular do x86QW e foi corrigida na composição local;
 - [-] não abrir PR de gameplay para KTX: a correção de `k_defmap` pertence ao launcher x86QW;
 - [-] Final Arena, Team Fortress, TD2 e Pro-X não possuem Git público de fonte identificado para receber estes patches;
 - [ ] documentar nos changelogs a ausência de upstream Git e manter patches prontos para envio se um repositório oficial surgir;

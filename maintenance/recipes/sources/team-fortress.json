@@ -2,7 +2,7 @@
   "format": 1,
   "project": "x86qw",
   "upstream": "team-fortress",
-  "status": "unverified",
+  "status": "runtime-verified",
   "source": {
     "archive": "dist/mods/team-fortress/2.9/source/tf_29src.zip",
     "sha256": "43c84cbba37a022078b1aa027a78ddd58f0f95388ec2ff077e789e4cb7f481ff"
@@ -12,7 +12,8 @@
     "version": "3343+svn3400",
     "source_url": "https://deb.debian.org/debian/pool/main/f/fteqcc/fteqcc_3343+svn3400.orig.tar.gz",
     "source_size": 196098,
-    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe"
+    "source_sha256": "c9bb6ca262cb970d013c5b17117f695c85fcb12d0771fc3933e1a18cd143b0fe",
+    "distribution_path": "dist/toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz"
   },
   "patches": [
     {
@@ -28,5 +29,5 @@
     "sha256": "bf6bd491fe7c4a74c6d02cf525cd838dba86ebf251623a770180423bee02665b",
     "warnings": 187
   },
-  "verification": "Comparar com o qwprogs.dat oficial 2.9 e executar smoke de 2fort5r em ezQuake stable e nightly antes de promover."
+  "verification": "Promovido após smoke de 2fort5r em ezQuake 3.6.9 e nightly 20260616-101233_a86996a: gamecode PR1 carregado, jogador entrou, versão 2.9 confirmada e nenhum bind remoto ou comando bloqueado."
 }

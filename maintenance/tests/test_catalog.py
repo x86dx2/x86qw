@@ -23,7 +23,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(validate_catalog(catalog), 26)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
-        self.assertEqual("1.47+x86qw.1", ktx["version"])
+        self.assertEqual("1.47+x86qw.2", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -65,7 +65,7 @@ class CatalogTests(unittest.TestCase):
         team_fortress = next(
             package for package in catalog["packages"] if package.get("package") == "team-fortress"
         )
-        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.2", team_fortress["version"])
+        self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.3", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
         self.assertEqual(1, len(installers))

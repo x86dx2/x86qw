@@ -81,6 +81,14 @@
       "distribution_prefixes": [
         "mods/td2/"
       ]
+    },
+    "toolchains": {
+      "consumers": [
+        "development:source-builds"
+      ],
+      "distribution_prefixes": [
+        "toolchains/"
+      ]
     }
   }
 }

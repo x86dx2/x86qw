@@ -12,12 +12,20 @@ Os 93 membros do `pak0.pak` oficial foram comparados com o conteúdo nQuake e es
 
 - mantém o gamecode Rakk já usado pelo nQuake para não perder votação, mochilas, airgib e estatísticas sem fonte equivalente;
 - separa perfil de cliente, configuração de servidor e arquivo pessoal;
+- inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
+  separadamente, sem recarregar o filesystem durante o startup;
 - expõe controles e ajuda sem alterar as regras do mod.
 
 ## Lacunas conhecidas
 
 - a fonte oficial 1.20 permite reconstruir a base, mas não a derivação Rakk;
 - `sprites/s_aball.spr` aparece apenas em `amtest.qc`, uma entidade de teste, e não existe no cliente oficial.
+
+## Validação de runtime
+
+- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `23ar-a`;
+- gamecode Rakk carregado, mapa correto aberto e jogador entrou na fila;
+- nenhum arquivo obrigatório ausente, comando bloqueado ou erro do mod.
 
 ## Deliberadamente não alterado
 

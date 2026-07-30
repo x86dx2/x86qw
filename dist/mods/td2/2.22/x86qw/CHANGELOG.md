@@ -12,12 +12,20 @@
 - remove binds e `scr_centertime` remotos, já fornecidos pelo perfil local;
 - remove alterações persistentes de gamma e mantém a duração visual da bomba de luz com os efeitos de entidade originais;
 - remove o ramo morto de `monster_vomit` que chamava `vomitus/v_sight1.wav`, arquivo inexistente também no código-base Quake 1.06;
-- `runtime/qwprogs.dat` é o candidato recompilado com FTEQCC; ele não deve ser promovido sem smoke stable/nightly.
+- inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
+  separadamente, sem recarregar o filesystem durante o startup;
+- `runtime/qwprogs.dat` foi recompilado com FTEQCC e promovido após smoke em stable e nightly.
 
 ## Lacunas conhecidas
 
 - a lista de votação cita 30 mapas externos não incluídos na distribuição original preservada;
 - o build produz 14 warnings históricos que ainda precisam ser classificados.
+
+## Validação de runtime
+
+- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `dm6` com `temp1 65560`;
+- jogador entrou, armas e efeitos carregaram e o `td2qw 2.22` foi preservado;
+- nenhuma demo automática, `stop`, gamma persistente, bind remoto ou erro `wad`/`vomitus`.
 
 ## Deliberadamente não alterado
 

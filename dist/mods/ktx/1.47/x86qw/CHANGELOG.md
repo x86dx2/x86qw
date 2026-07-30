@@ -10,13 +10,20 @@
 
 - mantém o QVM oficial sem recompilação nem alteração de gameplay;
 - configura o servidor local para `sv_progtype 2`;
+- deixa `k_defmap` sob controle do launcher, evitando a troca automática para
+  `dm3`, a segunda carga do QVM e o aviso `SV_PreSpawn_f from different level`;
 - fornece binds, ajuda e arquivo pessoal separados da configuração upstream;
 - preserva a ordem determinística de pacotes.
 
 ## Pendências conhecidas
 
-- o launcher ainda precisa definir o mapa escolhido como `k_defmap` antes do primeiro frame para evitar a troca automática para `dm3` e o aviso de prespawn;
 - `1.48-dev` é desenvolvimento no master, não uma release promovida.
+
+## Validação de runtime
+
+- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `dm6`;
+- houve uma única carga do QVM 1.47, o mapa escolhido foi preservado e o jogador entrou;
+- nenhum `SV_PreSpawn_f from different level`, erro de QVM ou comando desconhecido.
 
 ## Deliberadamente não alterado
 

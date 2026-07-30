@@ -654,7 +654,7 @@ class InstallerTests(unittest.TestCase):
                 "total-destruction-2": {"selection": "2.22"},
             }
             packages = {
-                "ktx": {"version": "1.47+x86qw.1"},
+                "ktx": {"version": "1.47+x86qw.2"},
                 "total-destruction-2": {"version": "2.22"},
             }
             with contextlib.redirect_stdout(io.StringIO()):
