@@ -19,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.1.25`, mantido imutável;
-- 48 pacotes e 21 componentes no catálogo;
+- instalador público `0.2.0`; `0.1.25` permanece imutável;
+- 49 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -249,11 +249,11 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 
 ## Gates para a próxima fase
 
-- [ ] checks reais do GitHub Actions verdes nos três sistemas;
+- [x] checks reais do GitHub Actions verdes nos três sistemas;
 - [ ] smokes nativos de serviços em Linux e Windows;
 - [ ] smoke do cliente em macOS Intel;
 - [ ] MVD produzido e validado formalmente;
 - [ ] forwarding QWFWD validado em suíte de rede;
-- [ ] revisão humana do diff e das migrações;
-- [ ] versão seguinte escolhida sem sobrescrever `0.1.25`;
+- [x] revisão humana do diff e das migrações;
+- [x] versão `0.2.0` escolhida sem sobrescrever `0.1.25`;
 - [ ] publicação executada somente em etapa explícita aprovada.

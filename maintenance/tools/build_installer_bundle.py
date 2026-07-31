@@ -282,6 +282,17 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
 def installer_record(result: dict[str, object], *, current: bool) -> dict[str, object]:
     version = str(result["version"])
     filename = str(result["filename"])
+    release_notes_path = ROOT / "docs" / "releases" / f"{version}.md"
+    release_notes = (
+        release_notes_path.read_text(encoding="utf-8").strip()
+        if release_notes_path.is_file() and not release_notes_path.is_symlink()
+        else "Bootstrap autocontido do instalador público x86QW."
+    )
+    mirror_notes = (
+        release_notes
+        if release_notes_path.is_file() and not release_notes_path.is_symlink()
+        else "Instalador público e atualizador da distribuição x86QW."
+    )
     github_repository = PRIMARY_GITHUB_REPOSITORY
     release_tag = f"x86qw-installer-{version}"
     github = (
@@ -312,9 +323,9 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "distribution_path": result["distribution_path"],
         "release_url": f"https://github.com/{github_repository}/releases/tag/{release_tag}",
         "release_title": f"x86QW Installer {version}",
-        "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+        "release_notes": release_notes,
         "mirror_title": f"x86QW Installer {version}",
-        "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+        "mirror_notes": mirror_notes,
         "mirror_latest": current,
     }
 

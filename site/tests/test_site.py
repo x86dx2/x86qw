@@ -134,17 +134,18 @@ class SiteTests(unittest.TestCase):
         product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
         self.assertEqual(package["version"], product["version"])
         self.assertEqual(package["sha256"], product["installer"]["sha256"])
-        self.assertEqual("x86QW Installer 0.1.25", package["release_title"])
+        self.assertEqual(f"x86QW Installer {package['version']}", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/",
+            f"github.com/x86dx2/x86qw/releases/download/x86qw-installer-{package['version']}/",
             package["urls"][0],
         )
         self.assertEqual(
-            [
-                "0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5",
-                "0.1.6", "0.1.7", "0.1.8", "0.1.9", "0.1.10", "0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.19", "0.1.20", "0.1.21", "0.1.25",
-            ],
-            sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
+            {
+                path.parent.name
+                for path in (PROJECT_ROOT / "dist/installer/packages").glob("*/*.zip")
+                if not path.parent.is_symlink()
+            },
+            {item["version"] for item in installers},
         )
         for historical in installers:
             historical_bundle = ROOT.parents[1] / "dist" / historical["distribution_path"]

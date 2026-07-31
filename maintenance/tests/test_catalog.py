@@ -22,7 +22,7 @@ class CatalogTests(unittest.TestCase):
         catalog = json.loads(
             (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(validate_catalog(catalog), 48)
+        self.assertEqual(validate_catalog(catalog), len(catalog["packages"]))
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
         self.assertEqual("1.47+x86qw.12", ktx["version"])
@@ -70,12 +70,18 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.4", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(20, len(installers))
-        self.assertEqual(["0.1.25"], [
+        current_version = (ROOT / "dist/installer/VERSION").read_text(encoding="utf-8").strip()
+        package_versions = {
+            path.parent.name
+            for path in (ROOT / "dist/installer/packages").glob("*/*.zip")
+            if not path.parent.is_symlink()
+        }
+        self.assertEqual(package_versions, {package["version"] for package in installers})
+        self.assertEqual([current_version], [
             package["version"] for package in installers if package.get("current") is True
         ])
         latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
-        self.assertEqual([("x86qw-installer", "0.1.25")], [
+        self.assertEqual([("x86qw-installer", current_version)], [
             (package.get("package"), package["version"]) for package in latest
         ])
         self.assertTrue(all(

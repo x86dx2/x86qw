@@ -9,8 +9,8 @@ detalhado do ecossistema está em
 Baseline analisado: `eeea45786401aae166efcd04f5d126faea740da2`, branch `main`,
 em 31 de julho de 2026.
 
-- instalador público `0.1.25`;
-- 48 pacotes e 21 componentes;
+- instalador público `0.2.0`; `0.1.25` permanece imutável no histórico;
+- 49 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
