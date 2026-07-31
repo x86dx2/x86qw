@@ -32,7 +32,7 @@ Baseline consolidado: `018e61f09b1f542f873d91be37dc8c1ebf3db589`, branch
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para uma stack em primeiro plano por instalação | unitária em lock concorrente, PID reutilizado, órfão, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária e dry-run do Worker |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.2.1` |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.

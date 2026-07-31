@@ -264,5 +264,5 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] revisão humana do diff e das migrações;
 - [x] versão `0.2.1` escolhida sem sobrescrever `0.2.0`;
 - [x] publicação `0.2.0` executada e verificada em etapa explícita aprovada;
-- [x] publicação `0.2.1` autorizada em etapa explícita;
+- [x] publicação `0.2.1` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.
