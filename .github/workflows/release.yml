@@ -61,5 +61,6 @@ jobs:
       - name: Publish after protected-environment approval
         env:
           GH_TOKEN: ${{ github.token }}
+          GLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: ./maintenance/manage.py publish
