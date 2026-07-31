@@ -62,5 +62,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-        run: ./maintenance/manage.py publish
+        run: |
+          GLAB_TOKEN="${GLAB_TOKEN//$'\r'/}"
+          GLAB_TOKEN="${GLAB_TOKEN//$'\n'/}"
+          test -n "${GLAB_TOKEN}"
+          export GLAB_TOKEN
+          export GITLAB_TOKEN="${GLAB_TOKEN}"
+          ./maintenance/manage.py publish
