@@ -20,6 +20,46 @@ Pro-X, cujo código-fonte público não foi localizado, possui `upstream/` e
 `x86qw/`, mas não uma pasta `source/` vazia. `dist/mods/x86qw/` é reservado aos
 componentes autorais da própria distribuição e não representa um upstream.
 
+## Layout dos serviços versionados
+
+Os serviços usam o mesmo contrato de proveniência sob
+`dist/services/<serviço>/<versão>/`. A forma da árvore registra a origem de cada
+artefato, e não precisa ser visualmente idêntica entre componentes:
+
+```text
+<serviço>/<versão>/
+├── source/                         # fonte upstream preservada
+├── upstream/<plataforma>/          # binário oficial, quando existir
+└── x86qw/
+    ├── runtime/<plataforma>/       # binário compilado pelo x86QW
+    ├── BUILD.json                  # origem, ferramenta e hash de cada runtime
+    └── *.cfg                       # configuração mantida pelo x86QW
+```
+
+- `source/` contém o código-fonte ou arquivo-fonte original fixado por hash;
+- `upstream/` contém somente binários publicados pelo projeto de origem e
+  preservados sem alteração;
+- `x86qw/runtime/` contém somente binários produzidos pelo x86QW a partir da
+  fonte registrada;
+- `x86qw/BUILD.json` declara, por plataforma, se o runtime é oficial ou foi
+  reproduzido pelo projeto, além de registrar ferramenta, comando e checksum
+  quando aplicável;
+- `x86qw/*.cfg` contém a configuração operacional do x86QW e nunca é
+  apresentada como arquivo do upstream.
+
+Diretórios vazios não são criados. QTV não possui builds oficiais por
+plataforma na revisão fixada: Linux, Windows e macOS são builds reproduzidos e,
+por isso, ficam todos em `x86qw/runtime/`; não existe `upstream/`. QWFWD 1.30
+fornece binários oficiais para Linux e Windows, preservados em `upstream/`,
+enquanto o runtime macOS arm64 é produzido pelo x86QW e fica em
+`x86qw/runtime/`.
+
+A pasta de versão também preserva a identidade imutável disponível no projeto
+de origem: QWFWD usa a tag `1.30`; QTV, que não possui release numerada, usa a
+abreviação `025ca949aca0` do commit completo registrado no inventário e no
+`BUILD.json`. Portanto, a diferença observada entre essas duas árvores é
+intencional e auditável, não um segundo padrão de organização.
+
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
