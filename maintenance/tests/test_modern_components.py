@@ -928,7 +928,8 @@ class ModernComponentTests(unittest.TestCase):
                         installer.launch_runtime(runtime, ["+map", "dm6"])
             self.assertEqual([
                 str(executable), "-nohome", "-basedir", str(target),
-                "-window", "-width", "1280", "-height", "720", "+map", "dm6",
+                "-window", "-width", "1280", "-height", "720",
+                "+cfg_save_onquit", "0", "+map", "dm6",
             ], popen.call_args.args[0])
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
