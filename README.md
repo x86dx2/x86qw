@@ -35,7 +35,7 @@ preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. A versão pública corrente
-é `0.2.1`; seu catálogo registra 50 pacotes e 21 componentes. Ao concluir, a
+é `0.2.2`; seu catálogo registra 51 pacotes e 21 componentes. Ao concluir, a
 CLI permanente fica na raiz escolhida e oferece `play`, `host`, `proxy`, `qtv`,
 `hub`, `update`, `upgrade`, `verify`, `repair`, `cleanup`, `uninstall` e
 `version`. Executar `./x86qw.sh`
