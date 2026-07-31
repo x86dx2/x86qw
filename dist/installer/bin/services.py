@@ -1675,6 +1675,29 @@ def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
 
 
 def posix_process_group_status(process_group: int) -> str:
+    if sys.platform.startswith("linux"):
+        proc = Path("/proc")
+        try:
+            members = False
+            for candidate in proc.iterdir():
+                if not candidate.name.isdigit():
+                    continue
+                try:
+                    stat_text = (candidate / "stat").read_text(encoding="ascii")
+                    closing = stat_text.rfind(")")
+                    fields = stat_text[closing + 2:].split() if closing >= 0 else []
+                    if len(fields) > 2 and int(fields[2]) == process_group:
+                        members = True
+                        if fields[0] != "Z":
+                            return "alive"
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                except (OSError, UnicodeError, ValueError):
+                    return "inconclusive"
+            if members:
+                return "dead"
+        except (OSError, UnicodeError):
+            return "inconclusive"
     try:
         os.killpg(process_group, 0)
         return "alive"

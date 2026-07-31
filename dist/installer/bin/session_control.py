@@ -57,6 +57,8 @@ def _linux_process_identity(pid: int) -> ProcessProbe:
         fields = stat_text[closing + 2:].split() if closing >= 0 else []
         if len(fields) <= 19:
             return ProcessProbe("inconclusive", detail="/proc stat incompleto")
+        if fields[0] == "Z":
+            return ProcessProbe("dead")
         boot_id_path = Path("/proc/sys/kernel/random/boot_id")
         boot_id = (
             boot_id_path.read_text(encoding="ascii").strip()

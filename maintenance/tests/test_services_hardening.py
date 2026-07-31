@@ -694,7 +694,9 @@ class ServiceHardeningTests(unittest.TestCase):
             process.poll.return_value = None
         with mock.patch.object(services.subprocess, "Popen", side_effect=processes), mock.patch.object(
             services, "apply_startup_rcon",
-        ), mock.patch.object(services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou")):
+        ), mock.patch.object(
+            services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou"),
+        ), mock.patch.object(services, "WindowsJobObject"):
             specs = [
                 services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
                 services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),

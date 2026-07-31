@@ -670,7 +670,9 @@ class InstallerTests(unittest.TestCase):
                             )
                         with mock.patch.object(install_qw, "Installer", return_value=installer):
                             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                                result = install_qw.main([*arguments, str(target)])
+                                result = install_qw.main([
+                                    arguments[0], str(target), *arguments[1:],
+                                ])
                         self.assertEqual(1, result)
                         installer.install_online_cli.assert_not_called()
                         installer.manage_components.assert_not_called()
