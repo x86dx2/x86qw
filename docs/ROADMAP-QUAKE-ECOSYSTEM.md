@@ -1,7 +1,7 @@
 # Roadmap técnico do ecossistema QuakeWorld no x86QW
 
 Este roadmap usa o estado real do produto como baseline e separa entrega de
-validação. Ele complementa o [índice geral](../ROADMAP.md); não autoriza release,
+validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
 Baseline consolidado: branch `main`, commit

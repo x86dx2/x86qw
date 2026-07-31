@@ -2,7 +2,7 @@
 
 Este arquivo é o índice e o roadmap do núcleo de distribuição. O planejamento
 detalhado do ecossistema está em
-[docs/ROADMAP-QUAKE-ECOSYSTEM.md](docs/ROADMAP-QUAKE-ECOSYSTEM.md).
+[ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md).
 
 ## Baseline atual
 

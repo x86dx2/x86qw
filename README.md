@@ -153,8 +153,7 @@ O manual completo esta em [dist/installer/docs/installer.md](dist/installer/docs
 dist/                    produto final canonico e versionado
 maintenance/            manutencao, inventarios, receitas, testes e builds
 site/                    site inteiro: produto, design, deploy, assets e testes
-docs/                    arquitetura global da plataforma
-ROADMAP.md                roteiro global do produto
+docs/                    arquitetura e roadmaps da plataforma
 ```
 
 Cada dominio guarda tudo que lhe pertence:
