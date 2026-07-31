@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T11:38:16Z",
+  "generated_at": "2026-07-31T17:59:37Z",
   "packages": [
     {
       "component": "core",
@@ -574,7 +574,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.25",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -598,7 +598,7 @@
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.25",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": true
+      "mirror_latest": false
     },
     {
       "component": "installer",
@@ -809,6 +809,36 @@
       "mirror_title": "x86QW Installer 0.1.9",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.2.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.2.0.zip",
+      "size": 100282,
+      "sha256": "f4ff969534dc0efeb8c517db1d36fb6b1227a182c59d67bc0372178c857fb870",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.0/x86qw-installer-0.2.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.0/x86qw-installer-0.2.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.2.0/x86qw-installer-0.2.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.2.0/x86qw-installer-0.2.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.2.0",
+      "release_title": "x86QW Installer 0.2.0",
+      "release_notes": "# x86QW 0.2.0\n\nRelease de consolidação da plataforma atual, sem incorporar novos runtimes,\njogos, mods ou mapas.\n\n## Destaques\n\n- CI contínua em Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- gate manual e protegido para publicação, com verificação integral e Git LFS;\n- validação segura e independente do sistema para membros PK3/ZIP;\n- senhas por prompt oculto ou arquivo privado, com redaction;\n- preflight, readiness, encerramento coordenado e recuperação de sessões;\n- catálogos declarativos de capacidades, runtimes, jogos e compatibilidade;\n- `play` e `host` sem instalação de payload permanente;\n- dependências independentes para MVDSV, QTV e QWFWD;\n- documentação, site, roadmaps e diagrama sincronizados com o catálogo.\n\n## Migração\n\nInstalações com `.install/state.json` no formato 1 são migradas de forma\nunilateral para o formato 2 durante `install`, `update`, `upgrade` ou `repair`.\nA seleção customizada, os componentes existentes, os fingerprints históricos e\nos arquivos pessoais são preservados. O formato 1 continua aceito durante esta\nlinha de compatibilidade.\n\n## Compatibilidade\n\nPermanecem suportados os cinco jogos atuais, stable e nightly lado a lado, os\nlaunchers shell e Windows e os comandos públicos existentes. MVDSV, QTV e\nQWFWD continuam disponíveis somente nas plataformas que possuem artefato\ndeclarado; serviços não são anunciados para macOS Intel.",
+      "mirror_title": "x86QW Installer 0.2.0",
+      "mirror_notes": "# x86QW 0.2.0\n\nRelease de consolidação da plataforma atual, sem incorporar novos runtimes,\njogos, mods ou mapas.\n\n## Destaques\n\n- CI contínua em Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- gate manual e protegido para publicação, com verificação integral e Git LFS;\n- validação segura e independente do sistema para membros PK3/ZIP;\n- senhas por prompt oculto ou arquivo privado, com redaction;\n- preflight, readiness, encerramento coordenado e recuperação de sessões;\n- catálogos declarativos de capacidades, runtimes, jogos e compatibilidade;\n- `play` e `host` sem instalação de payload permanente;\n- dependências independentes para MVDSV, QTV e QWFWD;\n- documentação, site, roadmaps e diagrama sincronizados com o catálogo.\n\n## Migração\n\nInstalações com `.install/state.json` no formato 1 são migradas de forma\nunilateral para o formato 2 durante `install`, `update`, `upgrade` ou `repair`.\nA seleção customizada, os componentes existentes, os fingerprints históricos e\nos arquivos pessoais são preservados. O formato 1 continua aceito durante esta\nlinha de compatibilidade.\n\n## Compatibilidade\n\nPermanecem suportados os cinco jogos atuais, stable e nightly lado a lado, os\nlaunchers shell e Windows e os comandos públicos existentes. MVDSV, QTV e\nQWFWD continuam disponíveis somente nas plataformas que possuem artefato\ndeclarado; serviços não são anunciados para macOS Intel.",
+      "mirror_latest": true
     },
     {
       "component": "ktx",

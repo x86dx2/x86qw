@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "commands": [
+    "play",
+    "host",
+    "proxy",
+    "qtv",
+    "hub",
+    "update",
+    "upgrade",
+    "verify",
+    "repair",
+    "cleanup",
+    "uninstall",
+    "version"
+  ],
+  "runtime_kinds": ["client", "server", "service"],
+  "compatibility_kinds": ["client", "server", "service", "tool"],
+  "protocols": [
+    {"id": "quakeworld", "label": "QuakeWorld"},
+    {"id": "http", "label": "HTTP"},
+    {"id": "udp-proxy", "label": "Proxy UDP QuakeWorld"}
+  ],
+  "capabilities": [
+    {"id": "multiplayer-client", "label": "Cliente multiplayer"},
+    {"id": "local-server", "label": "Servidor local"},
+    {"id": "dedicated-server", "label": "Servidor dedicado"},
+    {"id": "bots", "label": "Bots"},
+    {"id": "mvd-recording", "label": "Gravação MVD"},
+    {"id": "qtv", "label": "Relay QTV"},
+    {"id": "proxy", "label": "Proxy QWFWD"},
+    {"id": "demo-playback", "label": "Reprodução de demos"},
+    {"id": "server-browser", "label": "Navegador de servidores"}
+  ],
+  "systems": ["macos", "linux", "windows"],
+  "host_systems": {"Darwin": "macos", "Linux": "linux", "Windows": "windows"},
+  "architectures": ["universal", "arm64", "amd64", "x86_64", "x64"],
+  "architecture_aliases": {
+    "universal": ["arm64", "aarch64", "x86_64", "amd64"],
+    "arm64": ["arm64", "aarch64"],
+    "amd64": ["x86_64", "amd64"],
+    "x86_64": ["x86_64", "amd64"],
+    "x64": ["amd64", "x86_64"]
+  },
+  "platform_labels": {
+    "macos-universal": "macOS",
+    "macos-arm64": "macOS arm64",
+    "linux-x86_64": "Linux x86_64",
+    "linux-amd64": "Linux amd64",
+    "windows-x64": "Windows x64"
+  },
+  "executable_formats": ["macho-universal", "macho-arm64", "elf-amd64", "pe-x64"]
+}

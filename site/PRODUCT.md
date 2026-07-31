@@ -16,7 +16,7 @@ joga precisa reconhecer transparência técnica, controle e respeito ao ecossist
 Divulgar o QuakeWorld e apresentar o x86QW como uma distribuição moderna,
 reproduzível e auditável. O site deve transformar curiosidade em confiança:
 explicar a proposta, tornar o estado real da distribuição visível e conduzir o
-visitante à instalação sem esconder licenças, proveniência ou limitações.
+visitante à instalação sem esconder proveniência, suporte efetivo ou limitações.
 
 ## Brand Personality
 
@@ -28,8 +28,20 @@ contemporâneo sem apagar a história do QuakeWorld.
 
 Não parecer nostalgia pixelada excessiva, estética gamer neon/cyberpunk ou uma
 landing page SaaS genérica. Evitar também futurismo ornamental, jargão promocional,
-interfaces cheias de cartões iguais e qualquer tentativa de esconder que os
-primeiros pacotes ainda dependem de auditoria de redistribuição.
+interfaces cheias de cartões iguais e qualquer tentativa de esconder limitações
+de plataforma ou validação.
+
+## Fatos públicos
+
+Versão, contagens, comandos, jogos, runtimes e plataformas vêm da projeção
+gerada `public/api/v1/product.json`. A fonte é o conjunto canônico em
+`maintenance/inventory/`, `dist/installer/VERSION` e o catálogo de pacotes.
+Textos do site não podem manter números divergentes: os testes comparam a página
+com essa projeção e a validação integral rejeita um JSON desatualizado.
+
+O produto atual oferece cinco jogos, KTX com modos e Frogbots, hospedagem por
+MVDSV, relay QTV e proxy QWFWD. O cliente macOS é universal; os três serviços
+no macOS são arm64. Linux amd64 e Windows x64 possuem cliente e serviços.
 
 ## Design Principles
 

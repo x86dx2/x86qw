@@ -466,31 +466,45 @@ class InstallerTests(unittest.TestCase):
                 (target / "x86qw.cmd").read_bytes(),
             )
             self.assertEqual("1.0.6", installer.installed_cli_version())
-            launcher = target / "x86qw.sh"
-            self.assertTrue(os.access(launcher, os.X_OK))
+            if os.name == "nt":
+                launcher = target / "x86qw.cmd"
+                command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", str(launcher)]
+                usage = "Uso: x86qw.cmd <comando>"
+                play_usage = "play"
+            else:
+                launcher = target / "x86qw.sh"
+                command = [str(launcher)]
+                usage = "Uso: ./x86qw.sh <comando>"
+                play_usage = "./x86qw.sh play"
+                self.assertTrue(os.access(launcher, os.X_OK))
+            environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             result = subprocess.run(
-                [str(launcher)], text=True, capture_output=True, check=False,
+                command, text=True, encoding="utf-8", capture_output=True,
+                check=False, env=environment,
             )
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertIn("x86QW 1.0.6", result.stdout)
-            self.assertIn("Uso: ./x86qw.sh <comando>", result.stdout)
-            self.assertIn("./x86qw.sh play", result.stdout)
+            self.assertIn(usage, result.stdout)
+            self.assertIn(play_usage, result.stdout)
             self.assertIn("upgrade", result.stdout)
             self.assertNotIn("components", result.stdout)
             for argument in ("version", "--version"):
                 with self.subTest(argument=argument):
                     version = subprocess.run(
-                        [str(launcher), argument], text=True, capture_output=True, check=False,
+                        [*command, argument], text=True, encoding="utf-8",
+                        capture_output=True, check=False, env=environment,
                     )
                     self.assertEqual(0, version.returncode, version.stderr)
                     self.assertEqual("x86QW 1.0.6\n", version.stdout)
             rejected = subprocess.run(
-                [str(launcher), "install"], text=True, capture_output=True, check=False,
+                [*command, "install"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
             )
             self.assertEqual(2, rejected.returncode)
             self.assertIn("comando desconhecido", rejected.stderr)
             play = subprocess.run(
-                [str(launcher), "play", "--help"], text=True, capture_output=True, check=False,
+                [*command, "play", "--help"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
             )
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
@@ -846,6 +860,60 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(["ktx"], migrated["requested_components"])
             self.assertEqual(["ktx"], migrated["recorded_components"])
             self.assertNotIn("nquake-sounds", migrated["known_components"])
+
+    def test_format_one_state_migrates_once_without_changing_custom_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            selected = ["ktx", "qtv", "qwfwd"]
+            historical = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": list(selected),
+                "recorded_components": list(selected),
+                "known_components": list(installer.components),
+            }
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(historical), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "installed_components", return_value=list(selected)):
+                    migrated = installer.load_install_state(persist_migration=True)
+                    loaded_again = installer.load_install_state(persist_migration=True)
+            self.assertEqual(2, migrated["format"])
+            self.assertEqual("custom", migrated["profile"])
+            self.assertEqual(selected, migrated["requested_components"])
+            self.assertEqual(selected, migrated["recorded_components"])
+            self.assertEqual([], migrated["capabilities"])
+            self.assertEqual(
+                install_qw.profile_fingerprint(selected), migrated["component_fingerprint"],
+            )
+            self.assertEqual(migrated, loaded_again)
+            persisted = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(migrated, persisted)
+
+    def test_format_two_state_preserves_recorded_capabilities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            selected = ["mvdsv", "qtv"]
+            capabilities = ["dedicated-server", "qtv"]
+            state = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": list(selected),
+                "recorded_components": list(selected),
+                "known_components": list(installer.components),
+                "capabilities": capabilities,
+                "component_fingerprint": install_qw.profile_fingerprint(selected),
+            }
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            with mock.patch.object(installer, "installed_components", return_value=list(selected)):
+                loaded = installer.load_install_state(persist_migration=True)
+            self.assertEqual(capabilities, loaded["capabilities"])
+            self.assertEqual(state, json.loads(state_path.read_text(encoding="utf-8")))
 
     def test_upgrade_adds_only_components_newly_required_by_the_recorded_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1233,13 +1301,24 @@ class InstallerTests(unittest.TestCase):
             cli.write_text("# cli\n", encoding="utf-8")
             self.write_cli_receipt(target, "1.0.5")
             (target / "x86qw.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-            (target / "x86qw.cmd").write_text("@echo off\r\n", encoding="utf-8")
+            (target / "x86qw.cmd").write_bytes(
+                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes()
+            )
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"preserve")
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.uninstall()
             self.assertFalse((target / "x86qw.sh").exists())
-            self.assertFalse((target / "x86qw.cmd").exists())
+            if os.name == "nt":
+                # manager.py cannot remove the active batch safely; x86qw.cmd
+                # deletes itself after a successful uninstall.
+                self.assertTrue((target / "x86qw.cmd").exists())
+                self.assertIn(
+                    'if "%X86QW_EXIT%"=="0" del "%~f0"',
+                    (target / "x86qw.cmd").read_text(encoding="utf-8"),
+                )
+            else:
+                self.assertFalse((target / "x86qw.cmd").exists())
             self.assertFalse((target / ".install/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
 

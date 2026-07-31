@@ -13,6 +13,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1] / "public"
+PROJECT_ROOT = ROOT.parents[1]
 
 
 class Page(HTMLParser):
@@ -66,23 +67,85 @@ class SiteTests(unittest.TestCase):
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
 
+    def test_public_product_facts_match_the_canonical_catalogs_and_documentation(self):
+        product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
+        packages = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
+        components = json.loads(
+            (PROJECT_ROOT / "maintenance/inventory/components.json").read_text(encoding="utf-8")
+        )
+        runtimes = json.loads(
+            (PROJECT_ROOT / "maintenance/inventory/runtimes.json").read_text(encoding="utf-8")
+        )
+        games = json.loads(
+            (PROJECT_ROOT / "maintenance/inventory/games.json").read_text(encoding="utf-8")
+        )
+        capabilities = json.loads(
+            (PROJECT_ROOT / "maintenance/inventory/capabilities.json").read_text(encoding="utf-8")
+        )
+        version = (PROJECT_ROOT / "dist/installer/VERSION").read_text(encoding="utf-8").strip()
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        manual = (PROJECT_ROOT / "dist/installer/docs/installer.md").read_text(encoding="utf-8")
+
+        self.assertEqual(version, product["version"])
+        self.assertEqual(len(packages["packages"]), product["package_count"])
+        self.assertEqual(len(components["components"]), product["component_count"])
+        self.assertEqual(capabilities["commands"], product["commands"])
+        self.assertEqual(
+            {entry["id"] for entry in runtimes["runtimes"]},
+            {entry["id"] for entry in product["runtimes"]},
+        )
+        self.assertEqual(
+            {entry["id"] for entry in games["games"]},
+            {entry["id"] for entry in product["games"]},
+        )
+        self.assertEqual({"mvdsv", "qtv", "qwfwd"}, {
+            entry["id"] for entry in product["runtimes"]
+            if entry["kind"] in {"server", "service"}
+        })
+        service_variants = {
+            platform["variant"]
+            for runtime in product["runtimes"]
+            if runtime["kind"] in {"server", "service"}
+            for platform in runtime["platforms"]
+        }
+        self.assertEqual(
+            {"macos-arm64", "linux-amd64", "windows-x64"}, service_variants,
+        )
+        for document in (home, readme, manual):
+            self.assertIn(version, document)
+            self.assertIn(f"{product['component_count']} componentes", document)
+        self.assertIn(f"{product['package_count']} pacotes", home)
+        for command in product["commands"]:
+            self.assertIn(f"`{command}`", readme)
+        cli_help = subprocess.run(
+            [sys.executable, str(PROJECT_ROOT / "dist/installer/bin/manager.py"), "--help"],
+            check=True, capture_output=True, text=True,
+        ).stdout
+        for command in product["commands"]:
+            self.assertIn(command, cli_help)
+
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
         installers = [item for item in catalog["packages"] if item.get("package") == "x86qw-installer"]
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertEqual("x86QW Installer 0.1.25", package["release_title"])
+        product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
+        self.assertEqual(package["version"], product["version"])
+        self.assertEqual(package["sha256"], product["installer"]["sha256"])
+        self.assertEqual(f"x86QW Installer {package['version']}", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/",
+            f"github.com/x86dx2/x86qw/releases/download/x86qw-installer-{package['version']}/",
             package["urls"][0],
         )
         self.assertEqual(
-            [
-                "0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5",
-                "0.1.6", "0.1.7", "0.1.8", "0.1.9", "0.1.10", "0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.19", "0.1.20", "0.1.21", "0.1.25",
-            ],
-            sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
+            {
+                path.parent.name
+                for path in (PROJECT_ROOT / "dist/installer/packages").glob("*/*.zip")
+                if not path.parent.is_symlink()
+            },
+            {item["version"] for item in installers},
         )
         for historical in installers:
             historical_bundle = ROOT.parents[1] / "dist" / historical["distribution_path"]

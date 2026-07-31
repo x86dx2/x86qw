@@ -5,6 +5,8 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
+O bundle público corrente é `0.2.0`; o catálogo registra 49 pacotes e 21
+componentes. Esses fatos são validados contra os inventários canônicos.
 
 ## Instalação pública
 
@@ -37,8 +39,9 @@ Ao migrar de um bundle antigo, a atualização troca integralmente `.install/cli
 por essa árvore mínima e elimina payloads legados que haviam sido duplicados ali.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
-usam a aplicação única `.install/cli/x86qw.pyz`; por exemplo: `./x86qw.sh play`,
-`./x86qw.sh update`, `./x86qw.sh upgrade`, `./x86qw.sh verify` e `./x86qw.sh cleanup`. Sem argumento, a CLI
+usam a aplicação única `.install/cli/x86qw.pyz`; as ações públicas são `play`,
+`host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
+`cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 mostra o help e não inicia instalação alguma. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
@@ -137,6 +140,9 @@ O estado do instalador fica agrupado por contexto em um único diretório neutro
 ```text
 quake-world/.install/
 ├── state.json
+├── sessions/
+│   └── <session-id>/
+│       └── session.json
 ├── cli/
 │   ├── x86qw.pyz
 │   └── receipt
@@ -188,7 +194,7 @@ O padrão é `N`. Se a resposta for positiva, há quatro opções:
 
 - `recomendado`: experiência base nQuake, sem matchinfo, QRP nem mods opcionais;
 - `essencial`: bootstrap, interface principal e KTX;
-- `completo`: os 18 componentes, incluindo QRP, Final Arena, Pro-X, Team Fortress e TD2;
+- `completo`: os 21 componentes atuais, incluindo QRP, os cinco jogos, MVDSV, QTV e QWFWD;
 - `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
@@ -196,7 +202,10 @@ O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Documentação,
 fontes QuakeC, exemplos originais e o `pwd.cfg` histórico permanecem preservados
 somente no artefato upstream em `dist/mods/td2/2.22/source/`; não entram no runtime. O pacote x86QW
 incorpora gamecode, modelos, sons, perfil de cliente, servidor local e modelo de
-configuração pessoal. A camada `play-support` mantém apenas a cópia isolada do gamecode.
+configuração pessoal. A camada `play-support` mantém apenas a cópia isolada do
+gamecode. Ela é materializada por `install`, `update`, `upgrade` ou `repair`;
+`play` e `host` somente validam o resultado e nunca criam recibos nem payload
+permanente.
 Assim uma nova versão do TD2 pode substituir seu conteúdo upstream sem misturar
 ou perder os ajustes do x86QW. As fontes do perfil são arquivos normais em
 `dist/mods/td2/2.22/x86qw/`, declarados em `maintenance/inventory/components.json`; não ficam
@@ -243,9 +252,10 @@ arquivo pessoal entram depois do conteúdo do mod.
 O catálogo publica uma versão atual por componente e o recibo
 individual grava sua versão. Antes do download, o instalador mostra as versões
 escolhidas e, quando disponível, o link das notas de release. Em um checkout,
-ele materializa o componente diretamente de `dist/distributions/nquake` ou `dist/mods`; sem
-essas fontes, recorre aos pacotes dos mirrors externos. Servidores e shareware
-ficam de fora. Em uma instalação nova, também cria
+ele materializa o componente diretamente de `dist/distributions/nquake`,
+`dist/mods`, `dist/servers` ou `dist/services`; sem essas fontes, recorre aos
+pacotes dos mirrors externos. Conteúdo shareware não faz parte dessa seleção.
+Em uma instalação nova, também cria
 `ezquake/configs/preset.cfg` com o ajuste mínimo de volume esperado pelo primeiro
 start; um preset existente nunca é substituído.
 
@@ -360,18 +370,17 @@ No macOS com notch, o modo de compatibilidade de área segura pode reduzir a
 janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
 **Options**. Durante a instalação ou o primeiro reparo, o x86QW registra
 `NSPrefersDisplaySafeAreaCompatibilityMode=false` no `Info.plist` e assina
-novamente o bundle com `codesign`. Ao abrir o jogo, o launcher identifica o
-monitor interno pela resolução física, que não muda quando outro fullscreen já
-está ativo, e deriva sua área 16:10 segura. Antes de iniciar o ezQuake, o launcher
-grava fullscreen explícito (`vid_fullscreen 1` e
-`vid_usedesktopres 0`) com a resolução 16:10 segura detectada para o painel. Em
+novamente o bundle com `codesign`. A fase de instalação ou reparo identifica o
+monitor interno pela resolução física e deriva sua área 16:10 segura. Ela grava
+fullscreen explícito (`vid_fullscreen 1` e `vid_usedesktopres 0`) com a
+resolução 16:10 segura detectada para o painel. Em
 um MacBook com painel físico 3024×1964, por exemplo, o jogo abre diretamente em
 3024×1890; o modo desktop automático não pode ignorar essas dimensões e ocupar a
 área recortada pelo notch. A frequência permanece automática. Alterações
 pessoais de vídeo desativam o gerenciamento automático e são preservadas. A
 migração da CLI 0.1.7 remove o ajuste temporário de janela sem bordas; instalações
 que receberam fullscreen desktop automático são migradas para o modo explícito
-seguro na próxima execução.
+seguro na próxima instalação, atualização ou reparo explícito.
 
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
@@ -528,6 +537,24 @@ o conjunto sem deixar filhos. Senhas ficam apenas em configurações efêmeras d
 permissão privada. Bind externo, firewall, NAT, DNS e TLS continuam sendo
 decisões explícitas do administrador.
 
+O cliente macOS é universal (`arm64` + `x86_64`). Os serviços MVDSV, QTV e
+QWFWD no macOS são `arm64`; não existe anúncio de serviço para macOS Intel.
+Linux usa `amd64`/`x86_64` e Windows usa `x64` para cliente e serviços.
+
+As opções `--prompt-password`, `--prompt-spectator-password`,
+`--prompt-rcon-password` e `--prompt-qtv-password` leem sem eco. As variantes
+`--password-file`, `--spectator-password-file`, `--rcon-password-file` e
+`--qtv-password-file` exigem arquivo regular, sem symlink e, no Unix, privado.
+As opções legadas que recebem segredo diretamente continuam aceitas por
+compatibilidade, mas podem permanecer no histórico do shell e geram alerta.
+
+Antes de iniciar qualquer filho, a CLI valida componentes, executáveis,
+configurações, endpoints e todas as portas. A ordem composta é MVDSV, readiness
+e configuração pós-map por RCON, QTV com HTTP/upstream e, por último, QWFWD.
+Falha parcial encerra o que já iniciou. O journal privado em
+`.install/sessions/` reconcilia crashes sem apagar arquivo pessoal ou temporário
+que tenha sido modificado.
+
 ## Preparar outro sistema
 
 O instalador pode ser executado diretamente no sistema de destino ou preparar outro SO. Para transportar uma instalação, copie a pasta `quake-world` inteira, preservando `id1`, `qw`, `ezquake` e os addons.
@@ -680,8 +707,23 @@ Instalações anteriores ao registro de perfil são migradas automaticamente. Um
 combinação exatamente igual a `essential`, `recommended` ou `complete` recupera
 esse perfil; qualquer combinação diferente vira `custom`, evitando a inclusão
 silenciosa de addons. Assinaturas históricas preservadas no manifesto permitem
-reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em `.install/state.json` e registra também
-os componentes conhecidos, permitindo detectar novidades publicadas.
+reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em
+`.install/state.json` e registra também os componentes conhecidos, capacidades
+explícitas e um fingerprint dos componentes. A migração para o formato 2 é
+unilateral, preserva a seleção customizada exatamente e aparece no plano antes
+da gravação.
+
+Para diagnosticar e recompor apenas conteúdo gerenciado ausente ou divergente,
+use no checkout de desenvolvimento:
+
+```sh
+./dist/installer/bin/manager.py repair --dry-run
+./dist/installer/bin/manager.py repair
+```
+
+Na CLI instalada, `repair` orienta a reexecução do bootstrap para que os
+pacotes sejam obtidos pelo fluxo público validado. Arquivos pessoais e arquivos
+gerenciados modificados são preservados.
 
 Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
 mostram somente as mudanças reais no formato do Homebrew: manifesto baixado,

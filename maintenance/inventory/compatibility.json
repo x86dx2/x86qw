@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "compatibility": [
+    {"kind": "client", "runtime": "ezquake-stable", "games": ["ktx", "final-arena", "pro-x", "team-fortress", "td2"], "protocol": "quakeworld", "smoke_test": "client-game-golden"},
+    {"kind": "client", "runtime": "ezquake-nightly", "games": ["ktx", "final-arena", "pro-x", "team-fortress", "td2"], "protocol": "quakeworld", "smoke_test": "client-game-golden"},
+    {"kind": "server", "runtime": "mvdsv", "games": ["ktx", "final-arena", "pro-x", "team-fortress", "td2"], "protocol": "quakeworld", "smoke_test": "server-game-golden"},
+    {"kind": "service", "runtime": "qtv", "games": [], "protocol": "http", "smoke_test": "qtv-http-upstream"},
+    {"kind": "service", "runtime": "qwfwd", "games": [], "protocol": "udp-proxy", "smoke_test": "qwfwd-process-port"}
+  ]
+}

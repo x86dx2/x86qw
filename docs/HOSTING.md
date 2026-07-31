@@ -31,9 +31,22 @@ deliberadamente a interface e ajuste firewall/NAT fora do x86QW:
 ./x86qw.sh host ktx --bind 0.0.0.0 --port 28501 --mode ctf --map e2m2
 ```
 
-Use `--password`, `--spectator-password` e `--rcon-password` quando necessário.
-Esses valores entram em um arquivo de sessão com permissão privada, removido ao
-encerrar. Caracteres que poderiam concatenar comandos são rejeitados.
+As opções legadas `--password`, `--spectator-password`, `--rcon-password` e
+`--qtv-password` continuam aceitas, mas o valor pode permanecer no histórico
+do shell ou na listagem de processos da própria CLI. Prefira entrada sem eco:
+
+```sh
+./x86qw.sh host ktx --prompt-password --prompt-rcon-password
+./x86qw.sh host ktx --password-file ~/.config/x86qw/player-password
+./x86qw.sh qtv --prompt-qtv-password --upstream quake.example:28501
+```
+
+Também existem `--spectator-password-file`, `--rcon-password-file` e
+`--qtv-password-file`. No Unix, o arquivo deve ser regular, não pode ser
+symlink e precisa estar restrito ao proprietário (`chmod 600`). Uma única
+quebra de linha final é removida; conteúdo multilinha é recusado. Senhas nunca
+entram nos argumentos do processo filho nem nos logs detalhados. Bind externo
+sem senha produz um alerta explícito, sem bloquear uma escolha intencional.
 
 O KTX distribuído inclui 77 rotas Frogbot e 54 rotas Race. No dedicado, bots
 são adicionados automaticamente quando o primeiro jogador entra; habilidade,
@@ -67,6 +80,10 @@ separadamente:
 Upload HTTP permanece desativado no perfil gerenciado. Use `--bind 0.0.0.0`
 somente se realmente quiser expor a página/stream.
 
+Upstreams aceitam apenas `IPv4:porta`, `hostname:porta` ou `[IPv6]:porta`.
+Espaços, controles, comandos concatenados, portas fora da faixa e IPv6 sem
+colchetes são recusados.
+
 ## QWFWD
 
 ```sh
@@ -80,8 +97,43 @@ configuração gerenciada não consulta masters públicos automaticamente.
 
 ## Encerramento e arquivos pessoais
 
-Os serviços rodam em primeiro plano. `Ctrl+C` encerra filhos na ordem inversa,
-aguarda a saída e força apenas processos que não responderem. A materialização
-temporária de PK3 necessária ao MVDSV é removida quando permanece inalterada;
-um arquivo modificado durante a sessão é preservado e reportado. Configurações
-pessoais, logs e demos não são tratados como payload imutável de atualização.
+Antes de criar qualquer processo, a CLI detecta portas duplicadas, tenta os
+binds solicitados e valida diretórios, executáveis, configurações e
+componentes. Ao compor os três serviços, a ordem é MVDSV, readiness por
+`status`, configuração pós-map via RCON local, QTV com readiness HTTP e
+upstream, e por último QWFWD com prova de vida e ocupação da porta. Falha em
+qualquer etapa encerra os processos já iniciados na ordem inversa.
+
+Os serviços rodam em primeiro plano. `Ctrl+C`, `SIGINT`, `SIGTERM`, erro de
+startup e encerramento normal encerram os filhos na ordem inversa, aguardam a
+saída e forçam apenas processos que não responderem. No Windows, a CLI usa o
+encerramento coordenado disponível em `subprocess`, seguido de `kill` após o
+timeout.
+
+Cada execução mantém um journal privado em
+`.install/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
+para o arquivo no Unix). Ele registra processos, configurações efêmeras,
+arquivos materializados, hashes e diretórios criados. Ao iniciar `host`,
+`proxy` ou `qtv`, sessões incompletas são reconciliadas: somente arquivos
+criados pela sessão e ainda iguais ao hash esperado são removidos. Arquivos
+alterados e dados preexistentes são preservados e reportados.
+
+## Limites de PK3/ZIP
+
+A materialização dedicada interpreta nomes internos sempre com semântica
+POSIX, independentemente do sistema hospedeiro. Ela rejeita traversal,
+symlink, membro especial, drive, barra invertida, controles, nomes reservados
+do Windows, colisões por caixa ou Unicode e caminhos incompatíveis com
+Windows. Os limites atuais, medidos com folga sobre os pacotes distribuídos,
+são:
+
+- 4.096 membros;
+- 128 MiB por membro;
+- 512 MiB descompactados no total;
+- 16 níveis de diretório;
+- 240 caracteres por caminho;
+- razão máxima de compressão de 500 para 1.
+
+A extração usa arquivo temporário, hash SHA-256 e rename atômico. Arquivo
+pessoal diferente nunca é sobrescrito. Configurações pessoais, logs e demos
+não são tratados como payload imutável de atualização.

@@ -19,8 +19,10 @@ from build_core_package import build_core_package  # noqa: E402
 
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
-        catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 48)
+        catalog = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(validate_catalog(catalog), len(catalog["packages"]))
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
         self.assertEqual("1.47+x86qw.12", ktx["version"])
@@ -68,12 +70,18 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.4", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(20, len(installers))
-        self.assertEqual(["0.1.25"], [
+        current_version = (ROOT / "dist/installer/VERSION").read_text(encoding="utf-8").strip()
+        package_versions = {
+            path.parent.name
+            for path in (ROOT / "dist/installer/packages").glob("*/*.zip")
+            if not path.parent.is_symlink()
+        }
+        self.assertEqual(package_versions, {package["version"] for package in installers})
+        self.assertEqual([current_version], [
             package["version"] for package in installers if package.get("current") is True
         ])
         latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
-        self.assertEqual([("x86qw-installer", "0.1.25")], [
+        self.assertEqual([("x86qw-installer", current_version)], [
             (package.get("package"), package["version"]) for package in latest
         ])
         self.assertTrue(all(
@@ -178,7 +186,9 @@ class CatalogTests(unittest.TestCase):
             }
             package = register_package(catalog_path, artifact, **arguments)
             self.assertEqual(artifact.stat().st_size, package["size"])
-            self.assertEqual(1, validate_catalog(json.loads(catalog_path.read_text())))
+            self.assertEqual(
+                1, validate_catalog(json.loads(catalog_path.read_text(encoding="utf-8")))
+            )
             with self.assertRaises(ValueError):
                 register_package(catalog_path, artifact, **arguments)
 
@@ -208,7 +218,7 @@ class CatalogTests(unittest.TestCase):
                 "packages": [catalog_package],
             }))
             register_packages(path, {"packages": [package]})
-            saved = json.loads(path.read_text())
+            saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(package["urls"], saved["packages"][0]["urls"])
             self.assertEqual(package["origin_url"], saved["packages"][0]["origin_url"])
             self.assertEqual("ktx", saved["packages"][0]["component"])

@@ -11,6 +11,7 @@ https://x86qw.x86.com.br/                    site do projeto
 https://x86qw.x86.com.br/install.sh          bootstrap macOS/Linux
 https://x86qw.x86.com.br/install.ps1         bootstrap Windows
 https://x86qw.x86.com.br/api/v1/catalog.json catálogo do instalador
+https://x86qw.x86.com.br/api/v1/product.json fatos públicos do produto
 https://github.com/x86dx2/x86qw/tree/main/dist distribuição canônica
 https://github.com/x86dx2/x86qw/releases      releases oficiais
 https://gitlab.com/x86dx2/x86qw               código e pacotes de contingência
@@ -58,11 +59,17 @@ O bootstrap geral segue o mesmo contrato em `dist/mods/x86qw/core/`: ele
 substitui explicitamente o `autoexec.cfg` da referência, instala documentação
 atual e cria somente modelos de configuração pessoal.
 
-O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
+O catálogo de pacotes canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
 servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
 permite que uma única validação cubra publicação e consumo. Os arquivos grandes
 ficam na árvore Git por meio do Git LFS. Releases e Generic Packages hospedam
 os clientes espelhados e os pacotes derivados necessários fora de um checkout.
+
+Capacidades, runtimes, jogos e compatibilidade são declarados em
+`maintenance/inventory/`. A projeção pública
+`site/public/api/v1/product.json` combina esses contratos com `VERSION` e o
+catálogo de pacotes; `verify` rejeita qualquer projeção ou texto factual
+divergente.
 
 ## Regra de entrada de componentes
 
@@ -115,7 +122,7 @@ declarada interrompe o build.
 ```text
 fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
                      -> maintenance/build/packages/ -> mirrors -> instalador público
-CLI + catálogo runtime mínimo -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
+CLI + catálogos runtime mínimos -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
 dist/game-data/id1 -> pacote x86qw-core-id1 -> GitHub/GitLab -> instalação inicial
 ```
 
@@ -140,10 +147,17 @@ um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
 
 ## Segurança e recuperação
 
-- tokens ficam somente nos secrets do provedor de CI;
+- workflows de pull request usam somente `contents: read` e não recebem secrets;
+- a matriz Linux, macOS e Windows bloqueia a etapa manual de release;
 - toda URL de artefato usa HTTPS;
 - nomes de arquivo não podem conter caminhos;
 - nenhum pacote é aceito sem tamanho e SHA-256;
 - versões publicadas não são substituídas, apenas descontinuadas no catálogo;
 - GitHub e GitLab hospedam o mesmo repositório com Git LFS; os registries são
   canais adicionais de entrega. R2 não faz parte da arquitetura atual.
+- senhas de serviço podem vir de prompt sem eco ou arquivo privado e nunca
+  entram na linha de comando dos filhos;
+- preflight de portas ocorre antes do primeiro processo; readiness e rollback
+  encerram startups parciais;
+- `.install/sessions/` registra journals privados e remove após crash somente
+  arquivos criados pela sessão cujo hash ainda coincide.

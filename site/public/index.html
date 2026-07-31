@@ -46,7 +46,7 @@
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="launch-note"><span aria-hidden="true"></span> Primeira distribuição em auditoria</p>
+          <p class="launch-note"><span aria-hidden="true"></span> Distribuição 0.2.0 verificável</p>
           <h1 id="hero-title">QuakeWorld,<br><strong>pronto para rodar.</strong></h1>
           <p class="hero-lead">O x86QW está reunindo o ezQuake mais recente, as customizações que fizeram o nQuake essencial e uma instalação verificável para três sistemas — sem esconder de onde cada arquivo veio.</p>
 
@@ -55,8 +55,8 @@
             <a class="button button-quiet" href="#estado">Ver estado real</a>
           </div>
 
-          <ul class="platform-list" aria-label="Sistemas planejados">
-            <li>macOS <span>arm64 + x86_64</span></li>
+          <ul class="platform-list" aria-label="Sistemas suportados">
+            <li>macOS <span>cliente universal · serviços arm64</span></li>
             <li>Linux <span>x86_64</span></li>
             <li>Windows <span>x64</span></li>
           </ul>
@@ -163,8 +163,8 @@
           </div>
           <div role="row">
             <strong role="cell">macOS</strong>
-            <span role="cell">arm64 + x86_64</span>
-            <span role="cell">Aplicativo universal</span>
+            <span role="cell">cliente universal; serviços arm64</span>
+            <span role="cell">App universal + binários arm64</span>
             <span role="cell">stable / nightly</span>
           </div>
           <div role="row">
@@ -205,7 +205,7 @@
           </li>
           <li>
             <span>3</span>
-            <div><strong>Escolha os componentes</strong><p>Os 18 componentes e os presets só entram com sua confirmação; stable e nightly coexistem.</p></div>
+            <div><strong>Escolha os componentes</strong><p>Os 21 componentes e os presets só entram com sua confirmação; stable e nightly coexistem.</p></div>
           </li>
         </ol>
       </section>
@@ -215,7 +215,8 @@
           <p>Confiança verificável</p>
           <h2 id="trust-title">O mirror não é a verdade.<br><strong>O catálogo é o contrato.</strong></h2>
           <p>Nesta fase, os pacotes vivem em GitHub Releases. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado.</p>
-          <a href="/api/v1/catalog.json">Abrir catálogo público <span aria-hidden="true">↗</span></a>
+          <a href="/api/v1/catalog.json">Abrir catálogo de pacotes <span aria-hidden="true">↗</span></a>
+          <a href="/api/v1/product.json">Abrir catálogo do produto <span aria-hidden="true">↗</span></a>
         </div>
 
         <dl class="trust-ledger">
@@ -245,7 +246,8 @@
         <noscript><p class="noscript-note">JavaScript está desativado. Consulte o <a href="/api/v1/catalog.json">catálogo JSON</a> diretamente.</p></noscript>
 
         <div class="readiness">
-          <p><strong>Já funciona:</strong> instalador multiplataforma, 18 componentes, CLI focada em <code>play</code>, <code>update</code> conservador, <code>upgrade</code> por perfil, validação, cleanup, uninstall e <code>uninstall --purge</code>.</p>
+          <p><strong>Já funciona:</strong> versão 0.2.0, 49 pacotes, 21 componentes, cinco jogos, KTX com modos e Frogbots, MVDSV, QTV e QWFWD. A CLI oferece <code>play</code>, <code>host</code>, <code>proxy</code>, <code>qtv</code>, <code>hub</code>, <code>update</code>, <code>upgrade</code>, <code>verify</code>, <code>repair</code>, <code>cleanup</code>, <code>uninstall</code> e <code>version</code>.</p>
+          <p><strong>Execução conservadora:</strong> gameplay e serviços não instalam payload permanente. Senhas podem ser lidas sem eco ou por arquivo privado; preflight, readiness, encerramento coordenado e journal recuperam sessões interrompidas.</p>
           <p><strong>Atualização independente:</strong> KTX 1.47, Pro-X 1.1 e Team Fortress 2.9 avançam sem renomear os outros componentes. Coleções sem release própria continuam fixadas no commit nQuake auditado.</p>
           <p><strong>Dois mirrors:</strong> o catálogo aponta para GitHub Releases e GitLab Generic Packages, sempre com tamanho e SHA-256. Em andamento: novos adaptadores por upstream.</p>
         </div>
@@ -263,6 +265,7 @@
       <p>Distribuição independente de QuakeWorld mantida por x86dx2.<br>Quake é marca da id Software. Seus PAKs originais permanecem seus.</p>
       <nav aria-label="Links do rodapé">
         <a href="/api/v1/catalog.json">Catálogo</a>
+        <a href="/api/v1/product.json">Produto</a>
         <a href="/legal/fonts/Atkinson-Hyperlegible-OFL.txt">Licença Atkinson</a>
         <a href="/legal/fonts/Barlow-Condensed-OFL.txt">Licença Barlow</a>
         <a href="https://www.quakeworld.nu/" rel="external">QuakeWorld.nu ↗</a>

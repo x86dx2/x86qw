@@ -36,6 +36,8 @@ from maintenance.tools.components import (
 )
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
+from maintenance.tools.product_catalog import encoded_product_catalog
+from maintenance.tools.runtime_catalog import load_inventory as load_runtime_inventory
 from maintenance.tools.sync_distribution import (
     Asset,
     discover_assets,
@@ -60,6 +62,7 @@ UPSTREAMS = INVENTORY / "upstreams.json"
 RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
+PRODUCT_CATALOG = PROJECT_ROOT / "site/public/api/v1/product.json"
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 EXPECTED_STABLE_MEMBERS = {
@@ -787,6 +790,21 @@ def command_verify(options: argparse.Namespace) -> int:
     catalog = load_json(CATALOG)
     package_count = validate_catalog(catalog)
     component_catalog = load_component_catalog(COMPONENTS)
+    runtime_inventory = load_runtime_inventory(
+        INVENTORY,
+        component_catalog=component_catalog,
+        project_root=PROJECT_ROOT,
+        public_catalog=catalog,
+    )
+    if (
+        not PRODUCT_CATALOG.is_file()
+        or PRODUCT_CATALOG.is_symlink()
+        or PRODUCT_CATALOG.read_bytes() != encoded_product_catalog(PROJECT_ROOT)
+    ):
+        raise ManagerError(
+            "site/public/api/v1/product.json diverge dos inventarios canonicos; "
+            "execute 'python3 -m maintenance.tools.product_catalog --write'"
+        )
     load_releases(RELEASES, COMPONENTS)
     upstream_registry = load_upstreams(UPSTREAMS)
     recipe_count = 0
@@ -800,6 +818,8 @@ def command_verify(options: argparse.Namespace) -> int:
     source_count = verify_preserved_sources(upstream_registry, DIST, PROJECT_ROOT)
     print(
         f"[OK] Catalogo: {package_count} pacotes; componentes: {len(component_catalog['components'])}; "
+        f"runtimes: {len(runtime_inventory['runtimes']['runtimes'])}; "
+        f"jogos: {len(runtime_inventory['games']['games'])}; "
         f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
         f"nQuake: {revision[:12]}."
     )

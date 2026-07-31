@@ -1,0 +1,142 @@
+import copy
+import io
+import json
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+
+from maintenance.tools.build_installer_bundle import zipapp_bytes
+from maintenance.tools.components import load_catalog as load_component_catalog
+from maintenance.tools.runtime_catalog import (
+    games_by_id,
+    load_inventory,
+    runtimes_by_id,
+    validate_inventory,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+INVENTORY = ROOT / "maintenance/inventory"
+
+
+class RuntimeCatalogTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.components = load_component_catalog(INVENTORY / "components.json")
+        cls.public = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8"))
+        cls.inventory = load_inventory(
+            INVENTORY,
+            component_catalog=cls.components,
+            project_root=ROOT,
+            public_catalog=cls.public,
+        )
+
+    def validate(self, documents):
+        validate_inventory(
+            documents["capabilities"], documents["runtimes"], documents["games"],
+            documents["compatibility"], component_catalog=self.components,
+        )
+
+    def test_inventory_models_only_the_current_five_runtimes_and_games(self):
+        self.assertEqual(
+            {"ezquake-stable", "ezquake-nightly", "mvdsv", "qtv", "qwfwd"},
+            set(runtimes_by_id(self.inventory["runtimes"])),
+        )
+        self.assertEqual(
+            {"ktx", "final-arena", "pro-x", "team-fortress", "td2"},
+            set(games_by_id(self.inventory["games"])),
+        )
+
+    def test_service_platforms_are_explicit_and_exclude_macos_intel(self):
+        runtimes = runtimes_by_id(self.inventory["runtimes"])
+        expected = {
+            ("macos", "arm64", "macos-arm64"),
+            ("linux", "amd64", "linux-amd64"),
+            ("windows", "x64", "windows-x64"),
+        }
+        for identifier in ("mvdsv", "qtv", "qwfwd"):
+            actual = {
+                (entry["system"], entry["architecture"], entry["variant"])
+                for entry in runtimes[identifier]["platforms"]
+            }
+            self.assertEqual(expected, actual)
+            self.assertNotIn(("macos", "x86_64", "macos-intel"), actual)
+
+    def test_invalid_protocol_cycle_and_personal_runtime_payload_fail(self):
+        for mutation, message in (
+            (lambda docs: docs["games"]["games"][0].__setitem__("protocol", "unknown"), "protocol"),
+            (lambda docs: docs["runtimes"]["runtimes"][0].__setitem__("dependencies", ["ezquake-stable"]), "dependency"),
+            (lambda docs: docs["runtimes"]["runtimes"][2].__setitem__("personal_configuration", ["_x86qw/runtimes/mvdsv/private.cfg"]), "personal configuration"),
+        ):
+            documents = copy.deepcopy(self.inventory)
+            mutation(documents)
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                self.validate(documents)
+
+    def test_fixture_game_can_be_added_without_editing_python(self):
+        documents = copy.deepcopy(self.inventory)
+        fixture = copy.deepcopy(documents["games"]["games"][-1])
+        fixture.update({
+            "id": "fixture-game",
+            "label": "Fixture Game",
+            "profile": "fixture-game",
+            "smoke_test": "fixture-game-smoke",
+        })
+        documents["games"]["games"].append(fixture)
+        for entry in documents["compatibility"]["compatibility"]:
+            if entry["kind"] in {"client", "server"}:
+                entry["games"].append("fixture-game")
+        self.validate(documents)
+        self.assertIn("fixture-game", games_by_id(documents["games"]))
+
+    def test_fixture_runtime_platform_can_be_added_without_editing_python(self):
+        documents = copy.deepcopy(self.inventory)
+        capabilities = documents["capabilities"]
+        capabilities["architectures"].append("riscv64")
+        capabilities["architecture_aliases"]["riscv64"] = ["riscv64"]
+        capabilities["platform_labels"]["linux-riscv64"] = "Linux riscv64"
+        runtime = runtimes_by_id(documents["runtimes"])["qtv"]
+        platform = copy.deepcopy(runtime["platforms"][1])
+        platform.update({
+            "architecture": "riscv64",
+            "variant": "linux-riscv64",
+            "runtime_path": "_x86qw/runtimes/qtv/linux-riscv64/qtv",
+        })
+        runtime["platforms"].append(platform)
+        runtime["architectures"].append("riscv64")
+        runtime["executable"]["linux-riscv64"] = "qtv"
+        runtime["runtime_path"]["linux-riscv64"] = platform["runtime_path"]
+        self.validate(documents)
+
+    def test_installer_zipapp_contains_only_runtime_projections(self):
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("0.1.25"))) as archive:
+            names = set(archive.namelist())
+            for name in (
+                "_x86qw/runtimes.json", "_x86qw/games.json",
+                "_x86qw/capabilities.json", "_x86qw/compatibility.json",
+                "_x86qw/ktx-modes.json",
+            ):
+                self.assertIn(name, names)
+            for name in names:
+                if name.startswith("_x86qw/") and name.endswith(".json"):
+                    document = json.loads(archive.read(name))
+                    serialized = json.dumps(document).casefold()
+                    self.assertNotIn("https://", serialized)
+                    self.assertNotIn("source-patch", serialized)
+
+    def test_static_command_contract_matches_pre_refactor_golden(self):
+        golden = json.loads(
+            (ROOT / "maintenance/tests/fixtures/runtime-command-golden.json").read_text(encoding="utf-8")
+        )
+        games = games_by_id(self.inventory["games"])
+        for identifier, expected in golden["games"].items():
+            actual = {field: games[identifier][field] for field in expected}
+            self.assertEqual(expected, actual, identifier)
+        runtimes = runtimes_by_id(self.inventory["runtimes"])
+        for identifier, expected in golden["services"].items():
+            self.assertEqual(expected, runtimes[identifier]["arguments"]["base"])
+
+
+if __name__ == "__main__":
+    unittest.main()
