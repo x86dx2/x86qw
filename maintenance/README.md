@@ -74,6 +74,10 @@ e QVM da release oficial e, por ultimo, ajustes x86QW. A politica em
 registra cada conflito compartilhado com os hashes das duas origens. Qualquer
 conflito novo ou alterado interrompe o build para revisao humana.
 
+A convenção de `source/`, `upstream/` e `x86qw/`, incluindo a assimetria
+intencional entre os runtimes de QTV e QWFWD, está documentada em
+[`docs/components.md`](docs/components.md#layout-dos-serviços-versionados).
+
 ## Definicao de inclusao
 
 `add` aceita um JSON temporario com identidade `distribution-change`. O arquivo
