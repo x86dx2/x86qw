@@ -27,9 +27,13 @@
 - mantém como única extensão de tecla o `F10`, vazio no nQuake, para ajuda sob
   demanda, e continua carregando o arquivo pessoal por último;
 - mantém os exemplos do arquivo pessoal independentes de aliases internos;
-- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
+- restaura exclusivamente no KTX a mensagem de abertura original do autoexec
+  nQuake;
+- apresenta em `F10`, em blocos coloridos e multilinha, todos os controles do
+  mapa nQuake usado pelo KTX, abrindo o console para que a referência completa
+  permaneça visível;
 - registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
-  novamente no console;
+  novamente no console e ao final da ajuda de `F10`;
 - força a conexão local inicial como jogador; isso evita o caminho de espectador
   incompatível entre o QVM atual e o servidor integrado do ezQuake 3.6.9;
 - aplica os valores de timing e salto do KTX somente ao KTX e restaura o padrão

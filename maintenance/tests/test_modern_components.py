@@ -1243,7 +1243,7 @@ class ModernComponentTests(unittest.TestCase):
                     target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
                 ).is_file())
 
-    def test_every_playable_mod_profile_keeps_help_on_demand_without_startup_noise(self):
+    def test_every_playable_mod_profile_keeps_help_on_demand(self):
         expected_gameplay = {
             "ktx": {
                 'tempalias sv_enableprofile ""',
@@ -1323,7 +1323,10 @@ class ModernComponentTests(unittest.TestCase):
                     profile = (ROOT / str(entry["path"])).read_text(encoding="utf-8")
                     help_alias = f"x86qw_{game.profile}_help"
                     self.assertIn(f"tempalias {help_alias}", profile)
-                    self.assertIn(f'bind F10 "{help_alias}', profile)
+                    f10 = re.search(r'(?m)^bind F10 "([^"]+)"$', profile)
+                    self.assertIsNotNone(f10)
+                    assert f10 is not None
+                    self.assertIn(help_alias, f10.group(1).split(";"))
                     for expected in expected_gameplay[game.key]:
                         self.assertIn(expected, profile)
                     user_exec = f"exec x86qw-{game.profile}-user.cfg"
@@ -1334,6 +1337,69 @@ class ModernComponentTests(unittest.TestCase):
                     ]
                     self.assertEqual(user_exec, executable_lines[-1])
                     self.assertNotIn(help_alias, executable_lines)
+
+    def test_only_ktx_restores_the_original_nquake_startup_message(self):
+        snapshot_root = ROOT / "dist/distributions/nquake"
+        revisions = [path for path in snapshot_root.iterdir() if path.is_dir()]
+        self.assertEqual(1, len(revisions))
+        nquake = (revisions[0] / "non-gpl/qw/autoexec.cfg").read_text(
+            encoding="latin-1"
+        )
+        ktx = (ROOT / "dist/mods/ktx/1.47/x86qw/client.cfg").read_text(
+            encoding="utf-8"
+        )
+
+        def alias_body(payload: str, prefix: str, number: int) -> str:
+            match = re.search(
+                rf'(?m)^(?:temp)?alias\s+{re.escape(prefix)}{number}\s+"(.*)"$',
+                payload,
+            )
+            self.assertIsNotNone(match)
+            assert match is not None
+            return match.group(1)
+
+        for number in range(1, 13):
+            self.assertEqual(
+                alias_body(nquake, "_startup_message_", number),
+                alias_body(ktx, "x86qw_ktx_startup_", number),
+            )
+
+        executable_lines = [
+            line.strip() for line in ktx.splitlines()
+            if line.strip() and not line.lstrip().startswith("//")
+        ]
+        self.assertIn("x86qw_ktx_startup", executable_lines)
+        self.assertLess(
+            executable_lines.index("x86qw_ktx_startup"),
+            executable_lines.index("exec x86qw-ktx-user.cfg"),
+        )
+        for game in play_qw.LOCAL_GAMES:
+            if game.key == "ktx":
+                continue
+            profile = (
+                ROOT / f"dist/mods/{game.key}/{game.version}/x86qw/client.cfg"
+            ).read_text(encoding="utf-8")
+            self.assertNotIn("x86qw_ktx_startup", profile)
+
+    def test_ktx_f10_prints_colored_multiline_controls_and_active_mode(self):
+        profile = (ROOT / "dist/mods/ktx/1.47/x86qw/client.cfg").read_text(
+            encoding="utf-8"
+        )
+        aliases = dict(re.findall(
+            r'(?m)^tempalias\s+(x86qw_ktx_help(?:_\w+)?)\s+"(.*)"$', profile
+        ))
+        sections = {"move", "weapons", "team", "match", "util", "demo"}
+        self.assertTrue({f"x86qw_ktx_help_{name}" for name in sections} <= aliases.keys())
+        for name in sections:
+            body = aliases[f"x86qw_ktx_help_{name}"]
+            self.assertIn("^", body)
+            self.assertGreaterEqual(body.count(";echo"), 2)
+        help_body = aliases["x86qw_ktx_help"]
+        for name in sections:
+            self.assertIn(f"x86qw_ktx_help_{name}", help_body)
+        self.assertIn("Digite ^k^t^x^_^m^o^d^e", help_body)
+        self.assertIn(";ktx_mode;", help_body)
+        self.assertIn('bind F10 "toggleconsole;x86qw_ktx_help"', profile)
 
     def test_each_mod_profile_is_isolated_from_every_other_mod(self):
         profiles = {}
@@ -1380,7 +1446,7 @@ class ModernComponentTests(unittest.TestCase):
             {key: profile_bindings[key] for key in restored},
         )
         self.assertEqual("", nquake_bindings["F10"])
-        self.assertEqual("x86qw_ktx_help", profile_bindings["F10"])
+        self.assertEqual("toggleconsole;x86qw_ktx_help", profile_bindings["F10"])
         user_example = (
             ROOT / "dist/mods/ktx/1.47/x86qw/user.cfg.example"
         ).read_text(encoding="utf-8")

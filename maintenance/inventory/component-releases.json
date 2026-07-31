@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.6",
+      "version": "1.47+x86qw.7",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.6",
+      "distribution_tag": "ktx-1.47-x86qw.7",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o mapa competitivo de teclas nQuake, com ajuda somente sob demanda.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o mapa competitivo de teclas nQuake. Restaura somente no KTX a abertura original do nQuake e oferece em F10 a referência multilinha colorida dos controles com confirmação do preset ativo por ktx_mode.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
