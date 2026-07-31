@@ -20,8 +20,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.2.2`; `0.2.1` permanece imutável;
-- 51 pacotes e 21 componentes no catálogo;
+- instalador público `0.2.3`; `0.2.2` e anteriores permanecem imutáveis;
+- 52 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -272,4 +272,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.2.1` executada e verificada em etapa explícita aprovada;
 - [x] versão `0.2.2` preparada sem sobrescrever `0.2.1`;
 - [x] publicação `0.2.2` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.2.3` corrige a leitura de journals limpos criados antes da `0.2.1`;
+- [x] publicação `0.2.3` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

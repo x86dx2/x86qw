@@ -10,8 +10,8 @@ Baseline da release anterior: tag `x86qw-installer-0.2.1`, commit
 `527d0d1006`. Baseline consolidado do código corretivo: branch `main`, commit
 `081657c349f3d4c111334bff49e9db9a6ee17f3c`, em 31 de julho de 2026.
 
-- instalador público `0.2.2`; `0.2.1` permanece imutável no histórico;
-- 51 pacotes e 21 componentes;
+- instalador público `0.2.3`; `0.2.2` e anteriores permanecem imutáveis no histórico;
+- 52 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
@@ -33,7 +33,7 @@ Baseline da release anterior: tag `x86qw-installer-0.2.1`, commit
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.2.2` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.2.3` |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.

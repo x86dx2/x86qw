@@ -189,6 +189,76 @@ class ServiceHardeningTests(unittest.TestCase):
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
             self.assertEqual("clean", recovered["status"])
 
+    def test_recovery_accepts_clean_legacy_journal_without_new_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            session = target / ".install/sessions/legacy-clean"
+            session.mkdir(parents=True)
+            path = session / "session.json"
+            legacy = {
+                "format": 1,
+                "project": "x86qw",
+                "session_id": "legacy-clean",
+                "created_at": "2026-07-31T18:57:49+00:00",
+                "status": "clean",
+                "processes": [{"label": "QTV", "pid": os.getpid()}],
+                "temporary_files": [{
+                    "path": "_x86qw/services/qtv/old-session.cfg",
+                    "origin": "configuração efêmera",
+                    "created_by_session": True,
+                    "expected_hash": "a" * 64,
+                }],
+                "materialized_files": [],
+                "created_directories": [],
+            }
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+
+            with mock.patch.object(
+                services, "process_identity",
+                side_effect=AssertionError("sessão limpa não deve consultar PID"),
+            ):
+                services.recover_sessions(target)
+
+            self.assertEqual(legacy, json.loads(path.read_text(encoding="utf-8")))
+
+    def test_recovery_treats_unclassified_legacy_temporary_as_sensitive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config = target / "qw/old-session.cfg"
+            config.parent.mkdir(parents=True)
+            secret = "segredo-legado"
+            config.write_text(secret, encoding="utf-8")
+            session = target / ".install/sessions/legacy-interrupted"
+            session.mkdir(parents=True)
+            path = session / "session.json"
+            path.write_text(json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "session_id": "legacy-interrupted",
+                "created_at": "2026-07-31T18:57:49+00:00",
+                "status": "interrupted",
+                "processes": [{"label": "QTV", "pid": 999999999}],
+                "temporary_files": [{
+                    "path": "qw/old-session.cfg",
+                    "origin": "configuração efêmera",
+                    "created_by_session": True,
+                    "expected_hash": services.file_sha256(config),
+                }],
+                "materialized_files": [],
+                "created_directories": [],
+            }), encoding="utf-8")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                services.recover_sessions(target)
+
+            self.assertFalse(config.exists())
+            recovered = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual("clean", recovered["status"])
+            self.assertTrue(recovered["temporary_files"][0]["sensitive"])
+            self.assertNotIn("expected_hash", recovered["temporary_files"][0])
+            self.assertNotIn(secret, output.getvalue())
+
     def test_session_recovery_preserves_modified_materialized_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)

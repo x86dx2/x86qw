@@ -541,10 +541,10 @@ def load_session_journal(path: Path) -> dict[str, object]:
             raise ValueError("journal inseguro")
         data = json.loads(path.read_text(encoding="utf-8"))
         required = {
-            "format", "project", "session_id", "created_at", "status", "controller",
+            "format", "project", "session_id", "created_at", "status",
             "processes", "temporary_files", "materialized_files", "created_directories",
         }
-        optional = {"recovery_actions", "recovered_at"}
+        optional = {"controller", "recovery_actions", "recovered_at"}
         if (
             not isinstance(data, dict)
             or set(data) < required
@@ -560,6 +560,21 @@ def load_session_journal(path: Path) -> dict[str, object]:
             ))
         ):
             raise ValueError("identidade inválida")
+        # Journals written before 0.2.1 did not identify the controller or
+        # classify ephemeral files.  Normalize them in memory before any
+        # recovery decision.  An unclassified temporary is conservatively
+        # sensitive because legacy host/QTV configs may contain passwords.
+        data.setdefault("controller", None)
+        for entry in data["temporary_files"]:
+            if isinstance(entry, dict):
+                entry.setdefault("type", "temporary-config")
+                entry.setdefault("sensitive", True)
+                if entry.get("sensitive") is True:
+                    entry.pop("expected_hash", None)
+        for entry in data["materialized_files"]:
+            if isinstance(entry, dict):
+                entry.setdefault("type", "materialized-content")
+                entry.setdefault("sensitive", False)
         controller = data.get("controller")
         if controller is not None and (
             not isinstance(controller, dict)
