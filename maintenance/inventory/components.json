@@ -12,6 +12,7 @@
   },
   "compatibility": {
     "policy": "common-baseline",
+    "scope": "ezquake-client-content",
     "clients": {
       "stable": "3.6.9",
       "nightly": "20260616-101233_a86996a"
@@ -34,10 +35,7 @@
       "final-arena",
       "pro-x",
       "team-fortress",
-      "total-destruction-2",
-      "mvdsv",
-      "qwfwd",
-      "qtv"
+      "total-destruction-2"
     ],
     "verified": [
       "catalog",

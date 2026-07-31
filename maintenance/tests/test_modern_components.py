@@ -726,7 +726,15 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(["stable", "nightly"], installer.component_catalog["client"]["channels"])
             compatibility = installer.component_catalog["compatibility"]
             self.assertEqual("common-baseline", compatibility["policy"])
-            self.assertEqual(set(installer.components), set(compatibility["covered_components"]))
+            self.assertEqual("ezquake-client-content", compatibility["scope"])
+            self.assertEqual(
+                {
+                    identifier for identifier, component in installer.components.items()
+                    if component["kind"] not in {"runtime", "service"}
+                },
+                set(compatibility["covered_components"]),
+            )
+            self.assertTrue({"mvdsv", "qwfwd", "qtv"}.isdisjoint(compatibility["covered_components"]))
             self.assertEqual(
                 {
                     "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
