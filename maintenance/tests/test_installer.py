@@ -42,6 +42,7 @@ class InstallerTests(unittest.TestCase):
     def test_public_zipapp_embeds_the_declarative_ktx_mode_catalog(self):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
+            self.assertIn("session_control.py", application.namelist())
         self.assertEqual(1, catalog["format"])
         self.assertEqual("ktx", catalog["game"])
         self.assertEqual("duel", catalog["modes"][0]["id"])
@@ -114,6 +115,23 @@ class InstallerTests(unittest.TestCase):
                     with self.assertRaises(KeyboardInterrupt):
                         installer.install()
             installer.cleanup_stage()
+            self.assertFalse(target.exists())
+
+    def test_cancel_after_new_install_lock_leaves_no_session_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "new-install"
+            installer = mock.Mock()
+            installer.target = target
+
+            def cancel(*, platform=None, before_mutation=None):
+                del platform
+                before_mutation()
+                raise KeyboardInterrupt
+
+            installer.install.side_effect = cancel
+            with mock.patch.object(install_qw, "Installer", return_value=installer):
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(130, install_qw.main(["install", str(target)]))
             self.assertFalse(target.exists())
 
     def test_development_install_receives_registered_paks_from_core_sources(self):
@@ -624,7 +642,110 @@ class InstallerTests(unittest.TestCase):
                     0,
                     install_qw.main(["install", str(target), "--platform", "linux"]),
                 )
-        installer.install.assert_called_once_with(platform="linux")
+        installer.install.assert_called_once()
+        self.assertEqual("linux", installer.install.call_args.kwargs["platform"])
+        self.assertTrue(callable(installer.install.call_args.kwargs["before_mutation"]))
+
+    def test_active_service_lock_blocks_every_mutating_manager_action(self):
+        cases = (
+            ["install"], ["components"], ["presets"], ["update"],
+            ["update", "--dry-run"], ["upgrade"], ["upgrade", "--dry-run"],
+            ["repair"], ["repair", "--dry-run"], ["cleanup"],
+            ["cleanup", "--personal-data"], ["uninstall"], ["uninstall", "--purge"],
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            (target / ".install").mkdir()
+            active = install_qw.session_control.InstallationLock.acquire(
+                target, "host", "service",
+            )
+            try:
+                for arguments in cases:
+                    with self.subTest(arguments=arguments):
+                        installer = mock.Mock()
+                        installer.target = target
+                        if arguments[0] == "install":
+                            installer.install.side_effect = (
+                                lambda *, platform=None, before_mutation=None: before_mutation()
+                            )
+                        with mock.patch.object(install_qw, "Installer", return_value=installer):
+                            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                                result = install_qw.main([*arguments, str(target)])
+                        self.assertEqual(1, result)
+                        installer.install_online_cli.assert_not_called()
+                        installer.manage_components.assert_not_called()
+                        installer.manage_presets.assert_not_called()
+                        installer.update.assert_not_called()
+                        installer.upgrade.assert_not_called()
+                        installer.repair.assert_not_called()
+                        installer.cleanup_cache.assert_not_called()
+                        installer.uninstall.assert_not_called()
+                        installer.purge.assert_not_called()
+            finally:
+                active.release()
+
+    def test_read_only_and_gameplay_actions_remain_available_during_maintenance(self):
+        self.assertTrue(
+            {"version", "verify", "hub", "play"}.isdisjoint(
+                install_qw.session_control.LOCK_COMMANDS
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            (target / ".install").mkdir()
+            active = install_qw.session_control.InstallationLock.acquire(
+                target, "repair", "maintenance",
+            )
+            try:
+                installer = mock.Mock()
+                installer.target = target
+                with mock.patch.object(install_qw, "Installer", return_value=installer):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(0, install_qw.main(["verify", str(target)]))
+                        self.assertEqual(0, install_qw.main(["hub", str(target)]))
+                with mock.patch("gameplay.main", return_value=0):
+                    self.assertEqual(0, install_qw.main(["play"]))
+                installer.verify_installation.assert_called_once()
+                installer.browse_hub.assert_called_once()
+            finally:
+                active.release()
+
+    def test_cli_update_handoff_downloads_before_final_process_acquires_lock(self):
+        target = Path("/tmp/x86qw-handoff-lock-test")
+        old_cli = mock.Mock()
+        old_cli.target = target
+        old_cli.handoff_cli_update.return_value = True
+        with mock.patch.object(install_qw, "Installer", return_value=old_cli):
+            with mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire",
+                side_effect=AssertionError("CLI antiga adquiriu o lock"),
+            ):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, install_qw.main([
+                        "--online-only", "--installed-cli", "update", str(target),
+                    ]))
+        old_cli.handoff_cli_update.assert_called_once()
+
+        final_cli = mock.Mock()
+        final_cli.target = target
+        final_cli.update.return_value = False
+        final_cli.cli_update_plan_row.return_value = None
+        operation_lock = mock.Mock()
+        with mock.patch.object(install_qw, "Installer", return_value=final_cli):
+            with mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire", return_value=operation_lock,
+            ) as acquire:
+                with mock.patch("services.recover_sessions"):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(0, install_qw.main([
+                            "--online-only", "--installed-cli", "--skip-cli-update",
+                            "update", str(target),
+                        ]))
+        acquire.assert_called_once_with(target, "update", "maintenance")
+        final_cli.handoff_cli_update.assert_not_called()
+        operation_lock.release.assert_called_once()
 
     def test_update_shows_homebrew_style_plan_and_requires_confirmation(self):
         target = Path("/tmp/x86qw-confirmation-test")
@@ -983,11 +1104,13 @@ class InstallerTests(unittest.TestCase):
                 installer, target, spec, "stable", payload=bytes(elf),
             )
             runtime.chmod(0o600)
-            release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
-            with mock.patch.object(installer, "client_catalog_release", return_value=release):
+            with mock.patch.object(
+                installer, "client_catalog_release", side_effect=AssertionError("catálogo consultado"),
+            ):
                 issues, diagnostics = installer.client_repair_assessment()
             self.assertEqual([], diagnostics)
             self.assertEqual("permission", issues[0].mode)
+            self.assertEqual("local-repair", issues[0].category)
 
     def test_repair_detects_corrupt_windows_exe_and_incomplete_macos_bundle(self):
         for platform in ("windows", "macos"):
@@ -1013,13 +1136,68 @@ class InstallerTests(unittest.TestCase):
             spec = install_qw.PLATFORMS["macos"]
             _, receipt, runtime = self.write_ezquake_fixture(installer, target, spec, "stable")
             runtime.mkdir(parents=True)
-            release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
-            with mock.patch.object(installer, "client_catalog_release", return_value=release):
+            with mock.patch.object(
+                installer, "client_catalog_release", side_effect=AssertionError("catálogo consultado"),
+            ):
                 with mock.patch.object(installer, "check_runtime"):
                     with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
                         issues, diagnostics = installer.client_repair_assessment()
             self.assertEqual([], diagnostics)
             self.assertEqual("macos-preparation", issues[0].mode)
+            self.assertEqual("local-repair", issues[0].category)
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_offline_client_permission_repair_completes_without_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            elf = bytearray(64)
+            elf[:5] = b"\x7fELF\x02"
+            struct.pack_into("<H", elf, 18, 62)
+            _, _, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=bytes(elf),
+            )
+            runtime.chmod(0o600)
+            with mock.patch.object(
+                installer, "client_catalog_release", side_effect=AssertionError("catálogo consultado"),
+            ):
+                issues, diagnostics = installer.client_repair_assessment()
+            assessment = install_qw.RepairAssessment((), False, (), False, tuple(issues), tuple(diagnostics))
+            state = {"profile": "none", "requested_components": [], "known_components": [], "capabilities": []}
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(installer, "load_install_state", return_value=state):
+                    with mock.patch.object(installer, "write_install_state"):
+                        with mock.patch.object(installer, "verify_installation"):
+                            self.assertTrue(installer.repair(
+                                dry_run=False, plan_rows=[], allow_download=False,
+                            ))
+            self.assertTrue(os.access(runtime, os.X_OK))
+
+    def test_offline_macos_preparation_repair_completes_without_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+            )
+            runtime.mkdir(parents=True)
+            with mock.patch.object(installer, "check_runtime"):
+                with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
+                    with mock.patch.object(
+                        installer, "client_catalog_release", side_effect=AssertionError("catálogo consultado"),
+                    ):
+                        issues, diagnostics = installer.client_repair_assessment()
+            assessment = install_qw.RepairAssessment((), False, (), False, tuple(issues), tuple(diagnostics))
+            state = {"profile": "none", "requested_components": [], "known_components": [], "capabilities": []}
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(installer, "repair_installed_macos_runtime") as prepare:
+                    with mock.patch.object(installer, "load_install_state", return_value=state):
+                        with mock.patch.object(installer, "write_install_state"):
+                            with mock.patch.object(installer, "verify_installation"):
+                                self.assertTrue(installer.repair(
+                                    dry_run=False, plan_rows=[], allow_download=False,
+                                ))
+            prepare.assert_called_once_with(spec, "stable", receipt_path, receipt)
 
     def test_repair_diagnoses_partial_component_metadata_in_both_directions(self):
         for missing in ("receipt", "inventory"):
@@ -1511,6 +1689,25 @@ class InstallerTests(unittest.TestCase):
                 installer.purge()
             self.assertFalse(target.exists())
             self.assertFalse(cache.exists())
+
+    def test_purge_keeps_operation_lock_until_final_release(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / ".install").mkdir()
+            (target / "personal.txt").write_text("remove", encoding="utf-8")
+            operation_lock = install_qw.session_control.InstallationLock.acquire(
+                target, "uninstall", "maintenance",
+            )
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    installer.purge(preserve_operation_lock=True)
+                self.assertTrue(operation_lock.path.is_file())
+                self.assertFalse((target / "personal.txt").exists())
+            finally:
+                operation_lock.release()
+            install_qw.remove_empty_directories(target / ".install")
+            target.rmdir()
+            self.assertFalse(target.exists())
 
     def test_regular_uninstall_removes_the_cli_and_preserves_id1(self):
         with tempfile.TemporaryDirectory() as temporary:
