@@ -65,6 +65,7 @@ NQUAKE_LOCAL_SERVER_SETTINGS = (
     ("pm_ktjump", "0.5"),
 )
 KTX_LOCAL_SERVER_SETTINGS = (
+    ("maxclients", "32"),
     ("sv_mintic", "0.01"),
     ("sv_maxtic", "0.03"),
     ("pm_ktjump", "1"),
@@ -99,6 +100,26 @@ class KtxModeSpec:
     help_commands: tuple[tuple[str, str], ...]
     launch_settings: tuple[tuple[str, str], ...]
     entry_config: str | None
+    required_map_asset: str | None
+    bots: bool
+
+
+@dataclass(frozen=True)
+class KtxLaunchOptions:
+    bots: int = 0
+    fill_bots: bool = False
+    bot_skill: int = 5
+    bot_team: str | None = None
+    bot_weapon: str | None = None
+    bot_health: int | None = None
+    bot_break_on_death: bool = False
+    ctf_hook: str | None = None
+    ctf_runes: str | None = None
+    ctf_based_spawn: bool = False
+    race_style: str | None = None
+    race_scoring: str | None = None
+    race_pacemaker: int | None = None
+    race_hide_players: bool = False
 
 
 LOCAL_GAMES = (
@@ -165,6 +186,8 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         help_commands = raw.get("help_commands")
         launch_settings = raw.get("launch_settings", [])
         entry_config = raw.get("entry_config")
+        required_map_asset = raw.get("required_map_asset")
+        bots = raw.get("bots", True)
         text_fields = (
             "label", "description", "recommended_players", "usermode",
             "default_map",
@@ -205,12 +228,17 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 and re.fullmatch(r"[A-Za-z0-9_.+-]{1,64}", entry[1]) is not None
                 for entry in launch_settings
             )
-            or entry_config not in {
-                None,
-                "x86qw-ktx-mode-midair.cfg",
-                "x86qw-ktx-mode-race.cfg",
-                "x86qw-ktx-mode-practice.cfg",
-            }
+            or entry_config not in {None, f"x86qw-ktx-mode-{key}.cfg"}
+            or (
+                required_map_asset is not None
+                and (
+                    not isinstance(required_map_asset, str)
+                    or re.fullmatch(r"[a-z0-9_./-]*\{map\}[a-z0-9_./-]*", required_map_asset)
+                    is None
+                    or ".." in PurePosixPath(required_map_asset.replace("{map}", "map")).parts
+                )
+            )
+            or not isinstance(bots, bool)
             or any(not isinstance(raw.get(field), str) or not raw[field] for field in text_fields)
         ):
             raise InstallerError(f"Definição inválida do modo KTX: {key!r}.")
@@ -234,12 +262,106 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 (str(entry[0]), str(entry[1])) for entry in launch_settings
             ),
             entry_config=entry_config,
+            required_map_asset=required_map_asset,
+            bots=bots,
         ))
     return tuple(modes)
 
 
 def ktx_mode_help_alias(mode: KtxModeSpec) -> str:
     return f"exec x86qw-ktx-help-{mode.key}.cfg"
+
+
+def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
+    return any((
+        options.bots,
+        options.fill_bots,
+        options.bot_skill != 5,
+        options.bot_team is not None,
+        options.bot_weapon is not None,
+        options.bot_health is not None,
+        options.bot_break_on_death,
+    ))
+
+
+def ktx_launch_commands(
+    mode: KtxModeSpec,
+    map_name: str,
+    assets: frozenset[str],
+    options: KtxLaunchOptions,
+) -> tuple[str, ...]:
+    commands: list[str] = []
+    bot_options = ktx_bot_options_requested(options)
+    if bot_options:
+        if not mode.bots:
+            raise InstallerError(f"Bots Frogbot não são compatíveis com o modo {mode.label}.")
+        route = f"bots/maps/{map_name.casefold()}.bot"
+        if route not in assets:
+            raise InstallerError(
+                f"O mapa {map_name} não possui rota Frogbot no pacote KTX ({route})."
+            )
+        if options.bot_team is not None and not options.bots:
+            raise InstallerError("--bot-team exige --bots; o comando fill distribui as equipes.")
+        commands.append(f"cmd botcmd skill {options.bot_skill}")
+        if options.bot_health is not None:
+            commands.append(f"cmd botcmd health {options.bot_health}")
+        if options.bot_weapon is not None:
+            commands.append(f"cmd botcmd weapon {options.bot_weapon}")
+        if options.fill_bots:
+            commands.append(f"cmd botcmd fill {options.bot_skill}")
+        else:
+            team = f" {options.bot_team}" if options.bot_team is not None else ""
+            commands.extend(
+                f"cmd botcmd addbot {options.bot_skill}{team}"
+                for _ in range(options.bots)
+            )
+
+    ctf_options = any((
+        options.ctf_hook is not None,
+        options.ctf_runes is not None,
+        options.ctf_based_spawn,
+    ))
+    if ctf_options and mode.key != "ctf":
+        raise InstallerError("Opções --ctf-* só podem ser usadas com o modo KTX ctf.")
+    if mode.key == "ctf":
+        hook_commands = {
+            "off": "nohook",
+            "smooth": "hook_smooth",
+            "fast": "hook_fast",
+            "classic": "hook_classic",
+            "crhook": "hook_crhook",
+        }
+        if options.ctf_hook is not None:
+            commands.append(f"cmd {hook_commands[options.ctf_hook]}")
+        if options.ctf_runes == "off":
+            commands.append("cmd norunes")
+        if options.ctf_based_spawn:
+            commands.append("cmd ctfbasedspawn")
+
+    race_options = any((
+        options.race_style is not None,
+        options.race_scoring is not None,
+        options.race_pacemaker is not None,
+        options.race_hide_players,
+    ))
+    if race_options and mode.key != "race":
+        raise InstallerError("Opções --race-* só podem ser usadas com o modo KTX race.")
+    if mode.key == "race":
+        if options.race_scoring is not None and options.race_style in {"solo", "simultaneous"}:
+            raise InstallerError("--race-scoring exige --race-style match (ou omitir o estilo).")
+        if options.race_style == "solo":
+            commands.append("cmd race_simultaneous")
+        if options.race_style == "match" or (
+            options.race_style is None and options.race_scoring is not None
+        ):
+            commands.append("cmd race_match")
+        scoring_steps = {None: 0, "win": 0, "scaled": 1, "formula1": 2}
+        commands.extend("cmd race_scoring" for _ in range(scoring_steps[options.race_scoring]))
+        if options.race_pacemaker is not None:
+            commands.append(f"cmd race_pacemaker {options.race_pacemaker}")
+        if options.race_hide_players:
+            commands.append("cmd race_hide_players")
+    return tuple(commands)
 
 
 class Player(core.Installer):
@@ -571,7 +693,11 @@ class Player(core.Installer):
         return match.group(1) if match is not None else game.version
 
     def choose_local_game(
-        self, games: list[LocalGameSpec], requested: str | None = None,
+        self,
+        games: list[LocalGameSpec],
+        requested: str | None = None,
+        *,
+        activity: str = "jogar localmente",
     ) -> LocalGameSpec:
         if requested is not None:
             matches = [game for game in games if game.key.casefold() == requested.casefold()]
@@ -587,7 +713,7 @@ class Player(core.Installer):
                 )
             available = ", ".join(game.key for game in games)
             raise InstallerError(f"Jogo local desconhecido: {requested}. Disponíveis: {available}.")
-        print("\nQual mod deseja jogar localmente?")
+        print(f"\nQual mod deseja {activity}?")
         labels = [game.label + (" (padrão)" if index == 1 else "") for index, game in enumerate(games, 1)]
         versions = [self.installed_game_version(game) for game in games]
         label_width = max(map(len, labels))
@@ -613,7 +739,11 @@ class Player(core.Installer):
             console.warning(f"Escolha inválida. Use um número entre 1 e {len(games)}.")
 
     def choose_ktx_mode(
-        self, modes: tuple[KtxModeSpec, ...], requested: str | None = None,
+        self,
+        modes: tuple[KtxModeSpec, ...],
+        requested: str | None = None,
+        *,
+        activity: str = "jogar",
     ) -> KtxModeSpec:
         if requested is not None:
             answer = requested.casefold()
@@ -626,7 +756,7 @@ class Player(core.Installer):
                 return matches[0]
             available = ", ".join(mode.key for mode in modes)
             raise InstallerError(f"Modo KTX desconhecido: {requested}. Disponíveis: {available}.")
-        print("\nQual modo KTX deseja jogar?")
+        print(f"\nQual modo KTX deseja {activity}?")
         labels = [mode.label + (" (padrão)" if index == 1 else "") for index, mode in enumerate(modes, 1)]
         label_width = max(map(len, labels))
         players_width = max(len(mode.recommended_players) for mode in modes)
@@ -660,6 +790,22 @@ class Player(core.Installer):
         for offset in range(0, len(maps), 6):
             print("  " + "  ".join(f"{name:<16}" for name in maps[offset:offset + 6]).rstrip())
 
+    def ktx_archive_members(self) -> frozenset[str]:
+        package = self.target / "qw/ktx.pk3"
+        try:
+            if package.is_symlink() or not package.is_file() or not zipfile.is_zipfile(package):
+                raise InstallerError(f"Pacote KTX inválido: {package}")
+            with zipfile.ZipFile(package) as archive:
+                return frozenset(name.casefold() for name in archive.namelist())
+        except (OSError, zipfile.BadZipFile) as error:
+            raise InstallerError(f"Não foi possível consultar os recursos do KTX: {package}") from error
+
+    @staticmethod
+    def ktx_required_asset(mode: KtxModeSpec, map_name: str) -> str | None:
+        if mode.required_map_asset is None:
+            return None
+        return mode.required_map_asset.replace("{map}", map_name.casefold())
+
     def choose_local_map(
         self,
         game: LocalGameSpec,
@@ -667,8 +813,22 @@ class Player(core.Installer):
         default_map: str | None = None,
         suggested_maps: tuple[str, ...] | None = None,
         label: str | None = None,
+        requested_map: str | None = None,
+        required_asset: str | None = None,
+        available_assets: frozenset[str] | None = None,
     ) -> str:
         maps = self.local_map_names(game.gamedir)
+        if required_asset is not None:
+            assert available_assets is not None
+            maps = [
+                name for name in maps
+                if required_asset.replace("{map}", name.casefold()).casefold() in available_assets
+            ]
+            if not maps:
+                raise InstallerError(
+                    f"Nenhum mapa instalado possui o recurso exigido por {label or game.label}: "
+                    f"{required_asset}."
+                )
         lookup = {name.casefold(): name for name in maps}
         requested_default = default_map or game.default_map
         requested_suggestions = suggested_maps or game.suggested_maps
@@ -679,6 +839,14 @@ class Player(core.Installer):
                 f"O mapa padrão {requested_default} não está disponível para {display_label}. "
                 "Execute components para reparar o conteúdo."
             )
+        if requested_map is not None:
+            selected = lookup.get(requested_map.casefold())
+            if selected is None:
+                raise InstallerError(
+                    f"O mapa {requested_map} não está disponível ou não é compatível com "
+                    f"{display_label}."
+                )
+            return selected
         suggestions = [
             lookup[name.casefold()] for name in requested_suggestions if name.casefold() in lookup
         ]
@@ -703,7 +871,13 @@ class Player(core.Installer):
                 return lookup[answer.casefold()]
             console.warning(f"Mapa não encontrado: {answer}. Digite t para listar os mapas instalados.")
 
-    def play_local(self, game_key: str | None = None, mode_key: str | None = None) -> None:
+    def play_local(
+        self,
+        game_key: str | None = None,
+        mode_key: str | None = None,
+        map_key: str | None = None,
+        ktx_options: KtxLaunchOptions | None = None,
+    ) -> None:
         self.check_paks()
         self.migrate_saved_configs()
         self.remove_legacy_macos_video_layout()
@@ -717,23 +891,40 @@ class Player(core.Installer):
         game = self.choose_local_game(games, game_key)
         if mode_key is not None and game.key != "ktx":
             raise InstallerError("--mode só pode ser usado com o jogo KTX.")
+        if (
+            game.key != "ktx"
+            and ktx_options is not None
+            and ktx_options != KtxLaunchOptions()
+        ):
+            raise InstallerError("Opções de bots, CTF e Race só podem ser usadas com o jogo KTX.")
         installed_component = self.installed_component_for_game(game)
         if installed_component is None:
             raise InstallerError(f"O componente de {game.label} não está mais instalado.")
         self.migrate_mutable_component_defaults(installed_component)
         self.verify_component(installed_component)
         ktx_mode = None
+        ktx_assets: frozenset[str] | None = None
         if game.key == "ktx":
             ktx_mode = self.choose_ktx_mode(load_ktx_modes(self.project_root), mode_key)
             console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
+            launch_options = ktx_options or KtxLaunchOptions()
+            ktx_assets = (
+                self.ktx_archive_members()
+                if ktx_mode.required_map_asset is not None
+                or ktx_bot_options_requested(launch_options)
+                else frozenset()
+            )
             map_name = self.choose_local_map(
                 game,
                 default_map=ktx_mode.default_map,
                 suggested_maps=ktx_mode.suggested_maps,
                 label=f"KTX · {ktx_mode.label}",
+                requested_map=map_key,
+                required_asset=ktx_mode.required_map_asset,
+                available_assets=ktx_assets,
             )
         else:
-            map_name = self.choose_local_map(game)
+            map_name = self.choose_local_map(game, requested_map=map_key)
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = ["+sb_listcache", "0", "+spectator", "0"]
@@ -762,18 +953,34 @@ class Player(core.Installer):
             arguments.extend(["+cl_pext_lagteleport", "0"])
         if game.key == "ktx":
             assert ktx_mode is not None
+            assert ktx_assets is not None
+            setup_commands = ktx_launch_commands(
+                ktx_mode, map_name, ktx_assets, launch_options,
+            )
+            if ktx_bot_options_requested(launch_options):
+                arguments.extend(["+set", "k_fb_enabled", "1"])
+                if launch_options.bot_break_on_death:
+                    arguments.extend(["+set", "k_fb_break_on_death", "1"])
             for name, value in ktx_mode.launch_settings:
                 arguments.extend([f"+{name}", value])
+            setup_body = ";".join((
+                "unalias x86qw_ktx_launch_setup", *setup_commands,
+            ))
+            arguments.extend([
+                "+tempalias", "x86qw_ktx_launch_setup", setup_body,
+            ])
             for event in ("on_enter", "on_enter_ffa", "on_enter_ctf"):
-                arguments.extend(["+tempalias", event, "exec x86qw-ktx.cfg"])
+                arguments.extend([
+                    "+tempalias", event,
+                    "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup",
+                ])
             if ktx_mode.entry_config is not None:
                 event = {
                     "ffa": "on_enter_ffa",
                     "ctf": "on_enter_ctf",
                 }.get(ktx_mode.usermode, "on_enter")
                 arguments.extend([
-                    "+tempalias", event,
-                    f"exec {ktx_mode.entry_config};exec x86qw-ktx.cfg",
+                    "+tempalias", event, f"exec {ktx_mode.entry_config}",
                 ])
             arguments.extend(["+set", "k_defmap", map_name])
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
@@ -902,6 +1109,144 @@ class Player(core.Installer):
         raise InstallerError(f"Gamecode {member_name} não encontrado em {package}.")
 
 
+def bounded_integer(minimum: int, maximum: int):
+    def parse(value: str) -> int:
+        try:
+            number = int(value)
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(f"esperado inteiro entre {minimum} e {maximum}") from error
+        if not minimum <= number <= maximum:
+            raise argparse.ArgumentTypeError(f"esperado inteiro entre {minimum} e {maximum}")
+        return number
+
+    return parse
+
+
+def add_game_launch_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    dedicated: bool = False,
+) -> None:
+    parser.add_argument(
+        "--mode", metavar="MODO",
+        help="seleciona diretamente um modo quando o jogo for KTX",
+    )
+    parser.add_argument("--map", metavar="MAPA", help="seleciona diretamente um mapa instalado")
+    bots = parser.add_mutually_exclusive_group()
+    bots.add_argument(
+        "--bots", type=bounded_integer(1, 31), metavar="N",
+        help="adiciona de 1 a 31 bots Frogbot no KTX",
+    )
+    bots.add_argument(
+        "--fill-bots", action="store_true",
+        help="preenche o servidor KTX com até 8 bots Frogbot",
+    )
+    parser.add_argument(
+        "--bot-skill", type=bounded_integer(1, 20), default=5, metavar="1-20",
+        help="define a habilidade dos bots (padrão: 5)",
+    )
+    if not dedicated:
+        parser.add_argument(
+            "--bot-team", metavar="EQUIPE",
+            help="coloca os bots de --bots numa equipe (máximo: 9 caracteres)",
+        )
+    parser.add_argument(
+        "--bot-weapon", choices=("random", *map(str, range(1, 9))), metavar="ARMA",
+        help="limita os bots à arma 1-8 ou random",
+    )
+    parser.add_argument(
+        "--bot-health", type=bounded_integer(1, 300), metavar="HP",
+        help="define a vida dos bots entre 1 e 300",
+    )
+    parser.add_argument(
+        "--bot-break-on-death", action="store_true",
+        help="encerra a tentativa quando o jogador humano morre",
+    )
+    parser.add_argument(
+        "--ctf-hook", choices=("smooth", "fast", "classic", "crhook", "off"),
+        help="seleciona o estilo do gancho no CTF",
+    )
+    parser.add_argument(
+        "--ctf-runes", choices=("on", "off"),
+        help="mantém ou desativa as runas no CTF",
+    )
+    parser.add_argument(
+        "--ctf-based-spawn", action="store_true",
+        help="ativa spawn baseado na base no CTF",
+    )
+    parser.add_argument(
+        "--race-style", choices=("solo", "simultaneous", "match"),
+        help="seleciona o formato da corrida",
+    )
+    parser.add_argument(
+        "--race-scoring", choices=("win", "scaled", "formula1"),
+        help="seleciona a pontuação do Race match",
+    )
+    if not dedicated:
+        parser.add_argument(
+            "--race-pacemaker", type=bounded_integer(1, 10), metavar="RANK",
+            help="carrega como pacemaker o tempo da posição 1-10",
+        )
+        parser.add_argument(
+            "--race-hide-players", action="store_true",
+            help="oculta os demais corredores",
+        )
+
+
+def resolve_ktx_launch_options(
+    parser: argparse.ArgumentParser,
+    namespace: argparse.Namespace,
+    game: str | None,
+) -> tuple[str | None, KtxLaunchOptions]:
+    if namespace.mode is not None:
+        if game not in {None, "ktx"}:
+            parser.error("--mode só pode ser usado com o jogo KTX")
+        game = "ktx"
+    bot_team = getattr(namespace, "bot_team", None)
+    race_pacemaker = getattr(namespace, "race_pacemaker", None)
+    race_hide_players = getattr(namespace, "race_hide_players", False)
+    if bot_team is not None and re.fullmatch(
+        r"[A-Za-z0-9_-]{1,9}", bot_team,
+    ) is None:
+        parser.error("--bot-team aceita 1 a 9 letras, números, _ ou -")
+    ktx_specific = any((
+        namespace.bots,
+        namespace.fill_bots,
+        namespace.bot_skill != 5,
+        bot_team is not None,
+        namespace.bot_weapon is not None,
+        namespace.bot_health is not None,
+        namespace.bot_break_on_death,
+        namespace.ctf_hook is not None,
+        namespace.ctf_runes is not None,
+        namespace.ctf_based_spawn,
+        namespace.race_style is not None,
+        namespace.race_scoring is not None,
+        race_pacemaker is not None,
+        race_hide_players,
+    ))
+    if ktx_specific:
+        if game not in {None, "ktx"}:
+            parser.error("opções de bots, CTF e Race só podem ser usadas com o jogo KTX")
+        game = "ktx"
+    return game, KtxLaunchOptions(
+        bots=namespace.bots or 0,
+        fill_bots=namespace.fill_bots,
+        bot_skill=namespace.bot_skill,
+        bot_team=bot_team,
+        bot_weapon=namespace.bot_weapon,
+        bot_health=namespace.bot_health,
+        bot_break_on_death=namespace.bot_break_on_death,
+        ctf_hook=namespace.ctf_hook,
+        ctf_runes=namespace.ctf_runes,
+        ctf_based_spawn=namespace.ctf_based_spawn,
+        race_style=namespace.race_style,
+        race_scoring=namespace.race_scoring,
+        race_pacemaker=race_pacemaker,
+        race_hide_players=race_hide_players,
+    )
+
+
 def parse_arguments(arguments: list[str], project_root: Path):
     public_cli = core.ZIPAPP_PATH is not None
     parser = core.FriendlyArgumentParser(
@@ -925,10 +1270,7 @@ def parse_arguments(arguments: list[str], project_root: Path):
         "--no-color", action="store_true",
         help="desativa cores mesmo em um terminal interativo",
     )
-    parser.add_argument(
-        "--mode", metavar="MODO",
-        help="seleciona diretamente um modo quando o jogo for KTX",
-    )
+    add_game_launch_arguments(parser)
     parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
         "selection", nargs="?",
@@ -944,10 +1286,9 @@ def parse_arguments(arguments: list[str], project_root: Path):
             namespace.target = Path(namespace.selection)
         else:
             parser.error(f"jogo local desconhecido: {namespace.selection}")
-    if namespace.mode is not None:
-        if namespace.game not in {None, "ktx"}:
-            parser.error("--mode só pode ser usado com o jogo KTX")
-        namespace.game = "ktx"
+    namespace.game, namespace.ktx_options = resolve_ktx_launch_options(
+        parser, namespace, namespace.game,
+    )
     namespace.target = namespace.target or project_root / "quake-world"
     return namespace
 
@@ -971,7 +1312,9 @@ def main(arguments: list[str] | None = None) -> int:
         console.detail(f"Destino normalizado: {player.target}")
         player.reject_target_symlinks()
         console.section("Jogo local")
-        player.play_local(options.game, options.mode)
+        player.play_local(
+            options.game, options.mode, options.map, options.ktx_options,
+        )
         return 0
     except KeyboardInterrupt:
         console.error("Operação cancelada. O jogo não foi iniciado.")

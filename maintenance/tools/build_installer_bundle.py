@@ -25,14 +25,17 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.15"
+VERSION_FILE = ROOT / "dist/installer/VERSION"
+VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
 BUNDLE_FILES = (
+    ("dist/installer/VERSION", "VERSION", 0o644),
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
 )
 ZIPAPP_FILES = (
     ("dist/installer/bin/manager.py", "manager.py"),
     ("dist/installer/bin/gameplay.py", "gameplay.py"),
+    ("dist/installer/bin/services.py", "services.py"),
     ("dist/mods/ktx/1.47/x86qw/modes.json", "_x86qw/ktx-modes.json"),
     ("maintenance/__init__.py", "maintenance/__init__.py"),
     ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),

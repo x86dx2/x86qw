@@ -82,6 +82,33 @@
         "mods/td2/"
       ]
     },
+    "mvdsv": {
+      "consumers": [
+        "install:mvdsv",
+        "runtime:host"
+      ],
+      "distribution_prefixes": [
+        "servers/mvdsv/"
+      ]
+    },
+    "qwfwd": {
+      "consumers": [
+        "install:qwfwd",
+        "runtime:proxy"
+      ],
+      "distribution_prefixes": [
+        "services/qwfwd/"
+      ]
+    },
+    "qtv": {
+      "consumers": [
+        "install:qtv",
+        "runtime:broadcast"
+      ],
+      "distribution_prefixes": [
+        "services/qtv/"
+      ]
+    },
     "toolchains": {
       "consumers": [
         "development:source-builds"

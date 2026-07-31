@@ -105,6 +105,7 @@ CLI_RECEIPT = ".install/cli/receipt"
 LEGACY_CLI_RECEIPT = ".install/cli.receipt"
 INSTALL_STATE = ".install/state.json"
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
+DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
 QW_PACKAGE_PRIORITY = (
     "ktx.pk3",
     "models.pk3",
@@ -140,6 +141,24 @@ def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object
     if not isinstance(value, dict):
         raise InstallerError(f"{label} inválido em {archive}")
     return value
+
+
+def application_version() -> str:
+    if ZIPAPP_PATH is not None:
+        identity = read_zipapp_json(
+            ZIPAPP_PATH, INSTALLER_BUNDLE_METADATA, "Identidade da CLI pública",
+        )
+        version = identity.get("version")
+        location = ZIPAPP_PATH
+    else:
+        location = PROJECT_ROOT / DEVELOPMENT_VERSION_FILE
+        try:
+            version = location.read_text(encoding="utf-8").strip()
+        except OSError as error:
+            raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}") from error
+    if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+        raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}")
+    return version
 
 
 def create_resilient_connection(
@@ -400,7 +419,7 @@ class Console:
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
     def banner(self, action: str, target: Path) -> None:
-        title = self.paint("x86-qw", "1;36")
+        title = self.paint(f"x86-qw {application_version()}", "1;36")
         print(f"\n{title} · instalador QuakeWorld", flush=True)
         print(f"Ação: {action}  |  Destino: {target}", flush=True)
 
@@ -1768,6 +1787,10 @@ class Installer:
             ):
                 return
             raise InstallerError(f"unexpected path in managed inventory: {value}")
+        if path.parts[0] == "_x86qw":
+            if len(path.parts) >= 3 and path.parts[1] in {"licenses", "runtimes", "services"}:
+                return
+            raise InstallerError(f"unexpected path in managed inventory: {value}")
         if value not in ("LICENSE", "readme.txt", "README-X86QW.txt") and path.parts[0] not in (
             "ezquake", "qw", "arena", "prox", "fortress", "td2",
         ):
@@ -2047,7 +2070,10 @@ class Installer:
         remove_path(canonical[0].parent)
         for path in self.component_pair_paths(component, metadata, legacy=True):
             remove_path(path)
-        for name in ("qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2"):
+        for name in (
+            "qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2",
+            "_x86qw/licenses", "_x86qw/runtimes", "_x86qw/services", "_x86qw",
+        ):
             remove_empty_directories(self.target / name)
         remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
         remove_empty_directories(self.target / METADATA_DIR)
@@ -2251,14 +2277,43 @@ class Installer:
             "known_components": list(self.components),
         })
 
+    def migrate_stale_custom_profile(self, state: dict[str, object]) -> dict[str, object]:
+        if state["profile"] != "custom":
+            return state
+        recorded = list(state["recorded_components"])
+        installed = self.installed_components()
+        if set(installed) != set(recorded):
+            return state
+        if set(self.desired_components(state)) == set(recorded):
+            return state
+        fingerprint = profile_fingerprint(recorded)
+        for candidate in ("essential", "recommended", "complete"):
+            if fingerprint in self.component_catalog["profile_history"][candidate]:
+                migrated = dict(state)
+                migrated["profile"] = candidate
+                migrated["requested_components"] = []
+                return self.validate_install_state(migrated)
+        return state
+
     def load_install_state(self, *, persist_migration: bool) -> dict[str, object]:
         path = self.target / INSTALL_STATE
         if path.is_file() and not path.is_symlink():
             try:
                 state = self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
-                return self.current_install_state(state)
             except (OSError, json.JSONDecodeError) as error:
                 raise InstallerError(f"Estado da instalação inválido: {path}") from error
+            state = self.current_install_state(state)
+            migrated = self.migrate_stale_custom_profile(state)
+            if migrated != state:
+                profile = str(migrated["profile"])
+                if persist_migration:
+                    migrated = self.write_install_state(
+                        profile, [], known=list(migrated["known_components"]),
+                    )
+                    console.success(f"Perfil histórico da instalação recuperado: {profile}.")
+                else:
+                    console.info(f"Perfil histórico inferido para a simulação: {profile}.")
+            return migrated
         if lexists(path):
             raise InstallerError(f"Estado da instalação inválido: {path}")
         state = self.infer_install_state()
@@ -4134,9 +4189,14 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
     public_cli = ZIPAPP_PATH is not None
+    version = application_version()
     parser = FriendlyArgumentParser(
         prog="x86qw" if public_cli else "dist/installer/bin/manager.py",
-        description="Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido.",
+        description=(
+            f"x86QW {version}\n"
+            "Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Exemplo: x86qw update"
             if public_cli
@@ -4147,6 +4207,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser._positionals.title = "argumentos"
     parser._optionals.title = "opções"
     parser.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
+    parser.add_argument(
+        "--version", action="version", version=f"x86QW {version}",
+        help="mostra a versão da CLI e encerra",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
@@ -4187,7 +4251,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "action", nargs="?", default="install",
-        help="install, play, update, upgrade, components, presets, hub, verify, uninstall ou cleanup",
+        help=(
+            "install, play, host, proxy, qtv, version, update, upgrade, components, presets, hub, "
+            "verify, uninstall ou cleanup"
+        ),
     )
     parser.add_argument(
         "target", nargs="?", type=Path,
@@ -4195,8 +4262,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "play", "update", "upgrade", "components", "presets", "hub", "verify",
-        "uninstall", "cleanup",
+        "install", "play", "host", "proxy", "qtv", "version", "update", "upgrade", "components",
+        "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
@@ -4247,8 +4314,14 @@ def main(arguments: list[str] | None = None) -> int:
         if raw_arguments[:1] == ["play"]:
             gameplay = importlib.import_module("gameplay")
             return gameplay.main(raw_arguments[1:])
+        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv"}:
+            services = importlib.import_module("services")
+            return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
+        if options.action == "version":
+            print(f"x86QW {application_version()}")
+            return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()
         if options.action == "play":

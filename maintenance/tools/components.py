@@ -9,7 +9,9 @@ from pathlib import Path, PurePosixPath
 
 
 COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-ALLOWED_KINDS = {"core", "gameplay", "content", "addon", "documentation"}
+ALLOWED_KINDS = {
+    "core", "gameplay", "content", "addon", "documentation", "runtime", "service",
+}
 ALLOWED_MODES = {"overlay", "default", "preserve", "archive", "archive-base"}
 ALLOWED_ORIGINS = {"reference", "release"}
 

@@ -37,26 +37,50 @@ preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 Os valores aceitos são `macos`, `linux` e `windows`. Ao
 concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
 `hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
-sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
+sem argumentos mostra esse guia de uso e a versão instalada; `./x86qw.sh version`
+e `./x86qw.sh --version` imprimem somente a versão. A ação principal é
+`./x86qw.sh play`.
 
 O KTX possui seleção própria de modo no menu. Também pode ser aberto
-diretamente, sem perder a escolha interativa de mapa:
+diretamente, com modo e mapa opcionais:
 
 ```sh
 ./x86qw.sh play ktx --mode duel
-./x86qw.sh play ktx --mode 2on2
-./x86qw.sh play ktx --mode 4on4
-./x86qw.sh play ktx --mode ffa
-./x86qw.sh play ktx --mode clan-arena
-./x86qw.sh play ktx --mode hoony
-./x86qw.sh play ktx --mode midair
-./x86qw.sh play ktx --mode race
-./x86qw.sh play ktx --mode practice
+./x86qw.sh play ktx --mode duel --map dm6 --bots 2 --bot-skill 8
+./x86qw.sh play ktx --mode ctf --ctf-hook smooth --ctf-runes off
+./x86qw.sh play ktx --mode race --map slide1 --race-style match --race-scoring formula1
 ```
 
-Essas entradas usam modos e comandos existentes no KTX 1.47. Capture The Flag
-usa seis mapas clássicos com os ENTs oficiais do próprio KTX, curados e
-validados com uma bandeira de cada equipe.
+O catálogo cobre os 17 usermodes nativos — Duel, 2on2, 3on3, 4on4, 10on10,
+FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX,
+Wipeout, Clan Arena e ThunderWalker ToT — e sete variações oficiais: Midair,
+DMM4, Instagib, LGC, Rocket Arena, Race e Practice. `--help` lista as opções de
+Frogbot (quantidade/fill, habilidade 1-20, equipe, arma e vida), os estilos de
+CTF e os formatos, pontuações e pacemaker de Race. O launcher valida a rota do
+mapa antes de ativar um bot, limita Race às 54 rotas oficiais e mantém bots
+desligados em Race e CTF, conforme exigido pelo QVM 1.47.
+
+O perfil completo também instala MVDSV, QTV e QWFWD como componentes
+independentes e verificáveis. Eles iniciam apenas em primeiro plano e usam
+loopback por padrão; exposição à LAN/Internet exige um `--bind` explícito:
+
+```sh
+./x86qw.sh host
+./x86qw.sh host ktx --mode 4on4 --map dm3
+./x86qw.sh host team-fortress --map 2fort5r
+./x86qw.sh host td2 --map dm6 --bind 0.0.0.0 --with-qtv
+./x86qw.sh proxy --bind 0.0.0.0
+./x86qw.sh qtv --upstream 127.0.0.1:28501
+```
+
+`host` oferece os mesmos jogos instalados de `play`, mas executa somente o
+MVDSV: KTX, Final Arena, Pro-X, Team Fortress ou Total Destruction 2. Para KTX,
+modo, mapa, bots e regras de CTF/Race podem ser definidos sem abrir o ezQuake.
+`--with-qtv` e `--with-proxy` continuam opcionais; `proxy` executa QWFWD e `qtv`
+pode operar sozinho ou conectado a um MVDSV. `Ctrl+C`
+encerra de forma coordenada todos os processos iniciados pelo comando. Senhas
+são gravadas somente em configurações efêmeras privadas, nunca na linha de
+comando nem na saída. Consulte [docs/HOSTING.md](docs/HOSTING.md).
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
@@ -65,7 +89,10 @@ que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novo
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
 registrado naquela instalação. Ambos mostram o plano completo e exigem que o
 jogador confirme em um prompt `[y/n]` antes de alterar arquivos; `--yes` confirma
-o plano em automações e `--dry-run` encerra depois de apresentá-lo. A saída segue
+o plano em automações e `--dry-run` encerra depois de apresentá-lo. Perfis
+históricos salvos incorretamente como `custom` são recuperados somente
+quando os componentes presentes coincidem exatamente com um perfil conhecido;
+seleções customizadas válidas são preservadas. A saída segue
 o fluxo do Homebrew: baixa e valida o manifesto, mostra somente os pacotes
 desatualizados em linhas tabuladas com versão instalada, versão disponível e
 tamanho, pede confirmação e então informa o progresso de cada pacote. Quando não
@@ -137,6 +164,7 @@ dist/
 │   │   ├── x86qw.cmd     launcher permanente Windows
 │   │   ├── manager.py    gerenciador de instalação e manutenção
 │   │   ├── gameplay.py   módulo interno especializado em gameplay local
+│   │   ├── services.py   MVDSV, QTV e QWFWD em primeiro plano
 │   ├── docs/
 │   │   └── installer.md  manual completo
 │   └── packages/         histórico de bundles públicos imutáveis

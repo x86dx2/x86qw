@@ -72,15 +72,15 @@ class SiteTests(unittest.TestCase):
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertEqual("x86QW Installer 0.1.15", package["release_title"])
+        self.assertEqual("x86QW Installer 0.1.25", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.15/",
+            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/",
             package["urls"][0],
         )
         self.assertEqual(
             [
                 "0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5",
-                "0.1.6", "0.1.7", "0.1.8", "0.1.9", "0.1.10", "0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15",
+                "0.1.6", "0.1.7", "0.1.8", "0.1.9", "0.1.10", "0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.19", "0.1.20", "0.1.21", "0.1.25",
             ],
             sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
         )
@@ -97,6 +97,7 @@ class SiteTests(unittest.TestCase):
             identity = json.loads(archive.read(
                 f"{prefix}/installer.json"
             ))
+            outer_version = archive.read(f"{prefix}/VERSION").decode()
             application = archive.read(f"{prefix}/x86qw.pyz")
             legacy_identity = json.loads(archive.read(f"{prefix}/_x86qw/installer.json"))
             with tempfile.TemporaryDirectory() as temporary:
@@ -109,6 +110,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(
             {
                 f"{prefix}/installer.json", f"{prefix}/x86qw.pyz",
+                f"{prefix}/VERSION",
                 f"{prefix}/x86qw.sh", f"{prefix}/x86qw.cmd",
                 f"{prefix}/dist/installer/bin/manager.py",
                 f"{prefix}/_x86qw/installer.json",
@@ -123,6 +125,8 @@ class SiteTests(unittest.TestCase):
             identity,
         )
         self.assertEqual(identity, embedded_identity)
+        self.assertEqual(package["version"] + "\n", outer_version)
+        self.assertIn(f"x86QW {package['version']}", legacy_result.stdout)
         self.assertEqual(identity, legacy_identity)
         self.assertEqual(0, legacy_result.returncode, legacy_result.stderr)
         self.assertIn("usage: x86qw", legacy_result.stdout)

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T03:53:54Z",
+  "generated_at": "2026-07-31T11:38:16Z",
   "packages": [
     {
       "component": "core",
@@ -424,7 +424,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.15",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -448,7 +448,37 @@
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.15",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": true
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.19",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.19.zip",
+      "size": 79368,
+      "sha256": "5a7ca2c779219cf3bbb3eef985c23c060d9e602665df455c6f1ad891af2c807a",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.19/x86qw-installer-0.1.19.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.19/x86qw-installer-0.1.19.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.19/x86qw-installer-0.1.19.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.19/x86qw-installer-0.1.19.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.19",
+      "release_title": "x86QW Installer 0.1.19",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.19",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
     },
     {
       "component": "installer",
@@ -479,6 +509,96 @@
       "mirror_title": "x86QW Installer 0.1.2",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.20",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.20.zip",
+      "size": 79915,
+      "sha256": "d30a836693100869e72a56df3d14aa8715bf111a4f1350948f3d34be04134304",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.20/x86qw-installer-0.1.20.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.20/x86qw-installer-0.1.20.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.20/x86qw-installer-0.1.20.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.20/x86qw-installer-0.1.20.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.20",
+      "release_title": "x86QW Installer 0.1.20",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.20",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.21",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.21.zip",
+      "size": 80124,
+      "sha256": "39495f4098afbc4ecbdfbd102e4daf839168eb38a32b362c87776d704e91a888",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.21/x86qw-installer-0.1.21.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.21/x86qw-installer-0.1.21.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.21/x86qw-installer-0.1.21.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.21/x86qw-installer-0.1.21.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.21",
+      "release_title": "x86QW Installer 0.1.21",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.21",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.25",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.25.zip",
+      "size": 82721,
+      "sha256": "9c470dfc896cdb18294db51344b0b8a7aa8d982621d7489dbbcd8e916764ba0b",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/x86qw-installer-0.1.25.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/x86qw-installer-0.1.25.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.25/x86qw-installer-0.1.25.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.25/x86qw-installer-0.1.25.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.25",
+      "release_title": "x86QW Installer 0.1.25",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.25",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": true
     },
     {
       "component": "installer",
@@ -693,14 +813,14 @@
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.11",
+      "version": "1.47+x86qw.12",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.11.zip",
-      "size": 2544171,
-      "sha256": "c7032184b00ddf130e2a4209b18fce1e7d2303d978af694ce498a6fdd696e27a",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.11/ktx-1.47+x86qw.11.zip",
+      "filename": "ktx-1.47+x86qw.12.zip",
+      "size": 2552253,
+      "sha256": "007dfa491578e621e85ec3cc04acb99f44efc914031912add31a80b20c8f3b76",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.12/ktx-1.47+x86qw.12.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -710,17 +830,47 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.11/ktx-1.47+x86qw.11.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.11/ktx-1.47+x86qw.11.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.12/ktx-1.47+x86qw.12.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.12/ktx-1.47+x86qw.12.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.11",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.12",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o mapa competitivo de teclas nQuake. Habilita Capture The Flag com os seis ENTs oficiais da rotação KTX curados pelo x86QW; o launcher ativa o diretório CTF antes do mapa e o F10 apresenta seus comandos oficiais.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; o F10 combina controles comuns e ajuda contextual alinhada.",
       "upstream_version": "1.47"
+    },
+    {
+      "component": "mvdsv",
+      "package": "mvdsv",
+      "version": "1.11+x86qw.2",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "mvdsv-1.11+x86qw.2.zip",
+      "size": 1122249,
+      "sha256": "59b6bd09e5ecd5e2f2e1694ff1045ce09996276a22ebb19170cda1cb0071f2db",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.2/mvdsv-1.11+x86qw.2.zip",
+      "license": "GPL-2.0",
+      "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
+      "source_urls": [
+        "https://github.com/QW-Group/mvdsv/releases/download/1.11/mvdsv-source-with-submodules-1.11.zip",
+        "https://github.com/QW-Group/mvdsv/releases/tag/1.11"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.2/mvdsv-1.11+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/mvdsv/1.11+x86qw.2/mvdsv-1.11+x86qw.2.zip"
+      ],
+      "mirror_title": "x86QW Content · MVDSV dedicado 1.11+x86qw.2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_revision": "a1312d109587fdc62d6373b3ba321926730d08de82ad6a9f4360ca81b9398e31",
+      "release_url": "https://github.com/QW-Group/mvdsv/releases/tag/1.11",
+      "release_notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O perfil local é fechado por padrão e o launcher gera a configuração efêmera da sessão sem persistir segredos.",
+      "upstream_version": "1.11"
     },
     {
       "component": "nquake",
@@ -1089,6 +1239,66 @@
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com ajuda somente sob demanda e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
       "upstream_version": "1.1"
+    },
+    {
+      "component": "qtv",
+      "package": "qtv",
+      "version": "0+025ca949aca0+x86qw.1",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "qtv-0+025ca949aca0+x86qw.1.zip",
+      "size": 12083253,
+      "sha256": "51474ad85b91b4fb92e3569a33d1dcbc599923d4332258537d2b23f9a11a126d",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip",
+      "license": "GPL-2.0",
+      "license_url": "https://github.com/QW-Group/qtv/blob/025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE",
+      "source_urls": [
+        "https://github.com/QW-Group/qtv/archive/025ca949aca06cad6777de0075148ac06a15f4f0.tar.gz",
+        "https://github.com/QW-Group/qtv/commit/025ca949aca06cad6777de0075148ac06a15f4f0"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qtv/0+025ca949aca0+x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip"
+      ],
+      "mirror_title": "x86QW Content · QTV broadcast 0+025ca949aca0+x86qw.1",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_revision": "6742784e05b3222c2d82e18ac0f380218f9e8e8819d7834f0e80af366484f12d",
+      "release_url": "https://github.com/QW-Group/qtv/commit/025ca949aca06cad6777de0075148ac06a15f4f0",
+      "release_notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O padrão escuta apenas em loopback, desativa upload HTTP e não anuncia masters.",
+      "upstream_version": "025ca949aca0"
+    },
+    {
+      "component": "qwfwd",
+      "package": "qwfwd",
+      "version": "1.30+x86qw.2",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "qwfwd-1.30+x86qw.2.zip",
+      "size": 288199,
+      "sha256": "33662398583ea7c66cee45a1300b1744ba862fdf69c9d5458759d0e7dee2df8f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.2/qwfwd-1.30+x86qw.2.zip",
+      "license": "GPL-2.0",
+      "license_url": "https://github.com/QW-Group/qwfwd/blob/1.30/LICENSE.md",
+      "source_urls": [
+        "https://github.com/QW-Group/qwfwd/archive/refs/tags/1.30.tar.gz",
+        "https://github.com/QW-Group/qwfwd/releases/tag/1.30"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.2/qwfwd-1.30+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qwfwd/1.30+x86qw.2/qwfwd-1.30+x86qw.2.zip"
+      ],
+      "mirror_title": "x86QW Content · QWFWD proxy 1.30+x86qw.2",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_revision": "07f0f9cd2a9f9ff8d054774ba351c34cab6785626476bda27017889fae9cff2a",
+      "release_url": "https://github.com/QW-Group/qwfwd/releases/tag/1.30",
+      "release_notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. A configuração instalada escuta somente em loopback, não consulta nem anuncia masters e só é exposta quando o operador informa outro bind.",
+      "upstream_version": "1.30"
     },
     {
       "component": "td2",

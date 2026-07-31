@@ -5,7 +5,13 @@ if "%~1"=="" goto help
 if /I "%~1"=="help" goto help
 if /I "%~1"=="-h" goto help
 if /I "%~1"=="--help" goto help
+if /I "%~1"=="version" goto version
+if /I "%~1"=="-V" goto version
+if /I "%~1"=="--version" goto version
 if /I "%~1"=="play" goto play
+if /I "%~1"=="host" goto service
+if /I "%~1"=="proxy" goto service
+if /I "%~1"=="qtv" goto service
 if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
@@ -19,6 +25,10 @@ goto help_error
 py -3 "%X86QW_APP%" play %2 %3 %4 %5 %6 %7 %8 %9 --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
+:service
+py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
+exit /b %ERRORLEVEL%
+
 :maintenance
 set "X86QW_ACTION=%~1"
 py -3 "%X86QW_APP%" --online-only --installed-cli %1 "%X86QW_ROOT%" %2 %3 %4 %5 %6 %7 %8 %9
@@ -27,7 +37,8 @@ if /I "%X86QW_ACTION%"=="uninstall" if "%X86QW_EXIT%"=="0" del "%~f0"
 exit /b %X86QW_EXIT%
 
 :help
-echo x86QW - QuakeWorld moderno
+py -3 "%X86QW_APP%" --version
+echo QuakeWorld moderno
 echo.
 echo Uso: x86qw.cmd ^<comando^> [opcoes]
 echo.
@@ -36,6 +47,12 @@ echo   play                 escolhe e inicia um mod ou modo KTX local
 echo   play ktx --mode MODO inicia KTX diretamente no modo informado
 echo   hub                  lista servidores publicos
 echo.
+echo Servicos:
+echo   host                 escolhe e hospeda somente o servidor de um jogo
+echo   host JOGO            hospeda KTX, Final Arena, Pro-X, TF ou TD2
+echo   proxy                inicia o proxy QWFWD
+echo   qtv                  inicia o relay web/MVD QTV
+echo.
 echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
@@ -43,10 +60,15 @@ echo   verify               verifica a instalacao
 echo   cleanup              limpa o cache x86QW
 echo   uninstall            preserva PAKs e dados pessoais
 echo   uninstall --purge    remove completamente o x86QW
+echo   version              mostra a versao da CLI instalada
 echo   help                 mostra esta ajuda
 echo.
 echo A instalacao e exclusiva do install.ps1.
 exit /b 0
+
+:version
+py -3 "%X86QW_APP%" --version
+exit /b %ERRORLEVEL%
 
 :help_error
 call :help

@@ -304,6 +304,9 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
 
+A versão da CLI aparece no help e no cabeçalho de toda ação. Para consultá-la
+sem iniciar outro fluxo, use `./x86qw.sh version` ou `./x86qw.sh --version`.
+
 No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play`.
 
 - KTX em `qw/ktx.pk3`;
@@ -315,15 +318,18 @@ No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play
 Ao selecionar KTX, um segundo menu oferece os modos curados pela distribuição:
 
 ```text
-duel  2on2  4on4  ffa  clan-arena  hoony  midair  race  practice
+duel  2on2  3on3  4on4  10on10  ffa  ctf  hoony  blitz-2on2  blitz-4on4
+2on2on2  3on3on3  4on4on4  xonx  wipeout  clan-arena  tw-tot
+midair  dmm4  instagib  lgc  rocket-arena  race  practice
 ```
 
 O mesmo fluxo pode ser automatizado, sem atravessar os menus:
 
 ```sh
 ./x86qw.sh play ktx --mode duel
-./x86qw.sh play ktx --mode 4on4
-./x86qw.sh play ktx --mode race
+./x86qw.sh play ktx --mode 4on4 --fill-bots --bot-skill 6
+./x86qw.sh play ktx --mode duel --bots 1 --bot-skill 8
+./x86qw.sh play ktx --mode race --map slide1 --race-style match
 ```
 
 Cada entrada declara seu modo KTX, mapa padrão, sugestões compatíveis e perfil
@@ -332,6 +338,12 @@ mapa; Midair, Race e Practice usam um evento de entrada descartável para aplica
 o comando somente depois que o KTX está ativo. Capture The Flag usa os ENTs
 oficiais do KTX para seis mapas clássicos; o launcher seleciona o diretório CTF
 antes de carregar o mapa, garantindo a presença das duas bandeiras.
+
+Os Frogbots são acionados com `--bots <quantidade>` ou `--fill-bots`. A CLI
+também aceita habilidade 1–20, equipe, arma e vida e valida previamente se o
+mapa possui uma das 77 rotas `.bot` incorporadas. CTF e Race rejeitam bots por
+serem combinações não suportadas pelo QVM fixado. Race valida uma das 54 rotas
+oficiais e expõe estilo, pontuação e pacemaker; CTF expõe hook e runas.
 
 O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
 console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;
@@ -495,7 +507,26 @@ protocolo nem alteração no navegador ou no sistema operacional.
 
 O nQuake já fornece seu pacote visual, QRP map textures, skins, HUD e addons. O instalador não baixa automaticamente itens arbitrários de [gfx.quakeworld.nu](https://gfx.quakeworld.nu/): esses arquivos têm autores, licenças, estilos e destinos diferentes e frequentemente colidem entre si. Uma galeria curada exigirá uma lista explícita de itens compatíveis e licenciados, em vez de instalar o site inteiro.
 
-O navegador do Hub moderniza o acesso a servidores públicos. Hospedar um servidor MVDSV/KTX não foi misturado à instalação do cliente: a release atual do KTX publica SHA-256, mas os binários atuais do MVDSV não publicam checksum no GitHub, e não há binário macOS oficial. Isso evita executar silenciosamente um binário de servidor sem verificação ou exigir toolchains extras no Mac.
+O navegador do Hub moderniza o acesso a servidores públicos. O perfil completo
+instala MVDSV, QTV e QWFWD como componentes separados, com fonte, runtime,
+SHA-256, recibo e inventário. O x86QW preserva os binários oficiais Linux/Windows
+e fornece builds macOS arm64 reproduzidos das fontes fixadas.
+
+Os serviços ficam em loopback por padrão e sempre executam em primeiro plano:
+
+```sh
+./x86qw.sh host --mode 4on4 --map dm3
+./x86qw.sh host --mode duel --map dm6 --bind 0.0.0.0 --with-qtv
+./x86qw.sh proxy --bind 0.0.0.0
+./x86qw.sh qtv --upstream 127.0.0.1:28501
+```
+
+`host` materializa temporariamente o conteúdo KTX verificado que o MVDSV
+precisa ler fora do PK3 e o remove no encerramento. `--with-qtv` e
+`--with-proxy` iniciam os serviços opcionais na mesma sessão; `Ctrl+C` encerra
+o conjunto sem deixar filhos. Senhas ficam apenas em configurações efêmeras de
+permissão privada. Bind externo, firewall, NAT, DNS e TLS continuam sendo
+decisões explícitas do administrador.
 
 ## Preparar outro sistema
 

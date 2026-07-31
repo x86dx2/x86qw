@@ -132,8 +132,12 @@ def validate_releases(
                 raise ValueError(f"invalid artifact filename: {identifier}")
             distribution_path = _safe_path(artifact.get("distribution_path"), "artifact distribution path")
             distribution_component = str(release.get("distribution_component", "nquake"))
-            expected_prefix = f"mods/{distribution_component}/"
-            if distribution_path in distribution_paths or not distribution_path.startswith(expected_prefix):
+            expected_prefixes = (
+                f"mods/{distribution_component}/",
+                f"servers/{distribution_component}/",
+                f"services/{distribution_component}/",
+            )
+            if distribution_path in distribution_paths or not distribution_path.startswith(expected_prefixes):
                 raise ValueError(f"duplicate or misplaced distribution path: {identifier}")
             distribution_paths.add(distribution_path)
             if PurePosixPath(distribution_path).name != filename:
