@@ -1,0 +1,20 @@
+From: x86QW maintainers
+Subject: [PATCH] use pointer width for interpreted QVM syscall arguments
+
+MVDSV's idx64 macro describes the x86-64 JIT target, not every host with
+64-bit pointers. VM_CallInterpreted2 nevertheless uses it to decide
+whether the QVM's 32-bit syscall arguments need widening to intptr_t.
+On Apple Silicon adjacent arguments are combined into invalid pointers
+during GAME_INIT. Test the actual pointer width without enabling x86 JIT
+code on arm64.
+
+--- a/src/vm_interpreted.c
++++ b/src/vm_interpreted.c
+@@ -255,7 +255,7 @@ int VM_CallInterpreted2(vm_t *vm, int nargs, int *args)
+ 				//vm->programStack = programStack - 4;
+ 				vm->programStack = programStack - 8;
+ 				*(int *)&image[ programStack + 4 ] = ~r0.i;
+-#if idx64 //__WORDSIZE == 64
++#if INTPTR_MAX == INT64_MAX
+ 					// the vm has ints on the stack, we expect
+ 					// longs so we have to convert it

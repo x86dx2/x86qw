@@ -110,7 +110,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.11", ktx["version"])
+        self.assertEqual("1.47+x86qw.12", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -211,6 +211,12 @@ class ComponentReleaseTests(unittest.TestCase):
             self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
             self.assertEqual(112_973, len(package.read("qwprogs.map")))
             self.assertIn("bots/maps/anarena.bot", names)
+            self.assertEqual(77, sum(
+                name.startswith("bots/maps/") and name.endswith(".bot") for name in names
+            ))
+            self.assertEqual(54, sum(
+                name.startswith("race/routes/") and name.endswith(".route") for name in names
+            ))
             self.assertEqual(382, sum(name.startswith("locs/") for name in names))
             self.assertIn("configs/usermodes/dmm4base.cfg", names)
             self.assertIn("sound/ca/sffinal.wav", names)
@@ -228,6 +234,42 @@ class ComponentReleaseTests(unittest.TestCase):
                 payload = members[f"payload/id1/maps/ctf/{map_name}.ent"]
                 self.assertEqual(1, payload.count(b'"classname" "item_flag_team1"'))
                 self.assertEqual(1, payload.count(b'"classname" "item_flag_team2"'))
+
+    def test_service_components_pin_sources_and_platform_runtime_hashes(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        expected = {
+            "mvdsv": (
+                "1.11+x86qw.2",
+                "payload/_x86qw/runtimes/mvdsv/macos-arm64/mvdsv",
+                "09d17d44b694701a4325e4d636d1de112966982de17572ccb1be92f820164177",
+            ),
+            "qwfwd": (
+                "1.30+x86qw.2",
+                "payload/_x86qw/runtimes/qwfwd/macos-arm64/qwfwd",
+                "c789b5d26be1443bbe86bb704e2a8a5f7728ce52b5747e9793ab88e28905b58c",
+            ),
+            "qtv": (
+                "0+025ca949aca0+x86qw.1",
+                "payload/_x86qw/runtimes/qtv/macos-arm64/qtv",
+                "1bcc616b7bac1720191b706c681a57c65ba7e45d7693b3eada0f4e07ae07139a",
+            ),
+        }
+        for identifier, (version, member, digest) in expected.items():
+            with self.subTest(component=identifier):
+                release, source_revision, payloads = resolve_component_payloads(context, identifier)
+                self.assertEqual(version, release["version"])
+                self.assertEqual(64, len(source_revision))
+                members = {name: payload for _, name, payload, _ in payloads}
+                self.assertEqual(digest, hashlib.sha256(members[member]).hexdigest())
+        mvdsv = context.components["mvdsv"]
+        self.assertEqual(
+            ["dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch"],
+            [entry["path"] for entry in mvdsv["project_inputs"]],
+        )
 
     def test_ktx_layer_policy_rejects_an_unreviewed_conflict(self) -> None:
         context = load_source_context(
@@ -473,8 +515,9 @@ class ComponentReleaseTests(unittest.TestCase):
         self.assertEqual("current", td2["status"])
         self.assertEqual(
             [
-                "https://web.archive.org/web/20150217054944id_/http://www.bendarling.net/downloads/prox/prox_11.zip",
-                td2_artifact["url"],
+                release["artifacts"][0]["url"]
+                for release in releases["components"].values()
+                if release["strategy"] == "upstream-package"
             ],
             [call.args[0] for call in fingerprint.call_args_list],
         )

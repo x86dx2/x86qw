@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "component": "mvdsv",
+  "upstream_release": "1.11",
+  "source_revision": "11166a7f2a12838198ba253baa316c215271e357",
+  "platforms": {
+    "linux-amd64": {
+      "origin": "official-release",
+      "sha256": "6227295a2e636182e819e63fbd61231252157cda6206eb19e1376bd3e6d10f16"
+    },
+    "windows-x64": {
+      "origin": "official-release",
+      "sha256": "a615c693ddfd7e6bdfad2c2a0bd017396b8f72eda7993394e1d80872d0bd9365"
+    },
+    "macos-arm64": {
+      "origin": "x86qw-reproducible-build",
+      "toolchain": "AppleClang 21.0.0; CMake 4.1.2",
+      "command": "patch -p1 < 0001-detect-macos-arm64-as-64-bit.patch && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build",
+      "patches": [
+        {
+          "path": "source/0001-detect-macos-arm64-as-64-bit.patch",
+          "sha256": "6bbb0a04072ffb3f528645c644dca380c2347081823bba7be87b0133bd20a3db"
+        }
+      ],
+      "sha256": "09d17d44b694701a4325e4d636d1de112966982de17572ccb1be92f820164177"
+    }
+  }
+}

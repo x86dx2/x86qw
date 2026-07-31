@@ -5,7 +5,7 @@ do nQuake corresponde a um projeto com releases: skins, miras, skyboxes, mapas e
 outros recursos são coleções curadas. Nesses casos, a versão correta é o commit
 imutável do `nQuake/distfiles`, não um número inventado.
 
-Estado verificado em 30 de julho de 2026:
+Estado verificado em 31 de julho de 2026:
 
 ## Layout dos mods versionados
 
@@ -24,7 +24,7 @@ componentes autorais da própria distribuição e não representa um upstream.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.11` | release oficial sobre recursos nQuake e gameplay x86QW | mapa competitivo de teclas e abertura nQuake aplicados somente ao iniciar KTX, ajuda F10 colorida, alinhada e específica por modo, símbolos QVM preservados, carregamento QVM direto e dez modos locais declarativos, incluindo CTF com seis ENTs oficiais curados |
+| KTX | `1.47+x86qw.12` | release oficial sobre recursos nQuake e integração x86QW | 17 usermodes e sete variações oficiais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race e ajuda F10 contextual alinhada; QVM e símbolos preservados |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -40,6 +40,9 @@ componentes autorais da própria distribuição e não representa um upstream.
 | Pro-X | `1.1+x86qw.3` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; ajuda somente sob demanda |
 | Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.4` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; ajuda somente sob demanda |
 | Total Destruction 2 | `2.22+x86qw.3` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados sem gravação, binds, gamma ou ajuda automática |
+| MVDSV | `1.11+x86qw.2` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
+| QTV | `0+025ca949aca0+x86qw.1` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
+| QWFWD | `1.30+x86qw.2` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |
 
 ## Contrato de atualização
 
@@ -72,8 +75,8 @@ O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
 `qwprogs.map` oficiais da versão 1.47, mas o artefato do upstream é preservado
 em `dist/mods/ktx/1.47/upstream/` e as fontes em
-`dist/mods/ktx/1.47/source/`. Ele não é
-executado nem substitui o cliente ezQuake. O x86QW ainda não distribui MVDSV.
+`dist/mods/ktx/1.47/source/`. Ele não é executado nem substitui o cliente
+ezQuake. O servidor dedicado MVDSV é descrito separadamente no ecossistema.
 
 ## Composição característica de cada mod
 
@@ -118,7 +121,8 @@ pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod
 ajustes de compatibilidade do HUD e ajuda contextual. `F10` repete a ajuda
 automática mostrada ao carregar cada mod.
 
-O catálogo declara uma única política `common-baseline`: todos os 18 componentes
+O catálogo declara uma única política `common-baseline`: os componentes de
+gameplay
 usam arquivos de configuração comuns comprovados tanto com ezQuake stable 3.6.9
 quanto com a nightly `20260616-101233_a86996a`. Nenhum comando exclusivo da
 nightly é gravado globalmente; futuras otimizações específicas deverão entrar

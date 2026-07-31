@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "component": "qwfwd",
+  "upstream_release": "1.30",
+  "source_revision": "519b6734d50b42f32857eed3cad9fbd3bb7029de",
+  "platforms": {
+    "linux-amd64": {
+      "origin": "official-builds.quakeworld.nu",
+      "upstream_md5": "e5060ecd5e955045e708fffa53dde081",
+      "sha256": "a4182bca616f9c2b9562278cf9906bbf3e579ae88f8e9215f8d5f97c0605efb9"
+    },
+    "windows-x64": {
+      "origin": "official-builds.quakeworld.nu",
+      "upstream_md5": "94e277b0e0ff0278a9aa2c80c4fa2da7",
+      "sha256": "0eb0ca4c0be8e7f7c3c71b2475343b3763661a9b9c35fc7ca38d0ec9350203b2"
+    },
+    "macos-arm64": {
+      "origin": "x86qw-reproducible-build",
+      "toolchain": "AppleClang 21.0.0; CMake 4.1.2",
+      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build",
+      "sha256": "c789b5d26be1443bbe86bb704e2a8a5f7728ce52b5747e9793ab88e28905b58c"
+    }
+  }
+}

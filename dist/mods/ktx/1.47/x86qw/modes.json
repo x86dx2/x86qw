@@ -58,6 +58,42 @@
       "entry_config": null
     },
     {
+      "id": "3on3",
+      "aliases": ["3v3"],
+      "label": "3on3",
+      "description": "Teamplay competitivo com duas equipes de três.",
+      "recommended_players": "6",
+      "usermode": "3on3",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd 3on3", "reaplicar as regras de 3on3"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "10on10",
+      "aliases": ["10v10"],
+      "label": "10on10",
+      "description": "Teamplay de grande escala para vinte jogadores.",
+      "recommended_players": "20",
+      "usermode": "10on10",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd 10on10", "reaplicar as regras de 10on10"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
       "id": "ffa",
       "aliases": ["free-for-all"],
       "label": "Free For All",
@@ -94,6 +130,150 @@
       "entry_config": null
     },
     {
+      "id": "wipeout",
+      "aliases": ["wo"],
+      "label": "Wipeout",
+      "description": "Rounds em equipe com respawn coletivo progressivo.",
+      "recommended_players": "4+",
+      "usermode": "wipeout",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "help_commands": [
+        ["cmd wipeout", "reaplicar as regras de Wipeout"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar round"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "tot",
+      "aliases": ["thunderwalker"],
+      "label": "ThunderWalker ToT",
+      "description": "Combate de sobrevivência com progressão e bots Frogbot.",
+      "recommended_players": "1+",
+      "usermode": "tot",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "help_commands": [
+        ["cmd tot", "reaplicar as regras de ThunderWalker ToT"],
+        ["cmd botcmd", "listar comandos de bot"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "blitz-2v2",
+      "aliases": ["blitz2v2", "blitz2"],
+      "label": "Blitz 2v2",
+      "description": "Rounds rápidos de 2on2 com equipamento imediato.",
+      "recommended_players": "4",
+      "usermode": "blitz2v2",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "help_commands": [
+        ["cmd blitz2v2", "reaplicar as regras de Blitz 2v2"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar round"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "blitz-4v4",
+      "aliases": ["blitz4v4", "blitz4"],
+      "label": "Blitz 4v4",
+      "description": "Rounds rápidos de 4on4 com equipamento imediato.",
+      "recommended_players": "8",
+      "usermode": "blitz4v4",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd blitz4v4", "reaplicar as regras de Blitz 4v4"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar round"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "2on2on2",
+      "aliases": ["2v2v2"],
+      "label": "2on2on2",
+      "description": "Confronto entre três equipes de dois jogadores.",
+      "recommended_players": "6",
+      "usermode": "2on2on2",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd 2on2on2", "reaplicar as regras de 2on2on2"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "3on3on3",
+      "aliases": ["3v3v3"],
+      "label": "3on3on3",
+      "description": "Confronto entre três equipes de três jogadores.",
+      "recommended_players": "9",
+      "usermode": "3on3on3",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd 3on3on3", "reaplicar as regras de 3on3on3"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "4on4on4",
+      "aliases": ["4v4v4"],
+      "label": "4on4on4",
+      "description": "Confronto entre três equipes de quatro jogadores.",
+      "recommended_players": "12",
+      "usermode": "4on4on4",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd 4on4on4", "reaplicar as regras de 4on4on4"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
+      "id": "xonx",
+      "aliases": ["x-on-x"],
+      "label": "XonX",
+      "description": "Teamplay flexível dimensionado pelo número de jogadores.",
+      "recommended_players": "4+",
+      "usermode": "XonX",
+      "default_map": "dm3",
+      "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "help_commands": [
+        ["cmd XonX", "reaplicar as regras flexiveis de XonX"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": null
+    },
+    {
       "id": "hoony",
       "aliases": ["hoonymode"],
       "label": "HoonyMode",
@@ -125,6 +305,11 @@
         ["cmd flagstatus", "mostrar a situacao das duas bandeiras"],
         ["cmd tossflag", "soltar a bandeira carregada"],
         ["cmd tossrune", "soltar a runa carregada"],
+        ["cmd hook_smooth", "usar o gancho suave"],
+        ["cmd nohook", "desativar o gancho"],
+        ["cmd norunes", "desativar as runas"],
+        ["cmd swapall", "trocar todos de equipe"],
+        ["cmd ctfbasedspawn", "alternar spawn baseado na base"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"]
@@ -133,6 +318,7 @@
         ["sv_loadentfiles", "1"],
         ["sv_loadentfiles_dir", "ctf"]
       ],
+      "bots": false,
       "entry_config": null
     },
     {
@@ -154,6 +340,78 @@
       "entry_config": "x86qw-ktx-mode-midair.cfg"
     },
     {
+      "id": "dmm4",
+      "aliases": ["deathmatch-mode-4"],
+      "label": "DMM4",
+      "description": "Combate com todas as armas e munição ilimitada.",
+      "recommended_players": "2+",
+      "usermode": "1on1",
+      "default_map": "povdmm4",
+      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "help_commands": [
+        ["cmd dmm4", "ativar ou desativar DMM4"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "entry_config": "x86qw-ktx-mode-dmm4.cfg"
+    },
+    {
+      "id": "instagib",
+      "aliases": ["insta"],
+      "label": "Instagib",
+      "description": "Eliminação instantânea com shaft em DMM4.",
+      "recommended_players": "2+",
+      "usermode": "ffa",
+      "default_map": "povdmm4",
+      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "help_commands": [
+        ["cmd instagib", "ativar ou desativar Instagib"],
+        ["cmd dmm4", "ativar ou desativar a base DMM4"],
+        ["cmd join", "entrar na partida"],
+        ["cmd observe", "voltar para espectador"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": "x86qw-ktx-mode-instagib.cfg"
+    },
+    {
+      "id": "lgc",
+      "aliases": ["lgcmode"],
+      "label": "Lightning Gun Competition",
+      "description": "Duelo de shaft com regras LGC sobre a base DMM4.",
+      "recommended_players": "2",
+      "usermode": "1on1",
+      "default_map": "povdmm4",
+      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "help_commands": [
+        ["cmd lgcmode", "ativar ou desativar LGC"],
+        ["cmd dmm4", "ativar ou desativar a base DMM4"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "entry_config": "x86qw-ktx-mode-lgc.cfg"
+    },
+    {
+      "id": "rocket-arena",
+      "aliases": ["arena", "ra"],
+      "label": "Rocket Arena",
+      "description": "Duelo de rockets sem coleta de itens.",
+      "recommended_players": "2",
+      "usermode": "1on1",
+      "default_map": "dm6",
+      "suggested_maps": ["dm6", "dm4", "povdmm4"],
+      "help_commands": [
+        ["cmd arena", "ativar ou desativar Rocket Arena"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "entry_config": "x86qw-ktx-mode-rocket-arena.cfg"
+    },
+    {
       "id": "race",
       "aliases": [],
       "label": "Race",
@@ -161,15 +419,30 @@
       "recommended_players": "1+",
       "usermode": "ffa",
       "default_map": "dm6",
-      "suggested_maps": ["dm6", "aerowalk", "slide1", "slide7", "ztndm3", "ztricks"],
+      "suggested_maps": [
+        "dm6", "aerowalk", "slide1", "slide7", "ztndm3", "ztricks",
+        "2bfree", "bravado", "catalyst", "cmt3", "dm1", "dm2", "dm3", "dm4",
+        "dm5", "dungeonsurf", "e1m2", "escape2a", "hoppa2", "jqdf1", "jqdf3",
+        "monsoon", "mvdsv-kg", "q1q3toxicity", "race1", "race10", "race2", "race3",
+        "race4", "race5", "race6", "race7", "race8", "race9", "rampcity", "rawspeed",
+        "rj3", "shifter", "slide2", "slide3", "slide4", "slide5", "slide6", "slide8",
+        "slide9", "slidefox", "slstart", "speedrush", "subslide", "toxicity_ql",
+        "toxicity_test", "toxicity_test2", "zjumps", "ztricks2"
+      ],
       "help_commands": [
         ["cmd race_toggle", "alternar entre pronto e fora da fila"],
         ["cmd race_cancel", "cancelar a tentativa atual"],
         ["cmd race_show_lineup", "mostrar a fila de corredores"],
         ["cmd race_show_toptimes", "mostrar os melhores tempos"],
         ["cmd race_show_route", "mostrar a rota carregada"],
-        ["cmd race_chasecam", "alternar acompanhamento de corredores"]
+        ["cmd race_chasecam", "alternar acompanhamento de corredores"],
+        ["cmd race_simultaneous", "alternar largada simultanea"],
+        ["cmd race_match", "alternar corrida em match"],
+        ["cmd race_scoring", "alternar sistema de pontuacao"],
+        ["cmd race_pacemaker 1", "usar o melhor tempo como pacemaker"]
       ],
+      "required_map_asset": "race/routes/{map}.route",
+      "bots": false,
       "entry_config": "x86qw-ktx-mode-race.cfg"
     },
     {

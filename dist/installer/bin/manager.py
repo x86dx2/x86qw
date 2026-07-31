@@ -1768,6 +1768,10 @@ class Installer:
             ):
                 return
             raise InstallerError(f"unexpected path in managed inventory: {value}")
+        if path.parts[0] == "_x86qw":
+            if len(path.parts) >= 3 and path.parts[1] in {"licenses", "runtimes", "services"}:
+                return
+            raise InstallerError(f"unexpected path in managed inventory: {value}")
         if value not in ("LICENSE", "readme.txt", "README-X86QW.txt") and path.parts[0] not in (
             "ezquake", "qw", "arena", "prox", "fortress", "td2",
         ):
@@ -2047,7 +2051,10 @@ class Installer:
         remove_path(canonical[0].parent)
         for path in self.component_pair_paths(component, metadata, legacy=True):
             remove_path(path)
-        for name in ("qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2"):
+        for name in (
+            "qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2",
+            "_x86qw/licenses", "_x86qw/runtimes", "_x86qw/services", "_x86qw",
+        ):
             remove_empty_directories(self.target / name)
         remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
         remove_empty_directories(self.target / METADATA_DIR)
@@ -4187,7 +4194,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "action", nargs="?", default="install",
-        help="install, play, update, upgrade, components, presets, hub, verify, uninstall ou cleanup",
+        help=(
+            "install, play, host, proxy, qtv, update, upgrade, components, presets, hub, "
+            "verify, uninstall ou cleanup"
+        ),
     )
     parser.add_argument(
         "target", nargs="?", type=Path,
@@ -4195,8 +4205,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "play", "update", "upgrade", "components", "presets", "hub", "verify",
-        "uninstall", "cleanup",
+        "install", "play", "host", "proxy", "qtv", "update", "upgrade", "components",
+        "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
@@ -4247,6 +4257,9 @@ def main(arguments: list[str] | None = None) -> int:
         if raw_arguments[:1] == ["play"]:
             gameplay = importlib.import_module("gameplay")
             return gameplay.main(raw_arguments[1:])
+        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv"}:
+            services = importlib.import_module("services")
+            return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         if options.online_only and options.target is None:

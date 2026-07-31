@@ -318,8 +318,9 @@ def consumed_component(
             r"installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip",
             path,
         ) else None
-    if component in {"ktx", "final-arena", "pro-x", "team-fortress", "td2"}:
-        return component if component_for_artifact_path(releases, path) is not None else None
+    artifact_component = component_for_artifact_path(releases, path)
+    if artifact_component is not None:
+        return component if artifact_component == component else None
     name = PurePosixPath(path).name
     if component == "ezquake":
         if "/nightly/" in path:
@@ -560,6 +561,7 @@ def verify_distribution(
         missing = sorted(expected - actual)
         raise ValueError(f"distribution is missing a registered upstream file: {missing[0]}")
     component_document = load_component_catalog(component_catalog)
+    release_document = load_releases(component_releases, component_catalog)
     allowed_project_files = {
         PurePosixPath(str(source["path"])).relative_to("dist").as_posix()
         for component_entry in component_document["components"]
@@ -569,6 +571,11 @@ def verify_distribution(
             *component_entry.get("project_inputs", []),
         )
     }
+    allowed_release_files = {
+        str(artifact["distribution_path"])
+        for release in release_document["components"].values()
+        for artifact in release.get("artifacts", [])
+    }
     allowed_unmanaged = {
         "installer/README.md",
         "installer/docs/installer.md",
@@ -576,13 +583,14 @@ def verify_distribution(
         "installer/bin/install.sh",
         "installer/bin/manager.py",
         "installer/bin/gameplay.py",
+        "installer/bin/services.py",
         "installer/bin/x86qw.sh",
         "installer/bin/x86qw.cmd",
         "game-data/id1/pak0.pak",
         "game-data/id1/pak1.pak",
         *allowed_project_files,
     }
-    unexpected = sorted(actual - expected - allowed_unmanaged)
+    unexpected = sorted(actual - expected - allowed_unmanaged - allowed_release_files)
     if unexpected:
         raise ValueError(f"distribution contains a file without an explicit consumer: {unexpected[0]}")
     installer_files = [

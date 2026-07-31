@@ -5,7 +5,7 @@
     "id": "ezquake",
     "channels": ["stable", "nightly"]
   },
-  "content_namespaces": ["nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"],
+  "content_namespaces": ["nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2", "mvdsv", "qwfwd", "qtv"],
   "reference_source": {
     "repository": "https://github.com/nQuake/distfiles.git",
     "ref": "master"
@@ -34,7 +34,10 @@
       "final-arena",
       "pro-x",
       "team-fortress",
-      "total-destruction-2"
+      "total-destruction-2",
+      "mvdsv",
+      "qwfwd",
+      "qtv"
     ],
     "verified": [
       "catalog",
@@ -82,7 +85,10 @@
       "final-arena",
       "pro-x",
       "team-fortress",
-      "total-destruction-2"
+      "total-destruction-2",
+      "mvdsv",
+      "qwfwd",
+      "qtv"
     ]
   },
   "profile_history": {
@@ -98,7 +104,8 @@
     "complete": [
       "66a60d4cf678e67d132ca9cd17d7ab343b9fccd587adb5a37eb07e298095dd36",
       "f29290d2b77f98eb1380d1c6dc7ee2894793539f1fc5c8fdf2e9219e410ad325",
-      "c95442f034bd5d4b904fe94baab829e76a5fc3a6cd253aa110da323806ae3e4e"
+      "c95442f034bd5d4b904fe94baab829e76a5fc3a6cd253aa110da323806ae3e4e",
+      "d3e6e671dd94a4f157fc83728716e5dfcbc84352b3ad5c862dc1b3a55c9a27fc"
     ]
   },
   "components": [
@@ -159,14 +166,32 @@
         {"path": "dist/mods/ktx/1.47/x86qw/help-duel.cfg", "destination": "qw/x86qw-ktx-help-duel.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-2on2.cfg", "destination": "qw/x86qw-ktx-help-2on2.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-4on4.cfg", "destination": "qw/x86qw-ktx-help-4on4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-3on3.cfg", "destination": "qw/x86qw-ktx-help-3on3.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-10on10.cfg", "destination": "qw/x86qw-ktx-help-10on10.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-ffa.cfg", "destination": "qw/x86qw-ktx-help-ffa.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg", "destination": "qw/x86qw-ktx-help-clan-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-wipeout.cfg", "destination": "qw/x86qw-ktx-help-wipeout.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-tot.cfg", "destination": "qw/x86qw-ktx-help-tot.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-blitz-2v2.cfg", "destination": "qw/x86qw-ktx-help-blitz-2v2.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-blitz-4v4.cfg", "destination": "qw/x86qw-ktx-help-blitz-4v4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-2on2on2.cfg", "destination": "qw/x86qw-ktx-help-2on2on2.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-3on3on3.cfg", "destination": "qw/x86qw-ktx-help-3on3on3.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-4on4on4.cfg", "destination": "qw/x86qw-ktx-help-4on4on4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-xonx.cfg", "destination": "qw/x86qw-ktx-help-xonx.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-hoony.cfg", "destination": "qw/x86qw-ktx-help-hoony.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-ctf.cfg", "destination": "qw/x86qw-ktx-help-ctf.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-midair.cfg", "destination": "qw/x86qw-ktx-help-midair.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-dmm4.cfg", "destination": "qw/x86qw-ktx-help-dmm4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-instagib.cfg", "destination": "qw/x86qw-ktx-help-instagib.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-lgc.cfg", "destination": "qw/x86qw-ktx-help-lgc.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-rocket-arena.cfg", "destination": "qw/x86qw-ktx-help-rocket-arena.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-race.cfg", "destination": "qw/x86qw-ktx-help-race.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-practice.cfg", "destination": "qw/x86qw-ktx-help-practice.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-midair.cfg", "destination": "qw/x86qw-ktx-mode-midair.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-dmm4.cfg", "destination": "qw/x86qw-ktx-mode-dmm4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-instagib.cfg", "destination": "qw/x86qw-ktx-mode-instagib.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-lgc.cfg", "destination": "qw/x86qw-ktx-mode-lgc.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/mode-rocket-arena.cfg", "destination": "qw/x86qw-ktx-mode-rocket-arena.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-race.cfg", "destination": "qw/x86qw-ktx-mode-race.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-practice.cfg", "destination": "qw/x86qw-ktx-mode-practice.cfg", "mode": "overlay"}
       ],
@@ -412,6 +437,68 @@
       "project_inputs": [
         {"path": "dist/mods/td2/2.22/x86qw/CHANGELOG.md", "purpose": "mod-change-log"},
         {"path": "dist/mods/td2/2.22/x86qw/source/0001-runtime-compatibility.patch", "purpose": "source-patch"}
+      ]
+    },
+    {
+      "id": "mvdsv",
+      "label": "MVDSV dedicado",
+      "kind": "runtime",
+      "description": "Servidor QuakeWorld MVDSV 1.11 para KTX, MVD e transmissão QTV.",
+      "requires": ["ktx"],
+      "sources": [
+        {"path": "LICENSE.md", "destination": "_x86qw/licenses/mvdsv-LICENSE.md", "mode": "overlay", "origin": "release"}
+      ],
+      "project_sources": [
+        {"path": "dist/servers/mvdsv/1.11/upstream/linux-amd64/mvdsv", "destination": "_x86qw/runtimes/mvdsv/linux-amd64/mvdsv", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/upstream/windows-x64/mvdsv.exe", "destination": "_x86qw/runtimes/mvdsv/windows-x64/mvdsv.exe", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/x86qw/runtime/macos-arm64/mvdsv", "destination": "_x86qw/runtimes/mvdsv/macos-arm64/mvdsv", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/x86qw/BUILD.json", "destination": "_x86qw/runtimes/mvdsv/BUILD.json", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/x86qw/server.cfg", "destination": "qw/x86qw-mvdsv-user.cfg", "mode": "default"}
+      ],
+      "project_inputs": [
+        {"path": "dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch", "purpose": "source-patch"}
+      ]
+    },
+    {
+      "id": "qwfwd",
+      "label": "QWFWD proxy",
+      "kind": "service",
+      "description": "Proxy QuakeWorld QWFWD 1.30, local por padrão e exposição externa opcional.",
+      "requires": [],
+      "sources": [
+        {"path": "qwfwd-1.30/LICENSE.md", "destination": "_x86qw/licenses/qwfwd-LICENSE.md", "mode": "overlay", "origin": "release"}
+      ],
+      "project_sources": [
+        {"path": "dist/services/qwfwd/1.30/upstream/linux-amd64/qwfwd", "destination": "_x86qw/runtimes/qwfwd/linux-amd64/qwfwd", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/upstream/windows-x64/qwfwd.exe", "destination": "_x86qw/runtimes/qwfwd/windows-x64/qwfwd.exe", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/x86qw/runtime/macos-arm64/qwfwd", "destination": "_x86qw/runtimes/qwfwd/macos-arm64/qwfwd", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/x86qw/BUILD.json", "destination": "_x86qw/runtimes/qwfwd/BUILD.json", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/x86qw/qwfwd.cfg", "destination": "_x86qw/services/qwfwd/qwfwd.cfg", "mode": "default"}
+      ]
+    },
+    {
+      "id": "qtv",
+      "label": "QTV broadcast",
+      "kind": "service",
+      "description": "QTV HTTP fixado por commit para assistir streams e servir demos MVD.",
+      "requires": ["mvdsv"],
+      "sources": [
+        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE", "destination": "_x86qw/licenses/qtv-LICENSE", "mode": "overlay", "origin": "release"},
+        {
+          "path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources",
+          "destination": "_x86qw/services/qtv",
+          "mode": "overlay",
+          "origin": "release",
+          "exclude": ["qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources/qtv.cfg"]
+        },
+        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources/qtv.cfg", "destination": "_x86qw/services/qtv/qtv.example.cfg", "mode": "preserve", "origin": "release"}
+      ],
+      "project_sources": [
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/linux-amd64/qtv", "destination": "_x86qw/runtimes/qtv/linux-amd64/qtv", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/windows-x64/qtv.exe", "destination": "_x86qw/runtimes/qtv/windows-x64/qtv.exe", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/macos-arm64/qtv", "destination": "_x86qw/runtimes/qtv/macos-arm64/qtv", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/BUILD.json", "destination": "_x86qw/runtimes/qtv/BUILD.json", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/qtv.cfg", "destination": "_x86qw/services/qtv/qtv.cfg", "mode": "default"}
       ]
     }
   ]

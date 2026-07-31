@@ -34,6 +34,15 @@ sys.modules[PLAY_SPEC.name] = play_qw
 PLAY_SPEC.loader.exec_module(play_qw)
 sys.modules["gameplay"] = play_qw
 
+SERVICES_SPEC = importlib.util.spec_from_file_location(
+    "services_qw_modern", ROOT / "dist/installer/bin/services.py",
+)
+services_qw = importlib.util.module_from_spec(SERVICES_SPEC)
+assert SERVICES_SPEC.loader is not None
+sys.modules[SERVICES_SPEC.name] = services_qw
+SERVICES_SPEC.loader.exec_module(services_qw)
+sys.modules["services"] = services_qw
+
 
 def local_server_baseline(game: str) -> list[str]:
     arguments = ["+sb_listcache", "0", "+spectator", "0"]
@@ -52,6 +61,20 @@ def ktx_mode_runtime_aliases(mode_key: str) -> list[str]:
         "+tempalias", "ktx_mode",
         f"echo x86QW KTX preset: {mode.label} [{mode.key}]",
         "+tempalias", "x86qw_ktx_mode_help", play_qw.ktx_mode_help_alias(mode),
+    ]
+
+
+def ktx_launch_setup_alias(*commands: str) -> list[str]:
+    body = ";".join(("unalias x86qw_ktx_launch_setup", *commands))
+    return ["+tempalias", "x86qw_ktx_launch_setup", body]
+
+
+def ktx_entry_aliases() -> list[str]:
+    body = "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
+    return [
+        "+tempalias", "on_enter", body,
+        "+tempalias", "on_enter_ffa", body,
+        "+tempalias", "on_enter_ctf", body,
     ]
 
 
@@ -85,7 +108,7 @@ class ModernComponentTests(unittest.TestCase):
             output.write_bytes(source.read_bytes())
 
     def test_new_actions_are_accepted(self):
-        for action in ("components", "presets", "hub", "update", "upgrade"):
+        for action in ("host", "proxy", "qtv", "components", "presets", "hub", "update", "upgrade"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
@@ -98,6 +121,11 @@ class ModernComponentTests(unittest.TestCase):
                 install_qw.parse_arguments(["install", "--purge"], ROOT)
             with self.assertRaises(SystemExit):
                 install_qw.parse_arguments(["verify", "--dry-run"], ROOT)
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
+            install_qw.parse_arguments(["--help"], ROOT)
+        self.assertIn("play, host, proxy, qtv, update", output.getvalue())
 
     def test_play_has_its_own_module_and_is_exposed_by_the_main_cli(self):
         target = ROOT / "custom-quake"
@@ -115,12 +143,109 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(0, install_qw.main(["play", str(target), "--no-color"]))
         delegated.assert_called_once_with([str(target), "--no-color"])
 
+    def test_service_cli_exposes_host_proxy_and_qtv(self):
+        target = ROOT / "custom-quake"
+        host = services_qw.parse_arguments([
+            "host", "--target", str(target), "--mode", "4on4", "--map", "dm3",
+            "--bind", "0.0.0.0", "--with-qtv", "--with-proxy",
+        ], ROOT)
+        self.assertEqual("host", host.action)
+        self.assertEqual("4on4", host.mode)
+        self.assertEqual("dm3", host.map)
+        self.assertTrue(host.with_qtv)
+        self.assertTrue(host.with_proxy)
+        proxy = services_qw.parse_arguments(["proxy", "--port", "30001"], ROOT)
+        self.assertEqual(30001, proxy.proxy_port)
+        qtv = services_qw.parse_arguments(["qtv", "--upstream", "127.0.0.1:28501"], ROOT)
+        self.assertEqual("127.0.0.1:28501", qtv.upstream)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                services_qw.parse_arguments(["host", "--bind", "localhost"], ROOT)
+            with self.assertRaises(SystemExit):
+                services_qw.parse_arguments(["proxy", "--port", "80"], ROOT)
+
+    def test_service_runtime_platforms_and_ipv6_endpoints_are_explicit(self):
+        self.assertEqual("macos-arm64", services_qw.runtime_variant("Darwin", "arm64"))
+        self.assertEqual("linux-amd64", services_qw.runtime_variant("Linux", "x86_64"))
+        self.assertEqual("windows-x64", services_qw.runtime_variant("Windows", "AMD64"))
+        self.assertEqual("127.0.0.1:28000", services_qw.endpoint("127.0.0.1", 28000))
+        self.assertEqual("[::1]:28000", services_qw.endpoint("::1", 28000))
+        with self.assertRaises(services_qw.InstallerError):
+            services_qw.runtime_variant("Darwin", "x86_64")
+
+    def test_service_sessions_are_private_and_reject_command_injection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            session = services_qw.temporary_config(directory, "session-", ["hostname local"])
+            self.assertEqual("// x86QW: configuração efêmera removida ao encerrar.\nhostname local\n", session.read_text())
+            if os.name != "nt":
+                self.assertEqual(0o600, session.stat().st_mode & 0o777)
+        with self.assertRaises(services_qw.InstallerError):
+            services_qw.safe_text('bad"\nquit', "hostname")
+        with self.assertRaises(services_qw.InstallerError):
+            services_qw.safe_text("local;quit", "hostname")
+
+    def test_service_directory_rejects_symlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            real = root / "real"
+            real.mkdir()
+            linked = root / "linked"
+            linked.symlink_to(real, target_is_directory=True)
+            with self.assertRaises(services_qw.InstallerError):
+                services_qw.ensure_private_directory(linked)
+            created = root / "created"
+            services_qw.ensure_private_directory(created)
+            self.assertTrue(created.is_dir())
+
+    def test_dedicated_ktx_materialization_is_verified_and_reversible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            qw = target / "qw"
+            qw.mkdir()
+            preexisting = qw / "same.cfg"
+            preexisting.write_bytes(b"same")
+            with zipfile.ZipFile(qw / "ktx.pk3", "w") as package:
+                package.writestr("qwprogs.qvm", b"qvm")
+                package.writestr("configs/default.cfg", b"cfg")
+                package.writestr("same.cfg", b"same")
+            materialized = services_qw.materialize_dedicated_ktx(target)
+            self.assertEqual(b"qvm", (qw / "qwprogs.qvm").read_bytes())
+            self.assertEqual(b"cfg", (qw / "configs/default.cfg").read_bytes())
+            services_qw.cleanup_dedicated_ktx(materialized)
+            self.assertFalse((qw / "qwprogs.qvm").exists())
+            self.assertFalse((qw / "configs").exists())
+            self.assertEqual(b"same", preexisting.read_bytes())
+
+    def test_dedicated_ktx_materialization_preserves_conflicting_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            qw = target / "qw"
+            qw.mkdir()
+            conflict = qw / "qwprogs.qvm"
+            conflict.write_bytes(b"personal")
+            with zipfile.ZipFile(qw / "ktx.pk3", "w") as package:
+                package.writestr("qwprogs.qvm", b"upstream")
+            with self.assertRaises(services_qw.InstallerError):
+                services_qw.materialize_dedicated_ktx(target)
+            self.assertEqual(b"personal", conflict.read_bytes())
+
+    def test_main_cli_delegates_service_actions_without_entering_the_installer(self):
+        for action in ("host", "proxy", "qtv"):
+            with self.subTest(action=action):
+                with mock.patch.object(services_qw, "main", return_value=0) as delegated:
+                    self.assertEqual(0, install_qw.main([action, "--target", "/tmp/x86qw-test"]))
+                delegated.assert_called_once_with([action, "--target", "/tmp/x86qw-test"])
+
     def test_ktx_mode_catalog_is_declarative_and_uses_only_supported_commands(self):
         modes = play_qw.load_ktx_modes(ROOT)
         self.assertEqual(
             [
-                "duel", "2on2", "4on4", "ffa", "clan-arena",
-                "hoony", "ctf", "midair", "race", "practice",
+                "duel", "2on2", "4on4", "3on3", "10on10", "ffa",
+                "clan-arena", "wipeout", "tot", "blitz-2v2", "blitz-4v4",
+                "2on2on2", "3on3on3", "4on4on4", "xonx", "hoony", "ctf",
+                "midair", "dmm4", "instagib", "lgc", "rocket-arena",
+                "race", "practice",
             ],
             [mode.key for mode in modes],
         )
@@ -133,9 +258,14 @@ class ModernComponentTests(unittest.TestCase):
         ))
         ctf = next(mode for mode in modes if mode.key == "ctf")
         self.assertEqual("ctf", ctf.usermode)
+        self.assertFalse(ctf.bots)
         self.assertEqual((
             ("sv_loadentfiles", "1"), ("sv_loadentfiles_dir", "ctf"),
         ), ctf.launch_settings)
+        race = next(mode for mode in modes if mode.key == "race")
+        self.assertEqual("race/routes/{map}.route", race.required_map_asset)
+        self.assertEqual(54, len(race.suggested_maps))
+        self.assertFalse(race.bots)
 
     def test_ktx_mode_menu_aligns_players_and_accepts_aliases(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -151,6 +281,98 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("Duel (padrão)", lines[0])
             description_columns = [line.index(mode.description) for line, mode in zip(lines, modes)]
             self.assertEqual(1, len(set(description_columns)))
+
+    def test_ktx_cli_exposes_map_bots_ctf_and_race_options(self):
+        target = ROOT / "custom-quake"
+        parsed = play_qw.parse_arguments([
+            "ktx", "--mode", "duel", "--map", "dm6", "--bots", "2",
+            "--bot-skill", "12", "--bot-team", "red", "--bot-weapon", "8",
+            "--bot-health", "200", "--bot-break-on-death", "--target", str(target),
+        ], ROOT)
+        self.assertEqual("dm6", parsed.map)
+        self.assertEqual(play_qw.KtxLaunchOptions(
+            bots=2, bot_skill=12, bot_team="red", bot_weapon="8",
+            bot_health=200, bot_break_on_death=True,
+        ), parsed.ktx_options)
+        race = play_qw.parse_arguments([
+            "--mode", "race", "--race-style", "match",
+            "--race-scoring", "formula1", "--race-pacemaker", "3",
+            "--race-hide-players", "--target", str(target),
+        ], ROOT)
+        self.assertEqual("ktx", race.game)
+        self.assertEqual("formula1", race.ktx_options.race_scoring)
+        ctf = play_qw.parse_arguments([
+            "--mode", "ctf", "--ctf-hook", "smooth", "--ctf-runes", "off",
+            "--ctf-based-spawn", "--target", str(target),
+        ], ROOT)
+        self.assertEqual("smooth", ctf.ktx_options.ctf_hook)
+        self.assertTrue(ctf.ktx_options.ctf_based_spawn)
+
+    def test_ktx_launch_commands_validate_routes_and_mode_specific_options(self):
+        modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
+        assets = frozenset({"bots/maps/dm6.bot", "race/routes/dm6.route"})
+        options = play_qw.KtxLaunchOptions(
+            bots=2, bot_skill=12, bot_team="red", bot_weapon="8", bot_health=200,
+            bot_break_on_death=True,
+        )
+        self.assertEqual((
+            "cmd botcmd skill 12",
+            "cmd botcmd health 200",
+            "cmd botcmd weapon 8",
+            "cmd botcmd addbot 12 red",
+            "cmd botcmd addbot 12 red",
+        ), play_qw.ktx_launch_commands(modes["duel"], "dm6", assets, options))
+        self.assertEqual((
+            "cmd race_match", "cmd race_scoring", "cmd race_scoring",
+            "cmd race_pacemaker 3", "cmd race_hide_players",
+        ), play_qw.ktx_launch_commands(
+            modes["race"], "dm6", assets,
+            play_qw.KtxLaunchOptions(
+                race_style="match", race_scoring="formula1",
+                race_pacemaker=3, race_hide_players=True,
+            ),
+        ))
+        self.assertEqual((
+            "cmd hook_smooth", "cmd norunes", "cmd ctfbasedspawn",
+        ), play_qw.ktx_launch_commands(
+            modes["ctf"], "e2m2", frozenset(),
+            play_qw.KtxLaunchOptions(
+                ctf_hook="smooth", ctf_runes="off", ctf_based_spawn=True,
+            ),
+        ))
+        with self.assertRaisesRegex(play_qw.InstallerError, "não possui rota Frogbot"):
+            play_qw.ktx_launch_commands(
+                modes["duel"], "dm2", assets, play_qw.KtxLaunchOptions(bots=1),
+            )
+        with self.assertRaisesRegex(play_qw.InstallerError, "não são compatíveis"):
+            play_qw.ktx_launch_commands(
+                modes["race"], "dm6", assets, play_qw.KtxLaunchOptions(bots=1),
+            )
+        with self.assertRaisesRegex(play_qw.InstallerError, "só podem ser usadas"):
+            play_qw.ktx_launch_commands(
+                modes["duel"], "dm6", assets,
+                play_qw.KtxLaunchOptions(ctf_hook="off"),
+            )
+
+    def test_ktx_race_map_selection_requires_an_packaged_route(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            with mock.patch.object(player, "local_map_names", return_value=["dm6", "dm2"]):
+                selected = player.choose_local_map(
+                    game,
+                    requested_map="dm6",
+                    required_asset="race/routes/{map}.route",
+                    available_assets=frozenset({"race/routes/dm6.route"}),
+                )
+                self.assertEqual("dm6", selected)
+                with self.assertRaisesRegex(play_qw.InstallerError, "não é compatível"):
+                    player.choose_local_map(
+                        game,
+                        requested_map="dm2",
+                        required_asset="race/routes/{map}.route",
+                        available_assets=frozenset({"race/routes/dm6.route"}),
+                    )
 
     def test_play_menu_shows_installed_versions_and_aligns_descriptions(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -395,7 +617,10 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("common-baseline", compatibility["policy"])
             self.assertEqual(set(installer.components), set(compatibility["covered_components"]))
             self.assertEqual(
-                {"nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2"},
+                {
+                    "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
+                    "mvdsv", "qwfwd", "qtv",
+                },
                 installer.content_component_namespaces,
             )
             self.assertEqual(set(installer.components), set(installer.component_catalog["profiles"]["complete"]))
@@ -405,25 +630,15 @@ class ModernComponentTests(unittest.TestCase):
             self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
             ktx = installer.components["ktx"]
+            ktx_overlay = ROOT / "dist/mods/ktx/1.47/x86qw"
+            expected_ktx_sources = {
+                "dist/mods/ktx/1.47/x86qw/client.cfg",
+                "dist/mods/ktx/1.47/x86qw/user.cfg.example",
+                *(str(path.relative_to(ROOT)) for path in ktx_overlay.glob("help*.cfg")),
+                *(str(path.relative_to(ROOT)) for path in ktx_overlay.glob("mode-*.cfg")),
+            }
             self.assertEqual(
-                {
-                    "dist/mods/ktx/1.47/x86qw/client.cfg",
-                    "dist/mods/ktx/1.47/x86qw/user.cfg.example",
-                    "dist/mods/ktx/1.47/x86qw/help.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-duel.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-2on2.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-4on4.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-ffa.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-hoony.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-ctf.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-midair.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-race.cfg",
-                    "dist/mods/ktx/1.47/x86qw/help-practice.cfg",
-                    "dist/mods/ktx/1.47/x86qw/mode-midair.cfg",
-                    "dist/mods/ktx/1.47/x86qw/mode-race.cfg",
-                    "dist/mods/ktx/1.47/x86qw/mode-practice.cfg",
-                },
+                expected_ktx_sources,
                 {source["path"] for source in ktx["project_sources"]},
             )
             td2 = installer.components["total-destruction-2"]
@@ -566,6 +781,13 @@ class ModernComponentTests(unittest.TestCase):
             with zipfile.ZipFile(target / "qw/ktx.pk3") as package:
                 names = set(package.namelist())
                 self.assertIn("bots/maps/anarena.bot", names)
+                self.assertEqual(77, sum(
+                    name.startswith("bots/maps/") and name.endswith(".bot") for name in names
+                ))
+                self.assertEqual(54, sum(
+                    name.startswith("race/routes/") and name.endswith(".route") for name in names
+                ))
+                self.assertIn("race/routes/dm6.route", names)
                 self.assertIn("qwprogs.qvm", names)
                 self.assertIn("locs/dm6.loc", names)
                 self.assertIn("configs/usermodes/dmm4base.cfg", names)
@@ -983,9 +1205,8 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
-                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
+                *ktx_launch_setup_alias(),
+                *ktx_entry_aliases(),
                 "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
                 "+set", "x86qw_ktx_preset", "duel",
@@ -1011,16 +1232,56 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
-                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter",
-                "exec x86qw-ktx-mode-midair.cfg;exec x86qw-ktx.cfg",
+                *ktx_launch_setup_alias(),
+                *ktx_entry_aliases(),
+                "+tempalias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
                 "+set", "k_defmap", "povdmm4",
                 "+set", "k_defmode", "1on1",
                 "+set", "x86qw_ktx_preset", "midair",
                 *ktx_mode_runtime_aliases("midair"),
                 "+map", "povdmm4",
+            ])
+
+    def test_ktx_bot_options_enable_frogbot_before_map_and_add_after_entry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(
+                bots=2, bot_skill=10, bot_team="red", bot_weapon="8",
+                bot_health=150, bot_break_on_death=True,
+            )
+            assets = frozenset({"bots/maps/dm6.bot"})
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "ktx_archive_members", return_value=assets):
+                                    with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
+                                        with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                            with mock.patch.object(installer, "launch_runtime") as launch:
+                                                with mock.patch.object(installer, "ensure_local_play_support"):
+                                                    installer.play_local(
+                                                        "ktx", "duel", "dm6", options,
+                                                    )
+            launch.assert_called_once_with(runtime, [
+                *local_server_baseline("ktx"),
+                "+set", "k_fb_enabled", "1",
+                "+set", "k_fb_break_on_death", "1",
+                *ktx_launch_setup_alias(
+                    "cmd botcmd skill 10",
+                    "cmd botcmd health 150",
+                    "cmd botcmd weapon 8",
+                    "cmd botcmd addbot 10 red",
+                    "cmd botcmd addbot 10 red",
+                ),
+                *ktx_entry_aliases(),
+                "+set", "k_defmap", "dm6",
+                "+set", "k_defmode", "1on1",
+                "+set", "x86qw_ktx_preset", "duel",
+                *ktx_mode_runtime_aliases("duel"),
+                "+map", "dm6",
             ])
 
     def test_ktx_ctf_loads_curated_entities_before_the_map(self):
@@ -1043,9 +1304,8 @@ class ModernComponentTests(unittest.TestCase):
                 *local_server_baseline("ktx"),
                 "+sv_loadentfiles", "1",
                 "+sv_loadentfiles_dir", "ctf",
-                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
-                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
+                *ktx_launch_setup_alias(),
+                *ktx_entry_aliases(),
                 "+set", "k_defmap", "e2m2",
                 "+set", "k_defmode", "ctf",
                 "+set", "x86qw_ktx_preset", "ctf",
@@ -1082,19 +1342,19 @@ class ModernComponentTests(unittest.TestCase):
                         with mock.patch.object(installer, "available_local_games", return_value=[game]):
                             with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
                                 with mock.patch.object(installer, "verify_component"):
-                                    with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
-                                        with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
-                                            with mock.patch.object(installer, "launch_runtime") as launch:
-                                                with mock.patch.object(installer, "ensure_local_play_support"):
-                                                    with mock.patch("builtins.input", return_value=""):
-                                                        installer.play_local("ktx", mode)
+                                    assets = frozenset({"race/routes/dm6.route"})
+                                    with mock.patch.object(installer, "ktx_archive_members", return_value=assets):
+                                        with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
+                                            with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                                with mock.patch.object(installer, "launch_runtime") as launch:
+                                                    with mock.patch.object(installer, "ensure_local_play_support"):
+                                                        with mock.patch("builtins.input", return_value=""):
+                                                            installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
                     *local_server_baseline("ktx"),
-                    "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
-                    "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
-                    "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
-                    "+tempalias", event,
-                    f"exec {entry_config};exec x86qw-ktx.cfg",
+                    *ktx_launch_setup_alias(),
+                    *ktx_entry_aliases(),
+                    "+tempalias", event, f"exec {entry_config}",
                     "+set", "k_defmap", "dm6",
                     "+set", "k_defmode", usermode,
                     "+set", "x86qw_ktx_preset", mode,
@@ -1496,6 +1756,11 @@ class ModernComponentTests(unittest.TestCase):
         )
         self.assertIn("ktx_mode", help_profile)
         self.assertIn("x86qw_ktx_mode_help", help_profile)
+        visible_help = re.sub(r"\^(.)", r"\1", help_profile).replace("$x20", " ")
+        self.assertIn("BOTS FROGBOT", visible_help)
+        self.assertIn("BOTCMD SKILL 5", visible_help)
+        self.assertIn("BOTCMD ADDBOT", visible_help)
+        self.assertIn("BOTCMD REMOVEBOT", visible_help)
         rows = [
             line.removeprefix("echo ") for line in help_profile.splitlines()
             if line.startswith("echo ") and " - " in line
@@ -1509,6 +1774,7 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual([26], sorted(set(columns)))
 
     def test_each_ktx_mode_has_aligned_contextual_help_from_upstream_commands(self):
+        all_separator_columns = []
         for mode in play_qw.load_ktx_modes(ROOT):
             with self.subTest(mode=mode.key):
                 self.assertEqual(
@@ -1530,6 +1796,8 @@ class ModernComponentTests(unittest.TestCase):
                     self.assertTrue(visible.endswith(description))
                     separator_columns.append(visible.index("- "))
                 self.assertEqual(1, len(set(separator_columns)))
+                all_separator_columns.extend(separator_columns)
+        self.assertEqual([27], sorted(set(all_separator_columns)))
 
     def test_ktx_help_files_stay_below_the_console_line_limit(self):
         profiles = [

@@ -11,6 +11,7 @@ documentação e pacotes imutáveis:
 - `bin/x86qw.cmd`: launcher permanente para Windows;
 - `bin/manager.py`: gerenciador principal de instalação e manutenção;
 - `bin/gameplay.py`: implementação interna de gameplay, jogos e modos KTX;
+- `bin/services.py`: execução segura de MVDSV, QTV e QWFWD em primeiro plano;
 - `docs/installer.md`: manual completo;
 - `packages/<versão>/`: histórico de bundles públicos imutáveis;
 - `packages/latest`: link simbólico relativo para a versão corrente.

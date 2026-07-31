@@ -14,15 +14,21 @@
   `dm3`, a segunda carga do QVM e o aviso `SV_PreSpawn_f from different level`;
 - deixa `k_defmode` sob controle do launcher e inicia diretamente no usermode
   selecionado, sem aplicar primeiro o padrão 4on4;
-- declara em `modes.json` Duel, 2on2, 4on4, FFA, Clan Arena, HoonyMode,
-  Capture The Flag, Midair, Race e Practice, com mapas e entradas compatíveis
-  com KTX 1.47;
-- ativa Midair, Race e Practice por perfis estáticos de entrada única, somente
+- declara em `modes.json` os 17 usermodes nativos do KTX 1.47 e sete variações
+  oficiais: Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice;
+- ativa as sete variações por perfis estáticos de entrada única, somente
   depois que o KTX confirma a conexão local; a remoção imediata do alias evita
   alternância ou recarga em ciclo;
+- expõe no launcher os bots Frogbot por quantidade ou preenchimento, habilidade
+  1-20, equipe, arma e vida; habilita o subsistema antes do mapa e só aceita
+  mapas com uma das 77 rotas oficiais empacotadas;
+- filtra Race pelas 54 rotas oficiais e expõe corrida solo, simultânea ou em
+  match, os três sistemas de pontuação, pacemaker e ocultação de corredores;
 - habilita CTF com os seis ENTs oficiais da rotação KTX (`e2m2`, `e1m5`,
   `e1m3`, `e2m5`, `e1m4` e `e3m3`), cada um validado com uma bandeira por
   equipe, e configura o carregamento dos ENTs antes de abrir o mapa;
+- expõe no CTF os cinco estilos de gancho, gancho desligado, runas, troca de
+  equipes e spawn baseado na base; Race e CTF recusam bots como exige o QVM;
 - ao iniciar KTX, aplica exclusivamente ao perfil KTX o mapa de teclas
   competitivo do nQuake, incluindo quick weapons, mensagens de equipe, timers
   e comandos da partida;

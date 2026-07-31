@@ -6,6 +6,9 @@ if /I "%~1"=="help" goto help
 if /I "%~1"=="-h" goto help
 if /I "%~1"=="--help" goto help
 if /I "%~1"=="play" goto play
+if /I "%~1"=="host" goto service
+if /I "%~1"=="proxy" goto service
+if /I "%~1"=="qtv" goto service
 if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
@@ -17,6 +20,10 @@ goto help_error
 
 :play
 py -3 "%X86QW_APP%" play %2 %3 %4 %5 %6 %7 %8 %9 --target "%X86QW_ROOT%"
+exit /b %ERRORLEVEL%
+
+:service
+py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :maintenance
@@ -35,6 +42,11 @@ echo Gameplay:
 echo   play                 escolhe e inicia um mod ou modo KTX local
 echo   play ktx --mode MODO inicia KTX diretamente no modo informado
 echo   hub                  lista servidores publicos
+echo.
+echo Servicos:
+echo   host                 hospeda KTX em um MVDSV dedicado
+echo   proxy                inicia o proxy QWFWD
+echo   qtv                  inicia o relay web/MVD QTV
 echo.
 echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado

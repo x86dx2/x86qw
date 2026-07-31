@@ -40,23 +40,40 @@ concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
 sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
 
 O KTX possui seleção própria de modo no menu. Também pode ser aberto
-diretamente, sem perder a escolha interativa de mapa:
+diretamente, com modo e mapa opcionais:
 
 ```sh
 ./x86qw.sh play ktx --mode duel
-./x86qw.sh play ktx --mode 2on2
-./x86qw.sh play ktx --mode 4on4
-./x86qw.sh play ktx --mode ffa
-./x86qw.sh play ktx --mode clan-arena
-./x86qw.sh play ktx --mode hoony
-./x86qw.sh play ktx --mode midair
-./x86qw.sh play ktx --mode race
-./x86qw.sh play ktx --mode practice
+./x86qw.sh play ktx --mode duel --map dm6 --bots 2 --bot-skill 8
+./x86qw.sh play ktx --mode ctf --ctf-hook smooth --ctf-runes off
+./x86qw.sh play ktx --mode race --map slide1 --race-style match --race-scoring formula1
 ```
 
-Essas entradas usam modos e comandos existentes no KTX 1.47. Capture The Flag
-usa seis mapas clássicos com os ENTs oficiais do próprio KTX, curados e
-validados com uma bandeira de cada equipe.
+O catálogo cobre os 17 usermodes nativos — Duel, 2on2, 3on3, 4on4, 10on10,
+FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX,
+Wipeout, Clan Arena e ThunderWalker ToT — e sete variações oficiais: Midair,
+DMM4, Instagib, LGC, Rocket Arena, Race e Practice. `--help` lista as opções de
+Frogbot (quantidade/fill, habilidade 1-20, equipe, arma e vida), os estilos de
+CTF e os formatos, pontuações e pacemaker de Race. O launcher valida a rota do
+mapa antes de ativar um bot, limita Race às 54 rotas oficiais e mantém bots
+desligados em Race e CTF, conforme exigido pelo QVM 1.47.
+
+O perfil completo também instala MVDSV, QTV e QWFWD como componentes
+independentes e verificáveis. Eles iniciam apenas em primeiro plano e usam
+loopback por padrão; exposição à LAN/Internet exige um `--bind` explícito:
+
+```sh
+./x86qw.sh host --mode 4on4 --map dm3
+./x86qw.sh host --mode duel --map dm6 --bind 0.0.0.0 --with-qtv
+./x86qw.sh proxy --bind 0.0.0.0
+./x86qw.sh qtv --upstream 127.0.0.1:28501
+```
+
+`host` executa KTX no MVDSV e aceita `--with-qtv` e `--with-proxy`; `proxy`
+executa QWFWD; `qtv` pode operar sozinho ou conectado a um MVDSV. `Ctrl+C`
+encerra de forma coordenada todos os processos iniciados pelo comando. Senhas
+são gravadas somente em configurações efêmeras privadas, nunca na linha de
+comando nem na saída. Consulte [docs/HOSTING.md](docs/HOSTING.md).
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
@@ -137,6 +154,7 @@ dist/
 │   │   ├── x86qw.cmd     launcher permanente Windows
 │   │   ├── manager.py    gerenciador de instalação e manutenção
 │   │   ├── gameplay.py   módulo interno especializado em gameplay local
+│   │   ├── services.py   MVDSV, QTV e QWFWD em primeiro plano
 │   ├── docs/
 │   │   └── installer.md  manual completo
 │   └── packages/         histórico de bundles públicos imutáveis

@@ -15,6 +15,11 @@ Gameplay:
   play ktx --mode MODO inicia KTX diretamente em duel, 2on2, 4on4 e outros
   hub                  lista servidores públicos para jogar ou observar
 
+Serviços:
+  host                 hospeda KTX em um MVDSV dedicado
+  proxy                inicia o proxy QWFWD
+  qtv                  inicia o relay web/MVD QTV
+
 Manutenção:
   update [--yes]       atualiza somente clientes e componentes já instalados
   upgrade [--yes]      incorpora novidades do perfil da instalação
@@ -27,6 +32,8 @@ Manutenção:
 Exemplos:
   ./x86qw.sh play
   ./x86qw.sh play ktx --mode duel
+  ./x86qw.sh play ktx --mode duel --bots 1
+  ./x86qw.sh host --mode 4on4 --map dm3 --bind 0.0.0.0
 
 A instalação inicial e a adição de conteúdo são exclusivas do install.sh.
 EOF
@@ -35,7 +42,7 @@ EOF
 case "${1:-}" in
   '') show_help; exit 0 ;;
   help|-h|--help) show_help; exit 0 ;;
-  play) shift; exec python3 "$app" play "$@" --target "$root" ;;
+  play|host|proxy|qtv) action=$1; shift; exec python3 "$app" "$action" "$@" --target "$root" ;;
   update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac

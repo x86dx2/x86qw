@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "component": "qtv",
+  "upstream_revision": "025ca949aca06cad6777de0075148ac06a15f4f0",
+  "toolchain": "Go 1.24.13; CGO_ENABLED=0; -trimpath; -ldflags=-s -w -buildid=",
+  "platforms": {
+    "linux-amd64": {
+      "sha256": "1d7c781c52696d6ea3ffecff9221290ccfc74aaa201680b201d6d1028858f440"
+    },
+    "windows-x64": {
+      "sha256": "19a2b5b409ae3b4e8cd066b83b9d7bc4f897f7a47f6595735f1ee0b5ce80948c"
+    },
+    "macos-arm64": {
+      "sha256": "1bcc616b7bac1720191b706c681a57c65ba7e45d7693b3eada0f4e07ae07139a"
+    }
+  }
+}
