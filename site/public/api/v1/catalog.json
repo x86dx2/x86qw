@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T22:37:42Z",
+  "generated_at": "2026-07-31T23:30:19Z",
   "packages": [
     {
       "component": "core",
@@ -874,7 +874,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.2.2",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -898,6 +898,36 @@
       "release_notes": "# x86QW 0.2.2\n\nRelease corretiva da concorrência e da finalização de instalações da linha\n`0.2.x`.\n\n## Correções\n\n- lock único por instalação para stacks e todas as operações mutáveis;\n- compatibilidade de leitura com locks de formato 1 da `0.2.1`;\n- recuperação bloqueada por controlador de journal vivo ou inconclusivo;\n- temporários sensíveis sem hash e sem remoção recursiva;\n- liberação de lock tentada independentemente das demais etapas de limpeza;\n- encerramento do grupo POSIX completo e Job Object no Windows;\n- reparos locais de permissão e preparação macOS disponíveis offline;\n- testes de concorrência, ausência de lock, PID reutilizado, descendentes e\n  falhas injetadas na finalização.\n\n## Compatibilidade\n\nOs comandos públicos, perfis, stable/nightly, estados v1/v2, cinco jogos,\ngameplay, configurações pessoais e bundles existentes permanecem compatíveis.\nA `0.2.1` continua imutável no histórico.\n\n## Validação\n\n- validação integral e Git LFS;\n- testes de manutenção e site;\n- matriz Ubuntu, macOS e Windows em Python 3.10 e versão recente;\n- dry-run do Worker;\n- revisão do bundle imutável e dos hashes;\n- gate protegido e aprovação humana separados para publicar.",
       "mirror_title": "x86QW Installer 0.2.2",
       "mirror_notes": "# x86QW 0.2.2\n\nRelease corretiva da concorrência e da finalização de instalações da linha\n`0.2.x`.\n\n## Correções\n\n- lock único por instalação para stacks e todas as operações mutáveis;\n- compatibilidade de leitura com locks de formato 1 da `0.2.1`;\n- recuperação bloqueada por controlador de journal vivo ou inconclusivo;\n- temporários sensíveis sem hash e sem remoção recursiva;\n- liberação de lock tentada independentemente das demais etapas de limpeza;\n- encerramento do grupo POSIX completo e Job Object no Windows;\n- reparos locais de permissão e preparação macOS disponíveis offline;\n- testes de concorrência, ausência de lock, PID reutilizado, descendentes e\n  falhas injetadas na finalização.\n\n## Compatibilidade\n\nOs comandos públicos, perfis, stable/nightly, estados v1/v2, cinco jogos,\ngameplay, configurações pessoais e bundles existentes permanecem compatíveis.\nA `0.2.1` continua imutável no histórico.\n\n## Validação\n\n- validação integral e Git LFS;\n- testes de manutenção e site;\n- matriz Ubuntu, macOS e Windows em Python 3.10 e versão recente;\n- dry-run do Worker;\n- revisão do bundle imutável e dos hashes;\n- gate protegido e aprovação humana separados para publicar.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.2.3",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.2.3.zip",
+      "size": 113147,
+      "sha256": "05038b71dbd3d6c881986e90e6fb70a0be4aa5a5d6baedd4a59833ca4ace91c2",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.3/x86qw-installer-0.2.3.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.3/x86qw-installer-0.2.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.2.3/x86qw-installer-0.2.3.zip"
+      ],
+      "distribution_path": "installer/packages/0.2.3/x86qw-installer-0.2.3.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.2.3",
+      "release_title": "x86QW Installer 0.2.3",
+      "release_notes": "# x86QW 0.2.3\n\nRelease corretiva da compatibilidade de journals de sessão da linha `0.2.x`.\n\n## Correção\n\n- aceita journals limpos escritos antes da introdução dos campos\n  `controller`, `type` e `sensitive`;\n- normaliza o formato legado somente em memória, sem reescrever um journal\n  limpo durante `update`, `upgrade` ou outra operação;\n- trata temporários legados sem classificação como sensíveis quando uma\n  recuperação real for necessária;\n- remove hashes de temporários legados classificados como sensíveis antes de\n  persistir o resultado da recuperação.\n\n## Compatibilidade\n\nA correção preserva journals, configurações pessoais, comandos, perfis,\nstable/nightly, jogos e gameplay. Os bundles `0.2.2` e anteriores permanecem\nimutáveis.\n\n## Validação\n\n- reprodução com um journal real criado pela versão anterior;\n- regressão para journal legado limpo sem consulta ao PID registrado;\n- recuperação segura de temporário legado potencialmente sensível;\n- validação integral e matriz Ubuntu, macOS e Windows.",
+      "mirror_title": "x86QW Installer 0.2.3",
+      "mirror_notes": "# x86QW 0.2.3\n\nRelease corretiva da compatibilidade de journals de sessão da linha `0.2.x`.\n\n## Correção\n\n- aceita journals limpos escritos antes da introdução dos campos\n  `controller`, `type` e `sensitive`;\n- normaliza o formato legado somente em memória, sem reescrever um journal\n  limpo durante `update`, `upgrade` ou outra operação;\n- trata temporários legados sem classificação como sensíveis quando uma\n  recuperação real for necessária;\n- remove hashes de temporários legados classificados como sensíveis antes de\n  persistir o resultado da recuperação.\n\n## Compatibilidade\n\nA correção preserva journals, configurações pessoais, comandos, perfis,\nstable/nightly, jogos e gameplay. Os bundles `0.2.2` e anteriores permanecem\nimutáveis.\n\n## Validação\n\n- reprodução com um journal real criado pela versão anterior;\n- regressão para journal legado limpo sem consulta ao PID registrado;\n- recuperação segura de temporário legado potencialmente sensível;\n- validação integral e matriz Ubuntu, macOS e Windows.",
       "mirror_latest": true
     },
     {
