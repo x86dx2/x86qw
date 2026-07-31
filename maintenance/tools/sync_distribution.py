@@ -585,6 +585,7 @@ def verify_distribution(
         "installer/bin/manager.py",
         "installer/bin/gameplay.py",
         "installer/bin/services.py",
+        "installer/bin/session_control.py",
         "installer/bin/x86qw.sh",
         "installer/bin/x86qw.cmd",
         "game-data/id1/pak0.pak",

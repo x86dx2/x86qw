@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import errno
 import getpass
 import hashlib
 import importlib
@@ -21,6 +22,7 @@ import tempfile
 import time
 import unicodedata
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -30,11 +32,28 @@ POPEN_TYPE = subprocess.Popen
 
 core = importlib.import_module("manager")
 gameplay = importlib.import_module("gameplay")
+session_control = importlib.import_module("session_control")
 
 InstallerError = core.InstallerError
 console = core.console
 lexists = core.lexists
 remove_path = core.remove_path
+ProcessIdentity = session_control.ProcessIdentity
+ProcessProbe = session_control.ProcessProbe
+new_session_id = session_control.new_session_id
+process_identity = session_control.process_identity
+probe_expected_process = session_control.probe_expected_process
+
+
+class SessionLock(session_control.InstallationLock):
+    """Compatibility facade over the shared installation operation lock."""
+
+    @classmethod
+    def acquire(cls, target: Path, command: str) -> SessionLock:
+        try:
+            return super().acquire(target, command, "service")
+        except session_control.SessionControlError as error:
+            raise InstallerError(str(error)) from error
 
 MAX_ARCHIVE_MEMBERS = 4096
 MAX_ARCHIVE_MEMBER_SIZE = 128 * 1024 * 1024
@@ -69,20 +88,6 @@ class ProcessSpec:
     cwd: Path
     startup_rcon: StartupRcon | None = None
     readiness: ServiceReadiness | None = None
-
-
-@dataclass(frozen=True)
-class ProcessIdentity:
-    pid: int
-    creation_token: str
-    executable: str
-
-
-@dataclass(frozen=True)
-class ProcessProbe:
-    status: str
-    identity: ProcessIdentity | None = None
-    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -125,6 +130,16 @@ class HostedGame:
     map_name: str
     assets: frozenset[str]
     ktx_options: gameplay.KtxLaunchOptions
+
+
+@dataclass
+class ServiceResources:
+    temporary_paths: list[Path]
+    materialized_ktx: list[MaterializedKtx]
+    installer: core.Installer | None = None
+    journal: SessionJournal | None = None
+    session_lock: SessionLock | None = None
+    recovery_confirmed: bool = False
 
 
 def bounded_integer(minimum: int, maximum: int):
@@ -356,245 +371,6 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def new_session_id() -> str:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return f"{timestamp}-{secrets.token_hex(6)}"
-
-
-def _linux_process_identity(pid: int) -> ProcessProbe:
-    stat_path = Path(f"/proc/{pid}/stat")
-    try:
-        stat_text = stat_path.read_text(encoding="ascii")
-        closing = stat_text.rfind(")")
-        fields = stat_text[closing + 2:].split() if closing >= 0 else []
-        if len(fields) <= 19:
-            return ProcessProbe("inconclusive", detail="/proc stat incompleto")
-        start_ticks = fields[19]
-        boot_id_path = Path("/proc/sys/kernel/random/boot_id")
-        boot_id = boot_id_path.read_text(encoding="ascii").strip() if boot_id_path.is_file() else "boot-unknown"
-        executable = os.path.realpath(os.readlink(f"/proc/{pid}/exe"))
-        return ProcessProbe("alive", ProcessIdentity(pid, f"linux:{boot_id}:{start_ticks}", executable))
-    except FileNotFoundError:
-        return ProcessProbe("dead")
-    except (OSError, UnicodeError, ValueError) as error:
-        return ProcessProbe("inconclusive", detail=str(error))
-
-
-def _macos_process_identity(pid: int) -> ProcessProbe:
-    environment = dict(os.environ)
-    environment["LC_ALL"] = "C"
-    try:
-        started = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "lstart="],
-            check=False, capture_output=True, text=True, timeout=2, env=environment,
-        )
-        if started.returncode == 1 and not started.stdout.strip():
-            return ProcessProbe("dead")
-        if started.returncode != 0 or not started.stdout.strip():
-            return ProcessProbe("inconclusive", detail="ps não confirmou o início do processo")
-        command = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "comm="],
-            check=False, capture_output=True, text=True, timeout=2, env=environment,
-        )
-        if command.returncode != 0 or not command.stdout.strip():
-            return ProcessProbe("inconclusive", detail="ps não confirmou o executável do processo")
-        executable = os.path.realpath(command.stdout.strip())
-        token = "macos:" + " ".join(started.stdout.split())
-        return ProcessProbe("alive", ProcessIdentity(pid, token, executable))
-    except (OSError, subprocess.SubprocessError) as error:
-        return ProcessProbe("inconclusive", detail=str(error))
-
-
-def _windows_process_identity(pid: int) -> ProcessProbe:
-    from ctypes import wintypes
-
-    process_query_limited_information = 0x1000
-    invalid_parameter = 87
-
-    class FileTime(ctypes.Structure):
-        _fields_ = (("low", wintypes.DWORD), ("high", wintypes.DWORD))
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
-    if not handle:
-        error = ctypes.get_last_error()
-        if error == invalid_parameter:
-            return ProcessProbe("dead")
-        return ProcessProbe("inconclusive", detail=f"OpenProcess falhou ({error})")
-    try:
-        creation, exit_time, kernel, user = FileTime(), FileTime(), FileTime(), FileTime()
-        if not kernel32.GetProcessTimes(
-            handle, ctypes.byref(creation), ctypes.byref(exit_time),
-            ctypes.byref(kernel), ctypes.byref(user),
-        ):
-            return ProcessProbe("inconclusive", detail="GetProcessTimes falhou")
-        capacity = wintypes.DWORD(32768)
-        buffer = ctypes.create_unicode_buffer(capacity.value)
-        if not kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(capacity)):
-            return ProcessProbe("inconclusive", detail="QueryFullProcessImageNameW falhou")
-        created = (int(creation.high) << 32) | int(creation.low)
-        executable = os.path.normcase(os.path.realpath(buffer.value))
-        return ProcessProbe("alive", ProcessIdentity(pid, f"windows:{created}", executable))
-    finally:
-        kernel32.CloseHandle(handle)
-
-
-def process_identity(pid: int) -> ProcessProbe:
-    if pid <= 0:
-        return ProcessProbe("dead")
-    if sys.platform.startswith("linux"):
-        return _linux_process_identity(pid)
-    if sys.platform == "darwin":
-        return _macos_process_identity(pid)
-    if os.name == "nt":
-        return _windows_process_identity(pid)
-    return ProcessProbe("inconclusive", detail="plataforma sem identidade de processo confiável")
-
-
-def probe_expected_process(pid: int, creation_token: str, executable: str) -> ProcessProbe:
-    actual = process_identity(pid)
-    if actual.status != "alive" or actual.identity is None:
-        return actual
-    same_executable = os.path.normcase(os.path.realpath(actual.identity.executable)) == os.path.normcase(
-        os.path.realpath(executable)
-    )
-    if actual.identity.creation_token != creation_token or not same_executable:
-        return ProcessProbe("identity_mismatch", actual.identity)
-    return actual
-
-
-def read_lock_owner(path: Path) -> dict[str, object]:
-    try:
-        metadata = path.lstat()
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 65536:
-            raise ValueError("lock inseguro")
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
-        raise InstallerError(
-            f"Lock de sessão inválido foi preservado para inspeção: {path}"
-        ) from error
-    required = {
-        "format", "project", "session_id", "controller_pid", "controller_start_token",
-        "controller_executable", "created_at", "installation", "command",
-    }
-    if (
-        not isinstance(data, dict)
-        or set(data) != required
-        or data.get("format") != 1
-        or data.get("project") != "x86qw"
-        or data.get("command") not in {"host", "proxy", "qtv"}
-        or not isinstance(data.get("controller_pid"), int)
-        or not all(isinstance(data.get(field), str) and data.get(field) for field in required - {"format", "controller_pid"})
-    ):
-        raise InstallerError(f"Lock de sessão inválido foi preservado para inspeção: {path}")
-    return data
-
-
-class SessionLock:
-    """Exclusive per-installation controller lock with PID-reuse protection."""
-
-    def __init__(
-        self, target: Path, path: Path, owner: dict[str, object],
-        reclaimed_path: Path | None = None,
-    ) -> None:
-        self.target = target
-        self.path = path
-        self.owner = owner
-        self.session_id = str(owner["session_id"])
-        self.reclaimed_path = reclaimed_path
-
-    @classmethod
-    def acquire(cls, target: Path, command: str) -> SessionLock:
-        target = target.resolve()
-        sessions = target / ".install" / "sessions"
-        ensure_private_directory(sessions.parent)
-        ensure_private_directory(sessions)
-        if os.name != "nt":
-            sessions.parent.chmod(0o700)
-            sessions.chmod(0o700)
-        identity_probe = process_identity(os.getpid())
-        if identity_probe.status != "alive" or identity_probe.identity is None:
-            raise InstallerError(
-                "Não foi possível confirmar a identidade desta CLI; nenhuma sessão foi recuperada."
-            )
-        identity = identity_probe.identity
-        session_id = new_session_id()
-        owner: dict[str, object] = {
-            "format": 1,
-            "project": "x86qw",
-            "session_id": session_id,
-            "controller_pid": identity.pid,
-            "controller_start_token": identity.creation_token,
-            "controller_executable": identity.executable,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "installation": str(target),
-            "command": command,
-        }
-        path = sessions / "active.lock"
-        reclaimed_path: Path | None = None
-        while True:
-            try:
-                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            except FileExistsError:
-                existing = read_lock_owner(path)
-                if existing["installation"] != str(target):
-                    raise InstallerError(f"Lock de sessão pertence a outra instalação: {path}")
-                probe = probe_expected_process(
-                    int(existing["controller_pid"]),
-                    str(existing["controller_start_token"]),
-                    str(existing["controller_executable"]),
-                )
-                if probe.status == "alive":
-                    raise InstallerError(
-                        "Já existe uma sessão x86QW ativa nesta instalação.\n"
-                        f"Sessão: {existing['session_id']}\n"
-                        f"Controlador: PID {existing['controller_pid']}\n"
-                        f"Comando: {existing['command']}"
-                    )
-                if probe.status == "inconclusive":
-                    raise InstallerError(
-                        "Não foi possível confirmar se a sessão x86QW existente terminou; "
-                        f"lock e journal foram preservados em {sessions}."
-                    )
-                assert_recovery_processes_confirmable(target, str(existing["session_id"]))
-                candidate = sessions / f".active.lock.reclaimed.{session_id}"
-                try:
-                    os.replace(path, candidate)
-                except FileNotFoundError:
-                    continue
-                reclaimed_path = candidate
-                continue
-            try:
-                payload = (json.dumps(owner, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
-                os.write(descriptor, payload)
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
-            if os.name != "nt":
-                path.chmod(0o600)
-            return cls(target, path, owner, reclaimed_path)
-
-    def confirm_recovery(self) -> None:
-        if self.reclaimed_path is not None and lexists(self.reclaimed_path):
-            remove_path(self.reclaimed_path)
-        self.reclaimed_path = None
-
-    def release(self, *, restore_reclaimed: bool = False) -> None:
-        if lexists(self.path):
-            try:
-                current = read_lock_owner(self.path)
-            except InstallerError:
-                current = None
-            if current is not None and current.get("session_id") == self.session_id:
-                remove_path(self.path)
-        if self.reclaimed_path is not None and lexists(self.reclaimed_path):
-            if restore_reclaimed and not lexists(self.path):
-                os.replace(self.reclaimed_path, self.path)
-            else:
-                remove_path(self.reclaimed_path)
-        self.reclaimed_path = None
-
-
 class SessionJournal:
     """Private, append-safe description of ephemeral service session state."""
 
@@ -701,14 +477,16 @@ class SessionJournal:
     def record_temporary(self, path: Path, origin: str, *, sensitive: bool) -> None:
         entries = self.data["temporary_files"]
         assert isinstance(entries, list)
-        entries.append({
+        entry: dict[str, object] = {
             "path": self._relative(path),
-            "expected_hash": file_sha256(path),
             "origin": origin,
             "created_by_session": True,
             "type": "temporary-config",
             "sensitive": sensitive,
-        })
+        }
+        if not sensitive:
+            entry["expected_hash"] = file_sha256(path)
+        entries.append(entry)
         self._write()
 
     def record_materialized(self, entry: MaterializedFile) -> None:
@@ -762,13 +540,72 @@ def load_session_journal(path: Path) -> dict[str, object]:
         if path.is_symlink() or not path.is_file():
             raise ValueError("journal inseguro")
         data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("format") != 1 or data.get("project") != "x86qw":
+        required = {
+            "format", "project", "session_id", "created_at", "status", "controller",
+            "processes", "temporary_files", "materialized_files", "created_directories",
+        }
+        optional = {"recovery_actions", "recovered_at"}
+        if (
+            not isinstance(data, dict)
+            or set(data) < required
+            or set(data) - required - optional
+            or data.get("format") != 1
+            or data.get("project") != "x86qw"
+            or not isinstance(data.get("session_id"), str)
+            or not data.get("session_id")
+            or not isinstance(data.get("created_at"), str)
+            or data.get("status") not in {"starting", "running", "stopping", "interrupted", "clean"}
+            or not all(isinstance(data.get(field), list) for field in (
+                "processes", "temporary_files", "materialized_files", "created_directories",
+            ))
+        ):
             raise ValueError("identidade inválida")
+        controller = data.get("controller")
+        if controller is not None and (
+            not isinstance(controller, dict)
+            or set(controller) != {"pid", "creation_token", "executable", "command"}
+            or not isinstance(controller.get("pid"), int)
+            or not all(
+                isinstance(controller.get(field), str) and controller.get(field)
+                for field in ("creation_token", "executable", "command")
+            )
+        ):
+            raise ValueError("controlador inválido")
+        for entry in data["processes"]:
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("pid"), int)
+                or not isinstance(entry.get("label"), str)
+            ):
+                raise ValueError("processo inválido")
+        for collection in ("temporary_files", "materialized_files"):
+            for entry in data[collection]:
+                if (
+                    not isinstance(entry, dict)
+                    or not isinstance(entry.get("path"), str)
+                    or not isinstance(entry.get("created_by_session"), bool)
+                    or not isinstance(entry.get("sensitive"), bool)
+                ):
+                    raise ValueError("arquivo inválido")
+        if not all(isinstance(relative, str) for relative in data["created_directories"]):
+            raise ValueError("diretório inválido")
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         raise InstallerError(
             f"Journal de sessão inválido preservado para inspeção: {path.parent}"
         ) from error
     return data
+
+
+def journal_controller_probe(data: dict[str, object]) -> ProcessProbe | None:
+    controller = data.get("controller")
+    if controller is None:
+        return None
+    assert isinstance(controller, dict)
+    return probe_expected_process(
+        int(controller["pid"]),
+        str(controller["creation_token"]),
+        str(controller["executable"]),
+    )
 
 
 def journal_process_probe(entry: object) -> ProcessProbe:
@@ -808,8 +645,20 @@ def assert_recovery_processes_confirmable(target: Path, session_id: str | None =
         if data.get("status") == "clean":
             continue
         processes = data.get("processes", [])
-        if not isinstance(processes, list):
-            raise InstallerError(f"Processos inválidos no journal preservado: {path.parent}")
+        assert isinstance(processes, list)
+        controller_probe = journal_controller_probe(data)
+        if controller_probe is not None and controller_probe.status == "alive":
+            controller = data["controller"]
+            assert isinstance(controller, dict)
+            raise InstallerError(
+                "O controlador registrado no journal continua ativo; recuperação bloqueada.\n"
+                f"Sessão: {data['session_id']}\nControlador: PID {controller['pid']}"
+            )
+        if controller_probe is not None and controller_probe.status == "inconclusive":
+            raise InstallerError(
+                "Não foi possível confirmar o controlador do journal; lock, processos e arquivos "
+                f"foram preservados em {path.parent}."
+            )
         for entry in processes:
             probe = journal_process_probe(entry)
             if probe.status == "inconclusive":
@@ -818,24 +667,32 @@ def assert_recovery_processes_confirmable(target: Path, session_id: str | None =
                     f"Não foi possível confirmar a identidade de {label} na sessão abandonada; "
                     f"lock, journal e arquivos foram preservados em {path.parent}."
                 )
+            if controller_probe is None and probe.status == "alive":
+                raise InstallerError(
+                    "Journal legado possui processo vivo e não prova que seu controlador terminou; "
+                    f"processos e arquivos foram preservados em {path.parent}."
+                )
 
 
 def process_still_matches(entry: dict[str, object]) -> bool:
     probe = journal_process_probe(entry)
-    return probe.status == "alive"
+    if probe.status == "alive":
+        return True
+    if probe.status != "dead" or os.name == "nt":
+        return False
+    process_group = entry.get("process_group")
+    return (
+        isinstance(process_group, int)
+        and process_group == entry.get("pid")
+        and process_group > 1
+        and posix_process_group_status(process_group) == "alive"
+    )
 
 
 def signal_recorded_process(entry: dict[str, object], *, force: bool) -> None:
     pid = int(entry["pid"])
     if os.name == "nt":
-        process_terminate = 0x0001
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        handle = kernel32.OpenProcess(process_terminate, False, pid)
-        if handle:
-            try:
-                kernel32.TerminateProcess(handle, 1 if force else 0)
-            finally:
-                kernel32.CloseHandle(handle)
+        session_control.terminate_windows_process(pid, 1 if force else 0)
         return
     process_group = entry.get("process_group")
     selected_signal = signal.SIGKILL if force else signal.SIGTERM
@@ -848,10 +705,24 @@ def signal_recorded_process(entry: dict[str, object], *, force: bool) -> None:
 def terminate_recorded_process(entry: dict[str, object], timeout: float = 4.0) -> str:
     probe = journal_process_probe(entry)
     if probe.status == "dead":
-        return "already_dead"
+        process_group = entry.get("process_group")
+        if (
+            os.name == "nt"
+            or not isinstance(process_group, int)
+            or process_group != entry.get("pid")
+            or process_group <= 1
+        ):
+            return "already_dead"
+        group_status = posix_process_group_status(process_group)
+        if group_status == "dead":
+            return "already_dead"
+        if group_status == "inconclusive":
+            raise InstallerError(
+                f"O líder PID {entry['pid']} terminou, mas seu grupo ficou inconclusivo."
+            )
     if probe.status == "identity_mismatch":
         return "identity_mismatch"
-    if probe.status != "alive":
+    if probe.status not in {"alive", "dead"}:
         raise InstallerError("A identidade de um processo órfão ficou inconclusiva.")
     try:
         signal_recorded_process(entry, force=False)
@@ -903,13 +774,29 @@ def reconcile_journal(target: Path, path: Path) -> None:
     except InstallerError:
         console.warning(f"Journal de sessão inválido preservado para inspeção: {path.parent}")
         return
+    controller_probe = journal_controller_probe(data)
+    if controller_probe is not None and controller_probe.status == "alive":
+        raise InstallerError(
+            f"O controlador da sessão {data['session_id']} continua ativo; recuperação bloqueada."
+        )
+    if controller_probe is not None and controller_probe.status == "inconclusive":
+        raise InstallerError(
+            f"O controlador da sessão {data['session_id']} está inconclusivo; estado preservado."
+        )
     data["status"] = "interrupted"
     actions = data.setdefault("recovery_actions", [])
     if not isinstance(actions, list):
         raise InstallerError(f"Ações de recuperação inválidas no journal: {path.parent}")
     processes = data.get("processes", [])
-    if not isinstance(processes, list):
-        raise InstallerError(f"Processos inválidos no journal: {path.parent}")
+    assert isinstance(processes, list)
+    if controller_probe is None:
+        for entry in processes:
+            legacy_probe = journal_process_probe(entry)
+            if legacy_probe.status in {"alive", "inconclusive"}:
+                raise InstallerError(
+                    "Journal legado não prova que seu controlador terminou; "
+                    f"processos e arquivos foram preservados em {path.parent}."
+                )
     for entry in reversed(processes):
         probe = journal_process_probe(entry)
         if probe.status == "inconclusive":
@@ -938,7 +825,7 @@ def reconcile_journal(target: Path, path: Path) -> None:
             if candidate is None or not lexists(candidate):
                 continue
             if sensitive:
-                remove_path(candidate)
+                unlink_sensitive_temporary(candidate)
             elif (
                 isinstance(expected, str)
                 and candidate.is_file()
@@ -969,6 +856,20 @@ def recover_sessions(target: Path) -> None:
         reconcile_journal(target, path)
 
 
+def unlink_sensitive_temporary(path: Path) -> None:
+    """Unlink one sensitive temporary without traversing a replacement path."""
+    if not lexists(path):
+        return
+    metadata = path.lstat()
+    if stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        path.unlink()
+        return
+    kind = "diretório" if stat.S_ISDIR(metadata.st_mode) else "arquivo especial"
+    raise InstallerError(
+        f"Temporário sensível foi substituído por {kind} e foi preservado para inspeção: {path}"
+    )
+
+
 def cleanup_current_session(
     journal: SessionJournal | None,
     temporary_paths: list[Path],
@@ -982,7 +883,7 @@ def cleanup_current_session(
             temporary_hashes = {
                 str(entry.get("path")): str(entry.get("expected_hash"))
                 for entry in entries
-                if isinstance(entry, dict)
+                if isinstance(entry, dict) and isinstance(entry.get("expected_hash"), str)
             }
             sensitive_paths = {
                 str(entry.get("path"))
@@ -995,7 +896,7 @@ def cleanup_current_session(
         relative = journal._relative(path) if journal is not None else ""
         expected = temporary_hashes.get(relative)
         if relative in sensitive_paths:
-            remove_path(path)
+            unlink_sensitive_temporary(path)
         elif (
             expected is not None
             and path.is_file()
@@ -1021,6 +922,50 @@ def cleanup_current_session(
                 ):
                     journal.mark_modified(journal._relative(entry.path))
         cleanup_dedicated_ktx(materialized)
+
+
+@contextmanager
+def finalize_service_operation(resources: ServiceResources):
+    """Guarantee independent cleanup attempts before the controller exits."""
+    try:
+        yield
+    finally:
+        original_error = sys.exc_info()[0] is not None
+        cleanup_errors: list[str] = []
+        if resources.journal is not None:
+            try:
+                resources.journal.set_status("stopping")
+            except Exception as error:
+                cleanup_errors.append(f"journal em stopping: {error}")
+        cleanup_ok = True
+        try:
+            cleanup_current_session(
+                resources.journal, resources.temporary_paths, resources.materialized_ktx,
+            )
+        except Exception as error:
+            cleanup_ok = False
+            cleanup_errors.append(f"conteúdo efêmero: {error}")
+        if resources.journal is not None:
+            try:
+                resources.journal.set_status("clean" if cleanup_ok else "interrupted")
+            except Exception as error:
+                cleanup_errors.append(f"estado final do journal: {error}")
+        if resources.installer is not None:
+            try:
+                resources.installer.cleanup_stage()
+            except Exception as error:
+                cleanup_errors.append(f"área temporária do instalador: {error}")
+        if resources.session_lock is not None:
+            try:
+                resources.session_lock.release(
+                    restore_reclaimed=not resources.recovery_confirmed,
+                )
+            except Exception as error:
+                cleanup_errors.append(f"lock da instalação: {error}")
+        for error in cleanup_errors:
+            console.warning(f"Falha durante a finalização de {error}")
+        if cleanup_errors and not original_error:
+            raise InstallerError("A sessão terminou com falha crítica de finalização.")
 
 
 def runtime_variant(
@@ -1101,7 +1046,10 @@ def temporary_config(
         return path
     except Exception:
         if lexists(path):
-            remove_path(path)
+            if sensitive:
+                unlink_sensitive_temporary(path)
+            else:
+                remove_path(path)
         raise
 
 
@@ -1663,13 +1611,29 @@ def wait_udp_readiness(
 
 
 def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
+    groups: list[int] = []
     for process in reversed(processes):
-        if process.poll() is None:
+        if os.name != "nt" and isinstance(process, POPEN_TYPE):
+            process_group = int(getattr(process, "_x86qw_process_group", process.pid))
+            if process_group > 1 and process_group not in groups:
+                groups.append(process_group)
+            status = posix_process_group_status(process_group)
+            if status == "inconclusive":
+                raise InstallerError(
+                    f"Não foi possível confirmar o grupo de processos {process_group}; estado preservado."
+                )
+            if status == "alive":
+                try:
+                    os.killpg(process_group, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                except OSError as error:
+                    raise InstallerError(
+                        f"Não foi possível encerrar o grupo de processos {process_group}."
+                    ) from error
+        elif process.poll() is None:
             try:
-                if os.name != "nt" and isinstance(process, POPEN_TYPE):
-                    os.killpg(int(getattr(process, "_x86qw_process_group", process.pid)), signal.SIGTERM)
-                else:
-                    process.terminate()
+                process.terminate()
             except OSError:
                 pass
     deadline = time.monotonic() + 4
@@ -1678,14 +1642,167 @@ def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
             try:
                 process.wait(max(0.0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
-                try:
-                    if os.name != "nt" and isinstance(process, POPEN_TYPE):
-                        os.killpg(int(getattr(process, "_x86qw_process_group", process.pid)), signal.SIGKILL)
-                    else:
+                if os.name == "nt" or not isinstance(process, POPEN_TYPE):
+                    try:
                         process.kill()
-                    process.wait()
-                except OSError:
-                    pass
+                        process.wait()
+                    except OSError:
+                        pass
+    for process_group in groups:
+        status = posix_process_group_status(process_group)
+        if status == "inconclusive":
+            raise InstallerError(
+                f"Não foi possível confirmar o encerramento do grupo {process_group}."
+            )
+        if status == "alive":
+            try:
+                os.killpg(process_group, signal.SIGKILL)
+            except ProcessLookupError:
+                continue
+            except OSError as error:
+                raise InstallerError(
+                    f"Não foi possível forçar o encerramento do grupo {process_group}."
+                ) from error
+            group_deadline = time.monotonic() + 1.0
+            while time.monotonic() < group_deadline:
+                if posix_process_group_status(process_group) == "dead":
+                    break
+                time.sleep(0.05)
+            else:
+                raise InstallerError(
+                    f"O grupo de processos {process_group} permaneceu ativo após SIGKILL."
+                )
+
+
+def posix_process_group_status(process_group: int) -> str:
+    if sys.platform.startswith("linux"):
+        proc = Path("/proc")
+        try:
+            members = False
+            for candidate in proc.iterdir():
+                if not candidate.name.isdigit():
+                    continue
+                try:
+                    stat_text = (candidate / "stat").read_text(encoding="ascii")
+                    closing = stat_text.rfind(")")
+                    fields = stat_text[closing + 2:].split() if closing >= 0 else []
+                    if len(fields) > 2 and int(fields[2]) == process_group:
+                        members = True
+                        if fields[0] != "Z":
+                            return "alive"
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                except (OSError, UnicodeError, ValueError):
+                    return "inconclusive"
+            if members:
+                return "dead"
+        except (OSError, UnicodeError):
+            return "inconclusive"
+    try:
+        os.killpg(process_group, 0)
+        return "alive"
+    except ProcessLookupError:
+        return "dead"
+    except PermissionError:
+        return "inconclusive"
+    except OSError as error:
+        if error.errno == errno.ESRCH:
+            return "dead"
+        if error.errno == errno.EPERM:
+            return "inconclusive"
+        return "inconclusive"
+
+
+def _windows_job_kernel32():
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+    ]
+    kernel32.SetInformationJobObject.restype = wintypes.BOOL
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    return kernel32
+
+
+class WindowsJobObject:
+    """Own a Windows process tree and terminate it when the controller closes."""
+
+    def __init__(self) -> None:
+        from ctypes import wintypes
+
+        class IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("read_operations", ctypes.c_ulonglong),
+                ("write_operations", ctypes.c_ulonglong),
+                ("other_operations", ctypes.c_ulonglong),
+                ("read_bytes", ctypes.c_ulonglong),
+                ("write_bytes", ctypes.c_ulonglong),
+                ("other_bytes", ctypes.c_ulonglong),
+            ]
+
+        class BasicLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("per_process_user_time", ctypes.c_longlong),
+                ("per_job_user_time", ctypes.c_longlong),
+                ("limit_flags", wintypes.DWORD),
+                ("minimum_working_set", ctypes.c_size_t),
+                ("maximum_working_set", ctypes.c_size_t),
+                ("active_process_limit", wintypes.DWORD),
+                ("affinity", ctypes.c_size_t),
+                ("priority_class", wintypes.DWORD),
+                ("scheduling_class", wintypes.DWORD),
+            ]
+
+        class ExtendedLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("basic", BasicLimitInformation),
+                ("io", IoCounters),
+                ("process_memory_limit", ctypes.c_size_t),
+                ("job_memory_limit", ctypes.c_size_t),
+                ("peak_process_memory", ctypes.c_size_t),
+                ("peak_job_memory", ctypes.c_size_t),
+            ]
+
+        self.kernel32 = _windows_job_kernel32()
+        self.handle = self.kernel32.CreateJobObjectW(None, None)
+        if not self.handle:
+            raise InstallerError(
+                f"Não foi possível criar o Job Object dos serviços ({ctypes.get_last_error()})."
+            )
+        information = ExtendedLimitInformation()
+        information.basic.limit_flags = 0x00002000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not self.kernel32.SetInformationJobObject(
+            self.handle, 9, ctypes.byref(information), ctypes.sizeof(information),
+        ):
+            error = ctypes.get_last_error()
+            self.kernel32.CloseHandle(self.handle)
+            self.handle = None
+            raise InstallerError(f"Não foi possível configurar o Job Object ({error}).")
+
+    def assign(self, process: subprocess.Popen[bytes]) -> None:
+        if self.handle is None or not self.kernel32.AssignProcessToJobObject(
+            self.handle, int(process._handle),  # type: ignore[attr-defined]
+        ):
+            raise InstallerError(
+                f"Não foi possível associar PID {process.pid} ao Job Object "
+                f"({ctypes.get_last_error()})."
+            )
+
+    def close(self) -> None:
+        if self.handle is None:
+            return
+        handle = self.handle
+        self.handle = None
+        if not self.kernel32.CloseHandle(handle):
+            raise InstallerError(
+                f"Não foi possível fechar o Job Object ({ctypes.get_last_error()})."
+            )
 
 
 def apply_startup_rcon(startup: StartupRcon, timeout: float = 8.0) -> None:
@@ -1746,6 +1863,7 @@ class ServiceSignal(Exception):
 def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = None) -> int:
     processes: list[subprocess.Popen[bytes]] = []
     previous_handlers: dict[int, object] = {}
+    windows_job = WindowsJobObject() if os.name == "nt" else None
 
     def interrupted(signum: int, _frame: object) -> None:
         raise ServiceSignal(signum)
@@ -1764,6 +1882,23 @@ def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = Non
             else:
                 popen_options["start_new_session"] = True
             process = subprocess.Popen(spec.arguments, cwd=spec.cwd, **popen_options)
+            if windows_job is not None:
+                try:
+                    windows_job.assign(process)
+                except Exception:
+                    try:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=4)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=1)
+                    except Exception as cleanup_error:
+                        console.warning(
+                            f"Falha ao encerrar PID {process.pid} após associação recusada: "
+                            f"{cleanup_error}"
+                        )
+                    raise
             process_group = process.pid
             setattr(process, "_x86qw_process_group", process_group)
             processes.append(process)
@@ -1798,12 +1933,29 @@ def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = Non
     except OSError as error:
         raise InstallerError(f"Não foi possível iniciar um serviço: {error}") from error
     finally:
-        stop_processes(processes)
+        original_error = sys.exc_info()[0] is not None
+        finalization_errors: list[Exception] = []
+        try:
+            stop_processes(processes)
+        except Exception as error:
+            finalization_errors.append(error)
+        try:
+            if windows_job is not None:
+                windows_job.close()
+        except Exception as error:
+            finalization_errors.append(error)
         for signum, handler in previous_handlers.items():
             try:
                 signal.signal(signum, handler)
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as error:
+                finalization_errors.append(error)
+        for error in finalization_errors:
+            console.warning(f"Falha ao finalizar árvore de processos: {error}")
+        if finalization_errors and not original_error:
+            first = finalization_errors[0]
+            if isinstance(first, InstallerError):
+                raise first
+            raise InstallerError("Falha ao finalizar a árvore de processos.") from first
 
 
 def add_target(parser: argparse.ArgumentParser, project_root: Path) -> None:
@@ -1901,82 +2053,85 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
 def main(arguments: list[str] | None = None) -> int:
     temporary_paths: list[Path] = []
     materialized_ktx: list[MaterializedKtx] = []
-    installer = None
-    journal: SessionJournal | None = None
-    session_lock: SessionLock | None = None
-    recovery_confirmed = False
+    resources = ServiceResources(temporary_paths, materialized_ktx)
     try:
-        options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
-        console.configure(verbose=options.verbose, no_color=options.no_color)
-        resolve_passwords(options)
-        warn_external_bind(options)
-        target = options.target.expanduser().resolve()
-        installer = gameplay.Player(
-            core.PROJECT_ROOT, target, online_only=core.ZIPAPP_PATH is not None,
-        )
-        installer.validate_target("verify", purge=False)
-        installer.reject_target_symlinks()
-        session_lock = SessionLock.acquire(target, options.action)
-        recover_sessions(target)
-        session_lock.confirm_recovery()
-        recovery_confirmed = True
-        preflight_ports(requested_ports(options))
+        with finalize_service_operation(resources):
+            options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
+            console.configure(verbose=options.verbose, no_color=options.no_color)
+            resolve_passwords(options)
+            warn_external_bind(options)
+            target = options.target.expanduser().resolve()
+            installer = gameplay.Player(
+                core.PROJECT_ROOT, target, online_only=core.ZIPAPP_PATH is not None,
+            )
+            resources.installer = installer
+            installer.validate_target("verify", purge=False)
+            installer.reject_target_symlinks()
+            session_lock = SessionLock.acquire(target, options.action)
+            resources.session_lock = session_lock
+            recover_sessions(target)
+            session_lock.confirm_recovery()
+            resources.recovery_confirmed = True
+            preflight_ports(requested_ports(options))
 
-        if options.action == "proxy":
-            console.banner("iniciar QWFWD", target)
-            spec = proxy_spec(installer, options)
+            if options.action == "proxy":
+                console.banner("iniciar QWFWD", target)
+                spec = proxy_spec(installer, options)
+                journal = SessionJournal(
+                    target, session_id=session_lock.session_id, controller=session_lock.owner,
+                )
+                resources.journal = journal
+                console.info(f"Proxy local: {options.proxy_bind}:{options.proxy_port}/UDP")
+                return run_processes([spec], journal)
+            if options.action == "qtv":
+                console.banner("iniciar QTV", target)
+                journal = SessionJournal(
+                    target, session_id=session_lock.session_id, controller=session_lock.owner,
+                )
+                resources.journal = journal
+                spec = qtv_spec(
+                    installer, bind=options.bind, port=options.port,
+                    hostname=options.hostname, upstream=options.upstream,
+                    password=options.qtv_password, session_paths=temporary_paths,
+                    journal=journal,
+                )
+                console.info(f"QTV HTTP: http://{endpoint(options.bind, options.port)}/")
+                return run_processes([spec], journal)
+
+            console.banner("hospedar jogo com MVDSV", target)
+            selection = select_hosted_game(installer, options)
+            hostname = options.hostname or f"x86QW - {selection.game.label}"
+            safe_text(options.password, "senha de jogador") if options.password else None
+            safe_text(options.spectator_password, "senha de espectador") if options.spectator_password else None
+            safe_text(options.rcon_password, "senha RCON") if options.rcon_password else None
+            safe_text(options.qtv_password, "senha QTV") if options.qtv_password else None
             journal = SessionJournal(
                 target, session_id=session_lock.session_id, controller=session_lock.owner,
             )
-            console.info(f"Proxy local: {options.proxy_bind}:{options.proxy_port}/UDP")
-            return run_processes([spec], journal)
-        if options.action == "qtv":
-            console.banner("iniciar QTV", target)
-            journal = SessionJournal(
-                target, session_id=session_lock.session_id, controller=session_lock.owner,
+            resources.journal = journal
+            host = host_spec(
+                installer, options, selection, temporary_paths, materialized_ktx, journal,
             )
-            spec = qtv_spec(
-                installer, bind=options.bind, port=options.port,
-                hostname=options.hostname, upstream=options.upstream,
-                password=options.qtv_password, session_paths=temporary_paths,
-                journal=journal,
+            specs: list[ProcessSpec] = [host]
+            if options.with_qtv:
+                specs.append(qtv_spec(
+                    installer, bind=options.qtv_bind, port=options.qtv_port,
+                    hostname=f"{hostname} QTV",
+                    upstream=host_qtv_upstream(options.bind, options.port),
+                    password=options.qtv_password, session_paths=temporary_paths,
+                    journal=journal,
+                ))
+            if options.with_proxy:
+                specs.append(proxy_spec(installer, options))
+            label = selection.game.label
+            if selection.mode is not None:
+                label += f" · {selection.mode.label}"
+            console.info(
+                f"Servidor: connect {options.bind}:{options.port} · {label} em {selection.map_name}"
             )
-            console.info(f"QTV HTTP: http://{endpoint(options.bind, options.port)}/")
-            return run_processes([spec], journal)
-
-        console.banner("hospedar jogo com MVDSV", target)
-        selection = select_hosted_game(installer, options)
-        hostname = options.hostname or f"x86QW - {selection.game.label}"
-        safe_text(options.password, "senha de jogador") if options.password else None
-        safe_text(options.spectator_password, "senha de espectador") if options.spectator_password else None
-        safe_text(options.rcon_password, "senha RCON") if options.rcon_password else None
-        safe_text(options.qtv_password, "senha QTV") if options.qtv_password else None
-        journal = SessionJournal(
-            target, session_id=session_lock.session_id, controller=session_lock.owner,
-        )
-        host = host_spec(
-            installer, options, selection, temporary_paths, materialized_ktx, journal,
-        )
-        specs: list[ProcessSpec] = [host]
-        if options.with_qtv:
-            specs.append(qtv_spec(
-                installer, bind=options.qtv_bind, port=options.qtv_port,
-                hostname=f"{hostname} QTV",
-                upstream=host_qtv_upstream(options.bind, options.port),
-                password=options.qtv_password, session_paths=temporary_paths,
-                journal=journal,
-            ))
-        if options.with_proxy:
-            specs.append(proxy_spec(installer, options))
-        label = selection.game.label
-        if selection.mode is not None:
-            label += f" · {selection.mode.label}"
-        console.info(
-            f"Servidor: connect {options.bind}:{options.port} · {label} em {selection.map_name}"
-        )
-        if options.with_qtv:
-            console.info(f"QTV HTTP: http://{endpoint(options.qtv_bind, options.qtv_port)}/")
-        return run_processes(specs, journal)
+            if options.with_qtv:
+                console.info(f"QTV HTTP: http://{endpoint(options.qtv_bind, options.qtv_port)}/")
+            return run_processes(specs, journal)
     except InstallerError as error:
         console.error(str(error))
         return 1
@@ -1986,25 +2141,6 @@ def main(arguments: list[str] | None = None) -> int:
             traceback.print_exc()
         console.error(f"Falha inesperada nos serviços x86QW: {error}")
         return 1
-    finally:
-        if journal is not None:
-            try:
-                journal.set_status("stopping")
-            except Exception:
-                pass
-        cleanup_current_session(journal, temporary_paths, materialized_ktx)
-        if journal is not None:
-            try:
-                journal.set_status("clean")
-            except Exception as error:
-                console.warning(f"Não foi possível finalizar o journal da sessão: {error}")
-        if installer is not None:
-            installer.cleanup_stage()
-        if session_lock is not None:
-            try:
-                session_lock.release(restore_reclaimed=not recovery_confirmed)
-            except Exception as error:
-                console.warning(f"Não foi possível liberar o lock da sessão: {error}")
 
 
 if __name__ == "__main__":

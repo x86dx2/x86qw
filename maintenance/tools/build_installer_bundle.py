@@ -38,6 +38,7 @@ ZIPAPP_FILES = (
     ("dist/installer/bin/manager.py", "manager.py"),
     ("dist/installer/bin/gameplay.py", "gameplay.py"),
     ("dist/installer/bin/services.py", "services.py"),
+    ("dist/installer/bin/session_control.py", "session_control.py"),
     ("dist/mods/ktx/1.47/x86qw/modes.json", "_x86qw/ktx-modes.json"),
     ("maintenance/__init__.py", "maintenance/__init__.py"),
     ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),
