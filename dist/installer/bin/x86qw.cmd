@@ -1,6 +1,6 @@
 @echo off
-set "X86QW_ROOT=%~dp0"
-set "X86QW_APP=%X86QW_ROOT%.install\cli\x86qw.pyz"
+for %%I in ("%~dp0.") do set "X86QW_ROOT=%%~fI"
+set "X86QW_APP=%X86QW_ROOT%\.install\cli\x86qw.pyz"
 if "%~1"=="" goto help
 if /I "%~1"=="help" goto help
 if /I "%~1"=="-h" goto help
