@@ -6,7 +6,7 @@ publicação ou incorporação automática de conteúdo.
 
 Baseline inicial sincronizado: branch `main`, commit
 `3a95da88f7d6a978473115520ffe903560edfdd6`, em 31 de julho de 2026. As
-correções de código desta linha têm como baseline `bd2c2de` na branch
+correções de código desta linha têm como baseline `221522f` na branch
 `codex/fix-0.2.1-session-lifecycle`.
 
 ## Escala de estado

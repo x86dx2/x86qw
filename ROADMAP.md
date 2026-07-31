@@ -8,7 +8,7 @@ detalhado do ecossistema está em
 
 Baseline inicial sincronizado: `3a95da88f7d6a978473115520ffe903560edfdd6`,
 branch `main`, em 31 de julho de 2026. Baseline das correções de código desta
-linha: `bd2c2de` na branch `codex/fix-0.2.1-session-lifecycle`.
+linha: `221522f` na branch `codex/fix-0.2.1-session-lifecycle`.
 
 - instalador público `0.2.0`, já publicado e verificado; `0.1.25` permanece
   imutável no histórico;
