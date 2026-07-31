@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import os
@@ -917,10 +918,6 @@ class Player(core.Installer):
         ktx_options: KtxLaunchOptions | None = None,
     ) -> None:
         self.check_paks()
-        self.migrate_saved_configs()
-        self.remove_legacy_macos_video_layout()
-        self.configure_macos_fullscreen()
-        self.refresh_qw_package_order()
         games = self.available_local_games()
         if not games:
             raise InstallerError(
@@ -939,7 +936,6 @@ class Player(core.Installer):
         installed_component = self.installed_component_for_game(game)
         if installed_component is None:
             raise InstallerError(f"O componente de {game.label} não está mais instalado.")
-        self.migrate_mutable_component_defaults(installed_component)
         self.verify_component(installed_component)
         ktx_mode = None
         ktx_assets: frozenset[str] | None = None
@@ -964,7 +960,7 @@ class Player(core.Installer):
             )
         else:
             map_name = self.choose_local_map(game, requested_map=map_key)
-        self.ensure_local_play_support(games)
+        self.verify_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = ["+sb_listcache", "0", "+spectator", "0"]
         for name, value in game.local_server_settings:
@@ -1026,6 +1022,46 @@ class Player(core.Installer):
         self.launch_runtime(runtime, arguments)
         console.success(f"{label} aberto com {selection}.")
 
+    def expected_local_play_support(self, games: list[LocalGameSpec]) -> dict[str, bytes]:
+        return {
+            game.play_support_gamecode: self.local_game_program(game)
+            for game in games
+            if game.play_support_gamecode is not None
+        }
+
+    def local_play_support_issues(self, games: list[LocalGameSpec]) -> list[str]:
+        expected = self.expected_local_play_support(games)
+        present, entries, _ = self.validate_component_pair("play-support")
+        issues: list[str] = []
+        recorded = dict(entries) if present else {}
+        expected_hashes = {
+            relative: hashlib.sha256(payload).hexdigest()
+            for relative, payload in expected.items()
+        }
+        if recorded != expected_hashes:
+            issues.append("recibo play-support ausente ou divergente")
+        for relative, digest in expected_hashes.items():
+            destination = self.target.joinpath(*PurePosixPath(relative).parts)
+            if (
+                not destination.is_file()
+                or destination.is_symlink()
+                or file_hash(destination) != digest
+            ):
+                issues.append(f"gamecode derivado ausente ou divergente: {relative}")
+        for game in games:
+            destination = self.target.joinpath(*PurePosixPath(game.personal_config).parts)
+            if not destination.is_file() or destination.is_symlink():
+                issues.append(f"configuração pessoal ausente: {game.personal_config}")
+        return issues
+
+    def verify_local_play_support(self, games: list[LocalGameSpec]) -> None:
+        issues = self.local_play_support_issues(games)
+        if issues:
+            raise InstallerError(
+                "Suporte de execução incompleto (" + "; ".join(issues) + "). "
+                "Execute update, upgrade ou repair antes de jogar ou hospedar."
+            )
+
     def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
         present, old_entries, _ = self.validate_component_pair("play-support")
         if not games:
@@ -1039,22 +1075,20 @@ class Player(core.Installer):
         try:
             managed = self.stage / "managed"
             prepared = 0
-            for game in games:
-                files: dict[str, bytes] = {}
-                if game.play_support_gamecode is not None:
-                    files[game.play_support_gamecode] = self.local_game_program(game)
-                for relative, payload in files.items():
-                    destination = self.target / relative
-                    if lexists(destination):
-                        if not destination.is_file() or destination.is_symlink():
-                            raise InstallerError(f"Suporte local inválido: {destination}")
-                        if old.get(relative) != file_hash(destination):
-                            console.warning(f"Arquivo pessoal preservado: {destination}")
-                            continue
-                    candidate = managed / relative
-                    candidate.parent.mkdir(parents=True, exist_ok=True)
-                    candidate.write_bytes(payload)
-                    prepared += 1
+            for relative, payload in self.expected_local_play_support(games).items():
+                destination = self.target.joinpath(*PurePosixPath(relative).parts)
+                expected_digest = hashlib.sha256(payload).hexdigest()
+                if lexists(destination):
+                    if not destination.is_file() or destination.is_symlink():
+                        raise InstallerError(f"Suporte local inválido: {destination}")
+                    current_digest = file_hash(destination)
+                    if current_digest != expected_digest and old.get(relative) != current_digest:
+                        console.warning(f"Arquivo pessoal preservado: {destination}")
+                        continue
+                candidate = managed.joinpath(*PurePosixPath(relative).parts)
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                candidate.write_bytes(payload)
+                prepared += 1
             if prepared:
                 count = self.install_component_overlay(
                     "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",

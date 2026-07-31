@@ -847,6 +847,60 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(["ktx"], migrated["recorded_components"])
             self.assertNotIn("nquake-sounds", migrated["known_components"])
 
+    def test_format_one_state_migrates_once_without_changing_custom_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            selected = ["ktx", "qtv", "qwfwd"]
+            historical = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": list(selected),
+                "recorded_components": list(selected),
+                "known_components": list(installer.components),
+            }
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(historical), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "installed_components", return_value=list(selected)):
+                    migrated = installer.load_install_state(persist_migration=True)
+                    loaded_again = installer.load_install_state(persist_migration=True)
+            self.assertEqual(2, migrated["format"])
+            self.assertEqual("custom", migrated["profile"])
+            self.assertEqual(selected, migrated["requested_components"])
+            self.assertEqual(selected, migrated["recorded_components"])
+            self.assertEqual([], migrated["capabilities"])
+            self.assertEqual(
+                install_qw.profile_fingerprint(selected), migrated["component_fingerprint"],
+            )
+            self.assertEqual(migrated, loaded_again)
+            persisted = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(migrated, persisted)
+
+    def test_format_two_state_preserves_recorded_capabilities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            selected = ["mvdsv", "qtv"]
+            capabilities = ["dedicated-server", "qtv"]
+            state = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": list(selected),
+                "recorded_components": list(selected),
+                "known_components": list(installer.components),
+                "capabilities": capabilities,
+                "component_fingerprint": install_qw.profile_fingerprint(selected),
+            }
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            with mock.patch.object(installer, "installed_components", return_value=list(selected)):
+                loaded = installer.load_install_state(persist_migration=True)
+            self.assertEqual(capabilities, loaded["capabilities"])
+            self.assertEqual(state, json.loads(state_path.read_text(encoding="utf-8")))
+
     def test_upgrade_adds_only_components_newly_required_by_the_recorded_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

@@ -605,8 +605,10 @@ def runtime_binary(installer: core.Installer, component: str) -> Path:
     binary = installer.target.joinpath(*PurePosixPath(runtime_paths[variant]).parts)
     if not binary.is_file() or binary.is_symlink():
         raise InstallerError(f"Executável gerenciado ausente ou inseguro: {binary}")
-    if os.name != "nt":
-        binary.chmod(binary.stat().st_mode | 0o100)
+    if os.name != "nt" and not os.access(binary, os.X_OK):
+        raise InstallerError(
+            f"Executável gerenciado sem permissão de execução: {binary}. Execute repair."
+        )
     return binary
 
 
@@ -858,9 +860,8 @@ def select_hosted_game(
     component = player.installed_component_for_game(game)
     if component is None:
         raise InstallerError(f"O componente de {game.label} não está mais instalado.")
-    player.migrate_mutable_component_defaults(component)
     player.verify_component(component)
-    player.ensure_local_play_support(games)
+    player.verify_local_play_support(games)
     mode = None
     assets: frozenset[str] = frozenset()
     if game.mode_catalog is not None:

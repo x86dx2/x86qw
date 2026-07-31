@@ -443,8 +443,8 @@
       "id": "mvdsv",
       "label": "MVDSV dedicado",
       "kind": "runtime",
-      "description": "Servidor QuakeWorld MVDSV 1.11 para KTX, MVD e transmissão QTV.",
-      "requires": ["ktx"],
+      "description": "Servidor QuakeWorld MVDSV 1.11 para os gamecodes declarados, MVD e transmissão QTV.",
+      "requires": [],
       "sources": [
         {"path": "LICENSE.md", "destination": "_x86qw/licenses/mvdsv-LICENSE.md", "mode": "overlay", "origin": "release"}
       ],
@@ -480,8 +480,8 @@
       "id": "qtv",
       "label": "QTV broadcast",
       "kind": "service",
-      "description": "QTV HTTP fixado por commit para assistir streams e servir demos MVD.",
-      "requires": ["mvdsv"],
+      "description": "QTV HTTP fixado por commit para streams locais ou upstream remoto e demos MVD.",
+      "requires": [],
       "sources": [
         {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE", "destination": "_x86qw/licenses/qtv-LICENSE", "mode": "overlay", "origin": "release"},
         {

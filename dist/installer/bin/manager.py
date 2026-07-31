@@ -483,7 +483,7 @@ class Console:
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
     def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
-        verb = "update" if action == "update" else "upgrade"
+        verb = {"update": "update", "upgrade": "upgrade", "repair": "repair"}[action]
         noun = "package" if len(rows) == 1 else "packages"
         self.heading(f"Would {verb} {len(rows)} outdated {noun}")
         names = [row.item for row in rows]
@@ -2233,6 +2233,11 @@ class Installer:
         migrated = dict(state)
         for field in ("requested_components", "recorded_components", "known_components"):
             migrated[field] = self.replace_legacy_component_ids(list(state[field]))
+        migrated["format"] = 2
+        migrated.setdefault("capabilities", [])
+        migrated["component_fingerprint"] = profile_fingerprint(
+            list(migrated["recorded_components"]),
+        )
         return self.validate_install_state(migrated)
 
     def validate_install_state(self, state: object) -> dict[str, object]:
@@ -2241,7 +2246,7 @@ class Installer:
             raise InstallerError(f"Estado da instalação inválido: {path}")
         profiles = {"none", "custom", *self.component_catalog["profiles"]}
         profile = state.get("profile")
-        if state.get("format") != 1 or state.get("project") != "x86qw" or profile not in profiles:
+        if state.get("format") not in {1, 2} or state.get("project") != "x86qw" or profile not in profiles:
             raise InstallerError(f"Estado da instalação inválido: {path}")
         for field in ("requested_components", "recorded_components", "known_components"):
             values = state.get(field)
@@ -2254,6 +2259,16 @@ class Installer:
         requested = state["requested_components"]
         if profile != "custom" and requested:
             raise InstallerError(f"Somente o perfil custom pode registrar escolhas explícitas: {path}")
+        if state["format"] == 2:
+            capabilities = state.get("capabilities")
+            fingerprint = state.get("component_fingerprint")
+            if (
+                not isinstance(capabilities, list)
+                or len(capabilities) != len(set(capabilities))
+                or not all(isinstance(value, str) and COMPONENT_VERSION.fullmatch(value) for value in capabilities)
+                or fingerprint != profile_fingerprint(list(state["recorded_components"]))
+            ):
+                raise InstallerError(f"Capacidades ou fingerprint inválidos no estado da instalação: {path}")
         return state
 
     def write_install_state(
@@ -2262,15 +2277,19 @@ class Installer:
         requested: list[str],
         *,
         known: list[str] | None = None,
+        capabilities: list[str] | None = None,
     ) -> dict[str, object]:
         self.ensure_metadata_directory()
+        recorded = self.installed_components()
         state = self.validate_install_state({
-            "format": 1,
+            "format": 2,
             "project": "x86qw",
             "profile": profile,
             "requested_components": list(requested),
-            "recorded_components": self.installed_components(),
+            "recorded_components": recorded,
             "known_components": list(self.components) if known is None else list(known),
+            "capabilities": [] if capabilities is None else list(capabilities),
+            "component_fingerprint": profile_fingerprint(recorded),
         })
         destination = self.target / INSTALL_STATE
         descriptor, temporary_name = tempfile.mkstemp(prefix=".state-", suffix=".json", dir=destination.parent)
@@ -2305,12 +2324,14 @@ class Installer:
                     requested = []
                     break
         return self.validate_install_state({
-            "format": 1,
+            "format": 2,
             "project": "x86qw",
             "profile": profile,
             "requested_components": requested,
             "recorded_components": installed,
             "known_components": list(self.components),
+            "capabilities": [],
+            "component_fingerprint": profile_fingerprint(installed),
         })
 
     def migrate_stale_custom_profile(self, state: dict[str, object]) -> dict[str, object]:
@@ -2338,17 +2359,20 @@ class Installer:
                 state = self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
             except (OSError, json.JSONDecodeError) as error:
                 raise InstallerError(f"Estado da instalação inválido: {path}") from error
+            original = state
             state = self.current_install_state(state)
             migrated = self.migrate_stale_custom_profile(state)
-            if migrated != state:
+            if migrated != original:
                 profile = str(migrated["profile"])
                 if persist_migration:
                     migrated = self.write_install_state(
-                        profile, [], known=list(migrated["known_components"]),
+                        profile, list(migrated["requested_components"]),
+                        known=list(migrated["known_components"]),
+                        capabilities=list(migrated["capabilities"]),
                     )
-                    console.success(f"Perfil histórico da instalação recuperado: {profile}.")
+                    console.success(f"Estado histórico da instalação migrado para o formato 2: {profile}.")
                 else:
-                    console.info(f"Perfil histórico inferido para a simulação: {profile}.")
+                    console.info(f"Migração do estado para o formato 2 prevista na simulação: {profile}.")
             return migrated
         if lexists(path):
             raise InstallerError(f"Estado da instalação inválido: {path}")
@@ -2357,6 +2381,7 @@ class Installer:
             state = self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]),
                 known=list(state["known_components"]),
+                capabilities=list(state["capabilities"]),
             )
             console.success(f"Perfil da instalação registrado: {state['profile']}.")
         else:
@@ -3196,6 +3221,36 @@ class Installer:
                 preset.write_text(DEFAULT_PRESET, encoding="utf-8")
         self.migrate_saved_configs()
         self.refresh_qw_package_order()
+        self.reconcile_play_support()
+
+    def play_support_player(self):
+        gameplay = importlib.import_module("gameplay")
+        return gameplay.Player(
+            self.project_root, self.target, online_only=self.online_only,
+        )
+
+    def reconcile_play_support(
+        self,
+        *,
+        dry_run: bool = False,
+        plan_rows: list[UpdatePlanRow] | None = None,
+    ) -> bool:
+        player = self.play_support_player()
+        games = player.available_local_games()
+        issues = player.local_play_support_issues(games)
+        if not issues:
+            return False
+        if dry_run:
+            if plan_rows is not None:
+                plan_rows.append(UpdatePlanRow(
+                    "Gerado", "Suporte de execução dos mods",
+                    "ausente ou divergente", "derivado dos componentes instalados", "Reparar",
+                ))
+            return True
+        player.ensure_local_play_support(games)
+        player.verify_local_play_support(games)
+        console.success("Suporte de execução derivado foi reconciliado.")
+        return True
 
     def migrate_nquake_texture_limit(self) -> None:
         migrated = 0
@@ -3367,13 +3422,8 @@ class Installer:
             for identifier in selected:
                 removed = self.remove_component(identifier)
                 console.success(f"{self.components[identifier]['label']} removido ({file_count(removed)}).")
-            present, _, _ = self.validate_component_pair("play-support")
-            if present and selected:
-                removed = self.remove_component("play-support")
-                console.detail(
-                    f"Suporte local removido ({file_count(removed)}); ./x86qw.sh play o reconstruirá quando necessário."
-                )
             self.refresh_qw_package_order()
+            self.reconcile_play_support()
             self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
             return
         selected = self.choose_components()
@@ -3419,7 +3469,7 @@ class Installer:
         )
 
     def host_runtimes(self) -> list[tuple[str, Path]]:
-        platform_key = {"Darwin": "macos", "Linux": "linux", "Windows": "windows"}.get(host_platform.system())
+        platform_key = HOST_PLATFORMS.get(host_platform.system())
         if platform_key is None:
             raise InstallerError(f"A abertura automática não é suportada neste sistema: {host_platform.system()}.")
         choices: list[tuple[str, Path]] = []
@@ -3429,9 +3479,13 @@ class Installer:
             if receipt_path is None:
                 continue
             receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
-            receipt = self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
             self.check_runtime(spec, channel, receipt)
-            choices.append((f"ezQuake {channel} {receipt['selection']}", self.target / spec.runtime(channel)))
+            runtime = self.target / spec.runtime(channel)
+            if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
+                raise InstallerError(
+                    f"O runtime macOS requer reparo antes da execução: {runtime}. Execute update."
+                )
+            choices.append((f"ezQuake {channel} {receipt['selection']}", runtime))
         return choices
 
     def choose_host_runtime(self) -> tuple[str, Path]:
@@ -3582,9 +3636,117 @@ class Installer:
             raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
         self.verify_component("maps")
         self.verify_component("presets")
-        self.verify_component("play-support")
+        player = self.play_support_player()
+        player.verify_local_play_support(player.available_local_games())
         self.verify_qw_package_order()
         self.report_nquake_startup_state(installed)
+
+    def runtime_permission_repairs(self) -> list[Path]:
+        if os.name == "nt":
+            return []
+        repairs: list[Path] = []
+        installed = set(self.installed_components())
+        for runtime in RUNTIMES.values():
+            component = runtime.get("component")
+            if component not in installed:
+                continue
+            for platform_entry in runtime.get("platforms", []):
+                if not isinstance(platform_entry, dict) or platform_entry.get("permissions") != "executable":
+                    continue
+                relative = platform_entry.get("runtime_path")
+                if not isinstance(relative, str):
+                    continue
+                binary = self.target.joinpath(*PurePosixPath(relative).parts)
+                if binary.is_file() and not binary.is_symlink() and not os.access(binary, os.X_OK):
+                    repairs.append(binary)
+        return repairs
+
+    def repair_plan(self) -> tuple[list[str], bool, list[Path], bool]:
+        self.check_paks()
+        self.load_install_state(persist_migration=False)
+        invalid_components: list[str] = []
+        for identifier in self.installed_components():
+            try:
+                self.verify_component(identifier)
+            except InstallerError:
+                invalid_components.append(identifier)
+        player = self.play_support_player()
+        support_invalid = bool(player.local_play_support_issues(player.available_local_games()))
+        permissions = self.runtime_permission_repairs()
+        package_order_invalid = False
+        try:
+            self.verify_qw_package_order()
+        except InstallerError:
+            package_order_invalid = True
+        return invalid_components, support_invalid, permissions, package_order_invalid
+
+    def repair(
+        self,
+        *,
+        dry_run: bool,
+        plan_rows: list[UpdatePlanRow],
+    ) -> bool:
+        invalid_components, support_invalid, permissions, package_order_invalid = self.repair_plan()
+        for identifier in invalid_components:
+            _, _, receipt = self.validate_component_pair(identifier)
+            assert receipt is not None
+            package = self.component_package_record(identifier)
+            plan_rows.append(UpdatePlanRow(
+                "Componente", str(self.components[identifier]["label"]),
+                str(receipt["selection"]), str(package["version"]), "Reparar", package_size(package),
+            ))
+        if support_invalid:
+            plan_rows.append(UpdatePlanRow(
+                "Gerado", "Suporte de execução dos mods", "ausente ou divergente",
+                "derivado dos componentes instalados", "Reparar",
+            ))
+        for binary in permissions:
+            plan_rows.append(UpdatePlanRow(
+                "Runtime", binary.name, "sem execução", "executável", "Reparar",
+            ))
+        if package_order_invalid:
+            plan_rows.append(UpdatePlanRow(
+                "Gerado", "Ordem de PK3", "ausente ou divergente", "catálogo instalado", "Reparar",
+            ))
+        macos_repairs: list[tuple[PlatformSpec, str, Path, dict[str, str]]] = []
+        for spec in PLATFORMS.values():
+            if spec.key != "macos":
+                continue
+            for channel in ("stable", "nightly"):
+                receipt_path = self.ezquake_receipt_path(spec, channel)
+                if receipt_path is None:
+                    continue
+                receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+                if self.macos_app_needs_preparation(self.target / spec.runtime(channel)):
+                    macos_repairs.append((spec, channel, receipt_path, receipt))
+                    plan_rows.append(UpdatePlanRow(
+                        "Cliente", f"ezQuake {spec.label} {channel}",
+                        "preparação incompleta", "runtime preparado", "Reparar",
+                    ))
+        if dry_run or not plan_rows:
+            return bool(plan_rows)
+        if invalid_components:
+            self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-repair.", dir=self.target))
+            try:
+                self.install_components(invalid_components)
+            finally:
+                self.cleanup_stage()
+                self.stage = None
+        elif support_invalid:
+            self.reconcile_play_support()
+        for binary in permissions:
+            binary.chmod(binary.stat().st_mode | 0o100)
+        if package_order_invalid:
+            self.refresh_qw_package_order()
+        for spec, channel, receipt_path, receipt in macos_repairs:
+            self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
+        state = self.load_install_state(persist_migration=True)
+        self.write_install_state(
+            str(state["profile"]), list(state["requested_components"]),
+            known=list(state["known_components"]), capabilities=list(state["capabilities"]),
+        )
+        self.verify_installation()
+        return True
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
         installed = self.installed_components() if installed is None else installed
@@ -3959,7 +4121,24 @@ class Installer:
         if not dry_run and layout_change:
             self.migrate_metadata_layout()
         self.check_paks()
-        state = self.load_install_state(persist_migration=not dry_run)
+        state_path = self.target / INSTALL_STATE
+        persisted_state: dict[str, object] | None = None
+        if state_path.is_file() and not state_path.is_symlink():
+            try:
+                persisted_state = self.validate_install_state(
+                    json.loads(state_path.read_text(encoding="utf-8"))
+                )
+            except (OSError, json.JSONDecodeError) as error:
+                raise InstallerError(f"Estado da instalação inválido: {state_path}") from error
+        state = self.current_install_state(
+            self.load_install_state(persist_migration=not dry_run)
+        )
+        state_change = persisted_state != state
+        if dry_run and state_change and plan_rows is not None:
+            plan_rows.append(UpdatePlanRow(
+                "Sistema", "Estado da instalação",
+                "ausente ou formato histórico", "formato 2", "Migrar",
+            ))
         legacy_replacements = self.installed_legacy_component_replacements()
         legacy_removals = self.installed_legacy_component_removals()
         known = set(state["known_components"])
@@ -3984,7 +4163,7 @@ class Installer:
             name: file_hash(self.target / "id1" / name)
             for name in ("pak0.pak", "pak1.pak")
         }
-        changed = layout_change
+        changed = layout_change or state_change
         if not dry_run:
             console.section("Clientes ezQuake instalados")
         for spec, channel, receipt in runtimes:
@@ -4057,6 +4236,10 @@ class Installer:
         elif not dry_run and not self.installed_components():
             console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
 
+        changed = self.reconcile_play_support(
+            dry_run=dry_run, plan_rows=plan_rows,
+        ) or changed
+
         desired = self.desired_components(state)
         installed_or_planned = {
             *self.installed_components(), *legacy_replacements.values(),
@@ -4079,6 +4262,7 @@ class Installer:
         if not dry_run:
             state = self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+                capabilities=list(state["capabilities"]),
             )
             if changed and not profile_upgrade:
                 console.section("Verificação final")
@@ -4094,7 +4278,9 @@ class Installer:
         changed = self.update(
             dry_run=dry_run, profile_upgrade=True, preview=preview, plan_rows=plan_rows,
         )
-        state = self.load_install_state(persist_migration=not dry_run)
+        state = self.current_install_state(
+            self.load_install_state(persist_migration=not dry_run)
+        )
         desired = self.desired_components(state)
         installed = self.installed_components()
         legacy_replacements = self.installed_legacy_component_replacements()
@@ -4132,6 +4318,7 @@ class Installer:
         if not dry_run:
             self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+                capabilities=list(state["capabilities"]),
             )
             if changed:
                 console.section("Verificação final do perfil")
@@ -4267,7 +4454,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="simula update ou upgrade sem alterar arquivos",
+        help="simula update, upgrade ou repair sem alterar arquivos",
     )
     parser.add_argument(
         "--yes", action="store_true",
@@ -4288,7 +4475,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "action", nargs="?", default="install",
         help=(
-            "install, play, host, proxy, qtv, version, update, upgrade, components, presets, hub, "
+            "install, play, host, proxy, qtv, version, update, upgrade, repair, components, presets, hub, "
             "verify, uninstall ou cleanup"
         ),
     )
@@ -4298,7 +4485,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "play", "host", "proxy", "qtv", "version", "update", "upgrade", "components",
+        "install", "play", "host", "proxy", "qtv", "version", "update", "upgrade", "repair", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
@@ -4313,8 +4500,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         )
     if namespace.skip_cli_update and not (namespace.installed_cli and namespace.action in {"update", "upgrade"}):
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
-    if namespace.dry_run and namespace.action not in {"update", "upgrade"}:
-        parser.error("--dry-run só pode ser usado com update ou upgrade")
+    if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair"}:
+        parser.error("--dry-run só pode ser usado com update, upgrade ou repair")
     if namespace.yes and namespace.action not in {"update", "upgrade"}:
         parser.error("--yes só pode ser usado com update ou upgrade")
     if namespace.platform is not None and namespace.action != "install":
@@ -4373,7 +4560,7 @@ def main(arguments: list[str] | None = None) -> int:
             "presets": "gerenciar presets",
             "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
             "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
-            "upgrade": "incorporar novidades da distribuição",
+            "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
         }
         action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
         console.banner(action_label, options.target)
@@ -4404,6 +4591,22 @@ def main(arguments: list[str] | None = None) -> int:
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
+        elif options.action == "repair":
+            if options.installed_cli:
+                raise InstallerError(
+                    "A CLI instalada não baixa payload para repair. Execute novamente o bootstrap install.sh."
+                )
+            plan_rows: list[UpdatePlanRow] = []
+            needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
+            if not needs_repair:
+                console.success("Nenhum reparo é necessário; a instalação está íntegra.")
+            else:
+                console.update_plan(plan_rows, "repair")
+                if options.dry_run:
+                    console.heading("Dry run complete; no files were changed")
+                else:
+                    installer.repair(dry_run=False, plan_rows=[])
+                    console.success("Reparo concluído e validado.")
         elif options.action == "uninstall":
             if options.purge:
                 console.section("Desinstalação completa")

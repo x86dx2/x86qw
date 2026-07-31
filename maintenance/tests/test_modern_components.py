@@ -108,7 +108,10 @@ class ModernComponentTests(unittest.TestCase):
             output.write_bytes(source.read_bytes())
 
     def test_new_actions_are_accepted(self):
-        for action in ("host", "proxy", "qtv", "version", "components", "presets", "hub", "update", "upgrade"):
+        for action in (
+            "host", "proxy", "qtv", "version", "components", "presets", "hub",
+            "update", "upgrade", "repair",
+        ):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
@@ -734,6 +737,9 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("qrp-hires", installer.component_catalog["profiles"]["complete"])
             self.assertNotIn("total-destruction-2", installer.component_catalog["profiles"]["recommended"])
             self.assertIn("total-destruction-2", installer.component_catalog["profiles"]["complete"])
+            self.assertEqual([], installer.components["mvdsv"]["requires"])
+            self.assertEqual([], installer.components["qtv"]["requires"])
+            self.assertEqual([], installer.components["qwfwd"]["requires"])
             ktx = installer.components["ktx"]
             ktx_overlay = ROOT / "dist/mods/ktx/1.47/x86qw"
             expected_ktx_sources = {
@@ -1278,7 +1284,7 @@ class ModernComponentTests(unittest.TestCase):
                                 with mock.patch.object(installer, "local_map_names", return_value=["dm6", "dm2"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support") as support:
+                                            with mock.patch.object(installer, "verify_local_play_support") as support:
                                                 with mock.patch("builtins.input", side_effect=["", ""]):
                                                     installer.play_local()
             verify.assert_called_once_with("total-destruction-2")
@@ -1291,6 +1297,89 @@ class ModernComponentTests(unittest.TestCase):
                 "+map", "dm6", "+wait",
                 "+exec", "x86qw-td2.cfg",
             ])
+
+    def test_play_validates_support_without_mutating_managed_or_personal_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            runtime = target / "ezquake-stable.exe"
+            components = target / ".install/components"
+            personal = target / "td2/x86qw-td2-user.cfg"
+            components.mkdir(parents=True)
+            personal.parent.mkdir(parents=True)
+            (components / "sentinel.json").write_text("managed\n", encoding="utf-8")
+            personal.write_text("personal\n", encoding="utf-8")
+            before = {
+                path.relative_to(target).as_posix(): path.read_bytes()
+                for path in target.rglob("*") if path.is_file()
+            }
+            mutators = (
+                "ensure_local_play_support", "migrate_saved_configs",
+                "migrate_mutable_component_defaults", "remove_legacy_macos_video_layout",
+                "configure_macos_fullscreen", "refresh_qw_package_order",
+            )
+            patches = [
+                mock.patch.object(
+                    player, name,
+                    side_effect=AssertionError(f"play tentou executar {name}"),
+                )
+                for name in mutators
+            ]
+            for patcher in patches:
+                patcher.start()
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with mock.patch.object(player, "check_paks"):
+                        with mock.patch.object(player, "available_local_games", return_value=[game]):
+                            with mock.patch.object(player, "installed_component_for_game", return_value=game.component):
+                                with mock.patch.object(player, "verify_component"):
+                                    with mock.patch.object(player, "verify_local_play_support"):
+                                        with mock.patch.object(player, "choose_local_map", return_value="dm6"):
+                                            with mock.patch.object(player, "choose_host_runtime", return_value=("stable", runtime)):
+                                                with mock.patch.object(player, "launch_runtime"):
+                                                    player.play_local(game_key="td2", map_key="dm6")
+            finally:
+                for patcher in reversed(patches):
+                    patcher.stop()
+            after = {
+                path.relative_to(target).as_posix(): path.read_bytes()
+                for path in target.rglob("*") if path.is_file()
+            }
+            self.assertEqual(before, after)
+
+    def test_host_selection_validates_support_without_materializing_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            options = services_qw.parse_arguments(["host", "td2", "--map", "dm6"], ROOT)
+            with mock.patch.object(player, "check_paks"):
+                with mock.patch.object(player, "available_local_games", return_value=[game]):
+                    with mock.patch.object(player, "choose_local_game", return_value=game):
+                        with mock.patch.object(player, "installed_component_for_game", return_value=game.component):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(player, "verify_local_play_support") as verify_support:
+                                    with mock.patch.object(player, "choose_local_map", return_value="dm6"):
+                                        with mock.patch.object(
+                                            player, "ensure_local_play_support",
+                                            side_effect=AssertionError("host tentou instalar play-support"),
+                                        ):
+                                            selected = services_qw.select_hosted_game(player, options)
+            self.assertEqual("td2", selected.game.key)
+            verify_support.assert_called_once_with([game])
+
+    @unittest.skipIf(os.name == "nt", "permissão executável não existe no Windows")
+    def test_service_runtime_does_not_repair_permissions_during_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            binary = target / "_x86qw/runtimes/qwfwd/linux-amd64/qwfwd"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"runtime")
+            binary.chmod(0o600)
+            with mock.patch.object(installer, "verify_component", return_value=1):
+                with mock.patch.object(services_qw, "runtime_variant", return_value="linux-amd64"):
+                    with self.assertRaisesRegex(services_qw.InstallerError, "Execute repair"):
+                        services_qw.runtime_binary(installer, "qwfwd")
+            self.assertEqual(0o600, binary.stat().st_mode & 0o777)
 
     def test_ktx_uses_the_native_qw_gamedir_only_once(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1305,7 +1394,7 @@ class ModernComponentTests(unittest.TestCase):
                                 with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                            with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", side_effect=["", "", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
@@ -1332,7 +1421,7 @@ class ModernComponentTests(unittest.TestCase):
                                 with mock.patch.object(installer, "local_map_names", return_value=["povdmm4"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                            with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
@@ -1366,7 +1455,7 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                         with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                             with mock.patch.object(installer, "launch_runtime") as launch:
-                                                with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch.object(installer, "verify_local_play_support"):
                                                     installer.play_local(
                                                         "ktx", "duel", "dm6", options,
                                                     )
@@ -1402,7 +1491,7 @@ class ModernComponentTests(unittest.TestCase):
                                 with mock.patch.object(installer, "local_map_names", return_value=["e2m2"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                            with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "ctf")
             launch.assert_called_once_with(runtime, [
@@ -1452,7 +1541,7 @@ class ModernComponentTests(unittest.TestCase):
                                         with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                             with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                                 with mock.patch.object(installer, "launch_runtime") as launch:
-                                                    with mock.patch.object(installer, "ensure_local_play_support"):
+                                                    with mock.patch.object(installer, "verify_local_play_support"):
                                                         with mock.patch("builtins.input", return_value=""):
                                                             installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
@@ -1500,7 +1589,7 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch.object(installer, "local_map_names", return_value=[map_name]):
                                         with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                             with mock.patch.object(installer, "launch_runtime") as launch:
-                                                with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch.object(installer, "verify_local_play_support"):
                                                     with mock.patch("builtins.input", side_effect=["", ""]):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
@@ -1523,7 +1612,7 @@ class ModernComponentTests(unittest.TestCase):
                                 with mock.patch.object(installer, "local_map_names", return_value=["2fort5r"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("nightly", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
-                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                            with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", side_effect=["", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
