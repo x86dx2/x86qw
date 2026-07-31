@@ -35,6 +35,11 @@ Use apenas o gerenciador da raiz do contexto:
   identificados como conteúdo;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
+As suítes executadas por `verify` exportam `X86QW_TEST_WINDOWED=1`. Portanto,
+qualquer smoke que abra um cliente usa uma janela de `1280x720` e não captura o
+monitor do desenvolvedor. Somente um teste cujo objetivo declarado seja validar
+fullscreen deve remover essa variável no próprio caso de teste.
+
 `update --commit --push` existe para automacao, mas a rotina recomendada e
 separar revisao e publicacao:
 

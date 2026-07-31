@@ -34,6 +34,14 @@
   permaneça visível;
 - registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
   novamente no console e ao final da ajuda de `F10`;
+- declara no catálogo os comandos oficiais úteis de cada preset e faz o `F10`
+  combinar o mapa de teclas comum com a referência específica do modo ativo;
+- executa a ajuda comum e a ajuda contextual por arquivos CFG de linhas curtas,
+  evitando o limite do console que descartava aliases extensos;
+- padroniza em 26 caracteres a coluna de teclas e comandos e amplia o console
+  para 80% da tela quando a ajuda é solicitada;
+- aplica o perfil KTX no evento de entrada correspondente ao usermode, depois
+  que o QVM conclui a conexão local, tornando os binds e o `F10` determinísticos;
 - força a conexão local inicial como jogador; isso evita o caminho de espectador
   incompatível entre o QVM atual e o servidor integrado do ezQuake 3.6.9;
 - aplica os valores de timing e salto do KTX somente ao KTX e restaura o padrão

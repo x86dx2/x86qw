@@ -20,10 +20,10 @@ from build_core_package import build_core_package  # noqa: E402
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
-        self.assertEqual(validate_catalog(catalog), 36)
+        self.assertEqual(validate_catalog(catalog), 37)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
-        self.assertEqual("1.47+x86qw.7", ktx["version"])
+        self.assertEqual("1.47+x86qw.9", ktx["version"])
         self.assertEqual("1.47", ktx["upstream_version"])
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
@@ -68,12 +68,12 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("2.9+nquake.e4cb23d40aa2+x86qw.4", team_fortress["version"])
         self.assertEqual("team-fortress", team_fortress["component"])
         installers = [package for package in catalog["packages"] if package["component"] == "installer"]
-        self.assertEqual(11, len(installers))
-        self.assertEqual(["0.1.10"], [
+        self.assertEqual(12, len(installers))
+        self.assertEqual(["0.1.11"], [
             package["version"] for package in installers if package.get("current") is True
         ])
         latest = [package for package in catalog["packages"] if package.get("mirror_latest") is True]
-        self.assertEqual([("x86qw-installer", "0.1.10")], [
+        self.assertEqual([("x86qw-installer", "0.1.11")], [
             (package.get("package"), package["version"]) for package in latest
         ])
         self.assertTrue(all(

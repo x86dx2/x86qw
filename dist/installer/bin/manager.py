@@ -3357,6 +3357,10 @@ class Installer:
         system = host_platform.system()
         # A distribuição é autocontida: ~/.ezquake não pode sobrepor configs ou assets.
         base_arguments = ["-nohome", "-basedir", str(self.target)]
+        if os.environ.get("X86QW_TEST_WINDOWED") == "1":
+            # Smoke tests must not capture the user's display. Fullscreen is
+            # exercised only by tests that explicitly clear this environment.
+            base_arguments.extend(["-window", "-width", "1280", "-height", "720"])
         if system == "Darwin":
             executable = runtime / "Contents/MacOS/ezQuake"
             if not executable.is_file() or executable.is_symlink():

@@ -106,6 +106,7 @@ class KtxModeSpec:
     usermode: str
     default_map: str
     suggested_maps: tuple[str, ...]
+    help_commands: tuple[tuple[str, str], ...]
     entry_config: str | None
 
 
@@ -170,6 +171,7 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         key = raw.get("id")
         aliases = raw.get("aliases")
         suggested_maps = raw.get("suggested_maps")
+        help_commands = raw.get("help_commands")
         entry_config = raw.get("entry_config")
         text_fields = (
             "label", "description", "recommended_players", "usermode",
@@ -190,6 +192,16 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 isinstance(name, str)
                 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", name)
                 for name in suggested_maps
+            )
+            or not isinstance(help_commands, list)
+            or not help_commands
+            or not all(
+                isinstance(entry, list)
+                and len(entry) == 2
+                and all(isinstance(value, str) and value for value in entry)
+                and re.fullmatch(r"[A-Za-z0-9_+./ -]{1,48}", entry[0]) is not None
+                and re.fullmatch(r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}", entry[1]) is not None
+                for entry in help_commands
             )
             or entry_config not in {
                 None,
@@ -215,9 +227,14 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
             usermode=str(raw["usermode"]),
             default_map=str(raw["default_map"]),
             suggested_maps=tuple(suggested_maps),
+            help_commands=tuple((str(entry[0]), str(entry[1])) for entry in help_commands),
             entry_config=entry_config,
         ))
     return tuple(modes)
+
+
+def ktx_mode_help_alias(mode: KtxModeSpec) -> str:
+    return f"exec x86qw-ktx-help-{mode.key}.cfg"
 
 
 class Player(core.Installer):
@@ -316,21 +333,30 @@ class Player(core.Installer):
             if resolution is None:
                 raise ValueError("resolução física ausente")
             width, panel_height = (int(value) for value in resolution.groups())
-            height = round(width * 10 / 16)
+            safe_height = round(width * 10 / 16)
         except (
             OSError, subprocess.SubprocessError, json.JSONDecodeError,
             KeyError, TypeError, ValueError,
         ) as error:
             raise InstallerError(f"Não foi possível detectar o modo fullscreen seguro do macOS: {error}") from error
-        if width < 1280 or height < 800 or panel_height <= height or panel_height - height > 256:
+        if (
+            width < 1280
+            or safe_height < 800
+            or panel_height <= safe_height
+            or panel_height - safe_height > 256
+        ):
             raise InstallerError(
-                f"Geometria inesperada na tela com notch: {width}x{panel_height}; modo seguro {width}x{height}."
+                f"Geometria inesperada na tela com notch: {width}x{panel_height}; "
+                f"área segura {width}x{safe_height}."
             )
         return {
             "vid_fullscreen": "1",
-            "vid_usedesktopres": "0",
+            # SDL_WINDOW_FULLSCREEN_DESKTOP keeps the game fullscreen without
+            # changing the macOS display mode. Exclusive 3024x1890 could leave
+            # the panel captured and black after ezQuake exited.
+            "vid_usedesktopres": "1",
             "vid_width": str(width),
-            "vid_height": str(height),
+            "vid_height": str(panel_height),
             # Let SDL/macOS negotiate the refresh rate. Forcing the panel's
             # ProMotion maximum here couples a menu-layout fix to frame timing.
             "vid_displayfrequency": "0",
@@ -421,8 +447,8 @@ class Player(core.Installer):
         self.write_macos_fullscreen_marker(marker, managed=True, settings=desired)
         if not managed:
             console.success(
-                f"Fullscreen macOS ajustado para {desired['vid_width']}x{desired['vid_height']} "
-                "com frequência automática; menus permanecem abaixo do notch."
+                f"Fullscreen desktop macOS ajustado para {desired['vid_width']}x{desired['vid_height']} "
+                "com frequência automática e restauração segura ao encerrar."
             )
 
     @staticmethod
@@ -734,13 +760,16 @@ class Player(core.Installer):
             arguments.extend(["+cl_pext_lagteleport", "0"])
         if game.key == "ktx":
             for event in ("on_enter", "on_enter_ffa", "on_enter_ctf"):
-                arguments.extend(["+tempalias", event, "wait"])
+                arguments.extend(["+tempalias", event, "exec x86qw-ktx.cfg"])
             if ktx_mode.entry_config is not None:
                 event = {
                     "ffa": "on_enter_ffa",
                     "ctf": "on_enter_ctf",
                 }.get(ktx_mode.usermode, "on_enter")
-                arguments.extend(["+tempalias", event, f"exec {ktx_mode.entry_config}"])
+                arguments.extend([
+                    "+tempalias", event,
+                    f"exec {ktx_mode.entry_config};exec x86qw-ktx.cfg",
+                ])
             arguments.extend(["+set", "k_defmap", map_name])
             assert ktx_mode is not None
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
@@ -749,8 +778,11 @@ class Player(core.Installer):
                 "+tempalias", "ktx_mode",
                 f"echo x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
             ])
+            arguments.extend([
+                "+tempalias", "x86qw_ktx_mode_help", ktx_mode_help_alias(ktx_mode),
+            ])
         arguments.extend(["+map", map_name])
-        if game.key in PROFILED_LOCAL_GAMES:
+        if game.key in PROFILED_LOCAL_GAMES and game.key != "ktx":
             arguments.append("+wait")
             arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label

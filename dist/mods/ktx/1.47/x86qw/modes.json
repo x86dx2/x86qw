@@ -12,6 +12,13 @@
       "usermode": "1on1",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "help_commands": [
+        ["cmd 1on1", "reaplicar as regras de Duel"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd stats", "mostrar estatisticas do jogador"]
+      ],
       "entry_config": null
     },
     {
@@ -23,6 +30,13 @@
       "usermode": "2on2",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "help_commands": [
+        ["cmd 2on2", "reaplicar as regras de 2on2"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
       "entry_config": null
     },
     {
@@ -34,6 +48,13 @@
       "usermode": "4on4",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt1b", "cmt3", "cmt4"],
+      "help_commands": [
+        ["cmd 4on4", "reaplicar as regras de 4on4"],
+        ["cmd captain", "iniciar ou votar capitães"],
+        ["cmd rpickup", "sortear equipes para pickup"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
       "entry_config": null
     },
     {
@@ -45,6 +66,13 @@
       "usermode": "ffa",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk", "death32c"],
+      "help_commands": [
+        ["cmd ffa", "reaplicar as regras de Free For All"],
+        ["cmd join", "entrar na partida"],
+        ["cmd observe", "voltar para espectador"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
       "entry_config": null
     },
     {
@@ -56,6 +84,13 @@
       "usermode": "ca",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "help_commands": [
+        ["cmd carena", "reaplicar as regras de Clan Arena"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar round"],
+        ["cmd rules", "mostrar as regras ativas"],
+        ["cmd scores", "mostrar tempo e placar"]
+      ],
       "entry_config": null
     },
     {
@@ -67,6 +102,13 @@
       "usermode": "hoonymode",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "help_commands": [
+        ["cmd hoonymode", "reaplicar as regras de HoonyMode"],
+        ["cmd pickspawn", "escolher o spawn do proximo round"],
+        ["cmd roundsup", "aumentar o numero de rounds"],
+        ["cmd roundsdown", "diminuir o numero de rounds"],
+        ["cmd hmstats", "mostrar estatisticas por ponto"]
+      ],
       "entry_config": null
     },
     {
@@ -78,6 +120,13 @@
       "usermode": "1on1",
       "default_map": "povdmm4",
       "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "help_commands": [
+        ["cmd midair", "ativar ou desativar Midair"],
+        ["cmd midair_minheight", "consultar ou ajustar altura minima"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
       "entry_config": "x86qw-ktx-mode-midair.cfg"
     },
     {
@@ -89,6 +138,14 @@
       "usermode": "ffa",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "aerowalk", "slide1", "slide7", "ztndm3", "ztricks"],
+      "help_commands": [
+        ["cmd race_toggle", "alternar entre pronto e fora da fila"],
+        ["cmd race_cancel", "cancelar a tentativa atual"],
+        ["cmd race_show_lineup", "mostrar a fila de corredores"],
+        ["cmd race_show_toptimes", "mostrar os melhores tempos"],
+        ["cmd race_show_route", "mostrar a rota carregada"],
+        ["cmd race_chasecam", "alternar acompanhamento de corredores"]
+      ],
       "entry_config": "x86qw-ktx-mode-race.cfg"
     },
     {
@@ -100,6 +157,14 @@
       "usermode": "1on1",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk"],
+      "help_commands": [
+        ["cmd practice", "ativar ou desativar Practice"],
+        ["cmd pos_save", "salvar posicao e movimento atuais"],
+        ["cmd pos_move", "voltar para a posicao salva"],
+        ["cmd pos_show", "mostrar a posicao salva"],
+        ["cmd wp_reset", "zerar estatisticas de armas"],
+        ["cmd freeze", "congelar ou liberar o mapa"]
+      ],
       "entry_config": "x86qw-ktx-mode-practice.cfg"
     }
   ],

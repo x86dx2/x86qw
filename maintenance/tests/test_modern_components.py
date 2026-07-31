@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import struct
 import sys
@@ -11,6 +12,11 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
+
+
+# Um teste que por engano iniciar o runtime real nunca deve capturar a tela.
+# Casos que verificam o comando normal removem a variável em escopo controlado.
+os.environ.setdefault("X86QW_TEST_WINDOWED", "1")
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +44,15 @@ def local_server_baseline(game: str) -> list[str]:
     for name, value in settings:
         arguments.extend([f"+{name}", value])
     return arguments
+
+
+def ktx_mode_runtime_aliases(mode_key: str) -> list[str]:
+    mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == mode_key)
+    return [
+        "+tempalias", "ktx_mode",
+        f"echo x86QW KTX preset: {mode.label} [{mode.key}]",
+        "+tempalias", "x86qw_ktx_mode_help", play_qw.ktx_mode_help_alias(mode),
+    ]
 
 
 class ModernComponentTests(unittest.TestCase):
@@ -218,7 +233,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertTrue(backup.exists())
 
-    def test_notched_macos_uses_a_native_safe_fullscreen_mode(self):
+    def test_notched_macos_uses_desktop_fullscreen_without_display_capture(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, target, _ = self.make_player(Path(temporary))
             config = target / "ezquake/configs/config.cfg"
@@ -239,9 +254,9 @@ class ModernComponentTests(unittest.TestCase):
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
             self.assertEqual({
                 "vid_fullscreen": "1",
-                "vid_usedesktopres": "0",
+                "vid_usedesktopres": "1",
                 "vid_width": "3024",
-                "vid_height": "1890",
+                "vid_height": "1964",
                 "vid_displayfrequency": "0",
             }, values)
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
@@ -271,7 +286,7 @@ class ModernComponentTests(unittest.TestCase):
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
             self.assertFalse(marker["managed"])
 
-    def test_notched_macos_migrates_the_managed_120hz_mode_to_automatic(self):
+    def test_notched_macos_migrates_exclusive_fullscreen_to_desktop_fullscreen(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, target, _ = self.make_player(Path(temporary))
             config = target / "ezquake/configs/config.cfg"
@@ -306,6 +321,8 @@ class ModernComponentTests(unittest.TestCase):
                 with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
                     player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
+            self.assertEqual("1", values["vid_usedesktopres"])
+            self.assertEqual("1964", values["vid_height"])
             self.assertEqual("0", values["vid_displayfrequency"])
             state = json.loads(marker.read_text(encoding="utf-8"))
             self.assertTrue(state["managed"])
@@ -387,6 +404,16 @@ class ModernComponentTests(unittest.TestCase):
                 {
                     "dist/mods/ktx/1.47/x86qw/client.cfg",
                     "dist/mods/ktx/1.47/x86qw/user.cfg.example",
+                    "dist/mods/ktx/1.47/x86qw/help.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-duel.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-2on2.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-4on4.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-ffa.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-hoony.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-midair.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-race.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-practice.cfg",
                     "dist/mods/ktx/1.47/x86qw/mode-midair.cfg",
                     "dist/mods/ktx/1.47/x86qw/mode-race.cfg",
                     "dist/mods/ktx/1.47/x86qw/mode-practice.cfg",
@@ -876,9 +903,10 @@ class ModernComponentTests(unittest.TestCase):
             executable = runtime / "Contents/MacOS/ezQuake"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"mach-o")
-            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.subprocess, "Popen") as popen:
-                    installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
+            with mock.patch.dict(install_qw.os.environ, {"X86QW_TEST_WINDOWED": ""}):
+                with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                        installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
             command = popen.call_args.args[0]
             self.assertEqual([
                 str(executable), "-nohome", "-basedir", str(target),
@@ -886,6 +914,22 @@ class ModernComponentTests(unittest.TestCase):
             ], command)
             self.assertIs(popen.call_args.kwargs["stdin"], install_qw.subprocess.DEVNULL)
             self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_runtime_smoke_uses_a_window_unless_fullscreen_is_explicit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "ezQuake Stable.app"
+            executable = runtime / "Contents/MacOS/ezQuake"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"mach-o")
+            with mock.patch.dict(install_qw.os.environ, {"X86QW_TEST_WINDOWED": "1"}):
+                with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                        installer.launch_runtime(runtime, ["+map", "dm6"])
+            self.assertEqual([
+                str(executable), "-nohome", "-basedir", str(target),
+                "-window", "-width", "1280", "-height", "720", "+map", "dm6",
+            ], popen.call_args.args[0])
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -932,14 +976,14 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
-                "+tempalias", "on_enter", "wait",
-                "+tempalias", "on_enter_ffa", "wait",
-                "+tempalias", "on_enter_ctf", "wait",
+                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
                 "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
                 "+set", "x86qw_ktx_preset", "duel",
-                "+tempalias", "ktx_mode", "echo x86QW KTX preset: Duel [duel]",
-                "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
+                *ktx_mode_runtime_aliases("duel"),
+                "+map", "dm6",
             ])
 
     def test_ktx_direct_midair_mode_installs_a_one_shot_entry_profile(self):
@@ -960,15 +1004,16 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
-                "+tempalias", "on_enter", "wait",
-                "+tempalias", "on_enter_ffa", "wait",
-                "+tempalias", "on_enter_ctf", "wait",
-                "+tempalias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
+                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter",
+                "exec x86qw-ktx-mode-midair.cfg;exec x86qw-ktx.cfg",
                 "+set", "k_defmap", "povdmm4",
                 "+set", "k_defmode", "1on1",
                 "+set", "x86qw_ktx_preset", "midair",
-                "+tempalias", "ktx_mode", "echo x86QW KTX preset: Midair [midair]",
-                "+map", "povdmm4", "+wait", "+exec", "x86qw-ktx.cfg",
+                *ktx_mode_runtime_aliases("midair"),
+                "+map", "povdmm4",
             ])
 
     def test_ktx_race_and_practice_use_the_correct_one_shot_entry_event(self):
@@ -994,16 +1039,16 @@ class ModernComponentTests(unittest.TestCase):
                                                         installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
                     *local_server_baseline("ktx"),
-                    "+tempalias", "on_enter", "wait",
-                    "+tempalias", "on_enter_ffa", "wait",
-                    "+tempalias", "on_enter_ctf", "wait",
-                    "+tempalias", event, f"exec {entry_config}",
+                    "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
+                    "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
+                    "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
+                    "+tempalias", event,
+                    f"exec {entry_config};exec x86qw-ktx.cfg",
                     "+set", "k_defmap", "dm6",
                     "+set", "k_defmode", usermode,
                     "+set", "x86qw_ktx_preset", mode,
-                    "+tempalias", "ktx_mode",
-                    f"echo x86QW KTX preset: {mode.title()} [{mode}]",
-                    "+map", "dm6", "+wait", "+exec", "x86qw-ktx.cfg",
+                    *ktx_mode_runtime_aliases(mode),
+                    "+map", "dm6",
                 ])
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
@@ -1322,11 +1367,15 @@ class ModernComponentTests(unittest.TestCase):
                     )
                     profile = (ROOT / str(entry["path"])).read_text(encoding="utf-8")
                     help_alias = f"x86qw_{game.profile}_help"
-                    self.assertIn(f"tempalias {help_alias}", profile)
                     f10 = re.search(r'(?m)^bind F10 "([^"]+)"$', profile)
                     self.assertIsNotNone(f10)
                     assert f10 is not None
-                    self.assertIn(help_alias, f10.group(1).split(";"))
+                    if game.key == "ktx":
+                        self.assertIn("tempalias ktx_controls", profile)
+                        self.assertEqual("ktx_controls", f10.group(1))
+                    else:
+                        self.assertIn(f"tempalias {help_alias}", profile)
+                        self.assertIn(help_alias, f10.group(1).split(";"))
                     for expected in expected_gameplay[game.key]:
                         self.assertIn(expected, profile)
                     user_exec = f"exec x86qw-{game.profile}-user.cfg"
@@ -1385,21 +1434,61 @@ class ModernComponentTests(unittest.TestCase):
         profile = (ROOT / "dist/mods/ktx/1.47/x86qw/client.cfg").read_text(
             encoding="utf-8"
         )
-        aliases = dict(re.findall(
-            r'(?m)^tempalias\s+(x86qw_ktx_help(?:_\w+)?)\s+"(.*)"$', profile
-        ))
-        sections = {"move", "weapons", "team", "match", "util", "demo"}
-        self.assertTrue({f"x86qw_ktx_help_{name}" for name in sections} <= aliases.keys())
-        for name in sections:
-            body = aliases[f"x86qw_ktx_help_{name}"]
-            self.assertIn("^", body)
-            self.assertGreaterEqual(body.count(";echo"), 2)
-        help_body = aliases["x86qw_ktx_help"]
-        for name in sections:
-            self.assertIn(f"x86qw_ktx_help_{name}", help_body)
-        self.assertIn("Digite ^k^t^x^_^m^o^d^e", help_body)
-        self.assertIn(";ktx_mode;", help_body)
-        self.assertIn('bind F10 "toggleconsole;x86qw_ktx_help"', profile)
+        self.assertIn(
+            'tempalias ktx_controls "scr_consize 0.8;toggleconsole;exec x86qw-ktx-help.cfg"',
+            profile,
+        )
+        self.assertIn('bind F10 "ktx_controls"', profile)
+
+        help_profile = (ROOT / "dist/mods/ktx/1.47/x86qw/help.cfg").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ktx_mode", help_profile)
+        self.assertIn("x86qw_ktx_mode_help", help_profile)
+        rows = [
+            line.removeprefix("echo ") for line in help_profile.splitlines()
+            if line.startswith("echo ") and " - " in line
+        ]
+        self.assertGreaterEqual(len(rows), 40)
+        columns = []
+        for row in rows:
+            self.assertIn("^", row)
+            visible = re.sub(r"\^(.)", r"\1", row).replace("$x20", " ")
+            columns.append(visible.index(" - "))
+        self.assertEqual([26], sorted(set(columns)))
+
+    def test_each_ktx_mode_has_aligned_contextual_help_from_upstream_commands(self):
+        for mode in play_qw.load_ktx_modes(ROOT):
+            with self.subTest(mode=mode.key):
+                self.assertEqual(
+                    f"exec x86qw-ktx-help-{mode.key}.cfg",
+                    play_qw.ktx_mode_help_alias(mode),
+                )
+                help_profile = (
+                    ROOT / f"dist/mods/ktx/1.47/x86qw/help-{mode.key}.cfg"
+                ).read_text(encoding="utf-8")
+                rows = [
+                    line.removeprefix("echo ") for line in help_profile.splitlines()
+                    if line.startswith("echo ") and "- " in line
+                ]
+                self.assertEqual(len(mode.help_commands), len(rows))
+                separator_columns = []
+                for row, (command, description) in zip(rows, mode.help_commands):
+                    visible = re.sub(r"\^(.)", r"\1", row).replace("$x20", " ")
+                    self.assertIn(command, visible)
+                    self.assertTrue(visible.endswith(description))
+                    separator_columns.append(visible.index("- "))
+                self.assertEqual(1, len(set(separator_columns)))
+
+    def test_ktx_help_files_stay_below_the_console_line_limit(self):
+        profiles = [
+            ROOT / "dist/mods/ktx/1.47/x86qw/client.cfg",
+            *sorted((ROOT / "dist/mods/ktx/1.47/x86qw").glob("help*.cfg")),
+        ]
+        for profile in profiles:
+            with self.subTest(profile=profile.name):
+                lines = profile.read_text(encoding="utf-8").splitlines()
+                self.assertLessEqual(max(map(len, lines)), 512)
 
     def test_each_mod_profile_is_isolated_from_every_other_mod(self):
         profiles = {}
@@ -1446,7 +1535,7 @@ class ModernComponentTests(unittest.TestCase):
             {key: profile_bindings[key] for key in restored},
         )
         self.assertEqual("", nquake_bindings["F10"])
-        self.assertEqual("toggleconsole;x86qw_ktx_help", profile_bindings["F10"])
+        self.assertEqual("ktx_controls", profile_bindings["F10"])
         user_example = (
             ROOT / "dist/mods/ktx/1.47/x86qw/user.cfg.example"
         ).read_text(encoding="utf-8")

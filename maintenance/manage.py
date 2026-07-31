@@ -813,7 +813,13 @@ def command_verify(options: argparse.Namespace) -> int:
     if misplaced:
         raise ManagerError(f"itens fora de contexto na raiz: {', '.join(misplaced)}")
     if not options.no_tests:
-        environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+        environment = dict(
+            os.environ,
+            PYTHONDONTWRITEBYTECODE="1",
+            # Qualquer smoke de runtime incorporado às suítes herda janela
+            # segura. Casos dedicados de fullscreen removem esta variável.
+            X86QW_TEST_WINDOWED="1",
+        )
         for suite in ("maintenance/tests", "site/tests"):
             print(f"[INFO] Testando {suite}...")
             subprocess.run(

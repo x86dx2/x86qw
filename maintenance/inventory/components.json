@@ -149,6 +149,16 @@
       "project_sources": [
         {"path": "dist/mods/ktx/1.47/x86qw/client.cfg", "destination": "qw/x86qw-ktx.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/user.cfg.example", "destination": "qw/x86qw-ktx-user.cfg", "mode": "default"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help.cfg", "destination": "qw/x86qw-ktx-help.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-duel.cfg", "destination": "qw/x86qw-ktx-help-duel.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-2on2.cfg", "destination": "qw/x86qw-ktx-help-2on2.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-4on4.cfg", "destination": "qw/x86qw-ktx-help-4on4.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-ffa.cfg", "destination": "qw/x86qw-ktx-help-ffa.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg", "destination": "qw/x86qw-ktx-help-clan-arena.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-hoony.cfg", "destination": "qw/x86qw-ktx-help-hoony.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-midair.cfg", "destination": "qw/x86qw-ktx-help-midair.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-race.cfg", "destination": "qw/x86qw-ktx-help-race.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-practice.cfg", "destination": "qw/x86qw-ktx-help-practice.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-midair.cfg", "destination": "qw/x86qw-ktx-mode-midair.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-race.cfg", "destination": "qw/x86qw-ktx-mode-race.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/mode-practice.cfg", "destination": "qw/x86qw-ktx-mode-practice.cfg", "mode": "overlay"}
