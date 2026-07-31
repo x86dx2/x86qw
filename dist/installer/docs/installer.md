@@ -27,7 +27,7 @@ como fonte da distribuição. Antes de criar a instalação, o programa pergunta
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.
 
 O bundle contém `x86qw.pyz`, os launchers, `installer.json` e uma ponte mínima
-para a atualização iniciada pela CLI 0.1.9. Essa ponte encaminha a execução ao
+para a atualização iniciada pela CLI instalada. Essa ponte encaminha a execução ao
 zipapp e permanece apenas no diretório temporário. O zipapp incorpora a CLI e
 um catálogo runtime mínimo. PAKs, mods, configurações,
 gamecodes, fontes e inventários de manutenção são pacotes
@@ -352,16 +352,24 @@ novamente o bundle com `codesign`. Ao abrir o jogo, o launcher consulta a área
 segura e a resolução física do monitor principal. Em telas com notch, seleciona
 o modo fullscreen nativo 16:10 correspondente — por exemplo, `3024x1890` no
 painel `3024x1964` — mantendo `vid_fullscreen 1` e reservando apenas a faixa da
-câmera. Em monitores sem notch, mantém o fullscreen desktop. Alterações pessoais
-de vídeo desativam o gerenciamento automático e são preservadas. A migração da
-CLI 0.1.7 remove o ajuste temporário de janela sem bordas e restaura a
-configuração anterior quando ela ainda estiver intacta.
+câmera. A frequência permanece automática para que o ajuste de geometria não
+altere o timing da apresentação. Em monitores sem notch, mantém o fullscreen
+desktop. Alterações pessoais de vídeo desativam o gerenciamento automático e
+são preservadas. A migração da CLI 0.1.7 remove o ajuste temporário de janela
+sem bordas e restaura a configuração anterior quando ela ainda estiver intacta.
 
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
 ```text
 -game <mod> +sv_gamedir <mod> +map <mapa> +wait +exec perfil-x86qw.cfg
 ```
+
+Como o servidor integrado do ezQuake salva variáveis no `config.cfg` pessoal,
+o launcher também isola os valores de tick e salto: KTX recebe sua configuração
+própria e os gamecodes QuakeC recebem novamente a linha de base nQuake. A
+entrada local é sempre iniciada com `spectator 0`; isso evita o caminho de
+espectador incompatível entre o QVM KTX 1.47 e o servidor integrado do ezQuake
+3.6.9 sem alterar a opção pessoal gravada fora da execução.
 
 `-nohome` isola a execução de qualquer `~/.ezquake` externo. `-game` seleciona
 o diretório de arquivos e o gamecode antes da inicialização;

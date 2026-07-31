@@ -72,13 +72,16 @@ class SiteTests(unittest.TestCase):
         current = [item for item in installers if item.get("current") is True]
         self.assertEqual(1, len(current))
         package = current[0]
-        self.assertEqual("x86QW Installer 0.1.9", package["release_title"])
+        self.assertEqual("x86QW Installer 0.1.10", package["release_title"])
         self.assertIn(
-            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.9/",
+            "github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.10/",
             package["urls"][0],
         )
         self.assertEqual(
-            ["0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5", "0.1.6", "0.1.7", "0.1.8", "0.1.9"],
+            [
+                "0.1.0", "0.1.1", "0.1.2", "0.1.3", "0.1.4", "0.1.5",
+                "0.1.6", "0.1.7", "0.1.8", "0.1.9", "0.1.10",
+            ],
             sorted((item["version"] for item in installers), key=lambda value: tuple(map(int, value.split(".")))),
         )
         for historical in installers:

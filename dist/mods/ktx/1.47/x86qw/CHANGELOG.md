@@ -25,6 +25,10 @@
 - deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
 - registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
   novamente no console;
+- força a conexão local inicial como jogador; isso evita o caminho de espectador
+  incompatível entre o QVM atual e o servidor integrado do ezQuake 3.6.9;
+- aplica os valores de timing e salto do KTX somente ao KTX e restaura o padrão
+  nQuake ao abrir outro mod, impedindo o vazamento pelo `config.cfg` pessoal;
 - preserva a ordem determinística de pacotes.
 
 ## Pendências conhecidas
@@ -39,6 +43,10 @@
 - 30/07/2026: Duel iniciou diretamente em `1on1`; Midair foi ativado uma vez
   em `povdmm4`; Race carregou a rota de `dm6` sem ciclo de alternância; Practice
   confirmou o servidor destravado. Todos os processos encerraram sem órfãos.
+- 30/07/2026: dois crashes reproduzidos no ezQuake 3.6.9 foram identificados
+  como `SIGSEGV` em `SV_SpawnSpectator`, ao receber `classname` nulo do runtime
+  QVM. A conexão local explícita com `spectator 0` permaneceu ativa no mesmo
+  cenário de Duel que encerrava em aproximadamente oito segundos.
 
 ## Correção encaminhada ao cliente
 

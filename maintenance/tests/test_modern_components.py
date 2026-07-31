@@ -29,6 +29,17 @@ PLAY_SPEC.loader.exec_module(play_qw)
 sys.modules["gameplay"] = play_qw
 
 
+def local_server_baseline(game: str) -> list[str]:
+    arguments = ["+sb_listcache", "0", "+spectator", "0"]
+    settings = (
+        play_qw.KTX_LOCAL_SERVER_SETTINGS
+        if game == "ktx" else play_qw.NQUAKE_LOCAL_SERVER_SETTINGS
+    )
+    for name, value in settings:
+        arguments.extend([f"+{name}", value])
+    return arguments
+
+
 class ModernComponentTests(unittest.TestCase):
     def setUp(self):
         install_qw.console.configure(verbose=False, no_color=True)
@@ -231,7 +242,7 @@ class ModernComponentTests(unittest.TestCase):
                 "vid_usedesktopres": "0",
                 "vid_width": "3024",
                 "vid_height": "1890",
-                "vid_displayfrequency": "120",
+                "vid_displayfrequency": "0",
             }, values)
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
             self.assertTrue(marker["managed"])
@@ -259,6 +270,46 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(original, config.read_bytes())
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
             self.assertFalse(marker["managed"])
+
+    def test_notched_macos_migrates_the_managed_120hz_mode_to_automatic(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            config = target / "ezquake/configs/config.cfg"
+            config.parent.mkdir(parents=True)
+            previous = {
+                "vid_fullscreen": "1",
+                "vid_usedesktopres": "0",
+                "vid_width": "3024",
+                "vid_height": "1890",
+                "vid_displayfrequency": "120",
+            }
+            config.write_bytes(b"".join(
+                f'{name} "{value}"\n'.encode() for name, value in previous.items()
+            ))
+            marker = target / play_qw.MACOS_FULLSCREEN_LAYOUT
+            marker.parent.mkdir(parents=True)
+            marker.write_text(json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "mode": "notched-fullscreen",
+                "managed": True,
+                "settings": previous,
+            }), encoding="utf-8")
+            responses = [
+                mock.Mock(stdout='{"top":38,"width":1800,"height":1169}'),
+                mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
+                    "spdisplays_main": "spdisplays_yes",
+                    "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
+                }]}]})),
+            ]
+            with mock.patch.object(play_qw.sys, "platform", "darwin"):
+                with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
+                    player.configure_macos_fullscreen()
+            values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
+            self.assertEqual("0", values["vid_displayfrequency"])
+            state = json.loads(marker.read_text(encoding="utf-8"))
+            self.assertTrue(state["managed"])
+            self.assertEqual(values, state["settings"])
 
     def test_macos_without_a_notch_keeps_desktop_fullscreen(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -855,7 +906,7 @@ class ModernComponentTests(unittest.TestCase):
             verify.assert_called_once_with("total-destruction-2")
             support.assert_called_once_with([game])
             launch.assert_called_once_with(runtime, [
-                "+sb_listcache", "0",
+                *local_server_baseline("td2"),
                 "-game", "td2", "+sv_gamedir", "td2",
                 "+sv_progtype", "0",
                 "+cl_pext_lagteleport", "0",
@@ -880,7 +931,7 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", side_effect=["", "", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
-                "+sb_listcache", "0",
+                *local_server_baseline("ktx"),
                 "+tempalias", "on_enter", "wait",
                 "+tempalias", "on_enter_ffa", "wait",
                 "+tempalias", "on_enter_ctf", "wait",
@@ -908,7 +959,7 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
-                "+sb_listcache", "0",
+                *local_server_baseline("ktx"),
                 "+tempalias", "on_enter", "wait",
                 "+tempalias", "on_enter_ffa", "wait",
                 "+tempalias", "on_enter_ctf", "wait",
@@ -942,7 +993,7 @@ class ModernComponentTests(unittest.TestCase):
                                                     with mock.patch("builtins.input", return_value=""):
                                                         installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
-                    "+sb_listcache", "0",
+                    *local_server_baseline("ktx"),
                     "+tempalias", "on_enter", "wait",
                     "+tempalias", "on_enter_ffa", "wait",
                     "+tempalias", "on_enter_ctf", "wait",
@@ -992,7 +1043,7 @@ class ModernComponentTests(unittest.TestCase):
                                                     with mock.patch("builtins.input", side_effect=["", ""]):
                                                         installer.play_local()
                 launch.assert_called_once_with(runtime, [
-                    "+sb_listcache", "0",
+                    *local_server_baseline(key),
                     "-game", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", *before_map, "+map", map_name, "+wait",
                     *after_wait, "+exec", profile,
@@ -1015,7 +1066,7 @@ class ModernComponentTests(unittest.TestCase):
                                                 with mock.patch("builtins.input", side_effect=["", ""]):
                                                     installer.play_local()
             launch.assert_called_once_with(runtime, [
-                "+sb_listcache", "0",
+                *local_server_baseline("team-fortress"),
                 "-game", "fortress", "+sv_gamedir", "fortress",
                 "+sv_progtype", "0", "+exec", "x86qw-fortress-pre.cfg",
                 "+cl_pext_lagteleport", "0",

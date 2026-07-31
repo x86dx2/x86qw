@@ -28,7 +28,7 @@ file_hash = core.file_hash
 lexists = core.lexists
 remove_path = core.remove_path
 
-PLAY_SUPPORT_VERSION = "7"
+PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
 RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
 PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
@@ -65,6 +65,20 @@ JSON.stringify({
     height: Number(screen.frame.size.height)
 });
 """
+
+# The ezQuake listen server persists these server cvars in the shared personal
+# config. KTX intentionally uses MVDSV-oriented timing and jump values; reset
+# them explicitly when changing games so they cannot leak into legacy gamecode.
+NQUAKE_LOCAL_SERVER_SETTINGS = (
+    ("sv_mintic", "0"),
+    ("sv_maxtic", "0.1"),
+    ("pm_ktjump", "0.5"),
+)
+KTX_LOCAL_SERVER_SETTINGS = (
+    ("sv_mintic", "0.01"),
+    ("sv_maxtic", "0.03"),
+    ("pm_ktjump", "1"),
+)
 
 
 @dataclass(frozen=True)
@@ -299,12 +313,10 @@ class Player(core.Installer):
                 raise ValueError("monitor principal ausente")
             native = str(main.get("spdisplays_pixelresolution", ""))
             resolution = re.fullmatch(r"spdisplays_(\d+)x(\d+)Retina", native)
-            refresh = re.search(r"@\s*([0-9]+(?:\.[0-9]+)?)Hz", str(main.get("_spdisplays_resolution", "")))
-            if resolution is None or refresh is None:
-                raise ValueError("resolução física ou frequência ausente")
+            if resolution is None:
+                raise ValueError("resolução física ausente")
             width, panel_height = (int(value) for value in resolution.groups())
             height = round(width * 10 / 16)
-            frequency = round(float(refresh.group(1)))
         except (
             OSError, subprocess.SubprocessError, json.JSONDecodeError,
             KeyError, TypeError, ValueError,
@@ -319,7 +331,9 @@ class Player(core.Installer):
             "vid_usedesktopres": "0",
             "vid_width": str(width),
             "vid_height": str(height),
-            "vid_displayfrequency": str(frequency),
+            # Let SDL/macOS negotiate the refresh rate. Forcing the panel's
+            # ProMotion maximum here couples a menu-layout fix to frame timing.
+            "vid_displayfrequency": "0",
         }
 
     def write_macos_fullscreen_marker(
@@ -408,7 +422,7 @@ class Player(core.Installer):
         if not managed:
             console.success(
                 f"Fullscreen macOS ajustado para {desired['vid_width']}x{desired['vid_height']} "
-                f"a {desired['vid_displayfrequency']} Hz; menus permanecem abaixo do notch."
+                "com frequência automática; menus permanecem abaixo do notch."
             )
 
     @staticmethod
@@ -694,7 +708,12 @@ class Player(core.Installer):
             map_name = self.choose_local_map(game)
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
-        arguments = ["+sb_listcache", "0"]
+        arguments = ["+sb_listcache", "0", "+spectator", "0"]
+        server_settings = (
+            KTX_LOCAL_SERVER_SETTINGS if game.key == "ktx" else NQUAKE_LOCAL_SERVER_SETTINGS
+        )
+        for name, value in server_settings:
+            arguments.extend([f"+{name}", value])
         if game.key != "ktx":
             arguments.extend([
                 "-game", game.gamedir,
