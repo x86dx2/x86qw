@@ -69,6 +69,9 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("./maintenance/manage.py publish --dry-run", workflow)
         self.assertIn("./maintenance/manage.py publish", workflow)
         self.assertIn("GLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", workflow)
+        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\r'/}\"", workflow)
+        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\n'/}\"", workflow)
+        self.assertIn('export GITLAB_TOKEN="${GLAB_TOKEN}"', workflow)
         self.assertNotIn("pull_request:", workflow)
 
     def test_large_runtime_and_demo_payloads_are_lfs_managed(self):
