@@ -37,7 +37,9 @@ preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 Os valores aceitos são `macos`, `linux` e `windows`. Ao
 concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
 `hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
-sem argumentos mostra esse guia de uso; a ação principal é `./x86qw.sh play`.
+sem argumentos mostra esse guia de uso e a versão instalada; `./x86qw.sh version`
+e `./x86qw.sh --version` imprimem somente a versão. A ação principal é
+`./x86qw.sh play`.
 
 O KTX possui seleção própria de modo no menu. Também pode ser aberto
 diretamente, com modo e mapa opcionais:

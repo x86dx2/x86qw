@@ -108,7 +108,7 @@ class ModernComponentTests(unittest.TestCase):
             output.write_bytes(source.read_bytes())
 
     def test_new_actions_are_accepted(self):
-        for action in ("host", "proxy", "qtv", "components", "presets", "hub", "update", "upgrade"):
+        for action in ("host", "proxy", "qtv", "version", "components", "presets", "hub", "update", "upgrade"):
             with self.subTest(action=action):
                 parsed = install_qw.parse_arguments([action], ROOT)
                 self.assertEqual(action, parsed.action)
@@ -125,7 +125,21 @@ class ModernComponentTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
             install_qw.parse_arguments(["--help"], ROOT)
-        self.assertIn("play, host, proxy, qtv, update", output.getvalue())
+        self.assertIn(f"x86QW {install_qw.application_version()}", output.getvalue())
+        self.assertIn("play, host, proxy, qtv, version, update", output.getvalue())
+        self.assertIn("--version", output.getvalue())
+
+        version_output = io.StringIO()
+        with contextlib.redirect_stdout(version_output):
+            self.assertEqual(0, install_qw.main(["version"]))
+        self.assertEqual(
+            f"x86QW {install_qw.application_version()}\n", version_output.getvalue(),
+        )
+        flag_output = io.StringIO()
+        with contextlib.redirect_stdout(flag_output), self.assertRaises(SystemExit) as raised:
+            install_qw.parse_arguments(["--version"], ROOT)
+        self.assertEqual(0, raised.exception.code)
+        self.assertEqual(version_output.getvalue(), flag_output.getvalue())
 
     def test_play_has_its_own_module_and_is_exposed_by_the_main_cli(self):
         target = ROOT / "custom-quake"

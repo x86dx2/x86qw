@@ -304,6 +304,9 @@ O `config.cfg` pessoal e o `preset.cfg` mínimo do nQuake continuam fora do inve
 linha de comando do mod. O menu lista somente os gamecodes cujos componentes e
 arquivos de entrada estão presentes:
 
+A versão da CLI aparece no help e no cabeçalho de toda ação. Para consultá-la
+sem iniciar outro fluxo, use `./x86qw.sh version` ou `./x86qw.sh --version`.
+
 No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play`.
 
 - KTX em `qw/ktx.pk3`;

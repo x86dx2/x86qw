@@ -56,8 +56,8 @@ argumentos de inicialização nem regras de carregamento de pacotes.
 
 ### Produto e catálogo
 
-- o instalador público corrente nesta árvore é `0.1.19`;
-- o catálogo público contém 45 pacotes e o BOM contém 21 componentes;
+- o instalador público corrente nesta árvore é `0.1.20`;
+- o catálogo público contém 46 pacotes e o BOM contém 21 componentes;
 - ezQuake stable `3.6.9` e nightly
   `20260616-101233_a86996a` estão preservados para macOS universal, Linux
   x86-64 e Windows x64;

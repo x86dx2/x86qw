@@ -472,10 +472,18 @@ class InstallerTests(unittest.TestCase):
                 [str(launcher)], text=True, capture_output=True, check=False,
             )
             self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn("x86QW 1.0.6", result.stdout)
             self.assertIn("Uso: ./x86qw.sh <comando>", result.stdout)
             self.assertIn("./x86qw.sh play", result.stdout)
             self.assertIn("upgrade", result.stdout)
             self.assertNotIn("components", result.stdout)
+            for argument in ("version", "--version"):
+                with self.subTest(argument=argument):
+                    version = subprocess.run(
+                        [str(launcher), argument], text=True, capture_output=True, check=False,
+                    )
+                    self.assertEqual(0, version.returncode, version.stderr)
+                    self.assertEqual("x86QW 1.0.6\n", version.stdout)
             rejected = subprocess.run(
                 [str(launcher), "install"], text=True, capture_output=True, check=False,
             )

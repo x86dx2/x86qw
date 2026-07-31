@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T10:27:12Z",
+  "generated_at": "2026-07-31T10:35:58Z",
   "packages": [
     {
       "component": "core",
@@ -454,7 +454,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.1.19",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -478,7 +478,7 @@
       "release_notes": "Bootstrap autocontido do instalador público x86QW.",
       "mirror_title": "x86QW Installer 0.1.19",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
-      "mirror_latest": true
+      "mirror_latest": false
     },
     {
       "component": "installer",
@@ -509,6 +509,36 @@
       "mirror_title": "x86QW Installer 0.1.2",
       "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
       "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.1.20",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.1.20.zip",
+      "size": 79915,
+      "sha256": "d30a836693100869e72a56df3d14aa8715bf111a4f1350948f3d34be04134304",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.20/x86qw-installer-0.1.20.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.20/x86qw-installer-0.1.20.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.20/x86qw-installer-0.1.20.zip"
+      ],
+      "distribution_path": "installer/packages/0.1.20/x86qw-installer-0.1.20.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.1.20",
+      "release_title": "x86QW Installer 0.1.20",
+      "release_notes": "Bootstrap autocontido do instalador público x86QW.",
+      "mirror_title": "x86QW Installer 0.1.20",
+      "mirror_notes": "Instalador público e atualizador da distribuição x86QW.",
+      "mirror_latest": true
     },
     {
       "component": "installer",

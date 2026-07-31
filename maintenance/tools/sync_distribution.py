@@ -578,6 +578,7 @@ def verify_distribution(
     }
     allowed_unmanaged = {
         "installer/README.md",
+        "installer/VERSION",
         "installer/docs/installer.md",
         "installer/bin/install.ps1",
         "installer/bin/install.sh",

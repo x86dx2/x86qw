@@ -25,8 +25,10 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.19"
+VERSION_FILE = ROOT / "dist/installer/VERSION"
+VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
 BUNDLE_FILES = (
+    ("dist/installer/VERSION", "VERSION", 0o644),
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
 )

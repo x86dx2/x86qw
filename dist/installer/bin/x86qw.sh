@@ -5,8 +5,13 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 app="$root/.install/cli/x86qw.pyz"
 
 show_help() {
+  if [ -f "$app" ]; then
+    python3 "$app" --version
+  else
+    printf 'x86QW\n'
+  fi
   cat <<'EOF'
-x86QW · QuakeWorld moderno
+QuakeWorld moderno
 
 Uso: ./x86qw.sh <comando> [opções]
 
@@ -27,6 +32,7 @@ Manutenção:
   cleanup              limpa o cache gerenciado pelo x86QW
   uninstall            remove o x86QW e preserva PAKs e dados pessoais
   uninstall --purge    remove completamente instalação, dados e cache
+  version              mostra a versão da CLI instalada
   help                 mostra esta ajuda
 
 Exemplos:
@@ -42,6 +48,7 @@ EOF
 case "${1:-}" in
   '') show_help; exit 0 ;;
   help|-h|--help) show_help; exit 0 ;;
+  version|-V|--version) exec python3 "$app" --version ;;
   play|host|proxy|qtv) action=$1; shift; exec python3 "$app" "$action" "$@" --target "$root" ;;
   update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;

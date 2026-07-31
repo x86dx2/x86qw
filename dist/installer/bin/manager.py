@@ -105,6 +105,7 @@ CLI_RECEIPT = ".install/cli/receipt"
 LEGACY_CLI_RECEIPT = ".install/cli.receipt"
 INSTALL_STATE = ".install/state.json"
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
+DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
 QW_PACKAGE_PRIORITY = (
     "ktx.pk3",
     "models.pk3",
@@ -140,6 +141,24 @@ def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object
     if not isinstance(value, dict):
         raise InstallerError(f"{label} inválido em {archive}")
     return value
+
+
+def application_version() -> str:
+    if ZIPAPP_PATH is not None:
+        identity = read_zipapp_json(
+            ZIPAPP_PATH, INSTALLER_BUNDLE_METADATA, "Identidade da CLI pública",
+        )
+        version = identity.get("version")
+        location = ZIPAPP_PATH
+    else:
+        location = PROJECT_ROOT / DEVELOPMENT_VERSION_FILE
+        try:
+            version = location.read_text(encoding="utf-8").strip()
+        except OSError as error:
+            raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}") from error
+    if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+        raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}")
+    return version
 
 
 def create_resilient_connection(
@@ -400,7 +419,7 @@ class Console:
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
     def banner(self, action: str, target: Path) -> None:
-        title = self.paint("x86-qw", "1;36")
+        title = self.paint(f"x86-qw {application_version()}", "1;36")
         print(f"\n{title} · instalador QuakeWorld", flush=True)
         print(f"Ação: {action}  |  Destino: {target}", flush=True)
 
@@ -4141,9 +4160,14 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
     public_cli = ZIPAPP_PATH is not None
+    version = application_version()
     parser = FriendlyArgumentParser(
         prog="x86qw" if public_cli else "dist/installer/bin/manager.py",
-        description="Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido.",
+        description=(
+            f"x86QW {version}\n"
+            "Instala e mantém uma coleção QuakeWorld moderna em um diretório autocontido."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Exemplo: x86qw update"
             if public_cli
@@ -4154,6 +4178,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser._positionals.title = "argumentos"
     parser._optionals.title = "opções"
     parser.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
+    parser.add_argument(
+        "--version", action="version", version=f"x86QW {version}",
+        help="mostra a versão da CLI e encerra",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
@@ -4195,7 +4223,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "action", nargs="?", default="install",
         help=(
-            "install, play, host, proxy, qtv, update, upgrade, components, presets, hub, "
+            "install, play, host, proxy, qtv, version, update, upgrade, components, presets, hub, "
             "verify, uninstall ou cleanup"
         ),
     )
@@ -4205,7 +4233,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "play", "host", "proxy", "qtv", "update", "upgrade", "components",
+        "install", "play", "host", "proxy", "qtv", "version", "update", "upgrade", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
@@ -4262,6 +4290,9 @@ def main(arguments: list[str] | None = None) -> int:
             return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
+        if options.action == "version":
+            print(f"x86QW {application_version()}")
+            return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()
         if options.action == "play":
