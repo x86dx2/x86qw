@@ -89,12 +89,18 @@ Ao expor QTV em uma interface não loopback, a CLI sempre alerta que a senha do
 upstream não autentica a interface HTTP pública.
 
 Cada execução de serviço mantém um journal privado em `.install/sessions/`.
-Um lock atômico permite somente uma stack por instalação e impede que uma
-segunda CLI recupere uma sessão cujo controlador ainda esteja vivo. Depois de
-crash confirmado, a próxima execução valida PID, token de criação e executável,
+Um lock atômico cobre a instalação inteira: somente uma stack ou operação de
+manutenção mutável pode existir por destino. Assim, `install`, `components`,
+`presets`, `update`, `upgrade`, `repair`, `cleanup` e `uninstall` não alteram
+uma instalação usada por serviços, e serviços não iniciam durante manutenção.
+`version`, `verify`, `hub` e `play` permanecem disponíveis; `play` é seguro
+porque não altera payload gerenciado. Mesmo sem o arquivo de lock, um journal
+cujo controlador continue vivo bloqueia qualquer recuperação. Depois de crash
+confirmado, a próxima execução valida PID, token de criação e executável,
 encerra somente filhos cuja identidade coincida e reconcilia os temporários.
 Configurações efêmeras sensíveis são removidas mesmo quando modificadas;
-material não sensível modificado continua preservado. Consulte
+seu journal não contém hash nem conteúdo. Material não sensível modificado
+continua preservado. Consulte
 [docs/HOSTING.md](docs/HOSTING.md).
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
@@ -115,9 +121,10 @@ há mudanças, o comando informa isso e termina sem confirmação, aplicação o
 verificação integral. `repair` é o fluxo explícito para diagnosticar clientes,
 componentes, permissões e metadados incompletos e recompor somente conteúdo
 gerenciado ausente ou incorreto. Correções locais são aplicáveis pela CLI
-instalada; quando falta payload validado, ela orienta a reexecução segura do
-bootstrap. O canal e a versão registrada do ezQuake são preservados, sem
-downgrade.
+instalada mesmo sem catálogo — incluindo permissão de execução, preparação
+macOS e permissões de MVDSV/QTV/QWFWD. Quando falta payload validado, ela
+orienta a reexecução segura do bootstrap. O canal e a versão registrada do
+ezQuake são preservados, sem downgrade.
 
 `play`, `host`, `proxy`, `qtv` e `hub` não instalam nem atualizam payload
 gerenciado durante a execução normal. `play-support` é preparado por instalação,

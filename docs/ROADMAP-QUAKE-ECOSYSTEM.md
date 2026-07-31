@@ -4,8 +4,10 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline consolidado: branch `main`, commit
-`018e61f09b1f542f873d91be37dc8c1ebf3db589`, em 31 de julho de 2026.
+Baseline da release publicada: tag `x86qw-installer-0.2.1`, commit
+`527d0d1006`. Baseline inicial do código corretivo: branch `main`, commit
+`2c832762f6ac2fbebf7cfc7f925c13b9353f102a`, em 31 de julho de 2026. O HEAD
+documental corresponde à branch corretiva atual até seu merge.
 
 ## Escala de estado
 
@@ -71,17 +73,17 @@ Materialização necessária ao servidor é efêmera, journalizada e reconciliad
 
 ### ARCH-04 — CI e publicação
 
-**Entrega funcional:** MVP entregue
-**Validação:** unitária local; checks reais macOS/Linux/Windows pendentes nesta branch
+**Entrega funcional:** completa para o gate portável atual
+**Validação:** unitária e matriz real macOS/Linux/Windows; smokes nativos dos runtimes pendentes
 
 Pull requests executam LFS, validação integral, testes portáveis, parsing da
 CLI e dry-run do Worker. O workflow de release é separado, protegido e depende
 do workflow de validação. Publicação continua manual e não faz parte desta
 consolidação.
 
-Para chegar a “multiplataforma completa”:
+Os checks portáveis Python 3.10 e recente já executam nos três sistemas. Para
+chegar à validação nativa completa dos runtimes:
 
-- concluir com sucesso a matriz Python 3.10 e recente nos três runners;
 - registrar skips explícitos com motivo;
 - executar smokes nativos dos runtimes suportados;
 - guardar a evidência de release sem expor segredos.
@@ -165,17 +167,21 @@ separada.
 
 ### LIFE-01 — Lifecycle e crash recovery
 
-**Entrega funcional:** completa para uma stack em primeiro plano por instalação
-**Validação:** unitária em lock concorrente, sessão viva, controlador morto,
-PID reutilizado, órfão, configuração sensível, SIGINT, SIGTERM e crash; smokes
-nativos de recuperação ainda parciais
+**Entrega funcional:** completa para exclusão entre uma stack e manutenção por instalação
+**Validação:** unitária em lock concorrente, lock ausente com controlador vivo,
+journal legado, PID reutilizado, árvore órfã POSIX, Job Object Windows,
+configuração sensível, SIGINT, SIGTERM e crash; smokes nativos dos runtimes
+ainda pendentes
 
-O lock atômico é adquirido antes da recuperação e impede que uma segunda CLI
-reconcilie uma sessão viva. O preflight termina antes de iniciar filhos. A ordem
+O lock atômico compartilhado é adquirido antes da recuperação e impede tanto
+uma segunda stack quanto manutenção concorrente. O controlador do próprio
+journal também é validado, portanto a ausência do lock não torna uma sessão
+viva recuperável. O preflight termina antes de iniciar filhos. A ordem
 composta é MVDSV, RCON, QTV e QWFWD; o encerramento ocorre na ordem inversa.
 Controlador e filhos têm identidade por PID, token de criação e executável. O
-journal preserva material não sensível modificado e sempre remove configurações
-efêmeras sensíveis por unlink.
+journal preserva material não sensível modificado e remove configurações
+efêmeras sensíveis por unlink, sem registrar seus hashes. Diretórios ou arquivos
+especiais encontrados no lugar do temporário são preservados com erro.
 
 Serviços persistentes do sistema permanecem trabalho futuro e exigem proposta
 separada.

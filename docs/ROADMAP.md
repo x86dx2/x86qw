@@ -6,8 +6,11 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline consolidado: `018e61f09b1f542f873d91be37dc8c1ebf3db589`, branch
-`main`, em 31 de julho de 2026.
+Baseline da release publicada: tag `x86qw-installer-0.2.1`, commit
+`527d0d1006`. Baseline inicial do código corretivo: branch `main`, commit
+`2c832762f6ac2fbebf7cfc7f925c13b9353f102a`, em 31 de julho de 2026. O HEAD
+documental é o da branch corretiva que contém este arquivo e será fixado pelo
+merge, sem alterar os artefatos públicos da `0.2.1`.
 
 - instalador público `0.2.1`; `0.2.0` permanece imutável no histórico;
 - 50 pacotes e 21 componentes;
@@ -23,7 +26,7 @@ Baseline consolidado: `018e61f09b1f542f873d91be37dc8c1ebf3db589`, branch
 
 | Frente | Entrega funcional | Validação |
 |---|---|---|
-| Distribuição e instalador | completa para o escopo atual | unitária; matriz macOS/Linux/Windows no CI |
+| Distribuição e instalador | completa para o escopo atual | unitária; CI portável macOS/Linux/Windows concluída; smokes nativos pendentes |
 | KTX e modos | completa para o catálogo atual | unitária; smoke macOS existente |
 | Frogbots | MVP entregue | unitária; combinações suportadas cobertas |
 | Jogos legados atuais | MVP entregue | unitária; smoke gráfico manual permanece |
@@ -31,7 +34,7 @@ Baseline consolidado: `018e61f09b1f542f873d91be37dc8c1ebf3db589`, branch
 | QTV HTTP/upstream | MVP entregue | unitária; smoke macOS existente |
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
-| Lifecycle e recuperação | completa para uma stack em primeiro plano por instalação | unitária em lock concorrente, PID reutilizado, órfão, sinais, crash e rollback; smokes nativos ainda parciais |
+| Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
 | Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.2.1` |
 
 “MVP entregue” não significa que o runtime foi executado em todas as

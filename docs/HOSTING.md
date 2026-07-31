@@ -113,22 +113,32 @@ qualquer etapa encerra os processos já iniciados na ordem inversa.
 
 Os serviços rodam em primeiro plano. `Ctrl+C`, `SIGINT`, `SIGTERM`, erro de
 startup e encerramento normal encerram os filhos na ordem inversa, aguardam a
-saída e forçam apenas processos que não responderem. No Windows, a CLI usa o
-encerramento coordenado disponível em `subprocess`, seguido de `kill` após o
-timeout.
+saída e forçam apenas processos que não responderem. No Unix, a CLI verifica o
+grupo completo depois de `SIGTERM` e aplica `SIGKILL` se um descendente
+permanecer. No Windows, todos os processos entram em um Job Object com
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; falha de associação interrompe o startup.
 
-Somente uma stack de serviços x86QW pode ficar ativa por instalação. Antes de
-qualquer recuperação, a CLI adquire atomicamente
-`.install/sessions/active.lock`. Se o controlador registrado estiver vivo, a
-segunda execução falha sem tocar journal, processos ou arquivos. Se a identidade
-não puder ser comprovada, a CLI também falha de forma conservadora e orienta a
-inspeção do lock. Um lock abandonado só é reclamado quando PID, token de criação
-e executável confirmam que o controlador anterior morreu.
+Somente uma stack de serviços ou operação mutável pode ficar ativa por
+instalação. `host`, `proxy`, `qtv`, `install`, `components`, `presets`,
+`update`, `upgrade`, `repair`, `cleanup` e `uninstall` compartilham o lock
+atômico `.install/sessions/active.lock`, inclusive em `--dry-run`. Se o
+controlador registrado estiver vivo, a segunda execução falha sem tocar
+journal, processos ou arquivos. `version`, `verify`, `hub` e `play` continuam
+disponíveis; `play` não participa do lock porque permanece sem mutação de
+payload. O handoff de `update`/`upgrade` baixa e valida a CLI nova antes, e
+somente o processo final com `--skip-cli-update` adquire o lock para modificar
+o destino.
+
+Se a identidade não puder ser comprovada, a CLI falha de forma conservadora e
+orienta a inspeção do lock. Um lock abandonado só é reclamado quando PID, token
+de criação e executável confirmam que o controlador anterior morreu. A
+recuperação valida também o controlador gravado no próprio journal: remover
+apenas `active.lock` nunca autoriza recuperar uma stack ainda viva.
 
 Cada execução mantém um journal privado em
 `.install/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
 para o arquivo no Unix). Ele registra processos, configurações efêmeras,
-arquivos materializados, hashes e diretórios criados. Filhos usam grupo próprio
+arquivos materializados, hashes não sensíveis e diretórios criados. Filhos usam grupo próprio
 e registram PID, grupo, token de criação e executável. Após crash confirmado, a
 recuperação encerra somente o processo cuja identidade corresponda exatamente;
 PID reutilizado é preservado. Identidade inconclusiva bloqueia a nova stack e a
@@ -138,8 +148,10 @@ Temporários não sensíveis criados pela sessão são removidos quando ainda
 coincidem com o hash; modificados e dados preexistentes são preservados e
 reportados. Configurações efêmeras com senhas são classificadas como sensíveis
 e removidas por unlink no encerramento ou recuperação mesmo quando modificadas,
-sem backup ou conteúdo no journal. Isso é remoção lógica e não promessa de
-apagamento físico no dispositivo.
+sem hash, backup ou conteúdo no journal. Se o caminho tiver sido substituído
+por diretório ou arquivo especial, ele é preservado e a finalização falha sem
+remoção recursiva. Symlink é removido sem tocar seu alvo. Isso é remoção lógica
+e não promessa de apagamento físico no dispositivo.
 
 ## Limites de PK3/ZIP
 
