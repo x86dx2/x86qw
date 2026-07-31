@@ -351,12 +351,13 @@ class Player(core.Installer):
             )
         return {
             "vid_fullscreen": "1",
-            # SDL_WINDOW_FULLSCREEN_DESKTOP keeps the game fullscreen without
-            # changing the macOS display mode. Exclusive 3024x1890 could leave
-            # the panel captured and black after ezQuake exited.
-            "vid_usedesktopres": "1",
+            # The desktop-fullscreen mode ignores the explicit dimensions on
+            # notched displays and lets the menu occupy the panel's full
+            # 3024x1964 area. Select the detected safe mode before ezQuake
+            # starts so the engine opens directly at 3024x1890 instead.
+            "vid_usedesktopres": "0",
             "vid_width": str(width),
-            "vid_height": str(panel_height),
+            "vid_height": str(safe_height),
             # Let SDL/macOS negotiate the refresh rate. Forcing the panel's
             # ProMotion maximum here couples a menu-layout fix to frame timing.
             "vid_displayfrequency": "0",
@@ -447,8 +448,8 @@ class Player(core.Installer):
         self.write_macos_fullscreen_marker(marker, managed=True, settings=desired)
         if not managed:
             console.success(
-                f"Fullscreen desktop macOS ajustado para {desired['vid_width']}x{desired['vid_height']} "
-                "com frequência automática e restauração segura ao encerrar."
+                f"Fullscreen macOS definido antes da abertura em "
+                f"{desired['vid_width']}x{desired['vid_height']}, com frequência automática."
             )
 
     @staticmethod

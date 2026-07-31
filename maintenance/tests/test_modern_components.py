@@ -233,7 +233,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertTrue(backup.exists())
 
-    def test_notched_macos_uses_desktop_fullscreen_without_display_capture(self):
+    def test_notched_macos_sets_the_safe_fullscreen_mode_before_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, target, _ = self.make_player(Path(temporary))
             config = target / "ezquake/configs/config.cfg"
@@ -254,9 +254,9 @@ class ModernComponentTests(unittest.TestCase):
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
             self.assertEqual({
                 "vid_fullscreen": "1",
-                "vid_usedesktopres": "1",
+                "vid_usedesktopres": "0",
                 "vid_width": "3024",
-                "vid_height": "1964",
+                "vid_height": "1890",
                 "vid_displayfrequency": "0",
             }, values)
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
@@ -286,17 +286,17 @@ class ModernComponentTests(unittest.TestCase):
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
             self.assertFalse(marker["managed"])
 
-    def test_notched_macos_migrates_exclusive_fullscreen_to_desktop_fullscreen(self):
+    def test_notched_macos_migrates_desktop_fullscreen_to_the_safe_explicit_mode(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, target, _ = self.make_player(Path(temporary))
             config = target / "ezquake/configs/config.cfg"
             config.parent.mkdir(parents=True)
             previous = {
                 "vid_fullscreen": "1",
-                "vid_usedesktopres": "0",
+                "vid_usedesktopres": "1",
                 "vid_width": "3024",
-                "vid_height": "1890",
-                "vid_displayfrequency": "120",
+                "vid_height": "1964",
+                "vid_displayfrequency": "0",
             }
             config.write_bytes(b"".join(
                 f'{name} "{value}"\n'.encode() for name, value in previous.items()
@@ -321,8 +321,8 @@ class ModernComponentTests(unittest.TestCase):
                 with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
                     player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
-            self.assertEqual("1", values["vid_usedesktopres"])
-            self.assertEqual("1964", values["vid_height"])
+            self.assertEqual("0", values["vid_usedesktopres"])
+            self.assertEqual("1890", values["vid_height"])
             self.assertEqual("0", values["vid_displayfrequency"])
             state = json.loads(marker.read_text(encoding="utf-8"))
             self.assertTrue(state["managed"])

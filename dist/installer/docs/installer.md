@@ -349,15 +349,16 @@ janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
 **Options**. Durante a instalação ou o primeiro reparo, o x86QW registra
 `NSPrefersDisplaySafeAreaCompatibilityMode=false` no `Info.plist` e assina
 novamente o bundle com `codesign`. Ao abrir o jogo, o launcher consulta a área
-segura e a resolução física do monitor principal. O jogo permanece em
-fullscreen (`vid_fullscreen 1`), mas usa a resolução desktop do SDL
-(`vid_usedesktopres 1`), sem capturar nem trocar o modo físico do painel. Isso
-mantém o conteúdo na área fullscreen disponibilizada pelo macOS e permite que o
-sistema restaure imediatamente a tela ao encerrar. A frequência permanece
-automática. Alterações pessoais de vídeo desativam o gerenciamento automático e
-são preservadas. A migração da CLI 0.1.7 remove o ajuste temporário de janela
-sem bordas; instalações que receberam o modo exclusivo 16:10 também são
-migradas de forma unilateral para fullscreen desktop.
+segura e a resolução física do monitor principal. Antes de iniciar o ezQuake,
+o launcher grava fullscreen explícito (`vid_fullscreen 1` e
+`vid_usedesktopres 0`) com a resolução 16:10 segura detectada para o painel. Em
+um MacBook com painel físico 3024×1964, por exemplo, o jogo abre diretamente em
+3024×1890; o modo desktop automático não pode ignorar essas dimensões e ocupar a
+área recortada pelo notch. A frequência permanece automática. Alterações
+pessoais de vídeo desativam o gerenciamento automático e são preservadas. A
+migração da CLI 0.1.7 remove o ajuste temporário de janela sem bordas; instalações
+que receberam fullscreen desktop automático são migradas para o modo explícito
+seguro na próxima execução.
 
 A execução sempre configura os dois lados do servidor local, nesta ordem:
 
