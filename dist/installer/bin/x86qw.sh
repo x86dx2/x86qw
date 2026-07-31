@@ -21,7 +21,8 @@ Gameplay:
   hub                  lista servidores públicos para jogar ou observar
 
 Serviços:
-  host                 hospeda KTX em um MVDSV dedicado
+  host                 escolhe e hospeda somente o servidor de um jogo
+  host JOGO            hospeda KTX, Final Arena, Pro-X, Team Fortress ou TD2
   proxy                inicia o proxy QWFWD
   qtv                  inicia o relay web/MVD QTV
 
@@ -39,7 +40,8 @@ Exemplos:
   ./x86qw.sh play
   ./x86qw.sh play ktx --mode duel
   ./x86qw.sh play ktx --mode duel --bots 1
-  ./x86qw.sh host --mode 4on4 --map dm3 --bind 0.0.0.0
+  ./x86qw.sh host ktx --mode 4on4 --map dm3 --bind 0.0.0.0
+  ./x86qw.sh host team-fortress --map 2fort5r
 
 A instalação inicial e a adição de conteúdo são exclusivas do install.sh.
 EOF

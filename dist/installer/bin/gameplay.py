@@ -693,7 +693,11 @@ class Player(core.Installer):
         return match.group(1) if match is not None else game.version
 
     def choose_local_game(
-        self, games: list[LocalGameSpec], requested: str | None = None,
+        self,
+        games: list[LocalGameSpec],
+        requested: str | None = None,
+        *,
+        activity: str = "jogar localmente",
     ) -> LocalGameSpec:
         if requested is not None:
             matches = [game for game in games if game.key.casefold() == requested.casefold()]
@@ -709,7 +713,7 @@ class Player(core.Installer):
                 )
             available = ", ".join(game.key for game in games)
             raise InstallerError(f"Jogo local desconhecido: {requested}. Disponíveis: {available}.")
-        print("\nQual mod deseja jogar localmente?")
+        print(f"\nQual mod deseja {activity}?")
         labels = [game.label + (" (padrão)" if index == 1 else "") for index, game in enumerate(games, 1)]
         versions = [self.installed_game_version(game) for game in games]
         label_width = max(map(len, labels))
@@ -735,7 +739,11 @@ class Player(core.Installer):
             console.warning(f"Escolha inválida. Use um número entre 1 e {len(games)}.")
 
     def choose_ktx_mode(
-        self, modes: tuple[KtxModeSpec, ...], requested: str | None = None,
+        self,
+        modes: tuple[KtxModeSpec, ...],
+        requested: str | None = None,
+        *,
+        activity: str = "jogar",
     ) -> KtxModeSpec:
         if requested is not None:
             answer = requested.casefold()
@@ -748,7 +756,7 @@ class Player(core.Installer):
                 return matches[0]
             available = ", ".join(mode.key for mode in modes)
             raise InstallerError(f"Modo KTX desconhecido: {requested}. Disponíveis: {available}.")
-        print("\nQual modo KTX deseja jogar?")
+        print(f"\nQual modo KTX deseja {activity}?")
         labels = [mode.label + (" (padrão)" if index == 1 else "") for index, mode in enumerate(modes, 1)]
         label_width = max(map(len, labels))
         players_width = max(len(mode.recommended_players) for mode in modes)
@@ -1114,29 +1122,11 @@ def bounded_integer(minimum: int, maximum: int):
     return parse
 
 
-def parse_arguments(arguments: list[str], project_root: Path):
-    public_cli = core.ZIPAPP_PATH is not None
-    parser = core.FriendlyArgumentParser(
-        prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
-        description="Abre os mods locais da distribuição x86QW no ezQuake.",
-        epilog=(
-            "Exemplo: x86qw play"
-            if public_cli
-            else "Exemplo: ./dist/installer/bin/gameplay.py ./quake-world"
-        ),
-        add_help=False,
-    )
-    parser._positionals.title = "argumentos"
-    parser._optionals.title = "opções"
-    parser.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
-    parser.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="mostra comandos, caminhos e detalhes técnicos",
-    )
-    parser.add_argument(
-        "--no-color", action="store_true",
-        help="desativa cores mesmo em um terminal interativo",
-    )
+def add_game_launch_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    dedicated: bool = False,
+) -> None:
     parser.add_argument(
         "--mode", metavar="MODO",
         help="seleciona diretamente um modo quando o jogo for KTX",
@@ -1155,10 +1145,11 @@ def parse_arguments(arguments: list[str], project_root: Path):
         "--bot-skill", type=bounded_integer(1, 20), default=5, metavar="1-20",
         help="define a habilidade dos bots (padrão: 5)",
     )
-    parser.add_argument(
-        "--bot-team", metavar="EQUIPE",
-        help="coloca os bots de --bots numa equipe (máximo: 9 caracteres)",
-    )
+    if not dedicated:
+        parser.add_argument(
+            "--bot-team", metavar="EQUIPE",
+            help="coloca os bots de --bots numa equipe (máximo: 9 caracteres)",
+        )
     parser.add_argument(
         "--bot-weapon", choices=("random", *map(str, range(1, 9))), metavar="ARMA",
         help="limita os bots à arma 1-8 ou random",
@@ -1191,14 +1182,95 @@ def parse_arguments(arguments: list[str], project_root: Path):
         "--race-scoring", choices=("win", "scaled", "formula1"),
         help="seleciona a pontuação do Race match",
     )
+    if not dedicated:
+        parser.add_argument(
+            "--race-pacemaker", type=bounded_integer(1, 10), metavar="RANK",
+            help="carrega como pacemaker o tempo da posição 1-10",
+        )
+        parser.add_argument(
+            "--race-hide-players", action="store_true",
+            help="oculta os demais corredores",
+        )
+
+
+def resolve_ktx_launch_options(
+    parser: argparse.ArgumentParser,
+    namespace: argparse.Namespace,
+    game: str | None,
+) -> tuple[str | None, KtxLaunchOptions]:
+    if namespace.mode is not None:
+        if game not in {None, "ktx"}:
+            parser.error("--mode só pode ser usado com o jogo KTX")
+        game = "ktx"
+    bot_team = getattr(namespace, "bot_team", None)
+    race_pacemaker = getattr(namespace, "race_pacemaker", None)
+    race_hide_players = getattr(namespace, "race_hide_players", False)
+    if bot_team is not None and re.fullmatch(
+        r"[A-Za-z0-9_-]{1,9}", bot_team,
+    ) is None:
+        parser.error("--bot-team aceita 1 a 9 letras, números, _ ou -")
+    ktx_specific = any((
+        namespace.bots,
+        namespace.fill_bots,
+        namespace.bot_skill != 5,
+        bot_team is not None,
+        namespace.bot_weapon is not None,
+        namespace.bot_health is not None,
+        namespace.bot_break_on_death,
+        namespace.ctf_hook is not None,
+        namespace.ctf_runes is not None,
+        namespace.ctf_based_spawn,
+        namespace.race_style is not None,
+        namespace.race_scoring is not None,
+        race_pacemaker is not None,
+        race_hide_players,
+    ))
+    if ktx_specific:
+        if game not in {None, "ktx"}:
+            parser.error("opções de bots, CTF e Race só podem ser usadas com o jogo KTX")
+        game = "ktx"
+    return game, KtxLaunchOptions(
+        bots=namespace.bots or 0,
+        fill_bots=namespace.fill_bots,
+        bot_skill=namespace.bot_skill,
+        bot_team=bot_team,
+        bot_weapon=namespace.bot_weapon,
+        bot_health=namespace.bot_health,
+        bot_break_on_death=namespace.bot_break_on_death,
+        ctf_hook=namespace.ctf_hook,
+        ctf_runes=namespace.ctf_runes,
+        ctf_based_spawn=namespace.ctf_based_spawn,
+        race_style=namespace.race_style,
+        race_scoring=namespace.race_scoring,
+        race_pacemaker=race_pacemaker,
+        race_hide_players=race_hide_players,
+    )
+
+
+def parse_arguments(arguments: list[str], project_root: Path):
+    public_cli = core.ZIPAPP_PATH is not None
+    parser = core.FriendlyArgumentParser(
+        prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
+        description="Abre os mods locais da distribuição x86QW no ezQuake.",
+        epilog=(
+            "Exemplo: x86qw play"
+            if public_cli
+            else "Exemplo: ./dist/installer/bin/gameplay.py ./quake-world"
+        ),
+        add_help=False,
+    )
+    parser._positionals.title = "argumentos"
+    parser._optionals.title = "opções"
+    parser.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
     parser.add_argument(
-        "--race-pacemaker", type=bounded_integer(1, 10), metavar="RANK",
-        help="carrega como pacemaker o tempo da posição 1-10",
+        "-v", "--verbose", action="store_true",
+        help="mostra comandos, caminhos e detalhes técnicos",
     )
     parser.add_argument(
-        "--race-hide-players", action="store_true",
-        help="oculta os demais corredores",
+        "--no-color", action="store_true",
+        help="desativa cores mesmo em um terminal interativo",
     )
+    add_game_launch_arguments(parser)
     parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
         "selection", nargs="?",
@@ -1214,47 +1286,8 @@ def parse_arguments(arguments: list[str], project_root: Path):
             namespace.target = Path(namespace.selection)
         else:
             parser.error(f"jogo local desconhecido: {namespace.selection}")
-    if namespace.mode is not None:
-        if namespace.game not in {None, "ktx"}:
-            parser.error("--mode só pode ser usado com o jogo KTX")
-        namespace.game = "ktx"
-    if namespace.bot_team is not None and re.fullmatch(r"[A-Za-z0-9_-]{1,9}", namespace.bot_team) is None:
-        parser.error("--bot-team aceita 1 a 9 letras, números, _ ou -")
-    ktx_specific = any((
-        namespace.bots,
-        namespace.fill_bots,
-        namespace.bot_skill != 5,
-        namespace.bot_team is not None,
-        namespace.bot_weapon is not None,
-        namespace.bot_health is not None,
-        namespace.bot_break_on_death,
-        namespace.ctf_hook is not None,
-        namespace.ctf_runes is not None,
-        namespace.ctf_based_spawn,
-        namespace.race_style is not None,
-        namespace.race_scoring is not None,
-        namespace.race_pacemaker is not None,
-        namespace.race_hide_players,
-    ))
-    if ktx_specific:
-        if namespace.game not in {None, "ktx"}:
-            parser.error("opções de bots, CTF e Race só podem ser usadas com o jogo KTX")
-        namespace.game = "ktx"
-    namespace.ktx_options = KtxLaunchOptions(
-        bots=namespace.bots or 0,
-        fill_bots=namespace.fill_bots,
-        bot_skill=namespace.bot_skill,
-        bot_team=namespace.bot_team,
-        bot_weapon=namespace.bot_weapon,
-        bot_health=namespace.bot_health,
-        bot_break_on_death=namespace.bot_break_on_death,
-        ctf_hook=namespace.ctf_hook,
-        ctf_runes=namespace.ctf_runes,
-        ctf_based_spawn=namespace.ctf_based_spawn,
-        race_style=namespace.race_style,
-        race_scoring=namespace.race_scoring,
-        race_pacemaker=namespace.race_pacemaker,
-        race_hide_players=namespace.race_hide_players,
+    namespace.game, namespace.ktx_options = resolve_ktx_launch_options(
+        parser, namespace, namespace.game,
     )
     namespace.target = namespace.target or project_root / "quake-world"
     return namespace

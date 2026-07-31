@@ -65,14 +65,19 @@ independentes e verificáveis. Eles iniciam apenas em primeiro plano e usam
 loopback por padrão; exposição à LAN/Internet exige um `--bind` explícito:
 
 ```sh
-./x86qw.sh host --mode 4on4 --map dm3
-./x86qw.sh host --mode duel --map dm6 --bind 0.0.0.0 --with-qtv
+./x86qw.sh host
+./x86qw.sh host ktx --mode 4on4 --map dm3
+./x86qw.sh host team-fortress --map 2fort5r
+./x86qw.sh host td2 --map dm6 --bind 0.0.0.0 --with-qtv
 ./x86qw.sh proxy --bind 0.0.0.0
 ./x86qw.sh qtv --upstream 127.0.0.1:28501
 ```
 
-`host` executa KTX no MVDSV e aceita `--with-qtv` e `--with-proxy`; `proxy`
-executa QWFWD; `qtv` pode operar sozinho ou conectado a um MVDSV. `Ctrl+C`
+`host` oferece os mesmos jogos instalados de `play`, mas executa somente o
+MVDSV: KTX, Final Arena, Pro-X, Team Fortress ou Total Destruction 2. Para KTX,
+modo, mapa, bots e regras de CTF/Race podem ser definidos sem abrir o ezQuake.
+`--with-qtv` e `--with-proxy` continuam opcionais; `proxy` executa QWFWD e `qtv`
+pode operar sozinho ou conectado a um MVDSV. `Ctrl+C`
 encerra de forma coordenada todos os processos iniciados pelo comando. Senhas
 são gravadas somente em configurações efêmeras privadas, nunca na linha de
 comando nem na saída. Consulte [docs/HOSTING.md](docs/HOSTING.md).

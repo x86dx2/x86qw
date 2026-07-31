@@ -56,8 +56,8 @@ argumentos de inicialização nem regras de carregamento de pacotes.
 
 ### Produto e catálogo
 
-- o instalador público corrente nesta árvore é `0.1.21`;
-- o catálogo público contém 47 pacotes e o BOM contém 21 componentes;
+- o instalador público corrente nesta árvore é `0.1.25`;
+- o catálogo da árvore contém 48 pacotes e o BOM contém 21 componentes;
 - ezQuake stable `3.6.9` e nightly
   `20260616-101233_a86996a` estão preservados para macOS universal, Linux
   x86-64 e Windows x64;
@@ -1052,9 +1052,12 @@ Entregar hospedagem em primeiro plano com configuração explícita e preserváv
 
 ### Estado atual
 
-`x86qw host` seleciona modo/mapa, bind, porta, hostname, limites e senhas,
-grava configuração efêmera privada, coordena serviços opcionais e trata
-encerramento. Loopback é o padrão; exposição externa é explícita.
+`x86qw host` apresenta os jogos instalados de `play` e inicia somente o MVDSV.
+KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 aceitam mapa
+explícito; KTX também aceita modos, bots e regras dedicadas de CTF/Race. O
+comando seleciona bind, porta, hostname, limites e senhas, grava configuração
+efêmera privada, coordena serviços opcionais e trata encerramento. Loopback é o
+padrão; exposição externa é explícita.
 
 ### Escopo
 
@@ -1065,7 +1068,7 @@ encerramento. Loopback é o padrão; exposição externa é explícita.
 - fornecer presets duel, 2on2, 4on4, ffa, ctf, training, lan e tournament;
 - executar em primeiro plano e tratar sinais/encerramento;
 - mostrar comando final sanitizado em `--verbose`;
-- reservar integração futura com outros gamecodes compatíveis.
+- manter novos gamecodes compatíveis no mesmo catálogo compartilhado com `play`.
 
 ### Fora do escopo
 
@@ -1081,12 +1084,12 @@ encerramento. Loopback é o padrão; exposição externa é explícita.
 
 ### Critérios de aceite
 
-- [ ] presets iniciam e aceitam conexão local;
-- [ ] troca de mapa, KTX e encerramento são confirmados;
+- [x] jogos e modos iniciam e aceitam consulta local no MVDSV;
+- [x] troca de mapa, KTX e encerramento são confirmados;
 - [ ] MVD opcional é gravado e validado;
-- [ ] gamedir fica isolado da instalação cliente;
-- [ ] senhas e config pessoal sobrevivem a update;
-- [ ] `host` não baixa conteúdo e informa dependências ausentes.
+- [x] gamedir fica selecionado sem iniciar o processo do cliente;
+- [x] senhas e config pessoal sobrevivem a update;
+- [x] `host` não baixa conteúdo e informa dependências ausentes.
 
 ### Testes necessários
 

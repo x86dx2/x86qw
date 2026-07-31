@@ -48,7 +48,8 @@ echo   play ktx --mode MODO inicia KTX diretamente no modo informado
 echo   hub                  lista servidores publicos
 echo.
 echo Servicos:
-echo   host                 hospeda KTX em um MVDSV dedicado
+echo   host                 escolhe e hospeda somente o servidor de um jogo
+echo   host JOGO            hospeda KTX, Final Arena, Pro-X, TF ou TD2
 echo   proxy                inicia o proxy QWFWD
 echo   qtv                  inicia o relay web/MVD QTV
 echo.

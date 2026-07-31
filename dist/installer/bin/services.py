@@ -9,7 +9,8 @@ import importlib
 import ipaddress
 import os
 import platform
-import re
+import secrets
+import socket
 import subprocess
 import sys
 import tempfile
@@ -28,7 +29,12 @@ console = core.console
 lexists = core.lexists
 remove_path = core.remove_path
 
-MODE_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
+RUNTIME_NAMES = {
+    "mvdsv": ("mvdsv", "mvdsv.exe"),
+    "qwfwd": ("qwfwd", "qwfwd.exe"),
+    "qtv": ("qtv", "qtv.exe"),
+}
+DEDICATED_MODE_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
     "midair": (("deathmatch", "4"), ("k_midair", "1")),
     "dmm4": (("deathmatch", "4"),),
     "instagib": (("deathmatch", "4"), ("k_instagib", "1")),
@@ -41,12 +47,6 @@ MODE_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "practice": (("srv_practice_mode", "1"),),
 }
-RUNTIME_NAMES = {
-    "mvdsv": ("mvdsv", "mvdsv.exe"),
-    "qwfwd": ("qwfwd", "qwfwd.exe"),
-    "qtv": ("qtv", "qtv.exe"),
-}
-MAP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
 @dataclass(frozen=True)
@@ -54,12 +54,30 @@ class ProcessSpec:
     label: str
     arguments: tuple[str, ...]
     cwd: Path
+    startup_rcon: StartupRcon | None = None
+
+
+@dataclass(frozen=True)
+class StartupRcon:
+    address: str
+    port: int
+    password: str
+    config_name: str
 
 
 @dataclass(frozen=True)
 class MaterializedKtx:
     files: tuple[tuple[Path, str], ...]
     directories: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class HostedGame:
+    game: gameplay.LocalGameSpec
+    mode: gameplay.KtxModeSpec | None
+    map_name: str
+    assets: frozenset[str]
+    ktx_options: gameplay.KtxLaunchOptions
 
 
 def bounded_integer(minimum: int, maximum: int):
@@ -93,6 +111,14 @@ def q(value: str) -> str:
 
 def endpoint(address: str, port: int) -> str:
     return f"[{address}]:{port}" if ":" in address else f"{address}:{port}"
+
+
+def local_service_address(address: str) -> str:
+    if address == "0.0.0.0":
+        return "127.0.0.1"
+    if address == "::":
+        return "::1"
+    return address
 
 
 def ensure_private_directory(path: Path) -> None:
@@ -169,10 +195,16 @@ def ktx_assets(target: Path) -> frozenset[str]:
         raise InstallerError(f"Pacote KTX inválido: {package}") from error
 
 
-def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
+def materialize_dedicated_pk3(
+    package: Path,
+    destination_root: Path,
+    label: str,
+) -> MaterializedKtx:
     """Expose verified PK3 members to MVDSV, which does not implement PK3 loading."""
-    package = target / "qw" / "ktx.pk3"
-    destination_root = target / "qw"
+    if not package.is_file() or package.is_symlink():
+        raise InstallerError(f"Pacote {label} ausente ou inseguro: {package}")
+    if not destination_root.is_dir() or destination_root.is_symlink():
+        raise InstallerError(f"Diretório de {label} ausente ou inseguro: {destination_root}")
     created_files: list[tuple[Path, str]] = []
     created_directories: list[Path] = []
     try:
@@ -188,7 +220,7 @@ def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
                     or "\\" in info.filename
                     or any(part in {"", ".", ".."} for part in relative.parts)
                 ):
-                    raise InstallerError(f"Membro inseguro no pacote KTX: {info.filename}")
+                    raise InstallerError(f"Membro inseguro no pacote {label}: {info.filename}")
                 destination = destination_root.joinpath(*relative.parts)
                 parent = destination.parent
                 missing_parents: list[Path] = []
@@ -197,7 +229,7 @@ def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
                     missing_parents.append(cursor)
                     cursor = cursor.parent
                 if lexists(cursor) and (not cursor.is_dir() or cursor.is_symlink()):
-                    raise InstallerError(f"Diretório inseguro ao preparar MVDSV: {cursor}")
+                    raise InstallerError(f"Diretório inseguro ao preparar {label}: {cursor}")
                 for directory in reversed(missing_parents):
                     directory.mkdir()
                     created_directories.append(directory)
@@ -210,7 +242,7 @@ def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
                         or hashlib.sha256(destination.read_bytes()).hexdigest() != digest
                     ):
                         raise InstallerError(
-                            f"Arquivo local conflita com a carga KTX dedicada: {destination}"
+                            f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
                         )
                     continue
                 descriptor, temporary_name = tempfile.mkstemp(
@@ -232,8 +264,14 @@ def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
         raise
     except (OSError, zipfile.BadZipFile) as error:
         cleanup_dedicated_ktx(MaterializedKtx(tuple(created_files), tuple(created_directories)))
-        raise InstallerError(f"Não foi possível preparar a carga KTX para o MVDSV: {error}") from error
+        raise InstallerError(
+            f"Não foi possível preparar a carga de {label} para o MVDSV: {error}"
+        ) from error
     return MaterializedKtx(tuple(created_files), tuple(created_directories))
+
+
+def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
+    return materialize_dedicated_pk3(target / "qw/ktx.pk3", target / "qw", "KTX")
 
 
 def cleanup_dedicated_ktx(materialized: MaterializedKtx) -> None:
@@ -256,73 +294,214 @@ def cleanup_dedicated_ktx(materialized: MaterializedKtx) -> None:
                 pass
 
 
-def selected_mode(project_root: Path, key: str):
-    modes = gameplay.load_ktx_modes(project_root)
-    aliases = {
-        identity: mode
-        for mode in modes
-        for identity in (mode.key, *mode.aliases)
-    }
-    mode = aliases.get(key.casefold())
-    if mode is None:
+def select_hosted_game(
+    player: gameplay.Player,
+    options: argparse.Namespace,
+) -> HostedGame:
+    player.check_paks()
+    games = player.available_local_games()
+    if not games:
         raise InstallerError(
-            f"Modo KTX desconhecido: {key}. Use um destes: "
-            + ", ".join(mode.key for mode in modes)
+            "Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo."
         )
-    return mode
+    game = player.choose_local_game(games, options.game, activity="hospedar")
+    component = player.installed_component_for_game(game)
+    if component is None:
+        raise InstallerError(f"O componente de {game.label} não está mais instalado.")
+    player.migrate_mutable_component_defaults(component)
+    player.verify_component(component)
+    player.ensure_local_play_support(games)
+    mode = None
+    assets: frozenset[str] = frozenset()
+    if game.key == "ktx":
+        mode = player.choose_ktx_mode(
+            gameplay.load_ktx_modes(player.project_root),
+            options.mode,
+            activity="hospedar",
+        )
+        console.success(f"Modo KTX selecionado: {mode.label}.")
+        assets = ktx_assets(player.target)
+        map_name = player.choose_local_map(
+            game,
+            default_map=mode.default_map,
+            suggested_maps=mode.suggested_maps,
+            label=f"KTX · {mode.label}",
+            requested_map=options.map,
+            required_asset=mode.required_map_asset,
+            available_assets=assets,
+        )
+    else:
+        map_name = player.choose_local_map(game, requested_map=options.map)
+    return HostedGame(game, mode, map_name, assets, options.ktx_options)
+
+
+def materialize_hosted_game(
+    player: gameplay.Player,
+    selection: HostedGame,
+) -> MaterializedKtx | None:
+    package = player.game_marker_path(selection.game)
+    if package.suffix.casefold() != ".pk3":
+        return None
+    return materialize_dedicated_pk3(
+        package,
+        player.target / selection.game.gamedir,
+        selection.game.label,
+    )
+
+
+def dedicated_ktx_settings(
+    mode: gameplay.KtxModeSpec,
+    map_name: str,
+    assets: frozenset[str],
+    options: gameplay.KtxLaunchOptions,
+    maxclients: int,
+) -> tuple[tuple[str, str], ...]:
+    # Reuse the client launch validator, then translate supported choices into
+    # server cvars because MVDSV has no client aliases or client-command entity.
+    gameplay.ktx_launch_commands(mode, map_name, assets, options)
+    settings: list[tuple[str, str]] = list(DEDICATED_MODE_CVARS.get(mode.key, ()))
+    if gameplay.ktx_bot_options_requested(options):
+        target_clients = min(8, maxclients) if options.fill_bots else options.bots + 1
+        if target_clients > maxclients:
+            raise InstallerError(
+                f"--bots {options.bots} exige --maxclients de pelo menos {target_clients}."
+            )
+        settings.extend((
+            ("k_fb_enabled", "1"),
+            ("k_fb_skill", str(options.bot_skill)),
+            ("k_fb_autoadd_limit", str(target_clients)),
+            ("k_fb_autoremove_at", str(target_clients)),
+        ))
+        if options.bot_weapon is not None:
+            settings.append((
+                "k_fb_weapon", "0" if options.bot_weapon == "random" else options.bot_weapon,
+            ))
+        if options.bot_health is not None:
+            settings.append(("k_fb_health", str(options.bot_health)))
+        if options.bot_break_on_death:
+            settings.append(("k_fb_break_on_death", "1"))
+    if mode.key == "ctf":
+        if options.ctf_hook is not None:
+            hook_styles = {"smooth": "1", "fast": "2", "classic": "3", "crhook": "4"}
+            settings.append(("k_ctf_hook", "0" if options.ctf_hook == "off" else "1"))
+            if options.ctf_hook != "off":
+                settings.append(("k_ctf_hookstyle", hook_styles[options.ctf_hook]))
+        if options.ctf_runes is not None:
+            settings.append(("k_ctf_runes", "1" if options.ctf_runes == "on" else "0"))
+        if options.ctf_based_spawn:
+            settings.append(("k_ctf_based_spawn", "1"))
+    if mode.key == "race":
+        if options.race_style is not None:
+            settings.extend((
+                ("k_race_simultaneous", "1" if options.race_style == "simultaneous" else "0"),
+                ("k_race_match", "1" if options.race_style == "match" else "0"),
+            ))
+        if options.race_scoring is not None:
+            scoring = {"win": "0", "scaled": "1", "formula1": "2"}
+            settings.extend((
+                ("k_race_match", "1"),
+                ("k_race_scoring_system", scoring[options.race_scoring]),
+            ))
+    return tuple(settings)
 
 
 def host_spec(
-    installer: core.Installer, options: argparse.Namespace, session_paths: list[Path],
+    installer: gameplay.Player,
+    options: argparse.Namespace,
+    selection: HostedGame,
+    session_paths: list[Path],
     materialized_ktx: list[MaterializedKtx],
 ) -> ProcessSpec:
-    if installer.verify_component("ktx") == 0:
-        raise InstallerError("O componente ktx é obrigatório para hospedar com MVDSV.")
     binary = runtime_binary(installer, "mvdsv")
-    mode = selected_mode(installer.project_root, options.mode)
-    map_name = options.map or mode.default_map
-    if MAP_NAME.fullmatch(map_name) is None:
-        raise InstallerError(f"Mapa inválido: {map_name}")
-    assets = ktx_assets(installer.target)
-    if mode.required_map_asset is not None:
-        required = mode.required_map_asset.format(map=map_name.casefold())
-        if required not in assets:
-            raise InstallerError(f"O mapa {map_name} não possui o recurso obrigatório {required}.")
-    materialized_ktx.append(materialize_dedicated_ktx(installer.target))
+    game = selection.game
+    mode = selection.mode
+    map_name = selection.map_name
+    materialized = materialize_hosted_game(installer, selection)
+    if materialized is not None:
+        materialized_ktx.append(materialized)
 
+    hostname = options.hostname or f"x86QW - {game.label}"
+    user_config = (
+        "x86qw-mvdsv-user.cfg"
+        if game.key == "ktx"
+        else f"x86qw-{game.profile}-user.cfg"
+    )
+    post_map_settings: tuple[tuple[str, str], ...] = ()
+    if game.key == "ktx":
+        assert mode is not None
+        post_map_settings = dedicated_ktx_settings(
+            mode, map_name, selection.assets, selection.ktx_options, options.maxclients,
+        )
+    bootstrap_password = secrets.token_urlsafe(24) if post_map_settings else None
+    initial_rcon_password = bootstrap_password or options.rcon_password
     lines = [
-        "exec x86qw-mvdsv-user.cfg",
-        f"hostname {q(safe_text(options.hostname, 'hostname'))}",
+        f"exec {user_config}",
+        f"hostname {q(safe_text(hostname, 'hostname'))}",
         f"maxclients {options.maxclients}",
-        "sv_progtype 2",
-        "sv_mintic 0.01",
-        "sv_maxtic 0.03",
-        "pm_ktjump 1",
-        f"set k_defmode {mode.usermode}",
-        f"set k_defmap {map_name}",
         f"password {q(options.password)}",
         f"spectator_password {q(options.spectator_password)}",
-        f"rcon_password {q(options.rcon_password)}",
+        f"rcon_password {q(initial_rcon_password)}",
         f"set demo_tmp_record {0 if options.no_mvd else 1}",
     ]
-    for name, value in mode.launch_settings:
-        lines.append(f"{name} {value}")
+    if game.key == "ktx":
+        assert mode is not None
+        lines.extend((
+            "sv_progtype 2",
+            "sv_mintic 0.01",
+            "sv_maxtic 0.03",
+            "pm_ktjump 1",
+            f"set k_defmode {mode.usermode}",
+            f"set k_defmap {map_name}",
+            f"set x86qw_ktx_preset {mode.key}",
+        ))
+        for name, value in mode.launch_settings:
+            lines.append(f"{name} {value}")
+    else:
+        lines.extend((
+            "sv_progtype 0",
+            f"sv_gamedir {game.gamedir}",
+            f"sv_progsname x86qw_{game.gamedir}",
+            "sv_mintic 0",
+            "sv_maxtic 0.1",
+            "pm_ktjump 0.5",
+        ))
+        if game.key == "pro-x":
+            lines.append("sv_loadentfiles 1")
     if options.with_qtv:
         lines.extend((
             f"qtv_streamport {options.port}",
             f"qtv_password {q(options.qtv_password)}",
         ))
-    session = temporary_config(installer.target / "qw", "x86qw_host_", lines)
+    lines.append(f"map {q(map_name)}")
+    game_directory = installer.target / game.gamedir
+    session = temporary_config(game_directory, "x86qw_host_", lines)
     session_paths.append(session)
+    startup_rcon = None
+    if bootstrap_password is not None:
+        post_map = temporary_config(
+            game_directory,
+            "x86qw_host_post_",
+            [
+                *(f"set {name} {value}" for name, value in post_map_settings),
+                f"rcon_password {q(options.rcon_password)}",
+            ],
+        )
+        session_paths.append(post_map)
+        startup_rcon = StartupRcon(
+            local_service_address(options.bind), options.port,
+            bootstrap_password, post_map.name,
+        )
 
     arguments = [
-        str(binary), "-basedir", str(installer.target), "-ip", options.bind,
-        "-port", str(options.port), "-mem", "64", "+exec", session.name,
-        "+map", map_name,
+        str(binary), "-basedir", str(installer.target),
     ]
-    for name, value in MODE_CVARS.get(mode.key, ()):
-        arguments.extend(("+set", name, value))
-    return ProcessSpec("MVDSV", tuple(arguments), installer.target)
+    if game.key != "ktx":
+        arguments.extend(("-game", game.gamedir))
+    arguments.extend((
+        "-ip", options.bind, "-port", str(options.port), "-mem", "64",
+        "+exec", session.name,
+    ))
+    return ProcessSpec("MVDSV", tuple(arguments), installer.target, startup_rcon)
 
 
 def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> ProcessSpec:
@@ -382,12 +561,48 @@ def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
                 process.wait()
 
 
+def apply_startup_rcon(startup: StartupRcon, timeout: float = 8.0) -> None:
+    family = socket.AF_INET6 if ":" in startup.address else socket.AF_INET
+    destination = (startup.address, startup.port)
+    deadline = time.monotonic() + timeout
+    with socket.socket(family, socket.SOCK_DGRAM) as connection:
+        connection.settimeout(0.25)
+        while time.monotonic() < deadline:
+            connection.sendto(b"\xff\xff\xff\xffstatus\n", destination)
+            try:
+                response, _ = connection.recvfrom(65535)
+            except TimeoutError:
+                continue
+            if response.startswith(b"\xff\xff\xff\xff"):
+                break
+        else:
+            raise InstallerError(
+                f"MVDSV não respondeu em {endpoint(startup.address, startup.port)}."
+            )
+
+        # The first status reply is emitted only after the game VM has run its
+        # first frame and applied the selected KTX usermode defaults.
+        command = f"rcon {startup.password} exec {startup.config_name}\n".encode("ascii")
+        connection.settimeout(2.0)
+        connection.sendto(b"\xff\xff\xff\xff" + command, destination)
+        try:
+            response, _ = connection.recvfrom(65535)
+        except TimeoutError as error:
+            raise InstallerError("MVDSV não confirmou a configuração dedicada.") from error
+        if b"Bad rcon_password" in response:
+            raise InstallerError("MVDSV rejeitou a configuração dedicada por RCON local.")
+
+
 def run_processes(specs: list[ProcessSpec]) -> int:
     processes: list[subprocess.Popen[bytes]] = []
     try:
         for spec in specs:
             console.detail(f"Iniciando {spec.label}: {spec.arguments[0]}")
-            processes.append(subprocess.Popen(spec.arguments, cwd=spec.cwd))
+            process = subprocess.Popen(spec.arguments, cwd=spec.cwd)
+            processes.append(process)
+            if spec.startup_rcon is not None:
+                apply_startup_rcon(spec.startup_rcon)
+                console.detail("Opções dedicadas aplicadas após a inicialização do KTX.")
         while True:
             for spec, process in zip(specs, processes):
                 code = process.poll()
@@ -416,17 +631,28 @@ def add_target(parser: argparse.ArgumentParser, project_root: Path) -> None:
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
     parser = core.FriendlyArgumentParser(
-        prog="x86qw", description="Hospeda KTX e executa os serviços QuakeWorld do x86QW.",
+        prog="x86qw", description="Hospeda jogos e executa os serviços QuakeWorld do x86QW.",
     )
     subparsers = parser.add_subparsers(dest="action", required=True)
 
-    host = subparsers.add_parser("host", help="inicia um servidor KTX dedicado com MVDSV")
+    host = subparsers.add_parser(
+        "host",
+        help="inicia somente um servidor dedicado com MVDSV",
+        description="Hospeda um jogo instalado somente no servidor MVDSV, sem abrir o ezQuake.",
+        add_help=False,
+    )
+    host._positionals.title = "argumentos"
+    host._optionals.title = "opções"
+    host.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
     add_target(host, project_root)
-    host.add_argument("--mode", default="duel", help="modo KTX (duel, 2on2, 4on4, ctf, race…)")
-    host.add_argument("--map", help="mapa inicial")
+    gameplay.add_game_launch_arguments(host, dedicated=True)
+    host.add_argument(
+        "selection", nargs="?",
+        help="jogo: ktx, final-arena, pro-x, team-fortress ou td2",
+    )
     host.add_argument("--bind", type=bind_address, default="127.0.0.1", help="IP do servidor (padrão: loopback)")
     host.add_argument("--port", type=bounded_integer(1024, 65535), default=28501)
-    host.add_argument("--hostname", default="x86QW MVDSV")
+    host.add_argument("--hostname", help="nome público do servidor")
     host.add_argument("--maxclients", type=bounded_integer(1, 32), default=16)
     host.add_argument("--password", default="", help="senha para jogadores")
     host.add_argument("--spectator-password", default="", help="senha para espectadores")
@@ -452,17 +678,31 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     qtv.add_argument("--hostname", default="x86QW QTV")
     qtv.add_argument("--upstream", help="MVDSV de origem no formato host:porta")
     qtv.add_argument("--password", default="", help="senha QTV configurada no MVDSV")
-    return parser.parse_args(arguments)
+    namespace = parser.parse_args(arguments)
+    if namespace.action == "host":
+        namespace.game = None
+        if namespace.selection is not None:
+            game_keys = {game.key for game in gameplay.LOCAL_GAMES}
+            if namespace.selection.casefold() not in game_keys:
+                parser.error(f"jogo desconhecido: {namespace.selection}")
+            namespace.game = namespace.selection.casefold()
+        namespace.game, namespace.ktx_options = gameplay.resolve_ktx_launch_options(
+            parser, namespace, namespace.game,
+        )
+    return namespace
 
 
 def main(arguments: list[str] | None = None) -> int:
     temporary_paths: list[Path] = []
     materialized_ktx: list[MaterializedKtx] = []
+    installer = None
     try:
         options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         target = options.target.expanduser().resolve()
-        installer = core.Installer(core.PROJECT_ROOT, target, online_only=core.ZIPAPP_PATH is not None)
+        installer = gameplay.Player(
+            core.PROJECT_ROOT, target, online_only=core.ZIPAPP_PATH is not None,
+        )
         installer.validate_target("verify", purge=False)
         installer.reject_target_symlinks()
 
@@ -480,9 +720,9 @@ def main(arguments: list[str] | None = None) -> int:
             console.info(f"QTV HTTP: http://{endpoint(options.bind, options.port)}/")
             return run_processes([spec])
 
-        console.banner("hospedar KTX com MVDSV", target)
-        mode = selected_mode(installer.project_root, options.mode)
-        map_name = options.map or mode.default_map
+        console.banner("hospedar jogo com MVDSV", target)
+        selection = select_hosted_game(installer, options)
+        hostname = options.hostname or f"x86QW - {selection.game.label}"
         safe_text(options.password, "senha de jogador") if options.password else None
         safe_text(options.spectator_password, "senha de espectador") if options.spectator_password else None
         safe_text(options.rcon_password, "senha RCON") if options.rcon_password else None
@@ -493,12 +733,19 @@ def main(arguments: list[str] | None = None) -> int:
         if options.with_qtv:
             specs.append(qtv_spec(
                 installer, bind=options.qtv_bind, port=options.qtv_port,
-                hostname=f"{options.hostname} QTV", upstream=f"127.0.0.1:{options.port}",
+                hostname=f"{hostname} QTV", upstream=f"127.0.0.1:{options.port}",
                 password=options.qtv_password, session_paths=temporary_paths,
             ))
-        host = host_spec(installer, options, temporary_paths, materialized_ktx)
+        host = host_spec(
+            installer, options, selection, temporary_paths, materialized_ktx,
+        )
         specs.append(host)
-        console.info(f"Servidor: connect {options.bind}:{options.port} · {mode.label} em {map_name}")
+        label = selection.game.label
+        if selection.mode is not None:
+            label += f" · {selection.mode.label}"
+        console.info(
+            f"Servidor: connect {options.bind}:{options.port} · {label} em {selection.map_name}"
+        )
         if options.with_qtv:
             console.info(f"QTV HTTP: http://{endpoint(options.qtv_bind, options.qtv_port)}/")
         return run_processes(specs)
@@ -517,6 +764,8 @@ def main(arguments: list[str] | None = None) -> int:
                 remove_path(path)
         for materialized in reversed(materialized_ktx):
             cleanup_dedicated_ktx(materialized)
+        if installer is not None:
+            installer.cleanup_stage()
 
 
 if __name__ == "__main__":

@@ -160,14 +160,21 @@ class ModernComponentTests(unittest.TestCase):
     def test_service_cli_exposes_host_proxy_and_qtv(self):
         target = ROOT / "custom-quake"
         host = services_qw.parse_arguments([
-            "host", "--target", str(target), "--mode", "4on4", "--map", "dm3",
-            "--bind", "0.0.0.0", "--with-qtv", "--with-proxy",
+            "host", "ktx", "--target", str(target), "--mode", "4on4", "--map", "dm3",
+            "--bots", "2", "--bot-skill", "12", "--bind", "0.0.0.0",
+            "--with-qtv", "--with-proxy",
         ], ROOT)
         self.assertEqual("host", host.action)
+        self.assertEqual("ktx", host.game)
         self.assertEqual("4on4", host.mode)
         self.assertEqual("dm3", host.map)
+        self.assertEqual(2, host.ktx_options.bots)
+        self.assertEqual(12, host.ktx_options.bot_skill)
         self.assertTrue(host.with_qtv)
         self.assertTrue(host.with_proxy)
+        td2 = services_qw.parse_arguments(["host", "td2", "--map", "dm6"], ROOT)
+        self.assertEqual("td2", td2.game)
+        self.assertIsNone(td2.mode)
         proxy = services_qw.parse_arguments(["proxy", "--port", "30001"], ROOT)
         self.assertEqual(30001, proxy.proxy_port)
         qtv = services_qw.parse_arguments(["qtv", "--upstream", "127.0.0.1:28501"], ROOT)
@@ -177,6 +184,90 @@ class ModernComponentTests(unittest.TestCase):
                 services_qw.parse_arguments(["host", "--bind", "localhost"], ROOT)
             with self.assertRaises(SystemExit):
                 services_qw.parse_arguments(["proxy", "--port", "80"], ROOT)
+            with self.assertRaises(SystemExit):
+                services_qw.parse_arguments(["host", "td2", "--bots", "1"], ROOT)
+
+    def test_dedicated_ktx_options_are_translated_to_server_cvars(self):
+        modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
+        bot_options = play_qw.KtxLaunchOptions(
+            bots=2, bot_skill=12, bot_weapon="random", bot_health=200,
+            bot_break_on_death=True,
+        )
+        settings = dict(services_qw.dedicated_ktx_settings(
+            modes["duel"], "dm6", frozenset({"bots/maps/dm6.bot"}), bot_options, 16,
+        ))
+        self.assertEqual("1", settings["k_fb_enabled"])
+        self.assertEqual("12", settings["k_fb_skill"])
+        self.assertEqual("3", settings["k_fb_autoadd_limit"])
+        self.assertEqual("0", settings["k_fb_weapon"])
+        self.assertEqual("200", settings["k_fb_health"])
+        ctf = dict(services_qw.dedicated_ktx_settings(
+            modes["ctf"], "e2m2", frozenset(), play_qw.KtxLaunchOptions(
+                ctf_hook="smooth", ctf_runes="off", ctf_based_spawn=True,
+            ), 16,
+        ))
+        self.assertEqual("1", ctf["k_ctf_hook"])
+        self.assertEqual("1", ctf["k_ctf_hookstyle"])
+        self.assertEqual("0", ctf["k_ctf_runes"])
+        self.assertEqual("1", ctf["k_ctf_based_spawn"])
+
+    def test_non_ktx_host_spec_uses_only_mvdsv_and_the_selected_gamedir(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            (target / game.gamedir).mkdir()
+            options = services_qw.parse_arguments([
+                "host", "td2", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, None, "dm6", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            materialized = []
+            binary = target / "mvdsv"
+            with mock.patch.object(services_qw, "runtime_binary", return_value=binary):
+                spec = services_qw.host_spec(
+                    player, options, selection, sessions, materialized,
+                )
+            self.assertEqual("MVDSV", spec.label)
+            self.assertEqual(str(binary), spec.arguments[0])
+            self.assertIn(("-game", "td2"), list(zip(spec.arguments, spec.arguments[1:])))
+            self.assertNotIn("ezquake", " ".join(spec.arguments).casefold())
+            config = sessions[0].read_text(encoding="utf-8")
+            self.assertIn("exec x86qw-td2-user.cfg", config)
+            self.assertIn("sv_progtype 0", config)
+            self.assertIn("sv_progsname x86qw_td2", config)
+            self.assertIn('map "dm6"', config)
+            self.assertEqual([], materialized)
+
+    def test_ktx_host_reapplies_explicit_settings_after_map_load(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "ctf")
+            (target / game.gamedir).mkdir()
+            options = services_qw.parse_arguments([
+                "host", "ktx", "--mode", "ctf", "--map", "e2m2",
+                "--ctf-hook", "smooth", "--ctf-runes", "off",
+                "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, mode, "e2m2", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            with mock.patch.object(
+                services_qw, "runtime_binary", return_value=target / "mvdsv",
+            ), mock.patch.object(services_qw, "materialize_hosted_game", return_value=None):
+                spec = services_qw.host_spec(player, options, selection, sessions, [])
+            startup = sessions[0].read_text(encoding="utf-8")
+            post_map = sessions[1].read_text(encoding="utf-8")
+            self.assertIn('map "e2m2"', startup)
+            self.assertNotIn("set k_ctf_hook 1", startup)
+            self.assertIn("set k_ctf_hook 1", post_map)
+            self.assertIn("set k_ctf_runes 0", post_map)
+            self.assertTrue(post_map.rstrip().endswith('rcon_password ""'))
+            self.assertIsNotNone(spec.startup_rcon)
+            self.assertEqual(sessions[1].name, spec.startup_rcon.config_name)
 
     def test_service_runtime_platforms_and_ipv6_endpoints_are_explicit(self):
         self.assertEqual("macos-arm64", services_qw.runtime_variant("Darwin", "arm64"))
