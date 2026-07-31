@@ -466,31 +466,45 @@ class InstallerTests(unittest.TestCase):
                 (target / "x86qw.cmd").read_bytes(),
             )
             self.assertEqual("1.0.6", installer.installed_cli_version())
-            launcher = target / "x86qw.sh"
-            self.assertTrue(os.access(launcher, os.X_OK))
+            if os.name == "nt":
+                launcher = target / "x86qw.cmd"
+                command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", str(launcher)]
+                usage = "Uso: x86qw.cmd <comando>"
+                play_usage = "play"
+            else:
+                launcher = target / "x86qw.sh"
+                command = [str(launcher)]
+                usage = "Uso: ./x86qw.sh <comando>"
+                play_usage = "./x86qw.sh play"
+                self.assertTrue(os.access(launcher, os.X_OK))
+            environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
             result = subprocess.run(
-                [str(launcher)], text=True, capture_output=True, check=False,
+                command, text=True, encoding="utf-8", capture_output=True,
+                check=False, env=environment,
             )
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertIn("x86QW 1.0.6", result.stdout)
-            self.assertIn("Uso: ./x86qw.sh <comando>", result.stdout)
-            self.assertIn("./x86qw.sh play", result.stdout)
+            self.assertIn(usage, result.stdout)
+            self.assertIn(play_usage, result.stdout)
             self.assertIn("upgrade", result.stdout)
             self.assertNotIn("components", result.stdout)
             for argument in ("version", "--version"):
                 with self.subTest(argument=argument):
                     version = subprocess.run(
-                        [str(launcher), argument], text=True, capture_output=True, check=False,
+                        [*command, argument], text=True, encoding="utf-8",
+                        capture_output=True, check=False, env=environment,
                     )
                     self.assertEqual(0, version.returncode, version.stderr)
                     self.assertEqual("x86QW 1.0.6\n", version.stdout)
             rejected = subprocess.run(
-                [str(launcher), "install"], text=True, capture_output=True, check=False,
+                [*command, "install"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
             )
             self.assertEqual(2, rejected.returncode)
             self.assertIn("comando desconhecido", rejected.stderr)
             play = subprocess.run(
-                [str(launcher), "play", "--help"], text=True, capture_output=True, check=False,
+                [*command, "play", "--help"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
             )
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
@@ -1293,7 +1307,16 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 installer.uninstall()
             self.assertFalse((target / "x86qw.sh").exists())
-            self.assertFalse((target / "x86qw.cmd").exists())
+            if os.name == "nt":
+                # manager.py cannot remove the active batch safely; x86qw.cmd
+                # deletes itself after a successful uninstall.
+                self.assertTrue((target / "x86qw.cmd").exists())
+                self.assertIn(
+                    'if "%X86QW_EXIT%"=="0" del "%~f0"',
+                    (target / "x86qw.cmd").read_text(encoding="utf-8"),
+                )
+            else:
+                self.assertFalse((target / "x86qw.cmd").exists())
             self.assertFalse((target / ".install/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
 

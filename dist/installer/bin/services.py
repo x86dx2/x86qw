@@ -639,7 +639,10 @@ def temporary_config(
 
 
 def normalized_zip_member(info: zipfile.ZipInfo) -> tuple[PurePosixPath, str]:
-    name = info.filename
+    # ZipInfo.filename is normalized with the host separator by Python.  On
+    # Windows that would turn a hostile backslash into a forward slash before
+    # we can reject it, while orig_filename preserves the archive spelling.
+    name = info.orig_filename
     if (
         not name
         or len(name) > MAX_ARCHIVE_PATH_LENGTH

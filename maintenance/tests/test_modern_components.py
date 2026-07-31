@@ -285,7 +285,10 @@ class ModernComponentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             session = services_qw.temporary_config(directory, "session-", ["hostname local"])
-            self.assertEqual("// x86QW: configuração efêmera removida ao encerrar.\nhostname local\n", session.read_text())
+            self.assertEqual(
+                "// x86QW: configuração efêmera removida ao encerrar.\nhostname local\n",
+                session.read_text(encoding="utf-8"),
+            )
             if os.name != "nt":
                 self.assertEqual(0o600, session.stat().st_mode & 0o777)
         with self.assertRaises(services_qw.InstallerError):
@@ -745,8 +748,8 @@ class ModernComponentTests(unittest.TestCase):
             expected_ktx_sources = {
                 "dist/mods/ktx/1.47/x86qw/client.cfg",
                 "dist/mods/ktx/1.47/x86qw/user.cfg.example",
-                *(str(path.relative_to(ROOT)) for path in ktx_overlay.glob("help*.cfg")),
-                *(str(path.relative_to(ROOT)) for path in ktx_overlay.glob("mode-*.cfg")),
+                *(path.relative_to(ROOT).as_posix() for path in ktx_overlay.glob("help*.cfg")),
+                *(path.relative_to(ROOT).as_posix() for path in ktx_overlay.glob("mode-*.cfg")),
             }
             self.assertEqual(
                 expected_ktx_sources,

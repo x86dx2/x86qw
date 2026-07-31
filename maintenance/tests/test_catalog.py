@@ -19,7 +19,9 @@ from build_core_package import build_core_package  # noqa: E402
 
 class CatalogTests(unittest.TestCase):
     def test_repository_catalog_and_trust_boundary(self) -> None:
-        catalog = json.loads((ROOT / "site/public/api/v1/catalog.json").read_text())
+        catalog = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(validate_catalog(catalog), 48)
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
@@ -178,7 +180,9 @@ class CatalogTests(unittest.TestCase):
             }
             package = register_package(catalog_path, artifact, **arguments)
             self.assertEqual(artifact.stat().st_size, package["size"])
-            self.assertEqual(1, validate_catalog(json.loads(catalog_path.read_text())))
+            self.assertEqual(
+                1, validate_catalog(json.loads(catalog_path.read_text(encoding="utf-8")))
+            )
             with self.assertRaises(ValueError):
                 register_package(catalog_path, artifact, **arguments)
 
@@ -208,7 +212,7 @@ class CatalogTests(unittest.TestCase):
                 "packages": [catalog_package],
             }))
             register_packages(path, {"packages": [package]})
-            saved = json.loads(path.read_text())
+            saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(package["urls"], saved["packages"][0]["urls"])
             self.assertEqual(package["origin_url"], saved["packages"][0]["origin_url"])
             self.assertEqual("ktx", saved["packages"][0]["component"])
