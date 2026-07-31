@@ -24,7 +24,7 @@ componentes autorais da própria distribuição e não representa um upstream.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.4` | release oficial sobre recursos nQuake e gameplay x86QW | armas ergonômicas, comunicação competitiva, símbolos QVM preservados, carregamento QVM direto, nove modos locais declarativos e confirmação explícita do preset |
+| KTX | `1.47+x86qw.5` | release oficial sobre recursos nQuake e gameplay x86QW | mapa competitivo de teclas nQuake restaurado ao trocar de mod, símbolos QVM preservados, carregamento QVM direto, nove modos locais declarativos e confirmação explícita do preset |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |

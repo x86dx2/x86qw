@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T00:37:39Z",
+  "generated_at": "2026-07-31T01:03:52Z",
   "packages": [
     {
       "component": "core",
@@ -543,14 +543,14 @@
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.4",
+      "version": "1.47+x86qw.5",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.4.zip",
-      "size": 2498689,
-      "sha256": "147d17f294c7a1cb66303ef102449d8a8e4cfb87bf0e3967aacdbf8107614e88",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.4/ktx-1.47+x86qw.4.zip",
+      "filename": "ktx-1.47+x86qw.5.zip",
+      "size": 2498783,
+      "sha256": "0c59cf9bebe2f146d77428a77cd3026ce37eb3fa562108dc052a2225f3f4dbfd",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.5/ktx-1.47+x86qw.5.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -560,16 +560,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.4/ktx-1.47+x86qw.4.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.4/ktx-1.47+x86qw.4.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.5/ktx-1.47+x86qw.5.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.5/ktx-1.47+x86qw.5.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.4",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.5",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o perfil de gameplay x86QW com ajuda somente sob demanda.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo, atualiza os arquivos compartilhados com os recursos, o QVM e o mapa de símbolos oficiais do KTX 1.47 e aplica por último a compatibilidade, o catálogo de modos e o mapa competitivo de teclas nQuake, com ajuda somente sob demanda.",
       "upstream_version": "1.47"
     },
     {

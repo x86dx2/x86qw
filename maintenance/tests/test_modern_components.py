@@ -1247,11 +1247,12 @@ class ModernComponentTests(unittest.TestCase):
         expected_gameplay = {
             "ktx": {
                 'tempalias sv_enableprofile ""',
-                'bind 1 "x86qw_ktx_axe"',
-                'bind q "x86qw_ktx_gl"',
-                'bind e "x86qw_ktx_rl"',
-                'bind z "tp_msgquaddead"',
-                'bind x "tp_msgenemypwr"',
+                'bind 1 "tp_msgquaddead"',
+                'bind 5 "tp_msgenemypwr"',
+                'bind q "weapon 6"',
+                'bind e "weapon 7"',
+                'bind MOUSE2 "weapon 8"',
+                'bind MWHEELUP "time_inc"',
                 'bind F5 "toggleready"',
                 'bind F7 "join"',
             },
@@ -1333,6 +1334,33 @@ class ModernComponentTests(unittest.TestCase):
                     ]
                     self.assertEqual(user_exec, executable_lines[-1])
                     self.assertNotIn(help_alias, executable_lines)
+
+    def test_ktx_profile_restores_the_nquake_keymap_after_other_mods(self):
+        snapshot_root = ROOT / "dist/distributions/nquake"
+        revisions = [path for path in snapshot_root.iterdir() if path.is_dir()]
+        self.assertEqual(1, len(revisions))
+        nquake = (revisions[0] / "non-gpl/qw/nquake_default.cfg").read_text(encoding="latin-1")
+        profile = (ROOT / "dist/mods/ktx/1.47/x86qw/client.cfg").read_text(encoding="utf-8")
+
+        def bindings(payload: str) -> dict[str, str]:
+            return dict(re.findall(r'(?m)^bind\s+(\S+)\s+"([^"]*)"', payload))
+
+        nquake_bindings = bindings(nquake)
+        profile_bindings = bindings(profile)
+        restored = {
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            "c", "e", "f", "g", "h", "i", "m", "q", "r", "t", "v", "x", "z",
+            "ALT", "CTRL", "SHIFT",
+            "MOUSE1", "MOUSE2", "MOUSE3", "MOUSE4", "MOUSE5",
+            "MWHEELUP", "MWHEELDOWN",
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
+        }
+        self.assertEqual(
+            {key: nquake_bindings[key] for key in restored},
+            {key: profile_bindings[key] for key in restored},
+        )
+        self.assertEqual("", nquake_bindings["F10"])
+        self.assertEqual("x86qw_ktx_help", profile_bindings["F10"])
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:

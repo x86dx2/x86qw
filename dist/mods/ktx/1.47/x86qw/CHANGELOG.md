@@ -21,7 +21,10 @@
   alternância ou recarga em ciclo;
 - mantém CTF fora do launcher enquanto a distribuição não possuir um mapa ou
   ENT CTF curado com as duas bandeiras;
-- fornece binds, ajuda e arquivo pessoal separados da configuração upstream;
+- reaplica o mapa de teclas competitivo do nQuake ao voltar de outros mods,
+  incluindo quick weapons, mensagens de equipe, timers e comandos da partida;
+- mantém como única extensão de tecla o `F10`, vazio no nQuake, para ajuda sob
+  demanda, e continua carregando o arquivo pessoal por último;
 - deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
 - registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
   novamente no console;
