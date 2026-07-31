@@ -16,13 +16,14 @@ if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
 if /I "%~1"=="verify" goto maintenance
+if /I "%~1"=="repair" goto maintenance
 if /I "%~1"=="cleanup" goto maintenance
 if /I "%~1"=="uninstall" goto maintenance
 echo x86qw: comando desconhecido: %~1 1>&2
 goto help_error
 
 :play
-py -3 "%X86QW_APP%" play %2 %3 %4 %5 %6 %7 %8 %9 --target "%X86QW_ROOT%"
+py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :service
@@ -31,7 +32,7 @@ exit /b %ERRORLEVEL%
 
 :maintenance
 set "X86QW_ACTION=%~1"
-py -3 "%X86QW_APP%" --online-only --installed-cli %1 "%X86QW_ROOT%" %2 %3 %4 %5 %6 %7 %8 %9
+py -3 "%X86QW_APP%" --online-only --installed-cli %* "%X86QW_ROOT%"
 set "X86QW_EXIT=%ERRORLEVEL%"
 if /I "%X86QW_ACTION%"=="uninstall" if "%X86QW_EXIT%"=="0" del "%~f0"
 exit /b %X86QW_EXIT%
@@ -57,6 +58,7 @@ echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
+echo   repair [--dry-run]   diagnostica e repara conteudo gerenciado
 echo   cleanup              limpa o cache x86QW
 echo   uninstall            preserva PAKs e dados pessoais
 echo   uninstall --purge    remove completamente o x86QW
