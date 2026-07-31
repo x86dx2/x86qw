@@ -78,7 +78,7 @@ mutação, reparo explícito, perfis operacionais de host e central de demos.
 
 - preservar `id1/pak0.pak` e `id1/pak1.pak` e a estratégia técnica atual;
 - não incorporar runtime, engine, mod ou mapa novo;
-- manter FTEQCC somente como toolchain já existente, sem introduzir FTEQW;
+- preservar as toolchains existentes sem incorporar runtime novo;
 - preservar comandos, recibos, inventários, configurações pessoais e bundles
   publicados;
 - não publicar nem alterar o bootstrap público sem aprovação separada.

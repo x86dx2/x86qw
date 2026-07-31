@@ -17,7 +17,9 @@ documentação e pacotes imutáveis:
 - `packages/latest`: link simbólico relativo para a versão corrente.
 
 O link `latest` seleciona a versão corrente dentro do Git sem duplicar o bundle.
-O catálogo oficial começa em `0.1.0`, primeira versão da linha pública pré-1.0.
+O catálogo oficial começa em `0.1.0`, primeira versão da linha pública pré-1.0,
+e o bundle público corrente é `0.1.25`. A versão de desenvolvimento é sempre
+lida de `VERSION`; bundles já publicados permanecem imutáveis.
 Os bootstraps públicos continuam gravando versão e SHA-256 concretos: links
 simbólicos não são portáveis nos mirrors HTTP nem substituem a verificação de
 integridade feita no computador do jogador.
@@ -34,8 +36,8 @@ O bundle é deliberadamente enxuto: contém `x86qw.pyz`, os dois launchers e
 `installer.json`. Uma ponte mínima formada por `dist/installer/bin/manager.py`
 e `_x86qw/installer.json` permite que instaladores antigos entreguem o controle ao zipapp;
 ela existe apenas na extração temporária e nunca é instalada. O zipapp reúne a
-implementação da CLI, uma projeção runtime mínima do catálogo e o manifesto
-de modos KTX. PAKs, pacotes de mods, configurações,
+implementação da CLI, projeções mínimas de runtimes, jogos, capacidades e
+compatibilidade, além do manifesto de modos KTX. PAKs, pacotes de mods, configurações,
 gamecodes, fontes e inventários de desenvolvimento não entram nele. A instalação
 obtém cada payload pelo pacote independente registrado no catálogo; os PAKs
 obrigatórios usam o pacote `x86qw-core-id1`.

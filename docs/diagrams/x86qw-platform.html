@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.11.0">
-  <title>x86QW Platform Diagram</title>
+  <title>Plataforma x86QW Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -525,14 +525,14 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>x86QW Platform</h1>
+        <h1>Plataforma x86QW</h1>
       </div>
-      <p class="subtitle">Public edge, reproducible catalog and local installation</p>
+      <p class="subtitle">Catálogos declarativos, gates de publicação e execução recuperável</p>
     </div>
 
     <!-- Main Diagram -->
     <div class="diagram-container">
-      <svg viewBox="0 0 1280 760" role="img" aria-label="x86QW Platform — Public edge, reproducible catalog and local installation (architecture diagram)">
+      <svg viewBox="0 0 1200 740" role="img" aria-label="Plataforma x86QW — Catálogos declarativos, gates de publicação e execução recuperável (architecture diagram)">
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -556,112 +556,151 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect x="220" y="80" width="430" height="114" rx="12" class="c-region" stroke-width="1"/>
-        <text x="228" y="98" class="t-cloud" font-size="9" font-weight="600">x86QW release pipeline</text>
+        <rect x="160" y="70" width="820" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <text x="168" y="88" class="t-cloud" font-size="9" font-weight="600">Pipeline de distribuição x86QW</text>
 
-        <rect x="220" y="300" width="640" height="114" rx="12" class="c-region" stroke-width="1"/>
-        <text x="228" y="318" class="t-cloud" font-size="9" font-weight="600">Cloudflare edge</text>
+        <rect x="970" y="70" width="220" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <text x="978" y="88" class="t-cloud" font-size="9" font-weight="600">Entrega pública</text>
 
-        <rect x="860" y="300" width="410" height="284" rx="8" class="c-security-group" stroke-width="1"/>
-        <text x="868" y="318" class="t-security" font-size="9" font-weight="600">Player machine</text>
+        <rect x="210" y="360" width="230" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <text x="218" y="378" class="t-cloud" font-size="9" font-weight="600">x86qw.x86.com.br</text>
+
+        <rect x="440" y="360" width="720" height="294" rx="8" class="c-security-group" stroke-width="1"/>
+        <text x="448" y="378" class="t-security" font-size="9" font-weight="600">Instalação autocontida do jogador</text>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path d="M 190 142 L 250 142" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path d="M 400 142 L 460 142" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path d="M 325 174 L 325 232 Q 325 240 333 240 L 747 240 Q 755 240 755 248 L 755 330" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path d="M 190 362 L 250 362" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path d="M 400 362 L 460 362" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path d="M 620 362 L 680 362" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path d="M 830 362 L 890 362" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path d="M 540 174 L 540 232 Q 540 240 548 240 L 957 240 Q 965 240 965 248 L 965 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path d="M 1040 362 L 1100 362" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path d="M 1170 500 L 1170 394" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path d="M 160 132 L 190 132" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 340 132 L 390 132" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 550 132 L 600 132" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path d="M 750 132 L 800 132" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 950 132 L 1000 132" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 470 164 L 470 237 Q 470 245 462 245 L 333 245 Q 325 245 325 253 L 325 390" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path d="M 190 422 L 240 422" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path d="M 410 422 L 470 422" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 1080 164 L 999.5985852377229 278.4537786615944 Q 995 285 987 285 L 563 285 Q 555 285 555 293 L 555 390" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 640 422 L 710 422" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 555 454 L 555 570" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path d="M 555 454 L 555 504 Q 555 512 563 512 L 787 512 Q 795 512 795 520 L 795 570" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path d="M 880 602 L 960 602" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
-        <rect x="40" y="110" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="40" y="110" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-        <text x="115" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Upstream projects</text>
-        <text x="115" y="156" class="t-muted" font-size="9" text-anchor="middle">selected sources</text>
+        <rect x="20" y="100" width="140" height="64" rx="6" class="c-mask"/>
+        <rect x="20" y="100" width="140" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+        <text x="90" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Projetos upstream</text>
+        <text x="90" y="146" class="t-muted" font-size="9" text-anchor="middle">releases + snapshots</text>
 
-        <rect x="250" y="110" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="250" y="110" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-        <text x="325" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Canonical dist/</text>
-        <text x="325" y="156" class="t-muted" font-size="9" text-anchor="middle">sources + format + hash</text>
-        <text x="325" y="166" class="t-backend" font-size="7" text-anchor="middle">versioned</text>
+        <rect x="190" y="100" width="150" height="64" rx="6" class="c-mask"/>
+        <rect x="190" y="100" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+        <text x="265" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">dist/ canônico</text>
+        <text x="265" y="146" class="t-muted" font-size="9" text-anchor="middle">fontes + overlays + hashes</text>
+        <text x="265" y="156" class="t-backend" font-size="7" text-anchor="middle">versionado</text>
 
-        <rect x="460" y="110" width="160" height="64" rx="6" class="c-mask"/>
-        <rect x="460" y="110" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
-        <text x="540" y="140" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Generated packages</text>
-        <text x="540" y="156" class="t-muted" font-size="9" text-anchor="middle">GitHub + GitLab</text>
-        <text x="540" y="166" class="t-cloud" font-size="7" text-anchor="middle">reproducible</text>
+        <rect x="390" y="100" width="160" height="64" rx="6" class="c-mask"/>
+        <rect x="390" y="100" width="160" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+        <text x="470" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Catálogos declarativos</text>
+        <text x="470" y="146" class="t-muted" font-size="9" text-anchor="middle">runtimes + jogos + capacidades</text>
+        <text x="470" y="156" class="t-database" font-size="7" text-anchor="middle">fonte única</text>
 
-        <rect x="40" y="330" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="40" y="330" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-        <text x="115" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Players</text>
-        <text x="115" y="376" class="t-muted" font-size="9" text-anchor="middle">browser</text>
+        <rect x="600" y="100" width="150" height="64" rx="6" class="c-mask"/>
+        <rect x="600" y="100" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+        <text x="675" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CI + gates</text>
+        <text x="675" y="146" class="t-muted" font-size="9" text-anchor="middle">Linux · macOS · Windows</text>
+        <text x="675" y="156" class="t-security" font-size="7" text-anchor="middle">bloqueante</text>
 
-        <rect x="250" y="330" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="250" y="330" width="150" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="325" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">x86.com.br</text>
-        <text x="325" y="376" class="t-muted" font-size="9" text-anchor="middle">portal Worker</text>
+        <rect x="800" y="100" width="150" height="64" rx="6" class="c-mask"/>
+        <rect x="800" y="100" width="150" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
+        <text x="875" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Pacotes reproduzíveis</text>
+        <text x="875" y="146" class="t-muted" font-size="9" text-anchor="middle">component ZIPs + installer</text>
+        <text x="875" y="156" class="t-messagebus" font-size="7" text-anchor="middle">SHA-256</text>
 
-        <rect x="460" y="330" width="160" height="64" rx="6" class="c-mask"/>
-        <rect x="460" y="330" width="160" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="540" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">x86qw.x86.com.br</text>
-        <text x="540" y="376" class="t-muted" font-size="9" text-anchor="middle">Worker Static Assets</text>
+        <rect x="1000" y="100" width="160" height="64" rx="6" class="c-mask"/>
+        <rect x="1000" y="100" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
+        <text x="1080" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Mirrors de entrega</text>
+        <text x="1080" y="146" class="t-muted" font-size="9" text-anchor="middle">GitHub Releases + GitLab</text>
+        <text x="1080" y="156" class="t-cloud" font-size="7" text-anchor="middle">imutáveis</text>
 
-        <rect x="680" y="330" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="680" y="330" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-        <text x="755" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Catalog v1</text>
-        <text x="755" y="376" class="t-muted" font-size="9" text-anchor="middle">/api/v1/catalog.json</text>
-        <text x="755" y="386" class="t-backend" font-size="7" text-anchor="middle">public contract</text>
+        <rect x="30" y="390" width="160" height="64" rx="6" class="c-mask"/>
+        <rect x="30" y="390" width="160" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+        <text x="110" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Jogadores e admins</text>
+        <text x="110" y="436" class="t-muted" font-size="9" text-anchor="middle">macOS · Linux · Windows</text>
 
-        <rect x="890" y="330" width="150" height="64" rx="6" class="c-mask"/>
-        <rect x="890" y="330" width="150" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="965" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">x86QW installer</text>
-        <text x="965" y="376" class="t-muted" font-size="9" text-anchor="middle">Python standard library</text>
+        <rect x="240" y="390" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="240" y="390" width="170" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
+        <text x="325" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Cloudflare edge</text>
+        <text x="325" y="436" class="t-muted" font-size="9" text-anchor="middle">site + bootstraps + catálogo</text>
+        <text x="325" y="446" class="t-cloud" font-size="7" text-anchor="middle">Static Assets</text>
 
-        <rect x="1100" y="330" width="140" height="64" rx="6" class="c-mask"/>
-        <rect x="1100" y="330" width="140" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="1170" y="360" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">quake-world</text>
-        <text x="1170" y="376" class="t-muted" font-size="9" text-anchor="middle">stable + nightly</text>
+        <rect x="470" y="390" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="470" y="390" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+        <text x="555" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Instalador + CLI</text>
+        <text x="555" y="436" class="t-muted" font-size="9" text-anchor="middle">x86qw.pyz + launchers</text>
+        <text x="555" y="446" class="t-frontend" font-size="7" text-anchor="middle">versionada</text>
 
-        <rect x="1100" y="500" width="140" height="64" rx="6" class="c-mask"/>
-        <rect x="1100" y="500" width="140" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-        <text x="1170" y="530" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Base data package</text>
-        <text x="1170" y="546" class="t-muted" font-size="9" text-anchor="middle">x86qw-core-id1</text>
-        <text x="1170" y="556" class="t-security" font-size="7" text-anchor="middle">SHA-256 pinned</text>
+        <rect x="710" y="390" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="710" y="390" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+        <text x="795" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gameplay local</text>
+        <text x="795" y="436" class="t-muted" font-size="9" text-anchor="middle">ezQuake stable/nightly</text>
+        <text x="795" y="446" class="t-frontend" font-size="7" text-anchor="middle">play · hub</text>
+
+        <rect x="470" y="570" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="470" y="570" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+        <text x="555" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Estado + journal</text>
+        <text x="555" y="616" class="t-muted" font-size="9" text-anchor="middle">perfil v2 · recibos · sessões</text>
+        <text x="555" y="626" class="t-database" font-size="7" text-anchor="middle">recuperável</text>
+
+        <rect x="710" y="570" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="710" y="570" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+        <text x="795" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MVDSV dedicado</text>
+        <text x="795" y="616" class="t-muted" font-size="9" text-anchor="middle">cinco jogos instalados</text>
+        <text x="795" y="626" class="t-backend" font-size="7" text-anchor="middle">host</text>
+
+        <rect x="960" y="570" width="170" height="64" rx="6" class="c-mask"/>
+        <rect x="960" y="570" width="170" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
+        <text x="1045" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">QTV + QWFWD</text>
+        <text x="1045" y="616" class="t-muted" font-size="9" text-anchor="middle">stream HTTP + proxy UDP</text>
+        <text x="1045" y="626" class="t-messagebus" font-size="7" text-anchor="middle">opcionais</text>
 
         <!-- Connection labels -->
 
 
-        <rect x="496.6" y="220" width="86.8" height="14" rx="3" class="c-mask"/>
-        <text x="540" y="230" class="t-messagebus" font-size="8" text-anchor="middle">publish metadata</text>
-        <rect x="200.6" y="342" width="38.8" height="14" rx="3" class="c-mask"/>
-        <text x="220" y="352" class="t-muted" font-size="8" text-anchor="middle">/x86qw</text>
-        <rect x="396.2" y="398" width="67.6" height="14" rx="3" class="c-mask"/>
-        <text x="430" y="408" class="t-muted" font-size="8" text-anchor="middle">308 redirect</text>
+        <rect x="555.6" y="112" width="38.8" height="14" rx="3" class="c-mask"/>
+        <text x="575" y="122" class="t-security" font-size="8" text-anchor="middle">verify</text>
+        <rect x="741.2" y="168" width="67.6" height="14" rx="3" class="c-mask"/>
+        <text x="775" y="178" class="t-backend" font-size="8" text-anchor="middle">gates verdes</text>
 
-        <rect x="811.8" y="398" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-        <text x="860" y="408" class="t-backend" font-size="8" text-anchor="middle">versions + SHA-256</text>
-        <rect x="704" y="220" width="97" height="14" rx="3" class="c-mask"/>
-        <text x="752.5" y="230" class="t-backend" font-size="8" text-anchor="middle">remote fallback</text>
-
-        <rect x="1141" y="480" width="58" height="14" rx="3" class="c-mask"/>
-        <text x="1170" y="490" class="t-security" font-size="8" text-anchor="middle">validated copy</text>
+        <rect x="347" y="225" width="106" height="14" rx="3" class="c-mask"/>
+        <text x="400" y="235" class="t-messagebus" font-size="8" text-anchor="middle">projeta product.json</text>
+        <rect x="198" y="402" width="34" height="14" rx="3" class="c-mask"/>
+        <text x="215" y="412" class="t-muted" font-size="8" text-anchor="middle">HTTPS</text>
+        <rect x="387" y="458" width="106" height="14" rx="3" class="c-mask"/>
+        <text x="440" y="468" class="t-backend" font-size="8" text-anchor="middle">bootstrap + catálogo</text>
+        <rect x="717.2" y="265" width="115.6" height="14" rx="3" class="c-mask"/>
+        <text x="775" y="275" class="t-backend" font-size="8" text-anchor="middle">pacotes por plataforma</text>
+        <rect x="646" y="402" width="58" height="14" rx="3" class="c-mask"/>
+        <text x="675" y="412" class="t-backend" font-size="8" text-anchor="middle">play · hub</text>
+        <rect x="570.8" y="502" width="48.4" height="14" rx="3" class="c-mask"/>
+        <text x="595" y="512" class="t-security" font-size="8" text-anchor="middle">registra</text>
+        <rect x="660" y="492" width="30" height="14" rx="3" class="c-mask"/>
+        <text x="675" y="502" class="t-backend" font-size="8" text-anchor="middle">host</text>
+        <rect x="867" y="546" width="106" height="14" rx="3" class="c-mask"/>
+        <text x="920" y="556" class="t-messagebus" font-size="8" text-anchor="middle">MVD + encaminhamento</text>
 
         <!-- Legend -->
-        <text x="40" y="731" class="t-primary" font-size="9" font-weight="600">Legend</text>
-        <rect x="40" y="736" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-        <text x="60" y="744" class="t-muted" font-size="8">External</text>
-        <rect x="138" y="736" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-        <text x="158" y="744" class="t-muted" font-size="8">Backend</text>
-        <rect x="231" y="736" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
-        <text x="251" y="744" class="t-muted" font-size="8">Cloud</text>
-        <rect x="314" y="736" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
-        <text x="334" y="744" class="t-muted" font-size="8">Frontend</text>
-        <rect x="412" y="736" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
-        <text x="432" y="744" class="t-muted" font-size="8">Security</text>
+        <text x="40" y="711" class="t-primary" font-size="9" font-weight="600">Legend</text>
+        <rect x="40" y="716" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
+        <text x="60" y="724" class="t-muted" font-size="8">External</text>
+        <rect x="138" y="716" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+        <text x="158" y="724" class="t-muted" font-size="8">Backend</text>
+        <rect x="231" y="716" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
+        <text x="251" y="724" class="t-muted" font-size="8">Database</text>
+        <rect x="329" y="716" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+        <text x="349" y="724" class="t-muted" font-size="8">Security</text>
+        <rect x="427" y="716" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
+        <text x="447" y="724" class="t-muted" font-size="8">Message bus</text>
+        <rect x="540" y="716" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
+        <text x="560" y="724" class="t-muted" font-size="8">Cloud</text>
+        <rect x="623" y="716" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
+        <text x="643" y="724" class="t-muted" font-size="8">Frontend</text>
       </svg>
     </div>
 
@@ -670,33 +709,44 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot cyan"></div>
-          <h3>Stable public contract</h3>
+          <h3>Fonte única</h3>
         </div>
         <ul>
-          <li>&bull; The installer knows only the x86QW catalog URL</li>
-          <li>&bull; Mirror priority can change without replacing the installer</li>
+          <li>&bull; dist/ preserva os bytes; inventários declaram runtimes, jogos, plataformas e capacidades</li>
+          <li>&bull; product.json projeta versão, contagens e suporte sem números duplicados</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>Canonical distribution</h3>
+          <h3>Publicação bloqueada</h3>
         </div>
         <ul>
-          <li>&bull; Selected sources live once under dist/ with origin, size and SHA-256</li>
-          <li>&bull; Component ZIPs are temporary reproducible builds outside Git</li>
+          <li>&bull; Pull requests verificam LFS, schemas, testes e Worker nos três sistemas</li>
+          <li>&bull; Release é manual, protegida e só recebe artefatos depois de todos os gates</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>Registered game data</h3>
+          <h3>Instalação recuperável</h3>
         </div>
         <ul>
-          <li>&bull; id1 PAKs are versioned in dist/game-data/id1</li>
-          <li>&bull; A separate x86qw-core-id1 release is validated before installation</li>
+          <li>&bull; Perfis e seleções custom migram para state.json v2 sem perder componentes</li>
+          <li>&bull; Journal privado reconcilia crash e preserva todo arquivo pessoal ou modificado</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Execução imutável</h3>
+        </div>
+        <ul>
+          <li>&bull; play e host validam conteúdo; instalação, update, upgrade ou repair preparam payload</li>
+          <li>&bull; MVDSV inicia antes de QTV e QWFWD; falha parcial encerra todos os filhos</li>
         </ul>
       </div>
     </div>

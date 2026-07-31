@@ -1,6 +1,20 @@
 {
   "format": 1,
   "project": "x86qw",
+  "commands": [
+    "play",
+    "host",
+    "proxy",
+    "qtv",
+    "hub",
+    "update",
+    "upgrade",
+    "verify",
+    "repair",
+    "cleanup",
+    "uninstall",
+    "version"
+  ],
   "runtime_kinds": ["client", "server", "service"],
   "compatibility_kinds": ["client", "server", "service", "tool"],
   "protocols": [

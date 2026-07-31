@@ -27,7 +27,7 @@ Use apenas o gerenciador da raiz do contexto:
 - `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
   definicao local revisada;
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
-- `build`: valida os binarios stable e gera 19 ZIPs de componentes mais o
+- `build`: valida os binarios stable e gera 21 ZIPs de componentes mais o
   pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages nos
   repositórios `x86qw`, que são os únicos destinos da distribuição.
@@ -51,8 +51,9 @@ separar revisao e publicacao:
 ./maintenance/manage.py update
 ./maintenance/manage.py verify
 git diff --stat
-./maintenance/manage.py publish
 ./maintenance/manage.py commit --push
+# após revisão, checks verdes e aprovação separada:
+./maintenance/manage.py publish
 ```
 
 As comparacoes com upstreams publicos usam somente o protocolo Git e URLs

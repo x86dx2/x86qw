@@ -1,0 +1,312 @@
+{
+  "commands": [
+    "play",
+    "host",
+    "proxy",
+    "qtv",
+    "hub",
+    "update",
+    "upgrade",
+    "verify",
+    "repair",
+    "cleanup",
+    "uninstall",
+    "version"
+  ],
+  "component_count": 21,
+  "format": 1,
+  "games": [
+    {
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "component": "ktx",
+      "id": "ktx",
+      "label": "KTX",
+      "protocol": "quakeworld",
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "smoke_test": "ktx-modes-and-frogbots",
+      "version": "1.47"
+    },
+    {
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "component": "final-arena",
+      "id": "final-arena",
+      "label": "Final Arena",
+      "protocol": "quakeworld",
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "smoke_test": "final-arena-local-and-dedicated",
+      "version": "1.20"
+    },
+    {
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "component": "pro-x",
+      "id": "pro-x",
+      "label": "Pro-X",
+      "protocol": "quakeworld",
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "smoke_test": "pro-x-local-and-dedicated",
+      "version": "1.1"
+    },
+    {
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "component": "team-fortress",
+      "id": "team-fortress",
+      "label": "Team Fortress",
+      "protocol": "quakeworld",
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "smoke_test": "team-fortress-local-and-dedicated",
+      "version": "2.9"
+    },
+    {
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "component": "total-destruction-2",
+      "id": "td2",
+      "label": "Total Destruction 2",
+      "protocol": "quakeworld",
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "smoke_test": "td2-local-and-dedicated",
+      "version": "2.22"
+    }
+  ],
+  "installer": {
+    "distribution_path": "installer/packages/0.1.25/x86qw-installer-0.1.25.zip",
+    "filename": "x86qw-installer-0.1.25.zip",
+    "sha256": "9c470dfc896cdb18294db51344b0b8a7aa8d982621d7489dbbcd8e916764ba0b",
+    "size": 82721,
+    "urls": [
+      "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.1.25/x86qw-installer-0.1.25.zip",
+      "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.1.25/x86qw-installer-0.1.25.zip"
+    ]
+  },
+  "package_count": 48,
+  "project": "x86qw",
+  "runtimes": [
+    {
+      "capabilities": [
+        "multiplayer-client",
+        "local-server",
+        "bots",
+        "demo-playback",
+        "server-browser"
+      ],
+      "component": "ezquake",
+      "id": "ezquake-stable",
+      "kind": "client",
+      "label": "ezQuake Stable",
+      "platforms": [
+        {
+          "architecture": "universal",
+          "format": "macho-universal",
+          "origin": "official",
+          "system": "macos",
+          "test_required": true,
+          "variant": "macos-universal"
+        },
+        {
+          "architecture": "x86_64",
+          "format": "elf-amd64",
+          "origin": "official",
+          "system": "linux",
+          "test_required": true,
+          "variant": "linux-x86_64"
+        },
+        {
+          "architecture": "x64",
+          "format": "pe-x64",
+          "origin": "official",
+          "system": "windows",
+          "test_required": true,
+          "variant": "windows-x64"
+        }
+      ],
+      "protocols": [
+        "quakeworld"
+      ]
+    },
+    {
+      "capabilities": [
+        "multiplayer-client",
+        "local-server",
+        "bots",
+        "demo-playback",
+        "server-browser"
+      ],
+      "component": "ezquake",
+      "id": "ezquake-nightly",
+      "kind": "client",
+      "label": "ezQuake Nightly",
+      "platforms": [
+        {
+          "architecture": "universal",
+          "format": "macho-universal",
+          "origin": "official",
+          "system": "macos",
+          "test_required": true,
+          "variant": "macos-universal"
+        },
+        {
+          "architecture": "x86_64",
+          "format": "elf-amd64",
+          "origin": "official",
+          "system": "linux",
+          "test_required": true,
+          "variant": "linux-x86_64"
+        },
+        {
+          "architecture": "x64",
+          "format": "pe-x64",
+          "origin": "official",
+          "system": "windows",
+          "test_required": true,
+          "variant": "windows-x64"
+        }
+      ],
+      "protocols": [
+        "quakeworld"
+      ]
+    },
+    {
+      "capabilities": [
+        "dedicated-server",
+        "bots",
+        "mvd-recording"
+      ],
+      "component": "mvdsv",
+      "id": "mvdsv",
+      "kind": "server",
+      "label": "MVDSV",
+      "platforms": [
+        {
+          "architecture": "arm64",
+          "format": "macho-arm64",
+          "origin": "x86qw-build",
+          "system": "macos",
+          "test_required": true,
+          "variant": "macos-arm64"
+        },
+        {
+          "architecture": "amd64",
+          "format": "elf-amd64",
+          "origin": "official",
+          "system": "linux",
+          "test_required": true,
+          "variant": "linux-amd64"
+        },
+        {
+          "architecture": "x64",
+          "format": "pe-x64",
+          "origin": "official",
+          "system": "windows",
+          "test_required": true,
+          "variant": "windows-x64"
+        }
+      ],
+      "protocols": [
+        "quakeworld"
+      ]
+    },
+    {
+      "capabilities": [
+        "qtv",
+        "demo-playback"
+      ],
+      "component": "qtv",
+      "id": "qtv",
+      "kind": "service",
+      "label": "QTV",
+      "platforms": [
+        {
+          "architecture": "arm64",
+          "format": "macho-arm64",
+          "origin": "x86qw-build",
+          "system": "macos",
+          "test_required": true,
+          "variant": "macos-arm64"
+        },
+        {
+          "architecture": "amd64",
+          "format": "elf-amd64",
+          "origin": "x86qw-build",
+          "system": "linux",
+          "test_required": true,
+          "variant": "linux-amd64"
+        },
+        {
+          "architecture": "x64",
+          "format": "pe-x64",
+          "origin": "x86qw-build",
+          "system": "windows",
+          "test_required": true,
+          "variant": "windows-x64"
+        }
+      ],
+      "protocols": [
+        "quakeworld",
+        "http"
+      ]
+    },
+    {
+      "capabilities": [
+        "proxy"
+      ],
+      "component": "qwfwd",
+      "id": "qwfwd",
+      "kind": "service",
+      "label": "QWFWD",
+      "platforms": [
+        {
+          "architecture": "arm64",
+          "format": "macho-arm64",
+          "origin": "x86qw-build",
+          "system": "macos",
+          "test_required": true,
+          "variant": "macos-arm64"
+        },
+        {
+          "architecture": "amd64",
+          "format": "elf-amd64",
+          "origin": "official",
+          "system": "linux",
+          "test_required": true,
+          "variant": "linux-amd64"
+        },
+        {
+          "architecture": "x64",
+          "format": "pe-x64",
+          "origin": "official",
+          "system": "windows",
+          "test_required": true,
+          "variant": "windows-x64"
+        }
+      ],
+      "protocols": [
+        "udp-proxy"
+      ]
+    }
+  ],
+  "version": "0.1.25"
+}

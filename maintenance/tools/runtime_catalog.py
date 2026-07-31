@@ -137,6 +137,7 @@ def validate_inventory(
     systems = set(_string_list(capabilities.get("systems"), "systems", allow_empty=False))
     architectures = set(_string_list(capabilities.get("architectures"), "architectures", allow_empty=False))
     executable_formats = set(_string_list(capabilities.get("executable_formats"), "executable formats", allow_empty=False))
+    _string_list(capabilities.get("commands"), "CLI commands", allow_empty=False)
     host_systems = capabilities.get("host_systems")
     architecture_aliases = capabilities.get("architecture_aliases")
     platform_labels = capabilities.get("platform_labels")

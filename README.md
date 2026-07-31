@@ -34,9 +34,11 @@ preparar outro cliente a partir de macOS ou Linux, use, por exemplo:
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
 ```
 
-Os valores aceitos são `macos`, `linux` e `windows`. Ao
-concluir, a CLI permanente fica na raiz escolhida e oferece `play`, `verify`,
-`hub`, `update`, `upgrade`, `cleanup`, `uninstall` e `uninstall --purge`. Executar `./x86qw.sh`
+Os valores aceitos são `macos`, `linux` e `windows`. A versão pública corrente
+é `0.1.25`; seu catálogo registra 48 pacotes e 21 componentes. Ao concluir, a
+CLI permanente fica na raiz escolhida e oferece `play`, `host`, `proxy`, `qtv`,
+`hub`, `update`, `upgrade`, `verify`, `repair`, `cleanup`, `uninstall` e
+`version`. Executar `./x86qw.sh`
 sem argumentos mostra esse guia de uso e a versão instalada; `./x86qw.sh version`
 e `./x86qw.sh --version` imprimem somente a versão. A ação principal é
 `./x86qw.sh play`.
@@ -78,9 +80,16 @@ MVDSV: KTX, Final Arena, Pro-X, Team Fortress ou Total Destruction 2. Para KTX,
 modo, mapa, bots e regras de CTF/Race podem ser definidos sem abrir o ezQuake.
 `--with-qtv` e `--with-proxy` continuam opcionais; `proxy` executa QWFWD e `qtv`
 pode operar sozinho ou conectado a um MVDSV. `Ctrl+C`
-encerra de forma coordenada todos os processos iniciados pelo comando. Senhas
-são gravadas somente em configurações efêmeras privadas, nunca na linha de
-comando nem na saída. Consulte [docs/HOSTING.md](docs/HOSTING.md).
+encerra de forma coordenada todos os processos iniciados pelo comando. Use
+`--prompt-password` ou `--password-file` e as variantes de espectador, RCON e
+QTV para evitar o histórico do shell; as opções legadas em argumento permanecem
+compatíveis, mas geram alerta. Senhas resolvidas ficam somente em configurações
+efêmeras privadas e nunca entram no comando filho nem na saída.
+
+Cada execução de serviço mantém um journal privado em `.install/sessions/`.
+Depois de interrupção ou crash, a próxima execução remove apenas temporários
+criados pela sessão cujo hash continua igual e preserva qualquer arquivo
+alterado. Consulte [docs/HOSTING.md](docs/HOSTING.md).
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
@@ -97,7 +106,14 @@ o fluxo do Homebrew: baixa e valida o manifesto, mostra somente os pacotes
 desatualizados em linhas tabuladas com versão instalada, versão disponível e
 tamanho, pede confirmação e então informa o progresso de cada pacote. Quando não
 há mudanças, o comando informa isso e termina sem confirmação, aplicação ou
-verificação integral.
+verificação integral. `repair` é o fluxo explícito para recompor somente
+conteúdo gerenciado ausente ou incorreto; na CLI instalada ele orienta a
+reexecução segura do bootstrap.
+
+`play`, `host`, `proxy`, `qtv` e `hub` não instalam nem atualizam payload
+gerenciado durante a execução normal. `play-support` é preparado por instalação,
+`update`, `upgrade` ou `repair`; a materialização que o MVDSV necessita durante
+`host` é efêmera, journalizada e reconciliada no encerramento.
 
 Quem clonou o repositório está no fluxo de desenvolvimento e pode usar as
 fontes canônicas locais:
@@ -115,6 +131,10 @@ e os parametros `gamedir` corretos; arquivos pessoais e configuracoes que o
 cliente reescreve nao sao tratados como payload imutavel.
 Os launchers isolam a colecao com `-nohome`, e `qw/pak.lst` fixa a prioridade
 dos PK3 para que texturas e addons sejam carregados sempre na mesma ordem.
+
+O cliente ezQuake é universal no macOS e também é distribuído para Linux
+x86-64 e Windows x64. MVDSV, QTV e QWFWD têm artefatos para macOS arm64, Linux
+amd64 e Windows x64; os serviços não são anunciados para macOS Intel.
 
 O manual completo esta em [dist/installer/docs/installer.md](dist/installer/docs/installer.md).
 
@@ -155,6 +175,9 @@ dist/
 ├── game-data/
 │   └── id1/              fontes canônicas de pak0.pak e pak1.pak registrados
 ├── mods/                 KTX, Final Arena, Pro-X, Team Fortress, TD2 e perfis x86QW
+├── servers/              MVDSV por versão, origem e variante
+├── services/             QTV e QWFWD por versão, origem e variante
+├── toolchains/           ferramentas usadas para builds reproduzíveis
 ├── installer/            bundle versionado usado pelo bootstrap público
 │   ├── README.md         contrato e manutenção deste contexto
 │   ├── bin/              executáveis e módulos distribuídos

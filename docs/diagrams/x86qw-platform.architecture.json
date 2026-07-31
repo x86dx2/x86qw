@@ -2,43 +2,52 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "x86QW Platform",
-    "subtitle": "Public edge, reproducible catalog and local installation",
+    "title": "Plataforma x86QW",
+    "subtitle": "Catálogos declarativos, gates de publicação e execução recuperável",
     "output": "x86qw-platform.html",
-    "viewBox": [1280, 760]
+    "viewBox": [1200, 740]
   },
   "components": [
-    { "id": "upstreams", "type": "external", "label": "Upstream projects", "sublabel": "selected sources", "pos": [40, 110], "size": [150, 64] },
-    { "id": "ingest", "type": "backend", "label": "Canonical dist/", "sublabel": "sources + format + hash", "pos": [250, 110], "size": [150, 64], "tag": "versioned" },
-    { "id": "mirrors", "type": "cloud", "label": "Generated packages", "sublabel": "GitHub + GitLab", "pos": [460, 110], "size": [160, 64], "tag": "reproducible" },
-    { "id": "players", "type": "external", "label": "Players", "sublabel": "browser", "pos": [40, 330], "size": [150, 64] },
-    { "id": "portal", "type": "frontend", "label": "x86.com.br", "sublabel": "portal Worker", "pos": [250, 330], "size": [150, 64] },
-    { "id": "site", "type": "frontend", "label": "x86qw.x86.com.br", "sublabel": "Worker Static Assets", "pos": [460, 330], "size": [160, 64] },
-    { "id": "catalog", "type": "backend", "label": "Catalog v1", "sublabel": "/api/v1/catalog.json", "pos": [680, 330], "size": [150, 64], "tag": "public contract" },
-    { "id": "installer", "type": "frontend", "label": "x86QW installer", "sublabel": "Python standard library", "pos": [890, 330], "size": [150, 64] },
-    { "id": "runtime", "type": "frontend", "label": "quake-world", "sublabel": "stable + nightly", "pos": [1100, 330], "size": [140, 64] },
-    { "id": "id1", "type": "security", "label": "Base data package", "sublabel": "x86qw-core-id1", "pos": [1100, 500], "size": [140, 64], "tag": "SHA-256 pinned" }
+    { "id": "upstreams", "type": "external", "label": "Projetos upstream", "sublabel": "releases + snapshots", "pos": [20, 100], "size": [140, 64] },
+    { "id": "dist", "type": "backend", "label": "dist/ canônico", "sublabel": "fontes + overlays + hashes", "pos": [190, 100], "size": [150, 64], "tag": "versionado" },
+    { "id": "control", "type": "database", "label": "Catálogos declarativos", "sublabel": "runtimes + jogos + capacidades", "pos": [390, 100], "size": [160, 64], "tag": "fonte única" },
+    { "id": "ci", "type": "security", "label": "CI + gates", "sublabel": "Linux · macOS · Windows", "pos": [600, 100], "size": [150, 64], "tag": "bloqueante" },
+    { "id": "packages", "type": "messagebus", "label": "Pacotes reproduzíveis", "sublabel": "component ZIPs + installer", "pos": [800, 100], "size": [150, 64], "tag": "SHA-256" },
+    { "id": "mirrors", "type": "cloud", "label": "Mirrors de entrega", "sublabel": "GitHub Releases + GitLab", "pos": [1000, 100], "size": [160, 64], "tag": "imutáveis" },
+
+    { "id": "players", "type": "external", "label": "Jogadores e admins", "sublabel": "macOS · Linux · Windows", "pos": [30, 390], "size": [160, 64] },
+    { "id": "edge", "type": "cloud", "label": "Cloudflare edge", "sublabel": "site + bootstraps + catálogo", "pos": [240, 390], "size": [170, 64], "tag": "Static Assets" },
+    { "id": "cli", "type": "frontend", "label": "Instalador + CLI", "sublabel": "x86qw.pyz + launchers", "pos": [470, 390], "size": [170, 64], "tag": "versionada" },
+    { "id": "play", "type": "frontend", "label": "Gameplay local", "sublabel": "ezQuake stable/nightly", "pos": [710, 390], "size": [170, 64], "tag": "play · hub" },
+    { "id": "state", "type": "database", "label": "Estado + journal", "sublabel": "perfil v2 · recibos · sessões", "pos": [470, 570], "size": [170, 64], "tag": "recuperável" },
+    { "id": "host", "type": "backend", "label": "MVDSV dedicado", "sublabel": "cinco jogos instalados", "pos": [710, 570], "size": [170, 64], "tag": "host" },
+    { "id": "relays", "type": "messagebus", "label": "QTV + QWFWD", "sublabel": "stream HTTP + proxy UDP", "pos": [960, 570], "size": [170, 64], "tag": "opcionais" }
   ],
   "boundaries": [
-    { "kind": "region", "label": "x86QW release pipeline", "wraps": ["ingest", "mirrors"] },
-    { "kind": "region", "label": "Cloudflare edge", "wraps": ["portal", "site", "catalog"] },
-    { "kind": "security-group", "label": "Player machine", "wraps": ["installer", "runtime", "id1"] }
+    { "kind": "region", "label": "Pipeline de distribuição x86QW", "wraps": ["dist", "control", "ci", "packages"] },
+    { "kind": "region", "label": "Entrega pública", "wraps": ["mirrors"] },
+    { "kind": "region", "label": "x86qw.x86.com.br", "wraps": ["edge"] },
+    { "kind": "security-group", "label": "Instalação autocontida do jogador", "wraps": ["cli", "play", "state", "host", "relays"] }
   ],
   "connections": [
-    { "from": "upstreams", "to": "ingest", "variant": "emphasis" },
-    { "from": "ingest", "to": "mirrors", "variant": "emphasis" },
-    { "from": "ingest", "to": "catalog", "label": "publish metadata", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[325, 240], [755, 240]] },
-    { "from": "players", "to": "portal", "label": "/x86qw" },
-    { "from": "portal", "to": "site", "label": "308 redirect", "labelAt": [430, 408] },
-    { "from": "site", "to": "catalog" },
-    { "from": "catalog", "to": "installer", "label": "versions + SHA-256", "variant": "emphasis", "labelAt": [860, 408] },
-    { "from": "mirrors", "to": "installer", "label": "remote fallback", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[540, 240], [965, 240]] },
-    { "from": "installer", "to": "runtime", "variant": "emphasis" },
-    { "from": "id1", "to": "runtime", "label": "validated copy", "variant": "security", "fromSide": "top", "toSide": "bottom" }
+    { "from": "upstreams", "to": "dist", "variant": "emphasis" },
+    { "from": "dist", "to": "control", "variant": "emphasis" },
+    { "from": "control", "to": "ci", "label": "verify", "variant": "security" },
+    { "from": "ci", "to": "packages", "label": "gates verdes", "variant": "emphasis", "labelAt": [775, 178] },
+    { "from": "packages", "to": "mirrors", "variant": "emphasis" },
+    { "from": "control", "to": "edge", "label": "projeta product.json", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[470, 245], [325, 245]], "labelAt": [400, 235] },
+    { "from": "players", "to": "edge", "label": "HTTPS" },
+    { "from": "edge", "to": "cli", "label": "bootstrap + catálogo", "variant": "emphasis", "labelAt": [440, 468] },
+    { "from": "mirrors", "to": "cli", "label": "pacotes por plataforma", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[995, 285], [555, 285]], "labelAt": [775, 275] },
+    { "from": "cli", "to": "play", "label": "play · hub", "variant": "emphasis" },
+    { "from": "cli", "to": "state", "label": "registra", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelAt": [595, 512] },
+    { "from": "cli", "to": "host", "label": "host", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v" },
+    { "from": "host", "to": "relays", "label": "MVD + encaminhamento", "variant": "dashed", "labelAt": [920, 556] }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Stable public contract", "items": ["The installer knows only the x86QW catalog URL", "Mirror priority can change without replacing the installer"] },
-    { "dot": "emerald", "title": "Canonical distribution", "items": ["Selected sources live once under dist/ with origin, size and SHA-256", "Component ZIPs are reproducible temporary builds, not duplicated Git content"] },
-    { "dot": "rose", "title": "Registered game data", "items": ["id1 PAKs are versioned in dist/game-data/id1", "A separate x86qw-core-id1 release is validated before installation"] }
+    { "dot": "cyan", "title": "Fonte única", "items": ["dist/ preserva os bytes; inventários declaram runtimes, jogos, plataformas e capacidades", "product.json projeta versão, contagens e suporte sem números duplicados"] },
+    { "dot": "emerald", "title": "Publicação bloqueada", "items": ["Pull requests verificam LFS, schemas, testes e Worker nos três sistemas", "Release é manual, protegida e só recebe artefatos depois de todos os gates"] },
+    { "dot": "rose", "title": "Instalação recuperável", "items": ["Perfis e seleções custom migram para state.json v2 sem perder componentes", "Journal privado reconcilia crash e preserva todo arquivo pessoal ou modificado"] },
+    { "dot": "amber", "title": "Execução imutável", "items": ["play e host validam conteúdo; instalação, update, upgrade ou repair preparam payload", "MVDSV inicia antes de QTV e QWFWD; falha parcial encerra todos os filhos"] }
   ]
 }
