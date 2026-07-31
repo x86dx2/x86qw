@@ -1301,7 +1301,9 @@ class InstallerTests(unittest.TestCase):
             cli.write_text("# cli\n", encoding="utf-8")
             self.write_cli_receipt(target, "1.0.5")
             (target / "x86qw.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-            (target / "x86qw.cmd").write_text("@echo off\r\n", encoding="utf-8")
+            (target / "x86qw.cmd").write_bytes(
+                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes()
+            )
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"preserve")
             with contextlib.redirect_stdout(io.StringIO()):

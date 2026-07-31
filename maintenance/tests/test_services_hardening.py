@@ -33,9 +33,21 @@ class ServiceHardeningTests(unittest.TestCase):
 
     def assert_unsafe_archive(self, names: list[str]) -> None:
         with tempfile.TemporaryDirectory() as temporary:
+            archive_names = [name.replace("\\", "/") for name in names]
             package, destination = self.package(
-                Path(temporary), [(name, b"payload") for name in names],
+                Path(temporary), [(name, b"payload") for name in archive_names],
             )
+            # ZipInfo sanitizes the host separator while writing on Windows.
+            # Patch both equal-length name records so this remains a real ZIP
+            # with the hostile spelling an external archive may contain.
+            contents = package.read_bytes()
+            for original, archive_name in zip(names, archive_names):
+                if original != archive_name:
+                    self.assertIn(archive_name.encode("utf-8"), contents)
+                    contents = contents.replace(
+                        archive_name.encode("utf-8"), original.encode("utf-8")
+                    )
+            package.write_bytes(contents)
             with self.assertRaises(services.InstallerError):
                 services.materialize_dedicated_pk3(package, destination, "teste")
 
