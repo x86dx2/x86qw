@@ -85,11 +85,17 @@ encerra de forma coordenada todos os processos iniciados pelo comando. Use
 QTV para evitar o histórico do shell; as opções legadas em argumento permanecem
 compatíveis, mas geram alerta. Senhas resolvidas ficam somente em configurações
 efêmeras privadas e nunca entram no comando filho nem na saída.
+Ao expor QTV em uma interface não loopback, a CLI sempre alerta que a senha do
+upstream não autentica a interface HTTP pública.
 
 Cada execução de serviço mantém um journal privado em `.install/sessions/`.
-Depois de interrupção ou crash, a próxima execução remove apenas temporários
-criados pela sessão cujo hash continua igual e preserva qualquer arquivo
-alterado. Consulte [docs/HOSTING.md](docs/HOSTING.md).
+Um lock atômico permite somente uma stack por instalação e impede que uma
+segunda CLI recupere uma sessão cujo controlador ainda esteja vivo. Depois de
+crash confirmado, a próxima execução valida PID, token de criação e executável,
+encerra somente filhos cuja identidade coincida e reconcilia os temporários.
+Configurações efêmeras sensíveis são removidas mesmo quando modificadas;
+material não sensível modificado continua preservado. Consulte
+[docs/HOSTING.md](docs/HOSTING.md).
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
@@ -106,9 +112,12 @@ o fluxo do Homebrew: baixa e valida o manifesto, mostra somente os pacotes
 desatualizados em linhas tabuladas com versão instalada, versão disponível e
 tamanho, pede confirmação e então informa o progresso de cada pacote. Quando não
 há mudanças, o comando informa isso e termina sem confirmação, aplicação ou
-verificação integral. `repair` é o fluxo explícito para recompor somente
-conteúdo gerenciado ausente ou incorreto; na CLI instalada ele orienta a
-reexecução segura do bootstrap.
+verificação integral. `repair` é o fluxo explícito para diagnosticar clientes,
+componentes, permissões e metadados incompletos e recompor somente conteúdo
+gerenciado ausente ou incorreto. Correções locais são aplicáveis pela CLI
+instalada; quando falta payload validado, ela orienta a reexecução segura do
+bootstrap. O canal e a versão registrada do ezQuake são preservados, sem
+downgrade.
 
 `play`, `host`, `proxy`, `qtv` e `hub` não instalam nem atualizam payload
 gerenciado durante a execução normal. `play-support` é preparado por instalação,

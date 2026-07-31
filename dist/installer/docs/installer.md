@@ -141,6 +141,7 @@ O estado do instalador fica agrupado por contexto em um único diretório neutro
 quake-world/.install/
 ├── state.json
 ├── sessions/
+│   ├── active.lock
 │   └── <session-id>/
 │       └── session.json
 ├── cli/
@@ -552,8 +553,17 @@ Antes de iniciar qualquer filho, a CLI valida componentes, executáveis,
 configurações, endpoints e todas as portas. A ordem composta é MVDSV, readiness
 e configuração pós-map por RCON, QTV com HTTP/upstream e, por último, QWFWD.
 Falha parcial encerra o que já iniciou. O journal privado em
-`.install/sessions/` reconcilia crashes sem apagar arquivo pessoal ou temporário
-que tenha sido modificado.
+`.install/sessions/` e o lock atômico permitem uma única stack por instalação.
+Uma segunda CLI nunca recupera um controlador vivo. Após crash confirmado, PID,
+token de criação e executável identificam os filhos órfãos; PID reutilizado ou
+identidade inconclusiva são preservados. Temporários não sensíveis modificados
+continuam preservados, mas configurações efêmeras com segredo são sempre
+removidas por unlink, sem imprimir ou guardar seu conteúdo.
+
+QTV ligado fora de loopback sempre gera alerta de exposição HTTP: a senha do
+upstream protege a relação QTV/MVDSV, não autentica visitantes da interface
+HTTP. Em `host --with-qtv`, o upstream acompanha o bind alcançável do MVDSV,
+incluindo IPv4 e IPv6 (`0.0.0.0` vira loopback IPv4 e `::` vira `[::1]`).
 
 ## Preparar outro sistema
 
@@ -721,9 +731,14 @@ use no checkout de desenvolvimento:
 ./dist/installer/bin/manager.py repair
 ```
 
-Na CLI instalada, `repair` orienta a reexecução do bootstrap para que os
-pacotes sejam obtidos pelo fluxo público validado. Arquivos pessoais e arquivos
-gerenciados modificados são preservados.
+`repair` também valida os recibos stable e nightly do ezQuake, runtime, formato,
+hash, permissão AppImage e preparação do bundle macOS. Ele repara localmente
+permissões, preparação e estado reconstruível; versão e canal registrados são
+preservados sem downgrade. Recibo sem inventário, inventário sem recibo, runtime
+sem metadata e estados ambíguos são diagnosticados sem exclusão ou inferência
+destrutiva. Quando o plano exige payload, a CLI instalada orienta a reexecução
+do bootstrap para obtê-lo pelo fluxo público validado. Arquivos pessoais e
+arquivos gerenciados modificados são preservados.
 
 Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
 mostram somente as mudanças reais no formato do Homebrew: manifesto baixado,

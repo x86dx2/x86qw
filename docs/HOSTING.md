@@ -78,7 +78,14 @@ separadamente:
 ```
 
 Upload HTTP permanece desativado no perfil gerenciado. Use `--bind 0.0.0.0`
-somente se realmente quiser expor a página/stream.
+somente se realmente quiser expor a página/stream. Em qualquer bind não
+loopback, a CLI alerta que a interface HTTP/QTV ficará exposta e que a senha do
+upstream não autentica o acesso HTTP. O alerta aparece mesmo quando
+`--qtv-password` foi informado.
+
+Ao compor `host --with-qtv`, o upstream usa um endereço alcançável do bind do
+MVDSV: wildcard IPv4 vira `127.0.0.1`, wildcard IPv6 vira `[::1]`, endereços
+específicos são preservados e IPv6 é sempre formatado entre colchetes.
 
 Upstreams aceitam apenas `IPv4:porta`, `hostname:porta` ou `[IPv6]:porta`.
 Espaços, controles, comandos concatenados, portas fora da faixa e IPv6 sem
@@ -110,13 +117,29 @@ saída e forçam apenas processos que não responderem. No Windows, a CLI usa o
 encerramento coordenado disponível em `subprocess`, seguido de `kill` após o
 timeout.
 
+Somente uma stack de serviços x86QW pode ficar ativa por instalação. Antes de
+qualquer recuperação, a CLI adquire atomicamente
+`.install/sessions/active.lock`. Se o controlador registrado estiver vivo, a
+segunda execução falha sem tocar journal, processos ou arquivos. Se a identidade
+não puder ser comprovada, a CLI também falha de forma conservadora e orienta a
+inspeção do lock. Um lock abandonado só é reclamado quando PID, token de criação
+e executável confirmam que o controlador anterior morreu.
+
 Cada execução mantém um journal privado em
 `.install/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
 para o arquivo no Unix). Ele registra processos, configurações efêmeras,
-arquivos materializados, hashes e diretórios criados. Ao iniciar `host`,
-`proxy` ou `qtv`, sessões incompletas são reconciliadas: somente arquivos
-criados pela sessão e ainda iguais ao hash esperado são removidos. Arquivos
-alterados e dados preexistentes são preservados e reportados.
+arquivos materializados, hashes e diretórios criados. Filhos usam grupo próprio
+e registram PID, grupo, token de criação e executável. Após crash confirmado, a
+recuperação encerra somente o processo cuja identidade corresponda exatamente;
+PID reutilizado é preservado. Identidade inconclusiva bloqueia a nova stack e a
+remoção de arquivos dos quais o processo possa depender.
+
+Temporários não sensíveis criados pela sessão são removidos quando ainda
+coincidem com o hash; modificados e dados preexistentes são preservados e
+reportados. Configurações efêmeras com senhas são classificadas como sensíveis
+e removidas por unlink no encerramento ou recuperação mesmo quando modificadas,
+sem backup ou conteúdo no journal. Isso é remoção lógica e não promessa de
+apagamento físico no dispositivo.
 
 ## Limites de PK3/ZIP
 
