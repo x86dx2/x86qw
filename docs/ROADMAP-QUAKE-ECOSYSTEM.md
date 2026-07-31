@@ -4,10 +4,8 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](../ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline inicial sincronizado: branch `main`, commit
-`3a95da88f7d6a978473115520ffe903560edfdd6`, em 31 de julho de 2026. As
-correções de código desta linha têm como baseline `221522f` na branch
-`codex/fix-0.2.1-session-lifecycle`.
+Baseline consolidado: branch `main`, commit
+`018e61f09b1f542f873d91be37dc8c1ebf3db589`, em 31 de julho de 2026.
 
 ## Escala de estado
 
@@ -21,9 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.2.0`, já publicado e verificado; `0.1.25` permanece
-  imutável;
-- 49 pacotes e 21 componentes no catálogo;
+- instalador público `0.2.1`; `0.2.0` permanece imutável;
+- 50 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -265,7 +262,7 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [ ] MVD produzido e validado formalmente;
 - [ ] forwarding QWFWD validado em suíte de rede;
 - [x] revisão humana do diff e das migrações;
-- [x] versão `0.2.0` escolhida sem sobrescrever `0.1.25`;
+- [x] versão `0.2.1` escolhida sem sobrescrever `0.2.0`;
 - [x] publicação `0.2.0` executada e verificada em etapa explícita aprovada;
-- [ ] publicação de qualquer versão posterior executada somente em etapa
-  explícita aprovada.
+- [x] publicação `0.2.1` autorizada em etapa explícita;
+- [ ] publicação de qualquer versão posterior exige nova aprovação explícita.
