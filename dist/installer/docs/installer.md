@@ -348,9 +348,10 @@ No macOS com notch, o modo de compatibilidade de área segura pode reduzir a
 janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
 **Options**. Durante a instalação ou o primeiro reparo, o x86QW registra
 `NSPrefersDisplaySafeAreaCompatibilityMode=false` no `Info.plist` e assina
-novamente o bundle com `codesign`. Ao abrir o jogo, o launcher consulta a área
-segura e a resolução física do monitor principal. Antes de iniciar o ezQuake,
-o launcher grava fullscreen explícito (`vid_fullscreen 1` e
+novamente o bundle com `codesign`. Ao abrir o jogo, o launcher identifica o
+monitor interno pela resolução física, que não muda quando outro fullscreen já
+está ativo, e deriva sua área 16:10 segura. Antes de iniciar o ezQuake, o launcher
+grava fullscreen explícito (`vid_fullscreen 1` e
 `vid_usedesktopres 0`) com a resolução 16:10 segura detectada para o painel. Em
 um MacBook com painel físico 3024×1964, por exemplo, o jogo abre diretamente em
 3024×1890; o modo desktop automático não pode ignorar essas dimensões e ocupar a

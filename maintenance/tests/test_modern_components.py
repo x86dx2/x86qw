@@ -239,16 +239,14 @@ class ModernComponentTests(unittest.TestCase):
             config = target / "ezquake/configs/config.cfg"
             config.parent.mkdir(parents=True)
             config.write_bytes(b'vid_fullscreen "1"\nvid_usedesktopres "1"\n')
-            responses = [
-                mock.Mock(stdout='{"top":38,"width":1800,"height":1169}'),
-                mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
+            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
                     "spdisplays_main": "spdisplays_yes",
+                    "spdisplays_connection_type": "spdisplays_internal",
                     "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
                     "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
-                }]}]})),
-            ]
+                }]}]}))
             with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
+                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
                     with contextlib.redirect_stdout(io.StringIO()):
                         player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
@@ -270,16 +268,14 @@ class ModernComponentTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             original = b'vid_fullscreen "1"\nvid_usedesktopres "0"\nvid_width "1920"\nvid_height "1200"\n'
             config.write_bytes(original)
-            responses = [
-                mock.Mock(stdout='{"top":38,"width":1800,"height":1169}'),
-                mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
+            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
                     "spdisplays_main": "spdisplays_yes",
+                    "spdisplays_connection_type": "spdisplays_internal",
                     "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
                     "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
-                }]}]})),
-            ]
+                }]}]}))
             with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
+                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
                     with contextlib.redirect_stdout(io.StringIO()):
                         player.configure_macos_fullscreen()
             self.assertEqual(original, config.read_bytes())
@@ -310,15 +306,13 @@ class ModernComponentTests(unittest.TestCase):
                 "managed": True,
                 "settings": previous,
             }), encoding="utf-8")
-            responses = [
-                mock.Mock(stdout='{"top":38,"width":1800,"height":1169}'),
-                mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
+            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
                     "spdisplays_main": "spdisplays_yes",
+                    "spdisplays_connection_type": "spdisplays_internal",
                     "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
-                }]}]})),
-            ]
+                }]}]}))
             with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", side_effect=responses):
+                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
                     player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
             self.assertEqual("0", values["vid_usedesktopres"])
@@ -338,7 +332,13 @@ class ModernComponentTests(unittest.TestCase):
             with mock.patch.object(play_qw.sys, "platform", "darwin"):
                 with mock.patch.object(
                     play_qw.subprocess, "run",
-                    return_value=mock.Mock(stdout='{"top":0,"width":1920,"height":1080}'),
+                    return_value=mock.Mock(stdout=json.dumps({
+                        "SPDisplaysDataType": [{"spdisplays_ndrvs": [{
+                            "spdisplays_main": "spdisplays_yes",
+                            "spdisplays_connection_type": "spdisplays_internal",
+                            "spdisplays_pixelresolution": "spdisplays_1920x1200Retina",
+                        }]}],
+                    })),
                 ):
                     player.configure_macos_fullscreen()
             self.assertEqual(original, config.read_bytes())

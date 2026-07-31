@@ -56,16 +56,6 @@ MACOS_FULLSCREEN_CVARS = (
     "vid_height",
     "vid_displayfrequency",
 )
-MACOS_SAFE_AREA_SCRIPT = """
-ObjC.import("AppKit");
-var screen = $.NSScreen.mainScreen;
-JSON.stringify({
-    top: Number(screen.safeAreaInsets.top),
-    width: Number(screen.frame.size.width),
-    height: Number(screen.frame.size.height)
-});
-"""
-
 # The ezQuake listen server persists these server cvars in the shared personal
 # config. KTX intentionally uses MVDSV-oriented timing and jump values; reset
 # them explicitly when changing games so they cannot leak into legacy gamecode.
@@ -301,14 +291,6 @@ class Player(core.Installer):
 
     def macos_notched_fullscreen_settings(self) -> dict[str, str] | None:
         try:
-            safe_area = subprocess.run(
-                ["osascript", "-l", "JavaScript", "-e", MACOS_SAFE_AREA_SCRIPT],
-                check=True, capture_output=True, text=True, timeout=3,
-            )
-            geometry = json.loads(safe_area.stdout)
-            top = int(geometry["top"])
-            if top <= 0:
-                return None
             profile = subprocess.run(
                 ["system_profiler", "SPDisplaysDataType", "-json"],
                 check=True, capture_output=True, text=True, timeout=8,
@@ -328,6 +310,8 @@ class Player(core.Installer):
                     break
             if main is None:
                 raise ValueError("monitor principal ausente")
+            if main.get("spdisplays_connection_type") != "spdisplays_internal":
+                return None
             native = str(main.get("spdisplays_pixelresolution", ""))
             resolution = re.fullmatch(r"spdisplays_(\d+)x(\d+)Retina", native)
             if resolution is None:
@@ -339,12 +323,14 @@ class Player(core.Installer):
             KeyError, TypeError, ValueError,
         ) as error:
             raise InstallerError(f"Não foi possível detectar o modo fullscreen seguro do macOS: {error}") from error
-        if (
-            width < 1280
-            or safe_height < 800
-            or panel_height <= safe_height
-            or panel_height - safe_height > 256
-        ):
+        if width < 1280 or panel_height < 800:
+            raise InstallerError(
+                f"Geometria inesperada na tela interna: {width}x{panel_height}."
+            )
+        notch_height = panel_height - safe_height
+        if notch_height <= 0:
+            return None
+        if safe_height < 800 or notch_height > 256 or notch_height > round(panel_height * 0.08):
             raise InstallerError(
                 f"Geometria inesperada na tela com notch: {width}x{panel_height}; "
                 f"área segura {width}x{safe_height}."
