@@ -25,3 +25,6 @@ dist/mods/**/*.example diff merge text
 dist/mods/**/*.json diff merge text
 dist/mods/**/*.md diff merge text
 dist/mods/**/*.patch diff merge text
+
+# Generated public contracts are byte-compared by verify on every platform.
+site/public/api/v1/*.json text eol=lf
