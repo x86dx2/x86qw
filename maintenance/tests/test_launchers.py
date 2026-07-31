@@ -88,7 +88,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 "play", "ktx", "--mode", "duel", "--map", "dm6",
                 "--bots", "2", "--bot-skill", "8", "--no-color",
             ]
-            command = subprocess.list2cmdline([str(launcher), *arguments])
+            command = "call " + subprocess.list2cmdline([str(launcher), *arguments])
             completed = subprocess.run(
                 [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", command],
                 env=environment, check=False,
@@ -100,7 +100,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
             self.assertEqual(root.resolve(), Path(received[-1]).resolve())
 
             environment["X86QW_STUB_EXIT"] = "23"
-            command = subprocess.list2cmdline([str(launcher), "repair", "--dry-run"])
+            command = "call " + subprocess.list2cmdline([str(launcher), "repair", "--dry-run"])
             completed = subprocess.run(
                 [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", command],
                 env=environment, check=False,
