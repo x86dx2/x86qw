@@ -42,6 +42,11 @@ ZIPAPP_PATH = _argv0 if _argv0.suffix.casefold() == ".pyz" and _argv0.is_file() 
 PROJECT_ROOT = ZIPAPP_PATH.parent if ZIPAPP_PATH is not None else Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+INSTALLER_BIN = Path(__file__).resolve().parent
+if str(INSTALLER_BIN) not in sys.path:
+    sys.path.insert(0, str(INSTALLER_BIN))
+
+session_control = importlib.import_module("session_control")
 
 from maintenance.tools.components import (
     components_by_id,
@@ -439,6 +444,7 @@ class ClientRepairIssue:
     reason: str
     mode: str
     release: ReleaseRecord | None = None
+    category: str = "payload-required"
 
 
 @dataclass(frozen=True)
@@ -450,6 +456,12 @@ class RepairAssessment:
     client_issues: tuple[ClientRepairIssue, ...]
     metadata_diagnostics: tuple[str, ...]
     recovered_state: dict[str, object] | None = None
+
+
+def repair_diagnostic_category(diagnostic: str) -> str:
+    if "runtime presente sem recibo; preservado" in diagnostic:
+        return "advisory"
+    return "fatal"
 
 
 class LinkCollector(HTMLParser):
@@ -3714,23 +3726,15 @@ class Installer:
                         f"ezQuake {spec.label} {channel}: recibo inválido ou parcial ({error})"
                     )
                     continue
-                try:
-                    release = self.client_catalog_release(spec, channel, receipt["selection"])
-                except InstallerError as error:
-                    diagnostics.append(
-                        f"ezQuake {spec.label} {channel}: catálogo indisponível para validar "
-                        f"{receipt['selection']} ({error})"
-                    )
-                    continue
-                if release is None:
-                    diagnostics.append(
-                        f"ezQuake {spec.label} {channel}: versão registrada "
-                        f"{receipt['selection']} não existe mais no catálogo; preservada"
-                    )
-                    continue
                 if not lexists(runtime):
+                    try:
+                        release = self.client_catalog_release(spec, channel, receipt["selection"])
+                    except InstallerError:
+                        release = None
                     issues.append(ClientRepairIssue(
-                        spec, channel, receipt_path, receipt, "runtime ausente", "payload", release,
+                        spec, channel, receipt_path, receipt,
+                        "runtime ausente; payload precisa do bootstrap" if release is None else "runtime ausente",
+                        "payload", release,
                     ))
                     continue
                 if (
@@ -3743,12 +3747,16 @@ class Installer:
                 ):
                     issues.append(ClientRepairIssue(
                         spec, channel, receipt_path, receipt,
-                        "AppImage sem permissão de execução", "permission", release,
+                        "AppImage sem permissão de execução", "permission", None, "local-repair",
                     ))
                     continue
                 try:
                     self.check_runtime(spec, channel, receipt)
                 except InstallerError:
+                    try:
+                        release = self.client_catalog_release(spec, channel, receipt["selection"])
+                    except InstallerError:
+                        release = None
                     issues.append(ClientRepairIssue(
                         spec, channel, receipt_path, receipt,
                         "runtime ausente, incompleto ou divergente", "payload", release,
@@ -3757,7 +3765,7 @@ class Installer:
                 if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
                     issues.append(ClientRepairIssue(
                         spec, channel, receipt_path, receipt,
-                        "preparação macOS ausente", "macos-preparation", release,
+                        "preparação macOS ausente", "macos-preparation", None, "local-repair",
                     ))
         return issues, diagnostics
 
@@ -3873,8 +3881,9 @@ class Installer:
     ) -> bool:
         assessment = self.repair_plan()
         for diagnostic in assessment.metadata_diagnostics:
+            category = repair_diagnostic_category(diagnostic)
             plan_rows.append(UpdatePlanRow(
-                "Diagnóstico", "Metadados gerenciados", diagnostic,
+                f"Diagnóstico {category}", "Metadados gerenciados", diagnostic,
                 "preservar e reconciliar pelo bootstrap", "Inspecionar",
             ))
         if assessment.recovered_state is not None:
@@ -3910,27 +3919,38 @@ class Installer:
             ))
         if dry_run or not plan_rows:
             return bool(plan_rows)
-        if assessment.metadata_diagnostics:
+        fatal_diagnostics = [
+            diagnostic for diagnostic in assessment.metadata_diagnostics
+            if repair_diagnostic_category(diagnostic) == "fatal"
+        ]
+        if fatal_diagnostics:
             raise InstallerError(
                 "O repair encontrou metadados incompletos ou ambíguos e não alterou a instalação. "
                 "Preserve os arquivos e reexecute o bootstrap install.sh para reconciliar o estado."
             )
         payload_clients = [issue for issue in assessment.client_issues if issue.mode == "payload"]
-        if not allow_download and (payload_clients or assessment.invalid_components):
-            raise InstallerError(
-                "O plano exige payload validado. A CLI instalada não baixa conteúdo durante repair; "
-                "reexecute o bootstrap install.sh no mesmo destino."
-            )
         for issue in assessment.client_issues:
             runtime = self.target / issue.spec.runtime(issue.channel)
             if issue.mode == "permission":
                 runtime.chmod(runtime.stat().st_mode | 0o100)
+                console.success(f"Permissão de execução restaurada em {runtime}.")
             elif issue.mode == "macos-preparation":
                 self.repair_installed_macos_runtime(
                     issue.spec, issue.channel, issue.receipt_path, issue.receipt,
                 )
-            else:
-                self.repair_client_runtime(issue)
+        for binary in assessment.permission_repairs:
+            binary.chmod(binary.stat().st_mode | 0o100)
+            console.success(f"Permissão de execução restaurada em {binary}.")
+        unavailable_clients = [issue for issue in payload_clients if issue.release is None]
+        if unavailable_clients or (
+            not allow_download and (payload_clients or assessment.invalid_components)
+        ):
+            raise InstallerError(
+                "O plano exige payload validado. A CLI instalada não baixa conteúdo durante repair; "
+                "reexecute o bootstrap install.sh no mesmo destino."
+            )
+        for issue in payload_clients:
+            self.repair_client_runtime(issue)
         if assessment.invalid_components:
             self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-repair.", dir=self.target))
             try:
@@ -3940,8 +3960,6 @@ class Installer:
                 self.stage = None
         elif assessment.support_invalid:
             self.reconcile_play_support()
-        for binary in assessment.permission_repairs:
-            binary.chmod(binary.stat().st_mode | 0o100)
         if assessment.package_order_invalid:
             self.refresh_qw_package_order()
         state = assessment.recovered_state or self.load_install_state(persist_migration=True)
@@ -4143,7 +4161,7 @@ class Installer:
         if removed:
             console.success("CLI permanente x86QW removida.")
 
-    def purge(self) -> None:
+    def purge(self, *, preserve_operation_lock: bool = False) -> None:
         caches = self.owned_cache_roots(include_legacy=True)
         if lexists(self.target):
             identity = (
@@ -4158,8 +4176,27 @@ class Installer:
             current = Path.cwd().resolve()
             if current == self.target or self.target in current.parents:
                 os.chdir(self.target.parent)
-            remove_path(self.target)
-            console.success(f"Diretório da instalação removido: {self.target}")
+            if preserve_operation_lock:
+                metadata = self.target / METADATA_DIR
+                sessions = metadata / "sessions"
+                for child in tuple(self.target.iterdir()):
+                    if child != metadata:
+                        remove_path(child)
+                if metadata.is_dir() and not metadata.is_symlink():
+                    for child in tuple(metadata.iterdir()):
+                        if child != sessions:
+                            remove_path(child)
+                if sessions.is_dir() and not sessions.is_symlink():
+                    for child in tuple(sessions.iterdir()):
+                        if child.name != "active.lock":
+                            remove_path(child)
+                console.info(
+                    "Conteúdo da instalação removido; o diretório do lock será "
+                    "finalizado ao encerrar a operação."
+                )
+            else:
+                remove_path(self.target)
+                console.success(f"Diretório da instalação removido: {self.target}")
         else:
             console.info(f"Nenhum diretório de instalação foi encontrado em {self.target}.")
         for root in caches:
@@ -4169,13 +4206,20 @@ class Installer:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
         console.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
 
-    def install(self, *, platform: str | None = None) -> None:
+    def install(
+        self,
+        *,
+        platform: str | None = None,
+        before_mutation: Callable[[], None] | None = None,
+    ) -> None:
         console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
         self.choose_channel()
+        self.choose_release()
+        if before_mutation is not None:
+            before_mutation()
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
-        self.choose_release()
         self.prepare_install_target()
         self.reject_target_symlinks()
         self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
@@ -4733,6 +4777,180 @@ def choose_public_target(suggested: Path | None = None) -> Path:
     return target
 
 
+def execute_manager_action(options: argparse.Namespace, project_root: Path) -> int:
+    """Execute a parsed manager action under the installation operation contract."""
+    action_labels = {
+        "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
+        "presets": "gerenciar presets",
+        "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
+        "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
+        "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
+    }
+    action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
+    console.banner(action_label, options.target)
+    installer = Installer(project_root, options.target, online_only=options.online_only)
+    operation_lock: session_control.InstallationLock | None = None
+    recovery_confirmed = False
+
+    def acquire_operation_lock() -> None:
+        nonlocal operation_lock, recovery_confirmed
+        if operation_lock is not None:
+            return
+        operation_lock = session_control.InstallationLock.acquire(
+            installer.target, options.action, "maintenance",
+        )
+        try:
+            services = importlib.import_module("services")
+            services.recover_sessions(installer.target)
+            operation_lock.confirm_recovery()
+            recovery_confirmed = True
+        except Exception:
+            try:
+                operation_lock.release(restore_reclaimed=True)
+            except Exception as cleanup_error:
+                console.warning(
+                    f"Falha ao restaurar o lock após recuperação recusada: {cleanup_error}"
+                )
+            raise
+
+    try:
+        if options.action == "cleanup":
+            installer.validate_target(options.action, purge=False)
+            acquire_operation_lock()
+            console.section("Limpeza segura")
+            installer.cleanup_cache()
+            cache_count, personal_count = installer.cleanup_runtime_data(
+                downloads=options.downloads,
+                personal_data=options.personal_data,
+            )
+            if cache_count:
+                console.success(f"Dados regeneráveis removidos ({file_count(cache_count)}).")
+            else:
+                console.info("Nenhum dado regenerável da instalação precisava ser removido.")
+            if personal_count:
+                console.success(f"Dados pessoais locais removidos ({file_count(personal_count)}).")
+            elif not options.personal_data:
+                console.info("Histórico, logs e demos válidas foram preservados; use --personal-data para removê-los.")
+            if not options.downloads:
+                console.info("Downloads de servidores foram preservados; use --downloads para removê-los.")
+            return 0
+
+        installer.validate_target(options.action, purge=options.purge)
+        console.detail(f"Destino normalizado: {installer.target}")
+        if not options.purge:
+            installer.reject_target_symlinks()
+        if options.action == "verify":
+            console.section("Verificação da instalação")
+            installer.verify_installation()
+            console.success("Verificação concluída sem problemas.")
+        elif options.action == "repair":
+            acquire_operation_lock()
+            plan_rows: list[UpdatePlanRow] = []
+            needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
+            if not needs_repair:
+                console.success("Nenhum reparo é necessário; a instalação está íntegra.")
+            else:
+                console.update_plan(plan_rows, "repair")
+                if options.dry_run:
+                    console.heading("Dry run complete; no files were changed")
+                else:
+                    installer.repair(
+                        dry_run=False, plan_rows=[], allow_download=not options.installed_cli,
+                    )
+                    console.success("Reparo concluído e validado.")
+        elif options.action == "uninstall":
+            acquire_operation_lock()
+            if options.purge:
+                console.section("Desinstalação completa")
+                installer.purge(preserve_operation_lock=True)
+            else:
+                console.section("Desinstalação")
+                installer.uninstall()
+        elif options.action == "hub":
+            console.section("QuakeWorld Hub")
+            installer.browse_hub()
+        elif options.action in {"update", "upgrade"}:
+            installer.update_ui = True
+            if (
+                options.installed_cli
+                and not options.skip_cli_update
+                and installer.handoff_cli_update(
+                    options.action, dry_run=options.dry_run, assume_yes=options.yes,
+                )
+            ):
+                return 0
+            acquire_operation_lock()
+            plan_rows: list[UpdatePlanRow] = []
+            if options.skip_cli_update:
+                cli_row = installer.cli_update_plan_row()
+                if cli_row is not None:
+                    plan_rows.append(cli_row)
+            operation = installer.upgrade if options.action == "upgrade" else installer.update
+            content_changed = operation(
+                dry_run=True, preview=not options.dry_run, plan_rows=plan_rows,
+            )
+            if not plan_rows:
+                message = (
+                    "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
+                    if options.action == "upgrade"
+                    else "Nenhuma atualização disponível; o conteúdo instalado já está atualizado."
+                )
+                console.heading("Already up-to-date")
+                console.success(message)
+                return 0
+            console.update_plan(plan_rows, options.action)
+            if options.dry_run:
+                console.heading("Dry run complete; no files were changed")
+                return 0
+            if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
+                return 0
+            console.heading(
+                "Updating packages" if options.action == "update" else "Upgrading packages"
+            )
+            if content_changed:
+                operation(dry_run=False)
+            if options.skip_cli_update:
+                installer.install_online_cli()
+        else:
+            if options.action in {"components", "presets"}:
+                acquire_operation_lock()
+            if options.action == "components":
+                installer.manage_components()
+            elif options.action == "presets":
+                installer.manage_presets()
+            else:
+                installer.install(
+                    platform=options.platform, before_mutation=acquire_operation_lock,
+                )
+            installer.install_online_cli()
+        return 0
+    finally:
+        original_error = sys.exc_info()[0] is not None
+        cleanup_errors: list[str] = []
+        try:
+            installer.cleanup_stage()
+        except Exception as error:
+            cleanup_errors.append(f"área temporária: {error}")
+        lock_released = operation_lock is None
+        if operation_lock is not None:
+            try:
+                operation_lock.release(restore_reclaimed=not recovery_confirmed)
+                lock_released = True
+            except Exception as error:
+                cleanup_errors.append(f"lock da instalação: {error}")
+        if options.purge and lock_released and lexists(installer.target):
+            try:
+                remove_empty_directories(installer.target / METADATA_DIR)
+                installer.target.rmdir()
+                console.success(f"Diretório da instalação removido: {installer.target}")
+            except OSError as error:
+                cleanup_errors.append(f"diretório final da instalação: {error}")
+        for error in cleanup_errors:
+            console.warning(f"Falha durante a finalização de {error}")
+        if cleanup_errors and not original_error:
+            raise InstallerError("A operação terminou com falha crítica de finalização.")
+
+
 def main(arguments: list[str] | None = None) -> int:
     project_root = INSTALLER_ROOT
     options = None
@@ -4759,126 +4977,11 @@ def main(arguments: list[str] | None = None) -> int:
             if options.no_color:
                 play_arguments.insert(0, "--no-color")
             return gameplay.main(play_arguments)
-        action_labels = {
-            "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
-            "presets": "gerenciar presets",
-            "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
-            "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
-            "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
-        }
-        action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
-        console.banner(action_label, options.target)
-        installer = Installer(project_root, options.target, online_only=options.online_only)
-        if options.action == "cleanup":
-            console.section("Limpeza segura")
-            installer.cleanup_cache()
-            cache_count, personal_count = installer.cleanup_runtime_data(
-                downloads=options.downloads,
-                personal_data=options.personal_data,
-            )
-            if cache_count:
-                console.success(f"Dados regeneráveis removidos ({file_count(cache_count)}).")
-            else:
-                console.info("Nenhum dado regenerável da instalação precisava ser removido.")
-            if personal_count:
-                console.success(f"Dados pessoais locais removidos ({file_count(personal_count)}).")
-            elif not options.personal_data:
-                console.info("Histórico, logs e demos válidas foram preservados; use --personal-data para removê-los.")
-            if not options.downloads:
-                console.info("Downloads de servidores foram preservados; use --downloads para removê-los.")
-            return 0
-        installer.validate_target(options.action, purge=options.purge)
-        console.detail(f"Destino normalizado: {installer.target}")
-        if not options.purge:
-            installer.reject_target_symlinks()
-        if options.action == "verify":
-            console.section("Verificação da instalação")
-            installer.verify_installation()
-            console.success("Verificação concluída sem problemas.")
-        elif options.action == "repair":
-            plan_rows: list[UpdatePlanRow] = []
-            needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
-            if not needs_repair:
-                console.success("Nenhum reparo é necessário; a instalação está íntegra.")
-            else:
-                console.update_plan(plan_rows, "repair")
-                if options.dry_run:
-                    console.heading("Dry run complete; no files were changed")
-                else:
-                    installer.repair(
-                        dry_run=False, plan_rows=[], allow_download=not options.installed_cli,
-                    )
-                    console.success("Reparo concluído e validado.")
-        elif options.action == "uninstall":
-            if options.purge:
-                console.section("Desinstalação completa")
-                installer.purge()
-            else:
-                console.section("Desinstalação")
-                installer.uninstall()
-        elif options.action == "hub":
-            console.section("QuakeWorld Hub")
-            installer.browse_hub()
-        elif options.action in {"update", "upgrade"}:
-            installer.update_ui = True
-            if (
-                options.installed_cli
-                and not options.skip_cli_update
-                and installer.handoff_cli_update(
-                    options.action, dry_run=options.dry_run, assume_yes=options.yes,
-                )
-            ):
-                return 0
-            try:
-                plan_rows: list[UpdatePlanRow] = []
-                if options.skip_cli_update:
-                    cli_row = installer.cli_update_plan_row()
-                    if cli_row is not None:
-                        plan_rows.append(cli_row)
-                operation = installer.upgrade if options.action == "upgrade" else installer.update
-                content_changed = operation(
-                    dry_run=True, preview=not options.dry_run, plan_rows=plan_rows,
-                )
-                if not plan_rows:
-                    message = (
-                        "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
-                        if options.action == "upgrade"
-                        else "Nenhuma atualização disponível; o conteúdo instalado já está atualizado."
-                    )
-                    console.heading("Already up-to-date")
-                    console.success(message)
-                    return 0
-                console.update_plan(plan_rows, options.action)
-                if options.dry_run:
-                    console.heading("Dry run complete; no files were changed")
-                    return 0
-                if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
-                    return 0
-                console.heading(
-                    "Updating packages" if options.action == "update" else "Upgrading packages"
-                )
-                if content_changed:
-                    operation(dry_run=False)
-                if options.skip_cli_update:
-                    installer.install_online_cli()
-            finally:
-                installer.cleanup_stage()
-        else:
-            try:
-                if options.action == "components":
-                    installer.manage_components()
-                elif options.action == "presets":
-                    installer.manage_presets()
-                else:
-                    installer.install(platform=options.platform)
-                installer.install_online_cli()
-            finally:
-                installer.cleanup_stage()
-        return 0
+        return execute_manager_action(options, project_root)
     except KeyboardInterrupt:
         console.error("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
         return 130
-    except InstallerError as error:
+    except (InstallerError, session_control.SessionControlError) as error:
         console.error(str(error))
         if options is not None and not options.verbose:
             print("       Execute novamente com --verbose para obter detalhes técnicos.", file=sys.stderr)
