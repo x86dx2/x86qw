@@ -21,8 +21,9 @@
   alternância ou recarga em ciclo;
 - mantém CTF fora do launcher enquanto a distribuição não possuir um mapa ou
   ENT CTF curado com as duas bandeiras;
-- reaplica o mapa de teclas competitivo do nQuake ao voltar de outros mods,
-  incluindo quick weapons, mensagens de equipe, timers e comandos da partida;
+- ao iniciar KTX, aplica exclusivamente ao perfil KTX o mapa de teclas
+  competitivo do nQuake, incluindo quick weapons, mensagens de equipe, timers
+  e comandos da partida;
 - mantém como única extensão de tecla o `F10`, vazio no nQuake, para ajuda sob
   demanda, e continua carregando o arquivo pessoal por último;
 - mantém os exemplos do arquivo pessoal independentes de aliases internos;

@@ -1335,7 +1335,27 @@ class ModernComponentTests(unittest.TestCase):
                     self.assertEqual(user_exec, executable_lines[-1])
                     self.assertNotIn(help_alias, executable_lines)
 
-    def test_ktx_profile_restores_the_nquake_keymap_after_other_mods(self):
+    def test_each_mod_profile_is_isolated_from_every_other_mod(self):
+        profiles = {}
+        for game in play_qw.LOCAL_GAMES:
+            path = ROOT / f"dist/mods/{game.key}/{game.version}/x86qw/client.cfg"
+            profiles[game.key] = path.read_text(encoding="utf-8")
+
+        for game in play_qw.LOCAL_GAMES:
+            with self.subTest(game=game.key):
+                profile = profiles[game.key]
+                self.assertIn(f"exec x86qw-{game.profile}-user.cfg", profile)
+                for other in play_qw.LOCAL_GAMES:
+                    if other.key == game.key:
+                        continue
+                    self.assertNotIn(f"exec x86qw-{other.profile}.cfg", profile)
+                    self.assertNotIn(f"exec x86qw-{other.profile}-user.cfg", profile)
+
+        for key, profile in profiles.items():
+            if key != "ktx":
+                self.assertNotRegex(profile, r'(?m)^bind\s+\S+\s+"tp_msg')
+
+    def test_ktx_profile_preserves_the_nquake_competitive_keymap(self):
         snapshot_root = ROOT / "dist/distributions/nquake"
         revisions = [path for path in snapshot_root.iterdir() if path.is_dir()]
         self.assertEqual(1, len(revisions))

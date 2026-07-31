@@ -24,7 +24,7 @@ componentes autorais da própria distribuição e não representa um upstream.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.6` | release oficial sobre recursos nQuake e gameplay x86QW | mapa competitivo de teclas nQuake restaurado ao trocar de mod, símbolos QVM preservados, carregamento QVM direto, nove modos locais declarativos e confirmação explícita do preset |
+| KTX | `1.47+x86qw.6` | release oficial sobre recursos nQuake e gameplay x86QW | mapa competitivo de teclas nQuake aplicado somente ao iniciar KTX, símbolos QVM preservados, carregamento QVM direto, nove modos locais declarativos e confirmação explícita do preset |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -96,14 +96,22 @@ mas a mídia interna de Final Arena e Pro-X não foi descartada.
 
 ## Contrato dos perfis de gameplay
 
+A ordem de configuração é invariável e aplicada separadamente ao mod escolhido:
+
+```text
+nQuake -> upstream do mod selecionado -> x86QW do mesmo mod -> configuração pessoal do mesmo mod
+```
+
+O launcher executa somente o perfil correspondente ao jogo selecionado. O
+perfil KTX não é carregado por Final Arena, Pro-X, Team Fortress ou TD2, assim
+como nenhum perfil desses mods é carregado pelo KTX. A base nQuake fornece a
+configuração geral do cliente; o upstream define a semântica própria do mod; a
+camada x86QW harmoniza somente essa combinação; e o arquivo pessoal daquele mod
+é executado por último e nunca é sobrescrito.
+
 A camada x86QW substitui apenas binds que conflitam com a mecânica do mod,
 mantém os recursos coerentes da composição acima e acrescenta acesso às funções
 confirmadas no manual, na configuração original ou no gamecode correspondente.
-O arquivo pessoal é executado por último e nunca é sobrescrito:
-
-```text
-base composta do mod -> x86QW do mod -> x86qw-<mod>-user.cfg
-```
 
 As teclas de movimento, sensibilidade, rede e preferências visuais continuam
 pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod,
