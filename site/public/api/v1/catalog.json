@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T01:03:52Z",
+  "generated_at": "2026-07-31T01:10:31Z",
   "packages": [
     {
       "component": "core",
@@ -543,14 +543,14 @@
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.5",
+      "version": "1.47+x86qw.6",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.5.zip",
-      "size": 2498783,
-      "sha256": "0c59cf9bebe2f146d77428a77cd3026ce37eb3fa562108dc052a2225f3f4dbfd",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.5/ktx-1.47+x86qw.5.zip",
+      "filename": "ktx-1.47+x86qw.6.zip",
+      "size": 2498785,
+      "sha256": "49a651067882e5a8e22cb24e4a1ecbcbf51b27884924863378e63aa48c5b8834",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.6/ktx-1.47+x86qw.6.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -560,10 +560,10 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.5/ktx-1.47+x86qw.5.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.5/ktx-1.47+x86qw.5.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.6/ktx-1.47+x86qw.6.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.6/ktx-1.47+x86qw.6.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.5",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.6",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",

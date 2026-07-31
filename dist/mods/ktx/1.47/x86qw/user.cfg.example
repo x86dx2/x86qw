@@ -1,6 +1,6 @@
 // Personalizacoes locais do KTX.
 // Criado como qw/x86qw-ktx-user.cfg, carregado depois do perfil e nunca sobrescrito.
 // Exemplos:
-// bind MOUSE2 "x86qw_ktx_rl"
+// bind MOUSE2 "weapon 7"
 // bind z "tp_msgquaddead"
 // alias x86qw_ktx_help "echo Meus controles KTX"

@@ -1361,6 +1361,11 @@ class ModernComponentTests(unittest.TestCase):
         )
         self.assertEqual("", nquake_bindings["F10"])
         self.assertEqual("x86qw_ktx_help", profile_bindings["F10"])
+        user_example = (
+            ROOT / "dist/mods/ktx/1.47/x86qw/user.cfg.example"
+        ).read_text(encoding="utf-8")
+        self.assertIn('// bind MOUSE2 "weapon 7"', user_example)
+        self.assertNotIn("x86qw_ktx_rl", user_example)
 
     def test_local_map_discovery_reads_direct_bsp_pk3_and_pak(self):
         with tempfile.TemporaryDirectory() as temporary:

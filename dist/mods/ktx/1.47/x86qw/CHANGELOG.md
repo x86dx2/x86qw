@@ -25,6 +25,7 @@
   incluindo quick weapons, mensagens de equipe, timers e comandos da partida;
 - mantém como única extensão de tecla o `F10`, vazio no nQuake, para ajuda sob
   demanda, e continua carregando o arquivo pessoal por último;
+- mantém os exemplos do arquivo pessoal independentes de aliases internos;
 - deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
 - registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
   novamente no console;
