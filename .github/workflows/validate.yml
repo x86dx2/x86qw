@@ -1,0 +1,90 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Materialize and verify Git LFS
+        run: |
+          git lfs pull
+          git lfs fsck
+          python3 maintenance/tools/check_lfs.py
+      - name: Verify distribution and test suites
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: ./maintenance/manage.py verify
+      - name: Reject malformed diffs
+        run: git diff --check
+      - name: Validate Cloudflare static assets
+        working-directory: site
+        run: npx --yes wrangler@4.114.0 deploy --dry-run
+
+  portable:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Materialize and verify Git LFS
+        shell: bash
+        run: |
+          git lfs pull
+          git lfs fsck
+          python maintenance/tools/check_lfs.py
+      - name: Validate catalogs, schemas, paths and bundle inputs
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python maintenance/manage.py verify --no-tests
+      - name: Run portable installer and runtime tests
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          X86QW_CI_PORTABLE: "1"
+        run: python -m unittest discover -s maintenance/tests -v
+      - name: Run site contract tests
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s site/tests -v
+      - name: Parse every public CLI surface
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python dist/installer/bin/manager.py --help >/dev/null
+          python dist/installer/bin/manager.py play --help >/dev/null
+          python dist/installer/bin/manager.py host --help >/dev/null
+          python dist/installer/bin/manager.py proxy --help >/dev/null
+          python dist/installer/bin/manager.py qtv --help >/dev/null
