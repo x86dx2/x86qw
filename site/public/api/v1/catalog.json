@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T20:42:12Z",
+  "generated_at": "2026-07-31T22:37:42Z",
   "packages": [
     {
       "component": "core",
@@ -844,7 +844,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.2.1",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -868,6 +868,36 @@
       "release_notes": "# x86QW 0.2.1\n\nRelease corretiva do lifecycle e das superfícies de manutenção da plataforma\nconsolidada em `0.2.0`.\n\n## Ajustes\n\n- lock atômico de uma stack por instalação, adquirido antes da recuperação;\n- identidade de controlador e filhos resistente a reutilização de PID;\n- encerramento conservador de órfãos confirmados e preservação de identidade\n  divergente ou inconclusiva;\n- remoção lógica obrigatória das configurações efêmeras sensíveis;\n- upstream QTV coerente com binds IPv4/IPv6 e alerta independente para HTTP\n  exposto;\n- `repair` reconhecido nos launchers, com argumentos ilimitados no Windows;\n- repair de ezQuake stable/nightly, permissões, preparação macOS e metadata\n  parcial sem downgrade ou alteração de configuração pessoal;\n- gate de whitespace aplicado ao intervalo realmente commitado no PR/push;\n- capacidades de instalação limitadas ao conjunto explicitamente habilitado;\n- `compatibility.json` como fonte de verdade para relações de runtime, jogo,\n  serviço e protocolo.\n\n## Compatibilidade e limites\n\nOs comandos, perfis, cinco jogos, stable/nightly e formatos de estado 1 e 2 são\npreservados. Não há runtime, engine, jogo, mod ou mapa novo. Smokes gráficos e\nsmokes nativos de rede que já eram manuais continuam sujeitos a validação\nseparada. A versão `0.2.0` permanece imutável no histórico.",
       "mirror_title": "x86QW Installer 0.2.1",
       "mirror_notes": "# x86QW 0.2.1\n\nRelease corretiva do lifecycle e das superfícies de manutenção da plataforma\nconsolidada em `0.2.0`.\n\n## Ajustes\n\n- lock atômico de uma stack por instalação, adquirido antes da recuperação;\n- identidade de controlador e filhos resistente a reutilização de PID;\n- encerramento conservador de órfãos confirmados e preservação de identidade\n  divergente ou inconclusiva;\n- remoção lógica obrigatória das configurações efêmeras sensíveis;\n- upstream QTV coerente com binds IPv4/IPv6 e alerta independente para HTTP\n  exposto;\n- `repair` reconhecido nos launchers, com argumentos ilimitados no Windows;\n- repair de ezQuake stable/nightly, permissões, preparação macOS e metadata\n  parcial sem downgrade ou alteração de configuração pessoal;\n- gate de whitespace aplicado ao intervalo realmente commitado no PR/push;\n- capacidades de instalação limitadas ao conjunto explicitamente habilitado;\n- `compatibility.json` como fonte de verdade para relações de runtime, jogo,\n  serviço e protocolo.\n\n## Compatibilidade e limites\n\nOs comandos, perfis, cinco jogos, stable/nightly e formatos de estado 1 e 2 são\npreservados. Não há runtime, engine, jogo, mod ou mapa novo. Smokes gráficos e\nsmokes nativos de rede que já eram manuais continuam sujeitos a validação\nseparada. A versão `0.2.0` permanece imutável no histórico.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.2.2",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.2.2.zip",
+      "size": 112934,
+      "sha256": "c14a2e06887272e4d04b7e1da7a6e6afb4015bc330325aa2b02066dc164a1734",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.2/x86qw-installer-0.2.2.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.2.2/x86qw-installer-0.2.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.2.2/x86qw-installer-0.2.2.zip"
+      ],
+      "distribution_path": "installer/packages/0.2.2/x86qw-installer-0.2.2.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.2.2",
+      "release_title": "x86QW Installer 0.2.2",
+      "release_notes": "# x86QW 0.2.2\n\nRelease corretiva da concorrência e da finalização de instalações da linha\n`0.2.x`.\n\n## Correções\n\n- lock único por instalação para stacks e todas as operações mutáveis;\n- compatibilidade de leitura com locks de formato 1 da `0.2.1`;\n- recuperação bloqueada por controlador de journal vivo ou inconclusivo;\n- temporários sensíveis sem hash e sem remoção recursiva;\n- liberação de lock tentada independentemente das demais etapas de limpeza;\n- encerramento do grupo POSIX completo e Job Object no Windows;\n- reparos locais de permissão e preparação macOS disponíveis offline;\n- testes de concorrência, ausência de lock, PID reutilizado, descendentes e\n  falhas injetadas na finalização.\n\n## Compatibilidade\n\nOs comandos públicos, perfis, stable/nightly, estados v1/v2, cinco jogos,\ngameplay, configurações pessoais e bundles existentes permanecem compatíveis.\nA `0.2.1` continua imutável no histórico.\n\n## Validação\n\n- validação integral e Git LFS;\n- testes de manutenção e site;\n- matriz Ubuntu, macOS e Windows em Python 3.10 e versão recente;\n- dry-run do Worker;\n- revisão do bundle imutável e dos hashes;\n- gate protegido e aprovação humana separados para publicar.",
+      "mirror_title": "x86QW Installer 0.2.2",
+      "mirror_notes": "# x86QW 0.2.2\n\nRelease corretiva da concorrência e da finalização de instalações da linha\n`0.2.x`.\n\n## Correções\n\n- lock único por instalação para stacks e todas as operações mutáveis;\n- compatibilidade de leitura com locks de formato 1 da `0.2.1`;\n- recuperação bloqueada por controlador de journal vivo ou inconclusivo;\n- temporários sensíveis sem hash e sem remoção recursiva;\n- liberação de lock tentada independentemente das demais etapas de limpeza;\n- encerramento do grupo POSIX completo e Job Object no Windows;\n- reparos locais de permissão e preparação macOS disponíveis offline;\n- testes de concorrência, ausência de lock, PID reutilizado, descendentes e\n  falhas injetadas na finalização.\n\n## Compatibilidade\n\nOs comandos públicos, perfis, stable/nightly, estados v1/v2, cinco jogos,\ngameplay, configurações pessoais e bundles existentes permanecem compatíveis.\nA `0.2.1` continua imutável no histórico.\n\n## Validação\n\n- validação integral e Git LFS;\n- testes de manutenção e site;\n- matriz Ubuntu, macOS e Windows em Python 3.10 e versão recente;\n- dry-run do Worker;\n- revisão do bundle imutável e dos hashes;\n- gate protegido e aprovação humana separados para publicar.",
       "mirror_latest": true
     },
     {
