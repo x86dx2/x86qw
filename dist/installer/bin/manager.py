@@ -2277,14 +2277,43 @@ class Installer:
             "known_components": list(self.components),
         })
 
+    def migrate_stale_custom_profile(self, state: dict[str, object]) -> dict[str, object]:
+        if state["profile"] != "custom":
+            return state
+        recorded = list(state["recorded_components"])
+        installed = self.installed_components()
+        if set(installed) != set(recorded):
+            return state
+        if set(self.desired_components(state)) == set(recorded):
+            return state
+        fingerprint = profile_fingerprint(recorded)
+        for candidate in ("essential", "recommended", "complete"):
+            if fingerprint in self.component_catalog["profile_history"][candidate]:
+                migrated = dict(state)
+                migrated["profile"] = candidate
+                migrated["requested_components"] = []
+                return self.validate_install_state(migrated)
+        return state
+
     def load_install_state(self, *, persist_migration: bool) -> dict[str, object]:
         path = self.target / INSTALL_STATE
         if path.is_file() and not path.is_symlink():
             try:
                 state = self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
-                return self.current_install_state(state)
             except (OSError, json.JSONDecodeError) as error:
                 raise InstallerError(f"Estado da instalação inválido: {path}") from error
+            state = self.current_install_state(state)
+            migrated = self.migrate_stale_custom_profile(state)
+            if migrated != state:
+                profile = str(migrated["profile"])
+                if persist_migration:
+                    migrated = self.write_install_state(
+                        profile, [], known=list(migrated["known_components"]),
+                    )
+                    console.success(f"Perfil histórico da instalação recuperado: {profile}.")
+                else:
+                    console.info(f"Perfil histórico inferido para a simulação: {profile}.")
+            return migrated
         if lexists(path):
             raise InstallerError(f"Estado da instalação inválido: {path}")
         state = self.infer_install_state()

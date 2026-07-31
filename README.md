@@ -84,7 +84,10 @@ que já está instalado. `./x86qw.sh upgrade` também incorpora componentes novo
 passaram a integrar o perfil `essential`, `recommended`, `complete` ou `custom`
 registrado naquela instalação. Ambos mostram o plano completo e exigem que o
 jogador confirme em um prompt `[y/n]` antes de alterar arquivos; `--yes` confirma
-o plano em automações e `--dry-run` encerra depois de apresentá-lo. A saída segue
+o plano em automações e `--dry-run` encerra depois de apresentá-lo. Perfis
+históricos salvos incorretamente como `custom` são recuperados somente
+quando os componentes presentes coincidem exatamente com um perfil conhecido;
+seleções customizadas válidas são preservadas. A saída segue
 o fluxo do Homebrew: baixa e valida o manifesto, mostra somente os pacotes
 desatualizados em linhas tabuladas com versão instalada, versão disponível e
 tamanho, pede confirmação e então informa o progresso de cada pacote. Quando não

@@ -777,6 +777,60 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual("custom", state["profile"])
             self.assertEqual(installed, state["requested_components"])
 
+    def test_stale_custom_state_is_recovered_as_its_historical_complete_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installed = [
+                identifier
+                for identifier in installer.component_catalog["profiles"]["complete"]
+                if identifier not in {"mvdsv", "qwfwd", "qtv"}
+            ]
+            fingerprint = install_qw.profile_fingerprint(installed)
+            self.assertIn(fingerprint, installer.component_catalog["profile_history"]["complete"])
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": ["ktx"],
+                "recorded_components": installed,
+                "known_components": list(installer.components),
+            }
+            metadata = (target / install_qw.INSTALL_STATE).parent
+            metadata.mkdir(parents=True)
+            (target / install_qw.INSTALL_STATE).write_text(
+                json.dumps(state), encoding="utf-8",
+            )
+            with mock.patch.object(installer, "installed_components", return_value=installed):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    migrated = installer.load_install_state(persist_migration=True)
+            self.assertEqual("complete", migrated["profile"])
+            self.assertEqual([], migrated["requested_components"])
+            persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
+            self.assertEqual("complete", persisted["profile"])
+            self.assertEqual([], persisted["requested_components"])
+
+    def test_valid_custom_state_is_not_reclassified_as_a_named_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installed = list(installer.component_catalog["profiles"]["essential"])
+            state = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": installed,
+                "recorded_components": installed,
+                "known_components": list(installer.components),
+            }
+            metadata = (target / install_qw.INSTALL_STATE).parent
+            metadata.mkdir(parents=True)
+            (target / install_qw.INSTALL_STATE).write_text(
+                json.dumps(state), encoding="utf-8",
+            )
+            with mock.patch.object(installer, "installed_components", return_value=installed):
+                loaded = installer.load_install_state(persist_migration=True)
+            self.assertEqual("custom", loaded["profile"])
+            self.assertEqual(installed, loaded["requested_components"])
+
     def test_obsolete_nquake_sounds_is_removed_from_saved_component_state(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
