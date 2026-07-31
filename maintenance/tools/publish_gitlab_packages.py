@@ -83,17 +83,21 @@ def remote_sha256(url: str) -> tuple[int, str] | None:
 
 
 def upload(path: Path, package: dict[str, object]) -> None:
-    package_name = str(package.get("package", package["component"]))
-    endpoint = "/".join(
-        urllib.parse.quote(value, safe="+._-")
-        for value in (package_name, str(package["version"]), str(package["filename"]))
-    )
-    subprocess.run([
-        "glab", "api", "--silent", "--method", "PUT",
-        "--header", "Content-Type: application/octet-stream",
-        "--input", str(path),
-        f"projects/{PROJECT_ID}/packages/generic/{endpoint}",
-    ], check=True)
+    token = os.environ.get("GLAB_TOKEN") or os.environ.get("GITLAB_TOKEN")
+    if not token:
+        raise ValueError("GitLab publication token is missing")
+    if any(character in token for character in "\r\n\x00"):
+        raise ValueError("GitLab publication token contains an invalid control character")
+    # GitLab's documented generic-package upload uses PUT with --upload-file.
+    # Feed the private header over stdin so the token never enters argv or logs.
+    result = subprocess.run([
+        "curl", "--fail-with-body", "--silent", "--show-error", "--location",
+        "--request", "PUT", "--header", "@-", "--upload-file", str(path),
+        artifact_url(package),
+    ], input=f"PRIVATE-TOKEN: {token}\n", text=True, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, check=False)
+    if result.returncode:
+        raise ValueError(f"GitLab upload failed with curl exit code {result.returncode}")
 
 
 def write_catalog(path: Path, catalog: dict[str, object]) -> None:

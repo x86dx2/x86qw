@@ -38,10 +38,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Install authenticated GitLab client
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes glab
       - name: Revalidate immutable inputs
         env:
           PYTHONDONTWRITEBYTECODE: "1"
