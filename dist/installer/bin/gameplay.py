@@ -20,6 +20,7 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 
 core = importlib.import_module("manager")
+from maintenance.tools.runtime_catalog import load_games, games_by_id
 
 InstallerError = core.InstallerError
 console = core.console
@@ -31,12 +32,8 @@ remove_path = core.remove_path
 PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
 RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
-PROFILED_LOCAL_GAMES = frozenset({"ktx", "final-arena", "pro-x", "team-fortress", "td2"})
-PRECONNECT_LOCAL_GAMES = frozenset({"team-fortress"})
-LEGACY_LOCAL_CAPABILITIES = {
-    "final-arena": ("noaim",),
-    "pro-x": ("setinfo", "bind"),
-}
+DEVELOPMENT_GAME_CATALOG = "maintenance/inventory/games.json"
+RUNTIME_GAME_CATALOG = "_x86qw/games.json"
 LEGACY_MACOS_VIDEO_LAYOUT = Path(".install/launcher/macos-video-layout.json")
 LEGACY_MACOS_VIDEO_CVARS = (
     "vid_fullscreen",
@@ -56,22 +53,6 @@ MACOS_FULLSCREEN_CVARS = (
     "vid_height",
     "vid_displayfrequency",
 )
-# The ezQuake listen server persists these server cvars in the shared personal
-# config. KTX intentionally uses MVDSV-oriented timing and jump values; reset
-# them explicitly when changing games so they cannot leak into legacy gamecode.
-NQUAKE_LOCAL_SERVER_SETTINGS = (
-    ("sv_mintic", "0"),
-    ("sv_maxtic", "0.1"),
-    ("pm_ktjump", "0.5"),
-)
-KTX_LOCAL_SERVER_SETTINGS = (
-    ("maxclients", "32"),
-    ("sv_mintic", "0.01"),
-    ("sv_maxtic", "0.03"),
-    ("pm_ktjump", "1"),
-)
-
-
 @dataclass(frozen=True)
 class LocalGameSpec:
     key: str
@@ -85,6 +66,27 @@ class LocalGameSpec:
     suggested_maps: tuple[str, ...]
     version: str
     description: str
+    protocol: str
+    gamecode_type: str
+    client_runtimes: tuple[str, ...]
+    server_runtimes: tuple[str, ...]
+    pre_map_arguments: tuple[str, ...]
+    post_map_arguments: tuple[str, ...]
+    managed_config: str
+    personal_config: str
+    required_capabilities: tuple[str, ...]
+    smoke_test: str
+    local_server_settings: tuple[tuple[str, str], ...]
+    legacy_remote_capabilities: tuple[str, ...]
+    legacy_components: tuple[str, ...]
+    legacy_marker: str | None
+    mode_catalog: str | None
+    play_support_gamecode: str | None
+    dedicated_arguments: tuple[str, ...]
+    client_game_arguments: tuple[str, ...]
+    pre_connect_arguments: tuple[str, ...]
+    client_compatibility_arguments: tuple[str, ...]
+    dedicated_settings: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -122,40 +124,76 @@ class KtxLaunchOptions:
     race_hide_players: bool = False
 
 
-LOCAL_GAMES = (
-    LocalGameSpec(
-        "ktx", "KTX", "qw", "ktx", "ktx", "qw/ktx.pk3", "qw/ktx.pk3", "dm6",
-        ("dm6", "dm2", "dm4", "aerowalk"),
-        "1.47",
-        "QuakeWorld competitivo com o QVM oficial do KTX.",
-    ),
-    LocalGameSpec(
-        "final-arena", "Final Arena", "arena", "arena", "final-arena",
-        "arena/arena.pk3", "arena/arena.pk3", "23ar-a",
-        ("23ar-a", "arenarg2", "arenarg4", "dm2arena"),
-        "1.20",
-        "Duelos individuais em fila: o vencedor permanece na arena.",
-    ),
-    LocalGameSpec(
-        "pro-x", "Pro-X", "prox", "prox", "pro-x",
-        "prox/qwprogs.dat", "prox/qwprogs.dat", "proxmap1",
-        ("proxmap1", "proxmap2", "proxmap3", "proxmap4", "proxmap5"),
-        "1.1",
-        "Rounds e equipes com ready, break e votação.",
-    ),
-    LocalGameSpec(
-        "team-fortress", "Team Fortress", "fortress", "fortress", "team-fortress",
-        "fortress/misc.pak", "fortress/qwprogs.dat", "2fort5r",
-        ("2fort5r", "well6", "bases", "mbasesr"),
-        "2.9",
-        "Team Fortress clássico para QuakeWorld.",
-    ),
-    LocalGameSpec(
-        "td2", "Total Destruction 2", "td2", "td2", "total-destruction-2",
-        "td2/qwprogs.dat", "td2/qwprogs.dat", "dm6", ("dm6", "dm2", "dm4", "e1m2"),
-        "2.22",
-        "Armas, magias, runas e poderes.",
-    ),
+def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
+    if core.ZIPAPP_PATH is not None:
+        document = core.read_zipapp_json(
+            core.ZIPAPP_PATH, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
+        )
+    else:
+        document = load_games(project_root / DEVELOPMENT_GAME_CATALOG)
+    entries = games_by_id(document)
+    result: list[LocalGameSpec] = []
+    for raw in entries.values():
+        result.append(LocalGameSpec(
+            key=str(raw["id"]),
+            label=str(raw["label"]),
+            gamedir=str(raw["gamedir"]),
+            profile=str(raw["profile"]),
+            component=str(raw["component"]),
+            marker=str(raw["marker"]),
+            program=str(raw["gamecode"]),
+            default_map=str(raw["default_map"]),
+            suggested_maps=tuple(str(value) for value in raw["suggested_maps"]),
+            version=str(raw["version"]),
+            description=str(raw["description"]),
+            protocol=str(raw["protocol"]),
+            gamecode_type=str(raw["gamecode_type"]),
+            client_runtimes=tuple(str(value) for value in raw["client_runtimes"]),
+            server_runtimes=tuple(str(value) for value in raw["server_runtimes"]),
+            pre_map_arguments=tuple(str(value) for value in raw["pre_map_arguments"]),
+            post_map_arguments=tuple(str(value) for value in raw["post_map_arguments"]),
+            managed_config=str(raw["managed_config"]),
+            personal_config=str(raw["personal_config"]),
+            required_capabilities=tuple(str(value) for value in raw["required_capabilities"]),
+            smoke_test=str(raw["smoke_test"]),
+            local_server_settings=tuple(
+                (str(item[0]), str(item[1])) for item in raw.get("local_server_settings", [])
+            ),
+            legacy_remote_capabilities=tuple(
+                str(value) for value in raw.get("legacy_remote_capabilities", [])
+            ),
+            legacy_components=tuple(str(value) for value in raw.get("legacy_components", [])),
+            legacy_marker=str(raw["legacy_marker"]) if raw.get("legacy_marker") else None,
+            mode_catalog=str(raw["mode_catalog"]) if raw.get("mode_catalog") else None,
+            play_support_gamecode=(
+                str(raw["play_support_gamecode"])
+                if raw.get("play_support_gamecode") else None
+            ),
+            dedicated_arguments=tuple(str(value) for value in raw.get("dedicated_arguments", [])),
+            client_game_arguments=tuple(
+                str(value) for value in raw.get("client_game_arguments", [])
+            ),
+            pre_connect_arguments=tuple(
+                str(value) for value in raw.get("pre_connect_arguments", [])
+            ),
+            client_compatibility_arguments=tuple(
+                str(value) for value in raw.get("client_compatibility_arguments", [])
+            ),
+            dedicated_settings=tuple(
+                (str(item[0]), str(item[1])) for item in raw.get("dedicated_settings", [])
+            ),
+        ))
+    return tuple(result)
+
+
+LOCAL_GAMES = load_local_games(core.PROJECT_ROOT)
+# Compatibility projections for integrations that imported the former constants.
+# The canonical values now live in games.json.
+KTX_LOCAL_SERVER_SETTINGS = next(
+    game.local_server_settings for game in LOCAL_GAMES if game.key == "ktx"
+)
+NQUAKE_LOCAL_SERVER_SETTINGS = next(
+    game.local_server_settings for game in LOCAL_GAMES if game.key != "ktx"
 )
 
 
@@ -657,15 +695,15 @@ class Player(core.Installer):
 
     def game_marker_path(self, game: LocalGameSpec) -> Path:
         marker = self.target.joinpath(*PurePosixPath(game.marker).parts)
-        if marker.is_file() or game.key != "pro-x":
+        if marker.is_file() or game.legacy_marker is None:
             return marker
-        legacy = self.target / "prox/prox.pk3"
+        legacy = self.target.joinpath(*PurePosixPath(game.legacy_marker).parts)
         return legacy if legacy.is_file() else marker
 
     def game_program_path(self, game: LocalGameSpec) -> Path:
         program = self.target.joinpath(*PurePosixPath(game.program).parts)
-        if not program.is_file() and game.key == "pro-x":
-            legacy = self.target / "prox/prox.pk3"
+        if not program.is_file() and game.legacy_marker is not None:
+            legacy = self.target.joinpath(*PurePosixPath(game.legacy_marker).parts)
             if legacy.is_file():
                 program = legacy
         if not program.is_file() or program.is_symlink():
@@ -676,10 +714,10 @@ class Player(core.Installer):
         present, _, _ = self.validate_component_pair(game.component)
         if present:
             return game.component
-        if game.key in {"final-arena", "pro-x"}:
-            legacy_present, _, _ = self.validate_component_pair("clan-arena")
+        for legacy_component in game.legacy_components:
+            legacy_present, _, _ = self.validate_component_pair(legacy_component)
             if legacy_present:
-                return "clan-arena"
+                return legacy_component
         return None
 
     def installed_game_version(self, game: LocalGameSpec) -> str:
@@ -887,12 +925,13 @@ class Player(core.Installer):
         if not games:
             raise InstallerError(
                 "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
-            )
+        )
         game = self.choose_local_game(games, game_key)
-        if mode_key is not None and game.key != "ktx":
+        uses_mode_catalog = game.mode_catalog is not None
+        if mode_key is not None and not uses_mode_catalog:
             raise InstallerError("--mode só pode ser usado com o jogo KTX.")
         if (
-            game.key != "ktx"
+            not uses_mode_catalog
             and ktx_options is not None
             and ktx_options != KtxLaunchOptions()
         ):
@@ -904,7 +943,7 @@ class Player(core.Installer):
         self.verify_component(installed_component)
         ktx_mode = None
         ktx_assets: frozenset[str] | None = None
-        if game.key == "ktx":
+        if uses_mode_catalog:
             ktx_mode = self.choose_ktx_mode(load_ktx_modes(self.project_root), mode_key)
             console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
             launch_options = ktx_options or KtxLaunchOptions()
@@ -928,30 +967,18 @@ class Player(core.Installer):
         self.ensure_local_play_support(games)
         label, runtime = self.choose_host_runtime()
         arguments = ["+sb_listcache", "0", "+spectator", "0"]
-        server_settings = (
-            KTX_LOCAL_SERVER_SETTINGS if game.key == "ktx" else NQUAKE_LOCAL_SERVER_SETTINGS
-        )
-        for name, value in server_settings:
+        for name, value in game.local_server_settings:
             arguments.extend([f"+{name}", value])
-        if game.key != "ktx":
-            arguments.extend([
-                "-game", game.gamedir,
-                "+sv_gamedir", game.gamedir,
-            ])
-            arguments.extend(["+sv_progtype", "0"])
-        if game.key in PRECONNECT_LOCAL_GAMES:
-            arguments.extend(["+exec", f"x86qw-{game.profile}-pre.cfg"])
-        if capabilities := LEGACY_LOCAL_CAPABILITIES.get(game.key):
+        arguments.extend(game.client_game_arguments)
+        arguments.extend(game.pre_connect_arguments)
+        if game.legacy_remote_capabilities:
             arguments.extend([
                 "+cl_remote_capabilities",
-                "$cl_remote_capabilities," + ",".join(capabilities),
+                "$cl_remote_capabilities," + ",".join(game.legacy_remote_capabilities),
             ])
-        if game.key == "pro-x":
-            arguments.extend(["+sv_loadentfiles", "1"])
-        if game.key != "ktx":
-            # PR1 gamecodes do not advertise the high-lag teleport extension.
-            arguments.extend(["+cl_pext_lagteleport", "0"])
-        if game.key == "ktx":
+        arguments.extend(game.pre_map_arguments)
+        arguments.extend(game.client_compatibility_arguments)
+        if uses_mode_catalog:
             assert ktx_mode is not None
             assert ktx_assets is not None
             setup_commands = ktx_launch_commands(
@@ -993,9 +1020,7 @@ class Player(core.Installer):
                 "+tempalias", "x86qw_ktx_mode_help", ktx_mode_help_alias(ktx_mode),
             ])
         arguments.extend(["+map", map_name])
-        if game.key in PROFILED_LOCAL_GAMES and game.key != "ktx":
-            arguments.append("+wait")
-            arguments.extend(["+exec", f"x86qw-{game.profile}.cfg"])
+        arguments.extend(game.post_map_arguments)
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
         console.info(f"Abrindo {selection} no mapa {map_name}...")
         self.launch_runtime(runtime, arguments)
@@ -1016,9 +1041,8 @@ class Player(core.Installer):
             prepared = 0
             for game in games:
                 files: dict[str, bytes] = {}
-                if game.key != "ktx":
-                    program_name = f"x86qw_{game.gamedir}"
-                    files[f"{game.gamedir}/{program_name}.dat"] = self.local_game_program(game)
+                if game.play_support_gamecode is not None:
+                    files[game.play_support_gamecode] = self.local_game_program(game)
                 for relative, payload in files.items():
                     destination = self.target / relative
                     if lexists(destination):
@@ -1040,14 +1064,13 @@ class Player(core.Installer):
                 removed = self.remove_component("play-support")
                 console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
             for game in games:
-                if game.key in PROFILED_LOCAL_GAMES:
-                    self.ensure_game_user_profile(game)
+                self.ensure_game_user_profile(game)
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
 
     def ensure_game_user_profile(self, game: LocalGameSpec) -> None:
-        destination = self.target / game.gamedir / f"x86qw-{game.profile}-user.cfg"
+        destination = self.target.joinpath(*PurePosixPath(game.personal_config).parts)
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
                 raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")

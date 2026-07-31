@@ -10,7 +10,6 @@ import importlib
 import ipaddress
 import json
 import os
-import platform
 import secrets
 import signal
 import socket
@@ -35,11 +34,6 @@ console = core.console
 lexists = core.lexists
 remove_path = core.remove_path
 
-RUNTIME_NAMES = {
-    "mvdsv": ("mvdsv", "mvdsv.exe"),
-    "qwfwd": ("qwfwd", "qwfwd.exe"),
-    "qtv": ("qtv", "qtv.exe"),
-}
 MAX_ARCHIVE_MEMBERS = 4096
 MAX_ARCHIVE_MEMBER_SIZE = 128 * 1024 * 1024
 MAX_ARCHIVE_TOTAL_SIZE = 512 * 1024 * 1024
@@ -566,33 +560,49 @@ def cleanup_current_session(
         cleanup_dedicated_ktx(materialized)
 
 
-def runtime_variant(system: str | None = None, machine: str | None = None) -> str:
-    system = (system or platform.system()).casefold()
-    machine = (machine or platform.machine()).casefold()
-    if system == "darwin" and machine in {"arm64", "aarch64"}:
-        return "macos-arm64"
-    if system == "linux" and machine in {"x86_64", "amd64"}:
-        return "linux-amd64"
-    if system == "windows" and machine in {"amd64", "x86_64"}:
-        return "windows-x64"
+def runtime_variant(
+    system: str | None = None,
+    machine: str | None = None,
+    runtime_id: str | None = None,
+) -> str:
+    host_system = system or core.host_platform.system()
+    host_machine = (machine or core.host_platform.machine()).casefold()
+    system_id = core.HOST_PLATFORMS.get(host_system, host_system.casefold())
+    architecture_aliases = core.CAPABILITY_CATALOG.get("architecture_aliases")
+    if not isinstance(architecture_aliases, dict):
+        raise InstallerError("Catálogo de arquiteturas da CLI está inválido.")
+    variants = {
+        str(platform_entry["variant"])
+        for selected_runtime in ((runtime_id,) if runtime_id is not None else ("mvdsv", "qtv", "qwfwd"))
+        for platform_entry in core.RUNTIMES[selected_runtime]["platforms"]
+        if (
+            isinstance(platform_entry, dict)
+            and platform_entry.get("system") == system_id
+            and host_machine in architecture_aliases.get(platform_entry.get("architecture"), [])
+        )
+    }
+    if len(variants) == 1:
+        return variants.pop()
     raise InstallerError(
-        f"Runtime de serviço indisponível para {platform.system()} {platform.machine()}. "
+        f"Runtime de serviço indisponível para {host_system} {host_machine}. "
         "Os alvos distribuídos são macOS arm64, Linux amd64 e Windows x64."
     )
 
 
 def runtime_binary(installer: core.Installer, component: str) -> Path:
-    if component not in RUNTIME_NAMES:
+    runtime = core.RUNTIMES.get(component)
+    if runtime is None or runtime.get("kind") not in {"server", "service"}:
         raise InstallerError(f"Runtime desconhecido: {component}")
     if installer.verify_component(component) == 0:
         raise InstallerError(
             f"O componente {component} não está instalado. "
             "Execute install.sh e selecione o perfil completo ou esse componente."
         )
-    variant = runtime_variant()
-    unix_name, windows_name = RUNTIME_NAMES[component]
-    name = windows_name if variant == "windows-x64" else unix_name
-    binary = installer.target / "_x86qw" / "runtimes" / component / variant / name
+    variant = runtime_variant(runtime_id=component)
+    runtime_paths = runtime.get("runtime_path")
+    if not isinstance(runtime_paths, dict) or not isinstance(runtime_paths.get(variant), str):
+        raise InstallerError(f"Runtime {component} indisponível na variante {variant}.")
+    binary = installer.target.joinpath(*PurePosixPath(runtime_paths[variant]).parts)
     if not binary.is_file() or binary.is_symlink():
         raise InstallerError(f"Executável gerenciado ausente ou inseguro: {binary}")
     if os.name != "nt":
@@ -853,7 +863,7 @@ def select_hosted_game(
     player.ensure_local_play_support(games)
     mode = None
     assets: frozenset[str] = frozenset()
-    if game.key == "ktx":
+    if game.mode_catalog is not None:
         mode = player.choose_ktx_mode(
             gameplay.load_ktx_modes(player.project_root),
             options.mode,
@@ -965,12 +975,10 @@ def host_spec(
 
     hostname = options.hostname or f"x86QW - {game.label}"
     user_config = (
-        "x86qw-mvdsv-user.cfg"
-        if game.key == "ktx"
-        else f"x86qw-{game.profile}-user.cfg"
+        PurePosixPath(game.personal_config).name
     )
     post_map_settings: tuple[tuple[str, str], ...] = ()
-    if game.key == "ktx":
+    if game.mode_catalog is not None:
         assert mode is not None
         post_map_settings = dedicated_ktx_settings(
             mode, map_name, selection.assets, selection.ktx_options, options.maxclients,
@@ -986,7 +994,7 @@ def host_spec(
         f"rcon_password {q(initial_rcon_password)}",
         f"set demo_tmp_record {0 if options.no_mvd else 1}",
     ]
-    if game.key == "ktx":
+    if game.mode_catalog is not None:
         assert mode is not None
         lines.extend((
             "sv_progtype 2",
@@ -1008,8 +1016,8 @@ def host_spec(
             "sv_maxtic 0.1",
             "pm_ktjump 0.5",
         ))
-        if game.key == "pro-x":
-            lines.append("sv_loadentfiles 1")
+        for name, value in game.dedicated_settings:
+            lines.append(f"{name} {value}")
     if options.with_qtv:
         lines.extend((
             f"qtv_streamport {options.port}",
@@ -1037,8 +1045,7 @@ def host_spec(
     arguments = [
         str(binary), "-basedir", str(installer.target),
     ]
-    if game.key != "ktx":
-        arguments.extend(("-game", game.gamedir))
+    arguments.extend(game.dedicated_arguments)
     arguments.extend((
         "-ip", options.bind, "-port", str(options.port), "-mem", "64",
         "+exec", session.name,

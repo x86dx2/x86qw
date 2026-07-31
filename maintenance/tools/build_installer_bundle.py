@@ -18,9 +18,11 @@ from pathlib import Path
 
 try:
     from .components import load_catalog as load_component_catalog, runtime_catalog
+    from .runtime_catalog import load_inventory as load_runtime_inventory
     from .validate_catalog import validate_catalog
 except ImportError:
     from components import load_catalog as load_component_catalog, runtime_catalog
+    from runtime_catalog import load_inventory as load_runtime_inventory
     from validate_catalog import validate_catalog
 
 
@@ -40,6 +42,13 @@ ZIPAPP_FILES = (
     ("maintenance/__init__.py", "maintenance/__init__.py"),
     ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),
     ("maintenance/tools/components.py", "maintenance/tools/components.py"),
+    ("maintenance/tools/runtime_catalog.py", "maintenance/tools/runtime_catalog.py"),
+)
+RUNTIME_CONTRACT_FILES = (
+    ("capabilities", "maintenance/inventory/capabilities.json", "_x86qw/capabilities.json"),
+    ("runtimes", "maintenance/inventory/runtimes.json", "_x86qw/runtimes.json"),
+    ("games", "maintenance/inventory/games.json", "_x86qw/games.json"),
+    ("compatibility", "maintenance/inventory/compatibility.json", "_x86qw/compatibility.json"),
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -58,7 +67,7 @@ os.execv(sys.executable, [sys.executable, str(root / "x86qw.pyz"), *sys.argv[1:]
 def bundle_files() -> tuple[str, ...]:
     return tuple(source for source, _, _ in BUNDLE_FILES) + tuple(
         source for source, _ in ZIPAPP_FILES
-    )
+    ) + tuple(source for _, source, _ in RUNTIME_CONTRACT_FILES)
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -86,6 +95,10 @@ def write_member(
 def zipapp_bytes(version: str) -> bytes:
     output = io.BytesIO()
     identity = {"format": 1, "project": "x86qw", "version": version}
+    component_catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
+    runtime_inventory = load_runtime_inventory(
+        ROOT / "maintenance/inventory", component_catalog=component_catalog,
+    )
     with zipfile.ZipFile(output, "w", allowZip64=True) as application:
         write_member(
             application,
@@ -97,6 +110,8 @@ def zipapp_bytes(version: str) -> bytes:
             if not source.is_file() or source.is_symlink():
                 raise ValueError(f"zipapp input is missing or unsafe: {source}")
             write_member(application, member, source.read_bytes())
+        for key, _, member in RUNTIME_CONTRACT_FILES:
+            write_member(application, member, json_bytes(runtime_inventory[key]))
         write_member(application, "_x86qw/installer.json", json_bytes(identity))
         write_member(application, "_x86qw/components.json", runtime_catalog_bytes())
     return output.getvalue()

@@ -7,6 +7,11 @@ import json
 import re
 from pathlib import Path, PurePosixPath
 
+try:
+    from .runtime_catalog import load_inventory as load_runtime_inventory
+except ImportError:
+    from runtime_catalog import load_inventory as load_runtime_inventory
+
 
 COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_KINDS = {
@@ -37,6 +42,22 @@ def load_catalog(path: Path) -> dict[str, object]:
         raise ValueError(f"cannot read component catalog: {path}") from error
     validate_catalog(catalog)
     return catalog
+
+
+def load_product_inventory(
+    directory: Path,
+    *,
+    project_root: Path | None = None,
+    public_catalog: dict[str, object] | None = None,
+) -> dict[str, dict[str, object]]:
+    """Load product contracts against the canonical component dependency graph."""
+    component_catalog = load_catalog(directory / "components.json")
+    return load_runtime_inventory(
+        directory,
+        component_catalog=component_catalog,
+        project_root=project_root,
+        public_catalog=public_catalog,
+    )
 
 
 def runtime_catalog(catalog: dict[str, object]) -> dict[str, object]:

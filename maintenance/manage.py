@@ -36,6 +36,7 @@ from maintenance.tools.components import (
 )
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
+from maintenance.tools.runtime_catalog import load_inventory as load_runtime_inventory
 from maintenance.tools.sync_distribution import (
     Asset,
     discover_assets,
@@ -787,6 +788,12 @@ def command_verify(options: argparse.Namespace) -> int:
     catalog = load_json(CATALOG)
     package_count = validate_catalog(catalog)
     component_catalog = load_component_catalog(COMPONENTS)
+    runtime_inventory = load_runtime_inventory(
+        INVENTORY,
+        component_catalog=component_catalog,
+        project_root=PROJECT_ROOT,
+        public_catalog=catalog,
+    )
     load_releases(RELEASES, COMPONENTS)
     upstream_registry = load_upstreams(UPSTREAMS)
     recipe_count = 0
@@ -800,6 +807,8 @@ def command_verify(options: argparse.Namespace) -> int:
     source_count = verify_preserved_sources(upstream_registry, DIST, PROJECT_ROOT)
     print(
         f"[OK] Catalogo: {package_count} pacotes; componentes: {len(component_catalog['components'])}; "
+        f"runtimes: {len(runtime_inventory['runtimes']['runtimes'])}; "
+        f"jogos: {len(runtime_inventory['games']['games'])}; "
         f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
         f"nQuake: {revision[:12]}."
     )

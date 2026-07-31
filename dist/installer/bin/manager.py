@@ -51,6 +51,11 @@ from maintenance.tools.components import (
     resolve_dependencies,
     validate_runtime_catalog,
 )
+from maintenance.tools.runtime_catalog import (
+    load_capabilities,
+    load_runtimes,
+    runtimes_by_id,
+)
 
 
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
@@ -71,6 +76,10 @@ NQUAKE_INVENTORY = ".install/nquake.inventory"
 DEVELOPMENT_COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
 RUNTIME_COMPONENT_CATALOG = "_x86qw/components.json"
+DEVELOPMENT_CAPABILITY_CATALOG = Path("maintenance/inventory/capabilities.json")
+DEVELOPMENT_RUNTIME_CATALOG = Path("maintenance/inventory/runtimes.json")
+RUNTIME_CAPABILITY_CATALOG = "_x86qw/capabilities.json"
+RUNTIME_RUNTIME_CATALOG = "_x86qw/runtimes.json"
 CLI_ARCHIVE_NAME = "x86qw.pyz"
 OUTER_INSTALLER_METADATA = "installer.json"
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
@@ -287,35 +296,62 @@ class PlatformSpec:
         return f".install/ezquake-{self.key}-{channel}.receipt"
 
 
-PLATFORMS = {
-    "macos": PlatformSpec(
-        "macos", "macOS", "universal", "ezQuake-macOS-universal.zip",
-        "_ezQuake-macOS-universal.zip", "ezQuake.app",
-        "ezQuake Stable.app", "ezQuake Nightly.app",
-        ".install/clients/ezquake/macos/stable.receipt",
-        ".install/clients/ezquake/macos/nightly.receipt",
-    ),
-    "linux": PlatformSpec(
-        "linux", "Linux x86_64", "x86_64", "ezQuake-linux-x86_64.zip",
-        "_ezQuake-x86_64.AppImage", "ezQuake-x86_64.AppImage",
-        "ezquake-stable-x86_64.AppImage", "ezquake-nightly-x86_64.AppImage",
-        ".install/clients/ezquake/linux/stable.receipt",
-        ".install/clients/ezquake/linux/nightly.receipt",
-    ),
-    "windows": PlatformSpec(
-        "windows", "Windows x64", "x64", "ezQuake-windows-x64.zip",
-        "_ezquake.exe", "ezquake.exe",
-        "ezquake-stable.exe", "ezquake-nightly.exe",
-        ".install/clients/ezquake/windows/stable.receipt",
-        ".install/clients/ezquake/windows/nightly.receipt",
-    ),
-}
+def load_launcher_contracts() -> tuple[dict[str, object], dict[str, object]]:
+    if ZIPAPP_PATH is not None:
+        capabilities = read_zipapp_json(
+            ZIPAPP_PATH, RUNTIME_CAPABILITY_CATALOG, "Catálogo de capacidades da CLI",
+        )
+        runtimes = read_zipapp_json(
+            ZIPAPP_PATH, RUNTIME_RUNTIME_CATALOG, "Catálogo de runtimes da CLI",
+        )
+    else:
+        capabilities = load_capabilities(PROJECT_ROOT / DEVELOPMENT_CAPABILITY_CATALOG)
+        runtimes = load_runtimes(PROJECT_ROOT / DEVELOPMENT_RUNTIME_CATALOG)
+    return capabilities, runtimes
 
-HOST_PLATFORMS = {
-    "Darwin": "macos",
-    "Linux": "linux",
-    "Windows": "windows",
-}
+
+CAPABILITY_CATALOG, RUNTIME_CATALOG = load_launcher_contracts()
+RUNTIMES = runtimes_by_id(RUNTIME_CATALOG)
+
+
+def client_platform_specs() -> dict[str, PlatformSpec]:
+    stable = RUNTIMES["ezquake-stable"]
+    nightly = RUNTIMES["ezquake-nightly"]
+    stable_platforms = {
+        str(entry["system"]): entry for entry in stable["platforms"]
+        if isinstance(entry, dict)
+    }
+    nightly_platforms = {
+        str(entry["system"]): entry for entry in nightly["platforms"]
+        if isinstance(entry, dict)
+    }
+    labels = CAPABILITY_CATALOG.get("platform_labels")
+    if not isinstance(labels, dict) or set(stable_platforms) != set(nightly_platforms):
+        raise ValueError("catálogo declarativo de plataformas do ezQuake é inconsistente")
+    result: dict[str, PlatformSpec] = {}
+    for system, stable_platform in stable_platforms.items():
+        nightly_platform = nightly_platforms[system]
+        variant = str(stable_platform["variant"])
+        result[system] = PlatformSpec(
+            system,
+            str(labels[variant]),
+            str(stable_platform["architecture"]),
+            str(stable_platform["archive"]),
+            str(nightly_platform["filename_suffix"]),
+            str(stable_platform["archive_binary"]),
+            str(stable_platform["runtime_path"]),
+            str(nightly_platform["runtime_path"]),
+            str(stable_platform["receipt"]),
+            str(nightly_platform["receipt"]),
+        )
+    return result
+
+
+PLATFORMS = client_platform_specs()
+raw_host_platforms = CAPABILITY_CATALOG.get("host_systems")
+if not isinstance(raw_host_platforms, dict):
+    raise ValueError("catálogo declarativo não informa sistemas hospedeiros")
+HOST_PLATFORMS = {str(host): str(system) for host, system in raw_host_platforms.items()}
 
 
 PRESETS = {

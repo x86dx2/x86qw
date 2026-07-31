@@ -1,0 +1,14 @@
+{
+  "games": {
+    "ktx": {"client_game_arguments": [], "pre_connect_arguments": [], "pre_map_arguments": [], "post_map_arguments": [], "dedicated_arguments": [], "dedicated_settings": []},
+    "final-arena": {"client_game_arguments": ["-game", "arena", "+sv_gamedir", "arena", "+sv_progtype", "0"], "pre_connect_arguments": [], "pre_map_arguments": [], "post_map_arguments": ["+wait", "+exec", "x86qw-arena.cfg"], "dedicated_arguments": ["-game", "arena"], "dedicated_settings": []},
+    "pro-x": {"client_game_arguments": ["-game", "prox", "+sv_gamedir", "prox", "+sv_progtype", "0"], "pre_connect_arguments": [], "pre_map_arguments": ["+sv_loadentfiles", "1"], "post_map_arguments": ["+wait", "+exec", "x86qw-prox.cfg"], "dedicated_arguments": ["-game", "prox"], "dedicated_settings": [["sv_loadentfiles", "1"]]},
+    "team-fortress": {"client_game_arguments": ["-game", "fortress", "+sv_gamedir", "fortress", "+sv_progtype", "0"], "pre_connect_arguments": ["+exec", "x86qw-fortress-pre.cfg"], "pre_map_arguments": [], "post_map_arguments": ["+wait", "+exec", "x86qw-fortress.cfg"], "dedicated_arguments": ["-game", "fortress"], "dedicated_settings": []},
+    "td2": {"client_game_arguments": ["-game", "td2", "+sv_gamedir", "td2", "+sv_progtype", "0"], "pre_connect_arguments": [], "pre_map_arguments": [], "post_map_arguments": ["+wait", "+exec", "x86qw-td2.cfg"], "dedicated_arguments": ["-game", "td2"], "dedicated_settings": []}
+  },
+  "services": {
+    "mvdsv": ["-basedir", "{target}"],
+    "qtv": ["exec", "{session_config}"],
+    "qwfwd": ["{port}", "{bind}"]
+  }
+}

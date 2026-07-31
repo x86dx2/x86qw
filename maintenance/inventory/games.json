@@ -1,0 +1,392 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "games": [
+    {
+      "id": "ktx",
+      "label": "KTX",
+      "description": "QuakeWorld competitivo com o QVM oficial do KTX.",
+      "version": "1.47",
+      "protocol": "quakeworld",
+      "component": "ktx",
+      "gamedir": "qw",
+      "profile": "ktx",
+      "marker": "qw/ktx.pk3",
+      "gamecode": "qw/ktx.pk3",
+      "gamecode_type": "qvm-pk3",
+      "default_map": "dm6",
+      "suggested_maps": [
+        "dm6",
+        "dm2",
+        "dm4",
+        "aerowalk"
+      ],
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "pre_map_arguments": [],
+      "post_map_arguments": [],
+      "managed_config": "qw/x86qw-ktx.cfg",
+      "personal_config": "qw/x86qw-ktx-user.cfg",
+      "required_capabilities": [
+        "local-server",
+        "dedicated-server",
+        "bots"
+      ],
+      "smoke_test": "ktx-modes-and-frogbots",
+      "mode_catalog": "_x86qw/ktx-modes.json",
+      "play_support_gamecode": null,
+      "dedicated_arguments": [],
+      "client_game_arguments": [],
+      "pre_connect_arguments": [],
+      "client_compatibility_arguments": [],
+      "dedicated_settings": [],
+      "local_server_settings": [
+        [
+          "maxclients",
+          "32"
+        ],
+        [
+          "sv_mintic",
+          "0.01"
+        ],
+        [
+          "sv_maxtic",
+          "0.03"
+        ],
+        [
+          "pm_ktjump",
+          "1"
+        ]
+      ],
+      "legacy_remote_capabilities": [],
+      "legacy_components": []
+    },
+    {
+      "id": "final-arena",
+      "label": "Final Arena",
+      "description": "Duelos individuais em fila: o vencedor permanece na arena.",
+      "version": "1.20",
+      "protocol": "quakeworld",
+      "component": "final-arena",
+      "gamedir": "arena",
+      "profile": "arena",
+      "marker": "arena/arena.pk3",
+      "gamecode": "arena/arena.pk3",
+      "gamecode_type": "qvm-pk3",
+      "default_map": "23ar-a",
+      "suggested_maps": [
+        "23ar-a",
+        "arenarg2",
+        "arenarg4",
+        "dm2arena"
+      ],
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "pre_map_arguments": [],
+      "post_map_arguments": [
+        "+wait",
+        "+exec",
+        "x86qw-arena.cfg"
+      ],
+      "managed_config": "arena/x86qw-arena.cfg",
+      "personal_config": "arena/x86qw-arena-user.cfg",
+      "required_capabilities": [
+        "local-server",
+        "dedicated-server"
+      ],
+      "smoke_test": "final-arena-local-and-dedicated",
+      "local_server_settings": [
+        [
+          "sv_mintic",
+          "0"
+        ],
+        [
+          "sv_maxtic",
+          "0.1"
+        ],
+        [
+          "pm_ktjump",
+          "0.5"
+        ]
+      ],
+      "legacy_remote_capabilities": [
+        "noaim"
+      ],
+      "legacy_components": [
+        "clan-arena"
+      ],
+      "play_support_gamecode": "arena/x86qw_arena.dat",
+      "dedicated_arguments": [
+        "-game",
+        "arena"
+      ],
+      "client_game_arguments": [
+        "-game",
+        "arena",
+        "+sv_gamedir",
+        "arena",
+        "+sv_progtype",
+        "0"
+      ],
+      "pre_connect_arguments": [],
+      "client_compatibility_arguments": [
+        "+cl_pext_lagteleport",
+        "0"
+      ],
+      "dedicated_settings": []
+    },
+    {
+      "id": "pro-x",
+      "label": "Pro-X",
+      "description": "Rounds e equipes com ready, break e vota\u00e7\u00e3o.",
+      "version": "1.1",
+      "protocol": "quakeworld",
+      "component": "pro-x",
+      "gamedir": "prox",
+      "profile": "prox",
+      "marker": "prox/qwprogs.dat",
+      "gamecode": "prox/qwprogs.dat",
+      "gamecode_type": "dat",
+      "default_map": "proxmap1",
+      "suggested_maps": [
+        "proxmap1",
+        "proxmap2",
+        "proxmap3",
+        "proxmap4",
+        "proxmap5"
+      ],
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "pre_map_arguments": [
+        "+sv_loadentfiles",
+        "1"
+      ],
+      "post_map_arguments": [
+        "+wait",
+        "+exec",
+        "x86qw-prox.cfg"
+      ],
+      "managed_config": "prox/x86qw-prox.cfg",
+      "personal_config": "prox/x86qw-prox-user.cfg",
+      "required_capabilities": [
+        "local-server",
+        "dedicated-server"
+      ],
+      "smoke_test": "pro-x-local-and-dedicated",
+      "local_server_settings": [
+        [
+          "sv_mintic",
+          "0"
+        ],
+        [
+          "sv_maxtic",
+          "0.1"
+        ],
+        [
+          "pm_ktjump",
+          "0.5"
+        ]
+      ],
+      "legacy_remote_capabilities": [
+        "setinfo",
+        "bind"
+      ],
+      "legacy_components": [
+        "clan-arena"
+      ],
+      "legacy_marker": "prox/prox.pk3",
+      "play_support_gamecode": "prox/x86qw_prox.dat",
+      "dedicated_arguments": [
+        "-game",
+        "prox"
+      ],
+      "client_game_arguments": [
+        "-game",
+        "prox",
+        "+sv_gamedir",
+        "prox",
+        "+sv_progtype",
+        "0"
+      ],
+      "pre_connect_arguments": [],
+      "client_compatibility_arguments": [
+        "+cl_pext_lagteleport",
+        "0"
+      ],
+      "dedicated_settings": [
+        [
+          "sv_loadentfiles",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "team-fortress",
+      "label": "Team Fortress",
+      "description": "Team Fortress cl\u00e1ssico para QuakeWorld.",
+      "version": "2.9",
+      "protocol": "quakeworld",
+      "component": "team-fortress",
+      "gamedir": "fortress",
+      "profile": "fortress",
+      "marker": "fortress/misc.pak",
+      "gamecode": "fortress/qwprogs.dat",
+      "gamecode_type": "dat",
+      "default_map": "2fort5r",
+      "suggested_maps": [
+        "2fort5r",
+        "well6",
+        "bases",
+        "mbasesr"
+      ],
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "pre_map_arguments": [],
+      "post_map_arguments": [
+        "+wait",
+        "+exec",
+        "x86qw-fortress.cfg"
+      ],
+      "managed_config": "fortress/x86qw-fortress.cfg",
+      "personal_config": "fortress/x86qw-fortress-user.cfg",
+      "required_capabilities": [
+        "local-server",
+        "dedicated-server"
+      ],
+      "smoke_test": "team-fortress-local-and-dedicated",
+      "local_server_settings": [
+        [
+          "sv_mintic",
+          "0"
+        ],
+        [
+          "sv_maxtic",
+          "0.1"
+        ],
+        [
+          "pm_ktjump",
+          "0.5"
+        ]
+      ],
+      "legacy_remote_capabilities": [],
+      "legacy_components": [],
+      "play_support_gamecode": "fortress/x86qw_fortress.dat",
+      "dedicated_arguments": [
+        "-game",
+        "fortress"
+      ],
+      "client_game_arguments": [
+        "-game",
+        "fortress",
+        "+sv_gamedir",
+        "fortress",
+        "+sv_progtype",
+        "0"
+      ],
+      "pre_connect_arguments": [
+        "+exec",
+        "x86qw-fortress-pre.cfg"
+      ],
+      "client_compatibility_arguments": [
+        "+cl_pext_lagteleport",
+        "0"
+      ],
+      "dedicated_settings": []
+    },
+    {
+      "id": "td2",
+      "label": "Total Destruction 2",
+      "description": "Armas, magias, runas e poderes.",
+      "version": "2.22",
+      "protocol": "quakeworld",
+      "component": "total-destruction-2",
+      "gamedir": "td2",
+      "profile": "td2",
+      "marker": "td2/qwprogs.dat",
+      "gamecode": "td2/qwprogs.dat",
+      "gamecode_type": "dat",
+      "default_map": "dm6",
+      "suggested_maps": [
+        "dm6",
+        "dm2",
+        "dm4",
+        "e1m2"
+      ],
+      "client_runtimes": [
+        "ezquake-stable",
+        "ezquake-nightly"
+      ],
+      "server_runtimes": [
+        "mvdsv"
+      ],
+      "pre_map_arguments": [],
+      "post_map_arguments": [
+        "+wait",
+        "+exec",
+        "x86qw-td2.cfg"
+      ],
+      "managed_config": "td2/x86qw-td2.cfg",
+      "personal_config": "td2/x86qw-td2-user.cfg",
+      "required_capabilities": [
+        "local-server",
+        "dedicated-server"
+      ],
+      "smoke_test": "td2-local-and-dedicated",
+      "local_server_settings": [
+        [
+          "sv_mintic",
+          "0"
+        ],
+        [
+          "sv_maxtic",
+          "0.1"
+        ],
+        [
+          "pm_ktjump",
+          "0.5"
+        ]
+      ],
+      "legacy_remote_capabilities": [],
+      "legacy_components": [],
+      "play_support_gamecode": "td2/x86qw_td2.dat",
+      "dedicated_arguments": [
+        "-game",
+        "td2"
+      ],
+      "client_game_arguments": [
+        "-game",
+        "td2",
+        "+sv_gamedir",
+        "td2",
+        "+sv_progtype",
+        "0"
+      ],
+      "pre_connect_arguments": [],
+      "client_compatibility_arguments": [
+        "+cl_pext_lagteleport",
+        "0"
+      ],
+      "dedicated_settings": []
+    }
+  ]
+}
