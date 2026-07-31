@@ -313,6 +313,8 @@ def validate_catalog(catalog: object) -> None:
     compatibility = catalog.get("compatibility")
     if not isinstance(compatibility, dict) or compatibility.get("policy") != "common-baseline":
         raise ValueError("component catalog must declare the common stable/nightly baseline")
+    if compatibility.get("scope") != "ezquake-client-content":
+        raise ValueError("component compatibility must be scoped to ezQuake client content")
     compatible_clients = compatibility.get("clients")
     if (
         not isinstance(compatible_clients, dict)
@@ -321,8 +323,12 @@ def validate_catalog(catalog: object) -> None:
     ):
         raise ValueError("invalid stable/nightly compatibility versions")
     covered = compatibility.get("covered_components")
-    if not isinstance(covered, list) or len(covered) != len(set(covered)) or set(covered) != identifiers:
-        raise ValueError("stable/nightly compatibility must cover every component")
+    client_content = {
+        component["id"] for component in components
+        if component["kind"] not in {"runtime", "service"}
+    }
+    if not isinstance(covered, list) or len(covered) != len(set(covered)) or set(covered) != client_content:
+        raise ValueError("stable/nightly compatibility must cover every client content component")
     verified = compatibility.get("verified")
     if not isinstance(verified, list) or not verified or not all(isinstance(item, str) and item for item in verified):
         raise ValueError("invalid stable/nightly verification scope")

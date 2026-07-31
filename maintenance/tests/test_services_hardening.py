@@ -6,6 +6,7 @@ import os
 import signal
 import socket
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -205,7 +206,7 @@ class ServiceHardeningTests(unittest.TestCase):
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
             self.assertTrue(recovered["materialized_files"][0]["modified_during_session"])
 
-    def test_session_recovery_preserves_modified_temporary_file(self):
+    def test_session_recovery_removes_modified_sensitive_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             (target / ".install").mkdir()
@@ -213,10 +214,226 @@ class ServiceHardeningTests(unittest.TestCase):
             config_dir.mkdir()
             journal = services.SessionJournal(target)
             config = services.temporary_config(config_dir, "session-", ["hostname local"], journal)
+            secret = "segredo-que-nao-pode-vazar"
+            config.write_text(f'password "{secret}"\n', encoding="utf-8")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                services.recover_sessions(target)
+            self.assertFalse(config.exists())
+            self.assertNotIn(secret, output.getvalue())
+            self.assertNotIn(secret, journal.path.read_text(encoding="utf-8"))
+
+    def test_session_recovery_preserves_modified_non_sensitive_temporary_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            config = services.temporary_config(
+                config_dir, "session-", ["hostname local"], journal, sensitive=False,
+            )
             config.write_text("// configuração pessoalizada\n", encoding="utf-8")
             services.recover_sessions(target)
             self.assertTrue(config.exists())
             self.assertIn("pessoalizada", config.read_text(encoding="utf-8"))
+
+    def test_active_session_lock_blocks_recovery_and_preserves_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            first = services.SessionLock.acquire(target, "host")
+            try:
+                journal = services.SessionJournal(
+                    target, session_id=first.session_id, controller=first.owner,
+                )
+                config_dir = target / "qw"
+                config_dir.mkdir()
+                config = services.temporary_config(
+                    config_dir, "session-", ["hostname ativo"], journal,
+                )
+                with self.assertRaisesRegex(services.InstallerError, "Já existe uma sessão"):
+                    services.SessionLock.acquire(target, "qtv")
+                self.assertTrue(config.exists())
+                self.assertEqual("starting", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
+            finally:
+                first.release()
+
+    def test_session_lock_acquisition_is_atomic_between_controllers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            barrier = threading.Barrier(2)
+            release = threading.Event()
+            results: list[tuple[str, object]] = []
+            results_lock = threading.Lock()
+
+            def acquire(command: str) -> None:
+                barrier.wait()
+                try:
+                    acquired = services.SessionLock.acquire(target, command)
+                except services.InstallerError as error:
+                    with results_lock:
+                        results.append(("blocked", str(error)))
+                    return
+                with results_lock:
+                    results.append(("acquired", acquired))
+                release.wait(2)
+                acquired.release()
+
+            threads = [
+                threading.Thread(target=acquire, args=(command,))
+                for command in ("host", "proxy")
+            ]
+            for thread in threads:
+                thread.start()
+            deadline = time.monotonic() + 2
+            while len(results) < 2 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            release.set()
+            for thread in threads:
+                thread.join(2)
+            self.assertEqual(1, sum(kind == "acquired" for kind, _ in results))
+            self.assertEqual(1, sum(kind == "blocked" for kind, _ in results))
+
+    def test_stale_controller_lock_is_reclaimed_and_journal_recovered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            (target / ".install").mkdir()
+            old_session = "abandoned-session"
+            journal = services.SessionJournal(target, session_id=old_session)
+            lock_path = target / ".install/sessions/active.lock"
+            lock_path.write_text(json.dumps({
+                "format": 1, "project": "x86qw", "session_id": old_session,
+                "controller_pid": 999999999, "controller_start_token": "dead-token",
+                "controller_executable": str(target / "dead-controller"),
+                "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
+                "command": "host",
+            }), encoding="utf-8")
+            acquired = services.SessionLock.acquire(target, "proxy")
+            try:
+                services.recover_sessions(target)
+                acquired.confirm_recovery()
+                self.assertEqual("clean", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
+            finally:
+                acquired.release()
+
+    def test_inconclusive_controller_identity_preserves_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            sessions = target / ".install/sessions"
+            sessions.mkdir(parents=True)
+            lock_path = sessions / "active.lock"
+            lock_path.write_text(json.dumps({
+                "format": 1, "project": "x86qw", "session_id": "unknown-session",
+                "controller_pid": 424242, "controller_start_token": "unknown-token",
+                "controller_executable": str(target / "controller"),
+                "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
+                "command": "qtv",
+            }), encoding="utf-8")
+            with mock.patch.object(
+                services, "probe_expected_process",
+                return_value=services.ProcessProbe("inconclusive", detail="acesso negado"),
+            ):
+                with self.assertRaisesRegex(services.InstallerError, "Não foi possível confirmar"):
+                    services.SessionLock.acquire(target, "host")
+            self.assertTrue(lock_path.exists())
+
+    def test_orphan_with_matching_identity_is_terminated_and_recorded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            process = subprocess.Popen(
+                (sys.executable, "-c", "import time; time.sleep(30)"),
+                start_new_session=True,
+            )
+            journal = services.SessionJournal(target)
+            spec = services.ProcessSpec("fixture", (sys.executable,), Path.cwd())
+            try:
+                journal.record_process(spec, process, process.pid)
+                services.recover_sessions(target)
+                process.wait(timeout=2)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+            recovered = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertEqual("clean", recovered["status"])
+            self.assertIn(recovered["recovery_actions"][0]["result"], {"terminated", "killed"})
+            recorded = recovered["processes"][0]
+            for field in ("runtime", "process_group", "executable", "creation_token", "address", "port"):
+                self.assertIn(field, recorded)
+
+    def test_reused_pid_is_not_terminated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            journal = services.SessionJournal(target)
+            processes = journal.data["processes"]
+            self.assertIsInstance(processes, list)
+            processes.append({
+                "label": "MVDSV", "runtime": "mvdsv", "pid": 12345,
+                "process_group": 12345, "executable": "/old/mvdsv",
+                "creation_token": "old-token", "started_at": "2026-07-31T00:00:00+00:00",
+                "address": "127.0.0.1", "port": 28501,
+            })
+            journal._write()
+            mismatch = services.ProcessProbe(
+                "identity_mismatch", services.ProcessIdentity(12345, "new-token", "/other/process"),
+            )
+            with mock.patch.object(services, "probe_expected_process", return_value=mismatch):
+                with mock.patch.object(services, "signal_recorded_process") as terminate:
+                    services.recover_sessions(target)
+            terminate.assert_not_called()
+            recovered = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertEqual("identity_mismatch", recovered["recovery_actions"][0]["result"])
+
+    def test_inconclusive_orphan_preserves_journal_and_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".install").mkdir()
+            data = target / "qw/needed.cfg"
+            data.parent.mkdir()
+            data.write_text("needed", encoding="utf-8")
+            journal = services.SessionJournal(target)
+            journal.record_materialized(services.MaterializedFile(
+                data, services.file_sha256(data), "fixture.pk3", True, False,
+            ))
+            processes = journal.data["processes"]
+            self.assertIsInstance(processes, list)
+            processes.append({"label": "QTV", "pid": 12345})
+            journal._write()
+            with mock.patch.object(
+                services, "process_identity", return_value=services.ProcessProbe("inconclusive"),
+            ):
+                with self.assertRaisesRegex(services.InstallerError, "Não foi possível confirmar"):
+                    services.recover_sessions(target)
+            self.assertTrue(data.exists())
+            self.assertEqual("starting", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
+
+    def test_host_qtv_upstream_uses_reachable_ipv4_and_ipv6_endpoint(self):
+        expected = {
+            "127.0.0.1": "127.0.0.1:28501",
+            "0.0.0.0": "127.0.0.1:28501",
+            "192.168.1.50": "192.168.1.50:28501",
+            "::1": "[::1]:28501",
+            "::": "[::1]:28501",
+        }
+        for address, endpoint in expected.items():
+            with self.subTest(address=address):
+                self.assertEqual(endpoint, services.host_qtv_upstream(address, 28501))
+
+    def test_external_qtv_warning_is_independent_from_upstream_password(self):
+        for password in ("", "upstream-secret"):
+            options = SimpleNamespace(
+                action="qtv", bind="0.0.0.0", upstream="127.0.0.1:28501",
+                qtv_password=password,
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                services.warn_external_bind(options)
+            self.assertIn("interface HTTP/QTV será exposta", output.getvalue())
+            self.assertIn("não autentica o acesso HTTP", output.getvalue())
 
     def test_session_journal_is_private(self):
         with tempfile.TemporaryDirectory() as temporary:

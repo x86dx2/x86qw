@@ -4,8 +4,10 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](../ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline analisado: branch `main`, commit
-`eeea45786401aae166efcd04f5d126faea740da2`, em 31 de julho de 2026.
+Baseline inicial sincronizado: branch `main`, commit
+`3a95da88f7d6a978473115520ffe903560edfdd6`, em 31 de julho de 2026. As
+correções de código desta linha têm como baseline `221522f` na branch
+`codex/fix-0.2.1-session-lifecycle`.
 
 ## Escala de estado
 
@@ -19,7 +21,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.2.0`; `0.1.25` permanece imutável;
+- instalador público `0.2.0`, já publicado e verificado; `0.1.25` permanece
+  imutável;
 - 49 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
@@ -165,12 +168,17 @@ separada.
 
 ### LIFE-01 — Lifecycle e crash recovery
 
-**Entrega funcional:** completa para processos em primeiro plano
-**Validação:** unitária em startup parcial, SIGINT, SIGTERM e sessão abandonada
+**Entrega funcional:** completa para uma stack em primeiro plano por instalação
+**Validação:** unitária em lock concorrente, sessão viva, controlador morto,
+PID reutilizado, órfão, configuração sensível, SIGINT, SIGTERM e crash; smokes
+nativos de recuperação ainda parciais
 
-O preflight termina antes de iniciar filhos. A ordem composta é MVDSV, RCON,
-QTV e QWFWD; o encerramento ocorre na ordem inversa. O journal privado remove
-somente arquivos criados pela sessão e ainda idênticos ao hash registrado.
+O lock atômico é adquirido antes da recuperação e impede que uma segunda CLI
+reconcilie uma sessão viva. O preflight termina antes de iniciar filhos. A ordem
+composta é MVDSV, RCON, QTV e QWFWD; o encerramento ocorre na ordem inversa.
+Controlador e filhos têm identidade por PID, token de criação e executável. O
+journal preserva material não sensível modificado e sempre remove configurações
+efêmeras sensíveis por unlink.
 
 Serviços persistentes do sistema permanecem trabalho futuro e exigem proposta
 separada.
@@ -214,9 +222,11 @@ quando precisa obter pacotes.
 **Entrega funcional:** parcial
 **Validação:** unitária da migração do estado
 
-O formato 2 aceita capacidades explícitas sem inferi-las de instalações antigas.
-Perfis atuais permanecem intactos. Capacidades adicionais só podem ser ativadas
-quando seus componentes e migrações forem aprovados em trabalho separado.
+O formato 2 distingue capacidades técnicas do runtime das capacidades
+selecionáveis da instalação. Como nenhum perfil operacional adicional está
+habilitado, somente a lista vazia é aceita. Perfis atuais permanecem intactos;
+capacidades adicionais exigem componentes e migrações aprovados em trabalho
+separado.
 
 ## Site e documentação
 
@@ -256,4 +266,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [ ] forwarding QWFWD validado em suíte de rede;
 - [x] revisão humana do diff e das migrações;
 - [x] versão `0.2.0` escolhida sem sobrescrever `0.1.25`;
-- [ ] publicação executada somente em etapa explícita aprovada.
+- [x] publicação `0.2.0` executada e verificada em etapa explícita aprovada;
+- [ ] publicação de qualquer versão posterior executada somente em etapa
+  explícita aprovada.

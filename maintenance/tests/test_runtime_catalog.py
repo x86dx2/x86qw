@@ -63,6 +63,18 @@ class RuntimeCatalogTests(unittest.TestCase):
             self.assertEqual(expected, actual)
             self.assertNotIn(("macos", "x86_64", "macos-intel"), actual)
 
+    def test_runtime_compatibility_is_not_duplicated_by_the_client_content_baseline(self):
+        legacy = self.components["compatibility"]
+        self.assertEqual("ezquake-client-content", legacy["scope"])
+        self.assertTrue({"mvdsv", "qtv", "qwfwd"}.isdisjoint(legacy["covered_components"]))
+        runtime_entries = {
+            (entry["kind"], entry["runtime"])
+            for entry in self.inventory["compatibility"]["compatibility"]
+        }
+        self.assertIn(("server", "mvdsv"), runtime_entries)
+        self.assertIn(("service", "qtv"), runtime_entries)
+        self.assertIn(("service", "qwfwd"), runtime_entries)
+
     def test_invalid_protocol_cycle_and_personal_runtime_payload_fail(self):
         for mutation, message in (
             (lambda docs: docs["games"]["games"][0].__setitem__("protocol", "unknown"), "protocol"),

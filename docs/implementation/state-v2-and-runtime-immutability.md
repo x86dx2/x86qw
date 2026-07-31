@@ -22,6 +22,11 @@ O rollback operacional consiste em restaurar o `state.json` anterior; nenhum
 payload ou arquivo pessoal é removido pela conversão do estado. O instalador
 continua aceitando o formato 1 durante esta linha de compatibilidade.
 
+Capacidades técnicas de runtimes permanecem no catálogo declarativo e não são
+capacidades selecionáveis da instalação. Como nenhum perfil operacional foi
+habilitado nesta linha, o único valor aceito em `state.json` é
+`"capabilities": []`; identificadores arbitrários são rejeitados.
+
 ## Suporte derivado dos jogos
 
 `play-support` formaliza gamecodes e configurações gerenciadas derivados dos
@@ -35,7 +40,10 @@ conteúdo efêmero de PK3 necessário ao MVDSV, protegido pelo journal da sessã
 reconciliado no encerramento ou na próxima execução.
 
 Arquivos pessoais divergentes nunca são sobrescritos durante reparação. Um
-arquivo efêmero alterado durante a sessão também é preservado e reportado.
+arquivo efêmero não sensível alterado durante a sessão também é preservado e
+reportado. Configurações efêmeras classificadas como sensíveis são removidas
+mesmo quando modificadas, pois podem conter senhas; o journal registra somente
+metadados redigidos.
 
 ## Dependências operacionais
 

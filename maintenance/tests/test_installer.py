@@ -66,6 +66,31 @@ class InstallerTests(unittest.TestCase):
         )
         return receipt
 
+    @staticmethod
+    def write_ezquake_fixture(
+        installer, target: Path, spec, channel: str, *, payload: bytes | None = None,
+    ):
+        selection = "3.6.9" if channel == "stable" else "20260616-101233_a86996a"
+        runtime = target / spec.runtime(channel)
+        if payload is not None:
+            runtime.parent.mkdir(parents=True, exist_ok=True)
+            runtime.write_bytes(payload)
+        binary_hash = install_qw.file_hash(runtime) if runtime.is_file() else "b" * 64
+        receipt_path = target / spec.receipt(channel)
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt = {
+            "format": "1", "platform": spec.key, "architecture": spec.architecture,
+            "channel": channel, "selection": selection,
+            "install_name": spec.runtime(channel), "bundle_version": selection,
+            "artifact_name": spec.stable_archive if channel == "stable" else selection + spec.nightly_suffix,
+            "artifact_url": "https://example.invalid/" + (
+                spec.stable_archive if channel == "stable" else selection + spec.nightly_suffix
+            ),
+            "artifact_sha256": "a" * 64, "binary_sha256": binary_hash,
+        }
+        installer.write_ezquake_receipt_record(receipt_path, receipt)
+        return receipt_path, receipt, runtime
+
     def test_repository_preserves_the_registered_paks_as_core_sources(self):
         expected = {
             "pak0.pak": install_qw.ID1_PAK0_SHA256,
@@ -892,11 +917,11 @@ class InstallerTests(unittest.TestCase):
             persisted = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(migrated, persisted)
 
-    def test_format_two_state_preserves_recorded_capabilities(self):
+    def test_format_two_state_preserves_empty_installation_capabilities(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             selected = ["mvdsv", "qtv"]
-            capabilities = ["dedicated-server", "qtv"]
+            capabilities: list[str] = []
             state = {
                 "format": 2,
                 "project": "x86qw",
@@ -914,6 +939,200 @@ class InstallerTests(unittest.TestCase):
                 loaded = installer.load_install_state(persist_migration=True)
             self.assertEqual(capabilities, loaded["capabilities"])
             self.assertEqual(state, json.loads(state_path.read_text(encoding="utf-8")))
+
+    def test_format_two_state_rejects_undeclared_installation_capabilities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            selected = ["mvdsv", "qtv"]
+            state = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": list(selected),
+                "recorded_components": list(selected),
+                "known_components": list(installer.components),
+                "capabilities": ["qualquer-coisa"],
+                "component_fingerprint": install_qw.profile_fingerprint(selected),
+            }
+            with self.assertRaisesRegex(install_qw.InstallerError, "Capacidades"):
+                installer.validate_install_state(state)
+
+    def test_repair_plans_missing_stable_and_nightly_clients_at_recorded_version(self):
+        for channel in ("stable", "nightly"):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                _, receipt, _ = self.write_ezquake_fixture(installer, target, spec, channel)
+                release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
+                with mock.patch.object(installer, "client_catalog_release", return_value=release):
+                    issues, diagnostics = installer.client_repair_assessment()
+                self.assertEqual([], diagnostics)
+                self.assertEqual(1, len(issues))
+                self.assertEqual("payload", issues[0].mode)
+                self.assertEqual(receipt["selection"], issues[0].release[0])
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_detects_appimage_without_execution_as_local_fix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            elf = bytearray(64)
+            elf[:5] = b"\x7fELF\x02"
+            struct.pack_into("<H", elf, 18, 62)
+            _, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=bytes(elf),
+            )
+            runtime.chmod(0o600)
+            release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
+            with mock.patch.object(installer, "client_catalog_release", return_value=release):
+                issues, diagnostics = installer.client_repair_assessment()
+            self.assertEqual([], diagnostics)
+            self.assertEqual("permission", issues[0].mode)
+
+    def test_repair_detects_corrupt_windows_exe_and_incomplete_macos_bundle(self):
+        for platform in ("windows", "macos"):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS[platform]
+                receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable",
+                    payload=b"corrupt" if platform == "windows" else None,
+                )
+                if platform == "macos":
+                    runtime.mkdir(parents=True)
+                release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
+                with mock.patch.object(installer, "client_catalog_release", return_value=release):
+                    issues, diagnostics = installer.client_repair_assessment()
+                self.assertEqual([], diagnostics)
+                self.assertEqual(receipt_path, issues[0].receipt_path)
+                self.assertEqual("payload", issues[0].mode)
+
+    def test_repair_detects_missing_macos_preparation_without_replacing_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            _, receipt, runtime = self.write_ezquake_fixture(installer, target, spec, "stable")
+            runtime.mkdir(parents=True)
+            release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
+            with mock.patch.object(installer, "client_catalog_release", return_value=release):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
+                        issues, diagnostics = installer.client_repair_assessment()
+            self.assertEqual([], diagnostics)
+            self.assertEqual("macos-preparation", issues[0].mode)
+
+    def test_repair_diagnoses_partial_component_metadata_in_both_directions(self):
+        for missing in ("receipt", "inventory"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                receipt, inventory = (
+                    target / relative
+                    for relative in installer.component_metadata("ktx")
+                )
+                receipt.parent.mkdir(parents=True)
+                present = inventory if missing == "receipt" else receipt
+                present.write_text("parcial\n", encoding="utf-8")
+                valid, diagnostics = installer.component_metadata_assessment()
+                self.assertNotIn("ktx", valid)
+                self.assertTrue(any("ktx" in diagnostic for diagnostic in diagnostics))
+                self.assertTrue(present.exists())
+
+    def test_repair_reconstructs_missing_state_from_complete_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt, inventory = (
+                target / relative for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            inventory.write_text("", encoding="utf-8")
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+            with mock.patch.object(installer, "check_paks"):
+                with mock.patch.object(installer, "verify_component", return_value=0):
+                    with mock.patch.object(installer, "play_support_player") as player:
+                        player.return_value.available_local_games.return_value = []
+                        player.return_value.local_play_support_issues.return_value = []
+                        with mock.patch.object(installer, "verify_qw_package_order"):
+                            assessment = installer.repair_plan()
+            self.assertIsNotNone(assessment.recovered_state)
+            self.assertIn("ktx", assessment.recovered_state["recorded_components"])
+            self.assertEqual((), assessment.metadata_diagnostics)
+
+    def test_repair_diagnoses_runtime_without_receipt_and_invalid_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["windows"]
+            runtime = target / spec.runtime("stable")
+            runtime.write_bytes(b"unmanaged")
+            _, diagnostics = installer.client_repair_assessment()
+            self.assertTrue(any("runtime presente sem recibo" in item for item in diagnostics))
+            receipt = target / spec.receipt("stable")
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text("partial\n", encoding="utf-8")
+            _, diagnostics = installer.client_repair_assessment()
+            self.assertTrue(any("recibo inválido ou parcial" in item for item in diagnostics))
+            self.assertEqual(b"unmanaged", runtime.read_bytes())
+
+    def test_repair_uses_exact_recorded_client_release_without_downgrade(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            recorded = ("3.6.10", ("https://example.invalid/recorded.zip",), "b" * 64)
+            older = ("3.6.9", ("https://example.invalid/older.zip",), "a" * 64)
+            with mock.patch.object(installer, "stable_catalog", return_value=[recorded, older]):
+                self.assertEqual(recorded, installer.client_catalog_release(spec, "stable", "3.6.10"))
+                self.assertIsNone(installer.client_catalog_release(spec, "stable", "3.6.11"))
+
+    def test_repair_without_changes_and_dry_run_do_not_mutate(self):
+        empty = install_qw.RepairAssessment((), False, (), False, (), ())
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            with mock.patch.object(installer, "repair_plan", return_value=empty):
+                self.assertFalse(installer.repair(dry_run=True, plan_rows=[]))
+                self.assertFalse(installer.repair(dry_run=False, plan_rows=[]))
+
+    def test_installed_cli_repair_reports_payload_plan_without_downloading(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path, receipt, _ = self.write_ezquake_fixture(installer, target, spec, "stable")
+            release = (receipt["selection"], (f"https://example.invalid/{receipt['artifact_name']}",), "a" * 64)
+            issue = install_qw.ClientRepairIssue(
+                spec, "stable", receipt_path, receipt, "runtime ausente", "payload", release,
+            )
+            assessment = install_qw.RepairAssessment((), False, (), False, (issue,), ())
+            rows = []
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                self.assertTrue(installer.repair(dry_run=True, plan_rows=rows))
+                self.assertEqual("Cliente", rows[0].kind)
+                with self.assertRaisesRegex(install_qw.InstallerError, "reexecute o bootstrap"):
+                    installer.repair(dry_run=False, plan_rows=[], allow_download=False)
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_local_repair_preserves_personal_config(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "runtime"
+            runtime.write_bytes(b"runtime")
+            runtime.chmod(0o600)
+            personal = target / "ezquake/configs/config.cfg"
+            personal.parent.mkdir(parents=True)
+            personal.write_text("bind x impulse 7\n", encoding="utf-8")
+            assessment = install_qw.RepairAssessment((), False, (runtime,), False, (), ())
+            state = {
+                "profile": "none", "requested_components": [], "known_components": [],
+                "capabilities": [],
+            }
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(installer, "load_install_state", return_value=state):
+                    with mock.patch.object(installer, "write_install_state"):
+                        with mock.patch.object(installer, "verify_installation"):
+                            self.assertTrue(installer.repair(
+                                dry_run=False, plan_rows=[], allow_download=False,
+                            ))
+            self.assertTrue(os.access(runtime, os.X_OK))
+            self.assertEqual("bind x impulse 7\n", personal.read_text(encoding="utf-8"))
 
     def test_upgrade_adds_only_components_newly_required_by_the_recorded_profile(self):
         with tempfile.TemporaryDirectory() as temporary:

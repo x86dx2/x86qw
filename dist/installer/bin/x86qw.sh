@@ -30,6 +30,7 @@ Manutenção:
   update [--yes]       atualiza somente clientes e componentes já instalados
   upgrade [--yes]      incorpora novidades do perfil da instalação
   verify               verifica a integridade da instalação
+  repair [--dry-run]   diagnostica e repara conteúdo gerenciado
   cleanup              limpa o cache gerenciado pelo x86QW
   uninstall            remove o x86QW e preserva PAKs e dados pessoais
   uninstall --purge    remove completamente instalação, dados e cache
@@ -52,7 +53,7 @@ case "${1:-}" in
   help|-h|--help) show_help; exit 0 ;;
   version|-V|--version) exec python3 "$app" --version ;;
   play|host|proxy|qtv) action=$1; shift; exec python3 "$app" "$action" "$@" --target "$root" ;;
-  update|upgrade|hub|verify|cleanup|uninstall) action=$1; shift ;;
+  update|upgrade|hub|verify|repair|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac
 

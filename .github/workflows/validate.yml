@@ -22,6 +22,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           lfs: false
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -35,7 +36,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: ./maintenance/manage.py verify
       - name: Reject malformed diffs
-        run: git diff --check
+        run: python3 maintenance/tools/check_committed_diff.py
       - name: Validate Cloudflare static assets
         working-directory: site
         run: npx --yes wrangler@4.114.0 deploy --dry-run
@@ -53,6 +54,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           lfs: false
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}

@@ -6,10 +6,12 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline analisado: `eeea45786401aae166efcd04f5d126faea740da2`, branch `main`,
-em 31 de julho de 2026.
+Baseline inicial sincronizado: `3a95da88f7d6a978473115520ffe903560edfdd6`,
+branch `main`, em 31 de julho de 2026. Baseline das correções de código desta
+linha: `221522f` na branch `codex/fix-0.2.1-session-lifecycle`.
 
-- instalador público `0.2.0`; `0.1.25` permanece imutável no histórico;
+- instalador público `0.2.0`, já publicado e verificado; `0.1.25` permanece
+  imutável no histórico;
 - 49 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
@@ -31,7 +33,7 @@ em 31 de julho de 2026.
 | QTV HTTP/upstream | MVP entregue | unitária; smoke macOS existente |
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
-| Lifecycle e recuperação | completa para processos em primeiro plano | unitária em sinais, crash e rollback |
+| Lifecycle e recuperação | completa para uma stack em primeiro plano por instalação | unitária em lock concorrente, PID reutilizado, órfão, sinais, crash e rollback; smokes nativos ainda parciais |
 | Site e documentação | completa para o baseline atual | unitária e dry-run do Worker |
 
 “MVP entregue” não significa que o runtime foi executado em todas as

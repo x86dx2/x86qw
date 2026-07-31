@@ -113,6 +113,7 @@ PACKAGE_ORDER_INVENTORY = ".install/components/package-order/inventory"
 CLI_RECEIPT = ".install/cli/receipt"
 LEGACY_CLI_RECEIPT = ".install/cli.receipt"
 INSTALL_STATE = ".install/state.json"
+INSTALLATION_CAPABILITIES: frozenset[str] = frozenset()
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
 QW_PACKAGE_PRIORITY = (
@@ -427,6 +428,28 @@ class UpdatePlanRow:
     available: str
     action: str
     size: int | None = None
+
+
+@dataclass(frozen=True)
+class ClientRepairIssue:
+    spec: PlatformSpec
+    channel: str
+    receipt_path: Path
+    receipt: dict[str, str]
+    reason: str
+    mode: str
+    release: ReleaseRecord | None = None
+
+
+@dataclass(frozen=True)
+class RepairAssessment:
+    invalid_components: tuple[str, ...]
+    support_invalid: bool
+    permission_repairs: tuple[Path, ...]
+    package_order_invalid: bool
+    client_issues: tuple[ClientRepairIssue, ...]
+    metadata_diagnostics: tuple[str, ...]
+    recovered_state: dict[str, object] | None = None
 
 
 class LinkCollector(HTMLParser):
@@ -2266,6 +2289,7 @@ class Installer:
                 not isinstance(capabilities, list)
                 or len(capabilities) != len(set(capabilities))
                 or not all(isinstance(value, str) and COMPONENT_VERSION.fullmatch(value) for value in capabilities)
+                or set(capabilities) - INSTALLATION_CAPABILITIES
                 or fingerprint != profile_fingerprint(list(state["recorded_components"]))
             ):
                 raise InstallerError(f"Capacidades ou fingerprint inválidos no estado da instalação: {path}")
@@ -3641,11 +3665,107 @@ class Installer:
         self.verify_qw_package_order()
         self.report_nquake_startup_state(installed)
 
-    def runtime_permission_repairs(self) -> list[Path]:
+    def component_metadata_assessment(self) -> tuple[list[str], list[str]]:
+        valid: list[str] = []
+        diagnostics: list[str] = []
+        metadata = self.target / METADATA_DIR
+        for identifier in self.metadata_component_ids():
+            canonical = self.component_pair_paths(identifier, metadata)
+            legacy = self.component_pair_paths(identifier, metadata, legacy=True)
+            if not any(lexists(path) for path in (*canonical, *legacy)):
+                continue
+            try:
+                present, _, _ = self.validate_component_pair(identifier)
+            except InstallerError as error:
+                diagnostics.append(f"{identifier}: {error}")
+                continue
+            if present:
+                valid.append(identifier)
+        return valid, diagnostics
+
+    def client_catalog_release(
+        self, spec: PlatformSpec, channel: str, selection: str,
+    ) -> ReleaseRecord | None:
+        self.spec = spec
+        records = self.stable_catalog() if channel == "stable" else self.nightly_catalog()
+        return next((record for record in records if record[0] == selection), None)
+
+    def client_repair_assessment(self) -> tuple[list[ClientRepairIssue], list[str]]:
+        issues: list[ClientRepairIssue] = []
+        diagnostics: list[str] = []
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                runtime = self.target / spec.runtime(channel)
+                canonical = self.target / spec.receipt(channel)
+                legacy = self.target / spec.legacy_receipt(channel)
+                has_metadata = lexists(canonical) or lexists(legacy)
+                if not has_metadata:
+                    if lexists(runtime):
+                        diagnostics.append(
+                            f"ezQuake {spec.label} {channel}: runtime presente sem recibo; preservado"
+                        )
+                    continue
+                try:
+                    receipt_path = self.ezquake_receipt_path(spec, channel)
+                    assert receipt_path is not None
+                    receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
+                except (InstallerError, AssertionError) as error:
+                    diagnostics.append(
+                        f"ezQuake {spec.label} {channel}: recibo inválido ou parcial ({error})"
+                    )
+                    continue
+                try:
+                    release = self.client_catalog_release(spec, channel, receipt["selection"])
+                except InstallerError as error:
+                    diagnostics.append(
+                        f"ezQuake {spec.label} {channel}: catálogo indisponível para validar "
+                        f"{receipt['selection']} ({error})"
+                    )
+                    continue
+                if release is None:
+                    diagnostics.append(
+                        f"ezQuake {spec.label} {channel}: versão registrada "
+                        f"{receipt['selection']} não existe mais no catálogo; preservada"
+                    )
+                    continue
+                if not lexists(runtime):
+                    issues.append(ClientRepairIssue(
+                        spec, channel, receipt_path, receipt, "runtime ausente", "payload", release,
+                    ))
+                    continue
+                if (
+                    spec.key == "linux"
+                    and os.name != "nt"
+                    and runtime.is_file()
+                    and not runtime.is_symlink()
+                    and file_hash(runtime) == receipt["binary_sha256"]
+                    and not os.access(runtime, os.X_OK)
+                ):
+                    issues.append(ClientRepairIssue(
+                        spec, channel, receipt_path, receipt,
+                        "AppImage sem permissão de execução", "permission", release,
+                    ))
+                    continue
+                try:
+                    self.check_runtime(spec, channel, receipt)
+                except InstallerError:
+                    issues.append(ClientRepairIssue(
+                        spec, channel, receipt_path, receipt,
+                        "runtime ausente, incompleto ou divergente", "payload", release,
+                    ))
+                    continue
+                if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
+                    issues.append(ClientRepairIssue(
+                        spec, channel, receipt_path, receipt,
+                        "preparação macOS ausente", "macos-preparation", release,
+                    ))
+        return issues, diagnostics
+
+    def runtime_permission_repairs(self, installed: set[str] | None = None) -> list[Path]:
         if os.name == "nt":
             return []
         repairs: list[Path] = []
-        installed = set(self.installed_components())
+        installed = set(self.installed_components()) if installed is None else installed
         for runtime in RUNTIMES.values():
             component = runtime.get("component")
             if component not in installed:
@@ -3661,33 +3781,113 @@ class Installer:
                     repairs.append(binary)
         return repairs
 
-    def repair_plan(self) -> tuple[list[str], bool, list[Path], bool]:
+    def repair_plan(self) -> RepairAssessment:
         self.check_paks()
-        self.load_install_state(persist_migration=False)
+        valid_metadata, metadata_diagnostics = self.component_metadata_assessment()
+        state_path = self.target / INSTALL_STATE
+        recovered_state: dict[str, object] | None = None
+        try:
+            if state_path.is_file() and not state_path.is_symlink():
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+                state = self.current_install_state(self.validate_install_state(state))
+                recorded = set(state["recorded_components"])
+                installed = {identifier for identifier in valid_metadata if identifier in self.components}
+                missing_metadata = recorded - installed
+                if missing_metadata:
+                    metadata_diagnostics.append(
+                        "state.json registra componentes sem metadados íntegros: "
+                        + ", ".join(sorted(missing_metadata))
+                    )
+                elif installed != recorded:
+                    recovered_state = state
+            elif lexists(state_path):
+                raise InstallerError(f"Estado da instalação inválido: {state_path}")
+            elif metadata_diagnostics:
+                metadata_diagnostics.append(
+                    "state.json ausente e metadados parciais impedem inferência segura"
+                )
+            elif valid_metadata:
+                recovered_state = self.infer_install_state()
+            else:
+                self.infer_install_state()
+        except (OSError, json.JSONDecodeError, InstallerError) as error:
+            metadata_diagnostics.append(f"state.json: {error}")
         invalid_components: list[str] = []
-        for identifier in self.installed_components():
+        for identifier in valid_metadata:
+            if identifier not in self.components:
+                continue
             try:
                 self.verify_component(identifier)
             except InstallerError:
                 invalid_components.append(identifier)
-        player = self.play_support_player()
-        support_invalid = bool(player.local_play_support_issues(player.available_local_games()))
-        permissions = self.runtime_permission_repairs()
+        support_invalid = False
+        try:
+            player = self.play_support_player()
+            support_invalid = bool(player.local_play_support_issues(player.available_local_games()))
+        except InstallerError as error:
+            metadata_diagnostics.append(f"play-support: {error}")
+        permissions = self.runtime_permission_repairs(set(valid_metadata))
         package_order_invalid = False
         try:
             self.verify_qw_package_order()
         except InstallerError:
             package_order_invalid = True
-        return invalid_components, support_invalid, permissions, package_order_invalid
+        client_issues, client_diagnostics = self.client_repair_assessment()
+        metadata_diagnostics.extend(client_diagnostics)
+        return RepairAssessment(
+            tuple(invalid_components), support_invalid, tuple(permissions),
+            package_order_invalid, tuple(client_issues), tuple(metadata_diagnostics), recovered_state,
+        )
+
+    def repair_client_runtime(self, issue: ClientRepairIssue) -> None:
+        if issue.release is None:
+            raise InstallerError(
+                f"A versão registrada do ezQuake {issue.channel} não está disponível para reparo."
+            )
+        self.spec = issue.spec
+        self.channel = issue.channel
+        self.configure_release(issue.release)
+        self.ensure_macos_ezquake_closed()
+        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-client-repair.", dir=self.target))
+        try:
+            self.prepare_cache()
+            archive = self.ensure_archive()
+            prepared = self.prepare_runtime(archive)
+            staged_receipt = self.stage / "ezquake-receipt"
+            self.write_ezquake_receipt(staged_receipt)
+            self.commit_runtime(prepared, staged_receipt)
+            self.reset_macos_game_directory()
+        finally:
+            self.cleanup_stage()
+            self.stage = None
+        console.success(
+            f"ezQuake {issue.spec.label} {issue.channel} {issue.receipt['selection']} reparado."
+        )
 
     def repair(
         self,
         *,
         dry_run: bool,
         plan_rows: list[UpdatePlanRow],
+        allow_download: bool = True,
     ) -> bool:
-        invalid_components, support_invalid, permissions, package_order_invalid = self.repair_plan()
-        for identifier in invalid_components:
+        assessment = self.repair_plan()
+        for diagnostic in assessment.metadata_diagnostics:
+            plan_rows.append(UpdatePlanRow(
+                "Diagnóstico", "Metadados gerenciados", diagnostic,
+                "preservar e reconciliar pelo bootstrap", "Inspecionar",
+            ))
+        if assessment.recovered_state is not None:
+            plan_rows.append(UpdatePlanRow(
+                "Metadados", "state.json", "ausente ou desatualizado",
+                "reconstruído dos recibos íntegros", "Reparar",
+            ))
+        for issue in assessment.client_issues:
+            plan_rows.append(UpdatePlanRow(
+                "Cliente", f"ezQuake {issue.spec.label} {issue.channel}",
+                issue.reason, issue.receipt["selection"], "Reparar",
+            ))
+        for identifier in assessment.invalid_components:
             _, _, receipt = self.validate_component_pair(identifier)
             assert receipt is not None
             package = self.component_package_record(identifier)
@@ -3695,52 +3895,56 @@ class Installer:
                 "Componente", str(self.components[identifier]["label"]),
                 str(receipt["selection"]), str(package["version"]), "Reparar", package_size(package),
             ))
-        if support_invalid:
+        if assessment.support_invalid:
             plan_rows.append(UpdatePlanRow(
                 "Gerado", "Suporte de execução dos mods", "ausente ou divergente",
                 "derivado dos componentes instalados", "Reparar",
             ))
-        for binary in permissions:
+        for binary in assessment.permission_repairs:
             plan_rows.append(UpdatePlanRow(
                 "Runtime", binary.name, "sem execução", "executável", "Reparar",
             ))
-        if package_order_invalid:
+        if assessment.package_order_invalid:
             plan_rows.append(UpdatePlanRow(
                 "Gerado", "Ordem de PK3", "ausente ou divergente", "catálogo instalado", "Reparar",
             ))
-        macos_repairs: list[tuple[PlatformSpec, str, Path, dict[str, str]]] = []
-        for spec in PLATFORMS.values():
-            if spec.key != "macos":
-                continue
-            for channel in ("stable", "nightly"):
-                receipt_path = self.ezquake_receipt_path(spec, channel)
-                if receipt_path is None:
-                    continue
-                receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
-                if self.macos_app_needs_preparation(self.target / spec.runtime(channel)):
-                    macos_repairs.append((spec, channel, receipt_path, receipt))
-                    plan_rows.append(UpdatePlanRow(
-                        "Cliente", f"ezQuake {spec.label} {channel}",
-                        "preparação incompleta", "runtime preparado", "Reparar",
-                    ))
         if dry_run or not plan_rows:
             return bool(plan_rows)
-        if invalid_components:
+        if assessment.metadata_diagnostics:
+            raise InstallerError(
+                "O repair encontrou metadados incompletos ou ambíguos e não alterou a instalação. "
+                "Preserve os arquivos e reexecute o bootstrap install.sh para reconciliar o estado."
+            )
+        payload_clients = [issue for issue in assessment.client_issues if issue.mode == "payload"]
+        if not allow_download and (payload_clients or assessment.invalid_components):
+            raise InstallerError(
+                "O plano exige payload validado. A CLI instalada não baixa conteúdo durante repair; "
+                "reexecute o bootstrap install.sh no mesmo destino."
+            )
+        for issue in assessment.client_issues:
+            runtime = self.target / issue.spec.runtime(issue.channel)
+            if issue.mode == "permission":
+                runtime.chmod(runtime.stat().st_mode | 0o100)
+            elif issue.mode == "macos-preparation":
+                self.repair_installed_macos_runtime(
+                    issue.spec, issue.channel, issue.receipt_path, issue.receipt,
+                )
+            else:
+                self.repair_client_runtime(issue)
+        if assessment.invalid_components:
             self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-repair.", dir=self.target))
             try:
-                self.install_components(invalid_components)
+                self.install_components(list(assessment.invalid_components))
             finally:
                 self.cleanup_stage()
                 self.stage = None
-        elif support_invalid:
+        elif assessment.support_invalid:
             self.reconcile_play_support()
-        for binary in permissions:
+        for binary in assessment.permission_repairs:
             binary.chmod(binary.stat().st_mode | 0o100)
-        if package_order_invalid:
+        if assessment.package_order_invalid:
             self.refresh_qw_package_order()
-        for spec, channel, receipt_path, receipt in macos_repairs:
-            self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
-        state = self.load_install_state(persist_migration=True)
+        state = assessment.recovered_state or self.load_install_state(persist_migration=True)
         self.write_install_state(
             str(state["profile"]), list(state["requested_components"]),
             known=list(state["known_components"]), capabilities=list(state["capabilities"]),
@@ -4592,10 +4796,6 @@ def main(arguments: list[str] | None = None) -> int:
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
         elif options.action == "repair":
-            if options.installed_cli:
-                raise InstallerError(
-                    "A CLI instalada não baixa payload para repair. Execute novamente o bootstrap install.sh."
-                )
             plan_rows: list[UpdatePlanRow] = []
             needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
             if not needs_repair:
@@ -4605,7 +4805,9 @@ def main(arguments: list[str] | None = None) -> int:
                 if options.dry_run:
                     console.heading("Dry run complete; no files were changed")
                 else:
-                    installer.repair(dry_run=False, plan_rows=[])
+                    installer.repair(
+                        dry_run=False, plan_rows=[], allow_download=not options.installed_cli,
+                    )
                     console.success("Reparo concluído e validado.")
         elif options.action == "uninstall":
             if options.purge:
