@@ -112,6 +112,30 @@
       "entry_config": null
     },
     {
+      "id": "ctf",
+      "aliases": ["capture-the-flag"],
+      "label": "Capture The Flag",
+      "description": "Duas equipes defendem sua bandeira e capturam a adversária.",
+      "recommended_players": "4+",
+      "usermode": "ctf",
+      "default_map": "e2m2",
+      "suggested_maps": ["e2m2", "e1m5", "e1m3", "e2m5", "e1m4", "e3m3"],
+      "help_commands": [
+        ["cmd ctf", "reaplicar as regras de Capture The Flag"],
+        ["cmd flagstatus", "mostrar a situacao das duas bandeiras"],
+        ["cmd tossflag", "soltar a bandeira carregada"],
+        ["cmd tossrune", "soltar a runa carregada"],
+        ["cmd ready", "marcar jogador como pronto"],
+        ["cmd break", "cancelar ready ou encerrar partida"],
+        ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "launch_settings": [
+        ["sv_loadentfiles", "1"],
+        ["sv_loadentfiles_dir", "ctf"]
+      ],
+      "entry_config": null
+    },
+    {
       "id": "midair",
       "aliases": [],
       "label": "Midair",
@@ -166,12 +190,6 @@
         ["cmd freeze", "congelar ou liberar o mapa"]
       ],
       "entry_config": "x86qw-ktx-mode-practice.cfg"
-    }
-  ],
-  "not_exposed": [
-    {
-      "id": "ctf",
-      "reason": "A distribuição atual ainda não possui mapa ou ENT CTF curado com as duas bandeiras."
     }
   ]
 }

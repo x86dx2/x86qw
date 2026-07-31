@@ -144,7 +144,13 @@
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "archive-base"},
         {"path": "ktx-1.47/resources/example-configs/ktx", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
         {"path": "qwprogs.qvm", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
-        {"path": "qwprogs.map", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"}
+        {"path": "qwprogs.map", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e2m2.ent", "destination": "id1/maps/ctf/e2m2.ent", "mode": "overlay", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e1m5.ent", "destination": "id1/maps/ctf/e1m5.ent", "mode": "overlay", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e1m3.ent", "destination": "id1/maps/ctf/e1m3.ent", "mode": "overlay", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e2m5.ent", "destination": "id1/maps/ctf/e2m5.ent", "mode": "overlay", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e1m4.ent", "destination": "id1/maps/ctf/e1m4.ent", "mode": "overlay", "origin": "release"},
+        {"path": "ktx-1.47/resources/example-configs/id1/maps/ctf/e3m3.ent", "destination": "id1/maps/ctf/e3m3.ent", "mode": "overlay", "origin": "release"}
       ],
       "project_sources": [
         {"path": "dist/mods/ktx/1.47/x86qw/client.cfg", "destination": "qw/x86qw-ktx.cfg", "mode": "overlay"},
@@ -156,6 +162,7 @@
         {"path": "dist/mods/ktx/1.47/x86qw/help-ffa.cfg", "destination": "qw/x86qw-ktx-help-ffa.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg", "destination": "qw/x86qw-ktx-help-clan-arena.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-hoony.cfg", "destination": "qw/x86qw-ktx-help-hoony.cfg", "mode": "overlay"},
+        {"path": "dist/mods/ktx/1.47/x86qw/help-ctf.cfg", "destination": "qw/x86qw-ktx-help-ctf.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-midair.cfg", "destination": "qw/x86qw-ktx-help-midair.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-race.cfg", "destination": "qw/x86qw-ktx-help-race.cfg", "mode": "overlay"},
         {"path": "dist/mods/ktx/1.47/x86qw/help-practice.cfg", "destination": "qw/x86qw-ktx-help-practice.cfg", "mode": "overlay"},

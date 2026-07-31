@@ -54,9 +54,9 @@ diretamente, sem perder a escolha interativa de mapa:
 ./x86qw.sh play ktx --mode practice
 ```
 
-Essas entradas usam modos e comandos existentes no KTX 1.47. CTF só será
-exposto quando o catálogo incorporar pontualmente um mapa ou ENT compatível com
-as duas bandeiras; o launcher não oferece uma opção incompleta.
+Essas entradas usam modos e comandos existentes no KTX 1.47. Capture The Flag
+usa seis mapas clássicos com os ENTs oficiais do próprio KTX, curados e
+validados com uma bandeira de cada equipe.
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou

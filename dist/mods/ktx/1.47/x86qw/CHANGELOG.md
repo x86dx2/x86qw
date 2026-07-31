@@ -15,12 +15,14 @@
 - deixa `k_defmode` sob controle do launcher e inicia diretamente no usermode
   selecionado, sem aplicar primeiro o padrão 4on4;
 - declara em `modes.json` Duel, 2on2, 4on4, FFA, Clan Arena, HoonyMode,
-  Midair, Race e Practice, com mapas e entradas compatíveis com KTX 1.47;
+  Capture The Flag, Midair, Race e Practice, com mapas e entradas compatíveis
+  com KTX 1.47;
 - ativa Midair, Race e Practice por perfis estáticos de entrada única, somente
   depois que o KTX confirma a conexão local; a remoção imediata do alias evita
   alternância ou recarga em ciclo;
-- mantém CTF fora do launcher enquanto a distribuição não possuir um mapa ou
-  ENT CTF curado com as duas bandeiras;
+- habilita CTF com os seis ENTs oficiais da rotação KTX (`e2m2`, `e1m5`,
+  `e1m3`, `e2m5`, `e1m4` e `e3m3`), cada um validado com uma bandeira por
+  equipe, e configura o carregamento dos ENTs antes de abrir o mapa;
 - ao iniciar KTX, aplica exclusivamente ao perfil KTX o mapa de teclas
   competitivo do nQuake, incluindo quick weapons, mensagens de equipe, timers
   e comandos da partida;
@@ -64,6 +66,10 @@
   como `SIGSEGV` em `SV_SpawnSpectator`, ao receber `classname` nulo do runtime
   QVM. A conexão local explícita com `spectator 0` permaneceu ativa no mesmo
   cenário de Duel que encerrava em aproximadamente oito segundos.
+- 31/07/2026: CTF iniciou no ezQuake 3.6.9 em janela `1280x720`, carregou
+  `e2m2`, executou `configs/usermodes/ctf/default.cfg` e entrou em `standby`
+  com um jogador e 16 vagas. O teste usou `cfg_save_onquit 0` e preservou o
+  hash da configuração pessoal.
 
 ## Correção encaminhada ao cliente
 

@@ -1760,6 +1760,14 @@ class Installer:
             raise InstallerError(f"unsafe path in managed inventory: {value}")
         if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
             raise InstallerError(f"personal configuration must not be managed: {value}")
+        if path.parts[0] == "id1":
+            if (
+                len(path.parts) == 4
+                and path.parts[1:3] == ("maps", "ctf")
+                and path.suffix.casefold() == ".ent"
+            ):
+                return
+            raise InstallerError(f"unexpected path in managed inventory: {value}")
         if value not in ("LICENSE", "readme.txt", "README-X86QW.txt") and path.parts[0] not in (
             "ezquake", "qw", "arena", "prox", "fortress", "td2",
         ):

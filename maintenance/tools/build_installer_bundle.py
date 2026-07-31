@@ -25,7 +25,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.1.14"
+VERSION = "0.1.15"
 BUNDLE_FILES = (
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),

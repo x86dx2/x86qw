@@ -51,7 +51,11 @@ class ComponentReleaseTests(unittest.TestCase):
             }
 
         self.assertEqual("upstream-composed", releases["ktx"]["strategy"])
-        self.assertEqual({("reference", "archive-base"), ("release", "archive")}, origins("ktx"))
+        self.assertEqual({
+            ("reference", "archive-base"),
+            ("release", "archive"),
+            ("release", "overlay"),
+        }, origins("ktx"))
         self.assertEqual("reference-overlay", releases["final-arena"]["strategy"])
         self.assertEqual({("reference", "overlay")}, origins("final-arena"))
         self.assertEqual("upstream-package", releases["pro-x"]["strategy"])
@@ -106,7 +110,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.9", ktx["version"])
+        self.assertEqual("1.47+x86qw.11", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -217,6 +221,13 @@ class ComponentReleaseTests(unittest.TestCase):
             server_runtime = package.read("mvdsv.cfg")
             self.assertIn(b"sv_progtype                   2", server_runtime)
             self.assertNotIn(b"sv_progtype                   1", server_runtime)
+
+        ctf_maps = ("e2m2", "e1m5", "e1m3", "e2m5", "e1m4", "e3m3")
+        for map_name in ctf_maps:
+            with self.subTest(map=map_name):
+                payload = members[f"payload/id1/maps/ctf/{map_name}.ent"]
+                self.assertEqual(1, payload.count(b'"classname" "item_flag_team1"'))
+                self.assertEqual(1, payload.count(b'"classname" "item_flag_team2"'))
 
     def test_ktx_layer_policy_rejects_an_unreviewed_conflict(self) -> None:
         context = load_source_context(

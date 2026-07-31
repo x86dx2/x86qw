@@ -329,9 +329,9 @@ O mesmo fluxo pode ser automatizado, sem atravessar os menus:
 Cada entrada declara seu modo KTX, mapa padrão, sugestões compatíveis e perfil
 de entrada quando necessário. O launcher define `k_defmode` antes de iniciar o
 mapa; Midair, Race e Practice usam um evento de entrada descartável para aplicar
-o comando somente depois que o KTX está ativo. CTF existe no gamecode KTX 1.47,
-mas ainda não aparece no launcher porque
-o acervo curado atual do x86QW não contém um mapa ou ENT com as duas bandeiras.
+o comando somente depois que o KTX está ativo. Capture The Flag usa os ENTs
+oficiais do KTX para seis mapas clássicos; o launcher seleciona o diretório CTF
+antes de carregar o mapa, garantindo a presença das duas bandeiras.
 
 O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
 console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;

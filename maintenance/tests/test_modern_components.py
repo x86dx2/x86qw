@@ -120,7 +120,7 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual(
             [
                 "duel", "2on2", "4on4", "ffa", "clan-arena",
-                "hoony", "midair", "race", "practice",
+                "hoony", "ctf", "midair", "race", "practice",
             ],
             [mode.key for mode in modes],
         )
@@ -131,6 +131,11 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual("x86qw-ktx-mode-race.cfg", next(
             mode.entry_config for mode in modes if mode.key == "race"
         ))
+        ctf = next(mode for mode in modes if mode.key == "ctf")
+        self.assertEqual("ctf", ctf.usermode)
+        self.assertEqual((
+            ("sv_loadentfiles", "1"), ("sv_loadentfiles_dir", "ctf"),
+        ), ctf.launch_settings)
 
     def test_ktx_mode_menu_aligns_players_and_accepts_aliases(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -141,7 +146,7 @@ class ModernComponentTests(unittest.TestCase):
                 with contextlib.redirect_stdout(output):
                     selected = player.choose_ktx_mode(modes)
             self.assertEqual("clan-arena", selected.key)
-            lines = [line for line in output.getvalue().splitlines() if re.match(r"^  \d+\)", line)]
+            lines = [line for line in output.getvalue().splitlines() if re.match(r"^\s+\d+\)", line)]
             self.assertEqual(len(modes), len(lines))
             self.assertIn("Duel (padrão)", lines[0])
             description_columns = [line.index(mode.description) for line, mode in zip(lines, modes)]
@@ -411,6 +416,7 @@ class ModernComponentTests(unittest.TestCase):
                     "dist/mods/ktx/1.47/x86qw/help-ffa.cfg",
                     "dist/mods/ktx/1.47/x86qw/help-clan-arena.cfg",
                     "dist/mods/ktx/1.47/x86qw/help-hoony.cfg",
+                    "dist/mods/ktx/1.47/x86qw/help-ctf.cfg",
                     "dist/mods/ktx/1.47/x86qw/help-midair.cfg",
                     "dist/mods/ktx/1.47/x86qw/help-race.cfg",
                     "dist/mods/ktx/1.47/x86qw/help-practice.cfg",
@@ -1016,6 +1022,50 @@ class ModernComponentTests(unittest.TestCase):
                 *ktx_mode_runtime_aliases("midair"),
                 "+map", "povdmm4",
             ])
+
+    def test_ktx_ctf_loads_curated_entities_before_the_map(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "check_paks"):
+                    with mock.patch.object(installer, "available_local_games", return_value=[game]):
+                        with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(installer, "verify_component"):
+                                with mock.patch.object(installer, "local_map_names", return_value=["e2m2"]):
+                                    with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            with mock.patch.object(installer, "ensure_local_play_support"):
+                                                with mock.patch("builtins.input", return_value=""):
+                                                    installer.play_local("ktx", "ctf")
+            launch.assert_called_once_with(runtime, [
+                *local_server_baseline("ktx"),
+                "+sv_loadentfiles", "1",
+                "+sv_loadentfiles_dir", "ctf",
+                "+tempalias", "on_enter", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ffa", "exec x86qw-ktx.cfg",
+                "+tempalias", "on_enter_ctf", "exec x86qw-ktx.cfg",
+                "+set", "k_defmap", "e2m2",
+                "+set", "k_defmode", "ctf",
+                "+set", "x86qw_ktx_preset", "ctf",
+                *ktx_mode_runtime_aliases("ctf"),
+                "+map", "e2m2",
+            ])
+
+    def test_ktx_ctf_is_the_only_managed_content_allowed_under_id1_maps(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.validate_managed_path("id1/maps/ctf/e2m2.ent")
+            for relative in (
+                "id1/pak0.pak",
+                "id1/maps/e2m2.ent",
+                "id1/maps/ctf/e2m2.bsp",
+                "id1/maps/ctf/nested/e2m2.ent",
+            ):
+                with self.subTest(path=relative):
+                    with self.assertRaises(install_qw.InstallerError):
+                        installer.validate_managed_path(relative)
 
     def test_ktx_race_and_practice_use_the_correct_one_shot_entry_event(self):
         cases = {

@@ -97,6 +97,7 @@ class KtxModeSpec:
     default_map: str
     suggested_maps: tuple[str, ...]
     help_commands: tuple[tuple[str, str], ...]
+    launch_settings: tuple[tuple[str, str], ...]
     entry_config: str | None
 
 
@@ -162,6 +163,7 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         aliases = raw.get("aliases")
         suggested_maps = raw.get("suggested_maps")
         help_commands = raw.get("help_commands")
+        launch_settings = raw.get("launch_settings", [])
         entry_config = raw.get("entry_config")
         text_fields = (
             "label", "description", "recommended_players", "usermode",
@@ -193,6 +195,16 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 and re.fullmatch(r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}", entry[1]) is not None
                 for entry in help_commands
             )
+            or not isinstance(launch_settings, list)
+            or not all(
+                isinstance(entry, list)
+                and len(entry) == 2
+                and isinstance(entry[0], str)
+                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}", entry[0]) is not None
+                and isinstance(entry[1], str)
+                and re.fullmatch(r"[A-Za-z0-9_.+-]{1,64}", entry[1]) is not None
+                for entry in launch_settings
+            )
             or entry_config not in {
                 None,
                 "x86qw-ktx-mode-midair.cfg",
@@ -218,6 +230,9 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
             default_map=str(raw["default_map"]),
             suggested_maps=tuple(suggested_maps),
             help_commands=tuple((str(entry[0]), str(entry[1])) for entry in help_commands),
+            launch_settings=tuple(
+                (str(entry[0]), str(entry[1])) for entry in launch_settings
+            ),
             entry_config=entry_config,
         ))
     return tuple(modes)
@@ -746,6 +761,9 @@ class Player(core.Installer):
             # PR1 gamecodes do not advertise the high-lag teleport extension.
             arguments.extend(["+cl_pext_lagteleport", "0"])
         if game.key == "ktx":
+            assert ktx_mode is not None
+            for name, value in ktx_mode.launch_settings:
+                arguments.extend([f"+{name}", value])
             for event in ("on_enter", "on_enter_ffa", "on_enter_ctf"):
                 arguments.extend(["+tempalias", event, "exec x86qw-ktx.cfg"])
             if ktx_mode.entry_config is not None:
@@ -758,7 +776,6 @@ class Player(core.Installer):
                     f"exec {ktx_mode.entry_config};exec x86qw-ktx.cfg",
                 ])
             arguments.extend(["+set", "k_defmap", map_name])
-            assert ktx_mode is not None
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
             arguments.extend(["+set", "x86qw_ktx_preset", ktx_mode.key])
             arguments.extend([
