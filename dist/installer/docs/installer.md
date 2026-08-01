@@ -5,7 +5,7 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
-O bundle público corrente é `0.3.0`; o catálogo registra 53 pacotes e 21
+O bundle público corrente é `0.4.0`; o catálogo registra 54 pacotes e 21
 componentes. Esses fatos são validados contra os inventários canônicos.
 
 ## Instalação pública
