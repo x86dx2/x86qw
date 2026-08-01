@@ -409,8 +409,10 @@ class ModernComponentTests(unittest.TestCase):
             lines = [line for line in output.getvalue().splitlines() if re.match(r"^\s+\d+\)", line)]
             self.assertEqual(len(modes), len(lines))
             self.assertIn("Duel (padrão)", lines[0])
-            description_columns = [line.index(mode.description) for line, mode in zip(lines, modes)]
-            self.assertEqual(1, len(set(description_columns)))
+            divider_columns = [line.index("|") for line in lines]
+            self.assertEqual(1, len(set(divider_columns)))
+            for line, mode in zip(lines, modes):
+                self.assertIn(mode.description, line)
 
     def test_ktx_cli_exposes_map_bots_ctf_and_race_options(self):
         target = ROOT / "custom-quake"
@@ -531,11 +533,12 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("ktx", selected.key)
             lines = [line for line in output.getvalue().splitlines() if re.match(r"^  \d+\)", line)]
             self.assertEqual(len(play_qw.LOCAL_GAMES), len(lines))
-            description_columns = []
+            divider_columns = []
             for line, game in zip(lines, play_qw.LOCAL_GAMES):
                 self.assertIn(f"v{game.version}", line)
-                description_columns.append(line.index(game.description))
-            self.assertEqual(1, len(set(description_columns)))
+                self.assertIn(game.description, line)
+                divider_columns.append(line.index("|"))
+            self.assertEqual(1, len(set(divider_columns)))
             self.assertIn("KTX (padrão)", lines[0])
 
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):

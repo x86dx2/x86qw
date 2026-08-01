@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import select
 import shutil
 import sys
 from dataclasses import dataclass
@@ -25,6 +26,9 @@ class MenuCancelled(Exception):
 
 
 _NO_COLOR = False
+_ESCAPE_INITIAL_TIMEOUT = 0.12
+_ESCAPE_CONTINUATION_TIMEOUT = 0.04
+_ESCAPE_SEQUENCE_LIMIT = 16
 
 
 def configure(*, no_color: bool = False) -> None:
@@ -59,23 +63,48 @@ def _read_windows_key() -> str:  # pragma: no cover - exercised on Windows
     }.get(key, key)
 
 
+def _decode_posix_escape(sequence: bytes) -> str:
+    """Decode a complete CSI or SS3 sequence without treating it as bare Esc."""
+    if sequence[:1] not in (b"[", b"O"):
+        return "unknown"
+    return {
+        b"A": "up", b"B": "down", b"C": "right", b"D": "left",
+    }.get(sequence[-1:], "unknown")
+
+
+def _read_posix_escape(descriptor: int) -> str:
+    sequence = b""
+    timeout = _ESCAPE_INITIAL_TIMEOUT
+    while len(sequence) < _ESCAPE_SEQUENCE_LIMIT:
+        if not select.select([descriptor], [], [], timeout)[0]:
+            break
+        part = os.read(descriptor, 1)
+        if not part:
+            break
+        sequence += part
+        timeout = _ESCAPE_CONTINUATION_TIMEOUT
+        if sequence[:1] == b"[":
+            if len(sequence) >= 2 and 0x40 <= sequence[-1] <= 0x7E:
+                break
+        elif sequence[:1] == b"O":
+            if len(sequence) >= 2:
+                break
+        else:
+            break
+    return "escape" if not sequence else _decode_posix_escape(sequence)
+
+
 def _read_posix_key() -> str:  # pragma: no cover - real terminal path
-    import select
     import termios
     import tty
 
     descriptor = sys.stdin.fileno()
     previous = termios.tcgetattr(descriptor)
     try:
-        tty.setraw(descriptor)
+        tty.setraw(descriptor, when=termios.TCSANOW)
         first = os.read(descriptor, 1)
         if first == b"\x1b":
-            sequence = b""
-            while len(sequence) < 2 and select.select([descriptor], [], [], 0.035)[0]:
-                sequence += os.read(descriptor, 1)
-            return {
-                b"[A": "up", b"[B": "down", b"[D": "left", b"[C": "right",
-            }.get(sequence, "escape")
+            return _read_posix_escape(descriptor)
         if first in (b"\r", b"\n"):
             return "enter"
         if first in (b"\x7f", b"\x08"):
@@ -104,6 +133,27 @@ def _matching(options: tuple[MenuOption, ...], query: str) -> list[int]:
     ]
 
 
+def _label_width(options: tuple[MenuOption, ...]) -> int:
+    return max(len(option.label) for option in options if option.enabled)
+
+
+def _inline_description(option: MenuOption, *, include_detail: bool) -> str:
+    if include_detail and option.detail:
+        if option.description:
+            return f"{option.description} — {option.detail}"
+        return option.detail
+    return option.description
+
+
+def _option_line(
+    *, prefix: str, label: str, label_width: int, description: str, width: int,
+) -> str:
+    line = f"{prefix} {label:<{label_width}}"
+    if description:
+        line += f" | {description}"
+    return line[:width]
+
+
 def _render_navigation(
     *,
     title: str,
@@ -121,6 +171,7 @@ def _render_navigation(
     height = max(5, shutil.get_terminal_size((88, 24)).lines - 10)
     start = max(0, min(selected - height // 2, max(0, len(matches) - height)))
     visible = matches[start:start + height]
+    label_width = _label_width(options)
     sys.stdout.write("\033[2J\033[H")
     if breadcrumb:
         print(_paint(breadcrumb, "2;36"))
@@ -137,13 +188,14 @@ def _render_navigation(
     for position, option_index in enumerate(visible, start):
         option = options[option_index]
         active = position == selected
-        prefix = _paint("›", "1;36") if active else " "
-        label = _paint(option.label, "1;37") if active else option.label
-        description = f"  {option.description}" if option.description else ""
-        line = f"{prefix} {label}{description}"
-        print(line[:width])
-        if active and option.detail:
-            print(_paint(f"    {option.detail}"[:width], "2"))
+        line = _option_line(
+            prefix="›" if active else " ",
+            label=option.label,
+            label_width=label_width,
+            description=_inline_description(option, include_detail=active),
+            width=width,
+        )
+        print(_paint(line, "1;36") if active else line)
     footer = ["↑↓ navegar", "Enter selecionar"]
     if searchable:
         footer.append("/ buscar")
@@ -236,15 +288,13 @@ def _select_fallback(
         ]
         index_width = len(str(len(enabled)))
         label_width = max(len(label) for label in labels)
-        description_width = max((len(option.description) for option in enabled), default=0)
         for index, option in enumerate(enabled, 1):
             label = labels[index - 1]
+            description = _inline_description(option, include_detail=True)
             line = f"  {index:>{index_width}}) {label:<{label_width}}"
-            if description_width:
-                line += f"  {option.description:<{description_width}}"
-            if option.detail:
-                line += f"  {option.detail}"
-            print(line.rstrip())
+            if description:
+                line += f" | {description}"
+            print(line)
         prompt = f"Escolha [1-{len(enabled)}]"
         if searchable:
             prompt += " ou digite para buscar"
@@ -335,6 +385,7 @@ def _render_multiple(
     height = max(5, shutil.get_terminal_size((88, 24)).lines - 10)
     start = max(0, min(selected - height // 2, max(0, len(matches) - height)))
     visible = matches[start:start + height]
+    label_width = _label_width(options)
     sys.stdout.write("\033[2J\033[H")
     if breadcrumb:
         print(_paint(breadcrumb, "2;36"))
@@ -351,13 +402,20 @@ def _render_multiple(
     for position, option_index in enumerate(visible, start):
         option = options[option_index]
         active = position == selected
-        prefix = _paint("›", "1;36") if active else " "
-        mark = _paint("[✓]", "1;32") if option.key in checked else "[ ]"
-        label = _paint(option.label, "1;37") if active else option.label
-        description = f"  {option.description}" if option.description else ""
-        print(f"{prefix} {mark} {label}{description}"[:width])
-        if active and option.detail:
-            print(_paint(f"        {option.detail}"[:width], "2"))
+        mark = "[✓]" if option.key in checked else "[ ]"
+        line = _option_line(
+            prefix=f"{'›' if active else ' '} {mark}",
+            label=option.label,
+            label_width=label_width,
+            description=_inline_description(option, include_detail=active),
+            width=width,
+        )
+        if active:
+            print(_paint(line, "1;36"))
+        elif option.key in checked:
+            print(line.replace("[✓]", _paint("[✓]", "1;32"), 1))
+        else:
+            print(line)
     footer = ["↑↓ navegar", "Espaço marcar", "Enter concluir"]
     if searchable:
         footer.append("/ buscar")
@@ -398,8 +456,11 @@ def select_many(
             print(subtitle)
         for index, option in enumerate(enabled, 1):
             marker = "x" if option.key in checked else " "
-            detail = f"  {option.description}" if option.description else ""
-            print(f"  {index:>{index_width}}) [{marker}] {option.label:<{label_width}}{detail}".rstrip())
+            description = _inline_description(option, include_detail=True)
+            line = f"  {index:>{index_width}}) [{marker}] {option.label:<{label_width}}"
+            if description:
+                line += f" | {description}"
+            print(line)
         prompt = "Informe números ou identificadores separados por vírgula"
         if allow_back:
             prompt += "; b para voltar"
@@ -495,10 +556,11 @@ def confirm(
         title,
         (
             MenuOption(
-                "yes", "Sim", description if default else "", aliases=("s", "sim", "y", "yes"),
+                "yes", "Sim", description or "confirmar esta escolha",
+                aliases=("s", "sim", "y", "yes"),
             ),
             MenuOption(
-                "no", "Não", description if not default else "", aliases=("n", "nao", "não", "no"),
+                "no", "Não", "não executar esta ação", aliases=("n", "nao", "não", "no"),
             ),
         ),
         breadcrumb=breadcrumb,
