@@ -33,6 +33,7 @@ POPEN_TYPE = subprocess.Popen
 core = importlib.import_module("manager")
 gameplay = importlib.import_module("gameplay")
 session_control = importlib.import_module("session_control")
+navigation = importlib.import_module("menu")
 
 InstallerError = core.InstallerError
 console = core.console
@@ -1304,6 +1305,12 @@ def select_hosted_game(
             activity="hospedar",
         )
         console.success(f"Modo KTX selecionado: {mode.label}.")
+        if options.menu:
+            options.ktx_options = player.choose_ktx_launch_options(
+                mode,
+                options.ktx_options,
+                activity="Hospedar",
+            )
         assets = ktx_assets(player.target)
         map_name = player.choose_local_map(
             game,
@@ -1980,6 +1987,127 @@ def add_target(parser: argparse.ArgumentParser, project_root: Path) -> None:
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra detalhes técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores")
+    parser.add_argument("--menu", action="store_true", help=argparse.SUPPRESS)
+
+
+def menu_text(prompt: str, default: str, validator: object) -> object:
+    while True:
+        try:
+            answer = input(f"{prompt} (padrão: {default}): ").strip() or default
+        except EOFError as error:
+            raise InstallerError(f"Nenhum valor foi informado para {prompt.casefold()}.") from error
+        try:
+            return validator(answer)  # type: ignore[operator]
+        except (ValueError, argparse.ArgumentTypeError) as error:
+            console.warning(str(error))
+
+
+def menu_bind(label: str, current: str = "127.0.0.1") -> str:
+    selected = navigation.select_one(
+        f"Interface de rede do {label}",
+        (
+            navigation.MenuOption("loopback", "Somente este computador", "127.0.0.1"),
+            navigation.MenuOption("lan", "Toda a rede IPv4", "0.0.0.0 · revise senhas e firewall"),
+            navigation.MenuOption("ipv6", "Toda a rede IPv6", ":: · revise senhas e firewall"),
+            navigation.MenuOption("custom", "Endereço personalizado", "IPv4 ou IPv6 específico"),
+        ),
+        breadcrumb=f"x86QW › Serviços › {label} › Rede",
+    )
+    if selected == "custom":
+        return str(menu_text("Endereço IP", current, bind_address))
+    return {"loopback": "127.0.0.1", "lan": "0.0.0.0", "ipv6": "::"}.get(
+        str(selected), current,
+    )
+
+
+def menu_port(label: str, current: int) -> int:
+    selected = navigation.select_one(
+        f"Porta do {label}",
+        (
+            navigation.MenuOption("default", str(current), "porta padrão"),
+            navigation.MenuOption("custom", "Outra porta", "escolher entre 1024 e 65535"),
+        ),
+        breadcrumb=f"x86QW › Serviços › {label} › Rede",
+    )
+    if selected == "custom":
+        return int(menu_text("Porta", str(current), bounded_integer(1024, 65535)))
+    return current
+
+
+def configure_service_menu(options: argparse.Namespace) -> None:
+    if not options.menu:
+        return
+    if options.action == "proxy":
+        options.proxy_bind = menu_bind("QWFWD", options.proxy_bind)
+        options.proxy_port = menu_port("QWFWD", options.proxy_port)
+        return
+    if options.action == "qtv":
+        options.bind = menu_bind("QTV", options.bind)
+        options.port = menu_port("QTV", options.port)
+        upstream = navigation.select_one(
+            "Origem da transmissão",
+            (
+                navigation.MenuOption("none", "Sem upstream inicial", "iniciar QTV isoladamente"),
+                navigation.MenuOption("custom", "Conectar a um MVDSV", "informar host e porta"),
+            ),
+            breadcrumb="x86QW › Serviços › QTV",
+        )
+        if upstream == "custom":
+            options.upstream = str(menu_text(
+                "Endpoint MVDSV", "127.0.0.1:28501", parse_network_endpoint,
+            ))
+            options.prompt_qtv_password = navigation.confirm(
+                "Solicitar senha do upstream?",
+                breadcrumb="x86QW › Serviços › QTV › Segurança",
+                default=False,
+            )
+        return
+    options.bind = menu_bind("MVDSV", options.bind)
+    options.port = menu_port("MVDSV", options.port)
+    clients = navigation.select_one(
+        "Máximo de clientes",
+        (
+            navigation.MenuOption("8", "8", "partida pequena"),
+            navigation.MenuOption("16", "16", "padrão recomendado"),
+            navigation.MenuOption("24", "24", "servidor grande"),
+            navigation.MenuOption("32", "32", "limite atual"),
+        ),
+        breadcrumb="x86QW › Hospedar › Capacidade",
+        default=1,
+    )
+    options.maxclients = int(clients or 16)
+    options.no_mvd = not navigation.confirm(
+        "Gravar demos MVD automaticamente?",
+        breadcrumb="x86QW › Hospedar › Gravação",
+        default=True,
+    )
+    options.with_qtv = navigation.confirm(
+        "Iniciar QTV conectado ao servidor?",
+        breadcrumb="x86QW › Hospedar › Serviços adicionais",
+        default=False,
+    )
+    if options.with_qtv:
+        options.qtv_bind = menu_bind("QTV", options.qtv_bind)
+        options.qtv_port = menu_port("QTV", options.qtv_port)
+    options.with_proxy = navigation.confirm(
+        "Iniciar também o proxy QWFWD?",
+        breadcrumb="x86QW › Hospedar › Serviços adicionais",
+        default=False,
+    )
+    if options.with_proxy:
+        options.proxy_bind = menu_bind("QWFWD", options.proxy_bind)
+        options.proxy_port = menu_port("QWFWD", options.proxy_port)
+    if navigation.confirm(
+        "Configurar senhas com entrada oculta?",
+        breadcrumb="x86QW › Hospedar › Segurança",
+        description="As senhas não serão colocadas na linha de comando.",
+        default=False,
+    ):
+        options.prompt_password = True
+        options.prompt_spectator_password = True
+        options.prompt_rcon_password = True
+        if options.with_qtv:
+            options.prompt_qtv_password = True
 
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
@@ -2073,6 +2201,8 @@ def main(arguments: list[str] | None = None) -> int:
         with finalize_service_operation(resources):
             options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
             console.configure(verbose=options.verbose, no_color=options.no_color)
+            navigation.configure(no_color=options.no_color)
+            configure_service_menu(options)
             resolve_passwords(options)
             warn_external_bind(options)
             target = options.target.expanduser().resolve()
@@ -2150,6 +2280,9 @@ def main(arguments: list[str] | None = None) -> int:
     except InstallerError as error:
         console.error(str(error))
         return 1
+    except navigation.MenuCancelled:
+        console.info("Operação cancelada; nenhum serviço foi iniciado.")
+        return 130
     except Exception as error:
         if "options" in locals() and getattr(options, "verbose", False):
             import traceback

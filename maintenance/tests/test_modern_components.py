@@ -348,6 +348,25 @@ class ModernComponentTests(unittest.TestCase):
                     self.assertEqual(0, install_qw.main([action, "--target", "/tmp/x86qw-test"]))
                 delegated.assert_called_once_with([action, "--target", "/tmp/x86qw-test"])
 
+    def test_main_menu_routes_play_without_changing_the_public_flags(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=("play", "exit"),
+        ), mock.patch.object(play_qw, "main", return_value=0) as play_main:
+            self.assertEqual(0, install_qw.run_main_menu(target, no_color=True))
+        play_main.assert_called_once_with([
+            "--target", str(target), "--menu", "--no-color",
+        ])
+
+    def test_play_menu_cancel_is_reported_without_an_unexpected_failure(self):
+        player = mock.Mock()
+        player.play_local.side_effect = play_qw.navigation.MenuCancelled("Jogar")
+        output = io.StringIO()
+        with mock.patch.object(play_qw, "Player", return_value=player):
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(130, play_qw.main(["--target", "/tmp/x86qw-test"]))
+        self.assertIn("Operação cancelada", output.getvalue())
+
     def test_ktx_mode_catalog_is_declarative_and_uses_only_supported_commands(self):
         modes = play_qw.load_ktx_modes(ROOT)
         self.assertEqual(
@@ -418,6 +437,20 @@ class ModernComponentTests(unittest.TestCase):
         ], ROOT)
         self.assertEqual("smooth", ctf.ktx_options.ctf_hook)
         self.assertTrue(ctf.ktx_options.ctf_based_spawn)
+
+    def test_race_menu_collects_rules_before_launching_the_selected_map(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            race = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "race")
+            with mock.patch.object(
+                play_qw.navigation, "select_one",
+                side_effect=("match", "formula1", "3"),
+            ), mock.patch.object(play_qw.navigation, "confirm", return_value=True):
+                options = player.choose_ktx_launch_options(race)
+            self.assertEqual("match", options.race_style)
+            self.assertEqual("formula1", options.race_scoring)
+            self.assertEqual(3, options.race_pacemaker)
+            self.assertTrue(options.race_hide_players)
 
     def test_ktx_launch_commands_validate_routes_and_mode_specific_options(self):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}

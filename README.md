@@ -95,12 +95,21 @@ O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF
 ```
 
 `--help` detalha Frogbots, regras de CTF e formatos de Race. O launcher valida mapas, combinações e limitações do QVM antes de iniciar o cliente.
+No navegador interativo, essas opções aparecem somente quando fazem sentido:
+Race pergunta formato, pontuação, pacemaker e visibilidade dos corredores; CTF
+pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots e habilidade.
 
 </details>
 
 ## Uma CLI, toda a arena
 
 Depois da instalação, `x86qw.sh` — ou `x86qw.cmd` no Windows — é o ponto único de entrada.
+Sem argumentos, ele abre um navegador por tarefas: **Jogar**, **Encontrar
+servidor**, **Hospedar**, **Transmissão e proxy** e **Gerenciar instalação**.
+Use as setas ou `j`/`k`, confirme com Enter, volte com Esc e pressione `/` para
+buscar em listas longas. Em terminais sem navegação interativa, o mesmo fluxo
+usa opções numeradas. As flags abaixo continuam sendo o contrato estável para
+automação e acesso direto.
 
 ```text
 JOGAR                         OPERAR                         MANTER

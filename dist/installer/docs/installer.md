@@ -43,7 +43,9 @@ Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses coma
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
 `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
-mostra o help e não inicia instalação alguma. O clone e os comandos
+abre o navegador interativo e não inicia instalação alguma até uma ação ser
+confirmada. Setas ou `j`/`k` navegam, Enter seleciona, Esc volta e `/` busca;
+um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
 e são copiados byte a byte para o destino. O instalador não gera scripts em runtime.

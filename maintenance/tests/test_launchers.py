@@ -77,6 +77,20 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 json.loads(output.read_text(encoding="utf-8")),
             )
 
+    @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
+    def test_unix_launcher_opens_the_navigator_without_arguments(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "install with spaces"
+            launcher, _ = self.prepare_launcher(root, "x86qw.sh")
+            output = root / "arguments.json"
+            environment = dict(os.environ, X86QW_STUB_OUTPUT=str(output))
+            completed = subprocess.run([str(launcher)], env=environment, check=False)
+            self.assertEqual(0, completed.returncode)
+            self.assertEqual(
+                ["menu", str(root)],
+                json.loads(output.read_text(encoding="utf-8")),
+            )
+
     @unittest.skipUnless(os.name == "nt", "cmd.exe é exercitado somente no runner Windows")
     def test_windows_launcher_forwards_more_than_nine_arguments_and_exit_code(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -113,6 +127,15 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
             received = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(["--online-only", "--installed-cli", "repair", "--dry-run"], received[:-1])
             self.assertEqual(root.resolve(), Path(received[-1]).resolve())
+
+            completed = subprocess.run(
+                [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "call", str(launcher)],
+                env=dict(environment, X86QW_STUB_EXIT="0"), check=False,
+            )
+            self.assertEqual(0, completed.returncode)
+            received = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("menu", received[0])
+            self.assertEqual(root.resolve(), Path(received[1]).resolve())
 
 
 if __name__ == "__main__":
