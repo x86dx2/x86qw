@@ -3682,9 +3682,24 @@ class Installer:
             # exercised only by tests that explicitly clear this environment.
             # Disable nQuake's automatic config save before any test command so
             # -window can never leak into the player's persistent config.cfg.
+            # Port zero asks ezQuake to bind an ephemeral client port, allowing
+            # a windowed smoke to coexist with a client already in use.
             base_arguments.extend([
                 "-window", "-width", "1280", "-height", "720",
+                "-clientport", "0",
+            ])
+        if os.environ.get("X86QW_TEST_CONSOLE_LOG") == "1":
+            # Native smokes can assert gamecode output without changing the
+            # regular launch contract. The resulting qconsole.log is runtime
+            # data and is removed by the smoke harness after inspection.
+            base_arguments.append("-condebug")
+        if os.environ.get("X86QW_TEST_WINDOWED") == "1":
+            # Keep native local-game smokes independent from a server-browser
+            # refresh that might already be running in another ezQuake client.
+            base_arguments.extend([
                 "+cfg_save_onquit", "0",
+                "+sb_findroutes", "0",
+                "+sb_autoupdate", "0",
             ])
         if system == "Darwin":
             executable = runtime / "Contents/MacOS/ezQuake"
