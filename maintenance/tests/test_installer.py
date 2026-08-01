@@ -465,9 +465,9 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
-        catalog = json.loads(
-            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
-        )
+            catalog = json.loads(
+                (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+            )
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()) as get:
                     installer.stable_catalog()
