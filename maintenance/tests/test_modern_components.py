@@ -55,26 +55,30 @@ def local_server_baseline(game: str) -> list[str]:
     return arguments
 
 
-def ktx_mode_runtime_aliases(mode_key: str) -> list[str]:
+def ktx_launch_setup_alias(*commands: str, mode_key: str = "duel") -> list[str]:
     mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == mode_key)
+    body = ";".join((
+        "unalias x86qw_ktx_launch_setup",
+        f"tempalias ktx_mode echo x86QW KTX preset: {mode.label} [{mode.key}]",
+        "tempalias x86qw_ktx_mode_help "
+        f"exec {play_qw.ktx_mode_help_config(mode)}",
+        *commands,
+    ))
     return [
-        "+tempalias", "ktx_mode",
-        f"echo x86QW KTX preset: {mode.label} [{mode.key}]",
-        "+tempalias", "x86qw_ktx_mode_help", play_qw.ktx_mode_help_alias(mode),
+        "+tempalias", "x86qw_ktx_launch_setup",
+        play_qw.quote_console_command(body),
     ]
 
 
-def ktx_launch_setup_alias(*commands: str) -> list[str]:
-    body = ";".join(("unalias x86qw_ktx_launch_setup", *commands))
-    return ["+tempalias", "x86qw_ktx_launch_setup", body]
-
-
-def ktx_entry_aliases() -> list[str]:
+def ktx_entry_aliases(usermode: str = "1on1") -> list[str]:
     body = "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
+    event = {
+        "ffa": "on_enter_ffa",
+        "tot": "on_enter_ffa",
+        "ctf": "on_enter_ctf",
+    }.get(usermode, "on_enter")
     return [
-        "+tempalias", "on_enter", body,
-        "+tempalias", "on_enter_ffa", body,
-        "+tempalias", "on_enter_ctf", body,
+        "+tempalias", event, play_qw.quote_console_command(body),
     ]
 
 
@@ -396,6 +400,135 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual("race/routes/{map}.route", race.required_map_asset)
         self.assertEqual(54, len(race.suggested_maps))
         self.assertFalse(race.bots)
+
+    def test_ezquake_command_line_aliases_preserve_their_complete_body(self):
+        self.assertEqual(
+            '"exec x86qw-ktx.cfg;cmd botcmd addbot 5"',
+            play_qw.quote_console_command(
+                "exec x86qw-ktx.cfg;cmd botcmd addbot 5"
+            ),
+        )
+        for invalid in ('echo "broken"', "echo broken\nquit"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(play_qw.InstallerError, "caracteres inválidos"):
+                    play_qw.quote_console_command(invalid)
+
+    def test_every_ktx_mode_builds_a_complete_quoted_launch_command(self):
+        modes = play_qw.load_ktx_modes(ROOT)
+        maps = sorted({mode.default_map for mode in modes})
+        assets = frozenset(
+            f"race/routes/{mode.default_map.casefold()}.route"
+            for mode in modes if mode.required_map_asset is not None
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = player.target / "ezQuake Stable.app"
+            with mock.patch.object(player, "check_paks"):
+                with mock.patch.object(player, "available_local_games", return_value=[game]):
+                    with mock.patch.object(player, "installed_component_for_game", return_value="ktx"):
+                        with mock.patch.object(player, "verify_component"):
+                            with mock.patch.object(player, "verify_local_play_support"):
+                                with mock.patch.object(player, "ktx_archive_members", return_value=assets):
+                                    with mock.patch.object(player, "local_map_names", return_value=maps):
+                                        with mock.patch.object(player, "choose_host_runtime", return_value=("stable", runtime)):
+                                            with mock.patch.object(player, "launch_runtime") as launch:
+                                                for mode in modes:
+                                                    with self.subTest(mode=mode.key):
+                                                        player.play_local(
+                                                            "ktx", mode.key, mode.default_map,
+                                                        )
+                                                        arguments = launch.call_args.args[1]
+                                                        self.assertIn(
+                                                            ["+map", mode.default_map],
+                                                            [arguments[index:index + 2] for index in range(len(arguments) - 1)],
+                                                        )
+                                                        self.assertIn(
+                                                            ["+set", "k_defmode", mode.usermode],
+                                                            [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+                                                        )
+                                                        for index, argument in enumerate(arguments):
+                                                            if argument == "+tempalias":
+                                                                body = arguments[index + 2]
+                                                                if body.startswith('"'):
+                                                                    self.assertTrue(body.startswith('"'), body)
+                                                                    self.assertTrue(body.endswith('"'), body)
+                                                                else:
+                                                                    self.assertFalse(body.endswith('"'), body)
+                                                        launch.reset_mock()
+
+    def test_every_bot_compatible_ktx_mode_schedules_the_selected_frogbot(self):
+        modes = play_qw.load_ktx_modes(ROOT)
+        for mode in modes:
+            if not mode.bots:
+                continue
+            with self.subTest(mode=mode.key):
+                route = f"bots/maps/{mode.default_map.casefold()}.bot"
+                commands = play_qw.ktx_launch_commands(
+                    mode,
+                    mode.default_map,
+                    frozenset({route}),
+                    play_qw.KtxLaunchOptions(bots=1, bot_skill=7),
+                )
+                self.assertEqual("cmd botcmd skill 7", commands[0])
+                self.assertEqual("cmd botcmd addbot 7", commands[-1])
+
+    def test_tot_leaves_frogbot_enable_registration_to_the_server(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = player.target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(bots=1, bot_skill=5)
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                stack.enter_context(mock.patch.object(player, "check_paks"))
+                stack.enter_context(mock.patch.object(
+                    player, "available_local_games", return_value=[game],
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "installed_component_for_game", return_value="ktx",
+                ))
+                stack.enter_context(mock.patch.object(player, "verify_component"))
+                stack.enter_context(mock.patch.object(
+                    player, "verify_local_play_support",
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "ktx_archive_members",
+                    return_value=frozenset({"bots/maps/dm6.bot"}),
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "local_map_names", return_value=["dm6"],
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "choose_host_runtime", return_value=("stable", runtime),
+                ))
+                launch = stack.enter_context(mock.patch.object(player, "launch_runtime"))
+                player.play_local("ktx", "tot", "dm6", options)
+            arguments = launch.call_args.args[1]
+            triples = [
+                arguments[index:index + 3]
+                for index in range(len(arguments) - 2)
+            ]
+            self.assertNotIn(["+set", "k_fb_enabled", "1"], triples)
+            self.assertIn(
+                ["+unset", "k_fb_enabled", "k_fb_break_on_death"], triples,
+            )
+            self.assertIn(
+                [
+                    "+tempalias", "on_enter_ffa",
+                    play_qw.quote_console_command(
+                        "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
+                    ),
+                ],
+                [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+            )
+            setup = next(
+                arguments[index + 2]
+                for index, argument in enumerate(arguments)
+                if argument == "+tempalias"
+                and arguments[index + 1] == "x86qw_ktx_launch_setup"
+            )
+            self.assertIn("cmd botcmd addbot 5", setup)
 
     def test_ktx_mode_menu_aligns_players_and_accepts_aliases(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1315,7 +1448,33 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual([
                 str(executable), "-nohome", "-basedir", str(target),
                 "-window", "-width", "1280", "-height", "720",
-                "+cfg_save_onquit", "0", "+map", "dm6",
+                "-clientport", "0",
+                "+cfg_save_onquit", "0",
+                "+sb_findroutes", "0", "+sb_autoupdate", "0",
+                "+map", "dm6",
+            ], popen.call_args.args[0])
+
+    def test_native_runtime_smoke_can_capture_a_disposable_console_log(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "ezQuake Stable.app"
+            executable = runtime / "Contents/MacOS/ezQuake"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"mach-o")
+            with mock.patch.dict(install_qw.os.environ, {
+                "X86QW_TEST_WINDOWED": "1",
+                "X86QW_TEST_CONSOLE_LOG": "1",
+            }):
+                with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                        installer.launch_runtime(runtime, ["+map", "dm6"])
+            self.assertEqual([
+                str(executable), "-nohome", "-basedir", str(target),
+                "-window", "-width", "1280", "-height", "720",
+                "-clientport", "0", "-condebug",
+                "+cfg_save_onquit", "0",
+                "+sb_findroutes", "0", "+sb_autoupdate", "0",
+                "+map", "dm6",
             ], popen.call_args.args[0])
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
@@ -1450,8 +1609,6 @@ class ModernComponentTests(unittest.TestCase):
                 *ktx_entry_aliases(),
                 "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
-                "+set", "x86qw_ktx_preset", "duel",
-                *ktx_mode_runtime_aliases("duel"),
                 "+map", "dm6",
             ])
 
@@ -1473,13 +1630,11 @@ class ModernComponentTests(unittest.TestCase):
                                                     installer.play_local("ktx", "midair")
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
-                *ktx_launch_setup_alias(),
-                *ktx_entry_aliases(),
-                "+tempalias", "on_enter", "exec x86qw-ktx-mode-midair.cfg",
+                *ktx_launch_setup_alias(mode_key="midair"),
+                "+tempalias", "on_enter",
+                "exec x86qw-ktx-mode-midair.cfg",
                 "+set", "k_defmap", "povdmm4",
                 "+set", "k_defmode", "1on1",
-                "+set", "x86qw_ktx_preset", "midair",
-                *ktx_mode_runtime_aliases("midair"),
                 "+map", "povdmm4",
             ])
 
@@ -1520,8 +1675,6 @@ class ModernComponentTests(unittest.TestCase):
                 *ktx_entry_aliases(),
                 "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
-                "+set", "x86qw_ktx_preset", "duel",
-                *ktx_mode_runtime_aliases("duel"),
                 "+map", "dm6",
             ])
 
@@ -1545,12 +1698,10 @@ class ModernComponentTests(unittest.TestCase):
                 *local_server_baseline("ktx"),
                 "+sv_loadentfiles", "1",
                 "+sv_loadentfiles_dir", "ctf",
-                *ktx_launch_setup_alias(),
-                *ktx_entry_aliases(),
+                *ktx_launch_setup_alias(mode_key="ctf"),
+                *ktx_entry_aliases("ctf"),
                 "+set", "k_defmap", "e2m2",
                 "+set", "k_defmode", "ctf",
-                "+set", "x86qw_ktx_preset", "ctf",
-                *ktx_mode_runtime_aliases("ctf"),
                 "+map", "e2m2",
             ])
 
@@ -1593,15 +1744,28 @@ class ModernComponentTests(unittest.TestCase):
                                                             installer.play_local("ktx", mode)
                 launch.assert_called_once_with(runtime, [
                     *local_server_baseline("ktx"),
-                    *ktx_launch_setup_alias(),
-                    *ktx_entry_aliases(),
-                    "+tempalias", event, f"exec {entry_config}",
+                    *ktx_launch_setup_alias(mode_key=mode),
+                    "+tempalias", event,
+                    f"exec {entry_config}",
                     "+set", "k_defmap", "dm6",
                     "+set", "k_defmode", usermode,
-                    "+set", "x86qw_ktx_preset", mode,
-                    *ktx_mode_runtime_aliases(mode),
                     "+map", "dm6",
                 ])
+
+    def test_ktx_practice_adds_bots_without_waiting_for_a_second_entry(self):
+        profile = (
+            ROOT / "dist/mods/ktx/1.47/x86qw/mode-practice.cfg"
+        ).read_text(encoding="utf-8").splitlines()
+        commands = [
+            line.strip() for line in profile
+            if line.strip() and not line.lstrip().startswith("//")
+        ]
+        self.assertEqual([
+            "unalias on_enter",
+            "cmd practice",
+            "exec x86qw-ktx.cfg",
+            "x86qw_ktx_launch_setup",
+        ], commands)
 
     def test_play_loads_the_specific_arena_and_prox_profiles(self):
         expectations = {

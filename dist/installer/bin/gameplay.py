@@ -309,7 +309,18 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
 
 
 def ktx_mode_help_alias(mode: KtxModeSpec) -> str:
-    return f"exec x86qw-ktx-help-{mode.key}.cfg"
+    return f"exec {ktx_mode_help_config(mode)}"
+
+
+def ktx_mode_help_config(mode: KtxModeSpec) -> str:
+    return f"x86qw-ktx-help-{mode.key}.cfg"
+
+
+def quote_console_command(command: str) -> str:
+    """Keep an ezQuake command body inside one command-line argument."""
+    if '"' in command or any(ord(character) < 32 for character in command):
+        raise InstallerError("Comando interno do ezQuake contém caracteres inválidos.")
+    return f'"{command}"'
 
 
 def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
@@ -1095,12 +1106,26 @@ class Player(core.Installer):
         if uses_mode_catalog:
             assert ktx_mode is not None
             assert ktx_assets is not None
-            setup_commands = ktx_launch_commands(
-                ktx_mode, map_name, ktx_assets, launch_options,
+            setup_commands = (
+                "tempalias ktx_mode echo "
+                f"x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
+                "tempalias x86qw_ktx_mode_help "
+                f"exec {ktx_mode_help_config(ktx_mode)}",
+                *ktx_launch_commands(
+                    ktx_mode, map_name, ktx_assets, launch_options,
+                ),
             )
             if ktx_bot_options_requested(launch_options):
-                arguments.extend(["+set", "k_fb_enabled", "1"])
-                if launch_options.bot_break_on_death:
+                # ToT registers and enables this server cvar from its own
+                # usermode. Remove values persisted by older launchers before
+                # the QVM loads; otherwise the server rejects their ownership.
+                if ktx_mode.key == "tot":
+                    arguments.extend([
+                        "+unset", "k_fb_enabled", "k_fb_break_on_death",
+                    ])
+                else:
+                    arguments.extend(["+set", "k_fb_enabled", "1"])
+                if launch_options.bot_break_on_death and ktx_mode.key != "tot":
                     arguments.extend(["+set", "k_fb_break_on_death", "1"])
             for name, value in ktx_mode.launch_settings:
                 arguments.extend([f"+{name}", value])
@@ -1108,32 +1133,35 @@ class Player(core.Installer):
                 "unalias x86qw_ktx_launch_setup", *setup_commands,
             ))
             arguments.extend([
-                "+tempalias", "x86qw_ktx_launch_setup", setup_body,
+                "+tempalias", "x86qw_ktx_launch_setup",
+                quote_console_command(setup_body),
             ])
-            for event in ("on_enter", "on_enter_ffa", "on_enter_ctf"):
+            event = {
+                "ffa": "on_enter_ffa",
+                "tot": "on_enter_ffa",
+                "ctf": "on_enter_ctf",
+            }.get(ktx_mode.usermode, "on_enter")
+            if ktx_mode.entry_config is None:
                 arguments.extend([
                     "+tempalias", event,
-                    "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup",
+                    quote_console_command(
+                        "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
+                    ),
                 ])
-            if ktx_mode.entry_config is not None:
-                event = {
-                    "ffa": "on_enter_ffa",
-                    "ctf": "on_enter_ctf",
-                }.get(ktx_mode.usermode, "on_enter")
+            else:
                 arguments.extend([
-                    "+tempalias", event, f"exec {ktx_mode.entry_config}",
+                    "+tempalias", event,
+                    f"exec {ktx_mode.entry_config}",
                 ])
             arguments.extend(["+set", "k_defmap", map_name])
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
-            arguments.extend(["+set", "x86qw_ktx_preset", ktx_mode.key])
-            arguments.extend([
-                "+tempalias", "ktx_mode",
-                f"echo x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
-            ])
-            arguments.extend([
-                "+tempalias", "x86qw_ktx_mode_help", ktx_mode_help_alias(ktx_mode),
-            ])
         arguments.extend(["+map", map_name])
+        if (
+            ktx_mode is not None
+            and ktx_mode.key == "tot"
+            and launch_options.bot_break_on_death
+        ):
+            arguments.extend(["+k_fb_break_on_death", "1"])
         arguments.extend(game.post_map_arguments)
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
         console.info(f"Abrindo {selection} no mapa {map_name}...")

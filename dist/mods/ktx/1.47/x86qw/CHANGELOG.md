@@ -76,6 +76,10 @@
   `e2m2`, executou `configs/usermodes/ctf/default.cfg` e entrou em `standby`
   com um jogador e 16 vagas. O teste usou `cfg_save_onquit 0` e preservou o
   hash da configuração pessoal.
+- 01/08/2026: os 24 modos foram abertos no ezQuake 3.6.9 em janela
+  `1280x720`; os 22 modos compatíveis com Frogbot receberam o bot escolhido
+  durante a primeira entrada. CTF e Race permaneceram sem bots, conforme o
+  contrato do QVM. Practice deixou de aguardar uma segunda entrada inexistente.
 
 ## Correção encaminhada ao cliente
 
