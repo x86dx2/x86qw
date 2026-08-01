@@ -1,5 +1,8 @@
 # Estado v2 e execução sem mutação
 
+> Documento histórico da linha 0.2.x. O bootstrap limpo atual usa `.x86qw/`
+> e não converte árvores antigas; consulte `clean-bootstrap-layout.md`.
+
 Esta migração separa a preparação da instalação da execução dos runtimes.
 
 ## Estado da instalação

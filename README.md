@@ -88,7 +88,7 @@ efêmeras privadas e nunca entram no comando filho nem na saída.
 Ao expor QTV em uma interface não loopback, a CLI sempre alerta que a senha do
 upstream não autentica a interface HTTP pública.
 
-Cada execução de serviço mantém um journal privado em `.install/sessions/`.
+Cada execução de serviço mantém um journal privado em `.x86qw/sessions/`.
 Um lock atômico cobre a instalação inteira: somente uma stack ou operação de
 manutenção mutável pode existir por destino. Assim, `install`, `components`,
 `presets`, `update`, `upgrade`, `repair`, `cleanup` e `uninstall` não alteram
@@ -102,6 +102,24 @@ Configurações efêmeras sensíveis são removidas mesmo quando modificadas;
 seu journal não contém hash nem conteúdo. Material não sensível modificado
 continua preservado. Consulte
 [docs/HOSTING.md](docs/HOSTING.md).
+
+A instalação não cria mais um depósito genérico de runtimes. `.x86qw/` contém
+somente o plano de controle privado — CLI, estado, recibos, inventários e
+journals. O bootstrap instala apenas o binário da plataforma selecionada e
+mantém cada serviço no seu contexto operacional:
+
+```text
+quake-world/
+├── mvdsv                 # mvdsv.exe no Windows
+├── qtv/                  # binário, recursos, configuração, logs e demos
+├── qwfwd/                # binário e configuração
+├── docs/licenses/
+└── .x86qw/               # controle x86QW; nunca payload ou runtime
+```
+
+Esse é um contrato de bootstrap limpo. Uma árvore antiga pode permanecer em
+outro diretório apenas para consulta; o bootstrap atual cria uma instalação
+nova e não converte o layout anterior.
 
 Depois da instalação, a CLI não oferece instalação arbitrária de clientes,
 canais, mods ou presets. Esse papel pertence exclusivamente ao `install.sh` (ou
@@ -213,7 +231,7 @@ dist/
 
 `manager.py`, `gameplay.py` e os módulos auxiliares são fontes do repositório.
 O builder os empacota em `x86qw.pyz`; na instalação do jogador, a aplicação e
-seu recibo ficam juntos em `.install/cli/`.
+seu recibo ficam juntos em `.x86qw/cli/`.
 
 ## Manter a distribuicao
 
