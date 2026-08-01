@@ -15,12 +15,13 @@ import sys
 import tempfile
 import traceback
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 
 core = importlib.import_module("manager")
+navigation = importlib.import_module("menu")
 from maintenance.tools.runtime_catalog import load_games, games_by_id
 
 InstallerError = core.InstallerError
@@ -752,30 +753,23 @@ class Player(core.Installer):
                 )
             available = ", ".join(game.key for game in games)
             raise InstallerError(f"Jogo local desconhecido: {requested}. Disponíveis: {available}.")
-        print(f"\nQual mod deseja {activity}?")
-        labels = [game.label + (" (padrão)" if index == 1 else "") for index, game in enumerate(games, 1)]
-        versions = [self.installed_game_version(game) for game in games]
-        label_width = max(map(len, labels))
-        version_width = max(map(len, versions))
-        index_width = len(str(len(games)))
-        for index, (game, label, version) in enumerate(zip(games, labels, versions), 1):
-            print(
-                f"  {index:>{index_width}}) {label:<{label_width}}  "
-                f"v{version:<{version_width}}  {game.description}"
-            )
-        while True:
-            try:
-                answer = input(f"Escolha [1-{len(games)}] (padrão: 1): ").strip()
-            except EOFError as error:
-                raise InstallerError("Nenhum mod foi selecionado.") from error
-            if not answer:
-                return games[0]
-            if answer.isdigit() and 1 <= int(answer) <= len(games):
-                return games[int(answer) - 1]
-            matches = [game for game in games if game.key.casefold() == answer.casefold()]
-            if len(matches) == 1:
-                return matches[0]
-            console.warning(f"Escolha inválida. Use um número entre 1 e {len(games)}.")
+        selected = navigation.select_one(
+            f"O que deseja {activity}?",
+            (
+                navigation.MenuOption(
+                    game.key,
+                    game.label,
+                    f"v{self.installed_game_version(game)}",
+                    game.description,
+                )
+                for game in games
+            ),
+            breadcrumb="x86QW › " + ("Hospedar" if activity == "hospedar" else "Jogar"),
+            searchable=True,
+        )
+        if selected is None:
+            raise InstallerError("Nenhum jogo foi selecionado.")
+        return next(game for game in games if game.key == selected)
 
     def choose_ktx_mode(
         self,
@@ -795,33 +789,24 @@ class Player(core.Installer):
                 return matches[0]
             available = ", ".join(mode.key for mode in modes)
             raise InstallerError(f"Modo KTX desconhecido: {requested}. Disponíveis: {available}.")
-        print(f"\nQual modo KTX deseja {activity}?")
-        labels = [mode.label + (" (padrão)" if index == 1 else "") for index, mode in enumerate(modes, 1)]
-        label_width = max(map(len, labels))
-        players_width = max(len(mode.recommended_players) for mode in modes)
-        index_width = len(str(len(modes)))
-        for index, (mode, label) in enumerate(zip(modes, labels), 1):
-            print(
-                f"  {index:>{index_width}}) {label:<{label_width}}  "
-                f"{mode.recommended_players:>{players_width}} jogador(es)  {mode.description}"
-            )
-        while True:
-            try:
-                answer = input(f"Escolha [1-{len(modes)}] (padrão: 1): ").strip()
-            except EOFError as error:
-                raise InstallerError("Nenhum modo KTX foi selecionado.") from error
-            if not answer:
-                return modes[0]
-            if answer.isdigit() and 1 <= int(answer) <= len(modes):
-                return modes[int(answer) - 1]
-            matches = [
-                mode for mode in modes
-                if answer.casefold() == mode.key.casefold()
-                or answer.casefold() in {alias.casefold() for alias in mode.aliases}
-            ]
-            if len(matches) == 1:
-                return matches[0]
-            console.warning(f"Escolha inválida. Use um número entre 1 e {len(modes)}.")
+        selected = navigation.select_one(
+            "Qual modo KTX deseja " + activity + "?",
+            (
+                navigation.MenuOption(
+                    mode.key,
+                    mode.label,
+                    f"{mode.recommended_players} jogador(es)",
+                    mode.description,
+                    aliases=mode.aliases,
+                )
+                for mode in modes
+            ),
+            breadcrumb=f"x86QW › {'Hospedar' if activity == 'hospedar' else 'Jogar'} › KTX",
+            searchable=True,
+        )
+        if selected is None:
+            raise InstallerError("Nenhum modo KTX foi selecionado.")
+        return next(mode for mode in modes if mode.key == selected)
 
     @staticmethod
     def show_map_names(maps: list[str]) -> None:
@@ -889,26 +874,155 @@ class Player(core.Installer):
         suggestions = [
             lookup[name.casefold()] for name in requested_suggestions if name.casefold() in lookup
         ]
-        print(f"\nMapas sugeridos para {display_label}:")
-        for index, name in enumerate(suggestions, 1):
-            suffix = " (padrão)" if name.casefold() == default.casefold() else ""
-            print(f"  {index}) {name}{suffix}")
-        print(f"  t) mostrar todos os {len(maps)} mapas disponíveis")
-        while True:
-            try:
-                answer = input(f"Escolha o número ou informe o mapa (padrão: {default}): ").strip()
-            except EOFError as error:
-                raise InstallerError("Nenhum mapa foi selecionado.") from error
-            if not answer:
-                return default
-            if answer.casefold() in ("t", "todos"):
-                self.show_map_names(maps)
-                continue
-            if answer.isdigit() and 1 <= int(answer) <= len(suggestions):
-                return suggestions[int(answer) - 1]
-            if answer.casefold() in lookup:
-                return lookup[answer.casefold()]
-            console.warning(f"Mapa não encontrado: {answer}. Digite t para listar os mapas instalados.")
+        ordered = suggestions + [name for name in maps if name not in suggestions]
+        default_index = ordered.index(default)
+        selected = navigation.select_one(
+            f"Escolha o mapa para {display_label}",
+            (
+                navigation.MenuOption(
+                    name,
+                    name,
+                    "sugerido" if name in suggestions else "",
+                    "rota compatível e instalada" if required_asset is not None else "mapa instalado",
+                )
+                for name in ordered
+            ),
+            breadcrumb=f"x86QW › {display_label} › Mapa",
+            subtitle=f"{len(maps)} mapa(s) compatível(is). Pressione / para buscar.",
+            default=default_index,
+            searchable=True,
+        )
+        if selected is None:
+            raise InstallerError("Nenhum mapa foi selecionado.")
+        return selected
+
+    def choose_ktx_launch_options(
+        self,
+        mode: KtxModeSpec,
+        options: KtxLaunchOptions | None = None,
+        *,
+        activity: str = "Jogar",
+    ) -> KtxLaunchOptions:
+        """Collect only the options that are meaningful for the selected KTX mode."""
+        selected = options or KtxLaunchOptions()
+        breadcrumb = f"x86QW › {activity} › KTX › {mode.label}"
+        if mode.key == "race":
+            style = navigation.select_one(
+                "Formato da corrida",
+                (
+                    navigation.MenuOption("solo", "Solo", "um corredor por vez"),
+                    navigation.MenuOption("simultaneous", "Largada simultânea", "todos percorrem a rota juntos"),
+                    navigation.MenuOption("match", "Match competitivo", "rodadas com sistema de pontuação"),
+                ),
+                breadcrumb=breadcrumb,
+                default=0,
+            )
+            if style is None:
+                raise InstallerError("Nenhum formato de Race foi selecionado.")
+            scoring = None
+            if style == "match":
+                scoring = navigation.select_one(
+                    "Sistema de pontuação",
+                    (
+                        navigation.MenuOption("win", "Vitória simples", "vence quem ganhar a rodada"),
+                        navigation.MenuOption("scaled", "Escalonada", "pontua conforme a colocação"),
+                        navigation.MenuOption("formula1", "Fórmula 1", "pontuação no estilo automobilismo"),
+                    ),
+                    breadcrumb=breadcrumb + " › Match",
+                )
+            pacemaker = navigation.select_one(
+                "Pacemaker",
+                (
+                    navigation.MenuOption("none", "Nenhum", "correr sem referência"),
+                    *(navigation.MenuOption(str(rank), f"Posição {rank}", "usar esse tempo do ranking") for rank in range(1, 11)),
+                ),
+                breadcrumb=breadcrumb,
+                searchable=True,
+            )
+            hide_players = navigation.confirm(
+                "Ocultar os demais corredores?",
+                breadcrumb=breadcrumb,
+                default=False,
+            )
+            return replace(
+                selected,
+                race_style=style,
+                race_scoring=scoring,
+                race_pacemaker=None if pacemaker in (None, "none") else int(pacemaker),
+                race_hide_players=hide_players,
+            )
+        if mode.key == "ctf":
+            hook = navigation.select_one(
+                "Estilo do gancho",
+                (
+                    navigation.MenuOption("smooth", "Suave", "movimento progressivo"),
+                    navigation.MenuOption("fast", "Rápido", "resposta imediata"),
+                    navigation.MenuOption("classic", "Clássico", "comportamento tradicional"),
+                    navigation.MenuOption("crhook", "CRHook", "variação competitiva"),
+                    navigation.MenuOption("off", "Desativado", "partida sem gancho"),
+                ),
+                breadcrumb=breadcrumb,
+            )
+            runes = navigation.select_one(
+                "Runas",
+                (
+                    navigation.MenuOption("on", "Ativadas", "regras completas de CTF"),
+                    navigation.MenuOption("off", "Desativadas", "CTF sem powerups de runa"),
+                ),
+                breadcrumb=breadcrumb,
+            )
+            based_spawn = navigation.confirm(
+                "Usar spawn baseado na base?",
+                breadcrumb=breadcrumb,
+                default=False,
+            )
+            return replace(
+                selected,
+                ctf_hook=hook,
+                ctf_runes=runes,
+                ctf_based_spawn=based_spawn,
+            )
+        if mode.bots:
+            bot_choice = navigation.select_one(
+                "Adicionar Frogbots?",
+                (
+                    navigation.MenuOption("none", "Sem bots", "iniciar somente com jogadores humanos"),
+                    navigation.MenuOption("1", "1 bot", "adicionar um oponente"),
+                    navigation.MenuOption("2", "2 bots", "partida pequena"),
+                    navigation.MenuOption("4", "4 bots", "partida intermediária"),
+                    navigation.MenuOption("fill", "Preencher servidor", "até oito Frogbots"),
+                    navigation.MenuOption("custom", "Quantidade personalizada", "escolher de 1 a 31"),
+                ),
+                breadcrumb=breadcrumb,
+            )
+            if bot_choice not in (None, "none"):
+                if bot_choice == "custom":
+                    bot_choice = navigation.select_one(
+                        "Quantidade de Frogbots",
+                        (navigation.MenuOption(str(number), str(number)) for number in range(1, 32)),
+                        breadcrumb=breadcrumb + " › Frogbots",
+                        searchable=True,
+                    )
+                skill = navigation.select_one(
+                    "Habilidade dos Frogbots",
+                    (
+                        navigation.MenuOption(
+                            str(level), str(level),
+                            "iniciante" if level <= 4 else "intermediária" if level <= 10 else "avançada",
+                        )
+                        for level in range(1, 21)
+                    ),
+                    breadcrumb=breadcrumb + " › Frogbots",
+                    default=4,
+                    searchable=True,
+                )
+                selected = replace(
+                    selected,
+                    bots=0 if bot_choice == "fill" else int(bot_choice or 0),
+                    fill_bots=bot_choice == "fill",
+                    bot_skill=int(skill or 5),
+                )
+        return selected
 
     def play_local(
         self,
@@ -916,6 +1030,8 @@ class Player(core.Installer):
         mode_key: str | None = None,
         map_key: str | None = None,
         ktx_options: KtxLaunchOptions | None = None,
+        *,
+        configure_interactively: bool = False,
     ) -> None:
         self.check_paks()
         games = self.available_local_games()
@@ -943,6 +1059,8 @@ class Player(core.Installer):
             ktx_mode = self.choose_ktx_mode(load_ktx_modes(self.project_root), mode_key)
             console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
             launch_options = ktx_options or KtxLaunchOptions()
+            if configure_interactively:
+                launch_options = self.choose_ktx_launch_options(ktx_mode, launch_options)
             ktx_assets = (
                 self.ktx_archive_members()
                 if ktx_mode.required_map_asset is not None
@@ -1327,6 +1445,7 @@ def parse_arguments(arguments: list[str], project_root: Path):
         "--no-color", action="store_true",
         help="desativa cores mesmo em um terminal interativo",
     )
+    parser.add_argument("--menu", action="store_true", help=argparse.SUPPRESS)
     add_game_launch_arguments(parser)
     parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -1363,6 +1482,7 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
+        navigation.configure(no_color=options.no_color)
         show_banner(options.target)
         player = Player(project_root, options.target)
         player.validate_target("play")
@@ -1371,10 +1491,14 @@ def main(arguments: list[str] | None = None) -> int:
         console.section("Jogo local")
         player.play_local(
             options.game, options.mode, options.map, options.ktx_options,
+            configure_interactively=options.menu or options.mode is None,
         )
         return 0
     except KeyboardInterrupt:
         console.error("Operação cancelada. O jogo não foi iniciado.")
+        return 130
+    except navigation.MenuCancelled:
+        console.info("Operação cancelada; o jogo não foi iniciado.")
         return 130
     except InstallerError as error:
         console.error(str(error))

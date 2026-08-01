@@ -1,7 +1,7 @@
 @echo off
 for %%I in ("%~dp0.") do set "X86QW_ROOT=%%~fI"
 set "X86QW_APP=%X86QW_ROOT%\.x86qw\cli\x86qw.pyz"
-if "%~1"=="" goto help
+if "%~1"=="" goto menu
 if /I "%~1"=="help" goto help
 if /I "%~1"=="-h" goto help
 if /I "%~1"=="--help" goto help
@@ -24,6 +24,10 @@ goto help_error
 
 :play
 py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
+exit /b %ERRORLEVEL%
+
+:menu
+py -3 "%X86QW_APP%" menu "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :service
