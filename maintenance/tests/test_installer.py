@@ -253,6 +253,46 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("Windows x64", output.getvalue())
             self.assertIn("host detectado: macOS", output.getvalue())
 
+    def test_service_payload_keeps_only_the_selected_platform_at_operational_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            cases = (
+                ("macos", "Darwin", "arm64", "macos-arm64", ""),
+                ("linux", "Linux", "x86_64", "linux-amd64", ""),
+                ("windows", "Windows", "AMD64", "windows-x64", ".exe"),
+            )
+            for system, host, machine, variant, suffix in cases:
+                with self.subTest(system=system):
+                    installer.spec = install_qw.PLATFORMS[system]
+                    managed = Path(temporary) / f"managed-{system}"
+                    for identifier in ("mvdsv", "qtv", "qwfwd"):
+                        entries = [
+                            entry for entry in installer.components[identifier]["project_sources"]
+                            if entry.get("platform") is not None
+                        ]
+                        for entry in entries:
+                            path = managed / str(entry["destination"])
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_bytes(str(entry["platform"]).encode())
+                        with mock.patch.object(
+                            install_qw.host_platform, "system", return_value=host,
+                        ), mock.patch.object(
+                            install_qw.host_platform, "machine", return_value=machine,
+                        ):
+                            installer.normalize_component_platform_payload(identifier, managed)
+                        selected = next(entry for entry in entries if entry["platform"] == variant)
+                        destination = managed / str(selected["install_destination"])
+                        self.assertEqual(variant.encode(), destination.read_bytes())
+                        self.assertFalse((managed / "platforms" / identifier).exists())
+                        executable = identifier + suffix
+                        expected = (
+                            Path(executable)
+                            if identifier == "mvdsv"
+                            else Path(identifier) / executable
+                        )
+                        self.assertEqual(expected, destination.relative_to(managed))
+                        destination.unlink()
+
     def test_unknown_host_requires_an_explicit_platform(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
@@ -477,7 +517,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "x86qw"
             target.mkdir()
-            stale = target / ".install/cli/dist/game-data/id1/pak0.pak"
+            stale = target / ".x86qw/cli/dist/game-data/id1/pak0.pak"
             stale.parent.mkdir(parents=True)
             stale.write_bytes(b"legacy bundled PAK")
             bundle = Path(temporary) / "bundle"
@@ -495,8 +535,8 @@ class InstallerTests(unittest.TestCase):
                 ):
                     installer.install_online_cli()
             self.assertEqual(
-                [target / ".install/cli/receipt", target / ".install/cli/x86qw.pyz"],
-                sorted(path for path in (target / ".install/cli").rglob("*") if path.is_file()),
+                [target / ".x86qw/cli/receipt", target / ".x86qw/cli/x86qw.pyz"],
+                sorted(path for path in (target / ".x86qw/cli").rglob("*") if path.is_file()),
             )
             self.assertTrue((target / "x86qw.cmd").is_file())
             self.assertEqual(
@@ -555,7 +595,7 @@ class InstallerTests(unittest.TestCase):
     def test_flat_metadata_is_migrated_into_contextual_directories(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            metadata = target / ".install"
+            metadata = target / ".x86qw"
             (metadata / "cli").mkdir(parents=True)
             (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
             self.write_cli_receipt(target, "1.0.5", legacy=True)
@@ -655,7 +695,7 @@ class InstallerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             active = install_qw.session_control.InstallationLock.acquire(
                 target, "host", "service",
             )
@@ -694,7 +734,7 @@ class InstallerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             active = install_qw.session_control.InstallationLock.acquire(
                 target, "repair", "maintenance",
             )
@@ -1679,7 +1719,7 @@ class InstallerTests(unittest.TestCase):
     def test_purge_removes_the_entire_installation_and_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"remove")
             (target / "qw").mkdir()
@@ -1695,7 +1735,7 @@ class InstallerTests(unittest.TestCase):
     def test_purge_keeps_operation_lock_until_final_release(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             (target / "personal.txt").write_text("remove", encoding="utf-8")
             operation_lock = install_qw.session_control.InstallationLock.acquire(
                 target, "uninstall", "maintenance",
@@ -1707,14 +1747,14 @@ class InstallerTests(unittest.TestCase):
                 self.assertFalse((target / "personal.txt").exists())
             finally:
                 operation_lock.release()
-            install_qw.remove_empty_directories(target / ".install")
+            install_qw.remove_empty_directories(target / ".x86qw")
             target.rmdir()
             self.assertFalse(target.exists())
 
     def test_regular_uninstall_removes_the_cli_and_preserves_id1(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            cli = target / ".install/cli/x86qw.pyz"
+            cli = target / ".x86qw/cli/x86qw.pyz"
             cli.parent.mkdir(parents=True)
             cli.write_text("# cli\n", encoding="utf-8")
             self.write_cli_receipt(target, "1.0.5")
@@ -1737,7 +1777,7 @@ class InstallerTests(unittest.TestCase):
                 )
             else:
                 self.assertFalse((target / "x86qw.cmd").exists())
-            self.assertFalse((target / ".install/cli").exists())
+            self.assertFalse((target / ".x86qw/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
 
     def test_purge_without_an_installation_still_removes_owned_cache(self):

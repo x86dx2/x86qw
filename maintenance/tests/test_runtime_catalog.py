@@ -79,7 +79,7 @@ class RuntimeCatalogTests(unittest.TestCase):
         for mutation, message in (
             (lambda docs: docs["games"]["games"][0].__setitem__("protocol", "unknown"), "protocol"),
             (lambda docs: docs["runtimes"]["runtimes"][0].__setitem__("dependencies", ["ezquake-stable"]), "dependency"),
-            (lambda docs: docs["runtimes"]["runtimes"][2].__setitem__("personal_configuration", ["_x86qw/runtimes/mvdsv/private.cfg"]), "personal configuration"),
+            (lambda docs: docs["runtimes"]["runtimes"][2].__setitem__("personal_configuration", ["mvdsv"]), "personal configuration"),
         ):
             documents = copy.deepcopy(self.inventory)
             mutation(documents)
@@ -113,7 +113,7 @@ class RuntimeCatalogTests(unittest.TestCase):
         platform.update({
             "architecture": "riscv64",
             "variant": "linux-riscv64",
-            "runtime_path": "_x86qw/runtimes/qtv/linux-riscv64/qtv",
+            "runtime_path": "qtv/qtv-riscv64",
         })
         runtime["platforms"].append(platform)
         runtime["architectures"].append("riscv64")
@@ -131,7 +131,7 @@ class RuntimeCatalogTests(unittest.TestCase):
             ):
                 self.assertIn(name, names)
             for name in names:
-                if name.startswith("_x86qw/") and name.endswith(".json"):
+                if name.startswith("catalog/") and name.endswith(".json"):
                     document = json.loads(archive.read(name))
                     serialized = json.dumps(document).casefold()
                     self.assertNotIn("https://", serialized)
