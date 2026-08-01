@@ -223,8 +223,9 @@ def validate_inventory(
         for field in ("configuration", "personal_configuration", "logs", "demos"):
             for value in _string_list(runtime.get(field), f"runtime {field}: {identifier}"):
                 _safe_path(value, f"runtime {field}")
+        runtime_paths = {str(value) for value in runtime["runtime_path"].values()}
         for value in runtime["personal_configuration"]:
-            if str(value).startswith("_x86qw/runtimes/"):
+            if str(value) in runtime_paths:
                 raise ValueError(f"personal configuration is inside immutable runtime payload: {identifier}")
         arguments = runtime.get("arguments")
         if not isinstance(arguments, dict) or arguments.get("shell") is not False or not isinstance(arguments.get("base"), list):
@@ -343,13 +344,20 @@ def validate_inventory(
             component = component_entries[str(runtime["component"])]
             sources = component.get("project_sources", [])
             declared = {
-                str(entry.get("destination")): str(entry.get("path"))
-                for entry in sources if isinstance(entry, dict)
+                str(entry.get("platform")): entry
+                for entry in sources
+                if isinstance(entry, dict) and entry.get("platform") is not None
             }
-            for path in runtime["runtime_path"].values():
-                source = declared.get(str(path))
-                if source is None or not (project_root / source).is_file():
-                    raise ValueError(f"runtime architecture has no artifact: {identifier}/{path}")
+            for platform in runtime["platforms"]:
+                variant = str(platform["variant"])
+                entry = declared.get(variant)
+                path = str(platform["runtime_path"])
+                if (
+                    entry is None
+                    or entry.get("install_destination") != path
+                    or not (project_root / str(entry.get("path"))).is_file()
+                ):
+                    raise ValueError(f"runtime architecture has no artifact: {identifier}/{variant}")
     if public_catalog is not None:
         packages = public_catalog.get("packages")
         if not isinstance(packages, list):

@@ -382,7 +382,7 @@ class SessionJournal:
         controller: dict[str, object] | None = None,
     ) -> None:
         self.target = target.resolve()
-        sessions = self.target / ".install" / "sessions"
+        sessions = self.target / ".x86qw" / "sessions"
         ensure_private_directory(sessions.parent)
         ensure_private_directory(sessions)
         if os.name != "nt":
@@ -641,7 +641,7 @@ def journal_process_probe(entry: object) -> ProcessProbe:
 
 
 def session_journal_paths(target: Path, session_id: str | None = None) -> list[Path]:
-    sessions = target / ".install" / "sessions"
+    sessions = target / ".x86qw" / "sessions"
     if not lexists(sessions):
         return []
     if sessions.is_symlink() or not sessions.is_dir():
@@ -1489,7 +1489,7 @@ def host_spec(
 
 def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> ProcessSpec:
     binary = runtime_binary(installer, "qwfwd")
-    directory = installer.target / "_x86qw" / "services" / "qwfwd"
+    directory = installer.target / "qwfwd"
     config = directory / "qwfwd.cfg"
     if not config.is_file() or config.is_symlink():
         raise InstallerError(f"Configuração QWFWD ausente ou insegura: {config}")
@@ -1510,7 +1510,7 @@ def qtv_spec(
     journal: SessionJournal | None = None,
 ) -> ProcessSpec:
     binary = runtime_binary(installer, "qtv")
-    directory = installer.target / "_x86qw" / "services" / "qtv"
+    directory = installer.target / "qtv"
     config = directory / "qtv.cfg"
     if not config.is_file() or config.is_symlink():
         raise InstallerError(f"Configuração QTV ausente ou insegura: {config}")

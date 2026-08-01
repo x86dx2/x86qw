@@ -4,9 +4,9 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline da release anterior: tag `x86qw-installer-0.2.1`, commit
-`527d0d1006`. Baseline consolidado do código corretivo: branch `main`, commit
-`081657c349f3d4c111334bff49e9db9a6ee17f3c`, em 31 de julho de 2026.
+Baseline publicada: tag `x86qw-installer-0.2.3`. Baseline do trabalho de layout:
+branch `main`, commit `98331669d0b2881153e02858540d5920c18f9426`, em 31 de
+julho de 2026. A linha 0.3.0 permanece em preparação e não está publicada.
 
 ## Escala de estado
 
@@ -25,8 +25,8 @@ plataforma.
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
-- MVDSV `1.11+x86qw.2`, QTV `0+025ca949aca0+x86qw.1` e QWFWD
-  `1.30+x86qw.2`;
+- MVDSV `1.11+x86qw.3`, QTV `0+025ca949aca0+x86qw.2` e QWFWD
+  `1.30+x86qw.3`;
 - cliente macOS universal, Linux x86-64 e Windows x64;
 - serviços macOS arm64, Linux amd64 e Windows x64; macOS Intel não é anunciado
   para os serviços;
@@ -51,15 +51,16 @@ Próximos passos:
 - manter argumentos como listas, sem shell ou linguagem arbitrária;
 - impedir plataforma anunciada sem artefato e teste requerido.
 
-### ARCH-02 — Estado e migração
+### ARCH-02 — Estado e bootstrap limpo
 
 **Entrega funcional:** completa para formato 2
 **Validação:** unitária
 
-O formato 2 preserva perfil, seleção customizada, componentes registrados e
-histórico, acrescentando capacidades explícitas e fingerprint. A migração é
-unilateral, aparece no plano e não remove nem acrescenta componentes por
-inferência.
+O estado registra perfil, seleção customizada, componentes, capacidades e
+fingerprint em `.x86qw/state.json`. A linha atual começa em uma árvore nova:
+não converte `.install/` nem o antigo depósito `_x86qw/`. MVDSV, QTV e QWFWD
+recebem somente a variante da plataforma escolhida em seus contextos
+operacionais.
 
 ### ARCH-03 — Execução sem mutação
 

@@ -35,11 +35,12 @@ um catálogo runtime mínimo. PAKs, mods, configurações,
 gamecodes, fontes e inventários de manutenção são pacotes
 separados; isso evita duplicação e permite atualizar cada conteúdo sem republicar
 o instalador.
-Ao migrar de um bundle antigo, a atualização troca integralmente `.install/cli`
-por essa árvore mínima e elimina payloads legados que haviam sido duplicados ali.
+O layout atual é criado por um bootstrap limpo. Instalações antigas podem ser
+mantidas em outro diretório para consulta, mas não são convertidas pelo fluxo
+atual.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
-usam a aplicação única `.install/cli/x86qw.pyz`; as ações públicas são `play`,
+usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
 `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 mostra o help e não inicia instalação alguma. O clone e os comandos
@@ -135,10 +136,11 @@ Windows nightly: quake-world/ezquake-nightly.exe
 
 Os builds oficiais Linux e Windows são somente x86-64/x64. Eles não executam nativamente em Linux ARM ou Windows ARM sem uma camada de compatibilidade. O AppImage requer um Linux desktop compatível, Bash e o suporte AppImage/FUSE oferecido pela distribuição.
 
-O estado do instalador fica agrupado por contexto em um único diretório neutro:
+O plano de controle fica agrupado no diretório privado e específico do produto
+`.x86qw/`. Ele não contém runtimes nem payload de jogo:
 
 ```text
-quake-world/.install/
+quake-world/.x86qw/
 ├── state.json
 ├── sessions/
 │   ├── active.lock
@@ -170,11 +172,30 @@ quake-world/.install/
         └── inventory
 ```
 
+Os serviços ficam nos próprios contextos operacionais. Somente a variante da
+plataforma selecionada é instalada:
+
+```text
+quake-world/
+├── mvdsv
+├── qtv/
+│   ├── qtv
+│   ├── qtv.cfg
+│   └── <recursos web>
+├── qwfwd/
+│   ├── qwfwd
+│   └── qwfwd.cfg
+└── docs/licenses/
+```
+
+No Windows, os executáveis recebem a extensão `.exe`. `BUILD.json`, fontes,
+patches e as variantes de outros sistemas permanecem na distribuição de
+manutenção e nunca são copiados para a instalação do jogador.
+
 Cada componente possui inventário e recibo independentes. Assim ele pode ser
 instalado, atualizado, verificado ou removido sem assumir propriedade sobre os
-demais componentes e arquivos pessoais. `update` reconhece o formato plano das
-versões anteriores, inclui a reorganização no plano e só remove os arquivos
-legados depois de validar as cópias contextuais.
+demais componentes e arquivos pessoais. A linha atual pressupõe uma instalação
+criada por esse bootstrap e não executa migração do layout anterior.
 
 ### Fases
 
@@ -495,7 +516,7 @@ quake-world/td2/x86qw-td2-user.cfg
 ```
 
 Esse arquivo é criado somente quando não existe, é executado depois do preset
-x86QW e nunca entra em `.install/components/play-support/inventory`. Atualizar o TD2 ou o
+x86QW e nunca entra em `.x86qw/components/play-support/inventory`. Atualizar o TD2 ou o
 ezQuake reaplica a camada do projeto e preserva esse arquivo pessoal. Remover os
 componentes também o preserva; `uninstall --purge` continua sendo a ação explícita que
 remove toda a instalação.
@@ -553,7 +574,7 @@ Antes de iniciar qualquer filho, a CLI valida componentes, executáveis,
 configurações, endpoints e todas as portas. A ordem composta é MVDSV, readiness
 e configuração pós-map por RCON, QTV com HTTP/upstream e, por último, QWFWD.
 Falha parcial encerra o que já iniciou. O journal privado em
-`.install/sessions/` e o lock atômico permitem uma única stack por instalação.
+`.x86qw/sessions/` e o lock atômico permitem uma única stack por instalação.
 Uma segunda CLI nunca recupera um controlador vivo. Após crash confirmado, PID,
 token de criação e executável identificam os filhos órfãos; PID reutilizado ou
 identidade inconclusiva são preservados. Temporários não sensíveis modificados
@@ -569,7 +590,7 @@ incluindo IPv4 e IPv6 (`0.0.0.0` vira loopback IPv4 e `::` vira `[::1]`).
 
 O instalador pode ser executado diretamente no sistema de destino ou preparar outro SO. Para transportar uma instalação, copie a pasta `quake-world` inteira, preservando `id1`, `qw`, `ezquake` e os addons.
 
-A cópia deve incluir a pasta oculta `.install`. Não use apenas o glob `quake-world/*`, pois ele ignora arquivos ocultos. No terminal, por exemplo:
+A cópia deve incluir a pasta oculta `.x86qw`. Não use apenas o glob `quake-world/*`, pois ele ignora arquivos ocultos. No terminal, por exemplo:
 
 ```sh
 mkdir -p destino/quake-world
@@ -713,15 +734,10 @@ perfil `complete` recebe todos os componentes atuais. Em `custom`, somente as
 escolhas explícitas e suas dependências obrigatórias evoluem. Componentes fora
 do perfil são informados e preservados, nunca removidos implicitamente.
 
-Instalações anteriores ao registro de perfil são migradas automaticamente. Uma
-combinação exatamente igual a `essential`, `recommended` ou `complete` recupera
-esse perfil; qualquer combinação diferente vira `custom`, evitando a inclusão
-silenciosa de addons. Assinaturas históricas preservadas no manifesto permitem
-reconhecer o perfil mesmo quando o jogador pula releases. O estado fica em
-`.install/state.json` e registra também os componentes conhecidos, capacidades
-explícitas e um fingerprint dos componentes. A migração para o formato 2 é
-unilateral, preserva a seleção customizada exatamente e aparece no plano antes
-da gravação.
+O estado fica em `.x86qw/state.json` e registra o perfil, a seleção explícita,
+os componentes conhecidos, as capacidades e o fingerprint correspondente. O
+bootstrap cria esse estado integralmente; não infere seleção a partir de uma
+árvore antiga.
 
 Para diagnosticar e recompor apenas conteúdo gerenciado ausente ou divergente,
 use no checkout de desenvolvimento:

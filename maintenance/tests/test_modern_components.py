@@ -1000,7 +1000,7 @@ class ModernComponentTests(unittest.TestCase):
                 installer.migrate_mutable_component_defaults("clan-arena")
             self.assertEqual("personal\n", installed_config.read_text(encoding="utf-8"))
             self.assertEqual(2, installer.verify_component("clan-arena"))
-            inventory = (target / ".install/components/clan-arena/inventory").read_text(encoding="utf-8")
+            inventory = (target / ".x86qw/components/clan-arena/inventory").read_text(encoding="utf-8")
             self.assertNotIn("prox/configs/config.cfg", inventory)
 
     def test_combined_clan_arena_receipt_is_removed_before_the_split_components(self):
@@ -1021,8 +1021,8 @@ class ModernComponentTests(unittest.TestCase):
                     "clan-arena", managed, "legacy", "https://example.invalid/clan-arena.zip",
                 )
                 installer.migrate_legacy_clan_arena(["final-arena", "pro-x"])
-            self.assertFalse((target / ".install/components/clan-arena/receipt").exists())
-            self.assertFalse((target / ".install/components/clan-arena/inventory").exists())
+            self.assertFalse((target / ".x86qw/components/clan-arena/receipt").exists())
+            self.assertFalse((target / ".x86qw/components/clan-arena/inventory").exists())
             self.assertFalse((target / "arena/arena.pk3").exists())
             self.assertFalse((target / "prox/prox.pk3").exists())
 
@@ -1110,7 +1110,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue((target / "qw/autoexec.cfg").is_file())
             self.assertTrue((target / "ezquake/configs/config.cfg").is_file())
             self.assertGreater(installer.verify_component("nquake-bootstrap"), 0)
-            receipt = (target / ".install/components/nquake-bootstrap/receipt").read_text(encoding="utf-8")
+            receipt = (target / ".x86qw/components/nquake-bootstrap/receipt").read_text(encoding="utf-8")
             self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
             self.assertFalse(cache.exists())
 
@@ -1314,7 +1314,7 @@ class ModernComponentTests(unittest.TestCase):
             player, target, _ = self.make_player(Path(temporary))
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
             runtime = target / "ezquake-stable.exe"
-            components = target / ".install/components"
+            components = target / ".x86qw/components"
             personal = target / "td2/x86qw-td2-user.cfg"
             components.mkdir(parents=True)
             personal.parent.mkdir(parents=True)
@@ -1382,7 +1382,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_service_runtime_does_not_repair_permissions_during_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
-            binary = target / "_x86qw/runtimes/qwfwd/linux-amd64/qwfwd"
+            binary = target / "qwfwd/qwfwd"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(b"runtime")
             binary.chmod(0o600)
@@ -2120,7 +2120,7 @@ class ModernComponentTests(unittest.TestCase):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 installer.uninstall()
-            self.assertFalse((target / ".install").exists())
+            self.assertFalse((target / ".x86qw").exists())
             self.assertNotIn("Os componentes x86QW não estão instalados", output.getvalue())
 
 

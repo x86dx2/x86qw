@@ -19,6 +19,7 @@ ALLOWED_KINDS = {
 }
 ALLOWED_MODES = {"overlay", "default", "preserve", "archive", "archive-base"}
 ALLOWED_ORIGINS = {"reference", "release"}
+SERVICE_PLATFORMS = {"macos-arm64", "linux-amd64", "windows-x64"}
 
 
 def profile_fingerprint(selected: list[str]) -> str:
@@ -76,10 +77,19 @@ def runtime_catalog(catalog: dict[str, object]) -> dict[str, object]:
                 "kind": component["kind"],
                 "description": component["description"],
                 "requires": component["requires"],
-                "managed_files": [
-                    entry["destination"]
+                "managed_files": list(dict.fromkeys(
+                    entry.get("install_destination", entry["destination"])
                     for entry in component.get("project_sources", [])
                     if entry.get("mode") == "overlay"
+                )),
+                "platform_files": [
+                    {
+                        "platform": entry["platform"],
+                        "package_path": entry["destination"],
+                        "install_path": entry["install_destination"],
+                    }
+                    for entry in component.get("project_sources", [])
+                    if "platform" in entry
                 ],
             }
             for component in catalog["components"]
@@ -138,6 +148,23 @@ def validate_runtime_catalog(catalog: object) -> None:
             raise ValueError(f"invalid runtime managed files: {identifier}")
         for path in managed_files:
             _safe_path(path, "runtime managed path")
+        platform_files = component.get("platform_files")
+        if not isinstance(platform_files, list):
+            raise ValueError(f"invalid runtime platform files: {identifier}")
+        seen_platforms: set[str] = set()
+        for entry in platform_files:
+            if not isinstance(entry, dict) or set(entry) != {"platform", "package_path", "install_path"}:
+                raise ValueError(f"invalid runtime platform file: {identifier}")
+            platform = entry.get("platform")
+            if platform not in SERVICE_PLATFORMS or platform in seen_platforms:
+                raise ValueError(f"invalid or duplicate runtime platform file: {identifier}/{platform}")
+            seen_platforms.add(str(platform))
+            package_path = _safe_path(entry.get("package_path"), "runtime package path")
+            install_path = _safe_path(entry.get("install_path"), "runtime install path")
+            if not package_path.startswith(f"platforms/{identifier}/{platform}/"):
+                raise ValueError(f"runtime platform file has an invalid package path: {identifier}/{platform}")
+            if install_path not in managed_files:
+                raise ValueError(f"runtime platform file is absent from managed files: {identifier}/{platform}")
     for identifier, requires in dependencies.items():
         missing = set(requires) - identifiers
         if missing or identifier in requires:
@@ -266,6 +293,18 @@ def validate_catalog(catalog: object) -> None:
                 raise ValueError(f"project source is outside the distribution: {source_path}")
             if source_entry.get("mode") not in {"overlay", "default"}:
                 raise ValueError(f"invalid project install mode in {identifier}: {source_path}")
+            platform = source_entry.get("platform")
+            install_destination = source_entry.get("install_destination")
+            if (platform is None) != (install_destination is None):
+                raise ValueError(f"incomplete project platform mapping in {identifier}: {source_path}")
+            if platform is not None:
+                if platform not in SERVICE_PLATFORMS or source_entry.get("mode") != "overlay":
+                    raise ValueError(f"invalid project platform mapping in {identifier}: {source_path}")
+                install_path = _safe_path(install_destination, "project install destination")
+                if not destination.startswith(f"platforms/{identifier}/{platform}/"):
+                    raise ValueError(f"invalid project package destination in {identifier}: {destination}")
+                if install_path.startswith("platforms/"):
+                    raise ValueError(f"platform staging path cannot be installed directly: {install_path}")
             folded = destination.casefold()
             if folded in project_destinations:
                 raise ValueError(f"duplicate project destination: {destination}")

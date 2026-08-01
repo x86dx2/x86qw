@@ -243,18 +243,18 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         expected = {
             "mvdsv": (
-                "1.11+x86qw.2",
-                "payload/_x86qw/runtimes/mvdsv/macos-arm64/mvdsv",
+                "1.11+x86qw.3",
+                "payload/platforms/mvdsv/macos-arm64/mvdsv",
                 "09d17d44b694701a4325e4d636d1de112966982de17572ccb1be92f820164177",
             ),
             "qwfwd": (
-                "1.30+x86qw.2",
-                "payload/_x86qw/runtimes/qwfwd/macos-arm64/qwfwd",
+                "1.30+x86qw.3",
+                "payload/platforms/qwfwd/macos-arm64/qwfwd",
                 "c789b5d26be1443bbe86bb704e2a8a5f7728ce52b5747e9793ab88e28905b58c",
             ),
             "qtv": (
-                "0+025ca949aca0+x86qw.1",
-                "payload/_x86qw/runtimes/qtv/macos-arm64/qtv",
+                "0+025ca949aca0+x86qw.2",
+                "payload/platforms/qtv/macos-arm64/qtv",
                 "1bcc616b7bac1720191b706c681a57c65ba7e45d7693b3eada0f4e07ae07139a",
             ),
         }
@@ -266,9 +266,22 @@ class ComponentReleaseTests(unittest.TestCase):
                 members = {name: payload for _, name, payload, _ in payloads}
                 self.assertEqual(digest, hashlib.sha256(members[member]).hexdigest())
         mvdsv = context.components["mvdsv"]
+        qwfwd = context.components["qwfwd"]
+        qtv = context.components["qtv"]
         self.assertEqual(
-            ["dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch"],
+            [
+                "dist/servers/mvdsv/1.11/x86qw/BUILD.json",
+                "dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch",
+            ],
             [entry["path"] for entry in mvdsv["project_inputs"]],
+        )
+        self.assertEqual(
+            ["dist/services/qwfwd/1.30/x86qw/BUILD.json"],
+            [entry["path"] for entry in qwfwd["project_inputs"]],
+        )
+        self.assertEqual(
+            ["dist/services/qtv/025ca949aca0/x86qw/BUILD.json"],
+            [entry["path"] for entry in qtv["project_inputs"]],
         )
 
     def test_ktx_layer_policy_rejects_an_unreviewed_conflict(self) -> None:

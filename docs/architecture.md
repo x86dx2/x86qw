@@ -22,9 +22,15 @@ componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `dist
 somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
 HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
 O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
-o catálogo publicado e grava a CLI permanente e seu recibo em `.install/cli/`.
+o catálogo publicado e grava a CLI permanente e seu recibo em `.x86qw/cli/`.
 Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
 no bundle e apenas copiadas para a raiz da instalação.
+`.x86qw/` é exclusivamente o plano de controle. MVDSV ocupa a raiz operacional
+tradicional (`mvdsv` ou `mvdsv.exe`), QTV ocupa `qtv/`, QWFWD ocupa `qwfwd/` e
+as licenças ficam em `docs/licenses/`. Os pacotes carregam variantes numa área
+de staging, mas o instalador seleciona exatamente uma plataforma antes do
+overlay; o staging e `BUILD.json` nunca chegam ao destino. O contrato começa em
+uma árvore nova e não migra o layout anterior.
 Os bundles publicados ficam em `dist/installer/packages/<versão>/`; o link
 relativo `dist/installer/packages/latest` aponta para a maior versão disponível. O
 catálogo conserva as versões oficiais iniciadas em `0.1.0`, marca exatamente uma
@@ -159,5 +165,5 @@ um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
   entram na linha de comando dos filhos;
 - preflight de portas ocorre antes do primeiro processo; readiness e rollback
   encerram startups parciais;
-- `.install/sessions/` registra journals privados e remove após crash somente
+- `.x86qw/sessions/` registra journals privados e remove após crash somente
   arquivos criados pela sessão cujo hash ainda coincide.

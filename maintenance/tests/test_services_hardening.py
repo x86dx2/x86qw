@@ -176,7 +176,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_recovery_removes_only_unchanged_created_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             created = target / "qw" / "created.cfg"
             created.parent.mkdir()
             created.write_text("managed", encoding="utf-8")
@@ -192,7 +192,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_recovery_accepts_clean_legacy_journal_without_new_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            session = target / ".install/sessions/legacy-clean"
+            session = target / ".x86qw/sessions/legacy-clean"
             session.mkdir(parents=True)
             path = session / "session.json"
             legacy = {
@@ -203,7 +203,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 "status": "clean",
                 "processes": [{"label": "QTV", "pid": os.getpid()}],
                 "temporary_files": [{
-                    "path": "_x86qw/services/qtv/old-session.cfg",
+                    "path": "qtv/old-session.cfg",
                     "origin": "configuração efêmera",
                     "created_by_session": True,
                     "expected_hash": "a" * 64,
@@ -228,7 +228,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             secret = "segredo-legado"
             config.write_text(secret, encoding="utf-8")
-            session = target / ".install/sessions/legacy-interrupted"
+            session = target / ".x86qw/sessions/legacy-interrupted"
             session.mkdir(parents=True)
             path = session / "session.json"
             path.write_text(json.dumps({
@@ -262,7 +262,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_recovery_preserves_modified_materialized_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             created = target / "qw" / "created.cfg"
             created.parent.mkdir()
             created.write_text("managed", encoding="utf-8")
@@ -279,7 +279,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_recovery_removes_modified_sensitive_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             config_dir = target / "qw"
             config_dir.mkdir()
             journal = services.SessionJournal(target)
@@ -298,7 +298,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_sensitive_temporary_replaced_by_directory_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             config_dir = target / "qw"
             config_dir.mkdir()
             journal = services.SessionJournal(target)
@@ -314,7 +314,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_sensitive_temporary_symlink_is_unlinked_without_touching_target(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             config_dir = target / "qw"
             config_dir.mkdir()
             personal = config_dir / "personal.cfg"
@@ -331,7 +331,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_sensitive_temporary_special_file_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             config_dir = target / "qw"
             config_dir.mkdir()
             journal = services.SessionJournal(target)
@@ -345,7 +345,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_recovery_preserves_modified_non_sensitive_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             config_dir = target / "qw"
             config_dir.mkdir()
             journal = services.SessionJournal(target)
@@ -360,7 +360,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_active_session_lock_blocks_recovery_and_preserves_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             first = services.SessionLock.acquire(target, "host")
             try:
                 journal = services.SessionJournal(
@@ -381,7 +381,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_lock_acquisition_is_atomic_between_controllers(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             barrier = threading.Barrier(2)
             release = threading.Event()
             results: list[tuple[str, object]] = []
@@ -418,7 +418,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_maintenance_lock_blocks_all_service_entrypoints(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             maintenance = services.session_control.InstallationLock.acquire(
                 target, "update", "maintenance",
             )
@@ -433,10 +433,10 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_stale_controller_lock_is_reclaimed_and_journal_recovered(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             old_session = "abandoned-session"
             journal = services.SessionJournal(target, session_id=old_session)
-            lock_path = target / ".install/sessions/active.lock"
+            lock_path = target / ".x86qw/sessions/active.lock"
             lock_path.write_text(json.dumps({
                 "format": 1, "project": "x86qw", "session_id": old_session,
                 "controller_pid": 999999999, "controller_start_token": "dead-token",
@@ -455,7 +455,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_missing_lock_does_not_recover_a_live_journal_controller(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             first = services.SessionLock.acquire(target, "host")
             journal = services.SessionJournal(
                 target, session_id=first.session_id, controller=first.owner,
@@ -476,7 +476,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_inconclusive_controller_identity_preserves_lock(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            sessions = target / ".install/sessions"
+            sessions = target / ".x86qw/sessions"
             sessions.mkdir(parents=True)
             lock_path = sessions / "active.lock"
             lock_path.write_text(json.dumps({
@@ -497,7 +497,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_invalid_lock_is_preserved_and_never_recovered(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            sessions = target / ".install/sessions"
+            sessions = target / ".x86qw/sessions"
             sessions.mkdir(parents=True)
             lock_path = sessions / "active.lock"
             lock_path.write_text("{invalid", encoding="utf-8")
@@ -508,7 +508,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_lock_release_never_removes_another_session_owner(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary).resolve()
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             acquired = services.SessionLock.acquire(target, "host")
             other = dict(acquired.owner)
             other["session_id"] = "other-session"
@@ -523,7 +523,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_orphan_with_matching_identity_is_terminated_and_recorded(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             process = subprocess.Popen(
                 (sys.executable, "-c", "import time; time.sleep(30)"),
                 start_new_session=True,
@@ -553,7 +553,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_reused_pid_is_not_terminated(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             journal = services.SessionJournal(target)
             processes = journal.data["processes"]
             self.assertIsInstance(processes, list)
@@ -577,7 +577,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_inconclusive_orphan_preserves_journal_and_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             data = target / "qw/needed.cfg"
             data.parent.mkdir()
             data.write_text("needed", encoding="utf-8")
@@ -752,7 +752,7 @@ class ServiceHardeningTests(unittest.TestCase):
     def test_session_journal_is_private(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
-            (target / ".install").mkdir()
+            (target / ".x86qw").mkdir()
             journal = services.SessionJournal(target)
             if os.name != "nt":
                 self.assertEqual(0o700, journal.directory.stat().st_mode & 0o777)

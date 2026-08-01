@@ -72,12 +72,12 @@ CATALOG_URLS = (
     "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
 )
 CATALOG_TIMEOUT = 10.0
-METADATA_DIR = ".install"
-COMPONENT_METADATA_DIR = ".install/components"
-EZQUAKE_METADATA_DIR = ".install/clients/ezquake"
+METADATA_DIR = ".x86qw"
+COMPONENT_METADATA_DIR = ".x86qw/components"
+EZQUAKE_METADATA_DIR = ".x86qw/clients/ezquake"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
-NQUAKE_RECEIPT = ".install/nquake.receipt"
-NQUAKE_INVENTORY = ".install/nquake.inventory"
+NQUAKE_RECEIPT = ".x86qw/nquake.receipt"
+NQUAKE_INVENTORY = ".x86qw/nquake.inventory"
 DEVELOPMENT_COMPONENT_CATALOG = "maintenance/inventory/components.json"
 COMPONENT_RELEASES = "maintenance/inventory/component-releases.json"
 RUNTIME_COMPONENT_CATALOG = "_x86qw/components.json"
@@ -107,17 +107,17 @@ COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
-MAPS_RECEIPT = ".install/components/maps/receipt"
-MAPS_INVENTORY = ".install/components/maps/inventory"
-PRESETS_RECEIPT = ".install/components/presets/receipt"
-PRESETS_INVENTORY = ".install/components/presets/inventory"
-PLAY_SUPPORT_RECEIPT = ".install/components/play-support/receipt"
-PLAY_SUPPORT_INVENTORY = ".install/components/play-support/inventory"
-PACKAGE_ORDER_RECEIPT = ".install/components/package-order/receipt"
-PACKAGE_ORDER_INVENTORY = ".install/components/package-order/inventory"
-CLI_RECEIPT = ".install/cli/receipt"
-LEGACY_CLI_RECEIPT = ".install/cli.receipt"
-INSTALL_STATE = ".install/state.json"
+MAPS_RECEIPT = ".x86qw/components/maps/receipt"
+MAPS_INVENTORY = ".x86qw/components/maps/inventory"
+PRESETS_RECEIPT = ".x86qw/components/presets/receipt"
+PRESETS_INVENTORY = ".x86qw/components/presets/inventory"
+PLAY_SUPPORT_RECEIPT = ".x86qw/components/play-support/receipt"
+PLAY_SUPPORT_INVENTORY = ".x86qw/components/play-support/inventory"
+PACKAGE_ORDER_RECEIPT = ".x86qw/components/package-order/receipt"
+PACKAGE_ORDER_INVENTORY = ".x86qw/components/package-order/inventory"
+CLI_RECEIPT = ".x86qw/cli/receipt"
+LEGACY_CLI_RECEIPT = ".x86qw/cli.receipt"
+INSTALL_STATE = ".x86qw/state.json"
 INSTALLATION_CAPABILITIES: frozenset[str] = frozenset()
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
@@ -299,7 +299,7 @@ class PlatformSpec:
         return self.stable_receipt if channel == "stable" else self.nightly_receipt
 
     def legacy_receipt(self, channel: str) -> str:
-        return f".install/ezquake-{self.key}-{channel}.receipt"
+        return f".x86qw/ezquake-{self.key}-{channel}.receipt"
 
 
 def load_launcher_contracts() -> tuple[dict[str, object], dict[str, object]]:
@@ -930,7 +930,10 @@ class Installer:
             raise InstallerError("A raiz do projeto não pode ser usada como destino; use quake-world.")
 
     def reject_target_symlinks(self) -> None:
-        managed_roots = ("id1", "ezquake", "qw", "arena", "prox", "fortress", "td2", METADATA_DIR)
+        managed_roots = (
+            "id1", "ezquake", "qw", "arena", "prox", "fortress", "td2",
+            "mvdsv", "mvdsv.exe", "qtv", "qwfwd", "docs", METADATA_DIR,
+        )
         for name in managed_roots:
             candidate = self.target / name
             ensure_no_symlink(candidate, "managed path")
@@ -1258,6 +1261,89 @@ class Installer:
                 f"Cliente solicitado por --platform: {self.spec.label}; host detectado: {detected_label}."
             )
         return self.spec
+
+    def component_platform_variant(self, identifier: str) -> str:
+        runtime = next(
+            (entry for entry in RUNTIMES.values() if entry.get("component") == identifier),
+            None,
+        )
+        if runtime is None:
+            raise InstallerError(f"O componente {identifier} não possui runtime declarativo.")
+        detected = HOST_PLATFORMS.get(host_platform.system())
+        system = self.spec.key if self.spec is not None else detected
+        if system is None:
+            raise InstallerError(
+                f"Não foi possível selecionar a plataforma do componente {identifier}."
+            )
+        candidates = [
+            entry for entry in runtime["platforms"]
+            if isinstance(entry, dict) and entry.get("system") == system
+        ]
+        if len(candidates) != 1:
+            raise InstallerError(
+                f"O componente {identifier} não está disponível para {system}."
+            )
+        candidate = candidates[0]
+        if detected == system:
+            aliases = CAPABILITY_CATALOG.get("architecture_aliases", {})
+            accepted = aliases.get(candidate["architecture"], []) if isinstance(aliases, dict) else []
+            machine = str(host_platform.machine() or "").casefold()
+            if machine not in {str(value).casefold() for value in accepted}:
+                label = CAPABILITY_CATALOG.get("platform_labels", {}).get(
+                    candidate["variant"], candidate["variant"],
+                )
+                raise InstallerError(
+                    f"O componente {identifier} requer {label}; o host informou {machine or 'arquitetura desconhecida'}."
+                )
+        return str(candidate["variant"])
+
+    def normalize_component_platform_payload(self, identifier: str, managed: Path) -> None:
+        component = self.components[identifier]
+        platform_files = component.get("platform_files")
+        if platform_files is None:
+            platform_files = [
+                {
+                    "platform": entry["platform"],
+                    "package_path": entry["destination"],
+                    "install_path": entry["install_destination"],
+                }
+                for entry in component.get("project_sources", [])
+                if isinstance(entry, dict) and "platform" in entry
+            ]
+        if not platform_files:
+            return
+        if not isinstance(platform_files, list):
+            raise InstallerError(f"Mapeamento de plataforma inválido para {identifier}.")
+        selected = self.component_platform_variant(identifier)
+        matches = [
+            entry for entry in platform_files
+            if isinstance(entry, dict) and entry.get("platform") == selected
+        ]
+        if len(matches) != 1:
+            raise InstallerError(
+                f"O pacote {identifier} não contém exatamente um executável para {selected}."
+            )
+        for entry in platform_files:
+            if not isinstance(entry, dict):
+                raise InstallerError(f"Mapeamento de plataforma inválido para {identifier}.")
+            package_path = str(entry.get("package_path", ""))
+            source = managed.joinpath(*PurePosixPath(package_path).parts)
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(
+                    f"Executável de plataforma ausente no pacote {identifier}: {package_path}"
+                )
+            if entry.get("platform") != selected:
+                source.unlink()
+                continue
+            install_path = str(entry.get("install_path", ""))
+            destination = managed.joinpath(*PurePosixPath(install_path).parts)
+            if lexists(destination):
+                raise InstallerError(
+                    f"O pacote {identifier} possui destino operacional duplicado: {install_path}"
+                )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(destination)
+        remove_empty_directories(managed / "platforms")
 
     def prompt_catalog(self, label: str, catalog: list[ReleaseRecord]) -> ReleaseRecord:
         preview_size = 12
@@ -1858,10 +1944,12 @@ class Installer:
             ):
                 return
             raise InstallerError(f"unexpected path in managed inventory: {value}")
-        if path.parts[0] == "_x86qw":
-            if len(path.parts) >= 3 and path.parts[1] in {"licenses", "runtimes", "services"}:
-                return
-            raise InstallerError(f"unexpected path in managed inventory: {value}")
+        if value in {"mvdsv", "mvdsv.exe"}:
+            return
+        if len(path.parts) >= 3 and path.parts[:2] == ("docs", "licenses"):
+            return
+        if len(path.parts) >= 2 and path.parts[0] in {"qtv", "qwfwd"}:
+            return
         if value not in ("LICENSE", "readme.txt", "README-X86QW.txt") and path.parts[0] not in (
             "ezquake", "qw", "arena", "prox", "fortress", "td2",
         ):
@@ -1910,7 +1998,7 @@ class Installer:
 
     def legacy_component_metadata(self, component: str) -> tuple[str, str]:
         self.component_metadata(component)
-        return f".install/{component}.receipt", f".install/{component}.inventory"
+        return f".x86qw/{component}.receipt", f".x86qw/{component}.inventory"
 
     @staticmethod
     def metadata_path(metadata: Path, relative: str) -> Path:
@@ -2143,7 +2231,7 @@ class Installer:
             remove_path(path)
         for name in (
             "qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2",
-            "_x86qw/licenses", "_x86qw/runtimes", "_x86qw/services", "_x86qw",
+            "qtv", "qwfwd", "docs/licenses", "docs",
         ):
             remove_empty_directories(self.target / name)
         remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
@@ -3239,6 +3327,7 @@ class Installer:
                 source = str(package["origin_url"])
             else:
                 managed, defaults, source = prepared
+            self.normalize_component_platform_payload(identifier, managed)
             count = self.install_component_overlay(
                 identifier, managed, str(package["version"]), source,
             )
@@ -3773,6 +3862,7 @@ class Installer:
         if os.name == "nt":
             return []
         repairs: list[Path] = []
+        seen: set[Path] = set()
         installed = set(self.installed_components()) if installed is None else installed
         for runtime in RUNTIMES.values():
             component = runtime.get("component")
@@ -3785,7 +3875,13 @@ class Installer:
                 if not isinstance(relative, str):
                     continue
                 binary = self.target.joinpath(*PurePosixPath(relative).parts)
-                if binary.is_file() and not binary.is_symlink() and not os.access(binary, os.X_OK):
+                if (
+                    binary not in seen
+                    and binary.is_file()
+                    and not binary.is_symlink()
+                    and not os.access(binary, os.X_OK)
+                ):
+                    seen.add(binary)
                     repairs.append(binary)
         return repairs
 

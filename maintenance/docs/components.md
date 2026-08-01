@@ -80,9 +80,9 @@ intencional e auditável, não um segundo padrão de organização.
 | Pro-X | `1.1+x86qw.3` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; ajuda somente sob demanda |
 | Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.4` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; ajuda somente sob demanda |
 | Total Destruction 2 | `2.22+x86qw.3` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados sem gravação, binds, gamma ou ajuda automática |
-| MVDSV | `1.11+x86qw.2` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
-| QTV | `0+025ca949aca0+x86qw.1` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
-| QWFWD | `1.30+x86qw.2` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |
+| MVDSV | `1.11+x86qw.3` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
+| QTV | `0+025ca949aca0+x86qw.2` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
+| QWFWD | `1.30+x86qw.3` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |
 
 ## Contrato de atualização
 
@@ -182,7 +182,7 @@ distribuição original completa permanece preservada em
 `dist/mods/td2/2.22/source/`; o runtime recebe somente gamecode, modelos, sons e os
 perfis x86QW. Binds, HUD e parâmetros do servidor vêm da camada versionada em
 `dist/mods/td2/2.22/x86qw/` e entram no próprio pacote do componente. Somente a
-cópia isolada do gamecode pertence a `.install/play-support.*`, enquanto
+cópia isolada do gamecode pertence a `.x86qw/components/play-support/`, enquanto
 `td2/x86qw-td2-user.cfg` permanece pessoal e fora do inventário imutável.
 O pacote 2.22 omite `saw_down.wav`, embora o gamecode o pré-carregue. O builder
 restaura esse nome a partir do `saw.wav` byte-idêntico que já existe no próprio

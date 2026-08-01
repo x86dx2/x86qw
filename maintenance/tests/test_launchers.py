@@ -22,7 +22,7 @@ class LauncherContractTests(unittest.TestCase):
         shutil.copy2(ROOT / "dist/installer/bin" / name, launcher)
         if name.endswith(".sh"):
             launcher.chmod(0o755)
-        app = root / ".install/cli/x86qw.pyz"
+        app = root / ".x86qw/cli/x86qw.pyz"
         app.parent.mkdir(parents=True)
         app.write_text(
             """import json, os, pathlib, sys

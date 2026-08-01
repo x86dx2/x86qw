@@ -1,7 +1,7 @@
 # Hospedagem dedicada, QTV e QWFWD
 
-O x86QW distribui MVDSV `1.11+x86qw.2`, QTV
-`0+025ca949aca0+x86qw.1` e QWFWD `1.30+x86qw.2` no perfil completo. Cada
+O x86QW distribui MVDSV `1.11+x86qw.3`, QTV
+`0+025ca949aca0+x86qw.2` e QWFWD `1.30+x86qw.3` no perfil completo. Cada
 runtime possui pacote, recibo e verificação próprios. Os comandos não baixam
 conteúdo: se faltar um componente, a CLI orienta executar novamente o
 instalador e selecionar o perfil completo ou o componente correspondente.
@@ -121,7 +121,7 @@ permanecer. No Windows, todos os processos entram em um Job Object com
 Somente uma stack de serviços ou operação mutável pode ficar ativa por
 instalação. `host`, `proxy`, `qtv`, `install`, `components`, `presets`,
 `update`, `upgrade`, `repair`, `cleanup` e `uninstall` compartilham o lock
-atômico `.install/sessions/active.lock`, inclusive em `--dry-run`. Se o
+atômico `.x86qw/sessions/active.lock`, inclusive em `--dry-run`. Se o
 controlador registrado estiver vivo, a segunda execução falha sem tocar
 journal, processos ou arquivos. `version`, `verify`, `hub` e `play` continuam
 disponíveis; `play` não participa do lock porque permanece sem mutação de
@@ -136,7 +136,7 @@ recuperação valida também o controlador gravado no próprio journal: remover
 apenas `active.lock` nunca autoriza recuperar uma stack ainda viva.
 
 Cada execução mantém um journal privado em
-`.install/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
+`.x86qw/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
 para o arquivo no Unix). Ele registra processos, configurações efêmeras,
 arquivos materializados, hashes não sensíveis e diretórios criados. Filhos usam grupo próprio
 e registram PID, grupo, token de criação e executável. Após crash confirmado, a

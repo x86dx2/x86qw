@@ -357,14 +357,14 @@
       ]
     },
     "mvdsv": {
-      "version": "1.11+x86qw.2",
+      "version": "1.11+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "mvdsv",
-      "distribution_tag": "mvdsv-1.11-x86qw.2",
+      "distribution_tag": "mvdsv-1.11-x86qw.3",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
-      "notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O perfil local é fechado por padrão e o launcher gera a configuração efêmera da sessão sem persistir segredos.",
+      "notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -395,14 +395,14 @@
       ]
     },
     "qwfwd": {
-      "version": "1.30+x86qw.2",
+      "version": "1.30+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qwfwd",
-      "distribution_tag": "qwfwd-1.30-x86qw.2",
+      "distribution_tag": "qwfwd-1.30-x86qw.3",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qwfwd/blob/1.30/LICENSE.md",
-      "notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. A configuração instalada escuta somente em loopback, não consulta nem anuncia masters e só é exposta quando o operador informa outro bind.",
+      "notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. O bootstrap instala somente a variante selecionada em qwfwd/, junto de sua configuração operacional.",
       "compatibility": {
         "client_scope": [
           "QuakeWorld UDP clients"
@@ -432,14 +432,14 @@
       ]
     },
     "qtv": {
-      "version": "0+025ca949aca0+x86qw.1",
+      "version": "0+025ca949aca0+x86qw.2",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qtv",
-      "distribution_tag": "qtv-025ca949aca0-x86qw.1",
+      "distribution_tag": "qtv-025ca949aca0-x86qw.2",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qtv/blob/025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE",
-      "notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O padrão escuta apenas em loopback, desativa upload HTTP e não anuncia masters.",
+      "notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O bootstrap instala somente a variante selecionada em qtv/, junto dos recursos e da configuração operacional.",
       "compatibility": {
         "client_scope": [
           "Modern web browsers",
