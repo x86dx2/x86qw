@@ -2194,7 +2194,10 @@ class ModernComponentTests(unittest.TestCase):
                 target,
                 (("k_fb_name_0", play_qw.quake_colored_frogbot_name("Luffy")),),
             )
-            self.assertEqual(0o600, config.path.stat().st_mode & 0o777)
+            self.assertTrue(config.path.is_file())
+            self.assertFalse(config.path.is_symlink())
+            if os.name != "nt":
+                self.assertEqual(0o600, config.path.stat().st_mode & 0o777)
             self.assertIn(
                 "set_ex k_fb_name_0 $qt/$xa0$xcc$xf5$xe6$xe6$xf9$qt",
                 config.path.read_text(encoding="ascii"),

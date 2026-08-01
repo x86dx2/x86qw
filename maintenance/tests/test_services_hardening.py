@@ -754,9 +754,11 @@ class ServiceHardeningTests(unittest.TestCase):
             target = Path(temporary)
             (target / ".x86qw").mkdir()
             journal = services.SessionJournal(target)
+            self.assertTrue(journal.path.is_file())
+            self.assertFalse(journal.path.is_symlink())
             if os.name != "nt":
                 self.assertEqual(0o700, journal.directory.stat().st_mode & 0o777)
-            self.assertEqual(0o600, journal.path.stat().st_mode & 0o777)
+                self.assertEqual(0o600, journal.path.stat().st_mode & 0o777)
 
     def test_temporary_config_preserves_raw_quake_name_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
