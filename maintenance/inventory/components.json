@@ -444,16 +444,16 @@
       "description": "Servidor QuakeWorld MVDSV 1.11 para os gamecodes declarados, MVD e transmissão QTV.",
       "requires": [],
       "sources": [
-        {"path": "LICENSE.md", "destination": "_x86qw/licenses/mvdsv-LICENSE.md", "mode": "overlay", "origin": "release"}
+        {"path": "LICENSE.md", "destination": "docs/licenses/mvdsv.md", "mode": "overlay", "origin": "release"}
       ],
       "project_sources": [
-        {"path": "dist/servers/mvdsv/1.11/upstream/linux-amd64/mvdsv", "destination": "_x86qw/runtimes/mvdsv/linux-amd64/mvdsv", "mode": "overlay"},
-        {"path": "dist/servers/mvdsv/1.11/upstream/windows-x64/mvdsv.exe", "destination": "_x86qw/runtimes/mvdsv/windows-x64/mvdsv.exe", "mode": "overlay"},
-        {"path": "dist/servers/mvdsv/1.11/x86qw/runtime/macos-arm64/mvdsv", "destination": "_x86qw/runtimes/mvdsv/macos-arm64/mvdsv", "mode": "overlay"},
-        {"path": "dist/servers/mvdsv/1.11/x86qw/BUILD.json", "destination": "_x86qw/runtimes/mvdsv/BUILD.json", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/upstream/linux-amd64/mvdsv", "destination": "platforms/mvdsv/linux-amd64/mvdsv", "install_destination": "mvdsv", "platform": "linux-amd64", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/upstream/windows-x64/mvdsv.exe", "destination": "platforms/mvdsv/windows-x64/mvdsv.exe", "install_destination": "mvdsv.exe", "platform": "windows-x64", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/x86qw/runtime/macos-arm64/mvdsv", "destination": "platforms/mvdsv/macos-arm64/mvdsv", "install_destination": "mvdsv", "platform": "macos-arm64", "mode": "overlay"},
         {"path": "dist/servers/mvdsv/1.11/x86qw/server.cfg", "destination": "qw/x86qw-mvdsv-user.cfg", "mode": "default"}
       ],
       "project_inputs": [
+        {"path": "dist/servers/mvdsv/1.11/x86qw/BUILD.json", "purpose": "build-provenance"},
         {"path": "dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch", "purpose": "source-patch"}
       ]
     },
@@ -464,14 +464,16 @@
       "description": "Proxy QuakeWorld QWFWD 1.30, local por padrão e exposição externa opcional.",
       "requires": [],
       "sources": [
-        {"path": "qwfwd-1.30/LICENSE.md", "destination": "_x86qw/licenses/qwfwd-LICENSE.md", "mode": "overlay", "origin": "release"}
+        {"path": "qwfwd-1.30/LICENSE.md", "destination": "docs/licenses/qwfwd.md", "mode": "overlay", "origin": "release"}
       ],
       "project_sources": [
-        {"path": "dist/services/qwfwd/1.30/upstream/linux-amd64/qwfwd", "destination": "_x86qw/runtimes/qwfwd/linux-amd64/qwfwd", "mode": "overlay"},
-        {"path": "dist/services/qwfwd/1.30/upstream/windows-x64/qwfwd.exe", "destination": "_x86qw/runtimes/qwfwd/windows-x64/qwfwd.exe", "mode": "overlay"},
-        {"path": "dist/services/qwfwd/1.30/x86qw/runtime/macos-arm64/qwfwd", "destination": "_x86qw/runtimes/qwfwd/macos-arm64/qwfwd", "mode": "overlay"},
-        {"path": "dist/services/qwfwd/1.30/x86qw/BUILD.json", "destination": "_x86qw/runtimes/qwfwd/BUILD.json", "mode": "overlay"},
-        {"path": "dist/services/qwfwd/1.30/x86qw/qwfwd.cfg", "destination": "_x86qw/services/qwfwd/qwfwd.cfg", "mode": "default"}
+        {"path": "dist/services/qwfwd/1.30/upstream/linux-amd64/qwfwd", "destination": "platforms/qwfwd/linux-amd64/qwfwd", "install_destination": "qwfwd/qwfwd", "platform": "linux-amd64", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/upstream/windows-x64/qwfwd.exe", "destination": "platforms/qwfwd/windows-x64/qwfwd.exe", "install_destination": "qwfwd/qwfwd.exe", "platform": "windows-x64", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/x86qw/runtime/macos-arm64/qwfwd", "destination": "platforms/qwfwd/macos-arm64/qwfwd", "install_destination": "qwfwd/qwfwd", "platform": "macos-arm64", "mode": "overlay"},
+        {"path": "dist/services/qwfwd/1.30/x86qw/qwfwd.cfg", "destination": "qwfwd/qwfwd.cfg", "mode": "default"}
+      ],
+      "project_inputs": [
+        {"path": "dist/services/qwfwd/1.30/x86qw/BUILD.json", "purpose": "build-provenance"}
       ]
     },
     {
@@ -481,22 +483,24 @@
       "description": "QTV HTTP fixado por commit para streams locais ou upstream remoto e demos MVD.",
       "requires": [],
       "sources": [
-        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE", "destination": "_x86qw/licenses/qtv-LICENSE", "mode": "overlay", "origin": "release"},
+        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE", "destination": "docs/licenses/qtv.txt", "mode": "overlay", "origin": "release"},
         {
           "path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources",
-          "destination": "_x86qw/services/qtv",
+          "destination": "qtv",
           "mode": "overlay",
           "origin": "release",
           "exclude": ["qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources/qtv.cfg"]
         },
-        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources/qtv.cfg", "destination": "_x86qw/services/qtv/qtv.example.cfg", "mode": "preserve", "origin": "release"}
+        {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/resources/qtv.cfg", "destination": "qtv/qtv.example.cfg", "mode": "preserve", "origin": "release"}
       ],
       "project_sources": [
-        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/linux-amd64/qtv", "destination": "_x86qw/runtimes/qtv/linux-amd64/qtv", "mode": "overlay"},
-        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/windows-x64/qtv.exe", "destination": "_x86qw/runtimes/qtv/windows-x64/qtv.exe", "mode": "overlay"},
-        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/macos-arm64/qtv", "destination": "_x86qw/runtimes/qtv/macos-arm64/qtv", "mode": "overlay"},
-        {"path": "dist/services/qtv/025ca949aca0/x86qw/BUILD.json", "destination": "_x86qw/runtimes/qtv/BUILD.json", "mode": "overlay"},
-        {"path": "dist/services/qtv/025ca949aca0/x86qw/qtv.cfg", "destination": "_x86qw/services/qtv/qtv.cfg", "mode": "default"}
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/linux-amd64/qtv", "destination": "platforms/qtv/linux-amd64/qtv", "install_destination": "qtv/qtv", "platform": "linux-amd64", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/windows-x64/qtv.exe", "destination": "platforms/qtv/windows-x64/qtv.exe", "install_destination": "qtv/qtv.exe", "platform": "windows-x64", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/runtime/macos-arm64/qtv", "destination": "platforms/qtv/macos-arm64/qtv", "install_destination": "qtv/qtv", "platform": "macos-arm64", "mode": "overlay"},
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/qtv.cfg", "destination": "qtv/qtv.cfg", "mode": "default"}
+      ],
+      "project_inputs": [
+        {"path": "dist/services/qtv/025ca949aca0/x86qw/BUILD.json", "purpose": "build-provenance"}
       ]
     }
   ]

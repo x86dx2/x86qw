@@ -35,7 +35,7 @@ DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
 RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
 DEVELOPMENT_GAME_CATALOG = "maintenance/inventory/games.json"
 RUNTIME_GAME_CATALOG = "_x86qw/games.json"
-LEGACY_MACOS_VIDEO_LAYOUT = Path(".install/launcher/macos-video-layout.json")
+LEGACY_MACOS_VIDEO_LAYOUT = Path(".x86qw/launcher/macos-video-layout.json")
 LEGACY_MACOS_VIDEO_CVARS = (
     "vid_fullscreen",
     "vid_usedesktopres",
@@ -46,7 +46,7 @@ LEGACY_MACOS_VIDEO_CVARS = (
     "vid_xpos",
     "vid_ypos",
 )
-MACOS_FULLSCREEN_LAYOUT = Path(".install/launcher/macos-fullscreen-layout.json")
+MACOS_FULLSCREEN_LAYOUT = Path(".x86qw/launcher/macos-fullscreen-layout.json")
 MACOS_FULLSCREEN_CVARS = (
     "vid_fullscreen",
     "vid_usedesktopres",

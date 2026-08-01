@@ -2,7 +2,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-app="$root/.install/cli/x86qw.pyz"
+app="$root/.x86qw/cli/x86qw.pyz"
 
 show_help() {
   if [ -f "$app" ]; then

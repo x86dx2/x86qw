@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-07-31T23:30:19Z",
+  "generated_at": "2026-08-01T00:38:48Z",
   "packages": [
     {
       "component": "core",
@@ -965,14 +965,14 @@
     {
       "component": "mvdsv",
       "package": "mvdsv",
-      "version": "1.11+x86qw.2",
+      "version": "1.11+x86qw.3",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "mvdsv-1.11+x86qw.2.zip",
-      "size": 1122249,
-      "sha256": "59b6bd09e5ecd5e2f2e1694ff1045ce09996276a22ebb19170cda1cb0071f2db",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.2/mvdsv-1.11+x86qw.2.zip",
+      "filename": "mvdsv-1.11+x86qw.3.zip",
+      "size": 1121432,
+      "sha256": "dffadf1038f284c55ee525f1df5416da733e66f31f661741a9cf05473bdf87be",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.3/mvdsv-1.11+x86qw.3.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
       "source_urls": [
@@ -981,15 +981,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.2/mvdsv-1.11+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/mvdsv/1.11+x86qw.2/mvdsv-1.11+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.3/mvdsv-1.11+x86qw.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/mvdsv/1.11+x86qw.3/mvdsv-1.11+x86qw.3.zip"
       ],
-      "mirror_title": "x86QW Content · MVDSV dedicado 1.11+x86qw.2",
+      "mirror_title": "x86QW Content · MVDSV dedicado 1.11+x86qw.3",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "a1312d109587fdc62d6373b3ba321926730d08de82ad6a9f4360ca81b9398e31",
       "release_url": "https://github.com/QW-Group/mvdsv/releases/tag/1.11",
-      "release_notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O perfil local é fechado por padrão e o launcher gera a configuração efêmera da sessão sem persistir segredos.",
+      "release_notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
       "upstream_version": "1.11"
     },
     {
@@ -1363,14 +1363,14 @@
     {
       "component": "qtv",
       "package": "qtv",
-      "version": "0+025ca949aca0+x86qw.1",
+      "version": "0+025ca949aca0+x86qw.2",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "qtv-0+025ca949aca0+x86qw.1.zip",
-      "size": 12083253,
-      "sha256": "51474ad85b91b4fb92e3569a33d1dcbc599923d4332258537d2b23f9a11a126d",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip",
+      "filename": "qtv-0+025ca949aca0+x86qw.2.zip",
+      "size": 12079424,
+      "sha256": "b336e267f27386d32c2c1fae832b29f27c9bebcdc47579ed9a2c7de024457fde",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.2/qtv-0+025ca949aca0+x86qw.2.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qtv/blob/025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE",
       "source_urls": [
@@ -1379,28 +1379,28 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qtv/0+025ca949aca0+x86qw.1/qtv-0+025ca949aca0+x86qw.1.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/qtv-025ca949aca0-x86qw.2/qtv-0+025ca949aca0+x86qw.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qtv/0+025ca949aca0+x86qw.2/qtv-0+025ca949aca0+x86qw.2.zip"
       ],
-      "mirror_title": "x86QW Content · QTV broadcast 0+025ca949aca0+x86qw.1",
+      "mirror_title": "x86QW Content · QTV broadcast 0+025ca949aca0+x86qw.2",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "6742784e05b3222c2d82e18ac0f380218f9e8e8819d7834f0e80af366484f12d",
       "release_url": "https://github.com/QW-Group/qtv/commit/025ca949aca06cad6777de0075148ac06a15f4f0",
-      "release_notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O padrão escuta apenas em loopback, desativa upload HTTP e não anuncia masters.",
+      "release_notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O bootstrap instala somente a variante selecionada em qtv/, junto dos recursos e da configuração operacional.",
       "upstream_version": "025ca949aca0"
     },
     {
       "component": "qwfwd",
       "package": "qwfwd",
-      "version": "1.30+x86qw.2",
+      "version": "1.30+x86qw.3",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "qwfwd-1.30+x86qw.2.zip",
-      "size": 288199,
-      "sha256": "33662398583ea7c66cee45a1300b1744ba862fdf69c9d5458759d0e7dee2df8f",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.2/qwfwd-1.30+x86qw.2.zip",
+      "filename": "qwfwd-1.30+x86qw.3.zip",
+      "size": 287386,
+      "sha256": "ecb10fd2cd6389a6433d29f6a18bcdd1aa9734adc4a6b98b68d6ae44965f9458",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.3/qwfwd-1.30+x86qw.3.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qwfwd/blob/1.30/LICENSE.md",
       "source_urls": [
@@ -1409,15 +1409,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.2/qwfwd-1.30+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qwfwd/1.30+x86qw.2/qwfwd-1.30+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/qwfwd-1.30-x86qw.3/qwfwd-1.30+x86qw.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/qwfwd/1.30+x86qw.3/qwfwd-1.30+x86qw.3.zip"
       ],
-      "mirror_title": "x86QW Content · QWFWD proxy 1.30+x86qw.2",
+      "mirror_title": "x86QW Content · QWFWD proxy 1.30+x86qw.3",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "07f0f9cd2a9f9ff8d054774ba351c34cab6785626476bda27017889fae9cff2a",
       "release_url": "https://github.com/QW-Group/qwfwd/releases/tag/1.30",
-      "release_notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. A configuração instalada escuta somente em loopback, não consulta nem anuncia masters e só é exposta quando o operador informa outro bind.",
+      "release_notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. O bootstrap instala somente a variante selecionada em qwfwd/, junto de sua configuração operacional.",
       "upstream_version": "1.30"
     },
     {

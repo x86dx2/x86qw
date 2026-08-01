@@ -282,7 +282,7 @@ class InstallationLock:
             except FileExistsError:
                 if target.is_symlink() or not target.is_dir():
                     raise SessionControlError(f"Destino ausente ou inseguro: {target}")
-        sessions = target / ".install" / "sessions"
+        sessions = target / ".x86qw" / "sessions"
         _ensure_private_directory(sessions.parent, created)
         _ensure_private_directory(sessions, created)
         identity_probe = process_identity(os.getpid())
