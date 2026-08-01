@@ -3,9 +3,13 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
-import sys
-import unittest
+import os
 from pathlib import Path
+import sys
+import threading
+import time
+import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +59,42 @@ class MenuTests(unittest.TestCase):
                     searchable=True,
                 ),
             )
+
+    def test_posix_confirmation_accepts_delayed_ss3_arrow_without_cancelling(self):
+        if os.name == "nt" or not hasattr(os, "openpty"):
+            self.skipTest("PTY POSIX indisponível nesta plataforma")
+        master, slave = os.openpty()
+        writer_error = []
+
+        def write_keys():
+            try:
+                time.sleep(0.02)
+                os.write(master, b"\x1b")
+                time.sleep(0.06)
+                os.write(master, b"OA\r")
+            except OSError as error:
+                writer_error.append(error)
+
+        writer = threading.Thread(target=write_keys)
+        try:
+            with os.fdopen(slave, "r", encoding="utf-8") as terminal_input:
+                writer.start()
+                with mock.patch.object(menu.sys, "stdin", terminal_input):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertTrue(menu.confirm("Confirmar?", default=False, interactive=True))
+                writer.join(timeout=1)
+        finally:
+            if writer.is_alive():
+                writer.join(timeout=1)
+            os.close(master)
+        self.assertFalse(writer.is_alive())
+        self.assertEqual([], writer_error)
+
+    def test_posix_escape_decoder_accepts_csi_modifiers_and_rejects_unknown_sequences(self):
+        self.assertEqual("up", menu._decode_posix_escape(b"[A"))
+        self.assertEqual("down", menu._decode_posix_escape(b"[1;2B"))
+        self.assertEqual("left", menu._decode_posix_escape(b"OD"))
+        self.assertEqual("unknown", menu._decode_posix_escape(b"[200~"))
 
     def test_navigation_escape_returns_to_parent(self):
         with contextlib.redirect_stdout(io.StringIO()):

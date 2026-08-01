@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import select
 import shutil
 import sys
 from dataclasses import dataclass
@@ -25,6 +26,9 @@ class MenuCancelled(Exception):
 
 
 _NO_COLOR = False
+_ESCAPE_INITIAL_TIMEOUT = 0.12
+_ESCAPE_CONTINUATION_TIMEOUT = 0.04
+_ESCAPE_SEQUENCE_LIMIT = 16
 
 
 def configure(*, no_color: bool = False) -> None:
@@ -59,23 +63,48 @@ def _read_windows_key() -> str:  # pragma: no cover - exercised on Windows
     }.get(key, key)
 
 
+def _decode_posix_escape(sequence: bytes) -> str:
+    """Decode a complete CSI or SS3 sequence without treating it as bare Esc."""
+    if sequence[:1] not in (b"[", b"O"):
+        return "unknown"
+    return {
+        b"A": "up", b"B": "down", b"C": "right", b"D": "left",
+    }.get(sequence[-1:], "unknown")
+
+
+def _read_posix_escape(descriptor: int) -> str:
+    sequence = b""
+    timeout = _ESCAPE_INITIAL_TIMEOUT
+    while len(sequence) < _ESCAPE_SEQUENCE_LIMIT:
+        if not select.select([descriptor], [], [], timeout)[0]:
+            break
+        part = os.read(descriptor, 1)
+        if not part:
+            break
+        sequence += part
+        timeout = _ESCAPE_CONTINUATION_TIMEOUT
+        if sequence[:1] == b"[":
+            if len(sequence) >= 2 and 0x40 <= sequence[-1] <= 0x7E:
+                break
+        elif sequence[:1] == b"O":
+            if len(sequence) >= 2:
+                break
+        else:
+            break
+    return "escape" if not sequence else _decode_posix_escape(sequence)
+
+
 def _read_posix_key() -> str:  # pragma: no cover - real terminal path
-    import select
     import termios
     import tty
 
     descriptor = sys.stdin.fileno()
     previous = termios.tcgetattr(descriptor)
     try:
-        tty.setraw(descriptor)
+        tty.setraw(descriptor, when=termios.TCSANOW)
         first = os.read(descriptor, 1)
         if first == b"\x1b":
-            sequence = b""
-            while len(sequence) < 2 and select.select([descriptor], [], [], 0.035)[0]:
-                sequence += os.read(descriptor, 1)
-            return {
-                b"[A": "up", b"[B": "down", b"[D": "left", b"[C": "right",
-            }.get(sequence, "escape")
+            return _read_posix_escape(descriptor)
         if first in (b"\r", b"\n"):
             return "enter"
         if first in (b"\x7f", b"\x08"):
