@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T03:16:23Z",
+  "generated_at": "2026-08-01T13:41:58Z",
   "packages": [
     {
       "component": "core",
@@ -994,7 +994,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.4.1",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1018,19 +1018,49 @@
       "release_notes": "# x86QW 0.4.1\n\nRelease corretiva da navegação interativa da CLI x86QW.\n\n## Teclado\n\n- interpreta sequências CSI e SS3 completas produzidas pelas teclas de direção;\n- preserva teclas já enfileiradas, inclusive Enter logo após uma seta;\n- ignora sequências de terminal desconhecidas sem convertê-las em cancelamento;\n- mantém navegação por setas, `j`/`k`, Enter, Esc e fallback numerado.\n\n## Apresentação\n\n- colore a linha inteira da opção selecionada em terminais compatíveis;\n- alinha itens e descrições com `|` como divisor;\n- mostra a explicação da opção selecionada na própria linha;\n- preserva o marcador textual `›` quando cores estiverem desativadas;\n- torna explícita a consequência das respostas `Sim` e `Não` nas confirmações.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis. Jogos, gameplay,\nperfis, runtimes, PAKs e layout instalado não foram alterados.\n\n## Validação\n\n- 289 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- regressão PTY para setas, Enter enfileirado, cores, alinhamento e cancelamento;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- dry-run do Worker e publicação explícita após aprovação.",
       "mirror_title": "x86QW Installer 0.4.1",
       "mirror_notes": "# x86QW 0.4.1\n\nRelease corretiva da navegação interativa da CLI x86QW.\n\n## Teclado\n\n- interpreta sequências CSI e SS3 completas produzidas pelas teclas de direção;\n- preserva teclas já enfileiradas, inclusive Enter logo após uma seta;\n- ignora sequências de terminal desconhecidas sem convertê-las em cancelamento;\n- mantém navegação por setas, `j`/`k`, Enter, Esc e fallback numerado.\n\n## Apresentação\n\n- colore a linha inteira da opção selecionada em terminais compatíveis;\n- alinha itens e descrições com `|` como divisor;\n- mostra a explicação da opção selecionada na própria linha;\n- preserva o marcador textual `›` quando cores estiverem desativadas;\n- torna explícita a consequência das respostas `Sim` e `Não` nas confirmações.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis. Jogos, gameplay,\nperfis, runtimes, PAKs e layout instalado não foram alterados.\n\n## Validação\n\n- 289 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- regressão PTY para setas, Enter enfileirado, cores, alinhamento e cancelamento;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- dry-run do Worker e publicação explícita após aprovação.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.4.2",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.4.2.zip",
+      "size": 124242,
+      "sha256": "2458a34e50591fc7f1b540d81604977239315b0b1b15b663ca09924cb7014683",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.2/x86qw-installer-0.4.2.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.2/x86qw-installer-0.4.2.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.4.2/x86qw-installer-0.4.2.zip"
+      ],
+      "distribution_path": "installer/packages/0.4.2/x86qw-installer-0.4.2.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.4.2",
+      "release_title": "x86QW Installer 0.4.2",
+      "release_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- mantém CTF e Race sem bots, conforme o contrato do QVM oficial.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. O gamecode oficial KTX 1.47 não foi alterado.\n\n## Validação\n\n- 295 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
+      "mirror_title": "x86QW Installer 0.4.2",
+      "mirror_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- mantém CTF e Race sem bots, conforme o contrato do QVM oficial.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. O gamecode oficial KTX 1.47 não foi alterado.\n\n## Validação\n\n- 295 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
       "mirror_latest": true
     },
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.12",
+      "version": "1.47+x86qw.13",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.12.zip",
-      "size": 2552253,
-      "sha256": "007dfa491578e621e85ec3cc04acb99f44efc914031912add31a80b20c8f3b76",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.12/ktx-1.47+x86qw.12.zip",
+      "filename": "ktx-1.47+x86qw.13.zip",
+      "size": 2552235,
+      "sha256": "83de656613a57817bd1fd24f9bbb652c0e6b36b7635b9f70f329f6c2645e6f76",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.13/ktx-1.47+x86qw.13.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -1040,16 +1070,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.12/ktx-1.47+x86qw.12.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.12/ktx-1.47+x86qw.12.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.13/ktx-1.47+x86qw.13.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.13/ktx-1.47+x86qw.13.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.12",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.13",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; o F10 combina controles comuns e ajuda contextual alinhada.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; os 22 modos compatíveis adicionam o Frogbot escolhido na primeira entrada e o F10 combina controles comuns e ajuda contextual alinhada.",
       "upstream_version": "1.47"
     },
     {

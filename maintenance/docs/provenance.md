@@ -55,7 +55,7 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
 QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
-`1.47+x86qw.12`; fontes, override, catálogo de modos, gameplay e hashes ficam no inventário
+`1.47+x86qw.13`; fontes, override, catálogo de modos, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

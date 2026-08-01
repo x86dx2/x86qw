@@ -54,7 +54,7 @@ O x86QW transforma um ecossistema histórico em um produto atual: seleciona vers
 irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
-O bootstrap público `0.4.1` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.4.2` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows

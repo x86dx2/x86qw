@@ -4,8 +4,8 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.4.1`. Baseline da correção de
-navegação: branch `main`, commit `3a4e329`, em 1 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.4.2`. Baseline da correção dos
+modos KTX: branch `main`, commit `f8bbc81`, em 1 de agosto de 2026.
 
 ## Escala de estado
 
@@ -19,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.4.1`; as linhas anteriores permanecem imutáveis;
-- 55 pacotes e 21 componentes no catálogo;
+- instalador público `0.4.2`; as linhas anteriores permanecem imutáveis;
+- 56 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -103,7 +103,7 @@ comandos anterior à refatoração.
 ### KTX-01 — Modos KTX
 
 **Entrega funcional:** completa para os modos publicados
-**Validação:** unitária; macOS para o fluxo já exercitado
+**Validação:** unitária; 24 modos exercitados no macOS em janela
 
 `modes.json` continua como fonte de verdade. Duel, 2on2, 4on4, CTF, Race,
 Midair, Practice e os demais modos publicados preservam argumentos e ajuda.
@@ -111,7 +111,7 @@ Midair, Practice e os demais modos publicados preservam argumentos e ajuda.
 ### BOT-01 — Frogbots
 
 **Entrega funcional:** MVP entregue
-**Validação:** unitária; smoke real ainda parcial
+**Validação:** unitária; 22 modos compatíveis exercitados no macOS em janela
 
 Quantidade, preenchimento, habilidade, equipe, arma e vida são validados. CTF e
 Race rejeitam combinações de bot incompatíveis. Falta formalizar smokes reais
@@ -282,4 +282,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.4.0` executada e verificada em etapa explícita aprovada;
 - [x] versão `0.4.1` corrige sequências de setas e organiza as linhas dos menus;
 - [x] publicação `0.4.1` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.4.2` corrige a entrada dos 24 modos KTX e dos Frogbots;
+- [x] publicação `0.4.2` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.12",
+      "version": "1.47+x86qw.13",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.12",
+      "distribution_tag": "ktx-1.47-x86qw.13",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; o F10 combina controles comuns e ajuda contextual alinhada.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; os 22 modos compatíveis adicionam o Frogbot escolhido na primeira entrada e o F10 combina controles comuns e ajuda contextual alinhada.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

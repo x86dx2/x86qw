@@ -6,11 +6,11 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline publicada: tag `x86qw-installer-0.4.1`. Baseline da correção de
-navegação: branch `main`, commit `3a4e329`, em 1 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.4.2`. Baseline da correção dos
+modos KTX: branch `main`, commit `f8bbc81`, em 1 de agosto de 2026.
 
-- instalador público `0.4.1`; as linhas anteriores permanecem imutáveis no histórico;
-- 55 pacotes e 21 componentes;
+- instalador público `0.4.2`; as linhas anteriores permanecem imutáveis no histórico;
+- 56 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
@@ -26,15 +26,15 @@ navegação: branch `main`, commit `3a4e329`, em 1 de agosto de 2026.
 | Frente | Entrega funcional | Validação |
 |---|---|---|
 | Distribuição e instalador | completa para o escopo atual | unitária; CI portável macOS/Linux/Windows concluída; smokes nativos pendentes |
-| KTX e modos | completa para o catálogo atual | unitária; smoke macOS existente |
-| Frogbots | MVP entregue | unitária; combinações suportadas cobertas |
+| KTX e modos | completa para o catálogo atual | unitária; os 24 modos exercitados no macOS em janela |
+| Frogbots | MVP entregue | unitária; os 22 modos compatíveis exercitados no macOS |
 | Jogos legados atuais | MVP entregue | unitária; smoke gráfico manual permanece |
 | MVDSV e `host` | MVP entregue | unitária; smoke macOS existente |
 | QTV HTTP/upstream | MVP entregue | unitária; smoke macOS existente |
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.4.1` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.4.2` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
