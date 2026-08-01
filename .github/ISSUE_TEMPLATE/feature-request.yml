@@ -1,0 +1,59 @@
+name: Propor uma melhoria
+description: Sugira uma evolução de produto, distribuição, operação ou documentação.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propostas de novos componentes precisam explicar origem, licença, consumidor e como serão mantidas.
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Quem se beneficia?
+      options:
+        - Jogadores
+        - Hosts e operadores
+        - Mantenedores da distribuição
+        - Desenvolvedores upstream
+        - Todos
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual dificuldade concreta existe hoje? Evite começar apenas pela solução.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Resultado proposto
+      description: Descreva a experiência desejada e um critério objetivo de aceite.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Há uma solução existente na CLI, no upstream ou fora do projeto?
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Origem e licença
+      description: Obrigatório para clientes, runtimes, jogos, mods, mapas ou assets externos. Inclua links e versões.
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validação esperada
+      description: Quais plataformas, testes ou smokes demonstram que a proposta funciona?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei propostas semelhantes no roadmap e nas issues.
+          required: true
+        - label: A proposta preserva atualização explícita e pacotes publicados imutáveis.
+          required: true
