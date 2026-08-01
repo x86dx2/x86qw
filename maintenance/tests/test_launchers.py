@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CAPABILITIES = ROOT / "maintenance/inventory/capabilities.json"
 PRODUCT = ROOT / "site/public/api/v1/product.json"
+POWERSHELL = shutil.which("pwsh") or shutil.which("powershell.exe")
 
 
 class LauncherContractTests(unittest.TestCase):
@@ -137,7 +138,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
             self.assertEqual("menu", received[0])
             self.assertEqual(root.resolve(), Path(received[1]).resolve())
 
-    @unittest.skipUnless(os.name == "nt", "PowerShell é exercitado somente no runner Windows")
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_preserves_the_calling_session(self):
         bootstrap = ROOT / "site/public/install.ps1"
         source = bootstrap.read_text(encoding="utf-8")
@@ -176,7 +177,7 @@ Write-Output "X86QW_BOOTSTRAP_SURVIVED:$global:LASTEXITCODE"
             )
             completed = subprocess.run(
                 [
-                    "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
                     "-File", str(harness), str(bootstrap), version, digest,
                 ],
                 check=False, capture_output=True, text=True,
