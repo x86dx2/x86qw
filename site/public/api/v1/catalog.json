@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T13:41:58Z",
+  "generated_at": "2026-08-01T22:53:09Z",
   "packages": [
     {
       "component": "core",
@@ -182,14 +182,14 @@
     {
       "component": "final-arena",
       "package": "final-arena",
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.2",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.3",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "final-arena-1.20+nquake.e4cb23d40aa2+x86qw.2.zip",
-      "size": 6984548,
-      "sha256": "f9621889ea1ffe1df4d8fc369777f80ba7e2c37c82b22f6720c8859bf225ff55",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.2.zip",
+      "filename": "final-arena-1.20+nquake.e4cb23d40aa2+x86qw.3.zip",
+      "size": 6984564,
+      "sha256": "29c33c0e87e3f9fb8fcc78d411fdfc84de6f4581ea092ed975349454a5e27a3a",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.3.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
       "source_urls": [
@@ -199,15 +199,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.2.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/1.20+nquake.e4cb23d40aa2+x86qw.2/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.2.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.3.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/1.20+nquake.e4cb23d40aa2+x86qw.3/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.3.zip"
       ],
-      "mirror_title": "x86QW Content · Final Arena 1.20+nquake.e4cb23d40aa2+x86qw.2",
+      "mirror_title": "x86QW Content · Final Arena 1.20+nquake.e4cb23d40aa2+x86qw.3",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "release_notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com ajuda somente sob demanda.",
+      "release_notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com plano de teclas impresso ao entrar.",
       "upstream_version": "1.20"
     },
     {
@@ -1024,7 +1024,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.4.2",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1045,22 +1045,52 @@
       "distribution_path": "installer/packages/0.4.2/x86qw-installer-0.4.2.zip",
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.4.2",
       "release_title": "x86QW Installer 0.4.2",
-      "release_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- mantém CTF e Race sem bots, conforme o contrato do QVM oficial.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. O gamecode oficial KTX 1.47 não foi alterado.\n\n## Validação\n\n- 295 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
+      "release_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- completa automaticamente o elenco fixo de cada modo e distribui os bots pelas\n  equipes declaradas: `3on3` usa duas equipes de três e `2on2on2` usa três\n  equipes de dois;\n- mantém CTF e Race sem bots, conforme o contrato do KTX 1.47.\n- sorteia a habilidade de cada bot independentemente quando solicitado;\n- oferece nomes KTX Default, One Piece x86QW aleatório e lista pessoal;\n- preserva as skins e cores relacionais padrão do KTX também durante sessões\n  Frogbot, sem sobrescrita visual pelo launcher.\n\n## Interface e controles\n\n- numera todas as opções do menu, alinha descrições em uma coluna cinza e\n  mantém o detalhe do item selecionado na mesma linha;\n- padroniza a legenda em `↑↓ navegar`, `→/Enter selecionar`, `← voltar` e\n  `Esc Sair`;\n- separa voltar ao pai com seta esquerda de encerrar o fluxo com `Esc`;\n- imprime por jogo e por modo apenas ações realmente vinculadas a teclas;\n- organiza a camada KTX mantida pelo projeto em `catalog/`, `config/`,\n  `runtime/`, `source/` e `policy/`, sem alterar a árvore instalada.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. A extensão QVM do KTX continua mínima, reproduzível e inerte sem\nas cvars x86QW.\n\n## Validação\n\n- 324 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- bootstrap PowerShell preserva a sessão que executa `irm ... | iex` e mantém\n  visível o código devolvido pelo instalador Python;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
       "mirror_title": "x86QW Installer 0.4.2",
-      "mirror_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- mantém CTF e Race sem bots, conforme o contrato do QVM oficial.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. O gamecode oficial KTX 1.47 não foi alterado.\n\n## Validação\n\n- 295 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
+      "mirror_notes": "# x86QW 0.4.2\n\nRelease corretiva dos modos locais KTX e da inicialização de Frogbots.\n\n## Modos KTX\n\n- preserva corpos compostos de aliases até a entrada local no servidor;\n- instala somente o evento de entrada correspondente ao usermode escolhido;\n- abre os 24 modos declarados, incluindo as sete variações oficiais;\n- conclui o perfil Practice na primeira entrada, sem aguardar uma recarga que\n  não ocorre;\n- evita conflito de propriedade das cvars Frogbot no ThunderWalker ToT.\n\n## Frogbots\n\n- adiciona automaticamente o bot escolhido nos 22 modos compatíveis;\n- aplica quantidade, habilidade, equipe, arma e vida somente depois que o KTX\n  confirma a conexão local;\n- completa automaticamente o elenco fixo de cada modo e distribui os bots pelas\n  equipes declaradas: `3on3` usa duas equipes de três e `2on2on2` usa três\n  equipes de dois;\n- mantém CTF e Race sem bots, conforme o contrato do KTX 1.47.\n- sorteia a habilidade de cada bot independentemente quando solicitado;\n- oferece nomes KTX Default, One Piece x86QW aleatório e lista pessoal;\n- preserva as skins e cores relacionais padrão do KTX também durante sessões\n  Frogbot, sem sobrescrita visual pelo launcher.\n\n## Interface e controles\n\n- numera todas as opções do menu, alinha descrições em uma coluna cinza e\n  mantém o detalhe do item selecionado na mesma linha;\n- padroniza a legenda em `↑↓ navegar`, `→/Enter selecionar`, `← voltar` e\n  `Esc Sair`;\n- separa voltar ao pai com seta esquerda de encerrar o fluxo com `Esc`;\n- imprime por jogo e por modo apenas ações realmente vinculadas a teclas;\n- organiza a camada KTX mantida pelo projeto em `catalog/`, `config/`,\n  `runtime/`, `source/` e `policy/`, sem alterar a árvore instalada.\n\n## Compatibilidade\n\nComandos, perfis, runtimes, mapas, PAKs e configurações pessoais permanecem\ncompatíveis. A extensão QVM do KTX continua mínima, reproduzível e inerte sem\nas cvars x86QW.\n\n## Validação\n\n- 324 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- bootstrap PowerShell preserva a sessão que executa `irm ... | iex` e mantém\n  visível o código devolvido pelo instalador Python;\n- smoke real dos 24 modos no ezQuake 3.6.9 em janela `1280x720` no macOS;\n- Frogbot confirmado nos 22 modos compatíveis;\n- configurações pessoais preservadas e nenhum processo ou log residual;\n- Git LFS, catálogo, zipapp e bundles determinísticos.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.5.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.5.0.zip",
+      "size": 132652,
+      "sha256": "79ce5e2dcfdf2e3f0c3d03c79c34b7b4ee6ec28408ff6c298e8b7b8159ab352a",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.5.0/x86qw-installer-0.5.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.5.0/x86qw-installer-0.5.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.5.0/x86qw-installer-0.5.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.5.0/x86qw-installer-0.5.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.5.0",
+      "release_title": "x86QW Installer 0.5.0",
+      "release_notes": "# x86QW 0.5.0\n\nRelease funcional dos novos menus, perfis declarativos de Frogbots e controles\ncontextuais dos cinco jogos atuais.\n\n## Interface\n\n- organiza os menus por tarefas, numera todas as opções e mantém descrições\n  alinhadas na mesma linha;\n- usa setas e Enter para navegar, seta esquerda para voltar ao menu pai e Esc\n  para sair do fluxo inteiro;\n- corrige a leitura de sequências de setas em terminais interativos;\n- preserva confirmação automática com `--yes` e o fallback numerado.\n\n## KTX e Frogbots\n\n- reúne catálogo, configuração, runtime, fontes e política em contextos\n  separados dentro do componente KTX;\n- oferece nomes `KTX Default`, `x86QW aleatório` e lista pessoal editável;\n- aplica nomes e habilidades aleatórias sem substituir skins, cores ou equipes\n  controladas pelo KTX;\n- completa o elenco conforme cada usermode, inclusive três equipes nos modos\n  `2on2on2`, `3on3on3` e `4on4on4`;\n- carrega os 24 modos declarados e adiciona os bots escolhidos depois da entrada\n  local no servidor;\n- imprime um plano de teclas contextual e vincula F12 para saída direta nos\n  cinco jogos atuais.\n\n## Bootstrap e compatibilidade\n\n- o bootstrap PowerShell devolve o código do instalador sem encerrar a sessão\n  usada por `irm ... | iex`;\n- preserva comandos públicos, perfis, stable/nightly, PAKs, mapas, runtimes e\n  configurações pessoais;\n- publica novas revisões imutáveis de KTX, Final Arena, Pro-X, Team Fortress e\n  Total Destruction 2 sem alterar os pacotes anteriores.\n\n## Validação\n\n- 326 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real em janela do KTX 4on4 com sete Frogbots no macOS;\n- F12 exercitado em KTX, Final Arena, Pro-X, Team Fortress e TD2;\n- Git LFS, catálogo, zipapp, pacotes e site validados antes da publicação.",
+      "mirror_title": "x86QW Installer 0.5.0",
+      "mirror_notes": "# x86QW 0.5.0\n\nRelease funcional dos novos menus, perfis declarativos de Frogbots e controles\ncontextuais dos cinco jogos atuais.\n\n## Interface\n\n- organiza os menus por tarefas, numera todas as opções e mantém descrições\n  alinhadas na mesma linha;\n- usa setas e Enter para navegar, seta esquerda para voltar ao menu pai e Esc\n  para sair do fluxo inteiro;\n- corrige a leitura de sequências de setas em terminais interativos;\n- preserva confirmação automática com `--yes` e o fallback numerado.\n\n## KTX e Frogbots\n\n- reúne catálogo, configuração, runtime, fontes e política em contextos\n  separados dentro do componente KTX;\n- oferece nomes `KTX Default`, `x86QW aleatório` e lista pessoal editável;\n- aplica nomes e habilidades aleatórias sem substituir skins, cores ou equipes\n  controladas pelo KTX;\n- completa o elenco conforme cada usermode, inclusive três equipes nos modos\n  `2on2on2`, `3on3on3` e `4on4on4`;\n- carrega os 24 modos declarados e adiciona os bots escolhidos depois da entrada\n  local no servidor;\n- imprime um plano de teclas contextual e vincula F12 para saída direta nos\n  cinco jogos atuais.\n\n## Bootstrap e compatibilidade\n\n- o bootstrap PowerShell devolve o código do instalador sem encerrar a sessão\n  usada por `irm ... | iex`;\n- preserva comandos públicos, perfis, stable/nightly, PAKs, mapas, runtimes e\n  configurações pessoais;\n- publica novas revisões imutáveis de KTX, Final Arena, Pro-X, Team Fortress e\n  Total Destruction 2 sem alterar os pacotes anteriores.\n\n## Validação\n\n- 326 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real em janela do KTX 4on4 com sete Frogbots no macOS;\n- F12 exercitado em KTX, Final Arena, Pro-X, Team Fortress e TD2;\n- Git LFS, catálogo, zipapp, pacotes e site validados antes da publicação.",
       "mirror_latest": true
     },
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.13",
+      "version": "1.47+x86qw.17",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.13.zip",
-      "size": 2552235,
-      "sha256": "83de656613a57817bd1fd24f9bbb652c0e6b36b7635b9f70f329f6c2645e6f76",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.13/ktx-1.47+x86qw.13.zip",
+      "filename": "ktx-1.47+x86qw.17.zip",
+      "size": 2542852,
+      "sha256": "6b8ba40f1952ed8964a9c62626e50fd0ec9d5d8bcb4a666efdce83c138ef4f4c",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.17/ktx-1.47+x86qw.17.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -1070,16 +1100,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.13/ktx-1.47+x86qw.13.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.13/ktx-1.47+x86qw.13.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.17/ktx-1.47+x86qw.17.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.17/ktx-1.47+x86qw.17.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.13",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.17",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; os 22 modos compatíveis adicionam o Frogbot escolhido na primeira entrada e o F10 combina controles comuns e ajuda contextual alinhada.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória e balanceamento automático conforme as equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida e nomes. Camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
       "upstream_version": "1.47"
     },
     {
@@ -1453,14 +1483,14 @@
     {
       "component": "pro-x",
       "package": "pro-x",
-      "version": "1.1+x86qw.3",
+      "version": "1.1+x86qw.4",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "pro-x-1.1+x86qw.3.zip",
-      "size": 9080957,
-      "sha256": "50f3894607d67553f8fac7dc47cbd76c595860258b62e24defb3d83610659f14",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.3.zip",
+      "filename": "pro-x-1.1+x86qw.4.zip",
+      "size": 9081075,
+      "sha256": "b5b0bd364726406396575705a5f1ae4a39591fb0be6ae50968724102ef7ec44e",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.4.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "source_urls": [
@@ -1469,15 +1499,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.3.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.3/pro-x-1.1+x86qw.3.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.4/pro-x-1.1+x86qw.4.zip"
       ],
-      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.3",
+      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.4",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com ajuda somente sob demanda e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com plano de teclas impresso ao entrar e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
       "upstream_version": "1.1"
     },
     {
@@ -1543,14 +1573,14 @@
     {
       "component": "td2",
       "package": "total-destruction-2",
-      "version": "2.22+x86qw.3",
+      "version": "2.22+x86qw.4",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "total-destruction-2-2.22+x86qw.3.zip",
-      "size": 502563,
-      "sha256": "dfec262b3984db8f99f32973038d945106afd263858fd2c400d3d97bebbacbee",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.3.zip",
+      "filename": "total-destruction-2-2.22+x86qw.4.zip",
+      "size": 502601,
+      "sha256": "a99cb113e17b6accf27d495c23d36879718dad21f02be5d7578198bdc72668db",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.4.zip",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
       "source_urls": [
@@ -1559,28 +1589,28 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.3.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.3/total-destruction-2-2.22+x86qw.3.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.4/total-destruction-2-2.22+x86qw.4.zip"
       ],
-      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.3",
+      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.4",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
-      "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, ajuda somente sob demanda e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, plano de teclas impresso ao entrar e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
       "upstream_version": "2.22"
     },
     {
       "component": "team-fortress",
       "package": "team-fortress",
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.4",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.5",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.4.zip",
-      "size": 8566751,
-      "sha256": "63b16d87261a363d40f084ebc5763d6bcf930a832f5b8a9495ee4f4b6b49600c",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.4.zip",
+      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.5.zip",
+      "size": 8566724,
+      "sha256": "ad7fac4d4f6ec7c09997b1885f670e612afea06581ea37db73c95a90ae677a22",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.5.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "source_urls": [
@@ -1590,10 +1620,10 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.4.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.4/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.4.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.5.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.5/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.5.zip"
       ],
-      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.4",
+      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.5",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
