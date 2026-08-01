@@ -20,6 +20,11 @@ sys.modules[SPEC.name] = menu
 SPEC.loader.exec_module(menu)
 
 
+class TtyStringIO(io.StringIO):
+    def isatty(self):
+        return True
+
+
 class MenuTests(unittest.TestCase):
     def setUp(self):
         menu.configure(no_color=True)
@@ -38,7 +43,51 @@ class MenuTests(unittest.TestCase):
             )
         self.assertEqual("duel", selected)
         lines = [line for line in output.getvalue().splitlines() if ")" in line]
-        self.assertEqual(1, len({line.index(option.detail) for line, option in zip(lines, self.options)}))
+        self.assertEqual(1, len({line.index("|") for line in lines}))
+        for line, option in zip(lines, self.options):
+            self.assertIn(option.detail, line)
+
+    def test_selected_row_is_colored_and_keeps_its_explanation_inline(self):
+        output = TtyStringIO()
+        with mock.patch.object(menu, "_NO_COLOR", False):
+            with mock.patch.object(menu.sys, "stdout", output):
+                selected = menu.select_one(
+                    "Modo", self.options, interactive=True, key_reader=lambda: "enter",
+                )
+        self.assertEqual("duel", selected)
+        self.assertIn(
+            "\033[1;36m› Duel             | 2 jogadores — competitivo\033[0m",
+            output.getvalue(),
+        )
+        self.assertNotIn("\n    competitivo", output.getvalue())
+
+    def test_multiple_menu_aligns_description_and_keeps_active_detail_inline(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            selected = menu.select_many(
+                "Modos", self.options, selected=("duel",), interactive=True,
+                key_reader=lambda: "enter",
+            )
+        self.assertEqual(("duel",), selected)
+        lines = [line for line in output.getvalue().splitlines() if "[" in line and "|" in line]
+        self.assertEqual(1, len({line.index("|") for line in lines}))
+        self.assertIn("2 jogadores — competitivo", lines[0])
+
+    def test_confirmation_describes_yes_and_no_in_aligned_columns(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            accepted = menu.confirm(
+                "Executar?", description="aplicar as alterações", default=False,
+                interactive=False, input_fn=lambda _: "",
+            )
+        self.assertFalse(accepted)
+        lines = [line for line in output.getvalue().splitlines() if "|" in line]
+        self.assertEqual(2, len(lines))
+        self.assertEqual(1, len({line.index("|") for line in lines}))
+        self.assertIn("Sim", lines[0])
+        self.assertIn("| aplicar as alterações", lines[0])
+        self.assertIn("Não (padrão)", lines[1])
+        self.assertIn("| não executar esta ação", lines[1])
 
     def test_navigation_supports_arrows_and_search(self):
         keys = iter(("down", "enter"))
