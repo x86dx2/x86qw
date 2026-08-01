@@ -568,6 +568,7 @@ def verify_distribution(
         for source in (
             *component_entry.get("project_sources", []),
             *component_entry.get("project_overrides", []),
+            *component_entry.get("project_archive_overrides", []),
             *component_entry.get("project_inputs", []),
         )
     }

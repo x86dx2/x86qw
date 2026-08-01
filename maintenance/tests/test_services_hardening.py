@@ -756,7 +756,17 @@ class ServiceHardeningTests(unittest.TestCase):
             journal = services.SessionJournal(target)
             if os.name != "nt":
                 self.assertEqual(0o700, journal.directory.stat().st_mode & 0o777)
-                self.assertEqual(0o600, journal.path.stat().st_mode & 0o777)
+            self.assertEqual(0o600, journal.path.stat().st_mode & 0o777)
+
+    def test_temporary_config_preserves_raw_quake_name_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            raw_name = b'set k_fb_name_0 "/\xa0\xd9\xe1\xed\xe1\xf4\xef"'
+            config = services.temporary_config(directory, "host-", [raw_name])
+            try:
+                self.assertIn(raw_name + b"\n", config.read_bytes())
+            finally:
+                services.unlink_sensitive_temporary(config)
 
     def test_partial_startup_failure_stops_server_and_dependents(self):
         processes = [mock.Mock(pid=101), mock.Mock(pid=102)]

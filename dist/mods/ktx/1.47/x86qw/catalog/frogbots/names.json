@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "game": "ktx",
+  "profile": "x86qw",
+  "theme": "one-piece",
+  "prefix": "/",
+  "color": "quake-high-bit",
+  "randomize": true,
+  "groups": [
+    {
+      "id": "straw-hat-pirates",
+      "label": "Bando do Chapéu de Palha",
+      "characters": [
+        {"name": "Luffy", "top_color": 4, "bottom_color": 13, "palette": "camisa vermelha e bermuda azul"},
+        {"name": "Zoro", "top_color": 3, "bottom_color": 3, "palette": "haramaki e roupa verdes"},
+        {"name": "Nami", "top_color": 11, "bottom_color": 13, "palette": "top verde-azulado e jeans azul"},
+        {"name": "Usopp", "top_color": 12, "bottom_color": 10, "palette": "amarelo e tons terrosos"},
+        {"name": "Sanji", "top_color": 0, "bottom_color": 0, "palette": "terno preto"},
+        {"name": "Chopper", "top_color": 9, "bottom_color": 1, "palette": "chapeu rosa e pelagem marrom"},
+        {"name": "Robin", "top_color": 2, "bottom_color": 0, "palette": "violeta e preto"},
+        {"name": "Franky", "top_color": 4, "bottom_color": 13, "palette": "camisa vermelha e sunga azul"},
+        {"name": "Brook", "top_color": 0, "bottom_color": 0, "palette": "terno preto"},
+        {"name": "Jinbe", "top_color": 12, "bottom_color": 4, "palette": "quimono amarelo e vermelho"}
+      ]
+    },
+    {
+      "id": "strongest-characters",
+      "label": "Lendas e grandes potências",
+      "characters": [
+        {"name": "Roger", "top_color": 4, "bottom_color": 13, "palette": "casaco vermelho e calca azul"},
+        {"name": "Whitebeard", "top_color": 0, "bottom_color": 12, "palette": "capa branca e calca amarela"},
+        {"name": "Rocks", "top_color": 0, "bottom_color": 4, "palette": "casaco escuro e faixa vermelha"},
+        {"name": "Garp", "top_color": 0, "bottom_color": 13, "palette": "uniforme branco e azul"},
+        {"name": "Sengoku", "top_color": 0, "bottom_color": 13, "palette": "uniforme branco e azul"},
+        {"name": "Rayleigh", "top_color": 0, "bottom_color": 10, "palette": "camisa branca e calca clara"},
+        {"name": "Oden", "top_color": 6, "bottom_color": 2, "palette": "quimono laranja e roxo"},
+        {"name": "Shanks", "top_color": 0, "bottom_color": 1, "palette": "camisa branca e calca marrom"},
+        {"name": "Kaido", "top_color": 13, "bottom_color": 2, "palette": "azul e roxo"},
+        {"name": "Big Mom", "top_color": 9, "bottom_color": 12, "palette": "rosa e amarelo"},
+        {"name": "Blackbeard", "top_color": 0, "bottom_color": 4, "palette": "preto e vermelho"},
+        {"name": "Mihawk", "top_color": 0, "bottom_color": 4, "palette": "preto e vinho"},
+        {"name": "Dragon", "top_color": 11, "bottom_color": 0, "palette": "verde escuro e preto"},
+        {"name": "Akainu", "top_color": 4, "bottom_color": 0, "palette": "vermelho e preto"},
+        {"name": "Kuzan", "top_color": 13, "bottom_color": 0, "palette": "azul e preto"},
+        {"name": "Kizaru", "top_color": 12, "bottom_color": 12, "palette": "terno amarelo"},
+        {"name": "Fujitora", "top_color": 2, "bottom_color": 0, "palette": "roxo e preto"},
+        {"name": "Sabo", "top_color": 13, "bottom_color": 13, "palette": "casaco e calca azuis"},
+        {"name": "Law", "top_color": 12, "bottom_color": 13, "palette": "moletom amarelo e jeans azul"},
+        {"name": "Kid", "top_color": 4, "bottom_color": 0, "palette": "vermelho e preto"},
+        {"name": "Yamato", "top_color": 0, "bottom_color": 4, "palette": "branco e hakama vermelho"},
+        {"name": "Hancock", "top_color": 4, "bottom_color": 2, "palette": "vermelho e roxo"}
+      ]
+    }
+  ]
+}

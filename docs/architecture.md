@@ -118,7 +118,7 @@ arquivos para KTX, snapshot integral para Final Arena, substituição completa
 para Pro-X, assets de referência com gamecode atualizado para Team Fortress e
 pacote independente para TD2. As harmonizações x86QW são sempre aplicadas por
 último. No KTX, toda divergência compartilhada precisa constar, com hashes e
-resolução, em `dist/mods/ktx/1.47/x86qw/merge-policy.json`; em Team Fortress, o
+resolução, em `dist/mods/ktx/1.47/x86qw/policy/merge-policy.json`; em Team Fortress, o
 builder retira do PAK montado o gamecode 2.8 e a mídia estritamente duplicada
 antes de adicionar o `qwprogs.dat` 2.9 extraído do ZIP original. Uma mudança não
 declarada interrompe o build.

@@ -343,6 +343,37 @@ def validate_catalog(catalog: object) -> None:
             if len(matches) != 1 or matches[0]["mode"] == "preserve":
                 raise ValueError(f"project override has no runtime target in {identifier}: {target}")
 
+        project_archive_overrides = component.get("project_archive_overrides", [])
+        if not isinstance(project_archive_overrides, list):
+            raise ValueError(f"invalid project archive overrides: {identifier}")
+        archive_override_targets: set[tuple[str, str]] = set()
+        for override in project_archive_overrides:
+            if not isinstance(override, dict):
+                raise ValueError(f"invalid project archive override: {identifier}")
+            source_path = _safe_path(override.get("path"), "project archive override path")
+            target_archive = _safe_path(
+                override.get("target_archive"), "project archive override target",
+            )
+            member = _safe_path(override.get("member"), "project archive override member")
+            if not source_path.startswith("dist/"):
+                raise ValueError(
+                    f"project archive override is outside the distribution: {source_path}"
+                )
+            identity = (target_archive.casefold(), member.casefold())
+            if identity in archive_override_targets:
+                raise ValueError(f"duplicate project archive override: {target_archive}:{member}")
+            archive_override_targets.add(identity)
+            matches = [
+                entry for entry in sources
+                if entry["destination"] == target_archive
+                and entry["mode"] in {"archive", "archive-base"}
+            ]
+            if not matches:
+                raise ValueError(
+                    f"project archive override has no archive target in {identifier}: "
+                    f"{target_archive}"
+                )
+
     for identifier, requires in dependencies.items():
         missing = set(requires) - identifiers
         if missing or identifier in requires:

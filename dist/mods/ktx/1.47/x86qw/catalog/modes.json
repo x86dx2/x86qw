@@ -19,6 +19,12 @@
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd stats", "mostrar estatisticas do jogador"]
       ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["I", "cmd stats", "mostrar estatisticas do jogador"],
+        ["F11", "cmd rules", "mostrar as regras de Duel"]
+      ],
       "entry_config": null
     },
     {
@@ -30,12 +36,20 @@
       "usermode": "2on2",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm2", "dm4", "aerowalk"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd 2on2", "reaplicar as regras de 2on2"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 2on2"]
       ],
       "entry_config": null
     },
@@ -48,12 +62,20 @@
       "usermode": "4on4",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt1b", "cmt3", "cmt4"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd 4on4", "reaplicar as regras de 4on4"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 4on4"]
       ],
       "entry_config": null
     },
@@ -66,12 +88,20 @@
       "usermode": "3on3",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd 3on3", "reaplicar as regras de 3on3"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 3on3"]
       ],
       "entry_config": null
     },
@@ -84,12 +114,20 @@
       "usermode": "10on10",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd 10on10", "reaplicar as regras de 10on10"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 10on10"]
       ],
       "entry_config": null
     },
@@ -109,6 +147,12 @@
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
       ],
+      "key_bindings": [
+        ["F5", "join", "entrar na partida"],
+        ["F6", "observe", "voltar para espectador"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Free For All"]
+      ],
       "entry_config": null
     },
     {
@@ -120,12 +164,19 @@
       "usermode": "ca",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd carena", "reaplicar as regras de Clan Arena"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd break", "cancelar ready ou encerrar round"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar round"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Clan Arena"]
       ],
       "entry_config": null
     },
@@ -138,12 +189,19 @@
       "usermode": "wipeout",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd wipeout", "reaplicar as regras de Wipeout"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd break", "cancelar ready ou encerrar round"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar round"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Wipeout"]
       ],
       "entry_config": null
     },
@@ -163,6 +221,11 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["F11", "cmd rules", "mostrar as regras de ThunderWalker ToT"]
+      ],
       "entry_config": null
     },
     {
@@ -174,12 +237,19 @@
       "usermode": "blitz2v2",
       "default_map": "dm6",
       "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd blitz2v2", "reaplicar as regras de Blitz 2v2"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd break", "cancelar ready ou encerrar round"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar round"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Blitz 2v2"]
       ],
       "entry_config": null
     },
@@ -192,12 +262,19 @@
       "usermode": "blitz4v4",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd blitz4v4", "reaplicar as regras de Blitz 4v4"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd break", "cancelar ready ou encerrar round"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar round"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Blitz 4v4"]
       ],
       "entry_config": null
     },
@@ -210,12 +287,20 @@
       "usermode": "2on2on2",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue", "yellow"],
       "help_commands": [
         ["cmd 2on2on2", "reaplicar as regras de 2on2on2"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 2on2on2"]
       ],
       "entry_config": null
     },
@@ -228,12 +313,20 @@
       "usermode": "3on3on3",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue", "yellow"],
       "help_commands": [
         ["cmd 3on3on3", "reaplicar as regras de 3on3on3"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 3on3on3"]
       ],
       "entry_config": null
     },
@@ -246,12 +339,20 @@
       "usermode": "4on4on4",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue", "yellow"],
       "help_commands": [
         ["cmd 4on4on4", "reaplicar as regras de 4on4on4"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de 4on4on4"]
       ],
       "entry_config": null
     },
@@ -264,12 +365,20 @@
       "usermode": "XonX",
       "default_map": "dm3",
       "suggested_maps": ["dm3", "dm2", "e1m2", "cmt3"],
+      "bot_teams": ["red", "blue"],
       "help_commands": [
         ["cmd XonX", "reaplicar as regras flexiveis de XonX"],
         ["cmd captain", "iniciar ou votar capitães"],
         ["cmd rpickup", "sortear equipes para pickup"],
         ["cmd ready", "marcar jogador como pronto"],
         ["cmd rules", "mostrar as regras ativas"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd captain", "iniciar ou votar capitaes"],
+        ["I", "cmd rpickup", "sortear equipes para pickup"],
+        ["F11", "cmd rules", "mostrar as regras de XonX"]
       ],
       "entry_config": null
     },
@@ -288,6 +397,14 @@
         ["cmd roundsup", "aumentar o numero de rounds"],
         ["cmd roundsdown", "diminuir o numero de rounds"],
         ["cmd hmstats", "mostrar estatisticas por ponto"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar round"],
+        ["H", "cmd pickspawn", "escolher o spawn do proximo round"],
+        ["I", "cmd roundsdown", "diminuir o numero de rounds"],
+        ["M", "cmd roundsup", "aumentar o numero de rounds"],
+        ["F11", "cmd hmstats", "mostrar estatisticas por ponto"]
       ],
       "entry_config": null
     },
@@ -314,6 +431,15 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["H", "cmd flagstatus", "mostrar a situacao das bandeiras"],
+        ["I", "cmd tossflag", "soltar a bandeira carregada"],
+        ["M", "cmd tossrune", "soltar a runa carregada"],
+        ["X", "cmd swapall", "trocar todos de equipe"],
+        ["F11", "cmd rules", "mostrar as regras de CTF"]
+      ],
       "launch_settings": [
         ["sv_loadentfiles", "1"],
         ["sv_loadentfiles_dir", "ctf"]
@@ -337,6 +463,12 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["I", "cmd midair_minheight", "mostrar a altura minima"],
+        ["F11", "cmd rules", "mostrar as regras de Midair"]
+      ],
       "entry_config": "x86qw-ktx-mode-midair.cfg"
     },
     {
@@ -354,6 +486,12 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de DMM4"]
       ],
       "entry_config": "x86qw-ktx-mode-dmm4.cfg"
     },
@@ -373,6 +511,11 @@
         ["cmd observe", "voltar para espectador"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
+      "key_bindings": [
+        ["F5", "join", "entrar na partida"],
+        ["F6", "observe", "voltar para espectador"],
+        ["F11", "cmd rules", "mostrar as regras de Instagib"]
+      ],
       "entry_config": "x86qw-ktx-mode-instagib.cfg"
     },
     {
@@ -391,6 +534,11 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["F11", "cmd rules", "mostrar as regras de LGC"]
+      ],
       "entry_config": "x86qw-ktx-mode-lgc.cfg"
     },
     {
@@ -408,6 +556,12 @@
         ["cmd break", "cancelar ready ou encerrar partida"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
+      ],
+      "key_bindings": [
+        ["F5", "toggleready", "marcar jogador como pronto"],
+        ["F6", "break", "cancelar ready ou encerrar partida"],
+        ["I", "cmd scores", "mostrar tempo e placar"],
+        ["F11", "cmd rules", "mostrar as regras de Rocket Arena"]
       ],
       "entry_config": "x86qw-ktx-mode-rocket-arena.cfg"
     },
@@ -441,6 +595,15 @@
         ["cmd race_scoring", "alternar sistema de pontuacao"],
         ["cmd race_pacemaker 1", "usar o melhor tempo como pacemaker"]
       ],
+      "key_bindings": [
+        ["F5", "cmd race_toggle", "alternar pronto ou fora da fila"],
+        ["F6", "cmd race_cancel", "cancelar a tentativa atual"],
+        ["H", "cmd race_show_lineup", "mostrar a fila de corredores"],
+        ["I", "cmd race_show_toptimes", "mostrar os melhores tempos"],
+        ["M", "cmd race_show_route", "mostrar a rota carregada"],
+        ["X", "cmd race_chasecam", "alternar acompanhamento de corredores"],
+        ["F11", "cmd race_scoring", "alternar sistema de pontuacao"]
+      ],
       "required_map_asset": "race/routes/{map}.route",
       "bots": false,
       "entry_config": "x86qw-ktx-mode-race.cfg"
@@ -461,6 +624,13 @@
         ["cmd pos_show", "mostrar a posicao salva"],
         ["cmd wp_reset", "zerar estatisticas de armas"],
         ["cmd freeze", "congelar ou liberar o mapa"]
+      ],
+      "key_bindings": [
+        ["F5", "cmd pos_save", "salvar posicao e movimento"],
+        ["F6", "cmd pos_move", "voltar para a posicao salva"],
+        ["H", "cmd pos_show", "mostrar a posicao salva"],
+        ["I", "cmd wp_reset", "zerar estatisticas de armas"],
+        ["F11", "cmd freeze", "congelar ou liberar o mapa"]
       ],
       "entry_config": "x86qw-ktx-mode-practice.cfg"
     }

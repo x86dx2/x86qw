@@ -56,10 +56,38 @@ class MenuTests(unittest.TestCase):
                 )
         self.assertEqual("duel", selected)
         self.assertIn(
-            "\033[1;36m› Duel             | 2 jogadores — competitivo\033[0m",
+            "\033[1;36m› 1) Duel             | 2 jogadores \033[0m"
+            "\033[2m < competitivo\033[0m",
             output.getvalue(),
         )
+        self.assertIn(" | 1+ jogadores", output.getvalue())
+        self.assertNotIn("\033[0m | 2 jogadores", output.getvalue())
+        self.assertNotIn("\033[2m |", output.getvalue())
         self.assertNotIn("\n    competitivo", output.getvalue())
+
+    def test_navigation_numbers_every_item_and_documents_both_horizontal_arrows(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            selected = menu.select_one(
+                "Modo", self.options, interactive=True, key_reader=lambda: "right",
+                allow_back=True,
+            )
+        self.assertEqual("duel", selected)
+        rendered = output.getvalue()
+        self.assertIn("› 1) Duel", rendered)
+        self.assertIn("  2) Race", rendered)
+        self.assertIn("  3) Capture The Flag", rendered)
+        self.assertIn(
+            "↑↓ navegar   →/Enter selecionar   ← voltar   Esc Sair.", rendered,
+        )
+
+    def test_left_arrow_returns_to_the_immediate_parent(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            selected = menu.select_one(
+                "Filho", self.options, interactive=True, key_reader=lambda: "left",
+                allow_back=True,
+            )
+        self.assertIsNone(selected)
 
     def test_multiple_menu_aligns_description_and_keeps_active_detail_inline(self):
         output = io.StringIO()
@@ -71,7 +99,8 @@ class MenuTests(unittest.TestCase):
         self.assertEqual(("duel",), selected)
         lines = [line for line in output.getvalue().splitlines() if "[" in line and "|" in line]
         self.assertEqual(1, len({line.index("|") for line in lines}))
-        self.assertIn("2 jogadores — competitivo", lines[0])
+        self.assertIn("1) [✓]", lines[0])
+        self.assertIn("2 jogadores  < competitivo", lines[0])
 
     def test_confirmation_describes_yes_and_no_in_aligned_columns(self):
         output = io.StringIO()
@@ -143,12 +172,13 @@ class MenuTests(unittest.TestCase):
         self.assertEqual("left", menu._decode_posix_escape(b"OD"))
         self.assertEqual("unknown", menu._decode_posix_escape(b"[200~"))
 
-    def test_navigation_escape_returns_to_parent(self):
+    def test_navigation_escape_exits_instead_of_returning_to_parent(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertIsNone(menu.select_one(
-                "Modo", self.options, interactive=True, key_reader=lambda: "escape",
-                allow_back=True,
-            ))
+            with self.assertRaises(menu.MenuCancelled):
+                menu.select_one(
+                    "Modo", self.options, interactive=True, key_reader=lambda: "escape",
+                    allow_back=True,
+                )
 
     def test_multiple_selection_uses_space_and_preserves_catalog_order(self):
         keys = iter((" ", "down", "down", " ", "enter"))

@@ -13,6 +13,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 
 $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("x86qw-installer-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $WorkDir | Out-Null
+$InstallerExitCode = $null
 try {
   $Archive = Join-Path $WorkDir $InstallerFile
   $Downloaded = $false
@@ -32,7 +33,14 @@ try {
   Expand-Archive -Path $Archive -DestinationPath $WorkDir
   $Root = Join-Path $WorkDir "x86qw-installer-$InstallerVersion"
   & python (Join-Path $Root "x86qw.pyz") --online-only @args
-  exit $LASTEXITCODE
+  $InstallerExitCode = $LASTEXITCODE
 } finally {
   Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue
+}
+
+if ($null -ne $InstallerExitCode) {
+  $global:LASTEXITCODE = $InstallerExitCode
+  if ($InstallerExitCode -ne 0) {
+    Write-Error "x86QW: o instalador terminou com código $InstallerExitCode." -ErrorAction Continue
+  }
 }

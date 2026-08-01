@@ -255,6 +255,9 @@ def validate_inventory(
                 raise ValueError(f"game has invalid {field}: {identifier}")
         for field in ("marker", "gamecode", "managed_config", "personal_config"):
             _safe_path(game.get(field), f"game {field}")
+        bot_names_personal_config = game.get("bot_names_personal_config")
+        if bot_names_personal_config is not None:
+            _safe_path(bot_names_personal_config, "game bot names personal config")
         if game["managed_config"] == game["personal_config"]:
             raise ValueError(f"personal configuration overlaps managed payload: {identifier}")
         clients = _string_list(game.get("client_runtimes"), f"game client runtimes: {identifier}", allow_empty=False)
@@ -303,6 +306,13 @@ def validate_inventory(
             }
             if destinations.get(game["personal_config"]) != "default":
                 raise ValueError(f"personal game config is not a preserved default: {identifier}")
+            if (
+                bot_names_personal_config is not None
+                and destinations.get(bot_names_personal_config) != "default"
+            ):
+                raise ValueError(
+                    f"personal bot names config is not a preserved default: {identifier}"
+                )
 
     raw_compatibility = compatibility.get("compatibility")
     if not isinstance(raw_compatibility, list) or not raw_compatibility:

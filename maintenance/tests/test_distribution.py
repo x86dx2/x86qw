@@ -77,6 +77,33 @@ class DistributionTests(unittest.TestCase):
         self.assertTrue((ROOT / "dist/mods/ktx/1.47/source").is_dir())
         self.assertTrue((ROOT / "dist/mods/team-fortress/2.9/source").is_dir())
         self.assertFalse((ROOT / "dist/mods/clan-arena").exists())
+        self.assertEqual(
+            {"catalog", "config", "policy", "runtime", "source"},
+            {
+                path.name for path in (ROOT / "dist/mods/ktx/1.47/x86qw").iterdir()
+                if path.is_dir()
+            },
+        )
+        ktx_x86qw = ROOT / "dist/mods/ktx/1.47/x86qw"
+        self.assertEqual(
+            {"qwprogs.map", "qwprogs.qvm"},
+            {path.name for path in (ktx_x86qw / "runtime").iterdir()},
+        )
+        self.assertEqual(
+            {
+                "0001-reproducible-build-date.patch",
+                "0002-frogbot-appearances.patch",
+                "0003-frogbot-team-balance.patch",
+            },
+            {path.name for path in (ktx_x86qw / "source").iterdir()},
+        )
+        self.assertEqual(
+            {"names.json", "names.user.json.example"},
+            {
+                path.name
+                for path in (ktx_x86qw / "catalog/frogbots").iterdir()
+            },
+        )
 
     def test_policy_matches_installer_and_rejects_undeclared_components(self) -> None:
         components = load_component_policy()

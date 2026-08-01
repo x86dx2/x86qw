@@ -22,6 +22,11 @@ No Windows PowerShell:
 irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
+O bootstrap não usa `exit`: a janela atual do PowerShell permanece aberta ao
+fim da instalação. O código devolvido pelo instalador Python fica disponível em
+`$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
+código antes de devolver o controle ao terminal.
+
 O bootstrap tenta os mirrors GitHub e GitLab, valida o SHA-256 do bundle antes
 de extrair e ativa o modo remoto estrito. Nesse modo, o catálogo e todos os
 pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é tratada
@@ -362,7 +367,8 @@ O mesmo fluxo pode ser automatizado, sem atravessar os menus:
 ```sh
 ./x86qw.sh play ktx --mode duel
 ./x86qw.sh play ktx --mode 4on4 --fill-bots --bot-skill 6
-./x86qw.sh play ktx --mode duel --bots 1 --bot-skill 8
+./x86qw.sh play ktx --mode duel --bots 1 --bot-skill 8 --bot-names x86qw
+./x86qw.sh play ktx --mode ffa --bots 4 --bot-skill random
 ./x86qw.sh play ktx --mode race --map slide1 --race-style match
 ```
 
@@ -374,10 +380,31 @@ oficiais do KTX para seis mapas clássicos; o launcher seleciona o diretório CT
 antes de carregar o mapa, garantindo a presença das duas bandeiras.
 
 Os Frogbots são acionados com `--bots <quantidade>` ou `--fill-bots`. A CLI
-também aceita habilidade 1–20, equipe, arma e vida e valida previamente se o
+também aceita habilidade 1–20 ou `random` por bot, equipe, arma e vida e valida previamente se o
 mapa possui uma das 77 rotas `.bot` incorporadas. CTF e Race rejeitam bots por
 serem combinações não suportadas pelo QVM fixado. Race valida uma das 54 rotas
 oficiais e expõe estilo, pontuação e pacemaker; CTF expõe hook e runas.
+
+`--bot-names default` mantém os nomes originais do KTX sem definir cvars de
+customização. `--bot-names x86qw` sorteia por lançamento uma lista One Piece,
+priorizando os dez Chapéus de Palha, com camisa e calça próprias. `--bot-names personal` usa na ordem
+declarada `quake-world/qw/x86qw-frogbot-names.json`, criado pelo bootstrap e
+nunca sobrescrito depois de uma edição. O launcher aplica automaticamente o
+prefixo `/ ` e a cor clássica compatível com o protocolo; escreva no JSON
+o nome e os índices `top_color`/`bottom_color`, sem prefixo ou códigos no nome. O contrato completo está em
+[`docs/FROGBOTS.md`](../../../docs/FROGBOTS.md).
+
+No menu, `x86QW aleatório` é a seleção inicial e o perfil sem customização
+aparece como `KTX Default`. A CLI conserva `default` como padrão por
+compatibilidade. Modos de tamanho fixo oferecem somente as vagas restantes —
+Duel aceita um bot com o jogador humano — enquanto FFA e Practice mantêm
+preenchimento e quantidade personalizada. Vários bots entram em frames
+separados.
+
+Todos os itens do menu exibem o número equivalente; `→`/Enter avança e
+`←`/Esc volta somente para a etapa imediatamente anterior. Em todos os cinco
+jogos, `F12` fecha diretamente o QuakeWorld, antes de eventuais sobrescritas da
+configuração pessoal.
 
 O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
 console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;
@@ -452,14 +479,16 @@ executado por último:
 configuração nQuake -> x86qw-<mod>.cfg -> x86qw-<mod>-user.cfg
 ```
 
-O console inicia sem imprimir quadros de ajuda. `F10` exibe os binds do mod sob
-demanda, depois que o jogador precisar consultá-los. Os
+O KTX imprime ao entrar o plano contextual de `F5`, `F6` e `F11`; quando há
+Frogbots, também mostra `INS`, `DEL`, `HOME` e `END`. `F10` reapresenta a ajuda
+completa sob demanda. Os
 perfis não são cópias entre si:
 
 - **KTX:** `1-8` selecionam armas com fallback; `Q`, `E` e `Mouse2` dão acesso
   rápido a GL, RL e LG. As comunicações do nQuake continuam disponíveis, mas
   `quad morto` e `inimigo com powerup` foram movidos de `1` e `5` para `Z` e
-  `X`. `F1-F8` preservam quad, pent, timers, ready, break, join e observe.
+  `X`. `F1-F4` preservam quad, pent e timers; `F5`, `F6` e `F11` assumem as
+  ações declaradas pelo modo, enquanto `F7` e `F8` mantêm join e observe.
 - **Final Arena:** `F1` entra, `F2` mostra a fila, `F3` estatísticas, `F4`
   pausa, `F5` próximo mapa, `F6` status, `F7` mochilas e `F8` airgib. São os
   impulses publicados pelo gamecode do Final Arena 1.20.

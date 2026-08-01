@@ -97,12 +97,12 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertEqual(releases["reference"]["revision"], new)
         self.assertEqual(
             releases["components"]["final-arena"]["version"],
-            "1.20+nquake.bbbbbbbbbbbb+x86qw.2",
+            "1.20+nquake.bbbbbbbbbbbb+x86qw.3",
         )
-        self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.3")
+        self.assertEqual(releases["components"]["pro-x"]["version"], "1.1+x86qw.4")
         self.assertIn("nquake.bbbbbbbbbbbb", releases["components"]["team-fortress"]["version"])
-        self.assertEqual("1.47+x86qw.13", releases["components"]["ktx"]["version"])
-        self.assertEqual("ktx-1.47-x86qw.13", releases["components"]["ktx"]["distribution_tag"])
+        self.assertEqual("1.47+x86qw.17", releases["components"]["ktx"]["version"])
+        self.assertEqual("ktx-1.47-x86qw.17", releases["components"]["ktx"]["distribution_tag"])
 
     def test_reference_advance_without_consumed_byte_changes_is_ignored(self) -> None:
         payload = b"same product bytes"
@@ -238,9 +238,9 @@ class DistributionManagerTests(unittest.TestCase):
         self.assertIn("ezQuake nightly: 20260616-101233_a86996a (3 plataformas)", output)
         self.assertIn("Interface e recursos visuais nQuake: e4cb23d40aa2", output)
         self.assertIn("QRP alta resolução: e4cb23d40aa2+x86qw.1", output)
-        self.assertIn("Final Arena: upstream 1.20; pacote x86QW 1.20+nquake.e4cb23d40aa2+x86qw.2", output)
-        self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.3", output)
-        self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.4", output)
+        self.assertIn("Final Arena: upstream 1.20; pacote x86QW 1.20+nquake.e4cb23d40aa2+x86qw.3", output)
+        self.assertIn("Pro-X: upstream 1.1; pacote x86QW 1.1+x86qw.4", output)
+        self.assertIn("Team Fortress: upstream 2.9; pacote x86QW 2.9+nquake.e4cb23d40aa2+x86qw.5", output)
         self.assertIn("KTX competitivo", output)
         self.assertIn("dist/mods/ktx/1.47/upstream/qwprogs-qvm.zip", output)
         self.assertIn("Total Destruction 2", output)

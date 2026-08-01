@@ -86,6 +86,14 @@ class RuntimeCatalogTests(unittest.TestCase):
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 self.validate(documents)
 
+    def test_personal_frogbot_list_must_be_a_preserved_component_source(self):
+        documents = copy.deepcopy(self.inventory)
+        games_by_id(documents["games"])["ktx"]["bot_names_personal_config"] = (
+            "qw/unmanaged-bot-names.json"
+        )
+        with self.assertRaisesRegex(ValueError, "personal bot names config"):
+            self.validate(documents)
+
     def test_fixture_game_can_be_added_without_editing_python(self):
         documents = copy.deepcopy(self.inventory)
         fixture = copy.deepcopy(documents["games"]["games"][-1])
@@ -127,7 +135,7 @@ class RuntimeCatalogTests(unittest.TestCase):
             for name in (
                 "_x86qw/runtimes.json", "_x86qw/games.json",
                 "_x86qw/capabilities.json", "_x86qw/compatibility.json",
-                "_x86qw/ktx-modes.json",
+                "_x86qw/ktx-modes.json", "_x86qw/ktx-frogbot-names.json",
             ):
                 self.assertIn(name, names)
             for name in names:

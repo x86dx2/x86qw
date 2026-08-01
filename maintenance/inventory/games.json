@@ -32,6 +32,7 @@
       "post_map_arguments": [],
       "managed_config": "qw/x86qw-ktx.cfg",
       "personal_config": "qw/x86qw-ktx-user.cfg",
+      "bot_names_personal_config": "qw/x86qw-frogbot-names.json",
       "required_capabilities": [
         "local-server",
         "dedicated-server",

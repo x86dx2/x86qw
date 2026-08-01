@@ -110,13 +110,13 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.13", ktx["version"])
+        self.assertEqual("1.47+x86qw.17", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.3", td2["version"])
+        self.assertEqual("2.22+x86qw.4", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -195,7 +195,7 @@ class ComponentReleaseTests(unittest.TestCase):
             self.assertEqual(b"qvm", package.read("qwprogs.qvm"))
             self.assertEqual(b"symbols", package.read("qwprogs.map"))
 
-    def test_ktx_package_includes_the_official_qvm_symbol_map(self) -> None:
+    def test_ktx_package_includes_the_x86qw_qvm_and_symbol_map(self) -> None:
         context = load_source_context(
             ROOT / "dist",
             ROOT / "maintenance/inventory/components.json",
@@ -208,8 +208,14 @@ class ComponentReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(members["payload/qw/ktx.pk3"])) as package:
             names = set(package.namelist())
             self.assertEqual(710, len(names))
-            self.assertEqual(1_578_544, len(package.read("qwprogs.qvm")))
-            self.assertEqual(112_973, len(package.read("qwprogs.map")))
+            self.assertEqual(
+                "996f2e5b91cd76cf9b104a17ac1f1a9a5b70478dc66545413cc865c1806b2d29",
+                hashlib.sha256(package.read("qwprogs.qvm")).hexdigest(),
+            )
+            self.assertEqual(
+                "4fc9e51431a08a3e08faa3fe0dc08d0b7547377379c02b5536e8d80e4f22b991",
+                hashlib.sha256(package.read("qwprogs.map")).hexdigest(),
+            )
             self.assertIn("bots/maps/anarena.bot", names)
             self.assertEqual(77, sum(
                 name.startswith("bots/maps/") and name.endswith(".bot") for name in names
@@ -290,7 +296,7 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
             ROOT / "maintenance/inventory/component-releases.json",
         )
-        policy = ROOT / "dist/mods/ktx/1.47/x86qw/merge-policy.json"
+        policy = ROOT / "dist/mods/ktx/1.47/x86qw/policy/merge-policy.json"
         altered = json.loads(policy.read_text(encoding="utf-8"))
         altered["conflicts"] = [
             conflict for conflict in altered["conflicts"] if conflict["member"] != "server.cfg"
