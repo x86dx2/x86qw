@@ -4,8 +4,8 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.4.0`. Baseline do navegador moderno:
-branch `main`, commit `b6715e6`, em 31 de julho de 2026.
+Baseline publicada: tag `x86qw-installer-0.4.1`. Baseline da correção de
+navegação: branch `main`, commit `3a4e329`, em 1 de agosto de 2026.
 
 ## Escala de estado
 
@@ -19,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.4.0`; as linhas anteriores permanecem imutáveis;
-- 54 pacotes e 21 componentes no catálogo;
+- instalador público `0.4.1`; as linhas anteriores permanecem imutáveis;
+- 55 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -31,7 +31,8 @@ plataforma.
   para os serviços;
 - CLI com `play`, `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`,
   `repair`, `cleanup`, `uninstall` e `version`;
-- navegador de terminal por tarefas, com busca, teclado, multisseleção e fallback numerado;
+- navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
+  alinhadas e coloridas e fallback numerado;
 - perfis `essential`, `recommended`, `complete` e `custom` preservados.
 
 ## Arquitetura e distribuição
@@ -279,4 +280,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.3.0` executada e verificada em etapa explícita aprovada;
 - [x] versão `0.4.0` moderniza os menus preservando comandos e flags;
 - [x] publicação `0.4.0` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.4.1` corrige sequências de setas e organiza as linhas dos menus;
+- [x] publicação `0.4.1` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.
