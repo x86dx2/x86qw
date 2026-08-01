@@ -1,0 +1,86 @@
+name: Relatar um bug
+description: Informe uma falha reproduzível no instalador, CLI, jogo, serviço ou portal.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado pelo relato. Remova senhas, tokens, IPs privados e caminhos pessoais. Vulnerabilidades devem usar o canal privado da aba Security.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afetada
+      options:
+        - Instalação ou bootstrap
+        - CLI e lifecycle
+        - ezQuake ou gameplay
+        - KTX e modos
+        - Outro jogo ou mod
+        - MVDSV / host
+        - QTV
+        - QWFWD / proxy
+        - Portal ou catálogo
+        - Manutenção / build / release
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão do x86QW
+      description: Saída de x86qw version ou versão do instalador.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Plataforma
+      placeholder: "macOS 15 arm64, Ubuntu 24.04 amd64, Windows 11 x64..."
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o comportamento observado e o resultado esperado.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Instale o perfil...
+        2. Execute...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnóstico sanitizado
+      description: Inclua o comando exato, a saída relevante e o resultado de x86qw verify. Não inclua segredos.
+      render: shell
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Canal do cliente
+      options:
+        - Stable
+        - Nightly
+        - Ambos
+        - Não se aplica
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei issues existentes e não encontrei o mesmo problema.
+          required: true
+        - label: Revisei o conteúdo e removi credenciais e dados pessoais.
+          required: true
+        - label: Este relato não descreve uma vulnerabilidade ainda não corrigida.
+          required: true

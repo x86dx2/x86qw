@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Manual do instalador
+    url: https://github.com/x86dx2/x86qw/blob/main/dist/installer/docs/installer.md
+    about: Instalação, perfis, atualização, verificação e reparo.
+  - name: Guia de hosting
+    url: https://github.com/x86dx2/x86qw/blob/main/docs/HOSTING.md
+    about: MVDSV, QTV, QWFWD, rede, senhas e lifecycle.
+  - name: Relatar uma vulnerabilidade
+    url: https://github.com/x86dx2/x86qw/security/advisories/new
+    about: Use o canal privado para problemas de segurança.
