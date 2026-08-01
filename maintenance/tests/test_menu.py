@@ -109,7 +109,7 @@ class MenuTests(unittest.TestCase):
                 ),
             )
 
-    def test_posix_confirmation_accepts_delayed_ss3_arrow_without_cancelling(self):
+    def test_posix_confirmation_accepts_ss3_arrow_and_queued_enter(self):
         if os.name == "nt" or not hasattr(os, "openpty"):
             self.skipTest("PTY POSIX indisponível nesta plataforma")
         master, slave = os.openpty()
@@ -118,9 +118,7 @@ class MenuTests(unittest.TestCase):
         def write_keys():
             try:
                 time.sleep(0.02)
-                os.write(master, b"\x1b")
-                time.sleep(0.06)
-                os.write(master, b"OA\r")
+                os.write(master, b"\x1bOA\r")
             except OSError as error:
                 writer_error.append(error)
 
