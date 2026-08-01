@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T00:51:40Z",
+  "generated_at": "2026-08-01T02:32:39Z",
   "packages": [
     {
       "component": "core",
@@ -934,7 +934,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.3.0",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -958,6 +958,36 @@
       "release_notes": "# x86QW 0.3.0\n\nRelease de bootstrap limpo e reorganização do layout instalado.\n\n## Layout\n\n- substitui `.install/` por `.x86qw/` como plano de controle específico do\n  produto;\n- elimina o depósito instalado `_x86qw/`;\n- instala MVDSV na raiz operacional, QTV em `qtv/`, QWFWD em `qwfwd/` e as\n  licenças em `docs/licenses/`;\n- instala somente o executável da plataforma selecionada;\n- mantém `BUILD.json`, fontes, patches e outras variantes somente na camada de\n  manutenção.\n\n## Compatibilidade\n\nEsta linha usa bootstrap limpo e não migra o layout 0.2.x. Uma instalação\nanterior pode ser mantida em outro diretório apenas para consulta. Jogos,\ngameplay, perfis, stable/nightly e comandos públicos permanecem inalterados.\n\n## Validação\n\n- pacote e zipapp determinísticos;\n- bootstrap completo em destino vazio;\n- asserção de ausência de `_x86qw/`, `platforms/` e `BUILD.json` no destino;\n- matriz Ubuntu, macOS e Windows;\n- publicação explícita após aprovação e verificação do bootstrap público.",
       "mirror_title": "x86QW Installer 0.3.0",
       "mirror_notes": "# x86QW 0.3.0\n\nRelease de bootstrap limpo e reorganização do layout instalado.\n\n## Layout\n\n- substitui `.install/` por `.x86qw/` como plano de controle específico do\n  produto;\n- elimina o depósito instalado `_x86qw/`;\n- instala MVDSV na raiz operacional, QTV em `qtv/`, QWFWD em `qwfwd/` e as\n  licenças em `docs/licenses/`;\n- instala somente o executável da plataforma selecionada;\n- mantém `BUILD.json`, fontes, patches e outras variantes somente na camada de\n  manutenção.\n\n## Compatibilidade\n\nEsta linha usa bootstrap limpo e não migra o layout 0.2.x. Uma instalação\nanterior pode ser mantida em outro diretório apenas para consulta. Jogos,\ngameplay, perfis, stable/nightly e comandos públicos permanecem inalterados.\n\n## Validação\n\n- pacote e zipapp determinísticos;\n- bootstrap completo em destino vazio;\n- asserção de ausência de `_x86qw/`, `platforms/` e `BUILD.json` no destino;\n- matriz Ubuntu, macOS e Windows;\n- publicação explícita após aprovação e verificação do bootstrap público.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.4.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.4.0.zip",
+      "size": 123109,
+      "sha256": "422807bdef12f93e606352d9406c716cf953f383b2305b21d999e7fe099f4230",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.0/x86qw-installer-0.4.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.0/x86qw-installer-0.4.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.4.0/x86qw-installer-0.4.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.4.0/x86qw-installer-0.4.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.4.0",
+      "release_title": "x86QW Installer 0.4.0",
+      "release_notes": "# x86QW 0.4.0\n\nRelease da navegação moderna e orientada a tarefas da CLI x86QW.\n\n## Navegação\n\n- abre um menu principal ao executar `x86qw.sh` ou `x86qw.cmd` sem argumentos;\n- oferece navegação por setas, `j`/`k`, Enter e Esc;\n- permite buscar jogos, modos, mapas, versões, componentes e servidores com `/`;\n- mantém fallback numerado em ambientes sem navegação interativa;\n- adiciona multisseleção de componentes com Espaço.\n\n## Gameplay e serviços\n\n- apresenta opções específicas de Race, CTF e Frogbots somente quando aplicáveis;\n- orienta a configuração de MVDSV, QTV e QWFWD por menus contextuais;\n- mantém as opções seguras de senha e os preflights já existentes;\n- trata cancelamento sem iniciar jogos ou serviços.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis para automação e uso\navançado. Jogos, gameplay, perfis, stable/nightly, PAKs e layout instalado não\nforam alterados.\n\n## Validação\n\n- 284 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- smoke TTY de navegação, busca e cancelamento;\n- dry-run do Worker e publicação explícita após aprovação.",
+      "mirror_title": "x86QW Installer 0.4.0",
+      "mirror_notes": "# x86QW 0.4.0\n\nRelease da navegação moderna e orientada a tarefas da CLI x86QW.\n\n## Navegação\n\n- abre um menu principal ao executar `x86qw.sh` ou `x86qw.cmd` sem argumentos;\n- oferece navegação por setas, `j`/`k`, Enter e Esc;\n- permite buscar jogos, modos, mapas, versões, componentes e servidores com `/`;\n- mantém fallback numerado em ambientes sem navegação interativa;\n- adiciona multisseleção de componentes com Espaço.\n\n## Gameplay e serviços\n\n- apresenta opções específicas de Race, CTF e Frogbots somente quando aplicáveis;\n- orienta a configuração de MVDSV, QTV e QWFWD por menus contextuais;\n- mantém as opções seguras de senha e os preflights já existentes;\n- trata cancelamento sem iniciar jogos ou serviços.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis para automação e uso\navançado. Jogos, gameplay, perfis, stable/nightly, PAKs e layout instalado não\nforam alterados.\n\n## Validação\n\n- 284 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- smoke TTY de navegação, busca e cancelamento;\n- dry-run do Worker e publicação explícita após aprovação.",
       "mirror_latest": true
     },
     {

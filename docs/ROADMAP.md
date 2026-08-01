@@ -6,16 +6,17 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline publicada: tag `x86qw-installer-0.3.0`. Baseline do trabalho de layout:
-branch `main`, commit `d774c49899`, em 31 de julho de 2026.
+Baseline publicada: tag `x86qw-installer-0.4.0`. Baseline do navegador moderno:
+branch `main`, commit `b6715e6`, em 31 de julho de 2026.
 
-- instalador público `0.3.0`; a linha `0.2.x` permanece imutável no histórico;
-- 53 pacotes e 21 componentes;
+- instalador público `0.4.0`; as linhas anteriores permanecem imutáveis no histórico;
+- 54 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
 - comandos públicos `play`, `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`,
   `verify`, `repair`, `cleanup`, `uninstall` e `version`;
+- navegador de terminal por tarefas, com busca, teclado, multisseleção e fallback numerado;
 - catálogos declarativos de capacidades, runtimes, jogos e compatibilidade;
 - CI de qualidade multiplataforma e publicação separada por gate.
 
@@ -32,7 +33,7 @@ branch `main`, commit `d774c49899`, em 31 de julho de 2026.
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.3.0` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.4.0` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
