@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T02:32:39Z",
+  "generated_at": "2026-08-01T03:16:23Z",
   "packages": [
     {
       "component": "core",
@@ -964,7 +964,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.4.0",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -988,6 +988,36 @@
       "release_notes": "# x86QW 0.4.0\n\nRelease da navegação moderna e orientada a tarefas da CLI x86QW.\n\n## Navegação\n\n- abre um menu principal ao executar `x86qw.sh` ou `x86qw.cmd` sem argumentos;\n- oferece navegação por setas, `j`/`k`, Enter e Esc;\n- permite buscar jogos, modos, mapas, versões, componentes e servidores com `/`;\n- mantém fallback numerado em ambientes sem navegação interativa;\n- adiciona multisseleção de componentes com Espaço.\n\n## Gameplay e serviços\n\n- apresenta opções específicas de Race, CTF e Frogbots somente quando aplicáveis;\n- orienta a configuração de MVDSV, QTV e QWFWD por menus contextuais;\n- mantém as opções seguras de senha e os preflights já existentes;\n- trata cancelamento sem iniciar jogos ou serviços.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis para automação e uso\navançado. Jogos, gameplay, perfis, stable/nightly, PAKs e layout instalado não\nforam alterados.\n\n## Validação\n\n- 284 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- smoke TTY de navegação, busca e cancelamento;\n- dry-run do Worker e publicação explícita após aprovação.",
       "mirror_title": "x86QW Installer 0.4.0",
       "mirror_notes": "# x86QW 0.4.0\n\nRelease da navegação moderna e orientada a tarefas da CLI x86QW.\n\n## Navegação\n\n- abre um menu principal ao executar `x86qw.sh` ou `x86qw.cmd` sem argumentos;\n- oferece navegação por setas, `j`/`k`, Enter e Esc;\n- permite buscar jogos, modos, mapas, versões, componentes e servidores com `/`;\n- mantém fallback numerado em ambientes sem navegação interativa;\n- adiciona multisseleção de componentes com Espaço.\n\n## Gameplay e serviços\n\n- apresenta opções específicas de Race, CTF e Frogbots somente quando aplicáveis;\n- orienta a configuração de MVDSV, QTV e QWFWD por menus contextuais;\n- mantém as opções seguras de senha e os preflights já existentes;\n- trata cancelamento sem iniciar jogos ou serviços.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis para automação e uso\navançado. Jogos, gameplay, perfis, stable/nightly, PAKs e layout instalado não\nforam alterados.\n\n## Validação\n\n- 284 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- smoke TTY de navegação, busca e cancelamento;\n- dry-run do Worker e publicação explícita após aprovação.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.4.1",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.4.1.zip",
+      "size": 123563,
+      "sha256": "0195c56c55f7ffc532694ec31fb1a1ddbd75a7ef005ac8ee8efaf59384a4cce0",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.1/x86qw-installer-0.4.1.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.4.1/x86qw-installer-0.4.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.4.1/x86qw-installer-0.4.1.zip"
+      ],
+      "distribution_path": "installer/packages/0.4.1/x86qw-installer-0.4.1.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.4.1",
+      "release_title": "x86QW Installer 0.4.1",
+      "release_notes": "# x86QW 0.4.1\n\nRelease corretiva da navegação interativa da CLI x86QW.\n\n## Teclado\n\n- interpreta sequências CSI e SS3 completas produzidas pelas teclas de direção;\n- preserva teclas já enfileiradas, inclusive Enter logo após uma seta;\n- ignora sequências de terminal desconhecidas sem convertê-las em cancelamento;\n- mantém navegação por setas, `j`/`k`, Enter, Esc e fallback numerado.\n\n## Apresentação\n\n- colore a linha inteira da opção selecionada em terminais compatíveis;\n- alinha itens e descrições com `|` como divisor;\n- mostra a explicação da opção selecionada na própria linha;\n- preserva o marcador textual `›` quando cores estiverem desativadas;\n- torna explícita a consequência das respostas `Sim` e `Não` nas confirmações.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis. Jogos, gameplay,\nperfis, runtimes, PAKs e layout instalado não foram alterados.\n\n## Validação\n\n- 289 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- regressão PTY para setas, Enter enfileirado, cores, alinhamento e cancelamento;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- dry-run do Worker e publicação explícita após aprovação.",
+      "mirror_title": "x86QW Installer 0.4.1",
+      "mirror_notes": "# x86QW 0.4.1\n\nRelease corretiva da navegação interativa da CLI x86QW.\n\n## Teclado\n\n- interpreta sequências CSI e SS3 completas produzidas pelas teclas de direção;\n- preserva teclas já enfileiradas, inclusive Enter logo após uma seta;\n- ignora sequências de terminal desconhecidas sem convertê-las em cancelamento;\n- mantém navegação por setas, `j`/`k`, Enter, Esc e fallback numerado.\n\n## Apresentação\n\n- colore a linha inteira da opção selecionada em terminais compatíveis;\n- alinha itens e descrições com `|` como divisor;\n- mostra a explicação da opção selecionada na própria linha;\n- preserva o marcador textual `›` quando cores estiverem desativadas;\n- torna explícita a consequência das respostas `Sim` e `Não` nas confirmações.\n\n## Compatibilidade\n\nTodos os comandos e flags públicos continuam disponíveis. Jogos, gameplay,\nperfis, runtimes, PAKs e layout instalado não foram alterados.\n\n## Validação\n\n- 289 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- regressão PTY para setas, Enter enfileirado, cores, alinhamento e cancelamento;\n- Git LFS, catálogo, zipapp e bundle determinístico;\n- dry-run do Worker e publicação explícita após aprovação.",
       "mirror_latest": true
     },
     {
