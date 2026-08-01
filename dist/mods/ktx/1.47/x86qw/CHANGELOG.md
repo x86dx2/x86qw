@@ -8,7 +8,7 @@
 
 ## Alterações x86QW
 
-- recompila o QVM 1.47 com patches isolados que cacheiam nomes e cores Frogbot
+- recompila o QVM 1.47 com patches isolados que cacheiam identidades Frogbot
   e distribuem inclusões automáticas pelo número de equipes do usermode;
 - fixa o metadado de compilação na data do tag 1.47, eliminando a variação de
   `__DATE__` e `__TIME__` entre reconstruções do mesmo QVM;
@@ -32,7 +32,7 @@
   completar cada equipe;
 - oferece identidades Frogbot em três perfis: padrão KTX sem customização, catálogo
   One Piece x86QW embaralhado por lançamento e lista pessoal preservada pelo
-  instalador; mantém o prefixo `/` e aplica camisa/calça da paleta clássica;
+  instalador; mantém o prefixo `/` e deixa camisa/calça sob controle do KTX;
 - filtra Race pelas 54 rotas oficiais e expõe corrida solo, simultânea ou em
   match, os três sistemas de pontuação, pacemaker e ocultação de corredores;
 - habilita CTF com os seis ENTs oficiais da rotação KTX (`e2m2`, `e1m5`,
@@ -45,8 +45,8 @@
   e comandos da partida;
 - reserva `F5`, `F6`, `F11` e, conforme o modo, `H`, `I`, `M`, `X` e `Z` para
   ações contextuais; `INS`, `DEL`, `HOME` e `END` gerenciam sessões Frogbot;
-  continua carregando o arquivo pessoal por último, permitindo que ele
-  sobrescreva qualquer bind;
+  carrega o arquivo pessoal ao fim do perfil e reaplica depois dele somente o
+  bind universal `F12` para sair, preservando todos os demais controles;
 - mantém os exemplos do arquivo pessoal independentes de aliases internos;
 - substitui a mensagem genérica do nQuake pela ajuda contextual composta apenas
   por teclas realmente vinculadas;
@@ -71,6 +71,8 @@
 - preserva a ordem determinística de pacotes.
 - preserva integralmente as skins e cores relacionais definidas pelo KTX e pela
   configuração pessoal, inclusive nas sessões que contêm Frogbots;
+- não envia cores individuais dos perfis de nomes, mantendo camisa, calça e
+  cores de equipe sob as regras nativas do KTX;
 - organiza a camada mantida pelo projeto em `catalog/`, `config/`, `runtime/`,
   `source/` e `policy/`, sem alterar os caminhos instalados.
 

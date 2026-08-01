@@ -51,7 +51,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("one-piece", bot_names["theme"])
         luffy = bot_names["groups"][0]["characters"][0]
         self.assertEqual("Luffy", luffy["name"])
-        self.assertEqual((4, 13), (luffy["top_color"], luffy["bottom_color"]))
+        self.assertEqual({"name"}, set(luffy))
 
     @staticmethod
     def write_installer_bundle(path: Path, version: str) -> None:

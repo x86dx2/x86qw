@@ -45,7 +45,10 @@ sys.modules["services"] = services_qw
 
 
 def local_server_baseline(game: str) -> list[str]:
-    arguments = ["+sb_listcache", "0", "+spectator", "0"]
+    arguments = [
+        "+sb_listcache", "0", "+spectator", "0",
+        "+bind", "F12", "quit",
+    ]
     settings = (
         play_qw.KTX_LOCAL_SERVER_SETTINGS
         if game == "ktx" else play_qw.NQUAKE_LOCAL_SERVER_SETTINGS
@@ -398,6 +401,36 @@ class ModernComponentTests(unittest.TestCase):
             "--target", str(target), "--menu", "--no-color",
         ])
 
+    def test_escape_from_child_navigators_exits_the_root_menu(self):
+        target = ROOT / "custom-quake"
+        cases = (
+            ("play", play_qw, ["--target", str(target), "--menu"]),
+            ("host", services_qw, ["host", "--target", str(target), "--menu"]),
+        )
+        for selected, module, expected in cases:
+            with self.subTest(selected=selected), mock.patch.object(
+                install_qw.navigation, "select_one", return_value=selected,
+            ) as menu, mock.patch.object(module, "main", return_value=130) as child:
+                self.assertEqual(130, install_qw.run_main_menu(target))
+            menu.assert_called_once()
+            child.assert_called_once_with(expected)
+
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=("services", "qtv"),
+        ) as menu, mock.patch.object(services_qw, "main", return_value=130) as child:
+            self.assertEqual(130, install_qw.run_main_menu(target))
+        self.assertEqual(2, menu.call_count)
+        child.assert_called_once_with(["qtv", "--target", str(target), "--menu"])
+
+        with mock.patch.object(
+            install_qw.navigation, "select_one", return_value="hub",
+        ) as menu, mock.patch.object(install_qw, "main", return_value=130) as child:
+            self.assertEqual(130, install_qw.run_main_menu(target))
+        menu.assert_called_once()
+        child.assert_called_once_with([
+            "--online-only", "--installed-cli", "hub", str(target),
+        ])
+
     def test_play_menu_cancel_is_reported_without_an_unexpected_failure(self):
         player = mock.Mock()
         player.play_local.side_effect = play_qw.navigation.MenuCancelled("Jogar")
@@ -658,7 +691,7 @@ class ModernComponentTests(unittest.TestCase):
         self.assertIn('#define FB_CVAR_SKILL_RANDOM      "k_fb_skill_random"', patch)
         self.assertIn("skill_level = i_rnd(MIN_FROGBOT_SKILL, MAX_FROGBOT_SKILL);", patch)
 
-    def test_f12_quits_every_managed_game_before_personal_overrides(self):
+    def test_f12_quits_every_managed_game_after_personal_overrides(self):
         profiles = (
             ("ktx/1.47", "x86qw-ktx-user.cfg"),
             ("pro-x/1.1", "x86qw-prox-user.cfg"),
@@ -676,7 +709,7 @@ class ModernComponentTests(unittest.TestCase):
                     encoding="utf-8"
                 )
                 self.assertIn('bind F12 "quit"', profile)
-                self.assertLess(profile.index('bind F12 "quit"'), profile.index(f"exec {personal}"))
+                self.assertGreater(profile.index('bind F12 "quit"'), profile.index(f"exec {personal}"))
 
     def test_race_menu_collects_rules_before_launching_the_selected_map(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -828,6 +861,15 @@ class ModernComponentTests(unittest.TestCase):
                         if command.startswith("cmd botcmd addbot")
                     ),
                 )
+                self.assertEqual(
+                    max(0, len(sequence) - 1) * play_qw.FROGBOT_ADD_WAIT_FRAMES,
+                    commands.count("wait"),
+                )
+                if mode.key == "4on4":
+                    self.assertEqual(7, len(sequence))
+                    self.assertIn(
+                        "if ($maxclients < 8) then maxclients 8", commands,
+                    )
 
     def test_fill_bots_respects_the_fixed_mode_roster(self):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
@@ -1779,6 +1821,7 @@ class ModernComponentTests(unittest.TestCase):
                 "+cl_pext_lagteleport", "0",
                 "+map", "dm6", "+wait",
                 "+exec", "x86qw-td2.cfg",
+                "+bind", "F12", "quit",
             ])
 
     def test_play_validates_support_without_mutating_managed_or_personal_files(self):
@@ -1913,6 +1956,7 @@ class ModernComponentTests(unittest.TestCase):
                 "+set", "k_defmap", "dm6",
                 "+set", "k_defmode", "1on1",
                 "+map", "dm6",
+                "+bind", "F12", "quit",
             ])
 
     def test_ktx_direct_midair_mode_installs_a_one_shot_entry_profile(self):
@@ -1939,6 +1983,7 @@ class ModernComponentTests(unittest.TestCase):
                 "+set", "k_defmap", "povdmm4",
                 "+set", "k_defmode", "1on1",
                 "+map", "povdmm4",
+                "+bind", "F12", "quit",
             ])
 
     def test_ktx_bot_options_enable_frogbot_before_map_and_add_after_entry(self):
@@ -2017,8 +2062,9 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual(32, len(identities))
         self.assertEqual(32, len({identity.name.casefold() for identity in identities}))
         self.assertTrue(all(
-            identity.top_color is not None and identity.bottom_color is not None
-            for identity in identities
+            set(character) == {"name"}
+            for group in document["groups"]
+            for character in group["characters"]
         ))
 
     def test_frogbot_names_use_slash_and_quake_high_bit_color(self):
@@ -2032,30 +2078,18 @@ class ModernComponentTests(unittest.TestCase):
             play_qw.KtxLaunchOptions(bots=1),
         ))
 
-    def test_one_piece_frogbot_appearances_include_character_shirt_and_pants(self):
-        identities = {
-            identity.name: identity
-            for identity in play_qw.load_x86qw_frogbot_names(ROOT)
-        }
-        self.assertEqual((4, 13), (
-            identities["Luffy"].top_color, identities["Luffy"].bottom_color,
-        ))
-        self.assertEqual((3, 3), (
-            identities["Zoro"].top_color, identities["Zoro"].bottom_color,
-        ))
-        self.assertEqual((12, 12), (
-            identities["Kizaru"].top_color, identities["Kizaru"].bottom_color,
-        ))
+    def test_one_piece_frogbot_profiles_never_override_ktx_colors(self):
+        identities = play_qw.load_x86qw_frogbot_names(ROOT)
         settings = dict(play_qw.ktx_bot_name_settings(
             play_qw.KtxLaunchOptions(
-                bots=1,
-                bot_name_pool=(identities["Luffy"], identities["Zoro"], identities["Nami"]),
+                bots=1, bot_name_pool=identities[:3],
             ),
         ))
-        self.assertEqual("4", settings["k_fb_topcolor_0"])
-        self.assertEqual("13", settings["k_fb_bottomcolor_0"])
-        self.assertEqual("3", settings["k_fb_topcolor_team_0"])
-        self.assertEqual("11", settings["k_fb_topcolor_enemy_0"])
+        self.assertEqual(
+            {"k_fb_name_0", "k_fb_name_team_0", "k_fb_name_enemy_0"},
+            set(settings),
+        )
+        self.assertFalse(any("color" in name for name in settings))
 
     def test_x86qw_ktx_qvm_is_reproducible_and_extends_frogbots_declaratively(self):
         expected = {
@@ -2184,7 +2218,7 @@ class ModernComponentTests(unittest.TestCase):
         settings = play_qw.ktx_bot_name_settings(
             play_qw.KtxLaunchOptions(bots=31, bot_name_pool=names),
         )
-        self.assertEqual(279, len(settings))
+        self.assertEqual(93, len(settings))
 
     def test_frogbot_runtime_config_is_private_and_identity_safe(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2316,6 +2350,7 @@ class ModernComponentTests(unittest.TestCase):
                 "+set", "k_defmap", "e2m2",
                 "+set", "k_defmode", "ctf",
                 "+map", "e2m2",
+                "+bind", "F12", "quit",
             ])
 
     def test_ktx_ctf_is_the_only_managed_content_allowed_under_id1_maps(self):
@@ -2363,6 +2398,7 @@ class ModernComponentTests(unittest.TestCase):
                     "+set", "k_defmap", "dm6",
                     "+set", "k_defmode", usermode,
                     "+map", "dm6",
+                    "+bind", "F12", "quit",
                 ])
 
     def test_ktx_practice_adds_bots_without_waiting_for_a_second_entry(self):
@@ -2421,6 +2457,7 @@ class ModernComponentTests(unittest.TestCase):
                     "-game", gamedir, "+sv_gamedir", gamedir,
                     "+sv_progtype", "0", *before_map, "+map", map_name, "+wait",
                     *after_wait, "+exec", profile,
+                    "+bind", "F12", "quit",
                 ])
 
     def test_team_fortress_loads_only_required_legacy_settings_before_the_map(self):
@@ -2446,6 +2483,7 @@ class ModernComponentTests(unittest.TestCase):
                 "+cl_pext_lagteleport", "0",
                 "+map", "2fort5r", "+wait",
                 "+exec", "x86qw-fortress.cfg",
+                "+bind", "F12", "quit",
             ])
 
     def test_legacy_combined_receipt_keeps_arena_and_pro_x_visible_until_migration(self):
@@ -2713,9 +2751,10 @@ class ModernComponentTests(unittest.TestCase):
                         line.strip() for line in profile.splitlines()
                         if line.strip() and not line.lstrip().startswith("//")
                     ]
-                    self.assertEqual(user_exec, executable_lines[-1])
+                    self.assertEqual('bind F12 "quit"', executable_lines[-1])
+                    self.assertEqual(user_exec, executable_lines[-2])
                     if game.key != "ktx":
-                        self.assertEqual(help_alias, executable_lines[-2])
+                        self.assertEqual(help_alias, executable_lines[-3])
 
     def test_module_help_never_prints_raw_console_commands(self):
         for game in play_qw.LOCAL_GAMES:

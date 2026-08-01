@@ -112,7 +112,7 @@ máximo um bot quando há um jogador humano.
 Ao entrar no mapa, o console imprime as teclas do modo ativo. Em Duel, `F5`
 marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
 `DEL`, `HOME` e `END` gerenciam bots e habilidade. O perfil One Piece também
-aplica cores de camisa e calça declaradas por personagem.
+preserva as cores de camisa, calça e equipe definidas pelo KTX.
 `--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
 um bot entra. `F12` fecha diretamente o QuakeWorld em todos os cinco jogos.
 
@@ -124,8 +124,8 @@ Depois da instalação, `x86qw.sh` — ou `x86qw.cmd` no Windows — é o ponto 
 Sem argumentos, ele abre um navegador por tarefas: **Jogar**, **Encontrar
 servidor**, **Hospedar**, **Transmissão e proxy** e **Gerenciar instalação**.
 Cada item mostra seu número equivalente. Use `↑`/`↓` ou `j`/`k`, avance com
-`→`/Enter, volte exatamente uma etapa com `←`/Esc e pressione `/` para buscar
-em listas longas. Em terminais sem navegação interativa, o mesmo fluxo usa
+`→`/Enter, volte exatamente uma etapa com `←`, use Esc para sair e pressione
+`/` para buscar em listas longas. Em terminais sem navegação interativa, o mesmo fluxo usa
 opções numeradas. As flags abaixo continuam sendo o contrato estável para
 automação e acesso direto.
 

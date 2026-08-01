@@ -1,14 +1,14 @@
 # Nomes dos Frogbots
 
 O x86QW oferece três perfis de identidade para os Frogbots do KTX. O perfil é
-escolhido no menu ou com `--bot-names`; nomes e cores são dados declarativos e
+escolhido no menu ou com `--bot-names`; nomes são dados declarativos e
 não alteram regras, atributos ou inteligência dos bots.
 
 | Perfil | Comportamento |
 |---|---|
 | `default` — KTX Default | Não define identidade; o KTX conserva nomes e cores originais. |
-| `x86qw` — x86QW aleatório | Embaralha uma vez por lançamento personagens One Piece com camisa e calça correspondentes. |
-| `personal` | Usa, na ordem declarada, nomes e cores da lista pessoal da instalação. |
+| `x86qw` — x86QW aleatório | Embaralha uma vez por lançamento os nomes de personagens One Piece. |
+| `personal` | Usa, na ordem declarada, os nomes da lista pessoal da instalação. |
 
 Exemplos:
 
@@ -62,8 +62,8 @@ Edite somente a lista `characters`, mantendo o restante do contrato:
   "prefix": "/",
   "color": "quake-high-bit",
   "characters": [
-    {"name": "Luffy", "top_color": 4, "bottom_color": 13, "palette": "vermelho e azul"},
-    {"name": "Zoro", "top_color": 3, "bottom_color": 3, "palette": "verde"}
+    {"name": "Luffy"},
+    {"name": "Zoro"}
   ]
 }
 ```
@@ -72,10 +72,9 @@ Cada nome aceita de 1 a 13 caracteres ASCII: letras, números, espaço, ponto,
 apóstrofo e hífen. A comparação ignora maiúsculas e minúsculas, portanto não
 pode haver duplicatas como `Luffy` e `luffy`. A lista precisa conter ao menos
 tantos nomes quanto a quantidade de bots solicitada; `--fill-bots` pode usar
-oito. `top_color` é a camisa e `bottom_color` é a calça no índice clássico do
-Quake, ambos entre 0 e 13. O campo `palette` é uma anotação humana opcional.
-Listas antigas formadas apenas por strings em `names` continuam aceitas e usam
-as cores padrão do KTX.
+oito. Listas antigas formadas apenas por strings em `names` continuam aceitas.
+Campos legados de aparência também são aceitos, mas ignorados: camisa, calça e
+cores de equipe seguem sempre as regras e configurações padrão do KTX.
 
 Não escreva `/` nem códigos de cor nos valores. O launcher acrescenta
 automaticamente o prefixo `/ ` e converte cada caractere para a variante
@@ -84,9 +83,8 @@ colorida clássica do Quake. O formato RGB `&cRGB` não é usado porque o
 compatibilidade com clientes QuakeWorld antigos.
 
 Os nomes genéricos, aliados e inimigos recebem sequências separadas de cvars
-`k_fb_name_*`, `k_fb_topcolor_*` e `k_fb_bottomcolor_*`. O QVM KTX 1.47 recebe
-uma extensão mínima e reprodutível que cacheia essas identidades; sem as cvars,
-ele conserva integralmente o sorteio de cores e os nomes originais. No perfil
+`k_fb_name_*`. O launcher não envia cvars de aparência, portanto o QVM KTX
+conserva integralmente suas regras de cores. No perfil
 aleatório, o sorteio é feito uma vez antes da abertura do runtime; reiniciar o
 jogo produz outra ordem. No perfil pessoal, a ordem do JSON é preservada.
 

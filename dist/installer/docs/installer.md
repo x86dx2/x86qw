@@ -49,8 +49,8 @@ usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `pla
 `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 abre o navegador interativo e não inicia instalação alguma até uma ação ser
-confirmada. Setas ou `j`/`k` navegam, Enter seleciona, Esc volta e `/` busca;
-um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
+confirmada. Setas ou `j`/`k` navegam, Enter seleciona, `←` volta, Esc sai e
+`/` busca; um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
 e são copiados byte a byte para o destino. O instalador não gera scripts em runtime.
@@ -387,11 +387,12 @@ oficiais e expõe estilo, pontuação e pacemaker; CTF expõe hook e runas.
 
 `--bot-names default` mantém os nomes originais do KTX sem definir cvars de
 customização. `--bot-names x86qw` sorteia por lançamento uma lista One Piece,
-priorizando os dez Chapéus de Palha, com camisa e calça próprias. `--bot-names personal` usa na ordem
+priorizando os dez Chapéus de Palha. `--bot-names personal` usa na ordem
 declarada `quake-world/qw/x86qw-frogbot-names.json`, criado pelo bootstrap e
 nunca sobrescrito depois de uma edição. O launcher aplica automaticamente o
 prefixo `/ ` e a cor clássica compatível com o protocolo; escreva no JSON
-o nome e os índices `top_color`/`bottom_color`, sem prefixo ou códigos no nome. O contrato completo está em
+somente o nome, sem prefixo ou códigos no valor. Aparências legadas são ignoradas
+para que as cores continuem sob controle do KTX. O contrato completo está em
 [`docs/FROGBOTS.md`](../../../docs/FROGBOTS.md).
 
 No menu, `x86QW aleatório` é a seleção inicial e o perfil sem customização
@@ -401,10 +402,10 @@ Duel aceita um bot com o jogador humano — enquanto FFA e Practice mantêm
 preenchimento e quantidade personalizada. Vários bots entram em frames
 separados.
 
-Todos os itens do menu exibem o número equivalente; `→`/Enter avança e
-`←`/Esc volta somente para a etapa imediatamente anterior. Em todos os cinco
-jogos, `F12` fecha diretamente o QuakeWorld, antes de eventuais sobrescritas da
-configuração pessoal.
+Todos os itens do menu exibem o número equivalente; `→`/Enter avança, `←`
+volta somente para a etapa imediatamente anterior e Esc encerra o navegador.
+Em todos os cinco jogos, `F12` é ativado antes do mapa e reaplicado depois da
+configuração pessoal para fechar diretamente o QuakeWorld.
 
 O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
 console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;

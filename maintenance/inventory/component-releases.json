@@ -46,7 +46,7 @@
       "distribution_tag": "ktx-1.47-x86qw.17",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta aparências Frogbot declarativas e balanceamento automático conforme as equipes nativas de cada usermode, mantendo o comportamento original sem perfil customizado. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida, nomes e cores. Skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória e balanceamento automático conforme as equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida e nomes. Camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

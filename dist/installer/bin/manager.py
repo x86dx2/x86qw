@@ -5010,26 +5010,32 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             return 0
         if selected == "play":
             gameplay = importlib.import_module("gameplay")
-            gameplay.main([
+            result = gameplay.main([
                 "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "host":
             services = importlib.import_module("services")
-            services.main([
+            result = services.main([
                 "host", "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "hub":
-            main([
+            result = main([
                 "--online-only", "--installed-cli", "hub", str(target),
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "services":
             service = navigation.select_one(
@@ -5043,11 +5049,13 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             )
             if service is not None:
                 services = importlib.import_module("services")
-                services.main([
+                result = services.main([
                     service, "--target", str(target), "--menu",
                     *(("--verbose",) if verbose else ()),
                     *(("--no-color",) if no_color else ()),
                 ])
+                if result == 130:
+                    return result
             continue
         if selected == "manage":
             action = navigation.select_one(

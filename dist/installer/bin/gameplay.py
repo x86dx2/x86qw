@@ -124,8 +124,6 @@ class KtxModeSpec:
 @dataclass(frozen=True)
 class FrogbotIdentity:
     name: str
-    top_color: int | None = None
-    bottom_color: int | None = None
 
 
 @dataclass(frozen=True)
@@ -451,20 +449,13 @@ def validate_frogbot_name_document(
         }:
             raise InstallerError(f"Identidade Frogbot inválida: {label}")
         name = validate_frogbot_name(value.get("name"), label)
-        top_color = value.get("top_color")
-        bottom_color = value.get("bottom_color")
         palette = value.get("palette")
         if (
-            not isinstance(top_color, int)
-            or isinstance(top_color, bool)
-            or not 0 <= top_color <= 13
-            or not isinstance(bottom_color, int)
-            or isinstance(bottom_color, bool)
-            or not 0 <= bottom_color <= 13
-            or (palette is not None and (not isinstance(palette, str) or not palette.strip()))
+            palette is not None
+            and (not isinstance(palette, str) or not palette.strip())
         ):
-            raise InstallerError(f"Cores Frogbot inválidas para {name}: {label}")
-        identities.append(FrogbotIdentity(name, top_color, bottom_color))
+            raise InstallerError(f"Anotação Frogbot inválida para {name}: {label}")
+        identities.append(FrogbotIdentity(name))
     result = tuple(identities)
     if len({identity.name.casefold() for identity in result}) != len(result):
         raise InstallerError(f"Lista de nomes Frogbot contém duplicatas: {label}")
@@ -574,17 +565,11 @@ def ktx_bot_name_settings(
     }
     settings: list[tuple[str, str]] = []
     for prefix, offset in offsets.items():
-        color_suffix = prefix.removeprefix("k_fb_name")
         for index in range(count):
             identity = frogbot_identity(pool[(index + offset) % len(pool)])
             settings.append((
                 f"{prefix}_{index}", quake_colored_frogbot_name(identity.name),
             ))
-            if identity.top_color is not None and identity.bottom_color is not None:
-                settings.extend((
-                    (f"k_fb_topcolor{color_suffix}_{index}", str(identity.top_color)),
-                    (f"k_fb_bottomcolor{color_suffix}_{index}", str(identity.bottom_color)),
-                ))
     return tuple(settings)
 
 
@@ -610,17 +595,11 @@ def ktx_bot_name_binary_settings(
     }
     settings: list[tuple[str, bytes]] = []
     for prefix, offset in offsets.items():
-        color_suffix = prefix.removeprefix("k_fb_name")
         for index in range(count):
             identity = frogbot_identity(pool[(index + offset) % len(pool)])
             settings.append((
                 f"{prefix}_{index}", quake_colored_frogbot_bytes(identity.name),
             ))
-            if identity.top_color is not None and identity.bottom_color is not None:
-                settings.extend((
-                    (f"k_fb_topcolor{color_suffix}_{index}", str(identity.top_color).encode()),
-                    (f"k_fb_bottomcolor{color_suffix}_{index}", str(identity.bottom_color).encode()),
-                ))
     return tuple(settings)
 
 
@@ -1767,7 +1746,10 @@ class Player(core.Installer):
         assert map_name is not None
         self.verify_local_play_support(games)
         label, runtime = runtime_choice
-        arguments = ["+sb_listcache", "0", "+spectator", "0"]
+        arguments = [
+            "+sb_listcache", "0", "+spectator", "0",
+            "+bind", "F12", "quit",
+        ]
         for name, value in game.local_server_settings:
             arguments.extend([f"+{name}", value])
         arguments.extend(game.client_game_arguments)
@@ -1852,6 +1834,10 @@ class Player(core.Installer):
         ):
             arguments.extend(["+k_fb_break_on_death", "1"])
         arguments.extend(game.post_map_arguments)
+        # This is an invariant of the launcher, not a suggested profile bind.
+        # Keep it after every managed and personal config so no mod can leave
+        # the user without the universal emergency exit.
+        arguments.extend(["+bind", "F12", "quit"])
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
         console.info(f"Abrindo {selection} no mapa {map_name}...")
         runtime_config = None
