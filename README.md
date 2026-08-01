@@ -58,7 +58,7 @@ O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
 falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
 `$LASTEXITCODE`.
 
-O bootstrap público `0.4.2` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.5.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows

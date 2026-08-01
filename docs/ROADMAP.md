@@ -6,11 +6,11 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline publicada: tag `x86qw-installer-0.4.2`. Baseline da correção dos
-modos KTX: branch `main`, commit `f8bbc81`, em 1 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.5.0`. Baseline da reformulação dos
+menus e Frogbots: branch `main`, commit `699b858`, em 1 de agosto de 2026.
 
-- instalador público `0.4.2`; as linhas anteriores permanecem imutáveis no histórico;
-- 56 pacotes e 21 componentes;
+- instalador público `0.5.0`; as linhas anteriores permanecem imutáveis no histórico;
+- 57 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
@@ -34,7 +34,7 @@ modos KTX: branch `main`, commit `f8bbc81`, em 1 de agosto de 2026.
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.4.2` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.5.0` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
