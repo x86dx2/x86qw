@@ -54,6 +54,10 @@ O x86QW transforma um ecossistema histórico em um produto atual: seleciona vers
 irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
+O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
+falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
+`$LASTEXITCODE`.
+
 O bootstrap público `0.4.2` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
@@ -89,7 +93,8 @@ Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? C
 O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX, Wipeout, Clan Arena e ThunderWalker ToT. Também inclui Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice.
 
 ```sh
-./x86qw.sh play ktx --mode duel --map dm6 --bots 2 --bot-skill 8
+./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-skill 8 --bot-names x86qw
+./x86qw.sh play ktx --mode ffa --map dm6 --bots 4 --bot-skill random
 ./x86qw.sh play ktx --mode ctf --ctf-hook smooth --ctf-runes off
 ./x86qw.sh play ktx --mode race --map slide1 --race-style match --race-scoring formula1
 ```
@@ -97,7 +102,19 @@ O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF
 `--help` detalha Frogbots, regras de CTF e formatos de Race. O launcher valida mapas, combinações e limitações do QVM antes de iniciar o cliente.
 No navegador interativo, essas opções aparecem somente quando fazem sentido:
 Race pergunta formato, pontuação, pacemaker e visibilidade dos corredores; CTF
-pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots e habilidade.
+pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots, habilidade
+e nomes. Há três perfis: `KTX Default`, nomes originais sem customização;
+`x86QW aleatório`, a seleção inicial do menu com a lista One Piece embaralhada
+a cada lançamento; e uma lista pessoal editável. Veja o
+[guia de nomes dos Frogbots](docs/FROGBOTS.md).
+Modos de tamanho fixo limitam a seleção às vagas restantes: Duel oferece no
+máximo um bot quando há um jogador humano.
+Ao entrar no mapa, o console imprime as teclas do modo ativo. Em Duel, `F5`
+marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
+`DEL`, `HOME` e `END` gerenciam bots e habilidade. O perfil One Piece também
+preserva as cores de camisa, calça e equipe definidas pelo KTX.
+`--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
+um bot entra. `F12` fecha diretamente o QuakeWorld em todos os cinco jogos.
 
 </details>
 
@@ -106,9 +123,10 @@ pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots e habilidad
 Depois da instalação, `x86qw.sh` — ou `x86qw.cmd` no Windows — é o ponto único de entrada.
 Sem argumentos, ele abre um navegador por tarefas: **Jogar**, **Encontrar
 servidor**, **Hospedar**, **Transmissão e proxy** e **Gerenciar instalação**.
-Use as setas ou `j`/`k`, confirme com Enter, volte com Esc e pressione `/` para
-buscar em listas longas. Em terminais sem navegação interativa, o mesmo fluxo
-usa opções numeradas. As flags abaixo continuam sendo o contrato estável para
+Cada item mostra seu número equivalente. Use `↑`/`↓` ou `j`/`k`, avance com
+`→`/Enter, volte exatamente uma etapa com `←`, use Esc para sair e pressione
+`/` para buscar em listas longas. Em terminais sem navegação interativa, o mesmo fluxo usa
+opções numeradas. As flags abaixo continuam sendo o contrato estável para
 automação e acesso direto.
 
 ```text

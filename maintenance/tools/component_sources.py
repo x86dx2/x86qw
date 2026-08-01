@@ -805,6 +805,63 @@ def apply_project_overrides(
     return updated
 
 
+def apply_project_archive_overrides(
+    context: ComponentSourceContext,
+    component: dict[str, object],
+    payloads: list[Payload],
+) -> list[Payload]:
+    declared = component.get("project_archive_overrides", [])
+    if not declared:
+        return payloads
+    project_root = context.distribution.parent
+    grouped: dict[str, dict[str, tuple[str, bytes]]] = {}
+    for override in declared:
+        assert isinstance(override, dict)
+        source_name = str(override["path"])
+        source = project_root.joinpath(*PurePosixPath(source_name).parts)
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(
+                f"canonical x86QW archive override is missing or unsafe: {source}"
+            )
+        replacement = source.read_bytes()
+        if not replacement:
+            raise ValueError(f"canonical x86QW archive override is empty: {source}")
+        target_archive = str(override["target_archive"])
+        member = str(override["member"])
+        grouped.setdefault(target_archive, {})[member] = (source_name, replacement)
+
+    updated = list(payloads)
+    for target_archive, replacements in grouped.items():
+        package_member = f"payload/{target_archive}"
+        matching = [index for index, payload in enumerate(updated) if payload[1] == package_member]
+        if len(matching) != 1:
+            raise ValueError(
+                f"project archive override target is not produced exactly once: {target_archive}"
+            )
+        index = matching[0]
+        upstream_path, member_path, payload, metadata = updated[index]
+        current = read_zip_members(payload, f"x86QW archive target {target_archive}")
+        missing = set(replacements) - set(current)
+        if missing:
+            raise ValueError(
+                f"project archive override member is missing: {target_archive}:{sorted(missing)[0]}"
+            )
+        replacement_payloads = {
+            member: replacement for member, (_source, replacement) in replacements.items()
+        }
+        payload = rewrite_zip_members(payload, replacement_payloads)
+        override_metadata = [{
+            "target_archive": target_archive,
+            "member": member,
+            "project_override": source,
+            "sha256": file_sha256_bytes(replacement),
+        } for member, (source, replacement) in sorted(replacements.items())]
+        updated[index] = (
+            upstream_path, member_path, payload, [*metadata, *override_metadata],
+        )
+    return updated
+
+
 def resolve_component_payloads(
     context: ComponentSourceContext,
     identifier: str,
@@ -877,6 +934,7 @@ def resolve_component_payloads(
             f"archive text replacement is not consumed by {identifier}: {target}:{member}"
         )
     payloads = apply_project_overrides(context, component, payloads)
+    payloads = apply_project_archive_overrides(context, component, payloads)
     payloads.extend(project_component_payloads(context, component))
     members = [member for _, member, _, _ in payloads]
     if len(members) != len(set(members)):

@@ -3655,7 +3655,7 @@ class Installer:
             choices.append((f"ezQuake {channel} {receipt['selection']}", runtime))
         return choices
 
-    def choose_host_runtime(self) -> tuple[str, Path]:
+    def choose_host_runtime(self) -> tuple[str, Path] | None:
         choices = self.host_runtimes()
         if not choices:
             raise InstallerError("Nenhum ezQuake gerenciado para este sistema está instalado. Execute install primeiro.")
@@ -3668,12 +3668,15 @@ class Installer:
                 for index, (label, _) in enumerate(choices)
             ),
             breadcrumb="x86QW › Cliente",
+            allow_back=True,
         )
         if selected is None:
-            raise InstallerError("Nenhum cliente foi selecionado.")
+            return None
         return choices[int(selected)]
 
-    def launch_runtime(self, runtime: Path, quake_arguments: list[str]) -> None:
+    def launch_runtime(
+        self, runtime: Path, quake_arguments: list[str],
+    ) -> subprocess.Popen[bytes]:
         system = host_platform.system()
         # A distribuição é autocontida: ~/.ezquake não pode sobrepor configs ou assets.
         base_arguments = ["-nohome", "-basedir", str(self.target)]
@@ -3720,7 +3723,7 @@ class Installer:
             }
             if system != "Windows":
                 options["start_new_session"] = True
-            subprocess.Popen(command, **options)
+            return subprocess.Popen(command, **options)
         except OSError as error:
             raise InstallerError(f"Não foi possível abrir {runtime}: {error}") from error
 
@@ -3811,7 +3814,11 @@ class Installer:
         else:
             quake_arguments = ["+join", address]
             operation = "conexão"
-        label, runtime = self.choose_host_runtime()
+        runtime_choice = self.choose_host_runtime()
+        if runtime_choice is None:
+            console.info("Conexão cancelada; nenhum cliente foi aberto.")
+            return
+        label, runtime = runtime_choice
         self.launch_runtime(runtime, quake_arguments)
         console.success(f"{label} aberto para {operation} em {address}.")
 
@@ -5003,26 +5010,32 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             return 0
         if selected == "play":
             gameplay = importlib.import_module("gameplay")
-            gameplay.main([
+            result = gameplay.main([
                 "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "host":
             services = importlib.import_module("services")
-            services.main([
+            result = services.main([
                 "host", "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "hub":
-            main([
+            result = main([
                 "--online-only", "--installed-cli", "hub", str(target),
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ])
+            if result == 130:
+                return result
             continue
         if selected == "services":
             service = navigation.select_one(
@@ -5036,11 +5049,13 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             )
             if service is not None:
                 services = importlib.import_module("services")
-                services.main([
+                result = services.main([
                     service, "--target", str(target), "--menu",
                     *(("--verbose",) if verbose else ()),
                     *(("--no-color",) if no_color else ()),
                 ])
+                if result == 130:
+                    return result
             continue
         if selected == "manage":
             action = navigation.select_one(

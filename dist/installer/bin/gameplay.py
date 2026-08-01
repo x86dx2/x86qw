@@ -8,11 +8,14 @@ import hashlib
 import importlib
 import json
 import os
+import random
 import re
+import stat
 import struct
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 import zipfile
 from dataclasses import dataclass, replace
@@ -32,8 +35,15 @@ lexists = core.lexists
 remove_path = core.remove_path
 
 PLAY_SUPPORT_VERSION = "8"
-DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/modes.json"
+DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
 RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
+DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
+    "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json"
+)
+RUNTIME_KTX_BOT_NAME_CATALOG = "_x86qw/ktx-frogbot-names.json"
+KTX_CONTEXT_KEYS = ("F5", "F6", "H", "I", "M", "X", "Z", "F11")
+FROGBOT_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_FROGBOT_RUNTIME_CONFIG__"
+FROGBOT_ADD_WAIT_FRAMES = 8
 DEVELOPMENT_GAME_CATALOG = "maintenance/inventory/games.json"
 RUNTIME_GAME_CATALOG = "_x86qw/games.json"
 LEGACY_MACOS_VIDEO_LAYOUT = Path(".x86qw/launcher/macos-video-layout.json")
@@ -76,6 +86,7 @@ class LocalGameSpec:
     post_map_arguments: tuple[str, ...]
     managed_config: str
     personal_config: str
+    bot_names_personal_config: str | None
     required_capabilities: tuple[str, ...]
     smoke_test: str
     local_server_settings: tuple[tuple[str, str], ...]
@@ -102,21 +113,30 @@ class KtxModeSpec:
     default_map: str
     suggested_maps: tuple[str, ...]
     help_commands: tuple[tuple[str, str], ...]
+    key_bindings: tuple[tuple[str, str, str], ...]
     launch_settings: tuple[tuple[str, str], ...]
     entry_config: str | None
     required_map_asset: str | None
     bots: bool
+    bot_teams: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FrogbotIdentity:
+    name: str
 
 
 @dataclass(frozen=True)
 class KtxLaunchOptions:
     bots: int = 0
     fill_bots: bool = False
-    bot_skill: int = 5
+    bot_skill: int | str = 5
     bot_team: str | None = None
     bot_weapon: str | None = None
     bot_health: int | None = None
     bot_break_on_death: bool = False
+    bot_names_profile: str = "default"
+    bot_name_pool: tuple[FrogbotIdentity, ...] = ()
     ctf_hook: str | None = None
     ctf_runes: str | None = None
     ctf_based_spawn: bool = False
@@ -124,6 +144,13 @@ class KtxLaunchOptions:
     race_scoring: str | None = None
     race_pacemaker: int | None = None
     race_hide_players: bool = False
+
+
+@dataclass(frozen=True)
+class FrogbotRuntimeConfig:
+    path: Path
+    device: int
+    inode: int
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
@@ -156,6 +183,10 @@ def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
             post_map_arguments=tuple(str(value) for value in raw["post_map_arguments"]),
             managed_config=str(raw["managed_config"]),
             personal_config=str(raw["personal_config"]),
+            bot_names_personal_config=(
+                str(raw["bot_names_personal_config"])
+                if raw.get("bot_names_personal_config") else None
+            ),
             required_capabilities=tuple(str(value) for value in raw["required_capabilities"]),
             smoke_test=str(raw["smoke_test"]),
             local_server_settings=tuple(
@@ -224,10 +255,12 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         aliases = raw.get("aliases")
         suggested_maps = raw.get("suggested_maps")
         help_commands = raw.get("help_commands")
+        key_bindings = raw.get("key_bindings")
         launch_settings = raw.get("launch_settings", [])
         entry_config = raw.get("entry_config")
         required_map_asset = raw.get("required_map_asset")
         bots = raw.get("bots", True)
+        bot_teams = raw.get("bot_teams", [])
         text_fields = (
             "label", "description", "recommended_players", "usermode",
             "default_map",
@@ -258,6 +291,25 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 and re.fullmatch(r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}", entry[1]) is not None
                 for entry in help_commands
             )
+            or not isinstance(key_bindings, list)
+            or not 3 <= len(key_bindings) <= len(KTX_CONTEXT_KEYS)
+            or not all(
+                isinstance(entry, list)
+                and len(entry) == 3
+                and entry[0] in KTX_CONTEXT_KEYS
+                and isinstance(entry[1], str)
+                and re.fullmatch(r"[A-Za-z0-9_+./ -]{1,48}", entry[1]) is not None
+                and isinstance(entry[2], str)
+                and re.fullmatch(
+                    r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}",
+                    entry[2],
+                ) is not None
+                for entry in key_bindings
+            )
+            or len({entry[0] for entry in key_bindings}) != len(key_bindings)
+            or not {"F5", "F6", "F11"}.issubset(
+                {entry[0] for entry in key_bindings}
+            )
             or not isinstance(launch_settings, list)
             or not all(
                 isinstance(entry, list)
@@ -279,11 +331,27 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 )
             )
             or not isinstance(bots, bool)
+            or not isinstance(bot_teams, list)
+            or len(bot_teams) > 4
+            or not all(
+                isinstance(team, str)
+                and re.fullmatch(r"[A-Za-z0-9_-]{1,9}", team) is not None
+                for team in bot_teams
+            )
+            or len({team.casefold() for team in bot_teams}) != len(bot_teams)
             or any(not isinstance(raw.get(field), str) or not raw[field] for field in text_fields)
         ):
             raise InstallerError(f"Definição inválida do modo KTX: {key!r}.")
         if raw["default_map"].casefold() not in {name.casefold() for name in suggested_maps}:
             raise InstallerError(f"Mapa padrão ausente nas sugestões do modo KTX {key}.")
+        if (
+            bot_teams
+            and re.fullmatch(r"[1-9][0-9]*", str(raw["recommended_players"]))
+            and int(raw["recommended_players"]) % len(bot_teams) != 0
+        ):
+            raise InstallerError(
+                f"Formação de equipes incompatível com o modo KTX {key}."
+            )
         mode_identities = {key.casefold(), *(alias.casefold() for alias in aliases)}
         if identities & mode_identities:
             raise InstallerError(f"Identidade duplicada no catálogo de modos KTX: {key}.")
@@ -298,22 +366,368 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
             default_map=str(raw["default_map"]),
             suggested_maps=tuple(suggested_maps),
             help_commands=tuple((str(entry[0]), str(entry[1])) for entry in help_commands),
+            key_bindings=tuple(
+                (str(entry[0]), str(entry[1]), str(entry[2]))
+                for entry in key_bindings
+            ),
             launch_settings=tuple(
                 (str(entry[0]), str(entry[1])) for entry in launch_settings
             ),
             entry_config=entry_config,
             required_map_asset=required_map_asset,
             bots=bots,
+            bot_teams=tuple(str(team) for team in bot_teams),
         ))
     return tuple(modes)
 
 
+def validate_frogbot_name(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .'-]{0,12}", value) is None
+        or len(value) > 13
+    ):
+        raise InstallerError(
+            f"Nome Frogbot inválido em {label}: use de 1 a 13 caracteres ASCII."
+        )
+    return value
+
+
+def validate_frogbot_name_document(
+    document: object,
+    *,
+    profile: str,
+    label: str,
+) -> tuple[FrogbotIdentity, ...]:
+    if (
+        not isinstance(document, dict)
+        or document.get("format") != 1
+        or document.get("game") != "ktx"
+        or document.get("profile") != profile
+        or document.get("prefix") != "/"
+        or document.get("color") != "quake-high-bit"
+    ):
+        raise InstallerError(f"Catálogo de nomes Frogbot inválido: {label}")
+    raw_identities: list[object]
+    if profile == "x86qw":
+        if document.get("theme") != "one-piece" or document.get("randomize") is not True:
+            raise InstallerError(f"Catálogo de nomes Frogbot inválido: {label}")
+        groups = document.get("groups")
+        if not isinstance(groups, list) or not groups:
+            raise InstallerError(f"Catálogo de nomes Frogbot vazio: {label}")
+        raw_identities = []
+        group_ids: set[str] = set()
+        for group in groups:
+            identifier = group.get("id") if isinstance(group, dict) else None
+            characters = group.get("characters") if isinstance(group, dict) else None
+            if (
+                not isinstance(identifier, str)
+                or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", identifier) is None
+                or identifier in group_ids
+                or not isinstance(characters, list)
+                or not characters
+            ):
+                raise InstallerError(f"Grupo de nomes Frogbot inválido: {label}")
+            group_ids.add(identifier)
+            raw_identities.extend(characters)
+    else:
+        personal_characters = document.get("characters")
+        legacy_names = document.get("names")
+        if isinstance(personal_characters, list) and legacy_names is None:
+            raw_identities = personal_characters
+        elif isinstance(legacy_names, list) and personal_characters is None:
+            raw_identities = legacy_names
+        else:
+            raise InstallerError(f"Lista pessoal de nomes Frogbot inválida: {label}")
+    identities: list[FrogbotIdentity] = []
+    for value in raw_identities:
+        if isinstance(value, str) and profile == "personal":
+            identities.append(FrogbotIdentity(validate_frogbot_name(value, label)))
+            continue
+        if not isinstance(value, dict) or set(value) - {
+            "name", "top_color", "bottom_color", "palette",
+        }:
+            raise InstallerError(f"Identidade Frogbot inválida: {label}")
+        name = validate_frogbot_name(value.get("name"), label)
+        palette = value.get("palette")
+        if (
+            palette is not None
+            and (not isinstance(palette, str) or not palette.strip())
+        ):
+            raise InstallerError(f"Anotação Frogbot inválida para {name}: {label}")
+        identities.append(FrogbotIdentity(name))
+    result = tuple(identities)
+    if len({identity.name.casefold() for identity in result}) != len(result):
+        raise InstallerError(f"Lista de nomes Frogbot contém duplicatas: {label}")
+    return result
+
+
+def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
+    if core.ZIPAPP_PATH is not None:
+        document = core.read_zipapp_json(
+            core.ZIPAPP_PATH,
+            RUNTIME_KTX_BOT_NAME_CATALOG,
+            "Catálogo de nomes Frogbot",
+        )
+        label = RUNTIME_KTX_BOT_NAME_CATALOG
+    else:
+        path = project_root / DEVELOPMENT_KTX_BOT_NAME_CATALOG
+        label = str(path)
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise InstallerError(f"Catálogo de nomes Frogbot inválido: {path}") from error
+    return validate_frogbot_name_document(document, profile="x86qw", label=label)
+
+
+def load_personal_frogbot_names(target: Path, relative: str) -> tuple[FrogbotIdentity, ...]:
+    path = target.joinpath(*PurePosixPath(relative).parts)
+    if path.is_symlink() or not path.is_file():
+        raise InstallerError(
+            f"Lista pessoal de nomes Frogbot ausente ou insegura: {path}. "
+            "Execute repair ou edite o arquivo criado pelo bootstrap."
+        )
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise InstallerError(f"Lista pessoal de nomes Frogbot inválida: {path}") from error
+    return validate_frogbot_name_document(document, profile="personal", label=str(path))
+
+
+def requested_frogbot_names(
+    options: KtxLaunchOptions,
+    mode: KtxModeSpec | None = None,
+) -> int:
+    if not options.fill_bots:
+        return options.bots
+    limit = ktx_mode_bot_limit(mode) if mode is not None else None
+    return limit if limit is not None else 8
+
+
+def resolve_frogbot_name_profile(
+    project_root: Path,
+    target: Path,
+    game: LocalGameSpec,
+    options: KtxLaunchOptions,
+    mode: KtxModeSpec | None = None,
+    *,
+    generator: random.Random | random.SystemRandom | None = None,
+) -> KtxLaunchOptions:
+    count = requested_frogbot_names(options, mode)
+    if options.bot_names_profile == "default" or count == 0:
+        return replace(options, bot_name_pool=())
+    if options.bot_names_profile == "x86qw":
+        pool = load_x86qw_frogbot_names(project_root)
+        randomizer = generator or random.SystemRandom()
+        pool = tuple(randomizer.sample(pool, len(pool)))
+    elif options.bot_names_profile == "personal":
+        if game.bot_names_personal_config is None:
+            raise InstallerError(f"{game.label} não declara uma lista pessoal de bots.")
+        pool = load_personal_frogbot_names(target, game.bot_names_personal_config)
+    else:
+        raise InstallerError(f"Perfil de nomes Frogbot desconhecido: {options.bot_names_profile}")
+    if len(pool) < count:
+        raise InstallerError(
+            f"O perfil {options.bot_names_profile} possui {len(pool)} nome(s), "
+            f"mas este lançamento pode criar {count} Frogbot(s)."
+        )
+    return replace(options, bot_name_pool=pool)
+
+
+def quake_colored_frogbot_name(name: str) -> str:
+    # RGB sequences are forbidden in QuakeWorld player names. Encode the
+    # legacy high-bit glyphs explicitly so the QVM receives at most 15 bytes.
+    colored = "".join(
+        "$xa0" if character == " " else f"$x{ord(character) | 0x80:02x}"
+        for character in name
+    )
+    return f"/$xa0{colored}"
+
+
+def frogbot_identity(value: FrogbotIdentity | str) -> FrogbotIdentity:
+    if isinstance(value, FrogbotIdentity):
+        return value
+    return FrogbotIdentity(validate_frogbot_name(value, "opções de lançamento"))
+
+
+def ktx_bot_name_settings(
+    options: KtxLaunchOptions,
+    mode: KtxModeSpec | None = None,
+) -> tuple[tuple[str, str], ...]:
+    count = requested_frogbot_names(options, mode)
+    if not options.bot_name_pool or count == 0:
+        return ()
+    pool = options.bot_name_pool
+    offsets = {
+        "k_fb_name": 0,
+        "k_fb_name_team": count,
+        "k_fb_name_enemy": count * 2,
+    }
+    settings: list[tuple[str, str]] = []
+    for prefix, offset in offsets.items():
+        for index in range(count):
+            identity = frogbot_identity(pool[(index + offset) % len(pool)])
+            settings.append((
+                f"{prefix}_{index}", quake_colored_frogbot_name(identity.name),
+            ))
+    return tuple(settings)
+
+
+def quake_colored_frogbot_bytes(name: str) -> bytes:
+    return b"/\xa0" + bytes(
+        ord(character) | 0x80
+        for character in name
+    )
+
+
+def ktx_bot_name_binary_settings(
+    options: KtxLaunchOptions,
+    mode: KtxModeSpec | None = None,
+) -> tuple[tuple[str, bytes], ...]:
+    count = requested_frogbot_names(options, mode)
+    if not options.bot_name_pool or count == 0:
+        return ()
+    pool = options.bot_name_pool
+    offsets = {
+        "k_fb_name": 0,
+        "k_fb_name_team": count,
+        "k_fb_name_enemy": count * 2,
+    }
+    settings: list[tuple[str, bytes]] = []
+    for prefix, offset in offsets.items():
+        for index in range(count):
+            identity = frogbot_identity(pool[(index + offset) % len(pool)])
+            settings.append((
+                f"{prefix}_{index}", quake_colored_frogbot_bytes(identity.name),
+            ))
+    return tuple(settings)
+
+
+def write_frogbot_runtime_config(
+    target: Path,
+    settings: tuple[tuple[str, str], ...],
+    startup_commands: tuple[str, ...] = (),
+) -> FrogbotRuntimeConfig:
+    directory = target / "qw"
+    if directory.is_symlink() or not directory.is_dir():
+        raise InstallerError(f"Diretório de configuração do ezQuake inválido: {directory}")
+    if any(
+        not command or any(ord(character) < 32 for character in command)
+        for command in startup_commands
+    ):
+        raise InstallerError("Configuração efêmera Frogbot contém comando inválido.")
+    payload = "".join((
+        "// x86QW: ephemeral Frogbot launch configuration\n",
+        # Older launchers allowed these user cvars to reach config.cfg. Clear
+        # them before the QVM registers the KTX defaults or this launch sets a
+        # temporary custom pool.
+        "unset_re ^k_fb_name_\n",
+        *(f"set_ex {name} $qt{value}$qt\n" for name, value in settings),
+        *(f"{command}\n" for command in startup_commands),
+    )).encode("ascii")
+    descriptor = -1
+    temporary_name = ""
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix="x86qw-frogbots-", suffix=".cfg", dir=directory,
+        )
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+        pending = memoryview(payload)
+        while pending:
+            written = os.write(descriptor, pending)
+            if written == 0:
+                raise OSError("gravação incompleta da configuração efêmera")
+            pending = pending[written:]
+        os.fsync(descriptor)
+    except OSError as error:
+        if descriptor >= 0:
+            os.close(descriptor)
+            descriptor = -1
+        if temporary_name:
+            try:
+                Path(temporary_name).unlink()
+            except OSError:
+                pass
+        raise InstallerError(
+            f"Não foi possível preparar os nomes Frogbot: {error}"
+        ) from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    path = Path(temporary_name)
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError as error:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise InstallerError(
+            f"Não foi possível validar os nomes Frogbot temporários: {error}"
+        ) from error
+    return FrogbotRuntimeConfig(path, metadata.st_dev, metadata.st_ino)
+
+
+def remove_frogbot_runtime_config(config: FrogbotRuntimeConfig) -> bool:
+    try:
+        metadata = config.path.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if (
+        metadata.st_dev != config.device
+        or metadata.st_ino != config.inode
+        or not stat.S_ISREG(metadata.st_mode)
+        or config.path.is_symlink()
+    ):
+        return False
+    try:
+        config.path.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def ktx_mode_help_alias(mode: KtxModeSpec) -> str:
-    return f"exec {ktx_mode_help_config(mode)}"
+    del mode
+    return "x86qw_ktx_mode_help"
 
 
-def ktx_mode_help_config(mode: KtxModeSpec) -> str:
-    return f"x86qw-ktx-help-{mode.key}.cfg"
+def ktx_key_alias_commands(
+    mode: KtxModeSpec,
+    options: KtxLaunchOptions,
+) -> tuple[str, ...]:
+    commands: list[str] = []
+    for key in KTX_CONTEXT_KEYS:
+        alias_key = key.casefold()
+        commands.extend((
+            f"tempalias x86qw_ktx_key_{alias_key} $qt$qt",
+            f"tempalias x86qw_ktx_key_help_{alias_key} $qt$qt",
+        ))
+    for key, command, description in mode.key_bindings:
+        alias_key = key.casefold()
+        colored_key = "".join(f"^{character}" for character in key)
+        commands.extend((
+            f"tempalias x86qw_ktx_key_{alias_key} {command}",
+            "tempalias x86qw_ktx_key_help_"
+            f"{alias_key} echo {colored_key}$x20$x7c$x20{description}",
+        ))
+    if ktx_bot_options_requested(options):
+        random_skill = options.bot_skill == "random"
+        base_skill = 5 if random_skill else int(options.bot_skill)
+        lower_skill = max(1, base_skill - 1)
+        higher_skill = min(20, base_skill + 1)
+        add_command = "cmd botcmd addbot" if random_skill else f"cmd botcmd addbot {base_skill}"
+        commands.extend((
+            f"tempalias x86qw_ktx_bot_add {add_command}",
+            "tempalias x86qw_ktx_bot_remove cmd botcmd removebot",
+            f"tempalias x86qw_ktx_bot_skill_down cmd botcmd skill {lower_skill}",
+            f"tempalias x86qw_ktx_bot_skill_up cmd botcmd skill {higher_skill}",
+            "tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg",
+        ))
+    return tuple(commands)
 
 
 def quote_console_command(command: str) -> str:
@@ -321,6 +735,40 @@ def quote_console_command(command: str) -> str:
     if '"' in command or any(ord(character) < 32 for character in command):
         raise InstallerError("Comando interno do ezQuake contém caracteres inválidos.")
     return f'"{command}"'
+
+
+def ktx_chunked_setup_alias_commands(
+    commands: tuple[str, ...], *, maximum_body: int = 700,
+) -> tuple[str, ...]:
+    """Store a long post-map setup in bounded temporary aliases."""
+    chunks: list[list[str]] = []
+    current: list[str] = []
+    current_length = 0
+    for command in commands:
+        if len(command) > maximum_body:
+            raise InstallerError("Comando de inicialização KTX excede o limite seguro.")
+        added = len(command) + (1 if current else 0)
+        if current and current_length + added > maximum_body:
+            chunks.append(current)
+            current = []
+            current_length = 0
+            added = len(command)
+        current.append(command)
+        current_length += added
+    if current:
+        chunks.append(current)
+    aliases = tuple(
+        f"x86qw_ktx_launch_setup_{index}"
+        for index in range(1, len(chunks) + 1)
+    )
+    definitions = tuple(
+        f"tempalias {alias} {quote_console_command(';'.join(chunk))}"
+        for alias, chunk in zip(aliases, chunks)
+    )
+    return (*definitions, (
+        "tempalias x86qw_ktx_launch_setup "
+        f"{quote_console_command(';'.join(aliases))}"
+    ))
 
 
 def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
@@ -335,6 +783,49 @@ def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
     ))
 
 
+def ktx_mode_bot_limit(mode: KtxModeSpec) -> int | None:
+    """Return the remaining fixed slots after the local human player."""
+    if re.fullmatch(r"[1-9][0-9]*", mode.recommended_players) is None:
+        return None
+    return max(0, min(31, int(mode.recommended_players) - 1))
+
+
+def ktx_mode_roster_description(mode: KtxModeSpec) -> str:
+    if mode.bot_teams and re.fullmatch(r"[1-9][0-9]*", mode.recommended_players):
+        players_per_team = int(mode.recommended_players) // len(mode.bot_teams)
+        return f"{len(mode.bot_teams)} equipes de {players_per_team} jogadores"
+    return f"completar {mode.recommended_players} jogadores"
+
+
+def validate_ktx_bot_count(mode: KtxModeSpec, options: KtxLaunchOptions) -> None:
+    limit = ktx_mode_bot_limit(mode)
+    requested = requested_frogbot_names(options, mode)
+    if limit is not None and requested > limit:
+        noun = "Frogbot" if limit == 1 else "Frogbots"
+        raise InstallerError(
+            f"{mode.label} aceita no máximo {limit} {noun} com um jogador humano."
+        )
+
+
+def ktx_bot_team_sequence(
+    mode: KtxModeSpec,
+    options: KtxLaunchOptions,
+) -> tuple[str | None, ...]:
+    """Balance selected bots against the local player in the declared teams."""
+    count = requested_frogbot_names(options, mode)
+    if options.bot_team is not None:
+        return (options.bot_team,) * count
+    if not mode.bot_teams:
+        return (None,) * count
+    populations = [1, *(0 for _team in mode.bot_teams[1:])]
+    result: list[str] = []
+    for _index in range(count):
+        selected = min(range(len(mode.bot_teams)), key=lambda index: populations[index])
+        result.append(mode.bot_teams[selected])
+        populations[selected] += 1
+    return tuple(result)
+
+
 def ktx_launch_commands(
     mode: KtxModeSpec,
     map_name: str,
@@ -346,6 +837,7 @@ def ktx_launch_commands(
     if bot_options:
         if not mode.bots:
             raise InstallerError(f"Bots Frogbot não são compatíveis com o modo {mode.label}.")
+        validate_ktx_bot_count(mode, options)
         route = f"bots/maps/{map_name.casefold()}.bot"
         if route not in assets:
             raise InstallerError(
@@ -353,19 +845,42 @@ def ktx_launch_commands(
             )
         if options.bot_team is not None and not options.bots:
             raise InstallerError("--bot-team exige --bots; o comando fill distribui as equipes.")
+        bot_count = requested_frogbot_names(options, mode)
+        if not options.fill_bots or mode.bot_teams:
+            required_clients = bot_count + 1
+            commands.extend((
+                f"if ($k_maxclients < {required_clients}) then k_maxclients {required_clients}",
+                f"if ($maxclients < {required_clients}) then maxclients {required_clients}",
+            ))
+        if mode.bot_teams and options.bot_team is None:
+            commands.append(f"team {mode.bot_teams[0]}")
         commands.append(f"cmd botcmd skill {options.bot_skill}")
         if options.bot_health is not None:
             commands.append(f"cmd botcmd health {options.bot_health}")
         if options.bot_weapon is not None:
             commands.append(f"cmd botcmd weapon {options.bot_weapon}")
-        if options.fill_bots:
+        if options.fill_bots and not mode.bot_teams:
             commands.append(f"cmd botcmd fill {options.bot_skill}")
         else:
-            team = f" {options.bot_team}" if options.bot_team is not None else ""
-            commands.extend(
-                f"cmd botcmd addbot {options.bot_skill}{team}"
-                for _ in range(options.bots)
-            )
+            team_sequence = ktx_bot_team_sequence(mode, options)
+            for index, selected_team in enumerate(team_sequence):
+                team = f" {selected_team}" if selected_team is not None else ""
+                commands.append(f"cmd botcmd addbot {options.bot_skill}{team}")
+                if index + 1 < len(team_sequence):
+                    commands.extend(("wait",) * FROGBOT_ADD_WAIT_FRAMES)
+        if options.bot_name_pool:
+            # set_ex creates user cvars in ezQuake. Remove them after KTX has
+            # copied the names so they never leak into the player's config.
+            # The final client command still needs a server frame to reach the
+            # local QVM, just like the commands between successive bots.
+            commands.extend(("wait",) * FROGBOT_ADD_WAIT_FRAMES)
+            setting_names = [
+                name for name, _value in ktx_bot_name_settings(options, mode)
+            ]
+            for offset in range(0, len(setting_names), 12):
+                commands.append("unset " + " ".join(
+                    setting_names[offset:offset + 12]
+                ))
 
     ctf_options = any((
         options.ctf_hook is not None,
@@ -749,7 +1264,7 @@ class Player(core.Installer):
         requested: str | None = None,
         *,
         activity: str = "jogar localmente",
-    ) -> LocalGameSpec:
+    ) -> LocalGameSpec | None:
         if requested is not None:
             matches = [game for game in games if game.key.casefold() == requested.casefold()]
             if len(matches) == 1:
@@ -777,9 +1292,10 @@ class Player(core.Installer):
             ),
             breadcrumb="x86QW › " + ("Hospedar" if activity == "hospedar" else "Jogar"),
             searchable=True,
+            allow_back=True,
         )
         if selected is None:
-            raise InstallerError("Nenhum jogo foi selecionado.")
+            return None
         return next(game for game in games if game.key == selected)
 
     def choose_ktx_mode(
@@ -788,7 +1304,7 @@ class Player(core.Installer):
         requested: str | None = None,
         *,
         activity: str = "jogar",
-    ) -> KtxModeSpec:
+    ) -> KtxModeSpec | None:
         if requested is not None:
             answer = requested.casefold()
             matches = [
@@ -814,9 +1330,10 @@ class Player(core.Installer):
             ),
             breadcrumb=f"x86QW › {'Hospedar' if activity == 'hospedar' else 'Jogar'} › KTX",
             searchable=True,
+            allow_back=True,
         )
         if selected is None:
-            raise InstallerError("Nenhum modo KTX foi selecionado.")
+            return None
         return next(mode for mode in modes if mode.key == selected)
 
     @staticmethod
@@ -851,7 +1368,7 @@ class Player(core.Installer):
         requested_map: str | None = None,
         required_asset: str | None = None,
         available_assets: frozenset[str] | None = None,
-    ) -> str:
+    ) -> str | None:
         maps = self.local_map_names(game.gamedir)
         if required_asset is not None:
             assert available_assets is not None
@@ -902,9 +1419,10 @@ class Player(core.Installer):
             subtitle=f"{len(maps)} mapa(s) compatível(is). Pressione / para buscar.",
             default=default_index,
             searchable=True,
+            allow_back=True,
         )
         if selected is None:
-            raise InstallerError("Nenhum mapa foi selecionado.")
+            return None
         return selected
 
     def choose_ktx_launch_options(
@@ -913,126 +1431,215 @@ class Player(core.Installer):
         options: KtxLaunchOptions | None = None,
         *,
         activity: str = "Jogar",
-    ) -> KtxLaunchOptions:
+    ) -> KtxLaunchOptions | None:
         """Collect only the options that are meaningful for the selected KTX mode."""
         selected = options or KtxLaunchOptions()
         breadcrumb = f"x86QW › {activity} › KTX › {mode.label}"
         if mode.key == "race":
-            style = navigation.select_one(
-                "Formato da corrida",
-                (
-                    navigation.MenuOption("solo", "Solo", "um corredor por vez"),
-                    navigation.MenuOption("simultaneous", "Largada simultânea", "todos percorrem a rota juntos"),
-                    navigation.MenuOption("match", "Match competitivo", "rodadas com sistema de pontuação"),
-                ),
-                breadcrumb=breadcrumb,
-                default=0,
-            )
-            if style is None:
-                raise InstallerError("Nenhum formato de Race foi selecionado.")
-            scoring = None
-            if style == "match":
-                scoring = navigation.select_one(
-                    "Sistema de pontuação",
+            while True:
+                style = navigation.select_one(
+                    "Formato da corrida",
                     (
-                        navigation.MenuOption("win", "Vitória simples", "vence quem ganhar a rodada"),
-                        navigation.MenuOption("scaled", "Escalonada", "pontua conforme a colocação"),
-                        navigation.MenuOption("formula1", "Fórmula 1", "pontuação no estilo automobilismo"),
+                        navigation.MenuOption("solo", "Solo", "um corredor por vez"),
+                        navigation.MenuOption("simultaneous", "Largada simultânea", "todos percorrem a rota juntos"),
+                        navigation.MenuOption("match", "Match competitivo", "rodadas com sistema de pontuação"),
                     ),
-                    breadcrumb=breadcrumb + " › Match",
+                    breadcrumb=breadcrumb,
+                    default=0,
+                    allow_back=True,
                 )
-            pacemaker = navigation.select_one(
-                "Pacemaker",
-                (
-                    navigation.MenuOption("none", "Nenhum", "correr sem referência"),
-                    *(navigation.MenuOption(str(rank), f"Posição {rank}", "usar esse tempo do ranking") for rank in range(1, 11)),
-                ),
-                breadcrumb=breadcrumb,
-                searchable=True,
-            )
-            hide_players = navigation.confirm(
-                "Ocultar os demais corredores?",
-                breadcrumb=breadcrumb,
-                default=False,
-            )
-            return replace(
-                selected,
-                race_style=style,
-                race_scoring=scoring,
-                race_pacemaker=None if pacemaker in (None, "none") else int(pacemaker),
-                race_hide_players=hide_players,
-            )
+                if style is None:
+                    return None
+                scoring = None
+                if style == "match":
+                    scoring = navigation.select_one(
+                        "Sistema de pontuação",
+                        (
+                            navigation.MenuOption("win", "Vitória simples", "vence quem ganhar a rodada"),
+                            navigation.MenuOption("scaled", "Escalonada", "pontua conforme a colocação"),
+                            navigation.MenuOption("formula1", "Fórmula 1", "pontuação no estilo automobilismo"),
+                        ),
+                        breadcrumb=breadcrumb + " › Match",
+                        allow_back=True,
+                    )
+                    if scoring is None:
+                        continue
+                while True:
+                    pacemaker = navigation.select_one(
+                        "Pacemaker",
+                        (
+                            navigation.MenuOption("none", "Nenhum", "correr sem referência"),
+                            *(navigation.MenuOption(str(rank), f"Posição {rank}", "usar esse tempo do ranking") for rank in range(1, 11)),
+                        ),
+                        breadcrumb=breadcrumb,
+                        searchable=True,
+                        allow_back=True,
+                    )
+                    if pacemaker is None:
+                        break
+                    hide_players = navigation.confirm(
+                        "Ocultar os demais corredores?",
+                        breadcrumb=breadcrumb,
+                        default=False,
+                        allow_back=True,
+                    )
+                    if hide_players is None:
+                        continue
+                    return replace(
+                        selected,
+                        race_style=style,
+                        race_scoring=scoring,
+                        race_pacemaker=None if pacemaker == "none" else int(pacemaker),
+                        race_hide_players=hide_players,
+                    )
         if mode.key == "ctf":
-            hook = navigation.select_one(
-                "Estilo do gancho",
-                (
-                    navigation.MenuOption("smooth", "Suave", "movimento progressivo"),
-                    navigation.MenuOption("fast", "Rápido", "resposta imediata"),
-                    navigation.MenuOption("classic", "Clássico", "comportamento tradicional"),
-                    navigation.MenuOption("crhook", "CRHook", "variação competitiva"),
-                    navigation.MenuOption("off", "Desativado", "partida sem gancho"),
-                ),
-                breadcrumb=breadcrumb,
-            )
-            runes = navigation.select_one(
-                "Runas",
-                (
-                    navigation.MenuOption("on", "Ativadas", "regras completas de CTF"),
-                    navigation.MenuOption("off", "Desativadas", "CTF sem powerups de runa"),
-                ),
-                breadcrumb=breadcrumb,
-            )
-            based_spawn = navigation.confirm(
-                "Usar spawn baseado na base?",
-                breadcrumb=breadcrumb,
-                default=False,
-            )
-            return replace(
-                selected,
-                ctf_hook=hook,
-                ctf_runes=runes,
-                ctf_based_spawn=based_spawn,
-            )
+            while True:
+                hook = navigation.select_one(
+                    "Estilo do gancho",
+                    (
+                        navigation.MenuOption("smooth", "Suave", "movimento progressivo"),
+                        navigation.MenuOption("fast", "Rápido", "resposta imediata"),
+                        navigation.MenuOption("classic", "Clássico", "comportamento tradicional"),
+                        navigation.MenuOption("crhook", "CRHook", "variação competitiva"),
+                        navigation.MenuOption("off", "Desativado", "partida sem gancho"),
+                    ),
+                    breadcrumb=breadcrumb,
+                    allow_back=True,
+                )
+                if hook is None:
+                    return None
+                while True:
+                    runes = navigation.select_one(
+                        "Runas",
+                        (
+                            navigation.MenuOption("on", "Ativadas", "regras completas de CTF"),
+                            navigation.MenuOption("off", "Desativadas", "CTF sem powerups de runa"),
+                        ),
+                        breadcrumb=breadcrumb,
+                        allow_back=True,
+                    )
+                    if runes is None:
+                        break
+                    based_spawn = navigation.confirm(
+                        "Usar spawn baseado na base?",
+                        breadcrumb=breadcrumb,
+                        default=False,
+                        allow_back=True,
+                    )
+                    if based_spawn is None:
+                        continue
+                    return replace(
+                        selected,
+                        ctf_hook=hook,
+                        ctf_runes=runes,
+                        ctf_based_spawn=based_spawn,
+                    )
         if mode.bots:
-            bot_choice = navigation.select_one(
-                "Adicionar Frogbots?",
-                (
+            fixed_bot_limit = ktx_mode_bot_limit(mode)
+            if fixed_bot_limit is None:
+                bot_menu_options = (
                     navigation.MenuOption("none", "Sem bots", "iniciar somente com jogadores humanos"),
                     navigation.MenuOption("1", "1 bot", "adicionar um oponente"),
                     navigation.MenuOption("2", "2 bots", "partida pequena"),
                     navigation.MenuOption("4", "4 bots", "partida intermediária"),
                     navigation.MenuOption("fill", "Preencher servidor", "até oito Frogbots"),
                     navigation.MenuOption("custom", "Quantidade personalizada", "escolher de 1 a 31"),
-                ),
-                breadcrumb=breadcrumb,
-            )
-            if bot_choice not in (None, "none"):
-                if bot_choice == "custom":
+                )
+            else:
+                bot_menu_options = (
+                    navigation.MenuOption("none", "Sem bots", "iniciar somente com jogadores humanos"),
+                    navigation.MenuOption(
+                        str(fixed_bot_limit),
+                        "1 bot" if fixed_bot_limit == 1 else f"{fixed_bot_limit} bots",
+                        ktx_mode_roster_description(mode),
+                    ),
+                )
+            while True:
+                bot_choice = navigation.select_one(
+                    "Adicionar Frogbots?",
+                    bot_menu_options,
+                    breadcrumb=breadcrumb,
+                    allow_back=True,
+                )
+                if bot_choice is None:
+                    return None
+                if bot_choice == "none":
+                    return selected
+                chosen_custom = bot_choice == "custom"
+                if chosen_custom:
                     bot_choice = navigation.select_one(
                         "Quantidade de Frogbots",
-                        (navigation.MenuOption(str(number), str(number)) for number in range(1, 32)),
+                        (
+                            navigation.MenuOption(str(number), str(number))
+                            for number in range(1, (fixed_bot_limit or 31) + 1)
+                        ),
                         breadcrumb=breadcrumb + " › Frogbots",
                         searchable=True,
+                        allow_back=True,
                     )
-                skill = navigation.select_one(
-                    "Habilidade dos Frogbots",
-                    (
-                        navigation.MenuOption(
-                            str(level), str(level),
-                            "iniciante" if level <= 4 else "intermediária" if level <= 10 else "avançada",
-                        )
-                        for level in range(1, 21)
-                    ),
-                    breadcrumb=breadcrumb + " › Frogbots",
-                    default=4,
-                    searchable=True,
-                )
-                selected = replace(
-                    selected,
-                    bots=0 if bot_choice == "fill" else int(bot_choice or 0),
-                    fill_bots=bot_choice == "fill",
-                    bot_skill=int(skill or 5),
-                )
+                    if bot_choice is None:
+                        continue
+                while True:
+                    skill = navigation.select_one(
+                        "Habilidade dos Frogbots",
+                        (
+                            navigation.MenuOption(
+                                "random", "Aleatória", "cada bot recebe habilidade de 1 a 20",
+                            ),
+                            *(navigation.MenuOption(
+                                str(level), str(level),
+                                "iniciante" if level <= 4 else "intermediária" if level <= 10 else "avançada",
+                            ) for level in range(1, 21)),
+                        ),
+                        breadcrumb=breadcrumb + " › Frogbots",
+                        default=5,
+                        searchable=True,
+                        allow_back=True,
+                    )
+                    if skill is None:
+                        if chosen_custom:
+                            bot_choice = navigation.select_one(
+                                "Quantidade de Frogbots",
+                                (
+                                    navigation.MenuOption(str(number), str(number))
+                                    for number in range(1, (fixed_bot_limit or 31) + 1)
+                                ),
+                                breadcrumb=breadcrumb + " › Frogbots",
+                                searchable=True,
+                                allow_back=True,
+                            )
+                            if bot_choice is None:
+                                break
+                            continue
+                        break
+                    names_profile = navigation.select_one(
+                        "Nomes dos Frogbots",
+                        (
+                            navigation.MenuOption(
+                                "default", "KTX Default", "nomes originais sem customização",
+                            ),
+                            navigation.MenuOption(
+                                "x86qw", "x86QW aleatório",
+                                "Chapéus de Palha, lendas e grandes potências",
+                            ),
+                            navigation.MenuOption(
+                                "personal", "Lista pessoal",
+                                "usar qw/x86qw-frogbot-names.json na ordem declarada",
+                            ),
+                        ),
+                        breadcrumb=breadcrumb + " › Frogbots",
+                        default=1,
+                        allow_back=True,
+                    )
+                    if names_profile is None:
+                        continue
+                    return replace(
+                        selected,
+                        bots=0 if bot_choice == "fill" else int(bot_choice),
+                        fill_bots=bot_choice == "fill",
+                        bot_skill="random" if skill == "random" else int(skill),
+                        bot_names_profile=names_profile,
+                    )
         return selected
 
     def play_local(
@@ -1050,48 +1657,99 @@ class Player(core.Installer):
             raise InstallerError(
                 "Nenhum mod local gerenciado está instalado. Execute components e instale ao menos KTX."
         )
-        game = self.choose_local_game(games, game_key)
-        uses_mode_catalog = game.mode_catalog is not None
-        if mode_key is not None and not uses_mode_catalog:
-            raise InstallerError("--mode só pode ser usado com o jogo KTX.")
-        if (
-            not uses_mode_catalog
-            and ktx_options is not None
-            and ktx_options != KtxLaunchOptions()
-        ):
-            raise InstallerError("Opções de bots, CTF e Race só podem ser usadas com o jogo KTX.")
-        installed_component = self.installed_component_for_game(game)
-        if installed_component is None:
-            raise InstallerError(f"O componente de {game.label} não está mais instalado.")
-        self.verify_component(installed_component)
-        ktx_mode = None
+        game: LocalGameSpec | None = None
+        ktx_mode: KtxModeSpec | None = None
         ktx_assets: frozenset[str] | None = None
-        if uses_mode_catalog:
-            ktx_mode = self.choose_ktx_mode(load_ktx_modes(self.project_root), mode_key)
-            console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
-            launch_options = ktx_options or KtxLaunchOptions()
-            if configure_interactively:
-                launch_options = self.choose_ktx_launch_options(ktx_mode, launch_options)
-            ktx_assets = (
-                self.ktx_archive_members()
-                if ktx_mode.required_map_asset is not None
-                or ktx_bot_options_requested(launch_options)
-                else frozenset()
-            )
-            map_name = self.choose_local_map(
-                game,
-                default_map=ktx_mode.default_map,
-                suggested_maps=ktx_mode.suggested_maps,
-                label=f"KTX · {ktx_mode.label}",
-                requested_map=map_key,
-                required_asset=ktx_mode.required_map_asset,
-                available_assets=ktx_assets,
-            )
-        else:
-            map_name = self.choose_local_map(game, requested_map=map_key)
+        launch_options = ktx_options or KtxLaunchOptions()
+        map_name: str | None = None
+        runtime_choice: tuple[str, Path] | None = None
+        state = "game"
+        while runtime_choice is None:
+            if state == "game":
+                game = self.choose_local_game(games, game_key)
+                if game is None:
+                    return
+                uses_mode_catalog = game.mode_catalog is not None
+                if mode_key is not None and not uses_mode_catalog:
+                    raise InstallerError("--mode só pode ser usado com o jogo KTX.")
+                if (
+                    not uses_mode_catalog
+                    and ktx_options is not None
+                    and ktx_options != KtxLaunchOptions()
+                ):
+                    raise InstallerError(
+                        "Opções de bots, CTF e Race só podem ser usadas com o jogo KTX."
+                    )
+                installed_component = self.installed_component_for_game(game)
+                if installed_component is None:
+                    raise InstallerError(f"O componente de {game.label} não está mais instalado.")
+                self.verify_component(installed_component)
+                ktx_mode = None
+                launch_options = ktx_options or KtxLaunchOptions()
+                state = "mode" if uses_mode_catalog else "map"
+                continue
+            assert game is not None
+            uses_mode_catalog = game.mode_catalog is not None
+            if state == "mode":
+                ktx_mode = self.choose_ktx_mode(
+                    load_ktx_modes(self.project_root), mode_key,
+                )
+                if ktx_mode is None:
+                    state = "game"
+                    continue
+                console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
+                state = "options" if configure_interactively else "map"
+                continue
+            if state == "options":
+                assert ktx_mode is not None
+                chosen_options = self.choose_ktx_launch_options(ktx_mode, launch_options)
+                if chosen_options is None:
+                    state = "mode"
+                    continue
+                launch_options = chosen_options
+                state = "map"
+                continue
+            if state == "map":
+                if uses_mode_catalog:
+                    assert ktx_mode is not None
+                    launch_options = resolve_frogbot_name_profile(
+                        self.project_root, self.target, game, launch_options, ktx_mode,
+                    )
+                    ktx_assets = (
+                        self.ktx_archive_members()
+                        if ktx_mode.required_map_asset is not None
+                        or ktx_bot_options_requested(launch_options)
+                        else frozenset()
+                    )
+                    map_name = self.choose_local_map(
+                        game,
+                        default_map=ktx_mode.default_map,
+                        suggested_maps=ktx_mode.suggested_maps,
+                        label=f"KTX · {ktx_mode.label}",
+                        requested_map=map_key,
+                        required_asset=ktx_mode.required_map_asset,
+                        available_assets=ktx_assets,
+                    )
+                else:
+                    map_name = self.choose_local_map(game, requested_map=map_key)
+                if map_name is None:
+                    state = "options" if uses_mode_catalog and configure_interactively else (
+                        "mode" if uses_mode_catalog else "game"
+                    )
+                    continue
+                state = "runtime"
+                continue
+            runtime_choice = self.choose_host_runtime()
+            if runtime_choice is None:
+                state = "map"
+        assert game is not None
+        assert map_name is not None
         self.verify_local_play_support(games)
-        label, runtime = self.choose_host_runtime()
-        arguments = ["+sb_listcache", "0", "+spectator", "0"]
+        label, runtime = runtime_choice
+        arguments = [
+            "+sb_listcache", "0", "+spectator", "0",
+            "+bind", "F12", "quit",
+        ]
         for name, value in game.local_server_settings:
             arguments.extend([f"+{name}", value])
         arguments.extend(game.client_game_arguments)
@@ -1103,17 +1761,19 @@ class Player(core.Installer):
             ])
         arguments.extend(game.pre_map_arguments)
         arguments.extend(game.client_compatibility_arguments)
+        frogbot_startup_commands: tuple[str, ...] = ()
         if uses_mode_catalog:
             assert ktx_mode is not None
             assert ktx_assets is not None
+            bot_name_settings = ktx_bot_name_settings(launch_options, ktx_mode)
             setup_commands = (
                 "tempalias ktx_mode echo "
                 f"x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
-                "tempalias x86qw_ktx_mode_help "
-                f"exec {ktx_mode_help_config(ktx_mode)}",
+                *ktx_key_alias_commands(ktx_mode, launch_options),
                 *ktx_launch_commands(
                     ktx_mode, map_name, ktx_assets, launch_options,
                 ),
+                ktx_mode_help_alias(ktx_mode),
             )
             if ktx_bot_options_requested(launch_options):
                 # ToT registers and enables this server cvar from its own
@@ -1132,26 +1792,37 @@ class Player(core.Installer):
             setup_body = ";".join((
                 "unalias x86qw_ktx_launch_setup", *setup_commands,
             ))
-            arguments.extend([
-                "+tempalias", "x86qw_ktx_launch_setup",
-                quote_console_command(setup_body),
-            ])
             event = {
                 "ffa": "on_enter_ffa",
                 "tot": "on_enter_ffa",
                 "ctf": "on_enter_ctf",
             }.get(ktx_mode.usermode, "on_enter")
             if ktx_mode.entry_config is None:
+                event_body = "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
+            else:
+                event_body = f"exec {ktx_mode.entry_config}"
+            if ktx_bot_options_requested(launch_options):
+                # Keep the long, frame-separated addbot sequence outside the
+                # engine's bounded startup command line. The ephemeral file is
+                # read before the map and removed immediately after startup.
+                frogbot_startup_commands = (
+                    *ktx_chunked_setup_alias_commands(setup_commands),
+                    f"tempalias {event} {quote_console_command(event_body)}",
+                )
                 arguments.extend([
-                    "+tempalias", event,
-                    quote_console_command(
-                        "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"
-                    ),
+                    "+exec", FROGBOT_RUNTIME_CONFIG_PLACEHOLDER,
                 ])
             else:
+                event_argument = (
+                    quote_console_command(event_body)
+                    if ktx_mode.entry_config is None
+                    else event_body
+                )
                 arguments.extend([
+                    "+tempalias", "x86qw_ktx_launch_setup",
+                    quote_console_command(setup_body),
                     "+tempalias", event,
-                    f"exec {ktx_mode.entry_config}",
+                    event_argument,
                 ])
             arguments.extend(["+set", "k_defmap", map_name])
             arguments.extend(["+set", "k_defmode", ktx_mode.usermode])
@@ -1163,9 +1834,42 @@ class Player(core.Installer):
         ):
             arguments.extend(["+k_fb_break_on_death", "1"])
         arguments.extend(game.post_map_arguments)
+        # This is an invariant of the launcher, not a suggested profile bind.
+        # Keep it after every managed and personal config so no mod can leave
+        # the user without the universal emergency exit.
+        arguments.extend(["+bind", "F12", "quit"])
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
         console.info(f"Abrindo {selection} no mapa {map_name}...")
-        self.launch_runtime(runtime, arguments)
+        runtime_config = None
+        if uses_mode_catalog and frogbot_startup_commands:
+            runtime_config = write_frogbot_runtime_config(
+                self.target, bot_name_settings, frogbot_startup_commands,
+            )
+            arguments = [
+                argument.replace(
+                    FROGBOT_RUNTIME_CONFIG_PLACEHOLDER, runtime_config.path.name,
+                )
+                for argument in arguments
+            ]
+        try:
+            process = self.launch_runtime(runtime, arguments)
+            if runtime_config is not None and isinstance(process, subprocess.Popen):
+                deadline = time.monotonic() + 3.0
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise InstallerError(
+                            "O ezQuake encerrou antes de carregar os nomes Frogbot."
+                        )
+                    time.sleep(0.05)
+        finally:
+            if (
+                runtime_config is not None
+                and not remove_frogbot_runtime_config(runtime_config)
+            ):
+                console.warning(
+                    "Configuração efêmera de nomes Frogbot preservada porque "
+                    f"sua identidade mudou: {runtime_config.path}"
+                )
         console.success(f"{label} aberto com {selection}.")
 
     def expected_local_play_support(self, games: list[LocalGameSpec]) -> dict[str, bytes]:
@@ -1325,6 +2029,12 @@ def bounded_integer(minimum: int, maximum: int):
     return parse
 
 
+def bot_skill(value: str) -> int | str:
+    if value.casefold() == "random":
+        return "random"
+    return bounded_integer(1, 20)(value)
+
+
 def add_game_launch_arguments(
     parser: argparse.ArgumentParser,
     *,
@@ -1345,8 +2055,8 @@ def add_game_launch_arguments(
         help="preenche o servidor KTX com até 8 bots Frogbot",
     )
     parser.add_argument(
-        "--bot-skill", type=bounded_integer(1, 20), default=5, metavar="1-20",
-        help="define a habilidade dos bots (padrão: 5)",
+        "--bot-skill", type=bot_skill, default=5, metavar="1-20|random",
+        help="define a habilidade dos bots ou sorteia 1-20 por bot (padrão: 5)",
     )
     if not dedicated:
         parser.add_argument(
@@ -1364,6 +2074,10 @@ def add_game_launch_arguments(
     parser.add_argument(
         "--bot-break-on-death", action="store_true",
         help="encerra a tentativa quando o jogador humano morre",
+    )
+    parser.add_argument(
+        "--bot-names", choices=("default", "x86qw", "personal"), default="default",
+        help="seleciona nomes padrão KTX, x86QW aleatórios ou a lista pessoal",
     )
     parser.add_argument(
         "--ctf-hook", choices=("smooth", "fast", "classic", "crhook", "off"),
@@ -1408,6 +2122,9 @@ def resolve_ktx_launch_options(
     bot_team = getattr(namespace, "bot_team", None)
     race_pacemaker = getattr(namespace, "race_pacemaker", None)
     race_hide_players = getattr(namespace, "race_hide_players", False)
+    bot_names_profile = namespace.bot_names
+    if bot_names_profile != "default" and not (namespace.bots or namespace.fill_bots):
+        parser.error("--bot-names exige --bots ou --fill-bots")
     if bot_team is not None and re.fullmatch(
         r"[A-Za-z0-9_-]{1,9}", bot_team,
     ) is None:
@@ -1420,6 +2137,7 @@ def resolve_ktx_launch_options(
         namespace.bot_weapon is not None,
         namespace.bot_health is not None,
         namespace.bot_break_on_death,
+        bot_names_profile != "default",
         namespace.ctf_hook is not None,
         namespace.ctf_runes is not None,
         namespace.ctf_based_spawn,
@@ -1440,6 +2158,7 @@ def resolve_ktx_launch_options(
         bot_weapon=namespace.bot_weapon,
         bot_health=namespace.bot_health,
         bot_break_on_death=namespace.bot_break_on_death,
+        bot_names_profile=bot_names_profile,
         ctf_hook=namespace.ctf_hook,
         ctf_runes=namespace.ctf_runes,
         ctf_based_spawn=namespace.ctf_based_spawn,

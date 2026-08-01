@@ -1039,7 +1039,7 @@ def runtime_binary(installer: core.Installer, component: str) -> Path:
 def temporary_config(
     directory: Path,
     prefix: str,
-    lines: list[str],
+    lines: list[str | bytes],
     journal: SessionJournal | None = None,
     *,
     sensitive: bool = True,
@@ -1049,10 +1049,11 @@ def temporary_config(
     descriptor, name = tempfile.mkstemp(prefix=prefix, suffix=".cfg", dir=directory)
     path = Path(name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
-            output.write("// x86QW: configuração efêmera removida ao encerrar.\n")
-            output.write("\n".join(lines))
-            output.write("\n")
+        with os.fdopen(descriptor, "wb") as output:
+            output.write("// x86QW: configuração efêmera removida ao encerrar.\n".encode("utf-8"))
+            for line in lines:
+                output.write(line.encode("utf-8") if isinstance(line, str) else line)
+                output.write(b"\n")
         if os.name != "nt":
             path.chmod(0o600)
         if journal is not None:
@@ -1311,6 +1312,9 @@ def select_hosted_game(
                 options.ktx_options,
                 activity="Hospedar",
             )
+        options.ktx_options = gameplay.resolve_frogbot_name_profile(
+            player.project_root, player.target, game, options.ktx_options, mode,
+        )
         assets = ktx_assets(player.target)
         map_name = player.choose_local_map(
             game,
@@ -1348,23 +1352,26 @@ def dedicated_ktx_settings(
     assets: frozenset[str],
     options: gameplay.KtxLaunchOptions,
     maxclients: int,
-) -> tuple[tuple[str, str], ...]:
+) -> tuple[tuple[str, str | bytes], ...]:
     # Reuse the client launch validator, then translate supported choices into
     # server cvars because MVDSV has no client aliases or client-command entity.
     gameplay.ktx_launch_commands(mode, map_name, assets, options)
-    settings: list[tuple[str, str]] = list(DEDICATED_MODE_CVARS.get(mode.key, ()))
+    settings: list[tuple[str, str | bytes]] = list(DEDICATED_MODE_CVARS.get(mode.key, ()))
     if gameplay.ktx_bot_options_requested(options):
-        target_clients = min(8, maxclients) if options.fill_bots else options.bots + 1
+        target_clients = gameplay.requested_frogbot_names(options, mode) + 1
         if target_clients > maxclients:
             raise InstallerError(
-                f"--bots {options.bots} exige --maxclients de pelo menos {target_clients}."
+                f"{mode.label} com os Frogbots selecionados exige --maxclients "
+                f"de pelo menos {target_clients}."
             )
         settings.extend((
             ("k_fb_enabled", "1"),
-            ("k_fb_skill", str(options.bot_skill)),
+            ("k_fb_skill", "5" if options.bot_skill == "random" else str(options.bot_skill)),
+            ("k_fb_skill_random", "1" if options.bot_skill == "random" else "0"),
             ("k_fb_autoadd_limit", str(target_clients)),
             ("k_fb_autoremove_at", str(target_clients)),
         ))
+        settings.extend(gameplay.ktx_bot_name_binary_settings(options, mode))
         if options.bot_weapon is not None:
             settings.append((
                 "k_fb_weapon", "0" if options.bot_weapon == "random" else options.bot_weapon,
@@ -1418,7 +1425,7 @@ def host_spec(
     user_config = (
         PurePosixPath(game.personal_config).name
     )
-    post_map_settings: tuple[tuple[str, str], ...] = ()
+    post_map_settings: tuple[tuple[str, str | bytes], ...] = ()
     if game.mode_catalog is not None:
         assert mode is not None
         post_map_settings = dedicated_ktx_settings(
@@ -1472,7 +1479,12 @@ def host_spec(
         game_directory,
         "x86qw_host_post_",
         [
-            *(f"set {name} {value}" for name, value in post_map_settings),
+            *(
+                b"set " + name.encode("ascii") + b' "' + value + b'"'
+                if isinstance(value, bytes)
+                else f"set {name} {value}"
+                for name, value in post_map_settings
+            ),
             f"rcon_password {q(options.rcon_password)}",
         ],
         journal,
@@ -2002,7 +2014,7 @@ def menu_text(prompt: str, default: str, validator: object) -> object:
             console.warning(str(error))
 
 
-def menu_bind(label: str, current: str = "127.0.0.1") -> str:
+def menu_bind(label: str, current: str = "127.0.0.1") -> str | None:
     selected = navigation.select_one(
         f"Interface de rede do {label}",
         (
@@ -2012,7 +2024,10 @@ def menu_bind(label: str, current: str = "127.0.0.1") -> str:
             navigation.MenuOption("custom", "Endereço personalizado", "IPv4 ou IPv6 específico"),
         ),
         breadcrumb=f"x86QW › Serviços › {label} › Rede",
+        allow_back=True,
     )
+    if selected is None:
+        return None
     if selected == "custom":
         return str(menu_text("Endereço IP", current, bind_address))
     return {"loopback": "127.0.0.1", "lan": "0.0.0.0", "ipv6": "::"}.get(
@@ -2020,7 +2035,7 @@ def menu_bind(label: str, current: str = "127.0.0.1") -> str:
     )
 
 
-def menu_port(label: str, current: int) -> int:
+def menu_port(label: str, current: int) -> int | None:
     selected = navigation.select_one(
         f"Porta do {label}",
         (
@@ -2028,7 +2043,10 @@ def menu_port(label: str, current: int) -> int:
             navigation.MenuOption("custom", "Outra porta", "escolher entre 1024 e 65535"),
         ),
         breadcrumb=f"x86QW › Serviços › {label} › Rede",
+        allow_back=True,
     )
+    if selected is None:
+        return None
     if selected == "custom":
         return int(menu_text("Porta", str(current), bounded_integer(1024, 65535)))
     return current
@@ -2038,76 +2056,172 @@ def configure_service_menu(options: argparse.Namespace) -> None:
     if not options.menu:
         return
     if options.action == "proxy":
-        options.proxy_bind = menu_bind("QWFWD", options.proxy_bind)
-        options.proxy_port = menu_port("QWFWD", options.proxy_port)
+        while True:
+            bind = menu_bind("QWFWD", options.proxy_bind)
+            if bind is None:
+                raise navigation.MenuCancelled("QWFWD")
+            options.proxy_bind = bind
+            port = menu_port("QWFWD", options.proxy_port)
+            if port is None:
+                continue
+            options.proxy_port = port
+            break
         return
     if options.action == "qtv":
-        options.bind = menu_bind("QTV", options.bind)
-        options.port = menu_port("QTV", options.port)
-        upstream = navigation.select_one(
-            "Origem da transmissão",
-            (
-                navigation.MenuOption("none", "Sem upstream inicial", "iniciar QTV isoladamente"),
-                navigation.MenuOption("custom", "Conectar a um MVDSV", "informar host e porta"),
-            ),
-            breadcrumb="x86QW › Serviços › QTV",
-        )
-        if upstream == "custom":
-            options.upstream = str(menu_text(
-                "Endpoint MVDSV", "127.0.0.1:28501", parse_network_endpoint,
-            ))
-            options.prompt_qtv_password = navigation.confirm(
-                "Solicitar senha do upstream?",
-                breadcrumb="x86QW › Serviços › QTV › Segurança",
-                default=False,
-            )
+        stage = 0
+        while stage < 4:
+            if stage == 0:
+                bind = menu_bind("QTV", options.bind)
+                if bind is None:
+                    raise navigation.MenuCancelled("QTV")
+                options.bind = bind
+            elif stage == 1:
+                port = menu_port("QTV", options.port)
+                if port is None:
+                    stage -= 1
+                    continue
+                options.port = port
+            elif stage == 2:
+                upstream = navigation.select_one(
+                    "Origem da transmissão",
+                    (
+                        navigation.MenuOption("none", "Sem upstream inicial", "iniciar QTV isoladamente"),
+                        navigation.MenuOption("custom", "Conectar a um MVDSV", "informar host e porta"),
+                    ),
+                    breadcrumb="x86QW › Serviços › QTV",
+                    allow_back=True,
+                )
+                if upstream is None:
+                    stage -= 1
+                    continue
+                if upstream == "custom":
+                    options.upstream = str(menu_text(
+                        "Endpoint MVDSV", "127.0.0.1:28501", parse_network_endpoint,
+                    ))
+                else:
+                    options.upstream = None
+                    stage = 4
+                    continue
+            else:
+                prompt = navigation.confirm(
+                    "Solicitar senha do upstream?",
+                    breadcrumb="x86QW › Serviços › QTV › Segurança",
+                    default=False,
+                    allow_back=True,
+                )
+                if prompt is None:
+                    stage -= 1
+                    continue
+                options.prompt_qtv_password = prompt
+            stage += 1
         return
-    options.bind = menu_bind("MVDSV", options.bind)
-    options.port = menu_port("MVDSV", options.port)
-    clients = navigation.select_one(
-        "Máximo de clientes",
-        (
-            navigation.MenuOption("8", "8", "partida pequena"),
-            navigation.MenuOption("16", "16", "padrão recomendado"),
-            navigation.MenuOption("24", "24", "servidor grande"),
-            navigation.MenuOption("32", "32", "limite atual"),
-        ),
-        breadcrumb="x86QW › Hospedar › Capacidade",
-        default=1,
-    )
-    options.maxclients = int(clients or 16)
-    options.no_mvd = not navigation.confirm(
-        "Gravar demos MVD automaticamente?",
-        breadcrumb="x86QW › Hospedar › Gravação",
-        default=True,
-    )
-    options.with_qtv = navigation.confirm(
-        "Iniciar QTV conectado ao servidor?",
-        breadcrumb="x86QW › Hospedar › Serviços adicionais",
-        default=False,
-    )
-    if options.with_qtv:
-        options.qtv_bind = menu_bind("QTV", options.qtv_bind)
-        options.qtv_port = menu_port("QTV", options.qtv_port)
-    options.with_proxy = navigation.confirm(
-        "Iniciar também o proxy QWFWD?",
-        breadcrumb="x86QW › Hospedar › Serviços adicionais",
-        default=False,
-    )
-    if options.with_proxy:
-        options.proxy_bind = menu_bind("QWFWD", options.proxy_bind)
-        options.proxy_port = menu_port("QWFWD", options.proxy_port)
-    if navigation.confirm(
-        "Configurar senhas com entrada oculta?",
-        breadcrumb="x86QW › Hospedar › Segurança",
-        description="As senhas não serão colocadas na linha de comando.",
-        default=False,
-    ):
-        options.prompt_password = True
-        options.prompt_spectator_password = True
-        options.prompt_rcon_password = True
-        if options.with_qtv:
-            options.prompt_qtv_password = True
+
+    stage = 0
+    while stage < 11:
+        if stage == 0:
+            bind = menu_bind("MVDSV", options.bind)
+            if bind is None:
+                raise navigation.MenuCancelled("MVDSV")
+            options.bind = bind
+        elif stage == 1:
+            port = menu_port("MVDSV", options.port)
+            if port is None:
+                stage -= 1
+                continue
+            options.port = port
+        elif stage == 2:
+            clients = navigation.select_one(
+                "Máximo de clientes",
+                (
+                    navigation.MenuOption("8", "8", "partida pequena"),
+                    navigation.MenuOption("16", "16", "padrão recomendado"),
+                    navigation.MenuOption("24", "24", "servidor grande"),
+                    navigation.MenuOption("32", "32", "limite atual"),
+                ),
+                breadcrumb="x86QW › Hospedar › Capacidade",
+                default=1,
+                allow_back=True,
+            )
+            if clients is None:
+                stage -= 1
+                continue
+            options.maxclients = int(clients)
+        elif stage == 3:
+            record = navigation.confirm(
+                "Gravar demos MVD automaticamente?",
+                breadcrumb="x86QW › Hospedar › Gravação", default=True, allow_back=True,
+            )
+            if record is None:
+                stage -= 1
+                continue
+            options.no_mvd = not record
+        elif stage == 4:
+            with_qtv = navigation.confirm(
+                "Iniciar QTV conectado ao servidor?",
+                breadcrumb="x86QW › Hospedar › Serviços adicionais",
+                default=False, allow_back=True,
+            )
+            if with_qtv is None:
+                stage -= 1
+                continue
+            options.with_qtv = with_qtv
+            if not with_qtv:
+                stage = 6
+        elif stage == 5:
+            qtv_bind = menu_bind("QTV", options.qtv_bind)
+            if qtv_bind is None:
+                stage -= 1
+                continue
+            options.qtv_bind = qtv_bind
+        elif stage == 6:
+            if options.with_qtv:
+                qtv_port = menu_port("QTV", options.qtv_port)
+                if qtv_port is None:
+                    stage -= 1
+                    continue
+                options.qtv_port = qtv_port
+        elif stage == 7:
+            with_proxy = navigation.confirm(
+                "Iniciar também o proxy QWFWD?",
+                breadcrumb="x86QW › Hospedar › Serviços adicionais",
+                default=False, allow_back=True,
+            )
+            if with_proxy is None:
+                stage = 6 if options.with_qtv else 4
+                continue
+            options.with_proxy = with_proxy
+            if not with_proxy:
+                stage = 9
+        elif stage == 8:
+            proxy_bind = menu_bind("QWFWD", options.proxy_bind)
+            if proxy_bind is None:
+                stage -= 1
+                continue
+            options.proxy_bind = proxy_bind
+        elif stage == 9:
+            if options.with_proxy:
+                proxy_port = menu_port("QWFWD", options.proxy_port)
+                if proxy_port is None:
+                    stage -= 1
+                    continue
+                options.proxy_port = proxy_port
+        else:
+            passwords = navigation.confirm(
+                "Configurar senhas com entrada oculta?",
+                breadcrumb="x86QW › Hospedar › Segurança",
+                description="As senhas não serão colocadas na linha de comando.",
+                default=False, allow_back=True,
+            )
+            if passwords is None:
+                stage = 9 if options.with_proxy else 7
+                continue
+            if passwords:
+                options.prompt_password = True
+                options.prompt_spectator_password = True
+                options.prompt_rcon_password = True
+                if options.with_qtv:
+                    options.prompt_qtv_password = True
+        stage += 1
 
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:

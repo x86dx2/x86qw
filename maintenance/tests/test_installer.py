@@ -42,11 +42,16 @@ class InstallerTests(unittest.TestCase):
     def test_public_zipapp_embeds_the_declarative_ktx_mode_catalog(self):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
+            bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
             self.assertIn("session_control.py", application.namelist())
         self.assertEqual(1, catalog["format"])
         self.assertEqual("ktx", catalog["game"])
         self.assertEqual("duel", catalog["modes"][0]["id"])
         self.assertIn("race", [mode["id"] for mode in catalog["modes"]])
+        self.assertEqual("one-piece", bot_names["theme"])
+        luffy = bot_names["groups"][0]["characters"][0]
+        self.assertEqual("Luffy", luffy["name"])
+        self.assertEqual({"name"}, set(luffy))
 
     @staticmethod
     def write_installer_bundle(path: Path, version: str) -> None:

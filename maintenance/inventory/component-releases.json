@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.13",
+      "version": "1.47+x86qw.17",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.13",
+      "distribution_tag": "ktx-1.47-x86qw.17",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos, QVM e mapa de símbolos oficiais do KTX 1.47. O launcher expõe os 17 usermodes e sete variações oficiais, as 54 rotas Race, os seis ENTs de CTF e os bots Frogbot com validação de rota, habilidade, equipe, arma e vida; os 22 modos compatíveis adicionam o Frogbot escolhido na primeira entrada e o F10 combina controles comuns e ajuda contextual alinhada.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória e balanceamento automático conforme as equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida e nomes. Camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -58,7 +58,7 @@
           "managed-file-integrity",
           "uninstall"
         ],
-        "gamecode_runtime": "Official KTX 1.47 QVM running in the ezQuake local server; MVDSV is not distributed by x86QW"
+        "gamecode_runtime": "KTX 1.47 QVM with the reviewed x86QW Frogbot appearance and team-balance patches, running in the ezQuake local server"
       },
       "upstream": {
         "repository": "QW-Group/ktx",
@@ -71,7 +71,7 @@
         {
           "target_archive": "qw/ktx.pk3",
           "reference_source": "gpl/qw/ktx.pk3",
-          "policy": "dist/mods/ktx/1.47/x86qw/merge-policy.json"
+          "policy": "dist/mods/ktx/1.47/x86qw/policy/merge-policy.json"
         }
       ],
       "archive_text_replacements": [
@@ -173,7 +173,7 @@
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.2",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.3",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "final-arena",
@@ -181,7 +181,7 @@
       "embedded_version": "Final Arena 1.20",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com ajuda somente sob demanda.",
+      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com plano de teclas impresso ao entrar.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -219,7 +219,7 @@
       ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.3",
+      "version": "1.1+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "pro-x",
@@ -227,7 +227,7 @@
       "embedded_version": "Pro-X QW 1.1",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com ajuda somente sob demanda e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com plano de teclas impresso ao entrar e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -257,7 +257,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.4",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.5",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "team-fortress",
@@ -312,14 +312,14 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.3",
+      "version": "2.22+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, ajuda somente sob demanda e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, plano de teclas impresso ao entrar e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

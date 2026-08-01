@@ -137,21 +137,30 @@ def _label_width(options: tuple[MenuOption, ...]) -> int:
     return max(len(option.label) for option in options if option.enabled)
 
 
-def _inline_description(option: MenuOption, *, include_detail: bool) -> str:
-    if include_detail and option.detail:
-        if option.description:
-            return f"{option.description} — {option.detail}"
-        return option.detail
-    return option.description
+def _description_width(options: tuple[MenuOption, ...]) -> int:
+    return max((len(option.description) for option in options if option.enabled), default=0)
 
 
 def _option_line(
-    *, prefix: str, label: str, label_width: int, description: str, width: int,
+    *,
+    prefix: str,
+    option: MenuOption,
+    label_width: int,
+    description_width: int,
+    width: int,
+    active: bool,
 ) -> str:
-    line = f"{prefix} {label:<{label_width}}"
-    if description:
-        line += f" | {description}"
-    return line[:width]
+    """Render one stable table row while keeping ANSI outside its width budget."""
+    label = f"{prefix} {option.label:<{label_width}}"
+    description = ""
+    if description_width:
+        description = f" | {option.description:<{description_width}}"
+    detail = f" < {option.detail}" if active and option.detail else ""
+    remaining = max(0, width - len(label) - len(description))
+    detail = detail[:remaining]
+    primary = label + description
+    primary = _paint(primary, "1;36") if active else primary
+    return primary + _paint(detail, "2")
 
 
 def _render_navigation(
@@ -171,7 +180,9 @@ def _render_navigation(
     height = max(5, shutil.get_terminal_size((88, 24)).lines - 10)
     start = max(0, min(selected - height // 2, max(0, len(matches) - height)))
     visible = matches[start:start + height]
+    index_width = len(str(len(matches)))
     label_width = _label_width(options)
+    description_width = _description_width(options)
     sys.stdout.write("\033[2J\033[H")
     if breadcrumb:
         print(_paint(breadcrumb, "2;36"))
@@ -189,20 +200,17 @@ def _render_navigation(
         option = options[option_index]
         active = position == selected
         line = _option_line(
-            prefix="›" if active else " ",
-            label=option.label,
+            prefix=f"{'›' if active else ' '} {position + 1:>{index_width}})",
+            option=option,
             label_width=label_width,
-            description=_inline_description(option, include_detail=active),
+            description_width=description_width,
             width=width,
+            active=active,
         )
-        print(_paint(line, "1;36") if active else line)
-    footer = ["↑↓ navegar", "Enter selecionar"]
+        print(line)
+    footer = ["↑↓ navegar", "→/Enter selecionar", "← voltar", "Esc Sair."]
     if searchable:
-        footer.append("/ buscar")
-    if allow_back:
-        footer.append("Esc voltar")
-    else:
-        footer.append("Esc cancelar")
+        footer.insert(2, "/ buscar")
     print("\n" + _paint("   ".join(footer), "2"), flush=True)
 
 
@@ -249,9 +257,11 @@ def _select_navigation(
             selected = (selected + 1) % len(matches)
         elif key in ("enter", "right") and matches:
             return options[matches[selected]].key
-        elif key in ("escape", "left", "q"):
+        elif key == "left":
             if allow_back:
                 return None
+            raise MenuCancelled(title)
+        elif key in ("escape", "q"):
             raise MenuCancelled(title)
         elif key == "/" and searchable:
             searching = True
@@ -290,10 +300,12 @@ def _select_fallback(
         label_width = max(len(label) for label in labels)
         for index, option in enumerate(enabled, 1):
             label = labels[index - 1]
-            description = _inline_description(option, include_detail=True)
+            description_width = max(len(item.description) for item in enabled)
             line = f"  {index:>{index_width}}) {label:<{label_width}}"
-            if description:
-                line += f" | {description}"
+            if description_width:
+                line += f" | {option.description:<{description_width}}"
+            if option.detail:
+                line += f" < {option.detail}"
             print(line)
         prompt = f"Escolha [1-{len(enabled)}]"
         if searchable:
@@ -385,7 +397,9 @@ def _render_multiple(
     height = max(5, shutil.get_terminal_size((88, 24)).lines - 10)
     start = max(0, min(selected - height // 2, max(0, len(matches) - height)))
     visible = matches[start:start + height]
+    index_width = len(str(len(matches)))
     label_width = _label_width(options)
+    description_width = _description_width(options)
     sys.stdout.write("\033[2J\033[H")
     if breadcrumb:
         print(_paint(breadcrumb, "2;36"))
@@ -404,22 +418,24 @@ def _render_multiple(
         active = position == selected
         mark = "[✓]" if option.key in checked else "[ ]"
         line = _option_line(
-            prefix=f"{'›' if active else ' '} {mark}",
-            label=option.label,
+            prefix=f"{'›' if active else ' '} {position + 1:>{index_width}}) {mark}",
+            option=option,
             label_width=label_width,
-            description=_inline_description(option, include_detail=active),
+            description_width=description_width,
             width=width,
+            active=active,
         )
         if active:
-            print(_paint(line, "1;36"))
+            print(line)
         elif option.key in checked:
             print(line.replace("[✓]", _paint("[✓]", "1;32"), 1))
         else:
             print(line)
-    footer = ["↑↓ navegar", "Espaço marcar", "Enter concluir"]
+    footer = [
+        "↑↓ navegar", "Espaço marcar", "→/Enter concluir", "← voltar", "Esc Sair.",
+    ]
     if searchable:
-        footer.append("/ buscar")
-    footer.append("Esc voltar" if allow_back else "Esc cancelar")
+        footer.insert(3, "/ buscar")
     print("\n" + _paint("   ".join(footer), "2"), flush=True)
 
 
@@ -456,10 +472,12 @@ def select_many(
             print(subtitle)
         for index, option in enumerate(enabled, 1):
             marker = "x" if option.key in checked else " "
-            description = _inline_description(option, include_detail=True)
+            description_width = max(len(item.description) for item in enabled)
             line = f"  {index:>{index_width}}) [{marker}] {option.label:<{label_width}}"
-            if description:
-                line += f" | {description}"
+            if description_width:
+                line += f" | {option.description:<{description_width}}"
+            if option.detail:
+                line += f" < {option.detail}"
             print(line)
         prompt = "Informe números ou identificadores separados por vírgula"
         if allow_back:
@@ -529,9 +547,11 @@ def select_many(
             result = tuple(option.key for option in enabled if option.key in checked)
             if result or allow_empty:
                 return result
-        elif key in ("escape", "left", "q"):
+        elif key == "left":
             if allow_back:
                 return None
+            raise MenuCancelled(title)
+        elif key in ("escape", "q"):
             raise MenuCancelled(title)
         elif key == "/" and searchable:
             searching = True
@@ -551,7 +571,8 @@ def confirm(
     invalid_message: str = "Resposta inválida. Digite sim ou não.",
     interactive: bool | None = None,
     input_fn: Callable[[str], str] | None = None,
-) -> bool:
+    allow_back: bool = False,
+) -> bool | None:
     result = select_one(
         title,
         (
@@ -568,5 +589,8 @@ def confirm(
         invalid_message=invalid_message,
         interactive=interactive,
         input_fn=input_fn or input,
+        allow_back=allow_back,
     )
+    if result is None:
+        return None
     return result == "yes"

@@ -53,14 +53,26 @@ são adicionados automaticamente quando o primeiro jogador entra; habilidade,
 arma, vida e limite são configurados por cvars nativas do servidor:
 
 ```sh
-./x86qw.sh host ktx --mode duel --bots 1 --bot-skill 8
+./x86qw.sh host ktx --mode duel --bots 1 --bot-skill 8 --bot-names x86qw
 ./x86qw.sh host ktx --mode 4on4 --fill-bots --bot-skill 6
+./x86qw.sh host ktx --mode ffa --fill-bots --bot-skill random
 ./x86qw.sh host ktx --mode ctf --ctf-hook smooth --ctf-runes off
 ./x86qw.sh host ktx --mode race --race-style match --race-scoring formula1
 ```
 
 Equipe fixa de bot, pacemaker e ocultação de corredores são controles do
 cliente e permanecem disponíveis em `play`, não em `host`.
+
+O dedicado aceita os mesmos três perfis de nome: `default` não customiza o
+KTX, `x86qw` sorteia a lista One Piece da distribuição e `personal` lê
+`qw/x86qw-frogbot-names.json`. O prefixo `/ ` e a cor Quake são aplicados pelo
+launcher. Consulte [Nomes dos Frogbots](FROGBOTS.md) para editar a lista
+pessoal.
+No jogo local, cada modo imprime seu plano de teclas ao abrir o mapa; sessões
+com bots acrescentam `INS`/`DEL` para adicionar e remover e `HOME`/`END` para
+ajustar a habilidade em torno do valor escolhido.
+Com `--bot-skill random`, cada novo bot recebe independentemente uma habilidade
+de 1 a 20.
 
 ## QTV
 

@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "game": "ktx",
+  "profile": "x86qw",
+  "theme": "one-piece",
+  "prefix": "/",
+  "color": "quake-high-bit",
+  "randomize": true,
+  "groups": [
+    {
+      "id": "straw-hat-pirates",
+      "label": "Bando do Chapéu de Palha",
+      "characters": [
+        {"name": "Luffy"},
+        {"name": "Zoro"},
+        {"name": "Nami"},
+        {"name": "Usopp"},
+        {"name": "Sanji"},
+        {"name": "Chopper"},
+        {"name": "Robin"},
+        {"name": "Franky"},
+        {"name": "Brook"},
+        {"name": "Jinbe"}
+      ]
+    },
+    {
+      "id": "strongest-characters",
+      "label": "Lendas e grandes potências",
+      "characters": [
+        {"name": "Roger"},
+        {"name": "Whitebeard"},
+        {"name": "Rocks"},
+        {"name": "Garp"},
+        {"name": "Sengoku"},
+        {"name": "Rayleigh"},
+        {"name": "Oden"},
+        {"name": "Shanks"},
+        {"name": "Kaido"},
+        {"name": "Big Mom"},
+        {"name": "Blackbeard"},
+        {"name": "Mihawk"},
+        {"name": "Dragon"},
+        {"name": "Akainu"},
+        {"name": "Kuzan"},
+        {"name": "Kizaru"},
+        {"name": "Fujitora"},
+        {"name": "Sabo"},
+        {"name": "Law"},
+        {"name": "Kid"},
+        {"name": "Yamato"},
+        {"name": "Hancock"}
+      ]
+    }
+  ]
+}

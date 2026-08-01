@@ -4,3 +4,4 @@
 // bind MOUSE2 "weapon 7"
 // bind z "tp_msgquaddead"
 // alias x86qw_ktx_help "echo Meus controles KTX"
+// Os nomes pessoais dos Frogbots ficam em qw/x86qw-frogbot-names.json.

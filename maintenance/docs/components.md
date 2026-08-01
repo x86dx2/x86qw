@@ -15,6 +15,13 @@ Cada mod externo usa a mesma estrutura sob `dist/mods/<mod>/<versao>/`:
 - `source/`: código-fonte ou distribuição original que contém as fontes;
 - `x86qw/`: configurações, perfis e overlays mantidos pelo x86QW.
 
+O KTX possui mais de um tipo de overlay e, por isso, subdivide a autoria x86QW
+sem alterar os caminhos instalados: `catalog/` contém dados declarativos,
+`config/` contém os arquivos projetados para o jogo, `runtime/` contém o QVM e
+seus símbolos, `source/` contém os patches numerados que os reproduzem e
+`policy/` contém o contrato de composição do PK3. O inventário é a ponte
+explícita entre esses contextos e o runtime.
+
 As pastas são criadas somente quando há conteúdo correspondente. Por isso o
 Pro-X, cujo código-fonte público não foi localizado, possui `upstream/` e
 `x86qw/`, mas não uma pasta `source/` vazia. `dist/mods/x86qw/` é reservado aos
@@ -64,7 +71,7 @@ intencional e auditável, não um segundo padrão de organização.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.13` | release oficial sobre recursos nQuake e integração x86QW | 17 usermodes e sete variações oficiais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, bots na primeira entrada e ajuda F10 contextual alinhada; QVM e símbolos preservados |
+| KTX | `1.47+x86qw.17` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, bots na primeira entrada e balanceamento por equipes nativas; QVM e símbolos reproduzíveis |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -76,10 +83,10 @@ intencional e auditável, não um segundo padrão de organização.
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
 | Documentação | `e4cb23d40aa2+x86qw.1` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
 | QRP alta resolução | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
-| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.2` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; originais 1.20 e fonte-base preservados; ajuda somente sob demanda |
-| Pro-X | `1.1+x86qw.3` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; ajuda somente sob demanda |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.4` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; ajuda somente sob demanda |
-| Total Destruction 2 | `2.22+x86qw.3` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados sem gravação, binds, gamma ou ajuda automática |
+| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.3` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; originais 1.20 e fonte-base preservados; plano de teclas impresso ao entrar |
+| Pro-X | `1.1+x86qw.4` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; plano de teclas impresso ao entrar |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.5` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; plano de teclas impresso ao entrar |
+| Total Destruction 2 | `2.22+x86qw.4` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados e plano de teclas impresso ao entrar |
 | MVDSV | `1.11+x86qw.3` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
 | QTV | `0+025ca949aca0+x86qw.2` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
 | QWFWD | `1.30+x86qw.3` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |
@@ -113,8 +120,9 @@ pessoal ainda contém exatamente o padrão antigo. O arquivo global
 
 O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
 `ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
-`qwprogs.map` oficiais da versão 1.47, mas o artefato do upstream é preservado
-em `dist/mods/ktx/1.47/upstream/` e as fontes em
+`qwprogs.map` recompilados das fontes oficiais 1.47 com extensões x86QW isoladas.
+O artefato oficial sem alterações é preservado em
+`dist/mods/ktx/1.47/upstream/` e as fontes em
 `dist/mods/ktx/1.47/source/`. Ele não é executado nem substitui o cliente
 ezQuake. O servidor dedicado MVDSV é descrito separadamente no ecossistema.
 

@@ -71,7 +71,7 @@ gerenciador detecta a novidade e interrompe `update` com a orientacao de usar
 
 O KTX e montado em tres camadas: `gpl/qw/ktx.pk3` do snapshot nQuake, recursos
 e QVM da release oficial e, por ultimo, ajustes x86QW. A politica em
-`dist/mods/ktx/<versao>/x86qw/merge-policy.json` preserva arquivos exclusivos e
+`dist/mods/ktx/<versao>/x86qw/policy/merge-policy.json` preserva arquivos exclusivos e
 registra cada conflito compartilhado com os hashes das duas origens. Qualquer
 conflito novo ou alterado interrompe o build para revisao humana.
 

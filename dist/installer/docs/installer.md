@@ -22,6 +22,11 @@ No Windows PowerShell:
 irm https://x86qw.x86.com.br/install.ps1 | iex
 ```
 
+O bootstrap não usa `exit`: a janela atual do PowerShell permanece aberta ao
+fim da instalação. O código devolvido pelo instalador Python fica disponível em
+`$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
+código antes de devolver o controle ao terminal.
+
 O bootstrap tenta os mirrors GitHub e GitLab, valida o SHA-256 do bundle antes
 de extrair e ativa o modo remoto estrito. Nesse modo, o catálogo e todos os
 pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é tratada
@@ -44,8 +49,8 @@ usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `pla
 `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 abre o navegador interativo e não inicia instalação alguma até uma ação ser
-confirmada. Setas ou `j`/`k` navegam, Enter seleciona, Esc volta e `/` busca;
-um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
+confirmada. Setas ou `j`/`k` navegam, Enter seleciona, `←` volta, Esc sai e
+`/` busca; um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
 e são copiados byte a byte para o destino. O instalador não gera scripts em runtime.
@@ -362,7 +367,8 @@ O mesmo fluxo pode ser automatizado, sem atravessar os menus:
 ```sh
 ./x86qw.sh play ktx --mode duel
 ./x86qw.sh play ktx --mode 4on4 --fill-bots --bot-skill 6
-./x86qw.sh play ktx --mode duel --bots 1 --bot-skill 8
+./x86qw.sh play ktx --mode duel --bots 1 --bot-skill 8 --bot-names x86qw
+./x86qw.sh play ktx --mode ffa --bots 4 --bot-skill random
 ./x86qw.sh play ktx --mode race --map slide1 --race-style match
 ```
 
@@ -374,10 +380,32 @@ oficiais do KTX para seis mapas clássicos; o launcher seleciona o diretório CT
 antes de carregar o mapa, garantindo a presença das duas bandeiras.
 
 Os Frogbots são acionados com `--bots <quantidade>` ou `--fill-bots`. A CLI
-também aceita habilidade 1–20, equipe, arma e vida e valida previamente se o
+também aceita habilidade 1–20 ou `random` por bot, equipe, arma e vida e valida previamente se o
 mapa possui uma das 77 rotas `.bot` incorporadas. CTF e Race rejeitam bots por
 serem combinações não suportadas pelo QVM fixado. Race valida uma das 54 rotas
 oficiais e expõe estilo, pontuação e pacemaker; CTF expõe hook e runas.
+
+`--bot-names default` mantém os nomes originais do KTX sem definir cvars de
+customização. `--bot-names x86qw` sorteia por lançamento uma lista One Piece,
+priorizando os dez Chapéus de Palha. `--bot-names personal` usa na ordem
+declarada `quake-world/qw/x86qw-frogbot-names.json`, criado pelo bootstrap e
+nunca sobrescrito depois de uma edição. O launcher aplica automaticamente o
+prefixo `/ ` e a cor clássica compatível com o protocolo; escreva no JSON
+somente o nome, sem prefixo ou códigos no valor. Aparências legadas são ignoradas
+para que as cores continuem sob controle do KTX. O contrato completo está em
+[`docs/FROGBOTS.md`](../../../docs/FROGBOTS.md).
+
+No menu, `x86QW aleatório` é a seleção inicial e o perfil sem customização
+aparece como `KTX Default`. A CLI conserva `default` como padrão por
+compatibilidade. Modos de tamanho fixo oferecem somente as vagas restantes —
+Duel aceita um bot com o jogador humano — enquanto FFA e Practice mantêm
+preenchimento e quantidade personalizada. Vários bots entram em frames
+separados.
+
+Todos os itens do menu exibem o número equivalente; `→`/Enter avança, `←`
+volta somente para a etapa imediatamente anterior e Esc encerra o navegador.
+Em todos os cinco jogos, `F12` é ativado antes do mapa e reaplicado depois da
+configuração pessoal para fechar diretamente o QuakeWorld.
 
 O terminal confirma o preset selecionado antes e depois da abertura. Dentro do
 console do ezQuake, `ktx_mode` repete exatamente o preset iniciado pelo launcher;
@@ -452,14 +480,16 @@ executado por último:
 configuração nQuake -> x86qw-<mod>.cfg -> x86qw-<mod>-user.cfg
 ```
 
-O console inicia sem imprimir quadros de ajuda. `F10` exibe os binds do mod sob
-demanda, depois que o jogador precisar consultá-los. Os
+O KTX imprime ao entrar o plano contextual de `F5`, `F6` e `F11`; quando há
+Frogbots, também mostra `INS`, `DEL`, `HOME` e `END`. `F10` reapresenta a ajuda
+completa sob demanda. Os
 perfis não são cópias entre si:
 
 - **KTX:** `1-8` selecionam armas com fallback; `Q`, `E` e `Mouse2` dão acesso
   rápido a GL, RL e LG. As comunicações do nQuake continuam disponíveis, mas
   `quad morto` e `inimigo com powerup` foram movidos de `1` e `5` para `Z` e
-  `X`. `F1-F8` preservam quad, pent, timers, ready, break, join e observe.
+  `X`. `F1-F4` preservam quad, pent e timers; `F5`, `F6` e `F11` assumem as
+  ações declaradas pelo modo, enquanto `F7` e `F8` mantêm join e observe.
 - **Final Arena:** `F1` entra, `F2` mostra a fila, `F3` estatísticas, `F4`
   pausa, `F5` próximo mapa, `F6` status, `F7` mochilas e `F8` airgib. São os
   impulses publicados pelo gamecode do Final Arena 1.20.

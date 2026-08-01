@@ -1,0 +1,76 @@
+--- a/src/bot_commands.c
++++ b/src/bot_commands.c
+@@ -265,8 +265,32 @@
+ 	AddTeamToList(&foundTeams, "blue", 13, 13);
+ 	AddTeamToList(&foundTeams, "yellow", 12, 12);
+ 	AddTeamToList(&foundTeams, "green", 3, 3);
++}
++
++static int FrogbotAutomaticTeamCount(void)
++{
++	return current_umode >= um2on2on2 && current_umode <= um4on4on4 ? 3 : 2;
+ }
++
++static team_t* FrogbotLeastPopulatedTeam(int teamCount)
++{
++	team_t *selected = &teams[0];
++	int selectedCount = selected->humans + selected->bots;
++	int i;
+ 
++	for (i = 1; i < teamCount; ++i)
++	{
++		int candidateCount = teams[i].humans + teams[i].bots;
++		if (candidateCount < selectedCount)
++		{
++			selected = &teams[i];
++			selectedCount = candidateCount;
++		}
++	}
++
++	return selected;
++}
++
+ void FrogbotsAddbot(int skill_level, const char *specificteam, qbool error_messages)
+ {
+ 	char skill_level_str[3];
+@@ -292,25 +316,29 @@
+ 			customised_skill = SetAttributesBasedOnSkill(skill_level);
+ 			if (teamplay && !specificteam[0])
+ 			{
+-				int team1Count, team2Count;
++				int teamCount = FrogbotAutomaticTeamCount();
++				int teamIndex;
++				qbool selectedTeamHasHumans;
++				qbool anotherTeamHasHumans = false;
+ 				team_t *team;
+-				team_t *otherTeam;
+ 
+ 				BuildTeamList();
+-
+-				team1Count = teams[0].humans + teams[0].bots;
+-				team2Count = teams[1].humans + teams[1].bots;
+-
+-				team = team1Count < team2Count || (team1Count == team2Count && g_random() < 0.5) ?
+-						&teams[0] : &teams[1];
+-				otherTeam = team == &teams[0] ? &teams[1] : &teams[0];
++				team = FrogbotLeastPopulatedTeam(teamCount);
++				selectedTeamHasHumans = team->humans > 0;
++				for (teamIndex = 0; teamIndex < teamCount; ++teamIndex)
++				{
++					if (&teams[teamIndex] != team && teams[teamIndex].humans > 0)
++					{
++						anotherTeamHasHumans = true;
++					}
++				}
+ 
+-				if (team->humans && !otherTeam->humans)
++				if (selectedTeamHasHumans && !anotherTeamHasHumans)
+ 				{
+ 					strlcpy(bots[i].name, BotNameFriendly(team->bots), sizeof(bots[i].name));
+ 					customColors = BotColorsFriendly(team->bots, &topColor, &bottomColor);
+ 				}
+-				else if (otherTeam->humans && !team->humans)
++				else if (anotherTeamHasHumans && !selectedTeamHasHumans)
+ 				{
+ 					strlcpy(bots[i].name, BotNameEnemy(team->bots), sizeof(bots[i].name));
+ 					customColors = BotColorsEnemy(team->bots, &topColor, &bottomColor);
