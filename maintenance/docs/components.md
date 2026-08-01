@@ -64,7 +64,7 @@ intencional e auditável, não um segundo padrão de organização.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.12` | release oficial sobre recursos nQuake e integração x86QW | 17 usermodes e sete variações oficiais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race e ajuda F10 contextual alinhada; QVM e símbolos preservados |
+| KTX | `1.47+x86qw.13` | release oficial sobre recursos nQuake e integração x86QW | 17 usermodes e sete variações oficiais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, bots na primeira entrada e ajuda F10 contextual alinhada; QVM e símbolos preservados |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |

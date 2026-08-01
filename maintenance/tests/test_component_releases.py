@@ -110,7 +110,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.12", ktx["version"])
+        self.assertEqual("1.47+x86qw.13", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
