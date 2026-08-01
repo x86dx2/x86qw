@@ -4,9 +4,8 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.2.3`. Baseline do trabalho de layout:
-branch `main`, commit `98331669d0b2881153e02858540d5920c18f9426`, em 31 de
-julho de 2026. A linha 0.3.0 permanece em preparação e não está publicada.
+Baseline publicada: tag `x86qw-installer-0.3.0`. Baseline do trabalho de layout:
+branch `main`, commit `d774c49899`, em 31 de julho de 2026.
 
 ## Escala de estado
 
@@ -20,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.2.3`; `0.2.2` e anteriores permanecem imutáveis;
-- 52 pacotes e 21 componentes no catálogo;
+- instalador público `0.3.0`; a linha `0.2.x` permanece imutável;
+- 53 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -275,4 +274,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.2.2` executada e verificada em etapa explícita aprovada;
 - [x] versão `0.2.3` corrige a leitura de journals limpos criados antes da `0.2.1`;
 - [x] publicação `0.2.3` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.3.0` adota bootstrap limpo e layout contextual para os serviços;
+- [x] publicação `0.3.0` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

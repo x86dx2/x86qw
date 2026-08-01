@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T00:38:48Z",
+  "generated_at": "2026-08-01T00:51:40Z",
   "packages": [
     {
       "component": "core",
@@ -904,7 +904,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.2.3",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -928,6 +928,36 @@
       "release_notes": "# x86QW 0.2.3\n\nRelease corretiva da compatibilidade de journals de sessão da linha `0.2.x`.\n\n## Correção\n\n- aceita journals limpos escritos antes da introdução dos campos\n  `controller`, `type` e `sensitive`;\n- normaliza o formato legado somente em memória, sem reescrever um journal\n  limpo durante `update`, `upgrade` ou outra operação;\n- trata temporários legados sem classificação como sensíveis quando uma\n  recuperação real for necessária;\n- remove hashes de temporários legados classificados como sensíveis antes de\n  persistir o resultado da recuperação.\n\n## Compatibilidade\n\nA correção preserva journals, configurações pessoais, comandos, perfis,\nstable/nightly, jogos e gameplay. Os bundles `0.2.2` e anteriores permanecem\nimutáveis.\n\n## Validação\n\n- reprodução com um journal real criado pela versão anterior;\n- regressão para journal legado limpo sem consulta ao PID registrado;\n- recuperação segura de temporário legado potencialmente sensível;\n- validação integral e matriz Ubuntu, macOS e Windows.",
       "mirror_title": "x86QW Installer 0.2.3",
       "mirror_notes": "# x86QW 0.2.3\n\nRelease corretiva da compatibilidade de journals de sessão da linha `0.2.x`.\n\n## Correção\n\n- aceita journals limpos escritos antes da introdução dos campos\n  `controller`, `type` e `sensitive`;\n- normaliza o formato legado somente em memória, sem reescrever um journal\n  limpo durante `update`, `upgrade` ou outra operação;\n- trata temporários legados sem classificação como sensíveis quando uma\n  recuperação real for necessária;\n- remove hashes de temporários legados classificados como sensíveis antes de\n  persistir o resultado da recuperação.\n\n## Compatibilidade\n\nA correção preserva journals, configurações pessoais, comandos, perfis,\nstable/nightly, jogos e gameplay. Os bundles `0.2.2` e anteriores permanecem\nimutáveis.\n\n## Validação\n\n- reprodução com um journal real criado pela versão anterior;\n- regressão para journal legado limpo sem consulta ao PID registrado;\n- recuperação segura de temporário legado potencialmente sensível;\n- validação integral e matriz Ubuntu, macOS e Windows.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.3.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.3.0.zip",
+      "size": 114585,
+      "sha256": "929a2a9a57286945454b3e84e7d84ef864b4fba235040bdfeeab154f6eae2e22",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.3.0/x86qw-installer-0.3.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.3.0/x86qw-installer-0.3.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.3.0/x86qw-installer-0.3.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.3.0/x86qw-installer-0.3.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.3.0",
+      "release_title": "x86QW Installer 0.3.0",
+      "release_notes": "# x86QW 0.3.0\n\nRelease de bootstrap limpo e reorganização do layout instalado.\n\n## Layout\n\n- substitui `.install/` por `.x86qw/` como plano de controle específico do\n  produto;\n- elimina o depósito instalado `_x86qw/`;\n- instala MVDSV na raiz operacional, QTV em `qtv/`, QWFWD em `qwfwd/` e as\n  licenças em `docs/licenses/`;\n- instala somente o executável da plataforma selecionada;\n- mantém `BUILD.json`, fontes, patches e outras variantes somente na camada de\n  manutenção.\n\n## Compatibilidade\n\nEsta linha usa bootstrap limpo e não migra o layout 0.2.x. Uma instalação\nanterior pode ser mantida em outro diretório apenas para consulta. Jogos,\ngameplay, perfis, stable/nightly e comandos públicos permanecem inalterados.\n\n## Validação\n\n- pacote e zipapp determinísticos;\n- bootstrap completo em destino vazio;\n- asserção de ausência de `_x86qw/`, `platforms/` e `BUILD.json` no destino;\n- matriz Ubuntu, macOS e Windows;\n- publicação explícita após aprovação e verificação do bootstrap público.",
+      "mirror_title": "x86QW Installer 0.3.0",
+      "mirror_notes": "# x86QW 0.3.0\n\nRelease de bootstrap limpo e reorganização do layout instalado.\n\n## Layout\n\n- substitui `.install/` por `.x86qw/` como plano de controle específico do\n  produto;\n- elimina o depósito instalado `_x86qw/`;\n- instala MVDSV na raiz operacional, QTV em `qtv/`, QWFWD em `qwfwd/` e as\n  licenças em `docs/licenses/`;\n- instala somente o executável da plataforma selecionada;\n- mantém `BUILD.json`, fontes, patches e outras variantes somente na camada de\n  manutenção.\n\n## Compatibilidade\n\nEsta linha usa bootstrap limpo e não migra o layout 0.2.x. Uma instalação\nanterior pode ser mantida em outro diretório apenas para consulta. Jogos,\ngameplay, perfis, stable/nightly e comandos públicos permanecem inalterados.\n\n## Validação\n\n- pacote e zipapp determinísticos;\n- bootstrap completo em destino vazio;\n- asserção de ausência de `_x86qw/`, `platforms/` e `BUILD.json` no destino;\n- matriz Ubuntu, macOS e Windows;\n- publicação explícita após aprovação e verificação do bootstrap público.",
       "mirror_latest": true
     },
     {
