@@ -166,8 +166,20 @@ function Expand-Archive {
   New-Item -ItemType Directory -Path $Root | Out-Null
   New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
 }
+function Get-Command {
+  param([string]$Name, [object]$ErrorAction)
+  if ($Name -eq "python") {
+    return [pscustomobject]@{ Name = "python" }
+  }
+  return $null
+}
 function python {
-  $global:LASTEXITCODE = 7
+  if ($args -contains "--version") {
+    Write-Output "Python 3.13.0"
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 7
 }
 $Source = Get-Content -LiteralPath $Bootstrap -Raw
 Invoke-Expression $Source
@@ -186,6 +198,121 @@ Write-Output "X86QW_BOOTSTRAP_SURVIVED:$global:LASTEXITCODE"
         self.assertIn("X86QW_BOOTSTRAP_SURVIVED:7", completed.stdout)
         self.assertIn("instalador terminou", completed.stderr)
         self.assertIn("7", completed.stderr)
+
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
+    def test_public_powershell_bootstrap_rejects_store_alias_before_download(self):
+        bootstrap = ROOT / "site/public/install.ps1"
+        with tempfile.TemporaryDirectory() as temporary:
+            harness = Path(temporary) / "missing-python-harness.ps1"
+            harness.write_text(
+                r'''param([string]$Bootstrap)
+function Get-Command {
+  param([string]$Name, [object]$ErrorAction)
+  if ($Name -eq "python") {
+    return [pscustomobject]@{ Name = "python" }
+  }
+  return $null
+}
+function python {
+  Write-Output "STORE_ALIAS_OUTPUT_MUST_STAY_HIDDEN"
+  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 9009
+}
+function Invoke-WebRequest {
+  throw "DOWNLOAD_MUST_NOT_RUN"
+}
+$Source = Get-Content -LiteralPath $Bootstrap -Raw
+try {
+  Invoke-Expression $Source
+} catch {
+  Write-Output ("X86QW_EXPECTED_ERROR:" + $_.Exception.Message)
+}
+''',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(harness), str(bootstrap),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("X86QW_EXPECTED_ERROR:x86QW: Python 3.10", completed.stdout)
+        self.assertIn("winget install --id Python.Python.3.13 -e", completed.stdout)
+        self.assertNotIn("STORE_ALIAS_OUTPUT_MUST_STAY_HIDDEN", completed.stdout)
+        self.assertNotIn("DOWNLOAD_MUST_NOT_RUN", completed.stdout)
+
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
+    def test_public_powershell_bootstrap_prefers_py_launcher_with_python_3(self):
+        bootstrap = ROOT / "site/public/install.ps1"
+        source = bootstrap.read_text(encoding="utf-8")
+        version = source.split('$InstallerVersion = "', 1)[1].split('"', 1)[0]
+        digest = source.split('$InstallerSha256 = "', 1)[1].split('"', 1)[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments_path = Path(temporary) / "arguments.json"
+            harness = Path(temporary) / "py-launcher-harness.ps1"
+            harness.write_text(
+                r'''param(
+  [string]$Bootstrap,
+  [string]$MockVersion,
+  [string]$MockDigest,
+  [string]$ArgumentsPath
+)
+function Get-Command {
+  param([string]$Name, [object]$ErrorAction)
+  if ($Name -eq "py") {
+    return [pscustomobject]@{ Name = "py" }
+  }
+  return $null
+}
+function Invoke-WebRequest {
+  param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
+  [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
+}
+function Get-FileHash {
+  param([string]$Algorithm, [string]$Path)
+  [pscustomobject]@{ Hash = $MockDigest }
+}
+function Expand-Archive {
+  param([string]$Path, [string]$DestinationPath)
+  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
+  New-Item -ItemType Directory -Path $Root | Out-Null
+  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
+}
+function py {
+  if ($args -contains "--version") {
+    Write-Output "Python 3.13.0"
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  [System.IO.File]::WriteAllText($ArgumentsPath, ($args | ConvertTo-Json -Compress))
+  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+}
+$Source = Get-Content -LiteralPath $Bootstrap -Raw
+Invoke-Expression $Source
+''',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(harness), str(bootstrap), version, digest,
+                    str(arguments_path),
+                ],
+                check=False, capture_output=True, text=True,
+            )
+            received = json.loads(arguments_path.read_text(encoding="utf-8"))
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual("-3", received[0])
+        self.assertTrue(received[1].endswith("x86qw.pyz"), received)
+        self.assertEqual("--online-only", received[2])
+
+    def test_public_powershell_bootstrap_is_ascii_safe_for_windows_powershell(self):
+        source = (ROOT / "site/public/install.ps1").read_text(encoding="utf-8")
+        source.encode("ascii")
+        self.assertIn('[Console]::OutputEncoding = $Utf8Encoding', source)
+        self.assertIn('Command = "py"; Arguments = @("-3")', source)
+        self.assertIn("Python 3.10 ou mais recente nao foi encontrado", source)
 
 
 if __name__ == "__main__":

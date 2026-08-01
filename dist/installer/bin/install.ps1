@@ -1,46 +1,93 @@
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "0.5.0"
+$InstallerVersion = "0.5.1"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "79ce5e2dcfdf2e3f0c3d03c79c34b7b4ee6ec28408ff6c298e8b7b8159ab352a"
+$InstallerSha256 = "eebbaee49443d310ad22d7a9246cfa77452a444b86048db90f527627065e5dd4"
 $InstallerUrls = @(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-$InstallerVersion/$InstallerFile",
   "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/$InstallerVersion/$InstallerFile"
 )
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-  throw "x86QW: Python 3 é necessário para executar o instalador."
-}
-
-$WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("x86qw-installer-" + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $WorkDir | Out-Null
+$PreviousConsoleOutputEncoding = [Console]::OutputEncoding
+$PreviousPowerShellOutputEncoding = $OutputEncoding
+$Utf8Encoding = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $Utf8Encoding
+$OutputEncoding = $Utf8Encoding
 $InstallerExitCode = $null
+
 try {
-  $Archive = Join-Path $WorkDir $InstallerFile
-  $Downloaded = $false
-  foreach ($Url in $InstallerUrls) {
+  $PythonRuntime = $null
+  $PythonCandidates = @(
+    [pscustomobject]@{ Command = "py"; Arguments = @("-3") },
+    [pscustomobject]@{ Command = "python3"; Arguments = @() },
+    [pscustomobject]@{ Command = "python"; Arguments = @() }
+  )
+  foreach ($Candidate in $PythonCandidates) {
+    if (-not (Get-Command $Candidate.Command -ErrorAction SilentlyContinue)) {
+      continue
+    }
     try {
-      Write-Host "x86QW: baixando instalador $InstallerVersion..."
-      Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $Archive
-      $Downloaded = $true
-      break
+      $ProbeArguments = @($Candidate.Arguments) + @("--version")
+      $VersionOutput = (& $Candidate.Command @ProbeArguments 2>&1 | Out-String).Trim()
+      $VersionExitCode = $LASTEXITCODE
     } catch {
-      Write-Warning "Mirror indisponível: $Url"
+      continue
+    }
+    if ($VersionExitCode -ne 0 -or $VersionOutput -notmatch "Python\s+(\d+)\.(\d+)") {
+      continue
+    }
+    $PythonMajor = [int]$Matches[1]
+    $PythonMinor = [int]$Matches[2]
+    if ($PythonMajor -gt 3 -or ($PythonMajor -eq 3 -and $PythonMinor -ge 10)) {
+      $PythonRuntime = $Candidate
+      break
     }
   }
-  if (-not $Downloaded) { throw "x86QW: nenhum mirror entregou o instalador." }
-  $Actual = (Get-FileHash -Algorithm SHA256 -Path $Archive).Hash.ToLowerInvariant()
-  if ($Actual -ne $InstallerSha256) { throw "x86QW: o instalador baixado falhou na verificação SHA-256." }
-  Expand-Archive -Path $Archive -DestinationPath $WorkDir
-  $Root = Join-Path $WorkDir "x86qw-installer-$InstallerVersion"
-  & python (Join-Path $Root "x86qw.pyz") --online-only @args
-  $InstallerExitCode = $LASTEXITCODE
+
+  if ($null -eq $PythonRuntime) {
+    $PythonError = @(
+      "x86QW: Python 3.10 ou mais recente nao foi encontrado.",
+      "Instale com: winget install --id Python.Python.3.13 -e",
+      "Depois abra um novo PowerShell e execute o instalador novamente.",
+      "O alias da Microsoft Store, sozinho, nao e um Python utilizavel."
+    ) -join [Environment]::NewLine
+    throw $PythonError
+  }
+
+  $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("x86qw-installer-" + [guid]::NewGuid())
+  New-Item -ItemType Directory -Path $WorkDir | Out-Null
+  try {
+    $Archive = Join-Path $WorkDir $InstallerFile
+    $Downloaded = $false
+    foreach ($Url in $InstallerUrls) {
+      try {
+        Write-Host "x86QW: baixando instalador $InstallerVersion..."
+        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $Archive
+        $Downloaded = $true
+        break
+      } catch {
+        Write-Warning "Mirror indisponivel: $Url"
+      }
+    }
+    if (-not $Downloaded) { throw "x86QW: nenhum mirror entregou o instalador." }
+    $Actual = (Get-FileHash -Algorithm SHA256 -Path $Archive).Hash.ToLowerInvariant()
+    if ($Actual -ne $InstallerSha256) { throw "x86QW: o instalador baixado falhou na verificacao SHA-256." }
+    Expand-Archive -Path $Archive -DestinationPath $WorkDir
+    $Root = Join-Path $WorkDir "x86qw-installer-$InstallerVersion"
+    $InstallerArguments = @($PythonRuntime.Arguments) + @((Join-Path $Root "x86qw.pyz"), "--online-only") + @($args)
+    & $PythonRuntime.Command @InstallerArguments
+    $InstallerExitCode = $LASTEXITCODE
+  } finally {
+    Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue
+  }
+
 } finally {
-  Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue
+  [Console]::OutputEncoding = $PreviousConsoleOutputEncoding
+  $OutputEncoding = $PreviousPowerShellOutputEncoding
 }
 
 if ($null -ne $InstallerExitCode) {
-  $global:LASTEXITCODE = $InstallerExitCode
   if ($InstallerExitCode -ne 0) {
-    Write-Error "x86QW: o instalador terminou com código $InstallerExitCode." -ErrorAction Continue
+    Write-Error "x86QW: o instalador terminou com codigo $InstallerExitCode." -ErrorAction Continue
   }
+  $global:LASTEXITCODE = $InstallerExitCode
 }

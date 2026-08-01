@@ -5,7 +5,7 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
-O bundle público corrente é `0.5.0`; o catálogo registra 57 pacotes e 21
+O bundle público corrente é `0.5.1`; o catálogo registra 58 pacotes e 21
 componentes. Esses fatos são validados contra os inventários canônicos.
 
 ## Instalação pública
@@ -26,6 +26,16 @@ O bootstrap não usa `exit`: a janela atual do PowerShell permanece aberta ao
 fim da instalação. O código devolvido pelo instalador Python fica disponível em
 `$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
 código antes de devolver o controle ao terminal.
+
+No Windows, o bootstrap exige Python 3.10 ou mais recente e testa `py -3`,
+`python3` e `python`, nessa ordem. A presença do alias `python.exe` de
+`WindowsApps` não basta: o comando precisa responder com uma versão compatível.
+Quando nenhuma instalação real for encontrada, instale-a, abra um novo
+PowerShell e repita o bootstrap:
+
+```powershell
+winget install --id Python.Python.3.13 -e
+```
 
 O bootstrap tenta os mirrors GitHub e GitLab, valida o SHA-256 do bundle antes
 de extrair e ativa o modo remoto estrito. Nesse modo, o catálogo e todos os

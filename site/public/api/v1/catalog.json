@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T22:53:09Z",
+  "generated_at": "2026-08-01T23:34:21Z",
   "packages": [
     {
       "component": "core",
@@ -1054,7 +1054,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.5.0",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1078,6 +1078,36 @@
       "release_notes": "# x86QW 0.5.0\n\nRelease funcional dos novos menus, perfis declarativos de Frogbots e controles\ncontextuais dos cinco jogos atuais.\n\n## Interface\n\n- organiza os menus por tarefas, numera todas as opções e mantém descrições\n  alinhadas na mesma linha;\n- usa setas e Enter para navegar, seta esquerda para voltar ao menu pai e Esc\n  para sair do fluxo inteiro;\n- corrige a leitura de sequências de setas em terminais interativos;\n- preserva confirmação automática com `--yes` e o fallback numerado.\n\n## KTX e Frogbots\n\n- reúne catálogo, configuração, runtime, fontes e política em contextos\n  separados dentro do componente KTX;\n- oferece nomes `KTX Default`, `x86QW aleatório` e lista pessoal editável;\n- aplica nomes e habilidades aleatórias sem substituir skins, cores ou equipes\n  controladas pelo KTX;\n- completa o elenco conforme cada usermode, inclusive três equipes nos modos\n  `2on2on2`, `3on3on3` e `4on4on4`;\n- carrega os 24 modos declarados e adiciona os bots escolhidos depois da entrada\n  local no servidor;\n- imprime um plano de teclas contextual e vincula F12 para saída direta nos\n  cinco jogos atuais.\n\n## Bootstrap e compatibilidade\n\n- o bootstrap PowerShell devolve o código do instalador sem encerrar a sessão\n  usada por `irm ... | iex`;\n- preserva comandos públicos, perfis, stable/nightly, PAKs, mapas, runtimes e\n  configurações pessoais;\n- publica novas revisões imutáveis de KTX, Final Arena, Pro-X, Team Fortress e\n  Total Destruction 2 sem alterar os pacotes anteriores.\n\n## Validação\n\n- 326 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real em janela do KTX 4on4 com sete Frogbots no macOS;\n- F12 exercitado em KTX, Final Arena, Pro-X, Team Fortress e TD2;\n- Git LFS, catálogo, zipapp, pacotes e site validados antes da publicação.",
       "mirror_title": "x86QW Installer 0.5.0",
       "mirror_notes": "# x86QW 0.5.0\n\nRelease funcional dos novos menus, perfis declarativos de Frogbots e controles\ncontextuais dos cinco jogos atuais.\n\n## Interface\n\n- organiza os menus por tarefas, numera todas as opções e mantém descrições\n  alinhadas na mesma linha;\n- usa setas e Enter para navegar, seta esquerda para voltar ao menu pai e Esc\n  para sair do fluxo inteiro;\n- corrige a leitura de sequências de setas em terminais interativos;\n- preserva confirmação automática com `--yes` e o fallback numerado.\n\n## KTX e Frogbots\n\n- reúne catálogo, configuração, runtime, fontes e política em contextos\n  separados dentro do componente KTX;\n- oferece nomes `KTX Default`, `x86QW aleatório` e lista pessoal editável;\n- aplica nomes e habilidades aleatórias sem substituir skins, cores ou equipes\n  controladas pelo KTX;\n- completa o elenco conforme cada usermode, inclusive três equipes nos modos\n  `2on2on2`, `3on3on3` e `4on4on4`;\n- carrega os 24 modos declarados e adiciona os bots escolhidos depois da entrada\n  local no servidor;\n- imprime um plano de teclas contextual e vincula F12 para saída direta nos\n  cinco jogos atuais.\n\n## Bootstrap e compatibilidade\n\n- o bootstrap PowerShell devolve o código do instalador sem encerrar a sessão\n  usada por `irm ... | iex`;\n- preserva comandos públicos, perfis, stable/nightly, PAKs, mapas, runtimes e\n  configurações pessoais;\n- publica novas revisões imutáveis de KTX, Final Arena, Pro-X, Team Fortress e\n  Total Destruction 2 sem alterar os pacotes anteriores.\n\n## Validação\n\n- 326 testes de manutenção e quatro testes do site;\n- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- smoke real em janela do KTX 4on4 com sete Frogbots no macOS;\n- F12 exercitado em KTX, Final Arena, Pro-X, Team Fortress e TD2;\n- Git LFS, catálogo, zipapp, pacotes e site validados antes da publicação.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.5.1",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.5.1.zip",
+      "size": 132652,
+      "sha256": "eebbaee49443d310ad22d7a9246cfa77452a444b86048db90f527627065e5dd4",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.5.1/x86qw-installer-0.5.1.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.5.1/x86qw-installer-0.5.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.5.1/x86qw-installer-0.5.1.zip"
+      ],
+      "distribution_path": "installer/packages/0.5.1/x86qw-installer-0.5.1.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.5.1",
+      "release_title": "x86QW Installer 0.5.1",
+      "release_notes": "# x86QW 0.5.1\n\nCorreção do bootstrap público para instalações Windows sem um Python funcional.\n\n## PowerShell\n\n- testa uma versão real do Python antes de baixar o instalador;\n- aceita `py -3`, `python3` e `python`, nessa ordem;\n- rejeita o alias vazio da Microsoft Store em vez de terminar posteriormente\n  com o código `9009`;\n- exige Python 3.10 ou mais recente e apresenta um comando `winget` acionável\n  quando o requisito não está instalado;\n- mantém o bootstrap legível no Windows PowerShell antigo e restaura a\n  codificação da sessão ao terminar;\n- continua preservando a janela atual e o código de saída do instalador.\n\n## Compatibilidade\n\n- não altera gameplay, pacotes dos cinco jogos, runtimes, PAKs, perfis ou\n  configurações pessoais;\n- preserva integralmente o instalador imutável `0.5.0`.\n\n## Validação\n\n- cobre ausência de Python, falso alias da Microsoft Store, `py -3`, código de\n  saída e permanência da sessão PowerShell;\n- mantém a regressão multiplataforma e os contratos do site.",
+      "mirror_title": "x86QW Installer 0.5.1",
+      "mirror_notes": "# x86QW 0.5.1\n\nCorreção do bootstrap público para instalações Windows sem um Python funcional.\n\n## PowerShell\n\n- testa uma versão real do Python antes de baixar o instalador;\n- aceita `py -3`, `python3` e `python`, nessa ordem;\n- rejeita o alias vazio da Microsoft Store em vez de terminar posteriormente\n  com o código `9009`;\n- exige Python 3.10 ou mais recente e apresenta um comando `winget` acionável\n  quando o requisito não está instalado;\n- mantém o bootstrap legível no Windows PowerShell antigo e restaura a\n  codificação da sessão ao terminar;\n- continua preservando a janela atual e o código de saída do instalador.\n\n## Compatibilidade\n\n- não altera gameplay, pacotes dos cinco jogos, runtimes, PAKs, perfis ou\n  configurações pessoais;\n- preserva integralmente o instalador imutável `0.5.0`.\n\n## Validação\n\n- cobre ausência de Python, falso alias da Microsoft Store, `py -3`, código de\n  saída e permanência da sessão PowerShell;\n- mantém a regressão multiplataforma e os contratos do site.",
       "mirror_latest": true
     },
     {
