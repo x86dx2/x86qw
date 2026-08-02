@@ -682,6 +682,29 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertTrue(final["background"])
             self.assertEqual(".x86qw/logs/service-test.log", final["background_log"])
 
+    def test_stop_request_is_published_only_after_the_writer_is_flushed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            request = directory / "stop.request"
+            payload = b'{"format": 1, "project": "x86qw"}\n'
+            original_fsync = services.os.fsync
+            observations: list[bool] = []
+
+            def assert_private_until_fsync(descriptor: int) -> None:
+                observations.append(not request.exists())
+                original_fsync(descriptor)
+
+            with mock.patch.object(
+                services.os, "fsync", side_effect=assert_private_until_fsync,
+            ):
+                services.publish_stop_request(request, payload)
+
+            self.assertEqual([True], observations)
+            self.assertEqual(payload, request.read_bytes())
+            self.assertEqual([], list(directory.glob(".stop-*.request")))
+            services.unlink_stop_request(request)
+            self.assertFalse(request.exists())
+
     def test_orphan_with_matching_identity_is_terminated_and_recorded(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
