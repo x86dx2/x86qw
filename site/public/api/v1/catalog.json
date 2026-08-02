@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-01T23:34:21Z",
+  "generated_at": "2026-08-02T15:30:58Z",
   "packages": [
     {
       "component": "core",
@@ -1084,7 +1084,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.5.1",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1108,6 +1108,36 @@
       "release_notes": "# x86QW 0.5.1\n\nCorreção do bootstrap público para instalações Windows sem um Python funcional.\n\n## PowerShell\n\n- testa uma versão real do Python antes de baixar o instalador;\n- aceita `py -3`, `python3` e `python`, nessa ordem;\n- rejeita o alias vazio da Microsoft Store em vez de terminar posteriormente\n  com o código `9009`;\n- exige Python 3.10 ou mais recente e apresenta um comando `winget` acionável\n  quando o requisito não está instalado;\n- mantém o bootstrap legível no Windows PowerShell antigo e restaura a\n  codificação da sessão ao terminar;\n- continua preservando a janela atual e o código de saída do instalador.\n\n## Compatibilidade\n\n- não altera gameplay, pacotes dos cinco jogos, runtimes, PAKs, perfis ou\n  configurações pessoais;\n- preserva integralmente o instalador imutável `0.5.0`.\n\n## Validação\n\n- cobre ausência de Python, falso alias da Microsoft Store, `py -3`, código de\n  saída e permanência da sessão PowerShell;\n- mantém a regressão multiplataforma e os contratos do site.",
       "mirror_title": "x86QW Installer 0.5.1",
       "mirror_notes": "# x86QW 0.5.1\n\nCorreção do bootstrap público para instalações Windows sem um Python funcional.\n\n## PowerShell\n\n- testa uma versão real do Python antes de baixar o instalador;\n- aceita `py -3`, `python3` e `python`, nessa ordem;\n- rejeita o alias vazio da Microsoft Store em vez de terminar posteriormente\n  com o código `9009`;\n- exige Python 3.10 ou mais recente e apresenta um comando `winget` acionável\n  quando o requisito não está instalado;\n- mantém o bootstrap legível no Windows PowerShell antigo e restaura a\n  codificação da sessão ao terminar;\n- continua preservando a janela atual e o código de saída do instalador.\n\n## Compatibilidade\n\n- não altera gameplay, pacotes dos cinco jogos, runtimes, PAKs, perfis ou\n  configurações pessoais;\n- preserva integralmente o instalador imutável `0.5.0`.\n\n## Validação\n\n- cobre ausência de Python, falso alias da Microsoft Store, `py -3`, código de\n  saída e permanência da sessão PowerShell;\n- mantém a regressão multiplataforma e os contratos do site.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.6.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.6.0.zip",
+      "size": 148157,
+      "sha256": "a5e7f912a7a564e142d5acc6cc3597f43af97cee5f7576185d9da77ce1ac9b0b",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.6.0/x86qw-installer-0.6.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.6.0/x86qw-installer-0.6.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.6.0/x86qw-installer-0.6.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.6.0/x86qw-installer-0.6.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.6.0",
+      "release_title": "x86QW Installer 0.6.0",
+      "release_notes": "# x86QW 0.6.0\n\nRelease funcional do lifecycle de serviços em segundo plano e da revisão\nintegral dos menus do instalador.\n\n## Serviços\n\n- permite iniciar MVDSV, QTV e QWFWD em primeiro ou segundo plano;\n- adiciona visualização centralizada da stack ativa, seus endpoints e parâmetros\n  públicos;\n- permite solicitar o encerramento coordenado pelo menu ou por `status --stop`;\n- preserva senhas fora da linha de comando, do journal e da saída de status;\n- valida lock, identidade do controlador e journal antes de encerrar processos;\n- mantém logs privados da sessão em segundo plano e remove o lock ao finalizar.\n\n## Interface\n\n- mostra `x86qw.cmd` nos comandos equivalentes do Windows e `./x86qw.sh` em\n  macOS/Linux;\n- evita cortes no plano e no resultado de `update` em terminais estreitos;\n- mostra configurações, resumo e comando seguro antes de jogar ou hospedar;\n- mantém opções numeradas, descrições alinhadas e navegação consistente entre\n  menus pais;\n- inclui as ações de visualizar e encerrar serviços no agrupamento Serviços.\n\n## KTX e gameplay\n\n- mantém os 24 modos declarados e a composição de Frogbots conforme as regras\n  de cada usermode;\n- preserva skins, cores e equipes controladas pelo KTX;\n- mantém os planos de teclas contextuais e o encerramento direto por F12 nos\n  cinco jogos atuais;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 361 testes de manutenção e quatro testes do site;\n- smoke real de QTV e QWFWD em segundo plano no macOS, incluindo consulta e\n  encerramento coordenado;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- catálogo, Git LFS, zipapp, bundle imutável e site validados antes da\n  publicação.",
+      "mirror_title": "x86QW Installer 0.6.0",
+      "mirror_notes": "# x86QW 0.6.0\n\nRelease funcional do lifecycle de serviços em segundo plano e da revisão\nintegral dos menus do instalador.\n\n## Serviços\n\n- permite iniciar MVDSV, QTV e QWFWD em primeiro ou segundo plano;\n- adiciona visualização centralizada da stack ativa, seus endpoints e parâmetros\n  públicos;\n- permite solicitar o encerramento coordenado pelo menu ou por `status --stop`;\n- preserva senhas fora da linha de comando, do journal e da saída de status;\n- valida lock, identidade do controlador e journal antes de encerrar processos;\n- mantém logs privados da sessão em segundo plano e remove o lock ao finalizar.\n\n## Interface\n\n- mostra `x86qw.cmd` nos comandos equivalentes do Windows e `./x86qw.sh` em\n  macOS/Linux;\n- evita cortes no plano e no resultado de `update` em terminais estreitos;\n- mostra configurações, resumo e comando seguro antes de jogar ou hospedar;\n- mantém opções numeradas, descrições alinhadas e navegação consistente entre\n  menus pais;\n- inclui as ações de visualizar e encerrar serviços no agrupamento Serviços.\n\n## KTX e gameplay\n\n- mantém os 24 modos declarados e a composição de Frogbots conforme as regras\n  de cada usermode;\n- preserva skins, cores e equipes controladas pelo KTX;\n- mantém os planos de teclas contextuais e o encerramento direto por F12 nos\n  cinco jogos atuais;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 361 testes de manutenção e quatro testes do site;\n- smoke real de QTV e QWFWD em segundo plano no macOS, incluindo consulta e\n  encerramento coordenado;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- catálogo, Git LFS, zipapp, bundle imutável e site validados antes da\n  publicação.",
       "mirror_latest": true
     },
     {
