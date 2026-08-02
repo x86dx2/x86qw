@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import textwrap
 import threading
 import time
 import traceback
@@ -519,30 +520,51 @@ class Console:
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
     def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
-        verb = {"update": "update", "upgrade": "upgrade", "repair": "repair"}[action]
-        noun = "package" if len(rows) == 1 else "packages"
-        self.heading(f"Would {verb} {len(rows)} outdated {noun}")
+        noun = "pacote" if len(rows) == 1 else "pacotes"
+        adjective = "desatualizado" if len(rows) == 1 else "desatualizados"
+        action_label = {
+            "update": "atualizar", "upgrade": "incorporar", "repair": "reparar",
+        }[action]
+        self.heading(f"Plano: {action_label} {len(rows)} {noun} {adjective}")
         names = [row.item for row in rows]
         installed = [row.installed for row in rows]
         available = [row.available for row in rows]
         name_width = max(map(len, names))
         installed_width = max(map(len, installed))
         available_width = max(map(len, available))
+        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
         for row in rows:
             size = f" ({format_bytes_compact(row.size)})" if row.size is not None else ""
-            print(
+            line = (
                 f"{row.item.ljust(name_width)}  "
                 f"{row.installed.ljust(installed_width)} -> "
-                f"{row.available.ljust(available_width)}{size}",
-                flush=True,
+                f"{row.available.ljust(available_width)}{size}"
             )
+            if len(line) <= terminal_width:
+                print(line, flush=True)
+                continue
+            print("\n".join(textwrap.wrap(
+                row.item, width=terminal_width,
+                initial_indent="  ", subsequent_indent="    ",
+                break_long_words=False, break_on_hyphens=False,
+            )), flush=True)
+            print(f"    Instalado  | {row.installed}", flush=True)
+            print(f"    Disponível | {row.available}", flush=True)
+            if row.size is not None:
+                print(f"    Download   | {format_bytes_compact(row.size)}", flush=True)
 
     def download_result(
-        self, label: str, *, size: int, status: str = "Downloaded",
+        self, label: str, *, size: int, status: str = "Baixado",
     ) -> None:
         amount = format_bytes_compact(size)
         check = self.paint("✔︎", "32")
-        print(f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}", flush=True)
+        line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
+        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
+        if len(line) <= terminal_width:
+            print(line, flush=True)
+        else:
+            print(f"{check} {label}", flush=True)
+            print(f"    {status} | {amount}/{amount}", flush=True)
 
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
         if not sys.stdout.isatty():
@@ -1316,6 +1338,14 @@ class Installer:
         if not isinstance(platform_files, list):
             raise InstallerError(f"Mapeamento de plataforma inválido para {identifier}.")
         selected = self.component_platform_variant(identifier)
+        runtime = next(
+            entry for entry in RUNTIMES.values()
+            if entry.get("component") == identifier
+        )
+        runtime_platform = next(
+            entry for entry in runtime["platforms"]
+            if isinstance(entry, dict) and entry.get("variant") == selected
+        )
         matches = [
             entry for entry in platform_files
             if isinstance(entry, dict) and entry.get("platform") == selected
@@ -1344,6 +1374,8 @@ class Installer:
                 )
             destination.parent.mkdir(parents=True, exist_ok=True)
             source.replace(destination)
+            if os.name != "nt" and runtime_platform.get("permissions") == "executable":
+                destination.chmod(0o755)
         remove_empty_directories(managed / "platforms")
 
     def prompt_catalog(self, label: str, catalog: list[ReleaseRecord]) -> ReleaseRecord:
@@ -1386,7 +1418,7 @@ class Installer:
                 for index, record in enumerate(catalog)
             ),
             breadcrumb="x86QW › Instalação › Versão",
-            subtitle="Mais recente primeiro. Digite / para buscar uma versão.",
+            subtitle="Mais recente primeiro. Use a busca para localizar uma versão.",
             searchable=True,
         )
         if selected is None:
@@ -2212,12 +2244,18 @@ class Installer:
                 raise InstallerError("pak.lst gerenciado existe sem pacotes PK3 em qw.")
             return
         if not present:
-            raise InstallerError("Ordem de PK3 não registrada. Execute components para gerar qw/pak.lst.")
+            raise InstallerError(
+                "Ordem de PK3 não registrada. Reexecute o bootstrap x86QW no mesmo "
+                "destino para gerar qw/pak.lst."
+            )
         self.verify_component("package-order")
         path = self.target / "qw/pak.lst"
         expected = "".join(f"{name}\n" for name in packages)
         if path.read_text(encoding="utf-8") != expected:
-            raise InstallerError("qw/pak.lst não representa os PK3 instalados. Execute components novamente.")
+            raise InstallerError(
+                "qw/pak.lst não representa os PK3 instalados. Reexecute o bootstrap "
+                "x86QW no mesmo destino."
+            )
 
     def remove_component(self, component: str) -> int:
         present, entries, _ = self.validate_component_pair(component)
@@ -2817,7 +2855,7 @@ class Installer:
         self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-update.", dir=self.target))
         try:
             if self.update_ui:
-                console.heading("Downloading x86QW installer")
+                console.heading("Baixando o instalador x86QW")
             artifact = self.download_component_package(package)
             extracted = self.stage / "installer"
             extracted.mkdir()
@@ -2911,7 +2949,7 @@ class Installer:
     def public_catalog(self, message: str) -> dict[str, object]:
         if self._public_catalog is None:
             if self.update_ui:
-                console.heading("Downloading package manifests")
+                console.heading("Baixando manifestos de pacotes")
             else:
                 console.info(message)
             catalog_url = os.environ.get("X86_QW_CATALOG_URL")
@@ -2924,7 +2962,7 @@ class Installer:
                         catalog_url, timeout=CATALOG_TIMEOUT, attempts=2,
                     )
                     catalog = json.loads(catalog_payload)
-                    catalog_status = "Downloaded"
+                    catalog_status = "Baixado"
                     console.detail(f"Catálogo remoto explícito: {catalog_url}")
                 elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
                     catalog_payload = local_catalog.read_bytes()
@@ -2953,7 +2991,7 @@ class Installer:
                             f"Nenhum mirror do catálogo x86QW respondeu: {last_error}"
                         )
                     catalog = json.loads(catalog_payload)
-                    catalog_status = "Downloaded"
+                    catalog_status = "Baixado"
                     console.detail(f"Catálogo público: {selected_url}")
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
@@ -3655,7 +3693,9 @@ class Installer:
             choices.append((f"ezQuake {channel} {receipt['selection']}", runtime))
         return choices
 
-    def choose_host_runtime(self) -> tuple[str, Path] | None:
+    def choose_host_runtime(
+        self, *, breadcrumb: str = "x86QW › Cliente",
+    ) -> tuple[str, Path] | None:
         choices = self.host_runtimes()
         if not choices:
             raise InstallerError("Nenhum ezQuake gerenciado para este sistema está instalado. Execute install primeiro.")
@@ -3667,7 +3707,7 @@ class Installer:
                 navigation.MenuOption(str(index), label, "runtime instalado")
                 for index, (label, _) in enumerate(choices)
             ),
-            breadcrumb="x86QW › Cliente",
+            breadcrumb=breadcrumb,
             allow_back=True,
         )
         if selected is None:
@@ -3729,6 +3769,7 @@ class Installer:
 
     def browse_hub(self) -> None:
         servers = self.hub_servers()
+        interactive_menu = navigation.supports_navigation()
         server_options = []
         for index, server in enumerate(servers, 1):
             settings = server.get("settings") if isinstance(server.get("settings"), dict) else {}
@@ -3747,7 +3788,7 @@ class Installer:
                 str(server["address"]),
             ))
         legacy_action = None
-        if not navigation.supports_navigation():
+        if not interactive_menu:
             print("\nServidores QuakeWorld ativos:")
             for index, option in enumerate(server_options, 1):
                 print(f"  {index:3d}) {option.description} · {option.label}")
@@ -3771,7 +3812,7 @@ class Installer:
                 "Servidores QuakeWorld ativos",
                 server_options,
                 breadcrumb="x86QW › Encontrar servidor",
-                subtitle="Jogadores humanos primeiro. Pressione / para buscar.",
+                subtitle="Jogadores humanos primeiro. Use a busca para filtrar servidores.",
                 searchable=True,
                 allow_back=True,
             )
@@ -3793,6 +3834,7 @@ class Installer:
                 navigation.MenuOption(
                     "qtv", "Assistir pelo QTV", "reproduzir o stream publicado",
                     enabled=bool(has_qtv),
+                    disabled_reason="este servidor não publicou um stream QTV válido",
                 ),
             ),
             breadcrumb="x86QW › Encontrar servidor › " + address,
@@ -3814,11 +3856,41 @@ class Installer:
         else:
             quake_arguments = ["+join", address]
             operation = "conexão"
-        runtime_choice = self.choose_host_runtime()
-        if runtime_choice is None:
-            console.info("Conexão cancelada; nenhum cliente foi aberto.")
-            return
-        label, runtime = runtime_choice
+        while True:
+            runtime_choice = self.choose_host_runtime()
+            if runtime_choice is None:
+                console.info("Conexão cancelada; nenhum cliente foi aberto.")
+                return
+            label, runtime = runtime_choice
+            if not interactive_menu:
+                break
+            action_label = {
+                "join": "Jogar",
+                "observe": "Observar",
+                "qtv": "Assistir pelo QTV",
+            }[action]
+            summary = "\n".join((
+                "Resumo da conexão",
+                f"  Servidor | {server_options[int(selected)].label}",
+                f"  Endereço | {address}",
+                f"  Ação     | {action_label}",
+                f"  Cliente  | {label}",
+                *((f"  Stream   | {qtv_url}",) if action == "qtv" else ()),
+            ))
+            confirmed = navigation.confirm(
+                "Abrir este servidor?",
+                breadcrumb="x86QW › Encontrar servidor › Confirmação",
+                subtitle="\n" + summary,
+                description="abrir o ezQuake com a conexão selecionada",
+                default=True,
+                allow_back=True,
+            )
+            if confirmed is None:
+                continue
+            if not confirmed:
+                console.info("Conexão cancelada; nenhum cliente foi aberto.")
+                return
+            break
         self.launch_runtime(runtime, quake_arguments)
         console.success(f"{label} aberto para {operation} em {address}.")
 
@@ -3849,7 +3921,10 @@ class Installer:
             raise InstallerError(f"Nenhum ezQuake gerenciado foi encontrado em {self.target}. Execute install primeiro.")
         legacy, _, _ = self.validate_nquake_pair()
         if legacy:
-            raise InstallerError("Metadados nQuake antigos encontrados. Execute components para migrar a instalação.")
+            raise InstallerError(
+                "Metadados nQuake antigos encontrados. Reexecute o bootstrap x86QW "
+                "no mesmo destino para migrar a instalação."
+            )
         installed = self.installed_components()
         if lexists(self.target / INSTALL_STATE):
             state = self.load_install_state(persist_migration=False)
@@ -4924,7 +4999,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "action", nargs="?", default="install",
         help=(
-            "install, menu, play, host, proxy, qtv, version, update, upgrade, repair, components, presets, hub, "
+            "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, components, presets, hub, "
             "verify, uninstall ou cleanup"
         ),
     )
@@ -4934,7 +5009,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "menu", "play", "host", "proxy", "qtv", "version", "update", "upgrade", "repair", "components",
+        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
@@ -4978,6 +5053,15 @@ def choose_public_target(suggested: Path | None = None) -> Path:
     return target
 
 
+def pause_menu_result(message: str) -> bool:
+    """Keep a completed action visible before the navigator redraws the screen."""
+    try:
+        input(message)
+    except EOFError:
+        return False
+    return True
+
+
 def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False) -> int:
     """Run the installed CLI as a task-oriented navigator without changing command contracts."""
     breadcrumb = f"x86QW {application_version()}"
@@ -4989,12 +5073,13 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("play", "Jogar", "mods locais e modos KTX", "Escolha jogo, modo, mapa e regras."),
                     navigation.MenuOption("hub", "Encontrar servidor", "jogar, observar ou assistir QTV", "Servidores públicos com busca."),
                     navigation.MenuOption("host", "Hospedar partida", "MVDSV com QTV e QWFWD opcionais", "Servidor dedicado em primeiro plano."),
-                    navigation.MenuOption("services", "Transmissão e proxy", "QTV ou QWFWD isolados", "Serviços avançados independentes."),
+                    navigation.MenuOption("services", "Serviços", "visualizar, transmitir ou usar proxy", "Estado da stack, QTV e QWFWD isolados."),
                     navigation.MenuOption("manage", "Gerenciar instalação", "atualizar, reparar ou limpar", "Operações seguras sobre conteúdo instalado."),
                     navigation.MenuOption("info", "Ajuda e informações", "versão, caminhos e comandos", "A CLI por argumentos continua disponível."),
-                    navigation.MenuOption("exit", "Sair", "fechar o navegador"),
+                    navigation.MenuOption("exit", "Sair", "encerrar o menu"),
                 ),
                 breadcrumb=breadcrumb,
+                searchable=True,
                 allow_back=True,
             )
         except navigation.MenuCancelled:
@@ -5003,7 +5088,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, hub, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -5014,8 +5099,10 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
-            ])
+            ], propagate_menu_exit=True)
             if result == 130:
+                return result
+            if not pause_menu_result("\nPressione Enter para retornar ao menu principal..."):
                 return result
             continue
         if selected == "host":
@@ -5024,8 +5111,10 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 "host", "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
-            ])
+            ], propagate_menu_exit=True)
             if result == 130:
+                return result
+            if not pause_menu_result("\nPressione Enter para retornar ao menu principal..."):
                 return result
             continue
         if selected == "hub":
@@ -5036,31 +5125,57 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             ])
             if result == 130:
                 return result
+            if not pause_menu_result("\nPressione Enter para retornar ao menu principal..."):
+                return result
             continue
         if selected == "services":
-            service = navigation.select_one(
-                "Qual serviço deseja iniciar?",
-                (
-                    navigation.MenuOption("qtv", "QTV", "relay HTTP e transmissão MVD"),
-                    navigation.MenuOption("proxy", "QWFWD", "proxy UDP QuakeWorld"),
-                ),
-                breadcrumb=breadcrumb + " › Transmissão e proxy",
-                allow_back=True,
-            )
-            if service is not None:
+            while True:
+                service = navigation.select_one(
+                    "Serviços x86QW",
+                    (
+                        navigation.MenuOption(
+                            "status", "Visualizar serviços ativos",
+                            "PIDs, endpoints e parâmetros não sensíveis",
+                            "Use também em outro terminal enquanto a stack estiver ativa.",
+                        ),
+                        navigation.MenuOption(
+                            "stop", "Encerrar serviços ativos",
+                            "shutdown coordenado da stack atual",
+                            "Confirma identidade, encerra filhos e remove temporários.",
+                        ),
+                        navigation.MenuOption(
+                            "qtv", "QTV", "relay HTTP/MVD",
+                            "Pode iniciar isolado ou conectado a um MVDSV.",
+                        ),
+                        navigation.MenuOption(
+                            "proxy", "QWFWD", "proxy UDP QuakeWorld",
+                            "Encaminha conexões sem exigir um MVDSV local.",
+                        ),
+                    ),
+                    breadcrumb=breadcrumb + " › Serviços",
+                    searchable=True,
+                    allow_back=True,
+                )
+                if service is None:
+                    break
                 services = importlib.import_module("services")
+                service_action = "status" if service == "stop" else service
                 result = services.main([
-                    service, "--target", str(target), "--menu",
+                    service_action, "--target", str(target), "--menu",
+                    *(("--stop",) if service == "stop" else ()),
                     *(("--verbose",) if verbose else ()),
                     *(("--no-color",) if no_color else ()),
-                ])
+                ], propagate_menu_exit=True)
                 if result == 130:
+                    return result
+                if not pause_menu_result("\nPressione Enter para retornar ao menu de serviços..."):
                     return result
             continue
         if selected == "manage":
             action = navigation.select_one(
                 "Gerenciar instalação",
                 (
+                    navigation.MenuOption("content", "Alterar conteúdo pelo bootstrap", "mostrar o comando para adicionar ou remover componentes"),
                     navigation.MenuOption("update", "Atualizar", "atualizar somente o que já está instalado"),
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
@@ -5069,47 +5184,94 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("uninstall", "Desinstalar", "preservar ou remover todos os dados"),
                 ),
                 breadcrumb=breadcrumb + " › Gerenciar instalação",
+                searchable=True,
                 allow_back=True,
             )
             if action is None:
                 continue
+            if action == "content":
+                print("\nA CLI instalada não baixa componentes novos durante o gameplay.")
+                print("Reexecute o bootstrap e informe este mesmo destino:")
+                if os.name == "nt":
+                    print("\n  irm https://x86qw.x86.com.br/install.ps1 | iex")
+                else:
+                    print('\n  /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"')
+                print(f"\nDestino atual: {target}")
+                try:
+                    input("\nPressione Enter para voltar ao menu...")
+                except EOFError:
+                    return 0
+                continue
             extra: list[str] = []
             if action == "cleanup":
-                scope = navigation.select_one(
-                    "O que deseja limpar?",
-                    (
-                        navigation.MenuOption("cache", "Somente cache", "mantém downloads, histórico, logs e demos"),
-                        navigation.MenuOption("downloads", "Cache e downloads", "mantém histórico, logs e demos"),
-                        navigation.MenuOption("personal", "Cache e dados pessoais", "mantém downloads de servidores"),
-                        navigation.MenuOption("all", "Todos os dados locais", "cache, downloads, histórico, logs e demos"),
-                    ),
-                    breadcrumb=breadcrumb + " › Gerenciar instalação › Limpeza",
-                    allow_back=True,
-                )
+                while True:
+                    scope = navigation.select_one(
+                        "O que deseja limpar?",
+                        (
+                            navigation.MenuOption("cache", "Somente cache", "mantém downloads, histórico, logs e demos"),
+                            navigation.MenuOption("downloads", "Cache e downloads", "mantém histórico, logs e demos"),
+                            navigation.MenuOption("personal", "Cache e dados pessoais", "remove histórico, logs e demos"),
+                            navigation.MenuOption("all", "Todos os dados locais", "remove downloads, histórico, logs e demos"),
+                        ),
+                        breadcrumb=breadcrumb + " › Gerenciar instalação › Limpeza",
+                        searchable=True,
+                        allow_back=True,
+                    )
+                    if scope is None:
+                        break
+                    if scope in {"personal", "all"}:
+                        print("\nSerão removidos dados pessoais locais:")
+                        print("  - histórico do console")
+                        print("  - logs do ezQuake")
+                        print("  - demos de Total Destruction 2")
+                        if scope == "all":
+                            print("  - downloads recebidos de servidores")
+                        confirmed = navigation.confirm(
+                            "Confirma a limpeza destes dados?",
+                            breadcrumb=breadcrumb + " › Gerenciar instalação › Limpeza › Confirmação",
+                            description="remover permanentemente os dados listados",
+                            default=False,
+                            allow_back=True,
+                        )
+                        if confirmed is None:
+                            continue
+                        if not confirmed:
+                            scope = None
+                            break
+                    if scope in {"downloads", "all"}:
+                        extra.append("--downloads")
+                    if scope in {"personal", "all"}:
+                        extra.append("--personal-data")
+                    break
                 if scope is None:
                     continue
-                if scope in {"downloads", "all"}:
-                    extra.append("--downloads")
-                if scope in {"personal", "all"}:
-                    extra.append("--personal-data")
             elif action == "uninstall":
-                scope = navigation.select_one(
-                    "Como deseja desinstalar?",
-                    (
-                        navigation.MenuOption("preserve", "Preservar dados pessoais", "mantém PAKs, configurações, logs e demos"),
-                        navigation.MenuOption("purge", "Remover completamente", "apaga toda a instalação e o cache"),
+                while True:
+                    scope = navigation.select_one(
+                        "Como deseja desinstalar?",
+                        (
+                            navigation.MenuOption("preserve", "Preservar dados pessoais", "mantém PAKs, configurações, logs e demos"),
+                            navigation.MenuOption("purge", "Remover completamente", "apaga toda a instalação e o cache"),
                     ),
                     breadcrumb=breadcrumb + " › Gerenciar instalação › Desinstalar",
+                    searchable=True,
                     allow_back=True,
                 )
+                    if scope is None:
+                        break
+                    confirmed = navigation.confirm(
+                        "Confirma a desinstalação?",
+                        breadcrumb=breadcrumb + " › Gerenciar instalação › Desinstalar › Confirmação",
+                        description="Esta operação altera o conteúdo instalado.",
+                        default=False,
+                        allow_back=True,
+                    )
+                    if confirmed is None:
+                        continue
+                    if not confirmed:
+                        scope = None
+                    break
                 if scope is None:
-                    continue
-                if not navigation.confirm(
-                    "Confirma a desinstalação?",
-                    breadcrumb=breadcrumb + " › Gerenciar instalação › Desinstalar",
-                    description="Esta operação altera o conteúdo instalado.",
-                    default=False,
-                ):
                     continue
                 if scope == "purge":
                     extra.append("--purge")
@@ -5120,12 +5282,16 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             ])
             if action == "uninstall" and result == 0:
                 return 0
+            if not pause_menu_result("\nPressione Enter para retornar ao menu principal..."):
+                return result
             continue
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, update, upgrade, verify, repair, cleanup, uninstall e version.")
-            print("Use x86qw <comando> --help para ver todas as opções avançadas.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
+            print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
+            print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
             try:
                 input("\nPressione Enter para voltar ao menu...")
             except EOFError:
@@ -5207,7 +5373,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             else:
                 console.update_plan(plan_rows, "repair")
                 if options.dry_run:
-                    console.heading("Dry run complete; no files were changed")
+                    console.heading("Simulação concluída; nenhum arquivo foi alterado")
                 else:
                     installer.repair(
                         dry_run=False, plan_rows=[], allow_download=not options.installed_cli,
@@ -5250,17 +5416,17 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                     if options.action == "upgrade"
                     else "Nenhuma atualização disponível; o conteúdo instalado já está atualizado."
                 )
-                console.heading("Already up-to-date")
+                console.heading("Já está atualizado")
                 console.success(message)
                 return 0
             console.update_plan(plan_rows, options.action)
             if options.dry_run:
-                console.heading("Dry run complete; no files were changed")
+                console.heading("Simulação concluída; nenhum arquivo foi alterado")
                 return 0
             if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
                 return 0
             console.heading(
-                "Updating packages" if options.action == "update" else "Upgrading packages"
+                "Atualizando pacotes" if options.action == "update" else "Incorporando novidades"
             )
             if content_changed:
                 operation(dry_run=False)
@@ -5314,7 +5480,7 @@ def main(arguments: list[str] | None = None) -> int:
         if raw_arguments[:1] == ["play"]:
             gameplay = importlib.import_module("gameplay")
             return gameplay.main(raw_arguments[1:])
-        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv"}:
+        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv", "status"}:
             services = importlib.import_module("services")
             return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
@@ -5343,6 +5509,9 @@ def main(arguments: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         console.error("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
         return 130
+    except navigation.MenuExit:
+        console.info("Menu encerrado; nenhuma seleção pendente foi aplicada.")
+        return 0
     except navigation.MenuCancelled:
         console.info("Operação cancelada; nenhuma seleção pendente foi aplicada.")
         return 130

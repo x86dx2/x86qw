@@ -2,6 +2,38 @@
   "format": 1,
   "game": "ktx",
   "upstream_version": "1.47",
+  "menu_groups": [
+    {
+      "id": "recommended",
+      "label": "Recomendados",
+      "description": "começar pelos formatos mais conhecidos",
+      "modes": ["duel", "2on2", "4on4", "ffa", "ctf", "practice"]
+    },
+    {
+      "id": "individual",
+      "label": "Competitivo individual",
+      "description": "duelos, rounds e precisão",
+      "modes": ["duel", "hoony", "lgc", "rocket-arena"]
+    },
+    {
+      "id": "teams",
+      "label": "Equipes",
+      "description": "teamplay, múltiplas equipes e CTF",
+      "modes": ["2on2", "3on3", "4on4", "10on10", "blitz-2v2", "blitz-4v4", "2on2on2", "3on3on3", "4on4on4", "xonx", "ctf"]
+    },
+    {
+      "id": "arena",
+      "label": "Arena e alternativos",
+      "description": "combate contínuo, rounds e variações",
+      "modes": ["ffa", "clan-arena", "wipeout", "tot", "midair", "dmm4", "instagib"]
+    },
+    {
+      "id": "training",
+      "label": "Treino e movimento",
+      "description": "rotas, mecânicas e prática livre",
+      "modes": ["race", "practice"]
+    }
+  ],
   "modes": [
     {
       "id": "duel",

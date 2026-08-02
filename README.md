@@ -69,7 +69,7 @@ winget install --id Python.Python.3.13 -e
 Depois da instalação, abra um novo PowerShell e execute novamente o comando do
 x86QW.
 
-O bootstrap público `0.5.1` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.6.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
@@ -112,6 +112,9 @@ O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF
 
 `--help` detalha Frogbots, regras de CTF e formatos de Race. O launcher valida mapas, combinações e limitações do QVM antes de iniciar o cliente.
 No navegador interativo, essas opções aparecem somente quando fazem sentido:
+os 24 modos são primeiro agrupados em recomendados, individuais, equipes,
+arena/alternativos e treino, com uma entrada adicional para consultar o catálogo
+completo. Nenhum modo é ocultado por essa organização.
 Race pergunta formato, pontuação, pacemaker e visibilidade dos corredores; CTF
 pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots, habilidade
 e nomes. Há três perfis: `KTX Default`, nomes originais sem customização;
@@ -133,18 +136,38 @@ um bot entra. `F12` fecha diretamente o QuakeWorld em todos os cinco jogos.
 
 Depois da instalação, `x86qw.sh` — ou `x86qw.cmd` no Windows — é o ponto único de entrada.
 Sem argumentos, ele abre um navegador por tarefas: **Jogar**, **Encontrar
-servidor**, **Hospedar**, **Transmissão e proxy** e **Gerenciar instalação**.
+servidor**, **Hospedar**, **Serviços** e **Gerenciar instalação**.
 Cada item mostra seu número equivalente. Use `↑`/`↓` ou `j`/`k`, avance com
 `→`/Enter, volte exatamente uma etapa com `←`, use Esc para sair e pressione
-`/` para buscar em listas longas. Em terminais sem navegação interativa, o mesmo fluxo usa
-opções numeradas. As flags abaixo continuam sendo o contrato estável para
+`/` para buscar em listas longas. Atalhos com dois dígitos são confirmados com
+Enter; listas maiores mostram a faixa visível e o total. Opções indisponíveis
+continuam visíveis com o motivo. Em terminais estreitos, descrições e legendas
+são quebradas sem perder contexto. Em terminais sem navegação interativa, o
+mesmo fluxo usa opções numeradas.
+
+Antes de abrir o ezQuake, **Jogar** apresenta jogo, modo, mapa, cliente, bots e o
+comando equivalente. **Encontrar servidor** revisa servidor, ação e cliente;
+QTV e QWFWD isolados também exibem endpoint, upstream e comando seguro antes da
+confirmação. **Hospedar** escolhe jogo, regras e mapa antes da
+infraestrutura; em seguida oferece **Rápido local** — loopback, MVD ativo e sem
+serviços adicionais — ou **Avançado**, com rede, portas, QTV, QWFWD e senhas.
+Esses fluxos exigem confirmação final e ainda não adquiriram lock nem iniciaram
+processos quando o resumo é exibido. Toda ação concluída ou falha permanece
+visível até Enter antes de o menu ser redesenhado. Segredos nunca aparecem no
+comando equivalente. As flags abaixo continuam sendo o contrato estável para
 automação e acesso direto.
+
+Nos resumos, o comando equivalente usa `./x86qw.sh` em Unix e `x86qw.cmd` no
+Windows. Hosts e serviços podem permanecer no terminal ou usar `--background`;
+em segundo plano, o menu **Serviços** mostra controlador, processos, endpoints,
+parâmetros e log, e oferece encerramento coordenado da stack.
 
 ```text
 JOGAR                         OPERAR                         MANTER
 x86qw play                    x86qw host                    x86qw update
 x86qw play ktx --mode ctf     x86qw proxy                   x86qw upgrade
 x86qw hub                     x86qw qtv                     x86qw verify
+                              x86qw status
                                                              x86qw repair
 ```
 
@@ -154,6 +177,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | `host` | Inicia um servidor dedicado MVDSV |
 | `proxy` | Executa o proxy de rota QWFWD |
 | `qtv` | Inicia o relay/espectador QTV |
+| `status` | Mostra a stack ativa; `--stop` solicita encerramento coordenado |
 | `hub` | Abre o hub local da instalação |
 | `update` | Atualiza a CLI e o que já está instalado |
 | `upgrade` | Também incorpora novidades do perfil escolhido |
@@ -171,6 +195,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 ./x86qw.sh host td2 --map dm6 --bind 0.0.0.0 --with-qtv
 ./x86qw.sh proxy --bind 0.0.0.0
 ./x86qw.sh qtv --upstream 127.0.0.1:28501
+./x86qw.sh status
 ```
 
 Serviços usam loopback por padrão e só são expostos com `--bind` explícito. Senhas podem vir de prompt oculto ou arquivo privado; a CLI evita colocá-las no comando filho e na saída. Locks e journals impedem manutenção concorrente, coordenam o encerramento e permitem recuperação conservadora após crash. Veja o [guia de hosting](docs/HOSTING.md).

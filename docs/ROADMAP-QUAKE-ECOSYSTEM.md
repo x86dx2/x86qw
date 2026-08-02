@@ -4,8 +4,8 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.5.0`. Baseline da reformulação dos
-menus e Frogbots: branch `main`, commit `699b858`, em 1 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.6.0`. O estado funcional é descrito
+pela própria tag imutável, publicada em 2 de agosto de 2026.
 
 ## Escala de estado
 
@@ -19,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.5.0`; as linhas anteriores permanecem imutáveis;
-- 57 pacotes e 21 componentes no catálogo;
+- instalador público `0.6.0`; as linhas anteriores permanecem imutáveis;
+- 59 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -29,7 +29,7 @@ plataforma.
 - cliente macOS universal, Linux x86-64 e Windows x64;
 - serviços macOS arm64, Linux amd64 e Windows x64; macOS Intel não é anunciado
   para os serviços;
-- CLI com `play`, `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`,
+- CLI com `play`, `host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`,
   `repair`, `cleanup`, `uninstall` e `version`;
 - navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
   alinhadas e coloridas e fallback numerado;
@@ -68,7 +68,8 @@ operacionais.
 **Entrega funcional:** completa
 **Validação:** unitária
 
-`play`, `host`, `proxy`, `qtv` e `hub` validam e executam conteúdo instalado.
+`play`, `host`, `proxy`, `qtv` e `hub` validam e executam conteúdo instalado;
+`status` consulta a stack ativa sem adquirir lock nem alterar processos.
 `play-support` é preparado por instalação, `update`, `upgrade` ou `repair`.
 Materialização necessária ao servidor é efêmera, journalizada e reconciliada.
 
@@ -286,4 +287,9 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.4.2` executada e verificada em etapa explícita aprovada;
 - [x] versão `0.5.0` reformula menus, perfis Frogbot e controles contextuais;
 - [x] publicação `0.5.0` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.5.1` corrige a detecção e a orientação do Python no Windows;
+- [x] publicação `0.5.1` executada e verificada em etapa explícita aprovada;
+- [x] versão `0.6.0` adiciona lifecycle de serviços em segundo plano e status
+  com encerramento coordenado;
+- [x] publicação `0.6.0` executada e verificada em etapa explícita aprovada;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

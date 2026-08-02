@@ -20,6 +20,21 @@ Sem argumentos, `host` lista os mesmos jogos instalados apresentados por
 ./x86qw.sh host td2 --map dm6
 ```
 
+No menu principal, a hospedagem pergunta primeiro jogo, modo/regras e mapa. Em
+seguida há dois caminhos:
+
+- **Rápido local:** `127.0.0.1:28501`, 16 clientes, MVD automático e sem QTV ou
+  QWFWD; é o caminho seguro para treino, teste e rede local no mesmo computador;
+- **Avançado:** interfaces, portas, capacidade, MVD, QTV, QWFWD e entrada oculta
+  de senhas.
+
+Antes de adquirir o lock ou iniciar processos, o menu apresenta um resumo e um
+comando equivalente sem valores secretos. A seta esquerda volta uma etapa;
+recusar a confirmação encerra o fluxo sem iniciar MVDSV ou serviços.
+QTV e QWFWD isolados também apresentam resumo, comando seguro e confirmação;
+voltar reabre sua configuração. Depois de executar ou consultar o estado, a
+saída permanece visível até Enter e o navegador retorna ao submenu Serviços.
+
 Cada jogo utiliza seu gamecode, configuração pessoal e mapas próprios. Como o
 MVDSV não lê PK3, cargas como KTX e Final Arena são materializadas somente
 durante a sessão e removidas ao encerrar.
@@ -108,11 +123,43 @@ colchetes são recusados.
 ```sh
 ./x86qw.sh proxy
 ./x86qw.sh proxy --bind 0.0.0.0 --port 30000
+./x86qw.sh proxy --background
 ./x86qw.sh host ktx --mode duel --with-proxy
 ```
 
 O proxy usa `127.0.0.1:30000` por padrão e não promete reduzir latência. A
 configuração gerenciada não consulta masters públicos automaticamente.
+
+## Visualizar a stack ativa
+
+Serviços podem acompanhar o terminal ou ser destacados com `--background`.
+Para consultar qualquer stack ativa, execute:
+
+```sh
+./x86qw.sh status
+./x86qw.sh status --stop
+```
+
+A mesma consulta fica em **Serviços → Visualizar serviços ativos** no navegador
+interativo. A saída reúne a operação e a sessão ativas e, para cada MVDSV, QTV
+ou QWFWD registrado, mostra estado da identidade, PID, runtime, executável,
+endpoint e parâmetros efetivos como jogo, modo, mapa, bots, bind, portas,
+clientes, upstream e gravação MVD. Valores de senha nunca são persistidos nessa
+visão; ela informa somente quais classes de segredo foram configuradas. A área
+**Serviços → Encerrar serviços ativos** pede confirmação e envia ao controlador
+identificado um pedido privado de shutdown coordenado.
+
+`status` sem opções é estritamente somente leitura: não adquire o lock, não
+recupera sessão, não encerra processo e não altera arquivos. `status --stop`
+é a ação explícita de encerramento; `--yes` permite automação. Um journal
+inconclusivo ou sem lock é preservado para inspeção, sem sinalizar PID por
+inferência.
+
+Ao destacar uma stack, os valores de senha resolvidos são enviados uma única
+vez ao novo controlador por pipe anônimo. Eles não entram nos argumentos, no
+journal, no status nem no log. Os runtimes recebem `stdin` fechado em
+`DEVNULL`; segredos continuam materializados somente nas configurações
+efêmeras privadas já cobertas pelo cleanup da sessão.
 
 ## Encerramento e arquivos pessoais
 
@@ -135,7 +182,7 @@ instalação. `host`, `proxy`, `qtv`, `install`, `components`, `presets`,
 `update`, `upgrade`, `repair`, `cleanup` e `uninstall` compartilham o lock
 atômico `.x86qw/sessions/active.lock`, inclusive em `--dry-run`. Se o
 controlador registrado estiver vivo, a segunda execução falha sem tocar
-journal, processos ou arquivos. `version`, `verify`, `hub` e `play` continuam
+journal, processos ou arquivos. `status`, `version`, `verify`, `hub` e `play` continuam
 disponíveis; `play` não participa do lock porque permanece sem mutação de
 payload. O handoff de `update`/`upgrade` baixa e valida a CLI nova antes, e
 somente o processo final com `--skip-cli-update` adquire o lock para modificar

@@ -12,6 +12,7 @@ if /I "%~1"=="play" goto play
 if /I "%~1"=="host" goto service
 if /I "%~1"=="proxy" goto service
 if /I "%~1"=="qtv" goto service
+if /I "%~1"=="status" goto service
 if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
@@ -57,6 +58,7 @@ echo   host                 escolhe e hospeda somente o servidor de um jogo
 echo   host JOGO            hospeda KTX, Final Arena, Pro-X, TF ou TD2
 echo   proxy                inicia o proxy QWFWD
 echo   qtv                  inicia o relay web/MVD QTV
+echo   status               mostra servicos ativos, PIDs, endpoints e parametros
 echo.
 echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado

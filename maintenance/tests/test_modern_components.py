@@ -116,7 +116,7 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_new_actions_are_accepted(self):
         for action in (
-            "host", "proxy", "qtv", "version", "components", "presets", "hub",
+            "host", "proxy", "qtv", "status", "version", "components", "presets", "hub",
             "update", "upgrade", "repair",
         ):
             with self.subTest(action=action):
@@ -136,7 +136,8 @@ class ModernComponentTests(unittest.TestCase):
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
             install_qw.parse_arguments(["--help"], ROOT)
         self.assertIn(f"x86QW {install_qw.application_version()}", output.getvalue())
-        self.assertIn("play, host, proxy, qtv, version, update", output.getvalue())
+        self.assertIn("play, host, proxy, qtv, status, version,", output.getvalue())
+        self.assertIn("update, upgrade, repair", output.getvalue())
         self.assertIn("--version", output.getvalue())
 
         version_output = io.StringIO()
@@ -177,7 +178,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(0, install_qw.main(["play", str(target), "--no-color"]))
         delegated.assert_called_once_with([str(target), "--no-color"])
 
-    def test_service_cli_exposes_host_proxy_and_qtv(self):
+    def test_service_cli_exposes_host_proxy_qtv_and_status(self):
         target = ROOT / "custom-quake"
         host = services_qw.parse_arguments([
             "host", "ktx", "--target", str(target), "--mode", "4on4", "--map", "dm3",
@@ -192,6 +193,10 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual(12, host.ktx_options.bot_skill)
         self.assertTrue(host.with_qtv)
         self.assertTrue(host.with_proxy)
+        background_host = services_qw.parse_arguments([
+            "host", "td2", "--map", "dm6", "--background",
+        ], ROOT)
+        self.assertTrue(background_host.background)
         td2 = services_qw.parse_arguments(["host", "td2", "--map", "dm6"], ROOT)
         self.assertEqual("td2", td2.game)
         self.assertIsNone(td2.mode)
@@ -199,6 +204,12 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual(30001, proxy.proxy_port)
         qtv = services_qw.parse_arguments(["qtv", "--upstream", "127.0.0.1:28501"], ROOT)
         self.assertEqual("127.0.0.1:28501", qtv.upstream)
+        status = services_qw.parse_arguments(["status", "--target", str(target)], ROOT)
+        self.assertEqual("status", status.action)
+        self.assertEqual(target, status.target)
+        stop = services_qw.parse_arguments(["status", "--stop", "--yes"], ROOT)
+        self.assertTrue(stop.stop)
+        self.assertTrue(stop.yes)
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 services_qw.parse_arguments(["host", "--bind", "localhost"], ROOT)
@@ -314,6 +325,12 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue(post_map.rstrip().endswith('rcon_password ""'))
             self.assertIsNotNone(spec.startup_rcon)
             self.assertEqual(sessions[1].name, spec.startup_rcon.config_name)
+            parameters = dict(spec.parameters)
+            self.assertEqual("KTX", parameters["game"])
+            self.assertEqual("Capture The Flag", parameters["mode"])
+            self.assertEqual("e2m2", parameters["map"])
+            self.assertEqual("nenhum", parameters["secrets"])
+            self.assertNotIn("password", parameters)
 
     def test_service_runtime_platforms_and_ipv6_endpoints_are_explicit(self):
         self.assertEqual("macos-arm64", services_qw.runtime_variant("Darwin", "arm64"))
@@ -385,11 +402,145 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(b"personal", conflict.read_bytes())
 
     def test_main_cli_delegates_service_actions_without_entering_the_installer(self):
-        for action in ("host", "proxy", "qtv"):
+        for action in ("host", "proxy", "qtv", "status"):
             with self.subTest(action=action):
                 with mock.patch.object(services_qw, "main", return_value=0) as delegated:
                     self.assertEqual(0, install_qw.main([action, "--target", "/tmp/x86qw-test"]))
                 delegated.assert_called_once_with([action, "--target", "/tmp/x86qw-test"])
+
+    def test_main_menu_routes_service_status_and_pauses_before_redrawing(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one",
+            side_effect=("services", "status", None, "exit"),
+        ), mock.patch.object(
+            services_qw, "main", return_value=0,
+        ) as status, mock.patch(
+            "builtins.input", return_value="",
+        ) as pause:
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        status.assert_called_once_with(
+            ["status", "--target", str(target), "--menu"],
+            propagate_menu_exit=True,
+        )
+        pause.assert_called_once_with("\nPressione Enter para retornar ao menu de serviços...")
+
+    def test_main_menu_preserves_every_completed_action_result_before_redrawing(self):
+        target = ROOT / "custom-quake"
+        direct_cases = (
+            ("play", ("play", "exit"), play_qw, ["--target", str(target), "--menu"]),
+            ("host", ("host", "exit"), services_qw, ["host", "--target", str(target), "--menu"]),
+        )
+        for label, selections, module, expected in direct_cases:
+            with self.subTest(route=label), mock.patch.object(
+                install_qw.navigation, "select_one", side_effect=selections,
+            ), mock.patch.object(module, "main", return_value=0) as execute, mock.patch(
+                "builtins.input", return_value="",
+            ) as pause:
+                self.assertEqual(0, install_qw.run_main_menu(target))
+            execute.assert_called_once_with(expected, propagate_menu_exit=True)
+            pause.assert_called_once_with("\nPressione Enter para retornar ao menu principal...")
+
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=("hub", "exit"),
+        ), mock.patch.object(
+            install_qw, "main", return_value=0,
+        ) as execute, mock.patch("builtins.input", return_value="") as pause:
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        execute.assert_called_once_with([
+            "--online-only", "--installed-cli", "hub", str(target),
+        ])
+        pause.assert_called_once_with("\nPressione Enter para retornar ao menu principal...")
+
+        for service in ("status", "stop", "qtv", "proxy"):
+            with self.subTest(service=service), mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=("services", service, None, "exit"),
+            ), mock.patch.object(
+                services_qw, "main", return_value=0,
+            ) as execute, mock.patch("builtins.input", return_value="") as pause:
+                self.assertEqual(0, install_qw.run_main_menu(target))
+            execute.assert_called_once_with(
+                [
+                    "status" if service == "stop" else service,
+                    "--target", str(target), "--menu",
+                    *(("--stop",) if service == "stop" else ()),
+                ],
+                propagate_menu_exit=True,
+            )
+            pause.assert_called_once_with("\nPressione Enter para retornar ao menu de serviços...")
+
+        for action in ("update", "upgrade", "verify", "repair", "cleanup"):
+            selections = (
+                ("manage", "cleanup", "cache", "exit")
+                if action == "cleanup" else ("manage", action, "exit")
+            )
+            with self.subTest(action=action), mock.patch.object(
+                install_qw.navigation, "select_one", side_effect=selections,
+            ), mock.patch.object(
+                install_qw, "main", return_value=0,
+            ) as execute, mock.patch("builtins.input", return_value="") as pause:
+                self.assertEqual(0, install_qw.run_main_menu(target))
+            execute.assert_called_once_with([
+                "--online-only", "--installed-cli", action, str(target),
+            ])
+            pause.assert_called_once_with("\nPressione Enter para retornar ao menu principal...")
+
+    def test_primary_menus_are_searchable_and_content_action_describes_bootstrap(self):
+        target = ROOT / "custom-quake"
+        calls = []
+        selections = iter(("manage", None, "services", None, "exit"))
+
+        def choose(title, options, **kwargs):
+            entries = tuple(options)
+            calls.append((title, entries, kwargs))
+            return next(selections)
+
+        with mock.patch.object(install_qw.navigation, "select_one", side_effect=choose):
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        self.assertEqual(
+            ["QuakeWorld moderno", "Gerenciar instalação", "QuakeWorld moderno", "Serviços x86QW", "QuakeWorld moderno"],
+            [title for title, _entries, _kwargs in calls],
+        )
+        self.assertTrue(all(kwargs.get("searchable") for _title, _entries, kwargs in calls))
+        management = next(entries for title, entries, _kwargs in calls if title == "Gerenciar instalação")
+        content = next(option for option in management if option.key == "content")
+        self.assertEqual("Alterar conteúdo pelo bootstrap", content.label)
+        self.assertIn("adicionar ou remover", content.description)
+
+    def test_information_content_and_exit_render_the_promised_result(self):
+        target = ROOT / "custom-quake"
+        bootstrap = "install.ps1" if os.name == "nt" else "install.sh"
+        cases = (
+            (
+                ("info", "exit"),
+                ("x86QW ", f"Instalação: {target}", "Comandos: play, host, hub", "No menu:"),
+                "\nPressione Enter para voltar ao menu...",
+            ),
+            (
+                ("manage", "content", "exit"),
+                ("Reexecute o bootstrap", bootstrap, f"Destino atual: {target}"),
+                "\nPressione Enter para voltar ao menu...",
+            ),
+            (
+                ("exit",),
+                ("Até a próxima partida.",),
+                None,
+            ),
+        )
+        for selections, expected, prompt in cases:
+            with self.subTest(route=selections), mock.patch.object(
+                install_qw.navigation, "select_one", side_effect=selections,
+            ), mock.patch("builtins.input", return_value="") as pause:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, install_qw.run_main_menu(target))
+            for value in expected:
+                self.assertIn(value, output.getvalue())
+            if prompt is None:
+                pause.assert_not_called()
+            else:
+                pause.assert_called_once_with(prompt)
 
     def test_main_menu_routes_play_without_changing_the_public_flags(self):
         target = ROOT / "custom-quake"
@@ -399,7 +550,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(0, install_qw.run_main_menu(target, no_color=True))
         play_main.assert_called_once_with([
             "--target", str(target), "--menu", "--no-color",
-        ])
+        ], propagate_menu_exit=True)
 
     def test_escape_from_child_navigators_exits_the_root_menu(self):
         target = ROOT / "custom-quake"
@@ -413,14 +564,26 @@ class ModernComponentTests(unittest.TestCase):
             ) as menu, mock.patch.object(module, "main", return_value=130) as child:
                 self.assertEqual(130, install_qw.run_main_menu(target))
             menu.assert_called_once()
-            child.assert_called_once_with(expected)
+            child.assert_called_once_with(expected, propagate_menu_exit=True)
 
         with mock.patch.object(
             install_qw.navigation, "select_one", side_effect=("services", "qtv"),
         ) as menu, mock.patch.object(services_qw, "main", return_value=130) as child:
             self.assertEqual(130, install_qw.run_main_menu(target))
         self.assertEqual(2, menu.call_count)
-        child.assert_called_once_with(["qtv", "--target", str(target), "--menu"])
+        child.assert_called_once_with(
+            ["qtv", "--target", str(target), "--menu"],
+            propagate_menu_exit=True,
+        )
+
+    def test_escape_from_child_exits_root_cleanly(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one", return_value="play",
+        ), mock.patch.object(
+            play_qw, "main", side_effect=play_qw.navigation.MenuExit("Jogar"),
+        ):
+            self.assertEqual(0, install_qw.main(["menu", str(target)]))
 
         with mock.patch.object(
             install_qw.navigation, "select_one", return_value="hub",
@@ -430,6 +593,64 @@ class ModernComponentTests(unittest.TestCase):
         child.assert_called_once_with([
             "--online-only", "--installed-cli", "hub", str(target),
         ])
+
+    def test_child_error_is_paused_before_the_root_menu_is_redrawn(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=("play", "exit"),
+        ), mock.patch.object(
+            play_qw, "main", return_value=1,
+        ), mock.patch("builtins.input", return_value="") as pause:
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        pause.assert_called_once_with("\nPressione Enter para retornar ao menu principal...")
+
+    def test_personal_cleanup_requires_confirmation_before_running(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one",
+            side_effect=("manage", "cleanup", "personal", "exit"),
+        ), mock.patch.object(
+            install_qw.navigation, "confirm", return_value=False,
+        ) as confirm, mock.patch.object(install_qw, "main") as execute:
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        confirm.assert_called_once()
+        execute.assert_not_called()
+
+    def test_main_menu_routes_every_cleanup_and_uninstall_scope_to_exact_flags(self):
+        target = ROOT / "custom-quake"
+        cleanup_cases = {
+            "cache": [],
+            "downloads": ["--downloads"],
+            "personal": ["--personal-data"],
+            "all": ["--downloads", "--personal-data"],
+        }
+        for scope, flags in cleanup_cases.items():
+            with self.subTest(cleanup=scope), mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=("manage", "cleanup", scope, "exit"),
+            ), mock.patch.object(
+                install_qw.navigation, "confirm", return_value=True,
+            ), mock.patch.object(
+                install_qw, "main", return_value=0,
+            ) as execute, mock.patch("builtins.input", return_value=""):
+                self.assertEqual(0, install_qw.run_main_menu(target))
+            self.assertEqual([
+                "--online-only", "--installed-cli", "cleanup", str(target), *flags,
+            ], execute.call_args.args[0])
+
+        for scope, flags in (("preserve", []), ("purge", ["--purge"])):
+            with self.subTest(uninstall=scope), mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=("manage", "uninstall", scope),
+            ), mock.patch.object(
+                install_qw.navigation, "confirm", return_value=True,
+            ), mock.patch.object(
+                install_qw, "main", return_value=0,
+            ) as execute:
+                self.assertEqual(0, install_qw.run_main_menu(target))
+            self.assertEqual([
+                "--online-only", "--installed-cli", "uninstall", str(target), *flags,
+            ], execute.call_args.args[0])
 
     def test_play_menu_cancel_is_reported_without_an_unexpected_failure(self):
         player = mock.Mock()
@@ -443,6 +664,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_left_from_ktx_mode_returns_to_the_game_menu_not_the_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
+            (player.target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             with contextlib.ExitStack() as stack:
                 stack.enter_context(mock.patch.object(player, "check_paks"))
@@ -491,6 +713,15 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual("race/routes/{map}.route", race.required_map_asset)
         self.assertEqual(54, len(race.suggested_maps))
         self.assertFalse(race.bots)
+        groups = play_qw.load_ktx_menu_groups(ROOT)
+        self.assertEqual(
+            ("recommended", "individual", "teams", "arena", "training"),
+            tuple(group.key for group in groups),
+        )
+        self.assertEqual(
+            {mode.key for mode in modes},
+            {mode_id for group in groups for mode_id in group.modes},
+        )
 
     def test_ezquake_command_line_aliases_preserve_their_complete_body(self):
         self.assertEqual(
@@ -513,6 +744,7 @@ class ModernComponentTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
+            (player.target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = player.target / "ezQuake Stable.app"
             with mock.patch.object(player, "check_paks"):
@@ -546,6 +778,10 @@ class ModernComponentTests(unittest.TestCase):
                                                                     self.assertTrue(body.endswith('"'), body)
                                                                 else:
                                                                     self.assertFalse(body.endswith('"'), body)
+                                                        self.assertLessEqual(
+                                                            max(map(len, arguments)),
+                                                            play_qw.KTX_INLINE_SETUP_LIMIT,
+                                                        )
                                                         launch.reset_mock()
 
     def test_every_bot_compatible_ktx_mode_schedules_the_selected_frogbot(self):
@@ -579,7 +815,7 @@ class ModernComponentTests(unittest.TestCase):
                     arguments[index + 1]
                     for index, argument in enumerate(arguments[:-1])
                     if argument == "+exec"
-                    and arguments[index + 1].startswith("x86qw-frogbots-")
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
                 )
                 config_path = target / "qw" / config_name
                 captured["config"] = config_path.read_text(encoding="ascii")
@@ -634,11 +870,12 @@ class ModernComponentTests(unittest.TestCase):
             player, _, _ = self.make_player(Path(temporary))
             modes = play_qw.load_ktx_modes(ROOT)
             output = io.StringIO()
-            with mock.patch("builtins.input", return_value="ca"):
+            with mock.patch("builtins.input", side_effect=("all", "ca")):
                 with contextlib.redirect_stdout(output):
                     selected = player.choose_ktx_mode(modes)
             self.assertEqual("clan-arena", selected.key)
-            lines = [line for line in output.getvalue().splitlines() if re.match(r"^\s+\d+\)", line)]
+            mode_output = output.getvalue().split("Qual modo KTX deseja jogar?", 1)[1]
+            lines = [line for line in mode_output.splitlines() if re.match(r"^\s+\d+\)", line)]
             self.assertEqual(len(modes), len(lines))
             self.assertIn("Duel (padrão)", lines[0])
             divider_columns = [line.index("|") for line in lines]
@@ -751,6 +988,70 @@ class ModernComponentTests(unittest.TestCase):
                 tuple(option.label for option in name_options),
             )
             self.assertEqual(1, select.call_args_list[2].kwargs["default"])
+
+    def test_selecting_no_bots_clears_previous_frogbot_state(self):
+        duel = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "duel")
+        previous = play_qw.KtxLaunchOptions(
+            bots=1,
+            bot_skill=8,
+            bot_names_profile="x86qw",
+            bot_name_pool=(play_qw.FrogbotIdentity("Luffy"),),
+        )
+        with mock.patch.object(
+            play_qw.navigation, "select_one", return_value="none",
+        ):
+            selected = play_qw.Player.choose_ktx_launch_options(None, duel, previous)
+        self.assertEqual(play_qw.KtxLaunchOptions(), selected)
+
+    def test_changing_ktx_mode_discards_transient_options_from_the_previous_mode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
+            runtime = target / "ezQuake Stable.app"
+            chosen_inputs = []
+
+            def choose_options(_mode, options, **_kwargs):
+                chosen_inputs.append(options)
+                if len(chosen_inputs) == 1:
+                    return play_qw.replace(
+                        options, bots=1, bot_skill=8, bot_names_profile="x86qw",
+                    )
+                if len(chosen_inputs) == 2:
+                    return None
+                return options
+
+            with mock.patch.object(player, "check_paks"), mock.patch.object(
+                player, "available_local_games", return_value=[game],
+            ), mock.patch.object(
+                player, "choose_local_game", return_value=game,
+            ), mock.patch.object(
+                player, "installed_component_for_game", return_value=game.component,
+            ), mock.patch.object(player, "verify_component"), mock.patch.object(
+                player, "choose_ktx_mode", side_effect=(modes["duel"], modes["race"]),
+            ), mock.patch.object(
+                player, "choose_ktx_launch_options", side_effect=choose_options,
+            ), mock.patch.object(
+                player, "ktx_archive_members", return_value=frozenset(),
+            ), mock.patch.object(
+                player, "choose_local_map", side_effect=(None, "dm6"),
+            ), mock.patch.object(
+                player, "choose_host_runtime",
+                return_value=("ezQuake stable 1.0", runtime),
+            ), mock.patch.object(
+                player, "launch_runtime",
+            ) as launch, mock.patch.object(
+                play_qw, "resolve_frogbot_name_profile",
+                side_effect=lambda _root, _target, _game, options, _mode: options,
+            ), mock.patch.object(
+                play_qw.navigation, "confirm", return_value=False,
+            ), contextlib.redirect_stdout(io.StringIO()):
+                player.play_local(configure_interactively=True)
+
+            self.assertEqual(3, len(chosen_inputs))
+            self.assertEqual(1, chosen_inputs[1].bots)
+            self.assertEqual(play_qw.KtxLaunchOptions(), chosen_inputs[2])
+            launch.assert_not_called()
 
     def test_frogbot_skill_menu_can_return_to_count_and_select_random(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1919,6 +2220,221 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual(resolved, selection.ktx_options)
         self.assertIs(mode, resolve.call_args.args[4])
 
+    def test_play_menu_summarizes_and_confirms_before_opening_the_client(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            runtime = target / "ezQuake Stable.app"
+            output = io.StringIO()
+            with mock.patch.object(player, "check_paks"), mock.patch.object(
+                player, "available_local_games", return_value=[game],
+            ), mock.patch.object(
+                player, "installed_component_for_game", return_value=game.component,
+            ), mock.patch.object(player, "verify_component"), mock.patch.object(
+                player, "choose_local_map", return_value="dm6",
+            ), mock.patch.object(
+                player, "choose_host_runtime",
+                return_value=("ezQuake stable 1.0", runtime),
+            ), mock.patch.object(
+                player, "verify_local_play_support",
+            ) as support, mock.patch.object(
+                player, "launch_runtime",
+            ) as launch, mock.patch.object(
+                play_qw.navigation, "confirm", return_value=False,
+            ) as confirm, contextlib.redirect_stdout(output):
+                player.play_local(
+                    "td2", map_key="dm6", configure_interactively=True,
+                )
+            confirm.assert_called_once()
+            support.assert_not_called()
+            launch.assert_not_called()
+            rendered = confirm.call_args.kwargs["subtitle"]
+            self.assertIn("Resumo da partida", rendered)
+            self.assertIn("Cliente | ezQuake stable 1.0", rendered)
+            launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
+            self.assertIn(f"{launcher} play td2 --map dm6", rendered)
+
+    def test_host_menu_selects_the_game_before_quick_profile_and_confirmation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            selection = services_qw.HostedGame(
+                game, None, "dm6", frozenset(), play_qw.KtxLaunchOptions(),
+            )
+            player = mock.Mock(target=target, project_root=ROOT)
+            events = []
+            captured = {}
+
+            def select_game(*_args, **_kwargs):
+                events.append("game")
+                return selection
+
+            def quick(options, _current=None):
+                events.append("profile")
+                services_qw.apply_quick_host_defaults(options)
+                return "quick"
+
+            def execution(options, _breadcrumb):
+                events.append("execution")
+                options.background = False
+                return True
+
+            def refuse(*_args, **kwargs):
+                events.append("confirm")
+                captured["summary"] = kwargs["subtitle"]
+                return False
+
+            output = io.StringIO()
+            with mock.patch.object(
+                services_qw.gameplay, "Player", return_value=player,
+            ), mock.patch.object(
+                services_qw, "select_hosted_game", side_effect=select_game,
+            ), mock.patch.object(
+                services_qw, "choose_host_configuration", side_effect=quick,
+            ), mock.patch.object(
+                services_qw, "menu_execution_mode", side_effect=execution,
+            ), mock.patch.object(
+                services_qw.navigation, "confirm", side_effect=refuse,
+            ), mock.patch.object(
+                services_qw.SessionLock, "acquire",
+            ) as acquire, contextlib.redirect_stdout(output):
+                self.assertEqual(0, services_qw.main([
+                    "host", "--target", str(target), "--menu",
+                ]))
+            self.assertEqual(["game", "profile", "execution", "confirm"], events)
+            acquire.assert_not_called()
+            rendered = captured["summary"]
+            self.assertIn("Resumo da hospedagem", rendered)
+            self.assertIn("Perfil     | Rápido local", rendered)
+            self.assertIn("MVDSV      | 127.0.0.1:28501", rendered)
+            self.assertIn("QTV        | desativado", rendered)
+            self.assertIn("QWFWD      | desativado", rendered)
+
+    def test_advanced_host_menu_runs_before_confirmation_and_redacts_secrets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "duel")
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset(), play_qw.KtxLaunchOptions(),
+            )
+            player = mock.Mock(target=target, project_root=ROOT)
+            secret = "never-print-this-secret"
+
+            def configure(options):
+                options.password = secret
+                return True
+
+            output = io.StringIO()
+            with mock.patch.object(
+                services_qw.gameplay, "Player", return_value=player,
+            ), mock.patch.object(
+                services_qw, "select_hosted_game", return_value=selection,
+            ), mock.patch.object(
+                services_qw, "choose_host_configuration", return_value="advanced",
+            ), mock.patch.object(
+                services_qw, "configure_advanced_host_menu", side_effect=configure,
+            ) as advanced, mock.patch.object(
+                services_qw.navigation, "confirm", return_value=False,
+            ) as confirm, mock.patch.object(
+                services_qw.SessionLock, "acquire",
+            ) as acquire, contextlib.redirect_stdout(output):
+                self.assertEqual(0, services_qw.main([
+                    "host", "--target", str(target), "--menu",
+                ]))
+            advanced.assert_called_once()
+            acquire.assert_not_called()
+            rendered = confirm.call_args.kwargs["subtitle"]
+            self.assertIn("Perfil     | Avançado", rendered)
+            self.assertIn("valores redigidos", rendered)
+            self.assertNotIn(secret, rendered)
+            self.assertNotIn(secret, output.getvalue())
+
+    def test_standalone_services_show_safe_summary_and_confirm_before_locking(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            player = mock.Mock(target=target, project_root=ROOT)
+            cases = (
+                (
+                    ["qtv", "--target", str(target), "--menu", "--bind", "::", "--upstream", "[::1]:28501"],
+                    ("Resumo do serviço", "Serviço   | QTV", "HTTP      | http://[::]:28000/", "Upstream  | [::1]:28501"),
+                ),
+                (
+                    ["proxy", "--target", str(target), "--menu", "--bind", "0.0.0.0", "--port", "30001"],
+                    ("Resumo do serviço", "Serviço   | QWFWD", "Endpoint  | 0.0.0.0:30001/UDP"),
+                ),
+            )
+            for arguments, expected in cases:
+                with self.subTest(service=arguments[0]), mock.patch.object(
+                    services_qw.gameplay, "Player", return_value=player,
+                ), mock.patch.object(
+                    services_qw, "configure_service_menu", return_value=True,
+                ), mock.patch.object(
+                    services_qw.navigation, "confirm", return_value=False,
+                ) as confirm, mock.patch.object(
+                    services_qw.SessionLock, "acquire",
+                ) as acquire, contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, services_qw.main(arguments))
+                acquire.assert_not_called()
+                rendered = confirm.call_args.kwargs["subtitle"]
+                for value in expected:
+                    self.assertIn(value, rendered)
+                self.assertIn("Comando equivalente seguro", rendered)
+
+    def test_service_menu_can_select_background_execution(self):
+        proxy = services_qw.parse_arguments([
+            "proxy", "--target", "/tmp/x86qw-test", "--menu",
+        ], ROOT)
+        with mock.patch.object(
+            services_qw, "menu_bind", return_value="127.0.0.1",
+        ), mock.patch.object(
+            services_qw, "menu_port", return_value=30000,
+        ), mock.patch.object(
+            services_qw.navigation, "select_one", return_value="background",
+        ):
+            self.assertTrue(services_qw.configure_service_menu(proxy))
+        self.assertTrue(proxy.background)
+
+        qtv = services_qw.parse_arguments([
+            "qtv", "--target", "/tmp/x86qw-test", "--menu",
+        ], ROOT)
+        with mock.patch.object(
+            services_qw, "menu_bind", return_value="127.0.0.1",
+        ), mock.patch.object(
+            services_qw, "menu_port", return_value=28000,
+        ), mock.patch.object(
+            services_qw.navigation, "select_one",
+            side_effect=("none", "background"),
+        ):
+            self.assertTrue(services_qw.configure_service_menu(qtv))
+        self.assertTrue(qtv.background)
+
+    def test_service_summary_redacts_upstream_secret_and_uses_prompt_in_safe_command(self):
+        options = services_qw.parse_arguments([
+            "qtv", "--target", "/tmp/x86qw-test", "--upstream", "127.0.0.1:28501",
+            "--qtv-password", "never-print-this-secret",
+        ], ROOT)
+        rendered = services_qw.service_summary_text(options)
+        self.assertIn("segredo do upstream configurado; valor redigido", rendered)
+        self.assertIn("--prompt-qtv-password", rendered)
+        self.assertNotIn("never-print-this-secret", rendered)
+
+        options.background = True
+        rendered = services_qw.service_summary_text(options)
+        self.assertIn("Execução  | segundo plano", rendered)
+        self.assertIn("--background", rendered)
+
+    def test_equivalent_commands_use_the_windows_launcher_on_windows(self):
+        with mock.patch.object(play_qw.os, "name", "nt"):
+            rendered = play_qw.public_command([
+                "play", "ktx", "--mode", "duel", "--map", "dm6",
+            ])
+        self.assertTrue(rendered.startswith("x86qw.cmd play ktx "), rendered)
+        self.assertNotIn("./x86qw.sh", rendered)
+
     @unittest.skipIf(os.name == "nt", "permissão executável não existe no Windows")
     def test_service_runtime_does_not_repair_permissions_during_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1947,8 +2463,8 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(installer, "launch_runtime") as launch:
                                             with mock.patch.object(installer, "verify_local_play_support"):
-                                                with mock.patch("builtins.input", side_effect=["", "", ""]):
-                                                    installer.play_local()
+                                                with mock.patch("builtins.input", return_value=""):
+                                                    installer.play_local("ktx", "duel", "dm6")
             launch.assert_called_once_with(runtime, [
                 *local_server_baseline("ktx"),
                 *ktx_launch_setup_alias(),
@@ -2006,7 +2522,7 @@ class ModernComponentTests(unittest.TestCase):
                     arguments[index + 1]
                     for index, argument in enumerate(arguments[:-1])
                     if argument == "+exec"
-                    and arguments[index + 1].startswith("x86qw-frogbots-")
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
                 )
                 config_path = target / "qw" / config_name
                 captured["config_path"] = config_path
@@ -2292,7 +2808,7 @@ class ModernComponentTests(unittest.TestCase):
                         arguments[index + 1]
                         for index, argument in enumerate(arguments[:-1])
                         if argument == "+exec"
-                        and arguments[index + 1].startswith("x86qw-frogbots-")
+                        and arguments[index + 1].startswith("x86qw-ktx-session-")
                     )
                     config_path = target / "qw" / config_name
                     captured["config_path"] = config_path
@@ -2311,7 +2827,7 @@ class ModernComponentTests(unittest.TestCase):
             config_index = next(
                 index for index, argument in enumerate(arguments)
                 if argument == "+exec"
-                and arguments[index + 1].startswith("x86qw-frogbots-")
+                and arguments[index + 1].startswith("x86qw-ktx-session-")
             )
             map_index = arguments.index("+map")
             self.assertLess(config_index, map_index)
@@ -2328,8 +2844,23 @@ class ModernComponentTests(unittest.TestCase):
     def test_ktx_ctf_loads_curated_entities_before_the_map(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
+            captured = {}
+
+            def capture_launch(_runtime, arguments):
+                config_name = next(
+                    arguments[index + 1]
+                    for index, argument in enumerate(arguments[:-1])
+                    if argument == "+exec"
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
+                )
+                captured["config_name"] = config_name
+                captured["config"] = (target / "qw" / config_name).read_text(
+                    encoding="ascii",
+                )
+
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "check_paks"):
                     with mock.patch.object(installer, "available_local_games", return_value=[game]):
@@ -2337,7 +2868,9 @@ class ModernComponentTests(unittest.TestCase):
                             with mock.patch.object(installer, "verify_component"):
                                 with mock.patch.object(installer, "local_map_names", return_value=["e2m2"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
-                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                        with mock.patch.object(
+                                            installer, "launch_runtime", side_effect=capture_launch,
+                                        ) as launch:
                                             with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "ctf")
@@ -2345,13 +2878,18 @@ class ModernComponentTests(unittest.TestCase):
                 *local_server_baseline("ktx"),
                 "+sv_loadentfiles", "1",
                 "+sv_loadentfiles_dir", "ctf",
-                *ktx_launch_setup_alias(mode_key="ctf"),
-                *ktx_entry_aliases("ctf"),
+                "+exec", captured["config_name"],
                 "+set", "k_defmap", "e2m2",
                 "+set", "k_defmode", "ctf",
                 "+map", "e2m2",
                 "+bind", "F12", "quit",
             ])
+            self.assertIn("tempalias x86qw_ktx_launch_setup_1", captured["config"])
+            self.assertIn(
+                'tempalias on_enter_ctf "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"',
+                captured["config"],
+            )
+            self.assertFalse((target / "qw" / captured["config_name"]).exists())
 
     def test_ktx_ctf_is_the_only_managed_content_allowed_under_id1_maps(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2375,8 +2913,22 @@ class ModernComponentTests(unittest.TestCase):
         for mode, (event, entry_config, usermode) in cases.items():
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
                 installer, target, _ = self.make_player(Path(temporary))
+                (target / "qw").mkdir()
                 game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
                 runtime = target / "ezQuake Stable.app"
+                captured: dict[str, object] = {}
+
+                def capture_launch(_runtime, arguments):
+                    captured["arguments"] = arguments
+                    for index, argument in enumerate(arguments[:-1]):
+                        if (
+                            argument == "+exec"
+                            and arguments[index + 1].startswith("x86qw-ktx-session-")
+                        ):
+                            captured["config"] = (
+                                target / "qw" / arguments[index + 1]
+                            ).read_text(encoding="ascii")
+
                 with contextlib.redirect_stdout(io.StringIO()):
                     with mock.patch.object(installer, "check_paks"):
                         with mock.patch.object(installer, "available_local_games", return_value=[game]):
@@ -2386,20 +2938,29 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch.object(installer, "ktx_archive_members", return_value=assets):
                                         with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                             with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
-                                                with mock.patch.object(installer, "launch_runtime") as launch:
+                                                with mock.patch.object(
+                                                    installer,
+                                                    "launch_runtime",
+                                                    side_effect=capture_launch,
+                                                ) as launch:
                                                     with mock.patch.object(installer, "verify_local_play_support"):
                                                         with mock.patch("builtins.input", return_value=""):
                                                             installer.play_local("ktx", mode)
-                launch.assert_called_once_with(runtime, [
-                    *local_server_baseline("ktx"),
-                    *ktx_launch_setup_alias(mode_key=mode),
-                    "+tempalias", event,
-                    f"exec {entry_config}",
-                    "+set", "k_defmap", "dm6",
-                    "+set", "k_defmode", usermode,
-                    "+map", "dm6",
-                    "+bind", "F12", "quit",
-                ])
+                launch.assert_called_once()
+                arguments = captured["arguments"]
+                self.assertIn(
+                    ["+set", "k_defmode", usermode],
+                    [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+                )
+                if "config" in captured:
+                    self.assertIn(
+                        f'tempalias {event} "exec {entry_config}"', captured["config"],
+                    )
+                else:
+                    self.assertIn(
+                        ["+tempalias", event, f"exec {entry_config}"],
+                        [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+                    )
 
     def test_ktx_practice_adds_bots_without_waiting_for_a_second_entry(self):
         profile = (
@@ -3024,6 +3585,58 @@ class ModernComponentTests(unittest.TestCase):
                                     with mock.patch("builtins.input", return_value=answer):
                                         installer.browse_hub()
                     launch.assert_called_once_with(runtime, expected)
+
+    def test_hub_menu_reviews_server_action_and_client_before_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            server = {
+                "address": "server.example:27500", "mode": "duel", "players": [],
+                "settings": {"map": "dm6", "hostname": "Servidor Teste"},
+                "qtv_stream": {"url": "2@qtv.example:28000"},
+            }
+            runtime = target / "client"
+            with mock.patch.object(
+                installer, "hub_servers", return_value=[server],
+            ), mock.patch.object(
+                install_qw.navigation, "supports_navigation", return_value=True,
+            ), mock.patch.object(
+                install_qw.navigation, "select_one", side_effect=("0", "qtv"),
+            ), mock.patch.object(
+                installer, "choose_host_runtime", return_value=("ezQuake stable", runtime),
+            ), mock.patch.object(
+                install_qw.navigation, "confirm", return_value=False,
+            ) as confirm, mock.patch.object(installer, "launch_runtime") as launch:
+                installer.browse_hub()
+            launch.assert_not_called()
+            rendered = confirm.call_args.kwargs["subtitle"]
+            for value in (
+                "Resumo da conexão", "Servidor Teste", "server.example:27500",
+                "Assistir pelo QTV", "ezQuake stable", "2@qtv.example:28000",
+            ):
+                self.assertIn(value, rendered)
+
+    def test_hub_confirmation_left_returns_to_client_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            server = {
+                "address": "server.example:27500", "mode": "duel", "players": [],
+                "settings": {"map": "dm6", "hostname": "Servidor Teste"},
+            }
+            runtime = target / "client"
+            with mock.patch.object(
+                installer, "hub_servers", return_value=[server],
+            ), mock.patch.object(
+                install_qw.navigation, "supports_navigation", return_value=True,
+            ), mock.patch.object(
+                install_qw.navigation, "select_one", side_effect=("0", "join"),
+            ), mock.patch.object(
+                installer, "choose_host_runtime", return_value=("ezQuake stable", runtime),
+            ) as choose_runtime, mock.patch.object(
+                install_qw.navigation, "confirm", side_effect=(None, True),
+            ), mock.patch.object(installer, "launch_runtime") as launch:
+                installer.browse_hub()
+            self.assertEqual(2, choose_runtime.call_count)
+            launch.assert_called_once_with(runtime, ["+join", "server.example:27500"])
 
     def test_uninstall_removes_component_receipt_when_managed_file_is_missing(self):
         with tempfile.TemporaryDirectory() as temporary:

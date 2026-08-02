@@ -77,6 +77,14 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 ["--online-only", "--installed-cli", "repair", str(root), "--dry-run"],
                 json.loads(output.read_text(encoding="utf-8")),
             )
+            completed = subprocess.run(
+                [str(launcher), "status", "--no-color"], env=environment, check=False,
+            )
+            self.assertEqual(0, completed.returncode)
+            self.assertEqual(
+                ["status", "--no-color", "--target", str(root)],
+                json.loads(output.read_text(encoding="utf-8")),
+            )
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
     def test_unix_launcher_opens_the_navigator_without_arguments(self):
@@ -127,6 +135,19 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
             self.assertEqual(23, completed.returncode)
             received = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(["--online-only", "--installed-cli", "repair", "--dry-run"], received[:-1])
+            self.assertEqual(root.resolve(), Path(received[-1]).resolve())
+
+            completed = subprocess.run(
+                [
+                    os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "call",
+                    str(launcher), "status", "--no-color",
+                ],
+                env=dict(environment, X86QW_STUB_EXIT="0"), check=False,
+            )
+            self.assertEqual(0, completed.returncode)
+            received = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(["status", "--no-color"], received[:-2])
+            self.assertEqual("--target", received[-2])
             self.assertEqual(root.resolve(), Path(received[-1]).resolve())
 
             completed = subprocess.run(

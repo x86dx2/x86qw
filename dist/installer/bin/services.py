@@ -67,6 +67,10 @@ WINDOWS_RESERVED_NAMES = frozenset({
     *(f"COM{number}" for number in range(1, 10)),
     *(f"LPT{number}" for number in range(1, 10)),
 })
+BACKGROUND_SECRET_FIELDS = (
+    "password", "spectator_password", "rcon_password", "qtv_password",
+)
+BACKGROUND_START_TIMEOUT = 30.0
 DEDICATED_MODE_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
     "midair": (("deathmatch", "4"), ("k_midair", "1")),
     "dmm4": (("deathmatch", "4"),),
@@ -89,6 +93,7 @@ class ProcessSpec:
     cwd: Path
     startup_rcon: StartupRcon | None = None
     readiness: ServiceReadiness | None = None
+    parameters: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -273,7 +278,7 @@ def resolve_passwords(options: argparse.Namespace) -> None:
         password_file = getattr(options, file_name, None)
         if password_file is not None:
             value = read_password_file(password_file, label)
-        elif getattr(options, prompt_name, False):
+        elif getattr(options, prompt_name, False) and not value:
             value = getpass.getpass(f"{label.capitalize()}: ")
             if value:
                 safe_text(value, label, 4096)
@@ -381,6 +386,8 @@ class SessionJournal:
         *,
         session_id: str | None = None,
         controller: dict[str, object] | None = None,
+        background: bool = False,
+        background_log: str | None = None,
     ) -> None:
         self.target = target.resolve()
         sessions = self.target / ".x86qw" / "sessions"
@@ -405,6 +412,8 @@ class SessionJournal:
                 "executable": controller["controller_executable"],
                 "command": controller["command"],
             },
+            "background": background,
+            "background_log": background_log,
             "processes": [],
             "temporary_files": [],
             "materialized_files": [],
@@ -444,6 +453,31 @@ class SessionJournal:
         self.data["status"] = status
         self._write()
 
+    def consume_stop_request(self) -> bool:
+        request = self.directory / "stop.request"
+        if not lexists(request):
+            return False
+        try:
+            metadata = request.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("pedido inseguro")
+            payload = json.loads(request.read_text(encoding="utf-8"))
+            if (
+                not isinstance(payload, dict)
+                or set(payload) != {"format", "project", "session_id", "requested_at"}
+                or payload.get("format") != 1
+                or payload.get("project") != "x86qw"
+                or payload.get("session_id") != self.session_id
+                or not isinstance(payload.get("requested_at"), str)
+            ):
+                raise ValueError("pedido inválido")
+            request.unlink()
+            return True
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+            raise InstallerError(
+                f"Pedido de encerramento inválido preservado para inspeção: {request}"
+            ) from error
+
     def record_process(
         self,
         spec: ProcessSpec,
@@ -472,6 +506,7 @@ class SessionJournal:
             "started_at": datetime.now(timezone.utc).isoformat(),
             "address": address,
             "port": port,
+            "parameters": dict(spec.parameters),
         })
         self._write()
 
@@ -545,7 +580,10 @@ def load_session_journal(path: Path) -> dict[str, object]:
             "format", "project", "session_id", "created_at", "status",
             "processes", "temporary_files", "materialized_files", "created_directories",
         }
-        optional = {"controller", "recovery_actions", "recovered_at"}
+        optional = {
+            "controller", "recovery_actions", "recovered_at",
+            "background", "background_log",
+        }
         if (
             not isinstance(data, dict)
             or set(data) < required
@@ -566,6 +604,14 @@ def load_session_journal(path: Path) -> dict[str, object]:
         # recovery decision.  An unclassified temporary is conservatively
         # sensitive because legacy host/QTV configs may contain passwords.
         data.setdefault("controller", None)
+        data.setdefault("background", False)
+        data.setdefault("background_log", None)
+        if (
+            not isinstance(data["background"], bool)
+            or data["background_log"] is not None
+            and not isinstance(data["background_log"], str)
+        ):
+            raise ValueError("execução em segundo plano inválida")
         for entry in data["temporary_files"]:
             if isinstance(entry, dict):
                 entry.setdefault("type", "temporary-config")
@@ -588,10 +634,17 @@ def load_session_journal(path: Path) -> dict[str, object]:
         ):
             raise ValueError("controlador inválido")
         for entry in data["processes"]:
+            if isinstance(entry, dict):
+                entry.setdefault("parameters", {})
             if (
                 not isinstance(entry, dict)
                 or not isinstance(entry.get("pid"), int)
                 or not isinstance(entry.get("label"), str)
+                or not isinstance(entry.get("parameters"), dict)
+                or not all(
+                    isinstance(name, str) and isinstance(value, str)
+                    for name, value in entry.get("parameters", {}).items()
+                )
             ):
                 raise ValueError("processo inválido")
         for collection in ("temporary_files", "materialized_files"):
@@ -870,6 +923,267 @@ def recover_sessions(target: Path) -> None:
     assert_recovery_processes_confirmable(target)
     for path in session_journal_paths(target):
         reconcile_journal(target, path)
+
+
+STATUS_PARAMETER_LABELS = {
+    "game": "Jogo",
+    "mode": "Modo",
+    "map": "Mapa",
+    "bots": "Bots",
+    "bot_skill": "Habilidade",
+    "bot_names": "Nomes",
+    "bot_team": "Equipe",
+    "bot_weapon": "Arma",
+    "bot_health": "Vida",
+    "ctf_hook": "Gancho CTF",
+    "ctf_runes": "Runas CTF",
+    "race_style": "Estilo Race",
+    "race_scoring": "Pontuação Race",
+    "hostname": "Nome",
+    "bind": "Bind",
+    "port": "Porta",
+    "maxclients": "Clientes",
+    "mvd": "Gravação MVD",
+    "memory": "Memória",
+    "secrets": "Segredos",
+    "protocol": "Protocolo",
+    "http": "HTTP",
+    "upstream": "Upstream",
+    "upstream_secret": "Segredo upstream",
+}
+SESSION_STATUS_LABELS = {
+    "starting": "inicializando",
+    "running": "ativa",
+    "stopping": "encerrando",
+    "interrupted": "interrompida",
+    "clean": "finalizada",
+}
+
+
+def status_value(value: object) -> str:
+    text = str(value)
+    return "".join(character if character.isprintable() else "?" for character in text)[:512]
+
+
+def process_status_label(probe: ProcessProbe) -> str:
+    return {
+        "alive": "ativo",
+        "dead": "encerrado",
+        "identity_mismatch": "PID reutilizado; processo preservado",
+        "inconclusive": "identidade inconclusiva",
+    }.get(probe.status, status_value(probe.status))
+
+
+def status_executable(target: Path, value: object) -> str:
+    executable = Path(str(value))
+    try:
+        return executable.resolve(strict=False).relative_to(target).as_posix()
+    except ValueError:
+        return status_value(executable)
+
+
+def print_status_row(label: str, value: object) -> None:
+    print(f"  {label:<18}| {status_value(value)}")
+
+
+def print_service_session_status(target: Path, data: dict[str, object], *, owns_lock: bool) -> None:
+    session_id = str(data["session_id"])
+    console.section(f"Sessão {session_id}")
+    print_status_row(
+        "Estado", SESSION_STATUS_LABELS.get(str(data["status"]), data["status"]),
+    )
+    print_status_row("Lock", "ativo" if owns_lock else "ausente")
+    print_status_row("Iniciada", data["created_at"])
+    print_status_row(
+        "Execução", "segundo plano" if data.get("background") else "primeiro plano",
+    )
+    if data.get("background_log"):
+        print_status_row("Log", data["background_log"])
+    controller = data.get("controller")
+    if isinstance(controller, dict):
+        controller_probe = journal_controller_probe(data)
+        assert controller_probe is not None
+        print_status_row(
+            "Controlador",
+            f"PID {controller['pid']} · {process_status_label(controller_probe)}",
+        )
+        print_status_row("Comando", controller["command"])
+    else:
+        print_status_row("Controlador", "identidade não registrada")
+
+    processes = data.get("processes", [])
+    assert isinstance(processes, list)
+    if not processes:
+        console.info("Nenhum processo foi registrado; a stack pode ainda estar inicializando.")
+        return
+    for entry in processes:
+        assert isinstance(entry, dict)
+        label = status_value(entry.get("label", "Serviço"))
+        probe = journal_process_probe(entry)
+        print(f"\n  {console.paint(label, '1;36')}")
+        print_status_row("Estado", process_status_label(probe))
+        print_status_row("PID", entry["pid"])
+        print_status_row("Runtime", entry.get("runtime", label.casefold()))
+        address, port = entry.get("address"), entry.get("port")
+        if isinstance(address, str) and isinstance(port, int):
+            print_status_row("Endpoint local", endpoint(address, port))
+        if entry.get("executable"):
+            print_status_row("Executável", status_executable(target, entry["executable"]))
+        parameters = entry.get("parameters", {})
+        assert isinstance(parameters, dict)
+        displayed = False
+        for name, parameter_label in STATUS_PARAMETER_LABELS.items():
+            if name not in parameters:
+                continue
+            print_status_row(parameter_label, parameters[name])
+            displayed = True
+        if not displayed:
+            print_status_row("Parâmetros", "não registrados nesta sessão")
+
+
+def show_service_status(target: Path) -> bool:
+    console.banner("visualizar serviços ativos", target)
+    sessions = target / ".x86qw" / "sessions"
+    lock_path = sessions / "active.lock"
+    lock_owner: dict[str, object] | None = None
+    active_service = False
+    if lexists(lock_path):
+        try:
+            lock_owner = session_control.read_lock_owner(lock_path)
+        except session_control.SessionControlError as error:
+            raise InstallerError(str(error)) from error
+        probe = probe_expected_process(
+            int(lock_owner["controller_pid"]),
+            str(lock_owner["controller_start_token"]),
+            str(lock_owner["controller_executable"]),
+        )
+        console.section("Operação ativa")
+        print_status_row("Tipo", {
+            "service": "serviços",
+            "maintenance": "manutenção",
+        }.get(str(lock_owner.get("operation_kind", "service")), "serviços"))
+        print_status_row("Comando", lock_owner["command"])
+        print_status_row("Sessão", lock_owner["session_id"])
+        print_status_row(
+            "Controlador",
+            f"PID {lock_owner['controller_pid']} · {process_status_label(probe)}",
+        )
+        active_service = (
+            lock_owner.get("operation_kind", "service") == "service"
+            and probe.status == "alive"
+        )
+
+    unfinished: list[tuple[Path, dict[str, object]]] = []
+    for path in session_journal_paths(target):
+        data = load_session_journal(path)
+        if data.get("status") != "clean":
+            unfinished.append((path, data))
+    if not unfinished:
+        if lock_owner is not None and lock_owner.get("operation_kind") == "service":
+            console.info("A stack está inicializando; nenhum processo foi registrado ainda.")
+        elif lock_owner is not None:
+            console.info("Não há serviços registrados durante esta operação de manutenção.")
+        else:
+            console.success("Nenhum serviço x86QW está ativo nesta instalação.")
+        if active_service:
+            console.info(
+                "Para encerrar: Serviços › Encerrar serviços ativos ou status --stop."
+            )
+        return active_service
+
+    lock_session = str(lock_owner["session_id"]) if lock_owner is not None else None
+    for _path, data in unfinished:
+        owns_lock = str(data["session_id"]) == lock_session
+        if not owns_lock:
+            console.warning(
+                f"Sessão sem lock ativo preservada para inspeção: {data['session_id']}"
+            )
+        print_service_session_status(target, data, owns_lock=owns_lock)
+    if active_service:
+        console.info(
+            "Para encerrar: Serviços › Encerrar serviços ativos ou status --stop."
+        )
+    return active_service
+
+
+def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
+    """Ask the confirmed controller to perform its own coordinated shutdown."""
+    lock_path = target / ".x86qw" / "sessions" / "active.lock"
+    if not lexists(lock_path):
+        raise InstallerError("Nenhuma stack de serviços x86QW está ativa.")
+    try:
+        owner = session_control.read_lock_owner(lock_path)
+    except session_control.SessionControlError as error:
+        raise InstallerError(str(error)) from error
+    if owner.get("operation_kind", "service") != "service":
+        raise InstallerError(
+            f"A operação ativa é {owner['command']}, não uma stack de serviços."
+        )
+    probe = probe_expected_process(
+        int(owner["controller_pid"]),
+        str(owner["controller_start_token"]),
+        str(owner["controller_executable"]),
+    )
+    if probe.status != "alive":
+        raise InstallerError(
+            "O controlador ativo não pôde ser confirmado; nenhum processo foi encerrado."
+        )
+    session_id = str(owner["session_id"])
+    paths = session_journal_paths(target, session_id)
+    if len(paths) != 1:
+        raise InstallerError(
+            "O journal da stack ativa não está disponível; nenhum processo foi encerrado."
+        )
+    journal = load_session_journal(paths[0])
+    controller = journal.get("controller")
+    if (
+        not isinstance(controller, dict)
+        or controller.get("pid") != owner["controller_pid"]
+        or controller.get("creation_token") != owner["controller_start_token"]
+        or os.path.normcase(os.path.realpath(str(controller.get("executable"))))
+        != os.path.normcase(os.path.realpath(str(owner["controller_executable"])))
+    ):
+        raise InstallerError(
+            "Lock e journal não identificam o mesmo controlador; nada foi encerrado."
+        )
+    request = paths[0].parent / "stop.request"
+    payload = (
+        json.dumps({
+            "format": 1,
+            "project": "x86qw",
+            "session_id": session_id,
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+        }, ensure_ascii=False, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    try:
+        descriptor = os.open(request, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise InstallerError("Já existe um pedido de encerramento para esta stack.")
+    try:
+        os.write(descriptor, payload)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not lexists(lock_path):
+            if lexists(request) and request.is_file() and not request.is_symlink():
+                request.unlink()
+            return
+        try:
+            current = session_control.read_lock_owner(lock_path)
+        except session_control.SessionControlError:
+            if not lexists(lock_path):
+                if lexists(request) and request.is_file() and not request.is_symlink():
+                    request.unlink()
+                return
+            raise
+        if current.get("session_id") != session_id:
+            raise InstallerError("O lock mudou de proprietário durante o encerramento.")
+        time.sleep(0.1)
+    raise InstallerError(
+        "A stack recebeu o pedido, mas não concluiu o encerramento dentro do limite."
+    )
 
 
 def unlink_sensitive_temporary(path: Path) -> None:
@@ -1284,50 +1598,98 @@ def cleanup_dedicated_ktx(materialized: MaterializedKtx) -> None:
 def select_hosted_game(
     player: gameplay.Player,
     options: argparse.Namespace,
-) -> HostedGame:
+    *,
+    initial: HostedGame | None = None,
+    start_state: str = "game",
+) -> HostedGame | None:
     player.check_paks()
     games = player.available_local_games()
     if not games:
         raise InstallerError(
             "Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo."
         )
-    game = player.choose_local_game(games, options.game, activity="hospedar")
-    component = player.installed_component_for_game(game)
-    if component is None:
-        raise InstallerError(f"O componente de {game.label} não está mais instalado.")
-    player.verify_component(component)
-    player.verify_local_play_support(games)
-    mode = None
-    assets: frozenset[str] = frozenset()
-    if game.mode_catalog is not None:
-        mode = player.choose_ktx_mode(
-            gameplay.load_ktx_modes(player.project_root),
-            options.mode,
-            activity="hospedar",
-        )
-        console.success(f"Modo KTX selecionado: {mode.label}.")
-        if options.menu:
-            options.ktx_options = player.choose_ktx_launch_options(
-                mode,
-                options.ktx_options,
-                activity="Hospedar",
+    game = initial.game if initial is not None else None
+    mode = initial.mode if initial is not None else None
+    map_name = initial.map_name if initial is not None else None
+    assets = initial.assets if initial is not None else frozenset()
+    launch_options = initial.ktx_options if initial is not None else options.ktx_options
+    base_launch_options = options.ktx_options
+    previous_mode_key = mode.key if mode is not None else None
+    state = start_state
+    while True:
+        if state == "game":
+            game = player.choose_local_game(games, options.game, activity="hospedar")
+            if game is None:
+                return None
+            component = player.installed_component_for_game(game)
+            if component is None:
+                raise InstallerError(f"O componente de {game.label} não está mais instalado.")
+            player.verify_component(component)
+            player.verify_local_play_support(games)
+            mode = None
+            map_name = None
+            assets = frozenset()
+            launch_options = base_launch_options
+            previous_mode_key = None
+            state = "mode" if game.mode_catalog is not None else "map"
+            continue
+        assert game is not None
+        if state == "mode":
+            mode = player.choose_ktx_mode(
+                gameplay.load_ktx_modes(player.project_root),
+                options.mode,
+                activity="hospedar",
             )
-        options.ktx_options = gameplay.resolve_frogbot_name_profile(
-            player.project_root, player.target, game, options.ktx_options, mode,
-        )
-        assets = ktx_assets(player.target)
-        map_name = player.choose_local_map(
-            game,
-            default_map=mode.default_map,
-            suggested_maps=mode.suggested_maps,
-            label=f"KTX · {mode.label}",
-            requested_map=options.map,
-            required_asset=mode.required_map_asset,
-            available_assets=assets,
-        )
-    else:
-        map_name = player.choose_local_map(game, requested_map=options.map)
-    return HostedGame(game, mode, map_name, assets, options.ktx_options)
+            if mode is None:
+                state = "game"
+                continue
+            if previous_mode_key is not None and previous_mode_key != mode.key:
+                launch_options = base_launch_options
+            previous_mode_key = mode.key
+            console.success(f"Modo KTX selecionado: {mode.label}.")
+            state = "options" if options.menu else "map"
+            continue
+        if state == "options":
+            assert mode is not None
+            chosen = player.choose_ktx_launch_options(
+                mode, launch_options, activity="Hospedar",
+            )
+            if chosen is None:
+                state = "mode"
+                continue
+            launch_options = chosen
+            state = "map"
+            continue
+        if game.mode_catalog is not None:
+            assert mode is not None
+            resolved = gameplay.resolve_frogbot_name_profile(
+                player.project_root, player.target, game, launch_options, mode,
+            )
+            assets = ktx_assets(player.target)
+            map_name = player.choose_local_map(
+                game,
+                default_map=mode.default_map,
+                suggested_maps=mode.suggested_maps,
+                label=f"KTX · {mode.label}",
+                requested_map=options.map,
+                required_asset=mode.required_map_asset,
+                available_assets=assets,
+                breadcrumb=f"x86QW › Hospedar › KTX › {mode.label} › Mapa",
+            )
+            if map_name is None:
+                state = "options" if options.menu else "mode"
+                continue
+            launch_options = resolved
+        else:
+            map_name = player.choose_local_map(
+                game,
+                requested_map=options.map,
+                breadcrumb=f"x86QW › Hospedar › {game.label} › Mapa",
+            )
+            if map_name is None:
+                state = "game"
+                continue
+        return HostedGame(game, mode, map_name, assets, launch_options)
 
 
 def materialize_hosted_game(
@@ -1503,7 +1865,60 @@ def host_spec(
         "-ip", options.bind, "-port", str(options.port), "-mem", "64",
         "+exec", session.name,
     ))
-    return ProcessSpec("MVDSV", tuple(arguments), installer.target, startup_rcon)
+    parameters: list[tuple[str, str]] = [
+        ("game", game.label),
+        ("map", map_name),
+        ("hostname", hostname),
+        ("bind", options.bind),
+        ("port", str(options.port)),
+        ("maxclients", str(options.maxclients)),
+        ("memory", "64 MiB"),
+        ("mvd", "desativada" if options.no_mvd else "automática"),
+    ]
+    if mode is not None:
+        parameters.insert(1, ("mode", mode.label))
+        ktx_options = selection.ktx_options
+        if ktx_options.fill_bots:
+            parameters.append(("bots", "preencher servidor"))
+        else:
+            parameters.append(("bots", str(ktx_options.bots)))
+        if ktx_options.bots or ktx_options.fill_bots:
+            parameters.extend((
+                ("bot_skill", str(ktx_options.bot_skill)),
+                ("bot_names", {
+                    "default": "KTX Default",
+                    "x86qw": "x86QW aleatório",
+                    "personal": "lista pessoal",
+                }.get(ktx_options.bot_names_profile, ktx_options.bot_names_profile)),
+            ))
+            if ktx_options.bot_team is not None:
+                parameters.append(("bot_team", ktx_options.bot_team))
+            if ktx_options.bot_weapon is not None:
+                parameters.append(("bot_weapon", ktx_options.bot_weapon))
+            if ktx_options.bot_health is not None:
+                parameters.append(("bot_health", str(ktx_options.bot_health)))
+        if ktx_options.ctf_hook is not None:
+            parameters.append(("ctf_hook", ktx_options.ctf_hook))
+        if ktx_options.ctf_runes is not None:
+            parameters.append(("ctf_runes", ktx_options.ctf_runes))
+        if ktx_options.race_style is not None:
+            parameters.append(("race_style", ktx_options.race_style))
+        if ktx_options.race_scoring is not None:
+            parameters.append(("race_scoring", ktx_options.race_scoring))
+    configured_secrets = [
+        label for label, value in (
+            ("jogadores", options.password),
+            ("espectadores", options.spectator_password),
+            ("RCON", options.rcon_password),
+        ) if value
+    ]
+    parameters.append((
+        "secrets", ", ".join(configured_secrets) if configured_secrets else "nenhum",
+    ))
+    return ProcessSpec(
+        "MVDSV", tuple(arguments), installer.target, startup_rcon,
+        parameters=tuple(parameters),
+    )
 
 
 def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> ProcessSpec:
@@ -1515,6 +1930,11 @@ def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> Proces
     return ProcessSpec(
         "QWFWD", (str(binary), str(options.proxy_port), options.proxy_bind), directory,
         readiness=ServiceReadiness("udp", local_service_address(options.proxy_bind), options.proxy_port),
+        parameters=(
+            ("bind", options.proxy_bind),
+            ("port", str(options.proxy_port)),
+            ("protocol", "UDP QuakeWorld"),
+        ),
     )
 
 
@@ -1551,6 +1971,14 @@ def qtv_spec(
     return ProcessSpec(
         "QTV", (str(binary), "exec", session.name), directory,
         readiness=ServiceReadiness("http", local_service_address(bind), port, upstream),
+        parameters=(
+            ("hostname", hostname),
+            ("bind", bind),
+            ("port", str(port)),
+            ("http", f"http://{endpoint(local_service_address(bind), port)}/"),
+            ("upstream", upstream or "nenhum"),
+            ("upstream_secret", "configurado" if password else "não configurado"),
+        ),
     )
 
 
@@ -1588,6 +2016,24 @@ def requested_ports(options: argparse.Namespace) -> list[tuple[str, str, int, st
     return requests
 
 
+def qtv_http_response_ready(response: bytes, upstream: str | None) -> bool:
+    status_line, _, _ = response.partition(b"\r\n")
+    fields = status_line.split()
+    if (
+        len(fields) < 2
+        or not fields[0].startswith(b"HTTP/")
+        or not fields[1].isdigit()
+        or not 200 <= int(fields[1]) < 300
+    ):
+        return False
+    if upstream is None:
+        return True
+    _, separator, body = response.partition(b"\r\n\r\n")
+    if not separator:
+        return False
+    return upstream.casefold().encode("utf-8") in body.lower()
+
+
 def wait_http_readiness(
     process: subprocess.Popen[bytes],
     readiness: ServiceReadiness,
@@ -1600,7 +2046,7 @@ def wait_http_readiness(
             raise InstallerError("QTV encerrou antes de ficar pronto.")
         try:
             with socket.create_connection((readiness.address, readiness.port), timeout=0.4) as connection:
-                connection.sendall(b"GET / HTTP/1.0\r\nHost: x86qw.local\r\n\r\n")
+                connection.sendall(b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n")
                 chunks: list[bytes] = []
                 while sum(map(len, chunks)) < 1024 * 1024:
                     block = connection.recv(65535)
@@ -1608,17 +2054,12 @@ def wait_http_readiness(
                         break
                     chunks.append(block)
                 last_response = b"".join(chunks)
-                if last_response.startswith(b"HTTP/"):
-                    if readiness.upstream is not None:
-                        upstream_host, _ = endpoint_parts(readiness.upstream)
-                        if upstream_host.casefold().encode("utf-8") not in last_response.lower():
-                            time.sleep(0.1)
-                            continue
+                if qtv_http_response_ready(last_response, readiness.upstream):
                     return
         except OSError:
             pass
         time.sleep(0.1)
-    if readiness.upstream is not None and last_response.startswith(b"HTTP/"):
+    if readiness.upstream is not None and qtv_http_response_ready(last_response, None):
         raise InstallerError("QTV respondeu por HTTP, mas não registrou o upstream solicitado.")
     raise InstallerError(f"QTV não respondeu em http://{endpoint(readiness.address, readiness.port)}/.")
 
@@ -1877,6 +2318,12 @@ def apply_startup_rcon(startup: StartupRcon, timeout: float = 8.0) -> None:
                 f"MVDSV não confirmou o gamecode {startup.expected_gamedir}."
             )
 
+        # MVDSV validates an ordinary RCON packet against both the empty master
+        # password and the administrative password.  With KTX's sv_rconlim=3,
+        # two immediate RCON packets therefore exhaust the one-second window
+        # and the second valid command is rejected as "Bad rcon_password".
+        time.sleep(1.05)
+
         # Apply typed post-map settings and restore the final RCON password.
         command = f"rcon {startup.password} exec {startup.config_name}\n".encode("ascii")
         connection.settimeout(2.0)
@@ -1910,7 +2357,7 @@ def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = Non
                 pass
         for spec in specs:
             console.detail(f"Iniciando {spec.label}: {spec.arguments[0]}")
-            popen_options: dict[str, object] = {}
+            popen_options: dict[str, object] = {"stdin": subprocess.DEVNULL}
             if os.name == "nt":
                 popen_options["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             else:
@@ -1951,6 +2398,9 @@ def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = Non
         if journal is not None:
             journal.set_status("running")
         while True:
+            if journal is not None and journal.consume_stop_request():
+                console.info("Encerramento solicitado pelo gerenciador x86QW…")
+                return 0
             for spec, process in zip(specs, processes):
                 code = process.poll()
                 if code is not None:
@@ -2002,78 +2452,133 @@ def add_target(parser: argparse.ArgumentParser, project_root: Path) -> None:
     parser.add_argument("--menu", action="store_true", help=argparse.SUPPRESS)
 
 
-def menu_text(prompt: str, default: str, validator: object) -> object:
+def add_background_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--background", action="store_true",
+        help="mantém a stack em segundo plano após confirmar a inicialização",
+    )
+    parser.add_argument("--background-child", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--background-log", help=argparse.SUPPRESS)
+
+
+def menu_text(
+    prompt: str, default: str, validator: object, *, allow_back: bool = False,
+) -> object | None:
     while True:
         try:
             answer = input(f"{prompt} (padrão: {default}): ").strip() or default
         except EOFError as error:
             raise InstallerError(f"Nenhum valor foi informado para {prompt.casefold()}.") from error
+        if allow_back and answer.casefold() in {"b", "voltar"}:
+            return None
+        if answer.casefold() in {"q", "sair"}:
+            raise navigation.MenuExit(prompt)
         try:
             return validator(answer)  # type: ignore[operator]
         except (ValueError, argparse.ArgumentTypeError) as error:
             console.warning(str(error))
 
 
-def menu_bind(label: str, current: str = "127.0.0.1") -> str | None:
+def menu_bind(
+    label: str,
+    current: str = "127.0.0.1",
+    *,
+    breadcrumb: str | None = None,
+) -> str | None:
+    known = ("127.0.0.1", "0.0.0.0", "::")
+    default = known.index(current) if current in known else 3
     selected = navigation.select_one(
         f"Interface de rede do {label}",
         (
             navigation.MenuOption("loopback", "Somente este computador", "127.0.0.1"),
-            navigation.MenuOption("lan", "Toda a rede IPv4", "0.0.0.0 · revise senhas e firewall"),
-            navigation.MenuOption("ipv6", "Toda a rede IPv6", ":: · revise senhas e firewall"),
+            navigation.MenuOption("lan", "Todas as interfaces IPv4", "0.0.0.0 · revise senhas e firewall"),
+            navigation.MenuOption("ipv6", "Todas as interfaces IPv6", ":: · revise senhas e firewall"),
             navigation.MenuOption("custom", "Endereço personalizado", "IPv4 ou IPv6 específico"),
         ),
-        breadcrumb=f"x86QW › Serviços › {label} › Rede",
+        breadcrumb=breadcrumb or f"x86QW › Serviços › {label} › Rede",
+        default=default,
         allow_back=True,
     )
     if selected is None:
         return None
     if selected == "custom":
-        return str(menu_text("Endereço IP", current, bind_address))
+        value = menu_text("Endereço IP", current, bind_address, allow_back=True)
+        return None if value is None else str(value)
     return {"loopback": "127.0.0.1", "lan": "0.0.0.0", "ipv6": "::"}.get(
         str(selected), current,
     )
 
 
-def menu_port(label: str, current: int) -> int | None:
+def menu_port(
+    label: str,
+    current: int,
+    *,
+    breadcrumb: str | None = None,
+) -> int | None:
     selected = navigation.select_one(
         f"Porta do {label}",
         (
             navigation.MenuOption("default", str(current), "porta padrão"),
             navigation.MenuOption("custom", "Outra porta", "escolher entre 1024 e 65535"),
         ),
-        breadcrumb=f"x86QW › Serviços › {label} › Rede",
+        breadcrumb=breadcrumb or f"x86QW › Serviços › {label} › Rede",
         allow_back=True,
     )
     if selected is None:
         return None
     if selected == "custom":
-        return int(menu_text("Porta", str(current), bounded_integer(1024, 65535)))
+        value = menu_text(
+            "Porta", str(current), bounded_integer(1024, 65535), allow_back=True,
+        )
+        return None if value is None else int(value)
     return current
 
 
-def configure_service_menu(options: argparse.Namespace) -> None:
+def menu_execution_mode(options: argparse.Namespace, breadcrumb: str) -> bool:
+    selected = navigation.select_one(
+        "Como manter o serviço?",
+        (
+            navigation.MenuOption(
+                "foreground", "Primeiro plano", "terminal acompanha a execução",
+                "Ctrl+C encerra a stack coordenadamente.",
+            ),
+            navigation.MenuOption(
+                "background", "Segundo plano", "liberar o terminal após a inicialização",
+                "Consulte e encerre pela área Serviços.",
+            ),
+        ),
+        breadcrumb=breadcrumb + " › Execução",
+        default=1 if options.background else 0,
+        allow_back=True,
+    )
+    if selected is None:
+        return False
+    options.background = selected == "background"
+    return True
+
+
+def configure_service_menu(options: argparse.Namespace) -> bool:
     if not options.menu:
-        return
+        return True
     if options.action == "proxy":
         while True:
             bind = menu_bind("QWFWD", options.proxy_bind)
             if bind is None:
-                raise navigation.MenuCancelled("QWFWD")
+                return False
             options.proxy_bind = bind
             port = menu_port("QWFWD", options.proxy_port)
             if port is None:
                 continue
             options.proxy_port = port
             break
-        return
+        return menu_execution_mode(options, "x86QW › Serviços › QWFWD")
     if options.action == "qtv":
         stage = 0
-        while stage < 4:
+        while stage < 5:
             if stage == 0:
                 bind = menu_bind("QTV", options.bind)
                 if bind is None:
-                    raise navigation.MenuCancelled("QTV")
+                    return False
                 options.bind = bind
             elif stage == 1:
                 port = menu_port("QTV", options.port)
@@ -2089,20 +2594,25 @@ def configure_service_menu(options: argparse.Namespace) -> None:
                         navigation.MenuOption("custom", "Conectar a um MVDSV", "informar host e porta"),
                     ),
                     breadcrumb="x86QW › Serviços › QTV",
+                    default=1 if options.upstream else 0,
                     allow_back=True,
                 )
                 if upstream is None:
                     stage -= 1
                     continue
                 if upstream == "custom":
-                    options.upstream = str(menu_text(
+                    endpoint_value = menu_text(
                         "Endpoint MVDSV", "127.0.0.1:28501", parse_network_endpoint,
-                    ))
+                        allow_back=True,
+                    )
+                    if endpoint_value is None:
+                        continue
+                    options.upstream = str(endpoint_value)
                 else:
                     options.upstream = None
                     stage = 4
                     continue
-            else:
+            elif stage == 3:
                 prompt = navigation.confirm(
                     "Solicitar senha do upstream?",
                     breadcrumb="x86QW › Serviços › QTV › Segurança",
@@ -2113,18 +2623,34 @@ def configure_service_menu(options: argparse.Namespace) -> None:
                     stage -= 1
                     continue
                 options.prompt_qtv_password = prompt
+            else:
+                if not menu_execution_mode(options, "x86QW › Serviços › QTV"):
+                    stage = 3 if options.upstream else 2
+                    continue
             stage += 1
-        return
+        return True
+
+    return True
+
+
+def configure_advanced_host_menu(options: argparse.Namespace) -> bool:
+    """Collect advanced host settings; False returns to the profile choice."""
 
     stage = 0
-    while stage < 11:
+    while stage < 12:
         if stage == 0:
-            bind = menu_bind("MVDSV", options.bind)
+            bind = menu_bind(
+                "MVDSV", options.bind,
+                breadcrumb="x86QW › Hospedar › Avançado › MVDSV › Rede",
+            )
             if bind is None:
-                raise navigation.MenuCancelled("MVDSV")
+                return False
             options.bind = bind
         elif stage == 1:
-            port = menu_port("MVDSV", options.port)
+            port = menu_port(
+                "MVDSV", options.port,
+                breadcrumb="x86QW › Hospedar › Avançado › MVDSV › Rede",
+            )
             if port is None:
                 stage -= 1
                 continue
@@ -2168,14 +2694,20 @@ def configure_service_menu(options: argparse.Namespace) -> None:
             if not with_qtv:
                 stage = 6
         elif stage == 5:
-            qtv_bind = menu_bind("QTV", options.qtv_bind)
+            qtv_bind = menu_bind(
+                "QTV", options.qtv_bind,
+                breadcrumb="x86QW › Hospedar › Avançado › QTV › Rede",
+            )
             if qtv_bind is None:
                 stage -= 1
                 continue
             options.qtv_bind = qtv_bind
         elif stage == 6:
             if options.with_qtv:
-                qtv_port = menu_port("QTV", options.qtv_port)
+                qtv_port = menu_port(
+                    "QTV", options.qtv_port,
+                    breadcrumb="x86QW › Hospedar › Avançado › QTV › Rede",
+                )
                 if qtv_port is None:
                     stage -= 1
                     continue
@@ -2193,19 +2725,25 @@ def configure_service_menu(options: argparse.Namespace) -> None:
             if not with_proxy:
                 stage = 9
         elif stage == 8:
-            proxy_bind = menu_bind("QWFWD", options.proxy_bind)
+            proxy_bind = menu_bind(
+                "QWFWD", options.proxy_bind,
+                breadcrumb="x86QW › Hospedar › Avançado › QWFWD › Rede",
+            )
             if proxy_bind is None:
                 stage -= 1
                 continue
             options.proxy_bind = proxy_bind
         elif stage == 9:
             if options.with_proxy:
-                proxy_port = menu_port("QWFWD", options.proxy_port)
+                proxy_port = menu_port(
+                    "QWFWD", options.proxy_port,
+                    breadcrumb="x86QW › Hospedar › Avançado › QWFWD › Rede",
+                )
                 if proxy_port is None:
                     stage -= 1
                     continue
                 options.proxy_port = proxy_port
-        else:
+        elif stage == 10:
             passwords = navigation.confirm(
                 "Configurar senhas com entrada oculta?",
                 breadcrumb="x86QW › Hospedar › Segurança",
@@ -2221,7 +2759,384 @@ def configure_service_menu(options: argparse.Namespace) -> None:
                 options.prompt_rcon_password = True
                 if options.with_qtv:
                     options.prompt_qtv_password = True
+        else:
+            if not menu_execution_mode(options, "x86QW › Hospedar › Avançado"):
+                stage = 10
+                continue
         stage += 1
+    return True
+
+
+def apply_quick_host_defaults(options: argparse.Namespace) -> None:
+    """Apply the safe, local-only host profile without retaining advanced choices."""
+    options.bind = "127.0.0.1"
+    options.port = 28501
+    options.maxclients = 16
+    options.no_mvd = False
+    options.with_qtv = False
+    options.qtv_bind = "127.0.0.1"
+    options.qtv_port = 28000
+    options.with_proxy = False
+    options.proxy_bind = "127.0.0.1"
+    options.proxy_port = 30000
+    options.background = False
+    for name in (
+        "prompt_password", "prompt_spectator_password",
+        "prompt_rcon_password", "prompt_qtv_password",
+    ):
+        setattr(options, name, False)
+    for name in ("password", "spectator_password", "rcon_password", "qtv_password"):
+        setattr(options, name, "")
+    for name in (
+        "password_file", "spectator_password_file",
+        "rcon_password_file", "qtv_password_file",
+    ):
+        setattr(options, name, None)
+
+
+def choose_host_configuration(
+    options: argparse.Namespace, current: str | None = None,
+) -> str | None:
+    profile = navigation.select_one(
+        "Como deseja configurar o servidor?",
+        (
+            navigation.MenuOption(
+                "quick", "Rápido local", "padrões seguros em 127.0.0.1",
+                "MVD ativo, sem QTV/QWFWD e sem exposição à rede",
+            ),
+            navigation.MenuOption(
+                "advanced", "Avançado", "rede, portas, capacidade e serviços",
+                "controle completo de MVDSV, QTV, QWFWD e senhas",
+            ),
+        ),
+        breadcrumb="x86QW › Hospedar › Configuração",
+        default=1 if current == "advanced" else 0,
+        allow_back=True,
+    )
+    if profile == "quick":
+        apply_quick_host_defaults(options)
+    return profile
+
+
+def host_command_arguments(
+    selection: HostedGame, options: argparse.Namespace,
+) -> list[str]:
+    arguments = ["host", selection.game.key]
+    if selection.mode is not None:
+        arguments.extend(["--mode", selection.mode.key])
+        arguments.extend(gameplay.ktx_options_cli_arguments(selection.ktx_options))
+    arguments.extend(["--map", selection.map_name])
+    arguments.extend(["--bind", options.bind, "--port", str(options.port)])
+    arguments.extend(["--maxclients", str(options.maxclients)])
+    if options.hostname:
+        arguments.extend(["--hostname", options.hostname])
+    if options.no_mvd:
+        arguments.append("--no-mvd")
+    if options.with_qtv:
+        arguments.extend([
+            "--with-qtv", "--qtv-bind", options.qtv_bind,
+            "--qtv-port", str(options.qtv_port),
+        ])
+    if options.with_proxy:
+        arguments.extend([
+            "--with-proxy", "--proxy-bind", options.proxy_bind,
+            "--proxy-port", str(options.proxy_port),
+        ])
+    if options.background:
+        arguments.append("--background")
+    for enabled, flag in (
+        (options.prompt_password, "--prompt-password"),
+        (options.prompt_spectator_password, "--prompt-spectator-password"),
+        (options.prompt_rcon_password, "--prompt-rcon-password"),
+        (options.prompt_qtv_password, "--prompt-qtv-password"),
+    ):
+        if enabled:
+            arguments.append(flag)
+    return arguments
+
+
+def service_command_arguments(options: argparse.Namespace) -> list[str]:
+    """Return a reproducible command without putting secrets in process arguments."""
+    if options.action == "proxy":
+        arguments = [
+            "proxy", "--bind", options.proxy_bind,
+            "--port", str(options.proxy_port),
+        ]
+        if options.background:
+            arguments.append("--background")
+        return arguments
+    arguments = [
+        "qtv", "--bind", options.bind, "--port", str(options.port),
+        "--hostname", options.hostname,
+    ]
+    if options.upstream is not None:
+        arguments.extend(["--upstream", str(options.upstream)])
+    if (
+        options.qtv_password
+        or options.prompt_qtv_password
+        or options.qtv_password_file is not None
+    ):
+        arguments.append("--prompt-qtv-password")
+    if options.background:
+        arguments.append("--background")
+    return arguments
+
+
+def service_summary_text(options: argparse.Namespace) -> str:
+    if options.action == "proxy":
+        lines = (
+            "Resumo do serviço",
+            "  Serviço   | QWFWD",
+            f"  Endpoint  | {endpoint(options.proxy_bind, options.proxy_port)}/UDP",
+            "  Protocolo | proxy UDP QuakeWorld",
+        )
+    else:
+        secret = bool(
+            options.qtv_password
+            or options.prompt_qtv_password
+            or options.qtv_password_file is not None
+        )
+        lines = (
+            "Resumo do serviço",
+            "  Serviço   | QTV",
+            f"  Nome      | {options.hostname}",
+            f"  HTTP      | http://{endpoint(options.bind, options.port)}/",
+            f"  Upstream  | {options.upstream or 'isolado; sem origem inicial'}",
+            "  Segurança | " + (
+                "segredo do upstream configurado; valor redigido"
+                if secret else "sem segredo de upstream"
+            ),
+        )
+    return "\n".join((
+        *lines,
+        f"  Execução  | {'segundo plano' if options.background else 'primeiro plano'}",
+        "",
+        "Comando equivalente seguro:",
+        "  " + gameplay.public_command(service_command_arguments(options)),
+    ))
+
+
+def host_summary_text(
+    selection: HostedGame, options: argparse.Namespace, profile: str,
+) -> str:
+    lines = ["Resumo da hospedagem", f"  Jogo       | {selection.game.label}"]
+    if selection.mode is not None:
+        lines.append(f"  Modo       | {selection.mode.label}")
+        for line in gameplay.ktx_summary_lines(selection.ktx_options):
+            label, value = line.split("|", 1)
+            lines.append(f"  {label.strip():<11}|{value}")
+    lines.extend((
+        f"  Mapa       | {selection.map_name}",
+        f"  Perfil     | {'Rápido local' if profile == 'quick' else 'Avançado'}",
+        f"  Execução   | {'segundo plano' if options.background else 'primeiro plano'}",
+        f"  MVDSV      | {endpoint(options.bind, options.port)} · {options.maxclients} clientes",
+        f"  Gravação   | {'desativada' if options.no_mvd else 'MVD automática'}",
+        f"  QTV        | {'ativo em ' + endpoint(options.qtv_bind, options.qtv_port) if options.with_qtv else 'desativado'}",
+        f"  QWFWD      | {'ativo em ' + endpoint(options.proxy_bind, options.proxy_port) if options.with_proxy else 'desativado'}",
+    ))
+    secret_count = sum(bool(value) for value in (
+        options.password, options.spectator_password,
+        options.rcon_password, options.qtv_password,
+    )) + sum(bool(getattr(options, name, False)) for name in (
+        "prompt_password", "prompt_spectator_password",
+        "prompt_rcon_password", "prompt_qtv_password",
+    ))
+    lines.extend((
+        f"  Segurança  | {secret_count} segredo(s) configurado(s); valores redigidos",
+        "",
+        "Comando equivalente seguro:",
+        "  " + gameplay.public_command(host_command_arguments(selection, options)),
+    ))
+    return "\n".join(lines)
+
+
+def print_host_summary(
+    selection: HostedGame, options: argparse.Namespace, profile: str,
+) -> None:
+    print("\n" + host_summary_text(selection, options, profile))
+
+
+def background_controller_arguments(
+    options: argparse.Namespace, selection: HostedGame | None, log_relative: str,
+) -> list[str]:
+    if options.action == "host":
+        assert selection is not None
+        arguments = host_command_arguments(selection, options)
+    else:
+        arguments = service_command_arguments(options)
+    internal_only = {
+        "--background", "--prompt-password", "--prompt-spectator-password",
+        "--prompt-rcon-password", "--prompt-qtv-password",
+    }
+    arguments = [argument for argument in arguments if argument not in internal_only]
+    arguments.extend([
+        "--target", str(options.target),
+        "--background-child", "--background-log", log_relative,
+    ])
+    if options.verbose:
+        arguments.append("--verbose")
+    if options.no_color:
+        arguments.append("--no-color")
+    return arguments
+
+
+def background_entrypoint() -> Path:
+    if core.ZIPAPP_PATH is not None:
+        return core.ZIPAPP_PATH
+    return core.PROJECT_ROOT / "dist/installer/bin/manager.py"
+
+
+def read_background_request(options: argparse.Namespace) -> None:
+    try:
+        payload = sys.stdin.buffer.read(65537)
+        if len(payload) > 65536:
+            raise ValueError("pedido excede o limite")
+        data = json.loads(payload.decode("utf-8"))
+        if (
+            not isinstance(data, dict)
+            or set(data) != {"format", "project", "secrets"}
+            or data.get("format") != 1
+            or data.get("project") != "x86qw"
+            or not isinstance(data.get("secrets"), dict)
+            or set(data["secrets"]) != set(BACKGROUND_SECRET_FIELDS)
+            or not all(
+                isinstance(data["secrets"].get(name), str)
+                and len(data["secrets"][name]) <= 4096
+                for name in BACKGROUND_SECRET_FIELDS
+            )
+        ):
+            raise ValueError("pedido inválido")
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+        raise InstallerError(
+            "O controlador em segundo plano não recebeu uma configuração privada válida."
+        ) from error
+    for name in BACKGROUND_SECRET_FIELDS:
+        setattr(options, name, data["secrets"][name])
+        setattr(options, f"prompt_{name}", False)
+        setattr(options, f"{name}_file", None)
+    options.background = True
+
+
+def activate_background_log(target: Path, relative: str) -> Path:
+    pure = PurePosixPath(relative)
+    if (
+        pure.is_absolute()
+        or pure.parts[:2] != (".x86qw", "logs")
+        or len(pure.parts) != 3
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or not pure.name.startswith("service-")
+        or pure.suffix != ".log"
+    ):
+        raise InstallerError("Caminho interno do log em segundo plano é inválido.")
+    directory = target / ".x86qw" / "logs"
+    ensure_private_directory(directory)
+    path = target.joinpath(*pure.parts)
+    if lexists(path) and (path.is_symlink() or not path.is_file()):
+        raise InstallerError(f"Log em segundo plano ausente ou inseguro: {path}")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        if os.name != "nt":
+            os.fchmod(descriptor, 0o600)
+        os.dup2(descriptor, sys.stdout.fileno())
+        os.dup2(descriptor, sys.stderr.fileno())
+    finally:
+        os.close(descriptor)
+    return path
+
+
+def background_log_tail(path: Path, secrets_to_redact: tuple[str, ...]) -> str:
+    if not path.is_file() or path.is_symlink():
+        return ""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-8:]
+    except OSError:
+        return ""
+    rendered = "\n".join(
+        "".join(character if character.isprintable() else "?" for character in line)
+        for line in lines
+    )
+    for secret in secrets_to_redact:
+        if secret:
+            rendered = rendered.replace(secret, "[REDIGIDO]")
+    return rendered
+
+
+def launch_background_controller(
+    options: argparse.Namespace, selection: HostedGame | None,
+) -> int:
+    token = secrets.token_hex(8)
+    log_relative = f".x86qw/logs/service-{token}.log"
+    log_path = options.target.joinpath(*PurePosixPath(log_relative).parts)
+    arguments = background_controller_arguments(options, selection, log_relative)
+    command = [sys.executable, str(background_entrypoint()), *arguments]
+    popen_options: dict[str, object] = {
+        "cwd": core.PROJECT_ROOT,
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        popen_options["creationflags"] = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        )
+    else:
+        popen_options["start_new_session"] = True
+    try:
+        process = subprocess.Popen(command, **popen_options)
+        assert process.stdin is not None
+        request = (
+            json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "secrets": {
+                    name: str(getattr(options, name, "") or "")
+                    for name in BACKGROUND_SECRET_FIELDS
+                },
+            }, ensure_ascii=False, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        process.stdin.write(request)
+        process.stdin.close()
+    except OSError as error:
+        raise InstallerError(
+            f"Não foi possível criar o controlador em segundo plano: {error}"
+        ) from error
+    deadline = time.monotonic() + BACKGROUND_START_TIMEOUT
+    lock_path = options.target / ".x86qw" / "sessions" / "active.lock"
+    while time.monotonic() < deadline:
+        code = process.poll()
+        if code is not None:
+            tail = background_log_tail(
+                log_path,
+                tuple(str(getattr(options, name, "") or "") for name in BACKGROUND_SECRET_FIELDS),
+            )
+            detail = f"\n{tail}" if tail else ""
+            raise InstallerError(
+                f"O controlador em segundo plano encerrou com código {code}.{detail}"
+            )
+        if lexists(lock_path):
+            try:
+                owner = session_control.read_lock_owner(lock_path)
+                if owner.get("controller_pid") == process.pid:
+                    paths = session_journal_paths(options.target, str(owner["session_id"]))
+                    if len(paths) == 1:
+                        journal = load_session_journal(paths[0])
+                        if journal.get("status") == "running":
+                            console.success(
+                                "Stack iniciada em segundo plano; consulte em Serviços › "
+                                "Visualizar serviços ativos."
+                            )
+                            console.info(f"Controlador: PID {process.pid}")
+                            console.info(f"Log: {log_relative}")
+                            return 0
+            except (InstallerError, session_control.SessionControlError):
+                pass
+        time.sleep(0.1)
+    console.warning(
+        "A stack continua inicializando em segundo plano; use status para acompanhar."
+    )
+    console.info(f"Controlador: PID {process.pid}")
+    return 0
 
 
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
@@ -2229,6 +3144,27 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         prog="x86qw", description="Hospeda jogos e executa os serviços QuakeWorld do x86QW.",
     )
     subparsers = parser.add_subparsers(dest="action", required=True)
+
+    status = subparsers.add_parser(
+        "status",
+        help="mostra todos os serviços ativos e seus parâmetros não sensíveis",
+        description=(
+            "Consulta a stack x86QW sem alterar processos; --stop solicita "
+            "encerramento coordenado explicitamente."
+        ),
+        add_help=False,
+    )
+    status._optionals.title = "opções"
+    status.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
+    add_target(status, project_root)
+    status.add_argument(
+        "--stop", action="store_true",
+        help="solicita encerramento coordenado da stack ativa",
+    )
+    status.add_argument(
+        "--yes", action="store_true",
+        help="confirma o encerramento sem perguntar",
+    )
 
     host = subparsers.add_parser(
         "host",
@@ -2240,6 +3176,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     host._optionals.title = "opções"
     host.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
     add_target(host, project_root)
+    add_background_options(host)
     gameplay.add_game_launch_arguments(host, dedicated=True)
     host.add_argument(
         "selection", nargs="?",
@@ -2279,11 +3216,13 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
 
     proxy = subparsers.add_parser("proxy", help="inicia o proxy QWFWD")
     add_target(proxy, project_root)
+    add_background_options(proxy)
     proxy.add_argument("--bind", dest="proxy_bind", type=bind_address, default="127.0.0.1")
     proxy.add_argument("--port", dest="proxy_port", type=bounded_integer(1024, 65535), default=30000)
 
     qtv = subparsers.add_parser("qtv", help="inicia o relay HTTP/MVD QTV")
     add_target(qtv, project_root)
+    add_background_options(qtv)
     qtv.add_argument("--bind", type=bind_address, default="127.0.0.1")
     qtv.add_argument("--port", type=bounded_integer(1024, 65535), default=28000)
     qtv.add_argument("--hostname", default="x86QW QTV")
@@ -2307,7 +3246,9 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     return namespace
 
 
-def main(arguments: list[str] | None = None) -> int:
+def main(
+    arguments: list[str] | None = None, *, propagate_menu_exit: bool = False,
+) -> int:
     temporary_paths: list[Path] = []
     materialized_ktx: list[MaterializedKtx] = []
     resources = ServiceResources(temporary_paths, materialized_ktx)
@@ -2316,18 +3257,129 @@ def main(arguments: list[str] | None = None) -> int:
             options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
             console.configure(verbose=options.verbose, no_color=options.no_color)
             navigation.configure(no_color=options.no_color)
-            configure_service_menu(options)
-            resolve_passwords(options)
-            warn_external_bind(options)
             target = options.target.expanduser().resolve()
+            options.target = target
+            if getattr(options, "background_child", False):
+                read_background_request(options)
             installer = gameplay.Player(
                 core.PROJECT_ROOT, target, online_only=core.ZIPAPP_PATH is not None,
             )
             resources.installer = installer
             installer.validate_target("verify", purge=False)
             installer.reject_target_symlinks()
+
+            if options.action == "status":
+                active = show_service_status(target)
+                if options.stop:
+                    if not active:
+                        raise InstallerError("Nenhuma stack de serviços x86QW está ativa.")
+                    confirmed = options.yes or navigation.confirm(
+                        "Encerrar a stack ativa?",
+                        breadcrumb="x86QW › Serviços › Encerrar",
+                        description="finalizar dependentes, serviços, servidor e temporários",
+                        default=False,
+                    )
+                    if not confirmed:
+                        console.info("Encerramento cancelado; a stack continua ativa.")
+                        return 0
+                    request_service_stop(target)
+                    console.success("Stack de serviços encerrada coordenadamente.")
+                return 0
+
+            selection: HostedGame | None = None
+            if options.action == "host":
+                selection_state = "game"
+                while True:
+                    selection = select_hosted_game(
+                        installer, options, initial=selection,
+                        start_state=selection_state,
+                    )
+                    if selection is None:
+                        console.info("Hospedagem cancelada; nenhum serviço foi iniciado.")
+                        return 0
+                    return_to_selection = False
+                    profile_choice: str | None = None
+                    while True:
+                        profile = (
+                            choose_host_configuration(options, profile_choice)
+                            if options.menu else "advanced"
+                        )
+                        if profile is None:
+                            selection_state = "map"
+                            return_to_selection = True
+                            break
+                        profile_choice = profile
+                        if profile == "advanced" and options.menu:
+                            if not configure_advanced_host_menu(options):
+                                continue
+                        elif profile == "quick" and options.menu:
+                            if not menu_execution_mode(
+                                options, "x86QW › Hospedar › Rápido local",
+                            ):
+                                continue
+                        resolve_passwords(options)
+                        warn_external_bind(options)
+                        if not options.menu:
+                            break
+                        summary = host_summary_text(selection, options, profile)
+                        confirmed = navigation.confirm(
+                            "Iniciar esta hospedagem?",
+                            breadcrumb="x86QW › Hospedar › Confirmação",
+                            subtitle="\n" + summary,
+                            description="iniciar MVDSV e os serviços selecionados",
+                            default=True,
+                            allow_back=True,
+                        )
+                        if confirmed is None:
+                            continue
+                        if not confirmed:
+                            console.info("Hospedagem cancelada; nenhum serviço foi iniciado.")
+                            return 0
+                        break
+                    if return_to_selection:
+                        continue
+                    break
+            else:
+                while True:
+                    if not configure_service_menu(options):
+                        console.info("Serviço cancelado; nenhum processo foi iniciado.")
+                        return 0
+                    if not options.menu:
+                        break
+                    confirmed = navigation.confirm(
+                        "Iniciar este serviço?",
+                        breadcrumb=(
+                            "x86QW › Serviços › QTV › Confirmação"
+                            if options.action == "qtv"
+                            else "x86QW › Serviços › QWFWD › Confirmação"
+                        ),
+                        subtitle="\n" + service_summary_text(options),
+                        description=(
+                            "iniciar o relay QTV com os parâmetros acima"
+                            if options.action == "qtv"
+                            else "iniciar o proxy QWFWD com os parâmetros acima"
+                        ),
+                        default=True,
+                        allow_back=True,
+                    )
+                    if confirmed is None:
+                        continue
+                    if not confirmed:
+                        console.info("Serviço cancelado; nenhum processo foi iniciado.")
+                        return 0
+                    break
+                resolve_passwords(options)
+                warn_external_bind(options)
+
+            if options.background and not options.background_child:
+                return launch_background_controller(options, selection)
+
             session_lock = SessionLock.acquire(target, options.action)
             resources.session_lock = session_lock
+            if options.background_child:
+                if not options.background_log:
+                    raise InstallerError("Controlador em segundo plano sem log privado.")
+                activate_background_log(target, options.background_log)
             recover_sessions(target)
             session_lock.confirm_recovery()
             resources.recovery_confirmed = True
@@ -2338,6 +3390,8 @@ def main(arguments: list[str] | None = None) -> int:
                 spec = proxy_spec(installer, options)
                 journal = SessionJournal(
                     target, session_id=session_lock.session_id, controller=session_lock.owner,
+                    background=options.background_child,
+                    background_log=options.background_log,
                 )
                 resources.journal = journal
                 console.info(f"Proxy local: {options.proxy_bind}:{options.proxy_port}/UDP")
@@ -2346,6 +3400,8 @@ def main(arguments: list[str] | None = None) -> int:
                 console.banner("iniciar QTV", target)
                 journal = SessionJournal(
                     target, session_id=session_lock.session_id, controller=session_lock.owner,
+                    background=options.background_child,
+                    background_log=options.background_log,
                 )
                 resources.journal = journal
                 spec = qtv_spec(
@@ -2358,7 +3414,7 @@ def main(arguments: list[str] | None = None) -> int:
                 return run_processes([spec], journal)
 
             console.banner("hospedar jogo com MVDSV", target)
-            selection = select_hosted_game(installer, options)
+            assert selection is not None
             hostname = options.hostname or f"x86QW - {selection.game.label}"
             safe_text(options.password, "senha de jogador") if options.password else None
             safe_text(options.spectator_password, "senha de espectador") if options.spectator_password else None
@@ -2366,6 +3422,8 @@ def main(arguments: list[str] | None = None) -> int:
             safe_text(options.qtv_password, "senha QTV") if options.qtv_password else None
             journal = SessionJournal(
                 target, session_id=session_lock.session_id, controller=session_lock.owner,
+                background=options.background_child,
+                background_log=options.background_log,
             )
             resources.journal = journal
             host = host_spec(
@@ -2394,6 +3452,11 @@ def main(arguments: list[str] | None = None) -> int:
     except InstallerError as error:
         console.error(str(error))
         return 1
+    except navigation.MenuExit:
+        if propagate_menu_exit:
+            raise
+        console.info("Menu encerrado; nenhum serviço foi iniciado.")
+        return 0
     except navigation.MenuCancelled:
         console.info("Operação cancelada; nenhum serviço foi iniciado.")
         return 130

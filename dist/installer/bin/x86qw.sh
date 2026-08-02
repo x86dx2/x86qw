@@ -25,6 +25,7 @@ Serviços:
   host JOGO            hospeda KTX, Final Arena, Pro-X, Team Fortress ou TD2
   proxy                inicia o proxy QWFWD
   qtv                  inicia o relay web/MVD QTV
+  status               mostra serviços ativos, PIDs, endpoints e parâmetros
 
 Manutenção:
   update [--yes]       atualiza somente clientes e componentes já instalados
@@ -52,7 +53,7 @@ case "${1:-}" in
   '') exec python3 "$app" menu "$root" ;;
   help|-h|--help) show_help; exit 0 ;;
   version|-V|--version) exec python3 "$app" --version ;;
-  play|host|proxy|qtv) action=$1; shift; exec python3 "$app" "$action" "$@" --target "$root" ;;
+  play|host|proxy|qtv|status) action=$1; shift; exec python3 "$app" "$action" "$@" --target "$root" ;;
   update|upgrade|hub|verify|repair|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac
