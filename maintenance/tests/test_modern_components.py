@@ -510,6 +510,7 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_information_content_and_exit_render_the_promised_result(self):
         target = ROOT / "custom-quake"
+        bootstrap = "install.ps1" if os.name == "nt" else "install.sh"
         cases = (
             (
                 ("info", "exit"),
@@ -518,7 +519,7 @@ class ModernComponentTests(unittest.TestCase):
             ),
             (
                 ("manage", "content", "exit"),
-                ("Reexecute o bootstrap", "install.sh", f"Destino atual: {target}"),
+                ("Reexecute o bootstrap", bootstrap, f"Destino atual: {target}"),
                 "\nPressione Enter para voltar ao menu...",
             ),
             (
@@ -2250,7 +2251,8 @@ class ModernComponentTests(unittest.TestCase):
             rendered = confirm.call_args.kwargs["subtitle"]
             self.assertIn("Resumo da partida", rendered)
             self.assertIn("Cliente | ezQuake stable 1.0", rendered)
-            self.assertIn("./x86qw.sh play td2 --map dm6", rendered)
+            launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
+            self.assertIn(f"{launcher} play td2 --map dm6", rendered)
 
     def test_host_menu_selects_the_game_before_quick_profile_and_confirmation(self):
         with tempfile.TemporaryDirectory() as temporary:
