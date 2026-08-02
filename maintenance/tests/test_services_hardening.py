@@ -135,7 +135,8 @@ class ServiceHardeningTests(unittest.TestCase):
         connection = mock.MagicMock()
         connection.__enter__.return_value = connection
         connection.recv.side_effect = [
-            b"HTTP/1.0 200 OK\r\n\r\nstream 127.0.0.1:28501",
+            b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"
+            b'<td class="adr">127.0.0.1:28501</td>',
             b"",
         ]
         with mock.patch.object(services.socket, "create_connection", return_value=connection):
@@ -144,6 +145,21 @@ class ServiceHardeningTests(unittest.TestCase):
                 services.ServiceReadiness("http", "127.0.0.1", 28000, "127.0.0.1:28501"),
                 timeout=0.1,
             )
+        connection.sendall.assert_called_once_with(
+            b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n",
+        )
+
+    def test_qtv_http_readiness_requires_success_and_the_complete_upstream(self):
+        page = (
+            b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"
+            b'<td class="adr">[::1]:28501</td>'
+        )
+        self.assertTrue(services.qtv_http_response_ready(page, "[::1]:28501"))
+        self.assertFalse(services.qtv_http_response_ready(page, "[::1]:28502"))
+        self.assertFalse(services.qtv_http_response_ready(
+            b"HTTP/1.0 301 Moved Permanently\r\nLocation: /nowplaying/\r\n\r\n",
+            "[::1]:28501",
+        ))
 
     @unittest.skipIf(os.name == "nt", "ACLs do Windows não usam bits POSIX")
     def test_password_file_rejects_open_permissions_and_symlinks(self):
@@ -520,6 +536,152 @@ class ServiceHardeningTests(unittest.TestCase):
                 json.loads(acquired.path.read_text(encoding="utf-8"))["session_id"],
             )
 
+    def test_status_lists_every_active_service_and_only_safe_parameters(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            lock = services.SessionLock.acquire(target, "host")
+            try:
+                journal = services.SessionJournal(
+                    target, session_id=lock.session_id, controller=lock.owner,
+                )
+                journal.data["status"] = "running"
+                processes = journal.data["processes"]
+                self.assertIsInstance(processes, list)
+                for index, (label, runtime, port, parameters) in enumerate((
+                    ("MVDSV", "mvdsv", 28501, {
+                        "game": "KTX", "mode": "Duel", "map": "dm6",
+                        "bots": "1", "bot_skill": "random",
+                        "secrets": "RCON", "password": "raw-password",
+                    }),
+                    ("QTV", "qtv", 28000, {
+                        "http": "http://127.0.0.1:28000/",
+                        "upstream": "127.0.0.1:28501",
+                        "upstream_secret": "configurado",
+                    }),
+                    ("QWFWD", "qwfwd", 30000, {
+                        "bind": "127.0.0.1", "protocol": "UDP QuakeWorld",
+                    }),
+                ), 1):
+                    processes.append({
+                        "label": label,
+                        "runtime": runtime,
+                        "pid": 9000 + index,
+                        "process_group": 9000 + index,
+                        "executable": str(target / runtime),
+                        "creation_token": f"token-{index}",
+                        "started_at": "2026-08-02T00:00:00+00:00",
+                        "address": "127.0.0.1",
+                        "port": port,
+                        "parameters": parameters,
+                    })
+                journal._write()
+                alive = services.ProcessProbe(
+                    "alive", services.ProcessIdentity(1, "token", sys.executable),
+                )
+                output = io.StringIO()
+                with mock.patch.object(
+                    services, "probe_expected_process", return_value=alive,
+                ), contextlib.redirect_stdout(output):
+                    services.show_service_status(target)
+            finally:
+                lock.release()
+            rendered = output.getvalue()
+            for value in (
+                "MVDSV", "QTV", "QWFWD", "Duel", "dm6", "random",
+                "127.0.0.1:28501", "http://127.0.0.1:28000/", "UDP QuakeWorld",
+                "Serviços › Encerrar serviços ativos", "status --stop",
+            ):
+                self.assertIn(value, rendered)
+            self.assertRegex(rendered, r"Segredos\s+\| RCON")
+            self.assertNotIn("raw-password", rendered)
+
+    def test_status_without_a_stack_is_read_only_and_successful(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                services.show_service_status(target)
+            self.assertIn("Nenhum serviço x86QW está ativo", output.getvalue())
+            self.assertFalse((target / ".x86qw").exists())
+
+    def test_background_controller_arguments_and_request_keep_secrets_off_argv(self):
+        options = services.parse_arguments([
+            "qtv", "--target", "/tmp/x86qw-test", "--bind", "127.0.0.1",
+            "--upstream", "127.0.0.1:28501", "--qtv-password", "segredo",
+            "--background",
+        ], ROOT)
+        arguments = services.background_controller_arguments(
+            options, None, ".x86qw/logs/service-1234.log",
+        )
+        self.assertIn("--background-child", arguments)
+        self.assertIn("--background-log", arguments)
+        self.assertNotIn("--background", arguments)
+        self.assertNotIn("--prompt-qtv-password", arguments)
+        self.assertNotIn("segredo", arguments)
+
+        request = {
+            "format": 1,
+            "project": "x86qw",
+            "secrets": {
+                "password": "jogador", "spectator_password": "espectador",
+                "rcon_password": "rcon", "qtv_password": "qtv",
+            },
+        }
+        stream = SimpleNamespace(
+            buffer=io.BytesIO((json.dumps(request) + "\n").encode("utf-8")),
+        )
+        with mock.patch.object(services.sys, "stdin", stream):
+            services.read_background_request(options)
+        self.assertEqual("qtv", options.qtv_password)
+        self.assertTrue(options.background)
+        self.assertFalse(options.prompt_qtv_password)
+
+    def test_status_stop_request_performs_coordinated_shutdown_and_releases_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            lock = services.SessionLock.acquire(target, "proxy")
+            journal = services.SessionJournal(
+                target, session_id=lock.session_id, controller=lock.owner,
+                background=True,
+                background_log=".x86qw/logs/service-test.log",
+            )
+            resources = services.ServiceResources([], [])
+            resources.session_lock = lock
+            resources.recovery_confirmed = True
+            resources.journal = journal
+            result: list[int] = []
+
+            def controller() -> None:
+                with services.finalize_service_operation(resources):
+                    result.append(services.run_processes([
+                        services.ProcessSpec(
+                            "fixture",
+                            (sys.executable, "-c", "import time; time.sleep(60)"),
+                            target,
+                        ),
+                    ], journal))
+
+            thread = threading.Thread(target=controller)
+            thread.start()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = json.loads(journal.path.read_text(encoding="utf-8"))
+                if state["status"] == "running":
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("a fixture de serviço não ficou pronta")
+            services.request_service_stop(target, timeout=5)
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual([0], result)
+            self.assertFalse(lock.path.exists())
+            self.assertFalse((journal.directory / "stop.request").exists())
+            final = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertEqual("clean", final["status"])
+            self.assertTrue(final["background"])
+            self.assertEqual(".x86qw/logs/service-test.log", final["background_log"])
+
     def test_orphan_with_matching_identity_is_terminated_and_recorded(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -547,7 +709,10 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual("clean", recovered["status"])
             self.assertIn(recovered["recovery_actions"][0]["result"], {"terminated", "killed"})
             recorded = recovered["processes"][0]
-            for field in ("runtime", "process_group", "executable", "creation_token", "address", "port"):
+            for field in (
+                "runtime", "process_group", "executable", "creation_token",
+                "address", "port", "parameters",
+            ):
                 self.assertIn(field, recorded)
 
     def test_reused_pid_is_not_terminated(self):
@@ -774,7 +939,9 @@ class ServiceHardeningTests(unittest.TestCase):
         processes = [mock.Mock(pid=101), mock.Mock(pid=102)]
         for process in processes:
             process.poll.return_value = None
-        with mock.patch.object(services.subprocess, "Popen", side_effect=processes), mock.patch.object(
+        with mock.patch.object(
+            services.subprocess, "Popen", side_effect=processes,
+        ) as popen, mock.patch.object(
             services, "apply_startup_rcon",
         ), mock.patch.object(
             services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou"),
@@ -787,6 +954,8 @@ class ServiceHardeningTests(unittest.TestCase):
                 services.run_processes(specs)
         for process in processes:
             process.terminate.assert_called_once()
+        for call in popen.call_args_list:
+            self.assertIs(call.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_mvdsv_readiness_checks_map_gamecode_and_applies_post_map(self):
         responses = [
@@ -797,7 +966,9 @@ class ServiceHardeningTests(unittest.TestCase):
         connection = mock.MagicMock()
         connection.__enter__.return_value = connection
         connection.recvfrom.side_effect = [(response, ("127.0.0.1", 28501)) for response in responses]
-        with mock.patch.object(services.socket, "socket", return_value=connection):
+        with mock.patch.object(
+            services.socket, "socket", return_value=connection,
+        ), mock.patch.object(services.time, "sleep") as sleep:
             services.apply_startup_rcon(services.StartupRcon(
                 "127.0.0.1", 28501, "bootstrap", "post.cfg", "dm6", "qw",
             ))
@@ -805,6 +976,7 @@ class ServiceHardeningTests(unittest.TestCase):
         self.assertIn(b"status", sent)
         self.assertIn(b"serverinfo", sent)
         self.assertIn(b"exec post.cfg", sent)
+        sleep.assert_called_once_with(1.05)
 
     @unittest.skipIf(os.name == "nt", "SIGTERM POSIX validado nos runners Unix; Windows usa terminate")
     def test_sigterm_stops_child_without_orphan(self):

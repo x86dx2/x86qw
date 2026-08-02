@@ -36,6 +36,17 @@ estado.
 - Usar divulgação progressiva: perguntar somente o que se aplica à escolha atual.
 - Manter contexto visível por breadcrumbs, descrições e valores padrão claros.
 - Oferecer busca e atalhos sem prejudicar a navegação básica por teclado.
+- Mostrar um resumo verificável e pedir confirmação antes de iniciar gameplay,
+  conectar pelo Hub, iniciar um serviço isolado ou subir uma stack de hospedagem.
+- Preservar o resultado de cada ação até confirmação do usuário, antes de
+  redesenhar o menu que a iniciou.
+- Permitir consultar a stack ativa, seus endpoints e parâmetros não sensíveis
+  sem interromper nem alterar os serviços, e oferecer uma ação separada e
+  confirmada para encerrá-la coordenadamente.
+- Permitir primeiro ou segundo plano sem criar dois modelos de lifecycle: ambos
+  usam o mesmo lock, journal, readiness e cleanup.
+- Oferecer um caminho rápido com padrões seguros e um caminho avançado sem
+  misturar decisões de gameplay e infraestrutura.
 - Preservar os comandos existentes como contrato estável para usuários avançados e automação.
 
 ## Accessibility & Inclusion

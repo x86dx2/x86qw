@@ -29,7 +29,7 @@ plataforma.
 - cliente macOS universal, Linux x86-64 e Windows x64;
 - serviços macOS arm64, Linux amd64 e Windows x64; macOS Intel não é anunciado
   para os serviços;
-- CLI com `play`, `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`,
+- CLI com `play`, `host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`,
   `repair`, `cleanup`, `uninstall` e `version`;
 - navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
   alinhadas e coloridas e fallback numerado;
@@ -68,7 +68,8 @@ operacionais.
 **Entrega funcional:** completa
 **Validação:** unitária
 
-`play`, `host`, `proxy`, `qtv` e `hub` validam e executam conteúdo instalado.
+`play`, `host`, `proxy`, `qtv` e `hub` validam e executam conteúdo instalado;
+`status` consulta a stack ativa sem adquirir lock nem alterar processos.
 `play-support` é preparado por instalação, `update`, `upgrade` ou `repair`.
 Materialização necessária ao servidor é efêmera, journalizada e reconciliada.
 

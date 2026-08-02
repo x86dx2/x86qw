@@ -296,6 +296,8 @@ class InstallerTests(unittest.TestCase):
                             else Path(identifier) / executable
                         )
                         self.assertEqual(expected, destination.relative_to(managed))
+                        if system != "windows" and os.name != "nt":
+                            self.assertEqual(0o755, destination.stat().st_mode & 0o777)
                         destination.unlink()
 
     def test_unknown_host_requires_an_explicit_platform(self):
@@ -396,6 +398,28 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual("Reparar", rows[0].action)
             self.assertEqual("área segura", rows[0].installed)
             self.assertEqual("tela inteira", rows[0].available)
+
+    def test_update_output_wraps_without_cutting_names_or_versions(self):
+        row = install_qw.UpdatePlanRow(
+            kind="component", item="componente-com-um-nome-longo",
+            installed="1.47+x86qw.17", available="1.47+x86qw.123456789",
+            action="Atualizar", size=123456,
+        )
+        output = io.StringIO()
+        with mock.patch.object(
+            install_qw.shutil, "get_terminal_size",
+            return_value=os.terminal_size((48, 24)),
+        ), contextlib.redirect_stdout(output):
+            install_qw.console.update_plan([row], "update")
+            install_qw.console.download_result(
+                "x86QW Package Manifest com nome longo", size=123456,
+            )
+        rendered = output.getvalue()
+        self.assertIn("componente-com-um-nome-longo", rendered)
+        self.assertIn("Instalado  | 1.47+x86qw.17", rendered)
+        self.assertIn("Disponível | 1.47+x86qw.123456789", rendered)
+        self.assertIn("x86QW Package Manifest com nome longo", rendered)
+        self.assertIn("Baixado | 123.5KB/123.5KB", rendered)
 
     def test_nquake_startup_state_reports_pending_and_loaded(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -817,7 +841,7 @@ class InstallerTests(unittest.TestCase):
                     self.assertEqual(0, install_qw.main(["update", str(target)]))
         self.assertEqual(1, installer.update.call_count)
         self.assertTrue(installer.update.call_args.kwargs["dry_run"])
-        self.assertIn("==> Would update 1 outdated package", output.getvalue())
+        self.assertIn("==> Plano: atualizar 1 pacote desatualizado", output.getvalue())
         self.assertIn("Configuração base nQuake", output.getvalue())
         self.assertIn("1 -> 2 (15.4KB)", output.getvalue())
         self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())

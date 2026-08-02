@@ -14,7 +14,7 @@ menus e Frogbots: branch `main`, commit `699b858`, em 1 de agosto de 2026.
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
-- comandos públicos `play`, `host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`,
+- comandos públicos `play`, `host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`,
   `verify`, `repair`, `cleanup`, `uninstall` e `version`;
 - navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
   alinhadas e coloridas e fallback numerado;

@@ -56,11 +56,16 @@ atual.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
-`host`, `proxy`, `qtv`, `hub`, `update`, `upgrade`, `verify`, `repair`,
+`host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 abre o navegador interativo e não inicia instalação alguma até uma ação ser
 confirmada. Setas ou `j`/`k` navegam, Enter seleciona, `←` volta, Esc sai e
-`/` busca; um fallback numerado mantém o fluxo utilizável sem TTY. O clone e os comandos
+`/` busca; números com dois ou mais dígitos usam Enter para confirmar. Listas
+longas indicam a faixa visível e o total, opções indisponíveis explicam o motivo
+e o layout quebra linhas em terminais estreitos. Um fallback numerado mantém o
+fluxo utilizável sem TTY. Depois de uma execução ou diagnóstico, o resultado
+permanece na tela até Enter; em seguida o navegador retorna ao submenu que
+iniciou a ação. O clone e os comandos
 `./dist/installer/bin/manager.py` e `./dist/installer/bin/manager.py play` da raiz são o fluxo de desenvolvimento.
 Os dois launchers existem permanentemente em `dist/installer/`, entram no bundle
 e são copiados byte a byte para o destino. O instalador não gera scripts em runtime.
@@ -364,7 +369,10 @@ No Windows, a entrada equivalente é `py -3 .\dist\installer\bin\manager.py play
 - Team Fortress em `fortress/misc.pak`;
 - Total Destruction 2 em `td2/qwprogs.dat`.
 
-Ao selecionar KTX, um segundo menu oferece os modos curados pela distribuição:
+Ao selecionar KTX, o navegador agrupa os modos curados em **Recomendados**,
+**Competitivo individual**, **Equipes**, **Arena e alternativos** e **Treino e
+movimento**. **Todos os modos** preserva uma lista pesquisável do catálogo
+completo:
 
 ```text
 duel  2on2  3on3  4on4  10on10  ffa  ctf  hoony  blitz-2on2  blitz-4on4
@@ -426,7 +434,10 @@ Midair, Race ou Practice durante a entrada no mapa.
 Antes de abrir o jogo, o launcher valida o recibo do componente e descobre os
 mapas disponíveis em arquivos BSP soltos, PK3s e PAKs do gamedir e de `id1`.
 Ele oferece sugestões, aceita um nome instalado ou lista o acervo completo. Se
-stable e nightly coexistirem, pergunta qual cliente usar.
+stable e nightly coexistirem, pergunta qual cliente usar. Por fim, mostra um
+resumo de jogo, modo, mapa, cliente e Frogbots, imprime o comando equivalente e
+pede confirmação. Voltar retorna à escolha de cliente; recusar não abre nenhum
+processo.
 
 No macOS com notch, o modo de compatibilidade de área segura pode reduzir a
 janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
@@ -574,7 +585,9 @@ remove toda a instalação.
 Se stable e nightly estiverem instalados para o sistema atual, o instalador
 pergunta qual ezQuake abrir. A execução recebe `-basedir quake-world`, portanto
 os dois compartilham os mesmos PAKs e componentes. Não há registro global de
-protocolo nem alteração no navegador ou no sistema operacional.
+protocolo nem alteração no navegador ou no sistema operacional. Antes de abrir
+o cliente, o menu revisa servidor, endereço, ação, stream QTV quando aplicável e
+cliente; voltar retorna à escolha do cliente e recusar não inicia processo.
 
 ### Conteúdo visual e servidor próprio
 
@@ -585,14 +598,38 @@ instala MVDSV, QTV e QWFWD como componentes separados, com fonte, runtime,
 SHA-256, recibo e inventário. O x86QW preserva os binários oficiais Linux/Windows
 e fornece builds macOS arm64 reproduzidos das fontes fixadas.
 
-Os serviços ficam em loopback por padrão e sempre executam em primeiro plano:
+Os serviços ficam em loopback por padrão. Podem acompanhar o terminal ou usar
+`--background`, mantendo o mesmo lock, journal, readiness e cleanup:
 
 ```sh
 ./x86qw.sh host --mode 4on4 --map dm3
 ./x86qw.sh host --mode duel --map dm6 --bind 0.0.0.0 --with-qtv
 ./x86qw.sh proxy --bind 0.0.0.0
 ./x86qw.sh qtv --upstream 127.0.0.1:28501
+./x86qw.sh proxy --background
+./x86qw.sh status
+./x86qw.sh status --stop
 ```
+
+No navegador interativo, **Hospedar** segue a ordem jogo → modo e regras → mapa
+→ configuração → resumo. **Rápido local** usa `127.0.0.1:28501`, 16 clientes,
+gravação MVD e nenhum QTV/QWFWD. **Avançado** revela interfaces, portas,
+capacidade, gravação, serviços adicionais e entrada oculta de senhas. O resumo
+final redige segredos e a confirmação acontece antes do lock, do preflight e da
+criação de processos.
+
+QTV e QWFWD iniciados isoladamente seguem o mesmo contrato: configuração,
+resumo de endpoints e parâmetros não sensíveis, comando equivalente seguro e
+confirmação antes do lock. Voltar reabre a configuração e recusar não inicia
+processo. O estado e o resultado de cada serviço permanecem visíveis até Enter
+antes do retorno ao submenu **Serviços**.
+
+No perfil avançado e nos serviços isolados, o menu escolhe primeiro ou segundo
+plano. Uma stack destacada registra seu log privado em `.x86qw/logs/`. A área
+**Visualizar serviços ativos** mostra modo de execução, controlador, processos,
+endpoints e parâmetros; **Encerrar serviços ativos** confirma e solicita ao
+próprio controlador o shutdown ordenado. Na CLI, use `status --stop` e acrescente
+`--yes` somente em automação.
 
 `host` materializa temporariamente o conteúdo KTX verificado que o MVDSV
 precisa ler fora do PK3 e o remove no encerramento. `--with-qtv` e
@@ -617,6 +654,9 @@ configurações, endpoints e todas as portas. A ordem composta é MVDSV, readine
 e configuração pós-map por RCON, QTV com HTTP/upstream e, por último, QWFWD.
 Falha parcial encerra o que já iniciou. O journal privado em
 `.x86qw/sessions/` e o lock atômico permitem uma única stack por instalação.
+Em outro terminal, `status` consulta esse estado sem adquirir lock ou alterar a
+stack. Ele mostra controlador, processos, PIDs, executáveis, endpoints e somente
+parâmetros não sensíveis; senhas aparecem apenas como configuradas ou ausentes.
 Uma segunda CLI nunca recupera um controlador vivo. Após crash confirmado, PID,
 token de criação e executável identificam os filhos órfãos; PID reutilizado ou
 identidade inconclusiva são preservados. Temporários não sensíveis modificados
