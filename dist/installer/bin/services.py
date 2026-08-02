@@ -471,7 +471,7 @@ class SessionJournal:
                 or not isinstance(payload.get("requested_at"), str)
             ):
                 raise ValueError("pedido inválido")
-            request.unlink()
+            unlink_stop_request(request)
             return True
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
             raise InstallerError(
@@ -1155,27 +1155,17 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
             "requested_at": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
-    try:
-        descriptor = os.open(request, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        raise InstallerError("Já existe um pedido de encerramento para esta stack.")
-    try:
-        os.write(descriptor, payload)
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    publish_stop_request(request, payload)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not lexists(lock_path):
-            if lexists(request) and request.is_file() and not request.is_symlink():
-                request.unlink()
+            unlink_stop_request(request)
             return
         try:
             current = session_control.read_lock_owner(lock_path)
         except session_control.SessionControlError:
             if not lexists(lock_path):
-                if lexists(request) and request.is_file() and not request.is_symlink():
-                    request.unlink()
+                unlink_stop_request(request)
                 return
             raise
         if current.get("session_id") != session_id:
@@ -1184,6 +1174,55 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
     raise InstallerError(
         "A stack recebeu o pedido, mas não concluiu o encerramento dentro do limite."
     )
+
+
+def publish_stop_request(request: Path, payload: bytes) -> None:
+    """Publish a complete stop request without exposing an open writer on Windows."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".stop-", suffix=".request", dir=request.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        if os.name != "nt":
+            temporary.chmod(0o600)
+        try:
+            os.link(temporary, request)
+        except FileExistsError as error:
+            raise InstallerError("Já existe um pedido de encerramento para esta stack.") from error
+        except OSError as error:
+            raise InstallerError(
+                "Não foi possível publicar o pedido privado de encerramento."
+            ) from error
+    finally:
+        if lexists(temporary):
+            temporary.unlink()
+
+
+def unlink_stop_request(request: Path) -> None:
+    """Remove a private request, tolerating short-lived Windows file sharing locks."""
+    for attempt in range(20):
+        try:
+            metadata = request.lstat()
+        except FileNotFoundError:
+            return
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise InstallerError(
+                f"Pedido de encerramento inseguro preservado para inspeção: {request}"
+            )
+        try:
+            request.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            if os.name == "nt" and attempt < 19:
+                time.sleep(0.025)
+                continue
+            raise
 
 
 def unlink_sensitive_temporary(path: Path) -> None:
