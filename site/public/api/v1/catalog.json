@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-03T02:27:39Z",
+  "generated_at": "2026-08-03T06:21:10Z",
   "packages": [
     {
       "component": "core",
@@ -1144,7 +1144,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.0",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1168,6 +1168,36 @@
       "release_notes": "# x86QW 0.7.0\n\nRelease de consistência dos modos KTX e da integração Frogbot.\n\n## Modos e mapas\n\n- oferece somente mapas que possuam os recursos exigidos pelo modo selecionado:\n  rota Frogbot, rota Race ou entidade CTF;\n- mantém `3on3` como duas equipes de três jogadores e `2on2on2` como três\n  equipes de dois;\n- preserva `3v3` e `2v2v2` como aliases de linha de comando;\n- valida usermodes, configurações de entrada, comandos de ajuda e binds contra\n  o conteúdo real do KTX 1.47.\n\n## Frogbots\n\n- completa elencos fixos conforme a quantidade de jogadores e equipes de cada\n  usermode;\n- aplica habilidade aleatória independentemente a cada bot;\n- mantém perfis de nomes KTX, x86QW aleatório e lista pessoal;\n- corrige identidades repetidas entre aliados e adversários;\n- remove do QVM as antigas cvars experimentais de aparência: skins e cores\n  voltam a seguir integralmente o comportamento do KTX.\n\n## Integridade\n\n- recompila o QVM KTX 1.47 de maneira reproduzível e registra fontes, patches,\n  símbolos e hashes;\n- fortalece o verificador declarativo para detectar mapas, recursos, usermodes,\n  configurações ou comandos inconsistentes antes da publicação;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 373 testes de manutenção e quatro testes do site;\n- build determinístico do componente KTX;\n- smoke em janela no macOS com preenchimento de Frogbots, habilidade aleatória,\n  múltiplas equipes e encerramento por F12;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13 obrigatória antes da\n  publicação.",
       "mirror_title": "x86QW Installer 0.7.0",
       "mirror_notes": "# x86QW 0.7.0\n\nRelease de consistência dos modos KTX e da integração Frogbot.\n\n## Modos e mapas\n\n- oferece somente mapas que possuam os recursos exigidos pelo modo selecionado:\n  rota Frogbot, rota Race ou entidade CTF;\n- mantém `3on3` como duas equipes de três jogadores e `2on2on2` como três\n  equipes de dois;\n- preserva `3v3` e `2v2v2` como aliases de linha de comando;\n- valida usermodes, configurações de entrada, comandos de ajuda e binds contra\n  o conteúdo real do KTX 1.47.\n\n## Frogbots\n\n- completa elencos fixos conforme a quantidade de jogadores e equipes de cada\n  usermode;\n- aplica habilidade aleatória independentemente a cada bot;\n- mantém perfis de nomes KTX, x86QW aleatório e lista pessoal;\n- corrige identidades repetidas entre aliados e adversários;\n- remove do QVM as antigas cvars experimentais de aparência: skins e cores\n  voltam a seguir integralmente o comportamento do KTX.\n\n## Integridade\n\n- recompila o QVM KTX 1.47 de maneira reproduzível e registra fontes, patches,\n  símbolos e hashes;\n- fortalece o verificador declarativo para detectar mapas, recursos, usermodes,\n  configurações ou comandos inconsistentes antes da publicação;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 373 testes de manutenção e quatro testes do site;\n- build determinístico do componente KTX;\n- smoke em janela no macOS com preenchimento de Frogbots, habilidade aleatória,\n  múltiplas equipes e encerramento por F12;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13 obrigatória antes da\n  publicação.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.1",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.1.zip",
+      "size": 157113,
+      "sha256": "a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.1/x86qw-installer-0.7.1.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.1/x86qw-installer-0.7.1.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.1/x86qw-installer-0.7.1.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.1/x86qw-installer-0.7.1.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.1",
+      "release_title": "x86QW Installer 0.7.1",
+      "release_notes": "# x86QW 0.7.1\n\nRelease corretiva do bootstrap e dos launchers instalados.\n\n> Estado: publicada e verificada. A `0.7.1` é a versão `current`; o bundle e a\n> release `0.7.0` permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.1.zip` · 157113 bytes · SHA-256\n`a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80`.\n\n## Python\n\n- exige Python 3.10 ou mais recente antes de qualquer download ou mutação;\n- usa a mesma ordem determinística por plataforma em bootstrap e launcher;\n- gera o launcher com o executável Python realmente usado na instalação;\n- procura um fallback compatível caso esse runtime seja removido;\n- mantém paths com espaços/Unicode e argumentos ilimitados no Windows.\n\n## PowerShell\n\n- executa o bootstrap em escopo próprio sem abrir outro processo ou encerrar a\n  sessão usada por `irm ... | iex`;\n- restaura preferências e codificações do chamador, sem vazar variáveis\n  internas;\n- preserva como efeito global intencional somente o código do instalador em\n  `$LASTEXITCODE`;\n- passou na evidência nativa do Windows PowerShell 5.1.\n\n## Integridade\n\n- calcula o SHA-256 do bundle em streaming no bootstrap Unix;\n- adiciona guarda de versão ao zipapp antes de carregar o gerenciador;\n- preserva integralmente o bundle e a release `0.7.0`.\n\n## Validação concluída\n\n- 393 testes de manutenção e quatro testes do site;\n- 7/7 jobs verdes: Quality gate, Ubuntu, macOS e Windows com Python 3.10 e\n  3.13;\n- `git diff --check`, Git LFS, validação integral e dry-run do Worker;\n- argumentos longos, paths com espaços/Unicode, códigos de saída, ausência de\n  vazamento da sessão PowerShell e rejeição antecipada do Python 3.9.\n\nOs checks portáveis não equivalem a smokes gráficos ou de rede dos runtimes.\nEsses smokes permanecem pendentes onde indicado nos roadmaps.",
+      "mirror_title": "x86QW Installer 0.7.1",
+      "mirror_notes": "# x86QW 0.7.1\n\nRelease corretiva do bootstrap e dos launchers instalados.\n\n> Estado: publicada e verificada. A `0.7.1` é a versão `current`; o bundle e a\n> release `0.7.0` permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.1.zip` · 157113 bytes · SHA-256\n`a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80`.\n\n## Python\n\n- exige Python 3.10 ou mais recente antes de qualquer download ou mutação;\n- usa a mesma ordem determinística por plataforma em bootstrap e launcher;\n- gera o launcher com o executável Python realmente usado na instalação;\n- procura um fallback compatível caso esse runtime seja removido;\n- mantém paths com espaços/Unicode e argumentos ilimitados no Windows.\n\n## PowerShell\n\n- executa o bootstrap em escopo próprio sem abrir outro processo ou encerrar a\n  sessão usada por `irm ... | iex`;\n- restaura preferências e codificações do chamador, sem vazar variáveis\n  internas;\n- preserva como efeito global intencional somente o código do instalador em\n  `$LASTEXITCODE`;\n- passou na evidência nativa do Windows PowerShell 5.1.\n\n## Integridade\n\n- calcula o SHA-256 do bundle em streaming no bootstrap Unix;\n- adiciona guarda de versão ao zipapp antes de carregar o gerenciador;\n- preserva integralmente o bundle e a release `0.7.0`.\n\n## Validação concluída\n\n- 393 testes de manutenção e quatro testes do site;\n- 7/7 jobs verdes: Quality gate, Ubuntu, macOS e Windows com Python 3.10 e\n  3.13;\n- `git diff --check`, Git LFS, validação integral e dry-run do Worker;\n- argumentos longos, paths com espaços/Unicode, códigos de saída, ausência de\n  vazamento da sessão PowerShell e rejeição antecipada do Python 3.9.\n\nOs checks portáveis não equivalem a smokes gráficos ou de rede dos runtimes.\nEsses smokes permanecem pendentes onde indicado nos roadmaps.",
       "mirror_latest": true
     },
     {

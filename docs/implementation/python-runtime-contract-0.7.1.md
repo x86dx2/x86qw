@@ -1,17 +1,19 @@
 # Contrato do runtime Python — correção 0.7.1
 
 Esta nota registra a implementação da issue
-[#44](https://github.com/x86dx2/x86qw/issues/44). Ela não autoriza a publicação
-da `0.7.1` antes de todos os checks obrigatórios.
+[#44](https://github.com/x86dx2/x86qw/issues/44), entregue na release pública
+`0.7.1`.
 
-> Estado: implementação candidata na branch corretiva. A `0.7.0` permanece
-> `current`; nenhum comportamento descrito como candidato deve ser anunciado
-> como disponível no bootstrap público antes da promoção.
+> Estado: implementação publicada e verificável. A `0.7.0` permanece imutável
+> no histórico.
 
 ## Baseline e defeito
 
-- baseline: `57c7a06745d3d760a2ace70112beb6bbd391d633`;
-- release pública: `x86qw-installer-0.7.0`;
+- baseline publicada: `57c7a06745d3d760a2ace70112beb6bbd391d633`;
+- baseline do código corretivo: `8ba1f909fc8b4275c5a5001b0c2e1898b6f85c68`;
+- release pública: `x86qw-installer-0.7.1`;
+- bundle: 157113 bytes, SHA-256
+  `a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80`;
 - o PowerShell aceitava `py -3`, `python3` ou `python`, mas `x86qw.cmd` usava
   somente `py -3`;
 - Unix usava somente `python3` e não rejeitava Python 3.9 antes do download;
@@ -41,7 +43,7 @@ launchers; não existe liberação/reaquisição no meio da mutação.
 
 ## Isolamento da sessão PowerShell
 
-O bootstrap candidato é avaliado por `irm ... | iex` dentro da sessão atual,
+O bootstrap `0.7.1` é avaliado por `irm ... | iex` dentro da sessão atual,
 mas encapsula seu corpo em um escopo de script próprio. Não há processo filho
 nem nova janela. Variáveis internas, inclusive `$ErrorActionPreference`, não
 devem escapar desse escopo; as codificações de console e pipeline são
@@ -49,8 +51,8 @@ restauradas em `finally`. O único efeito global intencional é
 `$global:LASTEXITCODE`, que recebe exatamente o código do instalador Python.
 
 O erro continua visível no terminal e o bootstrap não executa `exit`. A
-evidência planejada precisa invocar o arquivo por `Invoke-Expression` em um
-harness que já possua estado próprio e comprovar:
+evidência invoca o arquivo por `Invoke-Expression` em um harness que já possui
+estado próprio e comprova:
 
 - a sessão chamadora continua viva após sucesso e falha;
 - `$ErrorActionPreference` e as codificações permanecem como antes;
@@ -59,9 +61,9 @@ harness que já possua estado próprio e comprovar:
 - o diagnóstico de falha permanece visível e não expõe saída descartada do
   probe.
 
-Essa evidência deve passar no Windows PowerShell 5.1 do runner Windows e em
-PowerShell 7 quando disponível. A execução local em PowerShell fora do Windows
-é complementar e não substitui a matriz nativa.
+Essa evidência passou no Windows PowerShell 5.1 do runner Windows. A execução
+local em PowerShell fora do Windows permanece complementar e não substitui a
+matriz nativa.
 
 ## Contratos preservados
 
@@ -72,25 +74,32 @@ PowerShell 7 quando disponível. A execução local em PowerShell fora do Window
 - stable e nightly lado a lado;
 - bundles e tags publicados, inclusive `0.7.0`, byte a byte imutáveis.
 
-## Contratos candidatos
+## Contratos entregues na correção
 
 - Python abaixo de 3.10 falha antes de download ou mutação;
 - launchers deixam de depender de um único nome global de executável;
 - SHA-256 do bootstrap Unix é calculado em blocos de 1 MiB;
 - o zipapp possui uma guarda de versão antes de importar o gerenciador.
 
-## Evidência planejada e exigida antes da publicação
+## Evidência da release
 
 - testes com somente `python`, somente `python3`, somente `py`, todos presentes
   e runtime persistido removido;
 - Python 3.9 rejeitado antes do downloader;
 - Python 3.10 e 3.13 nos três sistemas;
 - paths com espaços/Unicode, comandos públicos e argumentos longos;
-- `git diff --check`, Git LFS, `manage.py verify` e sete jobs do Actions.
+- `git diff --check`, Git LFS e `manage.py verify`;
+- 393 testes de manutenção e quatro testes do site;
+- 7/7 jobs do Actions: Quality gate e Python 3.10/3.13 em Ubuntu, macOS e
+  Windows.
+
+Essa matriz valida o contrato portável e os launchers nativos. Ela não é
+apresentada como smoke gráfico ou de rede de ezQuake, MVDSV, QTV ou QWFWD.
 
 ## Riscos residuais
 
 - a resolução precisa continuar duplicada nos wrappers até existir um runtime
   Python que possa carregar o módulo canônico;
 - o hardening de transporte e limites do download pertence à issue #45;
-- a `0.7.1` permanece não publicada até promoção explícita após os checks.
+- os smokes gráficos e de rede dos runtimes permanecem separados da matriz
+  portável, conforme os roadmaps.
