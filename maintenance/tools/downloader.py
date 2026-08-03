@@ -976,7 +976,7 @@ def _open_with_deadline(
     """
 
     initial_budget = _remaining(deadline, clock)
-    if cancel_open is not None and initial_budget < MIN_OPEN_BUDGET_SECONDS:
+    if cancel_open is not None and initial_budget <= MIN_OPEN_BUDGET_SECONDS:
         raise DownloadDeadlineError(
             "O orçamento restante é insuficiente para iniciar uma conexão segura."
         )

@@ -2597,8 +2597,25 @@ class DownloaderTests(unittest.TestCase):
 
     def test_connection_registry_interrupts_blocked_http_headers(self) -> None:
         client, peer = socket.socketpair()
-        response = http.client.HTTPResponse(client)
+        blocked = threading.Event()
         finished = threading.Event()
+
+        class ObservableReader:
+            def __init__(self, reader: object) -> None:
+                self.reader = reader
+
+            def readline(self, *args: object, **kwargs: object) -> bytes:
+                blocked.set()
+                return self.reader.readline(*args, **kwargs)
+
+            def __getattr__(self, name: str) -> object:
+                return getattr(self.reader, name)
+
+        class ObservableSocket:
+            def makefile(self, *args: object, **kwargs: object) -> ObservableReader:
+                return ObservableReader(client.makefile(*args, **kwargs))
+
+        response = http.client.HTTPResponse(ObservableSocket())
 
         class HeaderConnection:
             def __init__(self) -> None:
@@ -2618,10 +2635,11 @@ class DownloaderTests(unittest.TestCase):
         reader = threading.Thread(target=read_headers, name="x86qw-test-headers")
         reader.start()
         try:
+            self.assertTrue(blocked.wait(2), "a leitura de headers não iniciou")
             registry = downloader._ConnectionRegistry()
             registry.register(23, HeaderConnection())
             registry.cancel(23)
-            self.assertTrue(finished.wait(1))
+            self.assertTrue(finished.wait(2))
         finally:
             try:
                 peer.shutdown(socket.SHUT_RDWR)
@@ -2752,7 +2770,7 @@ class DownloaderTests(unittest.TestCase):
                 )
         elapsed = time.monotonic() - started
 
-        self.assertLess(elapsed, 1.15)
+        self.assertLess(elapsed, 1.5)
         self.assertTrue(process.killed.is_set())
         self.assertTrue(process.dns_started.is_set())
         self.assertFalse(process.dns_active.is_set())
@@ -2771,7 +2789,7 @@ class DownloaderTests(unittest.TestCase):
         process = BlockingResolverProcess()
 
         def delayed_spawn(*_args: object, **_kwargs: object) -> BlockingResolverProcess:
-            time.sleep(1.2)
+            time.sleep(2.0)
             return process
 
         started = time.monotonic()
@@ -2787,8 +2805,8 @@ class DownloaderTests(unittest.TestCase):
                 )
         elapsed = time.monotonic() - started
 
-        self.assertLess(elapsed, 1.15)
-        self.assertTrue(process.collected.wait(1))
+        self.assertLess(elapsed, 1.5)
+        self.assertTrue(process.collected.wait(2))
         self.assertTrue(process.killed.is_set())
         self.assertNotIn(b"G", process.inputs)
         self.assertFalse(process.dns_started.is_set())

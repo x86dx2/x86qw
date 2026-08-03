@@ -58,6 +58,7 @@ class InstallerTests(unittest.TestCase):
             "$InstallerSize": "234567",
         }, powershell)
 
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
     def test_public_unix_bootstrap_never_executes_a_partial_response(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -87,6 +88,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(sentinel.exists())
         self.assertEqual([], leftovers)
 
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
     def test_public_unix_bootstrap_bounds_unknown_length_before_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -122,6 +124,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("bootstrap excedeu 262144 bytes", result.stderr)
         self.assertEqual([], leftovers)
 
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
     def test_public_unix_bootstrap_forwards_arguments_and_exit_status(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

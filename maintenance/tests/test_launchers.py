@@ -1793,7 +1793,11 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             self.assertFalse(destination.exists())
 
         self.assertTrue(process.killed.is_set())
-        self.assertTrue(process.collected.is_set())
+        # The controller must stop the resolver before returning, but the
+        # daemon worker may need one final scheduler turn to reap the killed
+        # process.  Waiting on the event keeps this assertion portable without
+        # weakening the subsequent no-residual-thread check.
+        self.assertTrue(process.collected.wait(1))
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())
         self.assertFalse(any(

@@ -684,7 +684,7 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     else:
         deadline = connection_deadline
         timeout_error = TransientError("prazo de conexao ou headers excedido")
-    if deadline - time.monotonic() < MIN_OPEN_BUDGET_SECONDS:
+    if deadline - time.monotonic() <= MIN_OPEN_BUDGET_SECONDS:
         raise timeout_error
     lock = threading.Lock()
     state = {}
