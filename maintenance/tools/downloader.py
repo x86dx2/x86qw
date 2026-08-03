@@ -669,9 +669,9 @@ def _open_with_deadline(
     response is closed as soon as the underlying call returns.
     """
 
-    timeout = _remaining(deadline, clock)
+    open_timeout = _remaining(deadline, clock)
     if cancel_open is None:
-        response = open_url(request, timeout)
+        response = open_url(request, open_timeout)
         _remaining(deadline, clock)
         return response
 
@@ -683,7 +683,7 @@ def _open_with_deadline(
         nonlocal cancelled
         try:
             try:
-                value: object = open_url(request, timeout)
+                value: object = open_url(request, open_timeout)
                 kind = "response"
             except BaseException as error:
                 value = error
@@ -707,7 +707,7 @@ def _open_with_deadline(
     )
     thread.start()
     try:
-        thread.join(timeout)
+        thread.join(_remaining(deadline, clock))
     except BaseException:
         with lock:
             cancelled = True

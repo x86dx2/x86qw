@@ -67,6 +67,10 @@ redirects, headers, streaming, retries e respectivas pausas. Em
 `download_mirrors()`, o instante final é calculado uma vez antes do primeiro
 mirror e compartilhado por todas as origens e tentativas.
 
+O controlador recalcula o orçamento depois de iniciar o worker de conexão. Se
+o prazo expirar nesse intervalo, ele ainda cancela a conexão registrada, fecha
+uma resposta eventualmente recebida e não deixa a thread de transporte viva.
+
 Todos os contratos de um conjunto de mirrors são validados antes da primeira
 conexão. Tipo, deadline, destino e identidade precisam ser compatíveis. Falhas
 remotas de transporte ou integridade permitem fallback; falhas de protocolo,
@@ -105,6 +109,8 @@ A suíte dedicada cobre:
 - resposta parcial, tamanho excedido e SHA-256 incorreto;
 - timeout de conexão/headers, leitura bloqueante com `socketpair` e deadline
   entre chunks;
+- expiração entre a criação do worker e a espera do controlador, com
+  cancelamento obrigatório da conexão;
 - um deadline compartilhado entre retries e mirrors;
 - redirects para HTTP e headers privados entre origens;
 - corpos intermediários dos cinco status de redirect sem leitura ilimitada e

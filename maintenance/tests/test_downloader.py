@@ -1082,7 +1082,9 @@ class DownloaderTests(unittest.TestCase):
         self.assertEqual({"timeout": 7}, opened.call_args.kwargs)
 
     def test_open_and_header_phase_cannot_outlive_total_deadline(self) -> None:
+        registered = threading.Event()
         release = threading.Event()
+        clock = AdvancingClock()
         opener = downloader.build_https_opener()
         registry = getattr(opener, "_x86qw_connection_registry")
 
@@ -1093,23 +1095,48 @@ class DownloaderTests(unittest.TestCase):
         def blocked_open(_request: object, *, timeout: float) -> FakeResponse:
             self.assertGreater(timeout, 0)
             registry.register(threading.get_ident(), CancelConnection())
+            registered.set()
             release.wait(2)
             return FakeResponse(b"late")
 
-        started = time.monotonic()
-        with mock.patch.object(opener, "open", side_effect=blocked_open):
+        real_thread_start = downloader.threading.Thread.start
+        real_thread_join = downloader.threading.Thread.join
+        controller_joins: list[float | None] = []
+
+        def start_then_expire_deadline(thread: threading.Thread) -> None:
+            real_thread_start(thread)
+            if thread.name == "x86qw-download-open":
+                self.assertTrue(registered.wait(1))
+                clock.advance(2)
+
+        def record_controller_join(
+            thread: threading.Thread, timeout: float | None = None,
+        ) -> None:
+            if thread.name == "x86qw-download-open":
+                controller_joins.append(timeout)
+                return
+            real_thread_join(thread, timeout)
+
+        with mock.patch.object(
+            opener, "open", side_effect=blocked_open,
+        ), mock.patch.object(
+            downloader.threading.Thread, "start", start_then_expire_deadline,
+        ), mock.patch.object(
+            downloader.threading.Thread, "join", record_controller_join,
+        ):
             with self.assertRaises(downloader.DownloadDeadlineError):
                 downloader.download(
                     downloader.BoundedMetadata(
                         url=self.URL,
                         maximum_size=1024,
-                        deadline_seconds=0.05,
+                        deadline_seconds=1,
                         retry=downloader.RetryPolicy(attempts=1),
                     ),
                     opener=opener,
+                    clock=clock,
                 )
-        release.set()
-        self.assertLess(time.monotonic() - started, 0.5)
+        self.assertTrue(release.is_set())
+        self.assertEqual([], controller_joins)
         for _ in range(50):
             if not any(
                 thread.name == "x86qw-download-open" and thread.is_alive()

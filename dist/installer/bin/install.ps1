@@ -413,8 +413,10 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     thread = threading.Thread(target=worker, name="x86qw-bootstrap-open")
     thread.daemon = True
     thread.start()
-    wait = remaining(deadline)
     try:
+        wait = deadline - time.monotonic()
+        if wait <= 0:
+            raise deadline_error()
         thread.join(wait)
     except BaseException:
         with lock:

@@ -1297,19 +1297,26 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
         blocked = BlockingOpener()
         real_thread_start = namespace["threading"].Thread.start
+        real_monotonic = namespace["time"].monotonic
+        clock_offset = [0.0]
+
+        def controlled_monotonic():
+            return real_monotonic() + clock_offset[0]
 
         def start_after_registration(thread):
             real_thread_start(thread)
             if thread.name == "x86qw-bootstrap-open":
                 self.assertTrue(registered.wait(1))
+                clock_offset[0] = 1.0
 
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
-            started = time.monotonic()
             with mock.patch.object(
                 urllib_module.request, "build_opener", return_value=blocked,
             ), mock.patch.object(
                 namespace["threading"].Thread, "start", start_after_registration,
+            ), mock.patch.object(
+                namespace["time"], "monotonic", controlled_monotonic,
             ):
                 with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
                     namespace["download_mirrors"](
@@ -1322,7 +1329,6 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                         0,
                         0.05,
                     )
-            self.assertLess(time.monotonic() - started, 0.5)
             self.assertTrue(release.is_set())
             self.assertFalse(destination.exists())
         for _ in range(50):
@@ -1826,7 +1832,7 @@ function Get-Command {
   if ($Name -eq "python") { return [pscustomobject]@{ Name = "python" } }
   return $null
 }
-function Get-FileHash {
+function global:Get-FileHash {
   param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   $global:X86QWTestHashCalls += 1
   Microsoft.PowerShell.Utility\Get-FileHash -Algorithm $Algorithm -LiteralPath $LiteralPath
