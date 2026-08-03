@@ -41,7 +41,9 @@ pacote incremental `x86qw_runtime.io.archive` e migra:
 
 Os builders continuam escrevendo ZIP determinístico com `zipfile` em modo `w`.
 Eles não constituem um reader alternativo: o arquivo produzido precisa passar
-por `scan_archive()` ou `validate_installer_bundle()` antes de ser aceito.
+por `scan_archive()`, `validate_installer_bundle()` ou pelo contrato histórico
+versionado equivalente antes de ser aceito. A escrita ocorre em staging sob uma
+raiz explícita, seguida de publicação sem substituição.
 
 ## Fluxos resultantes
 
@@ -153,6 +155,7 @@ privados e arquivos são criados exclusivamente com `0600`.
 | Serviços | validador e extração próprios | scan/extract canônicos + materialização journalizada |
 | Serviços Windows | fallback sem cleanup reversível | handles, identidade persistente e unlink exato |
 | Bootstrap | `unzip`/`Expand-Archive` | projeção exata da fronteira canônica |
+| Builders | escrita direta no nome final | snapshot estável, staging sob raiz explícita, validação e hardlink sem substituição |
 | Regressão | proibição por convenção | gate estático de readers/extratores paralelos |
 
 ## Compatibilidade e migração
@@ -162,13 +165,26 @@ inventário inicial cabem nos novos limites e passam no scan. A estrutura
 instalada, os hashes de arquivos válidos, os comandos e o gameplay são
 preservados.
 
+O histórico imutável do instalador mantém seus dois layouts reais: seis membros
+entre `0.1.0` e `0.1.19`, e sete a partir de `0.1.20`. Ambos exigem conjunto
+exato de membros, identidades externas coerentes e identidade interna do
+`x86qw.pyz`; o layout moderno continua obrigatório para bundles novos.
+
+Os builders escrevem em arquivo privado sob uma raiz de saída explícita,
+rejeitam symlink ou reparse point nos pais gerenciados, validam o snapshot e
+publicam por hardlink sem substituir nome existente. Uma falha posterior à
+criação do link preserva o alvo para inspeção e impede manifesto, registro e
+publicação. O ponteiro `latest` só é criado quando ausente ou aceito quando já
+possui exatamente o valor esperado; promover um valor divergente permanece
+bloqueado até a transação imutável da PR 10.
+
 Arquivos antes tolerados somente por validação incompleta passam a falhar antes
 do primeiro write de extração ou payload visível. Esse é o único contrato
 deliberadamente incompatível.
 
 ## Evidência atual e gate restante
 
-Na validação local deste candidato, 665 testes de manutenção e cinco testes do
+Na validação local deste candidato, 683 testes de manutenção e cinco testes do
 site passaram tanto no Python 3.10 quanto no Python 3.14. Os 11 skips locais
 são dez verificações que exigem o runner Windows e um smoke de rede opt-in.
 `verify`, Git LFS, `git diff --check`, os parsers dos bootstraps e o dry-run do
@@ -194,6 +210,8 @@ nativo de ezQuake, MVDSV, QTV ou QWFWD.
 
 - a DACL privada no Windows pertence ao PR 4;
 - trust metadata pertence ao PR 9;
+- promoção transacional de candidato e atualização segura de `latest` pertencem
+  à PR 10; este candidato falha fechado diante de um ponteiro divergente;
 - smokes nativos e evidência do candidato pertencem aos PRs 10 e 11;
 - TAR não é extraído para o filesystem pelos fluxos atuais e permanece fora do
   contrato desta PR;

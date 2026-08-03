@@ -206,7 +206,7 @@ separada.
 
 **Entrega funcional:** completa no candidato local da issue #49; PR 3 ainda não
 publicada
-**Validação:** regressão local concluída em Python 3.14 e 3.10: 665 testes de
+**Validação:** regressão local concluída em Python 3.14 e 3.10: 683 testes de
 manutenção e cinco do site aprovados, com 11 skips explícitos (dez Windows e um
 smoke de rede); matriz portável e casos nativos Windows pendentes no CI; smokes
 nativos dos runtimes permanecem pendentes

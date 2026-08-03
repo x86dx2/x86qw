@@ -193,7 +193,10 @@ concordar com a versão solicitada antes da execução da CLI extraída.
 - conteúdo e estratégia dos PAKs;
 - arquivos pessoais e destinos já existentes;
 - bundles, tags, checksums e ponteiros já publicados, inclusive `0.7.1`;
-- writers determinísticos, desde que o resultado seja validado pela fronteira.
+- os dois layouts históricos imutáveis do instalador: seis membros até
+  `0.1.19` e sete membros a partir de `0.1.20`;
+- writers determinísticos, desde que o resultado seja produzido em staging,
+  validado pela fronteira e publicado sem substituir nome existente.
 
 ## Contratos alterados
 
@@ -203,7 +206,9 @@ concordar com a versão solicitada antes da execução da CLI extraída.
   compressão não permitida ou limite excedido falham antes de mutação;
 - executabilidade deixa de vir do ZIP e passa a ser declarada pelo produto;
 - extração canônica exige destino inexistente e promoção do diretório completo;
-- bootstraps deixam de depender de extratores externos.
+- bootstraps deixam de depender de extratores externos;
+- builders recusam pais symlink/reparse, alvos concorrentes e promoção
+  automática de um ponteiro `latest` divergente.
 
 ## Consequências e riscos residuais
 
@@ -220,6 +225,9 @@ Permanecem fora desta decisão:
   na [issue #48](https://github.com/x86dx2/x86qw/issues/48);
 - evidência e smokes nativos dos runtimes, que não são substituídos por testes
   portáveis de arquivo;
+- promoção transacional do candidato, incluindo troca deliberada de `latest`,
+  tratada no PR 10 e na
+  [issue #51](https://github.com/x86dx2/x86qw/issues/51);
 - TAR: não existe extração TAR para o filesystem nos fluxos abrangidos por esta
   PR. Se um consumidor futuro precisar disso, deve entrar por contrato próprio
   antes do primeiro uso, e não por exceção à fronteira ZIP/PK3/PYZ.
