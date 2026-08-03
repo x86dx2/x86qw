@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import hashlib
 import io
 import json
 import os
@@ -19,10 +18,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from .build_artifacts import publish_verified_file, read_regular_file, staged_artifact
     from .components import load_catalog as load_component_catalog, runtime_catalog
     from .runtime_catalog import load_inventory as load_runtime_inventory
     from .validate_catalog import validate_catalog
 except ImportError:
+    from build_artifacts import publish_verified_file, read_regular_file, staged_artifact
     from components import load_catalog as load_component_catalog, runtime_catalog
     from runtime_catalog import load_inventory as load_runtime_inventory
     from validate_catalog import validate_catalog
@@ -37,10 +38,13 @@ from x86qw_runtime.io.archive import (
     read_archive_members,
     scan_archive,
     validate_installer_bundle,
+    validate_installer_history_bundle,
 )
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
-VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
+MAX_BUILD_INPUT_BYTES = 128 * 1024 * 1024
+MAX_TEXT_INPUT_BYTES = 16 * 1024 * 1024
+VERSION = read_regular_file(VERSION_FILE, maximum_size=4096).decode("utf-8").strip()
 BUNDLE_FILES = (
     ("dist/installer/VERSION", "VERSION", 0o644),
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
@@ -148,9 +152,11 @@ def zipapp_bytes(version: str) -> bytes:
         )
         for source_name, member in ZIPAPP_FILES:
             source = ROOT / source_name
-            if not source.is_file() or source.is_symlink():
-                raise ValueError(f"zipapp input is missing or unsafe: {source}")
-            write_member(application, member, source.read_bytes())
+            write_member(
+                application,
+                member,
+                read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES),
+            )
         for key, _, member in RUNTIME_CONTRACT_FILES:
             write_member(application, member, json_bytes(runtime_inventory[key]))
         write_member(application, "_x86qw/installer.json", json_bytes(identity))
@@ -170,14 +176,6 @@ def zipapp_bytes(version: str) -> bytes:
     if set(plan.member_names) != set(required):
         raise ValueError("installer zipapp contains an unexpected member")
     return payload
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def version_key(version: str) -> tuple[int, int, int]:
@@ -203,12 +201,19 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             raise ValueError(f"installer package is missing or unsafe: {archive}")
         if any(entry.name != filename for entry in directory.iterdir()):
             raise ValueError(f"installer version directory contains an unexpected file: {directory}")
+        try:
+            plan = validate_installer_history_bundle(archive, version)
+            read_archive_members(plan, ())
+        except ArchiveError as error:
+            raise ValueError(
+                f"installer history bundle failed canonical archive validation: {archive}: {error}"
+            ) from error
         results.append({
             "version": version,
             "filename": filename,
             "distribution_path": archive.relative_to(ROOT / "dist").as_posix(),
-            "size": archive.stat().st_size,
-            "sha256": sha256(archive),
+            "size": plan.source_size,
+            "sha256": plan.source_sha256,
         })
     return sorted(results, key=lambda item: version_key(str(item["version"])))
 
@@ -220,14 +225,21 @@ def update_latest_link(package_root: Path) -> str:
     version = str(packages[-1]["version"])
     latest = package_root / "latest"
     expected = Path(version)
-    if os.path.lexists(latest) and not latest.is_symlink():
-        raise ValueError(f"installer latest pointer is not a symbolic link: {latest}")
-    if latest.is_symlink() and os.readlink(latest) == expected.as_posix():
-        return version
-    with tempfile.TemporaryDirectory(prefix=".latest-", dir=latest.parent) as temporary:
-        replacement = Path(temporary) / "latest"
-        replacement.symlink_to(expected, target_is_directory=True)
-        os.replace(replacement, latest)
+    if os.path.lexists(latest):
+        if latest.is_symlink() and os.readlink(latest) == expected.as_posix():
+            return version
+        raise ValueError(
+            "installer latest pointer differs from the selected immutable package; "
+            "candidate promotion requires the dedicated release transaction"
+        )
+    try:
+        latest.symlink_to(expected, target_is_directory=True)
+    except FileExistsError:
+        if latest.is_symlink() and os.readlink(latest) == expected.as_posix():
+            return version
+        raise ValueError(
+            f"installer latest pointer changed concurrently and was preserved: {latest}"
+        ) from None
     return version
 
 
@@ -242,9 +254,7 @@ def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
 
 
 def archive_source_bytes() -> bytes:
-    if not ARCHIVE_SOURCE.is_file() or ARCHIVE_SOURCE.is_symlink():
-        raise ValueError(f"archive helper source is missing or unsafe: {ARCHIVE_SOURCE}")
-    return ARCHIVE_SOURCE.read_bytes()
+    return read_regular_file(ARCHIVE_SOURCE, maximum_size=MAX_TEXT_INPUT_BYTES)
 
 
 def archive_source_base64() -> str:
@@ -252,7 +262,10 @@ def archive_source_base64() -> str:
 
 
 def embedded_archive_source(path: Path, assignment: str) -> bytes:
-    content = path.read_text(encoding="utf-8")
+    try:
+        content = read_regular_file(path, maximum_size=MAX_TEXT_INPUT_BYTES).decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"bootstrap source is not valid UTF-8: {path}") from error
     pattern = rf'(?m)^{re.escape(assignment)}\s*=\s*"([A-Za-z0-9+/]*={{0,2}})"$'
     matches = re.findall(pattern, content)
     if len(matches) != 1:
@@ -280,7 +293,10 @@ def validate_bootstrap_archive_source() -> None:
         (SHELL_BOOTSTRAP, PUBLIC_SHELL_BOOTSTRAP),
         (POWERSHELL_BOOTSTRAP, PUBLIC_POWERSHELL_BOOTSTRAP),
     ):
-        if canonical.read_bytes() != public.read_bytes():
+        if (
+            read_regular_file(canonical, maximum_size=MAX_TEXT_INPUT_BYTES)
+            != read_regular_file(public, maximum_size=MAX_TEXT_INPUT_BYTES)
+        ):
             raise ValueError(f"public bootstrap differs from canonical source: {public}")
         assignment = ARCHIVE_BASE64_ASSIGNMENTS[canonical]
         if embedded_archive_source(canonical, assignment) != expected:
@@ -354,19 +370,18 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
     validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
     target = output / version / filename
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".installer-", suffix=".zip", dir=target.parent)
-    os.close(descriptor)
-    temporary = Path(temporary_name)
-    try:
-        with zipfile.ZipFile(temporary, "w", allowZip64=True) as bundle:
+    with staged_artifact(target, root=output, prefix=".installer-") as staged:
+        with zipfile.ZipFile(staged.stream, "w", allowZip64=True) as bundle:
             prefix = f"x86qw-installer-{version}"
             write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_bytes(version))
             for source_name, member, mode in BUNDLE_FILES:
                 source = ROOT / source_name
-                if not source.is_file() or source.is_symlink():
-                    raise ValueError(f"installer input is missing or unsafe: {source}")
-                write_member(bundle, f"{prefix}/{member}", source.read_bytes(), mode)
+                write_member(
+                    bundle,
+                    f"{prefix}/{member}",
+                    read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES),
+                    mode,
+                )
             write_member(
                 bundle,
                 f"{prefix}/installer.json",
@@ -383,39 +398,25 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
                 f"{prefix}/_x86qw/installer.json",
                 json_bytes({"format": 1, "project": "x86qw", "version": version}),
             )
-        try:
-            plan = validate_installer_bundle(temporary, version)
-            read_archive_members(plan, ())
-        except ArchiveError as error:
-            raise ValueError(f"installer bundle failed archive validation: {error}") from error
-        target_exists = target.exists() or target.is_symlink()
-        if target_exists:
+        staged.seal()
+
+        def validate(path: Path):
             try:
-                existing_plan = validate_installer_bundle(target, version)
-                read_archive_members(existing_plan, ())
+                plan = validate_installer_bundle(path, version)
+                read_archive_members(plan, ())
             except ArchiveError as error:
-                raise ValueError(
-                    f"installer bundle failed archive validation: {error}"
-                ) from error
-            if (
-                existing_plan.source_size != plan.source_size
-                or existing_plan.source_sha256 != plan.source_sha256
-            ):
-                raise ValueError(
-                    f"installer version {version} is immutable; bump VERSION before rebuilding"
-                )
-        else:
-            os.replace(temporary, target)
-        if os.name != "nt":
-            target.chmod(0o644)
-        try:
-            accepted_plan = validate_installer_bundle(target, version)
-            read_archive_members(accepted_plan, ())
-        except ArchiveError as error:
-            raise ValueError(f"installer bundle failed archive validation: {error}") from error
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+                raise ValueError(f"installer bundle failed archive validation: {error}") from error
+            return plan
+
+        accepted_plan = publish_verified_file(
+            staged,
+            target,
+            validate=validate,
+            fingerprint=lambda value: (value.source_size, value.source_sha256),
+            conflict_message=(
+                f"installer version {version} is immutable; bump VERSION before rebuilding"
+            ),
+        )
     result = {
         "version": version,
         "filename": filename,
