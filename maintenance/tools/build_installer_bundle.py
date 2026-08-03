@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import io
 import json
@@ -11,6 +12,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
 import zipfile
 from datetime import datetime, timezone
@@ -27,6 +29,16 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    read_archive_members,
+    scan_archive,
+    validate_installer_bundle,
+)
+
 VERSION_FILE = ROOT / "dist/installer/VERSION"
 VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
 BUNDLE_FILES = (
@@ -48,6 +60,9 @@ ZIPAPP_FILES = (
     ("maintenance/tools/components.py", "maintenance/tools/components.py"),
     ("maintenance/tools/downloader.py", "maintenance/tools/downloader.py"),
     ("maintenance/tools/runtime_catalog.py", "maintenance/tools/runtime_catalog.py"),
+    ("x86qw_runtime/__init__.py", "x86qw_runtime/__init__.py"),
+    ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
+    ("x86qw_runtime/io/archive.py", "x86qw_runtime/io/archive.py"),
 )
 RUNTIME_CONTRACT_FILES = (
     ("capabilities", "maintenance/inventory/capabilities.json", "_x86qw/capabilities.json"),
@@ -59,6 +74,15 @@ FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 GITLAB_PROJECT_ID = "84813414"
+ARCHIVE_SOURCE = ROOT / "x86qw_runtime/io/archive.py"
+SHELL_BOOTSTRAP = ROOT / "dist/installer/bin/install.sh"
+POWERSHELL_BOOTSTRAP = ROOT / "dist/installer/bin/install.ps1"
+PUBLIC_SHELL_BOOTSTRAP = ROOT / "site/public/install.sh"
+PUBLIC_POWERSHELL_BOOTSTRAP = ROOT / "site/public/install.ps1"
+ARCHIVE_BASE64_ASSIGNMENTS = {
+    SHELL_BOOTSTRAP: "ARCHIVE_HELPER_BASE64",
+    POWERSHELL_BOOTSTRAP: "$ArchiveHelperBase64",
+}
 LEGACY_HANDOFF_SHIM = b"""#!/usr/bin/env python3
 import os
 import sys
@@ -91,6 +115,8 @@ def json_bytes(value: object) -> bytes:
 def write_member(
     archive: zipfile.ZipFile, name: str, payload: bytes, mode: int = 0o644,
 ) -> None:
+    if mode not in {0o644, 0o755}:
+        raise ValueError(f"installer ZIP member mode is not canonical: {name}: {mode:o}")
     info = zipfile.ZipInfo(name, FIXED_TIME)
     info.compress_type = zipfile.ZIP_DEFLATED
     info.external_attr = (stat.S_IFREG | mode) << 16
@@ -129,7 +155,21 @@ def zipapp_bytes(version: str) -> bytes:
             write_member(application, member, json_bytes(runtime_inventory[key]))
         write_member(application, "_x86qw/installer.json", json_bytes(identity))
         write_member(application, "_x86qw/components.json", runtime_catalog_bytes())
-    return output.getvalue()
+    payload = output.getvalue()
+    required = (
+        "__main__.py",
+        *(member for _, member in ZIPAPP_FILES),
+        *(member for _, _, member in RUNTIME_CONTRACT_FILES),
+        "_x86qw/installer.json",
+        "_x86qw/components.json",
+    )
+    try:
+        plan = scan_archive(payload, required_members=required)
+    except ArchiveError as error:
+        raise ValueError(f"installer zipapp failed archive validation: {error}") from error
+    if set(plan.member_names) != set(required):
+        raise ValueError("installer zipapp contains an unexpected member")
+    return payload
 
 
 def sha256(path: Path) -> str:
@@ -201,6 +241,52 @@ def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def archive_source_bytes() -> bytes:
+    if not ARCHIVE_SOURCE.is_file() or ARCHIVE_SOURCE.is_symlink():
+        raise ValueError(f"archive helper source is missing or unsafe: {ARCHIVE_SOURCE}")
+    return ARCHIVE_SOURCE.read_bytes()
+
+
+def archive_source_base64() -> str:
+    return base64.b64encode(archive_source_bytes()).decode("ascii")
+
+
+def embedded_archive_source(path: Path, assignment: str) -> bytes:
+    content = path.read_text(encoding="utf-8")
+    pattern = rf'(?m)^{re.escape(assignment)}\s*=\s*"([A-Za-z0-9+/]*={{0,2}})"$'
+    matches = re.findall(pattern, content)
+    if len(matches) != 1:
+        raise ValueError(
+            f"bootstrap archive source assignment is missing or duplicated: {path}:{assignment}"
+        )
+    try:
+        return base64.b64decode(matches[0], validate=True)
+    except ValueError as error:
+        raise ValueError(f"bootstrap archive source is not valid Base64: {path}") from error
+
+
+def synchronize_bootstrap_archive_source() -> None:
+    encoded = archive_source_base64()
+    for path, assignment in ARCHIVE_BASE64_ASSIGNMENTS.items():
+        update_public_bootstrap(path, {assignment: encoded})
+    shutil.copyfile(SHELL_BOOTSTRAP, PUBLIC_SHELL_BOOTSTRAP)
+    shutil.copyfile(POWERSHELL_BOOTSTRAP, PUBLIC_POWERSHELL_BOOTSTRAP)
+    validate_bootstrap_archive_source()
+
+
+def validate_bootstrap_archive_source() -> None:
+    expected = archive_source_bytes()
+    for canonical, public in (
+        (SHELL_BOOTSTRAP, PUBLIC_SHELL_BOOTSTRAP),
+        (POWERSHELL_BOOTSTRAP, PUBLIC_POWERSHELL_BOOTSTRAP),
+    ):
+        if canonical.read_bytes() != public.read_bytes():
+            raise ValueError(f"public bootstrap differs from canonical source: {public}")
+        assignment = ARCHIVE_BASE64_ASSIGNMENTS[canonical]
+        if embedded_archive_source(canonical, assignment) != expected:
+            raise ValueError(f"bootstrap archive source is stale: {canonical}")
+
+
 def public_bootstrap_assignments(
     record: dict[str, object],
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -265,6 +351,7 @@ def reset_history(package_root: Path) -> None:
 
 
 def build(output: Path, version: str = VERSION) -> dict[str, object]:
+    validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
     target = output / version / filename
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -296,12 +383,36 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
                 f"{prefix}/_x86qw/installer.json",
                 json_bytes({"format": 1, "project": "x86qw", "version": version}),
             )
-        if target.is_file() and sha256(target) != sha256(temporary):
-            raise ValueError(f"installer version {version} is immutable; bump VERSION before rebuilding")
-        if not target.exists():
+        try:
+            plan = validate_installer_bundle(temporary, version)
+            read_archive_members(plan, ())
+        except ArchiveError as error:
+            raise ValueError(f"installer bundle failed archive validation: {error}") from error
+        target_exists = target.exists() or target.is_symlink()
+        if target_exists:
+            try:
+                existing_plan = validate_installer_bundle(target, version)
+                read_archive_members(existing_plan, ())
+            except ArchiveError as error:
+                raise ValueError(
+                    f"installer bundle failed archive validation: {error}"
+                ) from error
+            if (
+                existing_plan.source_size != plan.source_size
+                or existing_plan.source_sha256 != plan.source_sha256
+            ):
+                raise ValueError(
+                    f"installer version {version} is immutable; bump VERSION before rebuilding"
+                )
+        else:
             os.replace(temporary, target)
         if os.name != "nt":
             target.chmod(0o644)
+        try:
+            accepted_plan = validate_installer_bundle(target, version)
+            read_archive_members(accepted_plan, ())
+        except ArchiveError as error:
+            raise ValueError(f"installer bundle failed archive validation: {error}") from error
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -309,8 +420,8 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
         "version": version,
         "filename": filename,
         "distribution_path": target.relative_to(ROOT / "dist").as_posix(),
-        "size": target.stat().st_size,
-        "sha256": sha256(target),
+        "size": accepted_plan.source_size,
+        "sha256": accepted_plan.source_sha256,
     }
     update_latest_link(output)
     return result
@@ -446,13 +557,14 @@ def register(result: dict[str, object]) -> None:
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    shell_bootstrap = ROOT / "dist/installer/bin/install.sh"
-    powershell_bootstrap = ROOT / "dist/installer/bin/install.ps1"
+    shell_bootstrap = SHELL_BOOTSTRAP
+    powershell_bootstrap = POWERSHELL_BOOTSTRAP
     shell_assignments, powershell_assignments = public_bootstrap_assignments(current_record)
     update_public_bootstrap(shell_bootstrap, shell_assignments)
     update_public_bootstrap(powershell_bootstrap, powershell_assignments)
-    shutil.copyfile(shell_bootstrap, ROOT / "site/public/install.sh")
-    shutil.copyfile(powershell_bootstrap, ROOT / "site/public/install.ps1")
+    shutil.copyfile(shell_bootstrap, PUBLIC_SHELL_BOOTSTRAP)
+    shutil.copyfile(powershell_bootstrap, PUBLIC_POWERSHELL_BOOTSTRAP)
+    validate_bootstrap_archive_source()
 
 
 def main() -> int:

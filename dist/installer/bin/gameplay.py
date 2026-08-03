@@ -18,7 +18,6 @@ import sys
 import tempfile
 import time
 import traceback
-import zipfile
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
@@ -27,6 +26,11 @@ sys.dont_write_bytecode = True
 core = importlib.import_module("manager")
 navigation = importlib.import_module("menu")
 from maintenance.tools.runtime_catalog import load_games, games_by_id
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    read_archive_member,
+    scan_archive,
+)
 
 InstallerError = core.InstallerError
 console = core.console
@@ -1634,8 +1638,7 @@ class Player(core.Installer):
 
     @staticmethod
     def map_name_from_member(member: str) -> str | None:
-        normalized = member.replace("\\", "/")
-        path = PurePosixPath(normalized)
+        path = PurePosixPath(member)
         if len(path.parts) != 2 or path.parts[0].lower() != "maps" or path.suffix.lower() != ".bsp":
             return None
         name = path.stem
@@ -1647,12 +1650,13 @@ class Player(core.Installer):
         maps: set[str] = set()
         if package.suffix.lower() == ".pk3":
             try:
-                with zipfile.ZipFile(package) as archive:
-                    members = archive.namelist()
-            except (OSError, zipfile.BadZipFile) as error:
+                plan = scan_archive(package)
+            except (ArchiveError, OSError) as error:
                 raise InstallerError(f"Pacote de mapas inválido: {package}") from error
-            for member in members:
-                if name := self.map_name_from_member(member):
+            for member in plan.members:
+                if member.kind == "file" and (
+                    name := self.map_name_from_member(member.path.as_posix())
+                ):
                     maps.add(name)
             return maps
         try:
@@ -1865,12 +1869,14 @@ class Player(core.Installer):
     def ktx_archive_members(self) -> frozenset[str]:
         package = self.target / "qw/ktx.pk3"
         try:
-            if package.is_symlink() or not package.is_file() or not zipfile.is_zipfile(package):
-                raise InstallerError(f"Pacote KTX inválido: {package}")
-            with zipfile.ZipFile(package) as archive:
-                managed = frozenset(name.casefold() for name in archive.namelist())
+            plan = scan_archive(package)
+            managed = frozenset(
+                member.path.as_posix().casefold()
+                for member in plan.members
+                if member.kind == "file"
+            )
             return managed | ktx_external_assets(self.target)
-        except (OSError, zipfile.BadZipFile) as error:
+        except (ArchiveError, OSError) as error:
             raise InstallerError(f"Não foi possível consultar os recursos do KTX: {package}") from error
 
     @staticmethod
@@ -2627,9 +2633,9 @@ class Player(core.Installer):
             return package.read_bytes()
         if suffix == ".pk3":
             try:
-                with zipfile.ZipFile(package) as archive:
-                    return archive.read("qwprogs.dat")
-            except (KeyError, OSError, zipfile.BadZipFile) as error:
+                plan = scan_archive(package, required_members=("qwprogs.dat",))
+                return read_archive_member(plan, "qwprogs.dat")
+            except (ArchiveError, KeyError, OSError) as error:
                 raise InstallerError(f"Gamecode qwprogs.dat não encontrado em {package}.") from error
         if suffix == ".pak":
             return self.pak_member(package, "qwprogs.dat")

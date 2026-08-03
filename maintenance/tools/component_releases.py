@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
+import sys
 import tarfile
-import zipfile
 from pathlib import Path, PurePosixPath
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    ArchivePlan,
+    read_archive_members,
+    scan_archive,
+)
 
 try:
     from .components import components_by_id, load_catalog as load_component_catalog
@@ -356,38 +368,50 @@ def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _verified_archive_plan(
+    path: Path,
+    artifact: dict[str, object],
+    required_members: tuple[str, ...] = (),
+) -> ArchivePlan:
+    try:
+        plan = scan_archive(path, required_members=required_members)
+    except ArchiveError as error:
+        raise ValueError(f"component source artifact is unsafe: {path}: {error}") from error
+    if plan.source_size != artifact["size"] or plan.source_sha256 != artifact["sha256"]:
+        raise ValueError(f"component source artifact failed SHA-256: {path}")
+    return plan
+
+
 def verified_artifact_members(distribution_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
     path = distribution_root / str(artifact["distribution_path"])
-    if not path.is_file() or path.stat().st_size != artifact["size"]:
+    if path.is_symlink() or not path.is_file():
         raise ValueError(f"missing or invalid component source artifact: {path}")
-    payload = path.read_bytes()
-    if sha256_bytes(payload) != artifact["sha256"]:
-        raise ValueError(f"component source artifact failed SHA-256: {path}")
-    selected: dict[str, bytes] = {}
-    with zipfile.ZipFile(path) as package:
-        if package.testzip() is not None:
-            raise ValueError(f"component source artifact contains a corrupt member: {path}")
-        for member in artifact["members"]:
-            name = str(member["path"])
-            try:
-                data = package.read(name)
-            except KeyError as error:
-                raise ValueError(f"component source artifact lacks {name}: {path}") from error
-            if len(data) != member["size"] or sha256_bytes(data) != member["sha256"]:
-                raise ValueError(f"component source member failed integrity: {name}")
-            selected[name] = data
+    member_records = artifact["members"]
+    assert isinstance(member_records, list)
+    names = tuple(str(member["path"]) for member in member_records)
+    try:
+        plan = _verified_archive_plan(path, artifact, names)
+        selected = read_archive_members(plan, names)
+    except (ArchiveError, ValueError) as error:
+        raise ValueError(f"component source artifact is unsafe: {path}: {error}") from error
+    for member in member_records:
+        name = str(member["path"])
+        data = selected[name]
+        if len(data) != member["size"] or sha256_bytes(data) != member["sha256"]:
+            raise ValueError(f"component source member failed integrity: {name}")
     return selected
 
 
 def verified_package_files(distribution_root: Path, artifact: dict[str, object]) -> dict[str, bytes]:
     path = distribution_root / str(artifact["distribution_path"])
-    if not path.is_file() or path.stat().st_size != artifact["size"]:
+    if path.is_symlink() or not path.is_file():
         raise ValueError(f"missing or invalid component source artifact: {path}")
-    if sha256_bytes(path.read_bytes()) != artifact["sha256"]:
-        raise ValueError(f"component source artifact failed SHA-256: {path}")
     selected: dict[str, bytes] = {}
     if path.name.endswith((".tar.gz", ".tgz")):
-        with tarfile.open(path, "r:gz") as package:
+        payload = path.read_bytes()
+        if len(payload) != artifact["size"] or sha256_bytes(payload) != artifact["sha256"]:
+            raise ValueError(f"component source artifact failed SHA-256: {path}")
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as package:
             for member in package.getmembers():
                 if member.isdir():
                     continue
@@ -399,14 +423,11 @@ def verified_package_files(distribution_root: Path, artifact: dict[str, object])
                     raise ValueError(f"standalone artifact member cannot be read: {name}")
                 selected[name] = extracted.read()
     elif path.suffix.casefold() == ".zip":
-        with zipfile.ZipFile(path) as package:
-            if package.testzip() is not None:
-                raise ValueError(f"component source artifact contains a corrupt member: {path}")
-            for member in package.infolist():
-                if member.is_dir():
-                    continue
-                name = _safe_path(member.filename, "standalone artifact member")
-                selected[name] = package.read(member)
+        try:
+            plan = _verified_archive_plan(path, artifact)
+            selected.update(read_archive_members(plan))
+        except (ArchiveError, ValueError) as error:
+            raise ValueError(f"component source artifact is unsafe: {path}: {error}") from error
     else:
         raise ValueError(f"unsupported standalone component archive: {path}")
     return selected

@@ -22,7 +22,6 @@ import textwrap
 import time
 import traceback
 import urllib.parse
-import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -49,6 +48,14 @@ except python_runtime.UnsupportedPythonError as error:
 
 session_control = importlib.import_module("session_control")
 navigation = importlib.import_module("menu")
+
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    extract_archive,
+    read_archive_member,
+    scan_archive,
+    validate_installer_bundle,
+)
 
 from maintenance.tools.components import (
     components_by_id,
@@ -126,7 +133,6 @@ DEVELOPMENT_RUNTIME_CATALOG = Path("maintenance/inventory/runtimes.json")
 RUNTIME_CAPABILITY_CATALOG = "_x86qw/capabilities.json"
 RUNTIME_RUNTIME_CATALOG = "_x86qw/runtimes.json"
 CLI_ARCHIVE_NAME = "x86qw.pyz"
-OUTER_INSTALLER_METADATA = "installer.json"
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 DEVELOPMENT_ID1_DIR = Path("dist/game-data/id1")
 CORE_ID1_PACKAGE = "x86qw-core-id1"
@@ -189,9 +195,9 @@ INSTALLER_ROOT = PROJECT_ROOT
 
 def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object]:
     try:
-        with zipfile.ZipFile(archive) as package:
-            value = json.loads(package.read(member))
-    except (OSError, KeyError, UnicodeDecodeError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+        plan = scan_archive(archive, required_members=(member,))
+        value = json.loads(read_archive_member(plan, member))
+    except (ArchiveError, OSError, KeyError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise InstallerError(f"{label} ausente ou inválido em {archive}") from error
     if not isinstance(value, dict):
         raise InstallerError(f"{label} inválido em {archive}")
@@ -226,6 +232,7 @@ class PlatformSpec:
     stable_archive: str
     nightly_suffix: str
     archive_binary: str
+    archive_executable: str | None
     stable_runtime: str
     nightly_runtime: str
     stable_receipt: str
@@ -284,6 +291,15 @@ def client_platform_specs() -> dict[str, PlatformSpec]:
             str(stable_platform["archive"]),
             str(nightly_platform["filename_suffix"]),
             str(stable_platform["archive_binary"]),
+            (
+                (
+                    f"{stable_platform['archive_binary']}/{stable_platform['executable']}"
+                    if system == "macos"
+                    else str(stable_platform["archive_binary"])
+                )
+                if stable_platform.get("permissions") == "executable"
+                else None
+            ),
             str(stable_platform["runtime_path"]),
             str(nightly_platform["runtime_path"]),
             str(stable_platform["receipt"]),
@@ -632,32 +648,18 @@ def reject_tree_symlinks(root: Path, label: str) -> None:
                 raise InstallerError(f"{label} contains a symlink: {candidate}")
 
 
-def archive_relative_path(name: str) -> PurePosixPath:
-    if not name or "\\" in name or ":" in name or name.startswith("/"):
-        raise InstallerError(f"unsafe archive path: {name}")
-    path = PurePosixPath(name)
-    if any(part in ("", ".", "..") for part in path.parts):
-        raise InstallerError(f"unsafe archive path: {name}")
-    return path
-
-
-def safe_extract_zip(archive: Path, destination: Path) -> None:
-    with zipfile.ZipFile(archive) as package:
-        for member in package.infolist():
-            relative = archive_relative_path(member.filename.rstrip("/"))
-            mode = member.external_attr >> 16
-            if stat.S_ISLNK(mode):
-                raise InstallerError(f"archive contains an unsupported symlink: {member.filename}")
-            output = destination.joinpath(*relative.parts)
-            if member.is_dir():
-                output.mkdir(parents=True, exist_ok=True)
-                continue
-            output.parent.mkdir(parents=True, exist_ok=True)
-            with package.open(member) as source, output.open("wb") as target:
-                shutil.copyfileobj(source, target)
-            permissions = stat.S_IMODE(mode)
-            if permissions and os.name != "nt":
-                output.chmod(permissions)
+def safe_extract_zip(
+    archive: Path,
+    destination: Path,
+    *,
+    executable_members: tuple[str, ...] = (),
+) -> None:
+    """Compatibility adapter over the single ZIP/PK3 extraction boundary."""
+    try:
+        plan = scan_archive(archive, executable_members=executable_members)
+        extract_archive(plan, destination)
+    except ArchiveError as error:
+        raise InstallerError(f"Pacote ZIP inválido: {error}") from error
 
 
 def copy_overlay(source: Path, destination: Path) -> None:
@@ -1851,8 +1853,13 @@ class Installer:
         prepared = self.stage / "prepared-runtime"
         if self.spec.key == "macos":
             extract = self.stage / "app"
-            extract.mkdir()
-            safe_extract_zip(archive, extract)
+            executable_members = (
+                (self.spec.archive_executable,)
+                if self.spec.archive_executable is not None else ()
+            )
+            safe_extract_zip(
+                archive, extract, executable_members=executable_members,
+            )
             source = extract / self.spec.archive_binary
             version, binary_hash = self.inspect_macos_app(source)
             if self.channel == "stable" and version != self.selected_version:
@@ -1867,8 +1874,13 @@ class Installer:
         else:
             if self.channel == "stable":
                 extract = self.stage / "runtime"
-                extract.mkdir()
-                safe_extract_zip(archive, extract)
+                executable_members = (
+                    (self.spec.archive_executable,)
+                    if self.spec.archive_executable is not None else ()
+                )
+                safe_extract_zip(
+                    archive, extract, executable_members=executable_members,
+                )
                 source = extract / self.spec.archive_binary
             else:
                 source = archive
@@ -2367,25 +2379,26 @@ class Installer:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
             if not managed.is_file() or managed.is_symlink():
                 raise InstallerError(f"Arquivo gerenciado ausente do componente {component}: {managed}")
-            if file_hash(managed) != expected:
+            suffix = managed.suffix.casefold()
+            if suffix == ".pk3":
+                try:
+                    archive_plan = scan_archive(managed)
+                except ArchiveError as error:
+                    raise InstallerError(f"PK3 gerenciado inválido: {managed}") from error
+                actual_hash = archive_plan.source_sha256
+            else:
+                actual_hash = file_hash(managed)
+            if actual_hash != expected:
                 raise InstallerError(f"Arquivo gerenciado foi alterado no componente {component}: {managed}")
-            if managed.suffix.casefold() == ".bsp":
+            if suffix == ".bsp":
                 with managed.open("rb") as source:
                     header = source.read(4)
                 if len(header) != 4 or struct.unpack("<I", header)[0] != 29:
                     raise InstallerError(f"BSP gerenciado inválido: {managed}")
-            if managed.suffix.casefold() == ".pak":
+            if suffix == ".pak":
                 with managed.open("rb") as source:
                     if source.read(4) != b"PACK":
                         raise InstallerError(f"PAK gerenciado inválido: {managed}")
-            if managed.suffix.casefold() == ".pk3":
-                try:
-                    with zipfile.ZipFile(managed) as package:
-                        bad_member = package.testzip()
-                except zipfile.BadZipFile as error:
-                    raise InstallerError(f"PK3 gerenciado inválido: {managed}") from error
-                if bad_member:
-                    raise InstallerError(f"Membro inválido {bad_member} no PK3: {managed}")
         assert receipt is not None
         console.success(f"Componente {component} íntegro ({file_count(len(entries))}; seleção {receipt['selection']}).")
         return len(entries)
@@ -2930,24 +2943,13 @@ class Installer:
                 console.heading("Baixando o instalador x86QW")
             artifact = self.download_component_package(package)
             extracted = self.stage / "installer"
-            extracted.mkdir()
-            safe_extract_zip(artifact, extracted)
+            try:
+                plan = validate_installer_bundle(artifact, available)
+                extract_archive(plan, extracted)
+            except ArchiveError as error:
+                raise InstallerError(f"Bundle de atualização x86QW inválido: {error}") from error
             bundle = extracted / f"x86qw-installer-{available}"
             application = bundle / CLI_ARCHIVE_NAME
-            metadata = bundle / OUTER_INSTALLER_METADATA
-            if not application.is_file() or application.is_symlink() or not metadata.is_file() or metadata.is_symlink():
-                raise InstallerError("O bundle de atualização x86QW está incompleto.")
-            try:
-                identity = json.loads(metadata.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as error:
-                raise InstallerError("Metadados inválidos no bundle de atualização x86QW.") from error
-            if identity != {"format": 1, "project": "x86qw", "version": available}:
-                raise InstallerError("A versão interna do bundle de atualização x86QW é inválida.")
-            embedded = read_zipapp_json(
-                application, INSTALLER_BUNDLE_METADATA, "Identidade interna da CLI",
-            )
-            if embedded != identity:
-                raise InstallerError("A identidade do aplicativo x86QW diverge do bundle.")
             command = [
                 sys.executable, str(application), "--online-only", "--installed-cli", "--skip-cli-update",
             ]
@@ -3176,7 +3178,7 @@ class Installer:
                     self.project_root / DEVELOPMENT_COMPONENT_CATALOG,
                     self.project_root / COMPONENT_RELEASES,
                 )
-            except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
+            except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError) as error:
                 raise InstallerError(
                     "As fontes canônicas locais estão incompletas ou inválidas. "
                     "Execute git lfs pull e tente novamente."
@@ -3195,7 +3197,7 @@ class Installer:
             from maintenance.tools.component_sources import resolve_component_payloads
 
             release, source_revision, payloads = resolve_component_payloads(context, identifier)
-        except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError, zipfile.BadZipFile) as error:
+        except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError) as error:
             raise InstallerError(
                 f"Não foi possível materializar {identifier} a partir das fontes canônicas locais. "
                 "Execute git lfs pull e tente novamente."
@@ -3238,7 +3240,6 @@ class Installer:
         assert self.stage is not None
         identifier = str(package["package"])
         root = self.stage / f"package-{identifier}"
-        root.mkdir()
         safe_extract_zip(artifact, root)
         metadata_path = root / "_x86qw/component.json"
         try:

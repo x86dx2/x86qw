@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +18,24 @@ from validate_recipes import recipe_paths, validate_recipe  # noqa: E402
 
 
 class RecipeTests(unittest.TestCase):
+    def test_zip_verification_uses_the_archive_plan_identity_and_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = Path(temporary) / "artifact.zip"
+            with zipfile.ZipFile(artifact, "w") as archive:
+                archive.writestr("runtime.exe", b"runtime")
+            payload = artifact.read_bytes()
+            package = {
+                "size": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "artifact_format": "zip",
+                "expected_members": ["runtime.exe"],
+            }
+            with mock.patch(
+                "build_package.file_sha256",
+                side_effect=AssertionError("ZIP must not be reopened for hashing"),
+            ):
+                verify_artifact(artifact, package)
+
     def test_repository_recipes_are_ready_for_the_published_mirror(self) -> None:
         paths = recipe_paths()
         self.assertEqual(3, len(paths))
@@ -73,7 +92,7 @@ class RecipeTests(unittest.TestCase):
                 "artifact_format": "zip",
                 "expected_members": ["ezquake.exe"],
             }
-            with self.assertRaisesRegex(ValueError, "unsafe path"):
+            with self.assertRaisesRegex(ValueError, "safe ZIP archive"):
                 verify_artifact(artifact, package)
 
     def test_recipe_output_segments_cannot_escape_dist(self) -> None:

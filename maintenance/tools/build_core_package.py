@@ -5,11 +5,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import zipfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import ArchiveError, read_archive_members, scan_archive
+
 VERSION = "0.1.0"
 PACKAGE = "x86qw-core-id1"
 RELEASE_TAG = f"x86qw-content-core-{VERSION}"
@@ -68,6 +74,19 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = 0o100644 << 16
         archive.writestr(info, metadata)
+    try:
+        plan = scan_archive(
+            artifact,
+            required_members=(
+                *(str(member["path"]) for member in members),
+                "_x86qw/component.json",
+            ),
+        )
+        read_archive_members(plan, ())
+    except ArchiveError as error:
+        raise ValueError(
+            f"core package failed canonical archive validation: {artifact}: {error}"
+        ) from error
     mirror = (
         f"https://github.com/x86dx2/x86qw/releases/download/{RELEASE_TAG}/{filename}"
     )
@@ -83,8 +102,8 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
         "platform": "any",
         "architecture": "any",
         "filename": filename,
-        "size": artifact.stat().st_size,
-        "sha256": file_sha256(artifact),
+        "size": plan.source_size,
+        "sha256": plan.source_sha256,
         "origin_url": mirror,
         "license": "id-software-registered-game-data",
         "license_url": "https://github.com/x86dx2/x86qw",

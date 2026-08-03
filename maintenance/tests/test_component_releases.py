@@ -28,6 +28,7 @@ from component_sources import (  # noqa: E402
 )
 from check_component_updates import check_updates  # noqa: E402
 from components import components_by_id, load_catalog  # noqa: E402
+import component_releases as component_releases_module  # noqa: E402
 from component_releases import (  # noqa: E402
     component_for_artifact_path,
     load_releases,
@@ -618,6 +619,101 @@ class ComponentReleaseTests(unittest.TestCase):
                 }],
             }
             self.assertEqual({"qwprogs.qvm": b"qvm"}, verified_artifact_members(root, artifact))
+
+    def test_all_component_zip_readers_reject_a_hostile_unselected_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "mods/ktx/test/hostile.zip"
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            with zipfile.ZipFile(path, "w") as package:
+                package.writestr("qwprogs.qvm", b"qvm")
+                package.writestr("CON.txt", b"hostile")
+            data = path.read_bytes()
+            artifact = {
+                "distribution_path": relative,
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "members": [{
+                    "path": "qwprogs.qvm",
+                    "size": 3,
+                    "sha256": hashlib.sha256(b"qvm").hexdigest(),
+                }],
+            }
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                verified_artifact_members(root, artifact)
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                verified_package_files(root, artifact)
+            with self.assertRaisesRegex(ValueError, "safe archive"):
+                rewrite_zip_members(data, {"qwprogs.qvm": b"new"})
+
+    def test_component_zip_readers_consume_the_authenticated_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "mods/ktx/test/snapshot.zip"
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            original = io.BytesIO()
+            with zipfile.ZipFile(original, "w") as package:
+                package.writestr("qwprogs.qvm", b"original")
+            replacement = io.BytesIO()
+            with zipfile.ZipFile(replacement, "w") as package:
+                package.writestr("qwprogs.qvm", b"replacement")
+            original_bytes = original.getvalue()
+            replacement_bytes = replacement.getvalue()
+            artifact = {
+                "distribution_path": relative,
+                "size": len(original_bytes),
+                "sha256": hashlib.sha256(original_bytes).hexdigest(),
+                "members": [{
+                    "path": "qwprogs.qvm",
+                    "size": len(b"original"),
+                    "sha256": hashlib.sha256(b"original").hexdigest(),
+                }],
+            }
+            real_scan = component_releases_module.scan_archive
+            for reader in (verified_artifact_members, verified_package_files):
+                path.write_bytes(original_bytes)
+
+                def scan_and_replace(*args: object, **kwargs: object):
+                    plan = real_scan(*args, **kwargs)
+                    path.write_bytes(replacement_bytes)
+                    return plan
+
+                with self.subTest(reader=reader.__name__), mock.patch.object(
+                    component_releases_module,
+                    "scan_archive",
+                    side_effect=scan_and_replace,
+                ):
+                    with self.assertRaisesRegex(ValueError, "unsafe"):
+                        reader(root, artifact)
+
+    def test_component_zip_readers_do_not_load_source_before_bounded_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "mods/ktx/test/bounded.zip"
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            with zipfile.ZipFile(path, "w") as package:
+                package.writestr("qwprogs.qvm", b"qvm")
+            data = path.read_bytes()
+            artifact = {
+                "distribution_path": relative,
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "members": [{
+                    "path": "qwprogs.qvm",
+                    "size": 3,
+                    "sha256": hashlib.sha256(b"qvm").hexdigest(),
+                }],
+            }
+            for reader in (verified_artifact_members, verified_package_files):
+                with self.subTest(reader=reader.__name__), mock.patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=AssertionError("ZIP source must be scanned as a path"),
+                ):
+                    self.assertEqual({"qwprogs.qvm": b"qvm"}, reader(root, artifact))
 
     def test_standalone_tar_package_is_verified_without_extracting_unsafe_members(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

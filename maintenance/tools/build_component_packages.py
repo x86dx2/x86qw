@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import zipfile
 from datetime import datetime, timezone
@@ -21,6 +22,11 @@ except ImportError:  # Execucao direta
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import ArchiveError, read_archive_members, scan_archive
+
 COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
@@ -114,6 +120,19 @@ def build_packages(
             ).encode() + b"\n"
             info, data = zip_member("_x86qw/component.json", package_metadata)
             package.writestr(info, data)
+        try:
+            plan = scan_archive(
+                artifact,
+                required_members=(
+                    *(str(member["path"]) for member in members),
+                    "_x86qw/component.json",
+                ),
+            )
+            read_archive_members(plan, ())
+        except ArchiveError as error:
+            raise ValueError(
+                f"component package failed canonical archive validation: {artifact}: {error}"
+            ) from error
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
         gitlab_url = (
@@ -143,8 +162,8 @@ def build_packages(
             "platform": "any",
             "architecture": "any",
             "filename": filename,
-            "size": artifact.stat().st_size,
-            "sha256": file_sha256(artifact),
+            "size": plan.source_size,
+            "sha256": plan.source_sha256,
             "origin_url": mirror_url,
             "license": str(release_metadata.get("license", "upstream-distfiles-terms")),
             "license_url": str(release_metadata.get("license_url", f"https://github.com/nQuake/distfiles/tree/{commit}")),
