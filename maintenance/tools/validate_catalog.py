@@ -8,6 +8,11 @@ import json
 import re
 import sys
 from pathlib import Path, PurePosixPath
+
+try:
+    from .downloader import MAX_ARTIFACT_BYTES
+except ImportError:  # Execucao direta
+    from downloader import MAX_ARTIFACT_BYTES
 from urllib.parse import unquote, urlsplit
 
 try:
@@ -64,6 +69,8 @@ def validate_package(
         raise ValueError(f"{label}.redistribution_reviewed must be true")
     if not isinstance(package["size"], int) or package["size"] <= 0:
         raise ValueError(f"{label}.size must be a positive integer")
+    if package["size"] > MAX_ARTIFACT_BYTES:
+        raise ValueError(f"{label}.size exceeds the supported download limit")
     if not isinstance(package["sha256"], str) or not SHA256.fullmatch(package["sha256"]):
         raise ValueError(f"{label}.sha256 is invalid")
     urls = package["urls"]

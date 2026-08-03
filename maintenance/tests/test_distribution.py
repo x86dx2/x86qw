@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import importlib.util
 import json
 import sys
@@ -23,8 +22,11 @@ from components import (  # noqa: E402
 )
 from sync_distribution import (  # noqa: E402
     Asset,
+    NIGHTLIES,
     collapse_case_duplicates,
     consumed_component,
+    discover_nquake,
+    discover_nightlies,
     download_asset,
     load_manifest,
     prune_unconsumed,
@@ -32,6 +34,9 @@ from sync_distribution import (  # noqa: E402
     verify_distribution,
     write_manifest,
 )
+from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
+from public_upstreams import GitTreeEntry  # noqa: E402
+from upstreams import validate_upstreams  # noqa: E402
 
 SPEC = importlib.util.spec_from_file_location("install_qw_policy", ROOT / "dist/installer/bin/manager.py")
 install_qw = importlib.util.module_from_spec(SPEC)
@@ -41,6 +46,42 @@ SPEC.loader.exec_module(install_qw)
 
 
 class DistributionTests(unittest.TestCase):
+    def test_upstream_registry_rejects_preserved_source_above_global_limit(self) -> None:
+        registry = json.loads(
+            (ROOT / "maintenance/inventory/upstreams.json").read_text(encoding="utf-8"),
+        )
+        source = next(
+            entry["source"]
+            for entry in registry["upstreams"]
+            if "size" in entry["source"]
+        )
+        source["size"] = MAX_ARTIFACT_BYTES + 1
+        with self.assertRaisesRegex(ValueError, "invalid preserved source identity"):
+            validate_upstreams(registry)
+
+    def test_distribution_manifest_rejects_file_above_global_limit(self) -> None:
+        manifest = {
+            "format": 1,
+            "project": "x86qw",
+            "captured_at": None,
+            "layout": "distribution-v1",
+            "repositories": {},
+            "files": {
+                "mods/ktx/test/oversized.zip": {
+                    "component": "ktx",
+                    "consumer": "install:ktx",
+                    "url": "https://example.invalid/oversized.zip",
+                    "size": MAX_ARTIFACT_BYTES + 1,
+                    "sha256": "0" * 64,
+                },
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid distribution file size"):
+                load_manifest(path)
+
     def test_top_level_taxonomy_separates_clients_distributions_and_game_data(self) -> None:
         stable = ROOT / "dist/clients/ezquake/stable/3.6.9"
         nightly = ROOT / "dist/clients/ezquake/nightly/20260616-101233_a86996a"
@@ -294,11 +335,60 @@ class DistributionTests(unittest.TestCase):
                 "size": len(expected),
                 "sha256": hashlib.sha256(b"old").hexdigest(),
             }
-            with mock.patch("sync_distribution.urllib.request.urlopen", return_value=io.BytesIO(expected)):
+            def transfer(contract):
+                self.assertEqual(len(expected), contract.expected_size)
+                contract.destination.write_bytes(expected)
+                return mock.Mock(
+                    size=len(expected), sha256=hashlib.sha256(expected).hexdigest(),
+                )
+
+            with mock.patch(
+                "sync_distribution.remote_content_length", return_value=len(expected),
+            ) as content_length, mock.patch(
+                "sync_distribution.download", side_effect=transfer,
+            ):
                 _, metadata, reused = download_asset(root, asset, known)
+            content_length.assert_called_once_with(asset.url)
             self.assertFalse(reused)
             self.assertEqual(expected, target.read_bytes())
             self.assertEqual(hashlib.sha256(expected).hexdigest(), metadata["sha256"])
+
+    def test_nightly_discovery_records_the_remote_size(self) -> None:
+        names = {
+            "macos-universal": "20260803-120000_abcdef0_ezQuake-macOS-universal.zip",
+            "linux-x86_64": "20260803-120000_abcdef0_ezQuake-x86_64.AppImage",
+            "windows-x64": "20260803-120000_abcdef0_ezquake.exe",
+        }
+        with mock.patch(
+            "sync_distribution.links",
+            side_effect=lambda root: [names[next(
+                platform
+                for platform, (candidate, _pattern) in NIGHTLIES.items()
+                if candidate == root
+            )]],
+        ), mock.patch(
+            "sync_distribution.remote_content_length", return_value=1234,
+        ) as content_length:
+            assets = discover_nightlies()
+        self.assertEqual([1234, 1234, 1234], [asset.expected_size for asset in assets])
+        self.assertEqual(3, content_length.call_count)
+
+    def test_nquake_discovery_reuses_blob_size_when_git_provides_it(self) -> None:
+        entry = GitTreeEntry("qw/file.cfg", "b" * 40, 321)
+        with mock.patch(
+            "sync_distribution.load_component_catalog", return_value={},
+        ), mock.patch(
+            "sync_distribution.source_roots", return_value=["qw"],
+        ), mock.patch(
+            "sync_distribution.git_remote_tree", return_value=("a" * 40, [entry]),
+        ), mock.patch(
+            "sync_distribution.component_for_source", return_value="nquake-bootstrap",
+        ):
+            assets = discover_nquake()
+
+        self.assertEqual(1, len(assets))
+        self.assertEqual(321, assets[0].expected_size)
+        self.assertEqual("b" * 40, assets[0].expected_git_sha1)
 
 
 if __name__ == "__main__":

@@ -11,8 +11,10 @@ from pathlib import Path, PurePosixPath
 
 try:
     from .components import components_by_id, load_catalog as load_component_catalog
+    from .downloader import MAX_ARTIFACT_BYTES
 except ImportError:  # Executado diretamente por ferramentas em tools/.
     from components import components_by_id, load_catalog as load_component_catalog
+    from downloader import MAX_ARTIFACT_BYTES
 
 
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
@@ -144,7 +146,11 @@ def validate_releases(
                 raise ValueError(f"artifact path and filename differ: {identifier}")
             if not isinstance(artifact.get("url"), str) or not artifact["url"].startswith("https://"):
                 raise ValueError(f"invalid artifact URL: {identifier}")
-            if not isinstance(artifact.get("size"), int) or artifact["size"] <= 0:
+            if (
+                not isinstance(artifact.get("size"), int)
+                or artifact["size"] <= 0
+                or artifact["size"] > MAX_ARTIFACT_BYTES
+            ):
                 raise ValueError(f"invalid artifact size: {identifier}")
             if not HEX64.fullmatch(str(artifact.get("sha256", ""))):
                 raise ValueError(f"invalid artifact hash: {identifier}")
@@ -161,7 +167,11 @@ def validate_releases(
                 _safe_path(member.get("target_member"), "target member")
                 if member.get("target_mode", "replace") not in {"replace", "add"}:
                     raise ValueError(f"invalid artifact member target mode: {identifier}")
-                if not isinstance(member.get("size"), int) or member["size"] <= 0:
+                if (
+                    not isinstance(member.get("size"), int)
+                    or member["size"] <= 0
+                    or member["size"] > MAX_ARTIFACT_BYTES
+                ):
                     raise ValueError(f"invalid artifact member size: {identifier}")
                 if not HEX64.fullmatch(str(member.get("sha256", ""))):
                     raise ValueError(f"invalid artifact member hash: {identifier}")
@@ -255,7 +265,11 @@ def validate_releases(
             destination = _safe_path(copy.get("destination"), "package copy destination")
             if source == destination or destination in copy_destinations:
                 raise ValueError(f"duplicate or ineffective package copy: {identifier}")
-            if not isinstance(copy.get("size"), int) or copy["size"] <= 0:
+            if (
+                not isinstance(copy.get("size"), int)
+                or copy["size"] <= 0
+                or copy["size"] > MAX_ARTIFACT_BYTES
+            ):
                 raise ValueError(f"invalid package copy size: {identifier}")
             if not HEX64.fullmatch(str(copy.get("sha256", ""))):
                 raise ValueError(f"invalid package copy hash: {identifier}")

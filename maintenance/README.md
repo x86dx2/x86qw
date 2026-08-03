@@ -61,6 +61,32 @@ publicas de releases e downloads. `check` e `update` nao exigem conta, token ou
 autenticacao no GitHub. Credenciais sao necessarias apenas no comando
 `publish`, porque ele grava os artefatos nos mirrors do projeto.
 
+## Fronteira de bytes remotos
+
+`maintenance/tools/downloader.py` é a única API Python do zipapp e da manutenção
+para receber bytes HTTP. O bootstrap PowerShell incorpora uma projeção mínima
+antes de o zipapp existir.
+Um artefato persistente usa `PinnedArtifact` e exige HTTPS, destino, tamanho,
+SHA-256, máximo, deadline e retry. `BoundedMetadata` serve somente a respostas
+dinâmicas efêmeras. `BoundedPayload` é uma exceção da manutenção: recebe em
+staging limitado, exige identidade independente quando ela existe e, na falta
+de digest oficial, permanece numa transação que só avança após confirmação,
+validação e revisão do diff. O instalador público nunca usa essa exceção.
+
+Descobertas HTTP possuem limite de 4 MiB e payloads, de 512 MiB. Git nativo
+continua responsável por identidades e árvores, não por contornar o downloader
+HTTP: seu adaptador exige HTTPS, neutraliza configuração herdada de transporte,
+limita stdout a 32 MiB, stderr a 1 MiB e o workspace temporário a 128 MiB, usa
+deadlines de 60 segundos para consultas e 300 segundos para árvores, e encerra
+a árvore de processos. O `curl` de
+publicação envia bytes e não é uma rota de ingestão. Um novo consumidor Python
+de `urlopen` ou `urlretrieve` falha na suíte estática. Limite e TLS não autenticam
+metadados dinâmicos.
+
+O contrato completo está no
+[`ADR 0001`](../docs/adr/0001-fronteira-limitada-de-bytes-remotos.md) e sua
+rastreabilidade, na [issue #45](https://github.com/x86dx2/x86qw/issues/45).
+
 ## Atualizacoes independentes
 
 O snapshot do nQuake pode ser atualizado mecanicamente porque cada caminho ja

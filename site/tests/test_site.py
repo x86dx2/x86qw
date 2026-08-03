@@ -1,4 +1,5 @@
 from html.parser import HTMLParser
+import ast
 import hashlib
 import io
 import json
@@ -125,6 +126,56 @@ class SiteTests(unittest.TestCase):
         for command in product["commands"]:
             self.assertIn(command, cli_help)
 
+    def test_unix_install_command_restricts_https_consistently(self):
+        command = (
+            "/bin/bash -c \"$(curl --proto '=https' --proto-redir '=https' "
+            "--connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL "
+            "https://x86qw.x86.com.br/install.sh)\""
+        )
+        documents = (
+            PROJECT_ROOT / "README.md",
+            PROJECT_ROOT / "dist/installer/docs/installer.md",
+            ROOT / "index.html",
+        )
+        for path in documents:
+            with self.subTest(path=path.relative_to(PROJECT_ROOT)):
+                self.assertIn(command, path.read_text(encoding="utf-8"))
+        manager_path = PROJECT_ROOT / "dist/installer/bin/manager.py"
+        manager_tree = ast.parse(manager_path.read_text(encoding="utf-8"))
+        manager_command = next(
+            ast.literal_eval(statement.value)
+            for statement in manager_tree.body
+            if isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "PUBLIC_UNIX_BOOTSTRAP_COMMAND"
+                for target in statement.targets
+            )
+        )
+        self.assertEqual(command, manager_command)
+
+        powershell_command = next(
+            ast.literal_eval(statement.value)
+            for statement in manager_tree.body
+            if isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND"
+                for target in statement.targets
+            )
+        )
+        for fragment in (
+            "System.Net.Http.HttpClient",
+            "AllowAutoRedirect = $false",
+            "Timeout = [TimeSpan]::FromSeconds(60)",
+            "MaxResponseContentBufferSize = 262144",
+            "ContentLength -gt 262144",
+        ):
+            self.assertIn(fragment, powershell_command)
+        for path in documents:
+            with self.subTest(path=path.relative_to(PROJECT_ROOT), shell="powershell"):
+                self.assertIn(powershell_command, path.read_text(encoding="utf-8"))
+
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
         installers = [item for item in catalog["packages"] if item.get("package") == "x86qw-installer"]
@@ -207,6 +258,7 @@ class SiteTests(unittest.TestCase):
             canonical = (ROOT.parents[1] / "dist" / "installer" / "bin" / name).read_text(encoding="utf-8")
             self.assertEqual(canonical, script)
             self.assertIn(package["sha256"], script)
+            self.assertIn(str(package["size"]), script)
             self.assertNotIn("__X86QW_INSTALLER_SHA256__", script)
         powershell = (ROOT / "install.ps1").read_text(encoding="utf-8")
         self.assertNotRegex(powershell, r"(?m)^\s*exit(?:\s|$)")

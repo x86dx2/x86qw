@@ -9,15 +9,15 @@ import json
 import os
 import subprocess
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from .downloader import DownloadError, DownloadHTTPError, MAX_ARTIFACT_BYTES, PinnedArtifact, download
     from .validate_catalog import DEFAULT_CATALOG, validate_catalog
 except ImportError:  # Execucao direta
+    from downloader import DownloadError, DownloadHTTPError, MAX_ARTIFACT_BYTES, PinnedArtifact, download
     from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
@@ -66,20 +66,25 @@ def local_artifact(package: dict[str, object], dist: Path, builds: Path) -> Path
     return path
 
 
-def remote_sha256(url: str) -> tuple[int, str] | None:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            digest = hashlib.sha256()
-            size = 0
-            while block := response.read(1024 * 1024):
-                size += len(block)
-                digest.update(block)
-            return size, digest.hexdigest()
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        raise
+def remote_sha256(url: str, expected_size: int, expected_sha256: str) -> tuple[int, str] | None:
+    with tempfile.TemporaryDirectory(prefix="x86qw-mirror-verify-") as temporary:
+        destination = Path(temporary) / "artifact"
+        try:
+            result = download(PinnedArtifact(
+                url=url,
+                destination=destination,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+                maximum_size=MAX_ARTIFACT_BYTES,
+                deadline_seconds=120,
+                headers={"User-Agent": USER_AGENT},
+                label="artefato do mirror GitLab",
+            ))
+        except DownloadHTTPError as error:
+            if error.status == 404:
+                return None
+            raise
+    return result.size, result.sha256
 
 
 def upload(path: Path, package: dict[str, object]) -> None:
@@ -91,13 +96,20 @@ def upload(path: Path, package: dict[str, object]) -> None:
     # GitLab's documented generic-package upload uses PUT with --upload-file.
     # Feed the private header over stdin so the token never enters argv or logs.
     result = subprocess.run([
-        "curl", "--fail-with-body", "--silent", "--show-error", "--location",
+        "curl", "--fail", "--silent", "--show-error",
+        "--proto", "=https", "--proto-redir", "=https",
+        "--connect-timeout", "15", "--max-time", "900",
+        "--max-redirs", "0", "--output", os.devnull,
+        "--write-out", "%{http_code}",
         "--request", "PUT", "--header", "@-", "--upload-file", str(path),
         artifact_url(package),
     ], input=f"PRIVATE-TOKEN: {token}\n", text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, check=False)
+        stderr=subprocess.DEVNULL, check=False)
     if result.returncode:
         raise ValueError(f"GitLab upload failed with curl exit code {result.returncode}")
+    status = result.stdout.strip()
+    if len(status) != 3 or not status.isascii() or not status.isdecimal() or not status.startswith("2"):
+        raise ValueError(f"GitLab upload failed with HTTP status {status or 'unknown'}")
 
 
 def write_catalog(path: Path, catalog: dict[str, object]) -> None:
@@ -134,13 +146,13 @@ def main() -> int:
         assert isinstance(package, dict)
         path = local_artifact(package, arguments.dist, arguments.builds)
         url = artifact_url(package)
-        remote = remote_sha256(url)
+        remote = remote_sha256(url, int(package["size"]), str(package["sha256"]))
         if remote is None:
             if not arguments.publish:
                 raise ValueError(f"GitLab mirror is missing: {package['filename']}")
             print(f"[{index}/{len(packages)}] enviando {package['filename']}...", flush=True)
             upload(path, package)
-            remote = remote_sha256(url)
+            remote = remote_sha256(url, int(package["size"]), str(package["sha256"]))
         if remote != (package["size"], package["sha256"]):
             raise ValueError(f"GitLab mirror differs from catalog: {package['filename']}")
         if url not in package["urls"]:
@@ -163,6 +175,12 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+    except (
+        DownloadError,
+        OSError,
+        ValueError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"GitLab mirror failed: {error}")
         raise SystemExit(1)

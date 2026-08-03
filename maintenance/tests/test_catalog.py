@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import unittest
 import zipfile
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from add_package import register_package  # noqa: E402
+from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url, upload  # noqa: E402
 from build_component_packages import component_package_metadata, register_packages  # noqa: E402
@@ -23,6 +25,7 @@ class CatalogTests(unittest.TestCase):
     @patch("publish_gitlab_packages.subprocess.run")
     def test_gitlab_upload_uses_documented_file_put_without_token_in_argv(self, run) -> None:
         run.return_value.returncode = 0
+        run.return_value.stdout = "201"
         package = {
             "component": "installer", "package": "x86qw-installer",
             "version": "0.2.2", "filename": "x86qw-installer-0.2.2.zip",
@@ -33,9 +36,39 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("curl", arguments[0])
         self.assertIn("--upload-file", arguments)
         self.assertIn("--header", arguments)
+        self.assertIn("--proto", arguments)
+        self.assertIn("--proto-redir", arguments)
+        self.assertIn("--max-time", arguments)
+        self.assertIn("--max-redirs", arguments)
+        self.assertIn("--output", arguments)
+        self.assertIn("--write-out", arguments)
+        self.assertNotIn("--location", arguments)
         self.assertIn("@-", arguments)
         self.assertNotIn("private-token", repr(arguments))
         self.assertEqual("PRIVATE-TOKEN: private-token\n", run.call_args.kwargs["input"])
+        self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+
+    @patch("publish_gitlab_packages.subprocess.run")
+    def test_gitlab_upload_rejects_redirect_without_capturing_response_body(self, run) -> None:
+        run.return_value.returncode = 0
+        run.return_value.stdout = "302"
+        package = {
+            "component": "installer", "package": "x86qw-installer",
+            "version": "0.2.2", "filename": "x86qw-installer-0.2.2.zip",
+        }
+        with patch.dict(os.environ, {"GLAB_TOKEN": "private-token"}, clear=False):
+            with self.assertRaisesRegex(ValueError, "HTTP status 302"):
+                upload(Path("bundle.zip"), package)
+        arguments = run.call_args.args[0]
+        self.assertEqual(os.devnull, arguments[arguments.index("--output") + 1])
+
+    def test_catalog_rejects_artifacts_above_the_global_download_limit(self) -> None:
+        catalog = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        catalog["packages"][0]["size"] = MAX_ARTIFACT_BYTES + 1
+        with self.assertRaisesRegex(ValueError, "supported download limit"):
+            validate_catalog(catalog)
 
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads(

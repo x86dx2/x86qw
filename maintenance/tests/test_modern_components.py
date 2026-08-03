@@ -2063,17 +2063,29 @@ class ModernComponentTests(unittest.TestCase):
                 ],
             }
 
-            def download(url, destination=None, headers=None):
-                if "github.com" in url:
-                    raise install_qw.InstallerError("GitHub unavailable")
-                destination.write_bytes(payload)
-                return b""
+            def download(contracts, **options):
+                self.assertEqual(tuple(package["urls"]), tuple(item.url for item in contracts))
+                self.assertTrue(all(item.expected_size == len(payload) for item in contracts))
+                self.assertTrue(all(
+                    item.expected_sha256 == package["sha256"] for item in contracts
+                ))
+                self.assertTrue(all(
+                    item.maximum_size == install_qw.MAX_ARTIFACT_BYTES
+                    for item in contracts
+                ))
+                options["on_mirror_failure"](
+                    1, contracts[0], install_qw.DownloadError("GitHub unavailable"),
+                )
+                contracts[1].destination.write_bytes(payload)
+                return mock.Mock(data=None)
 
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", side_effect=download) as request:
+                with mock.patch.object(
+                    install_qw, "bounded_download_mirrors", side_effect=download,
+                ) as request:
                     artifact = installer.download_component_package(package)
             self.assertEqual(payload, artifact.read_bytes())
-            self.assertEqual(2, request.call_count)
+            request.assert_called_once()
 
     def test_component_is_materialized_from_canonical_sources_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2082,7 +2094,9 @@ class ModernComponentTests(unittest.TestCase):
             installer.stage.mkdir()
             package = installer.component_package_record("nquake-bootstrap")
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", side_effect=AssertionError("network used")):
+                with mock.patch.object(
+                    installer, "http_get_mirrors", side_effect=AssertionError("network used"),
+                ):
                     prepared = installer.prepare_component_sources(package)
             self.assertIsNotNone(prepared)
             assert prepared is not None

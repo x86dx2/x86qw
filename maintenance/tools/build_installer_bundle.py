@@ -46,6 +46,7 @@ ZIPAPP_FILES = (
     ("maintenance/__init__.py", "maintenance/__init__.py"),
     ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),
     ("maintenance/tools/components.py", "maintenance/tools/components.py"),
+    ("maintenance/tools/downloader.py", "maintenance/tools/downloader.py"),
     ("maintenance/tools/runtime_catalog.py", "maintenance/tools/runtime_catalog.py"),
 )
 RUNTIME_CONTRACT_FILES = (
@@ -198,6 +199,28 @@ def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
         if count != 1:
             raise ValueError(f"public bootstrap assignment is missing or duplicated: {path}:{name}")
     path.write_text(content, encoding="utf-8")
+
+
+def public_bootstrap_assignments(
+    record: dict[str, object],
+) -> tuple[dict[str, str], dict[str, str]]:
+    values = {
+        "version": str(record["version"]),
+        "sha256": str(record["sha256"]),
+        "size": str(record["size"]),
+    }
+    return (
+        {
+            "INSTALLER_VERSION": values["version"],
+            "INSTALLER_SHA256": values["sha256"],
+            "INSTALLER_SIZE": values["size"],
+        },
+        {
+            "$InstallerVersion": values["version"],
+            "$InstallerSha256": values["sha256"],
+            "$InstallerSize": values["size"],
+        },
+    )
 
 
 def reset_history(package_root: Path) -> None:
@@ -425,14 +448,9 @@ def register(result: dict[str, object]) -> None:
     )
     shell_bootstrap = ROOT / "dist/installer/bin/install.sh"
     powershell_bootstrap = ROOT / "dist/installer/bin/install.ps1"
-    update_public_bootstrap(shell_bootstrap, {
-        "INSTALLER_VERSION": str(current_record["version"]),
-        "INSTALLER_SHA256": str(current_record["sha256"]),
-    })
-    update_public_bootstrap(powershell_bootstrap, {
-        "$InstallerVersion": str(current_record["version"]),
-        "$InstallerSha256": str(current_record["sha256"]),
-    })
+    shell_assignments, powershell_assignments = public_bootstrap_assignments(current_record)
+    update_public_bootstrap(shell_bootstrap, shell_assignments)
+    update_public_bootstrap(powershell_bootstrap, powershell_assignments)
     shutil.copyfile(shell_bootstrap, ROOT / "site/public/install.sh")
     shutil.copyfile(powershell_bootstrap, ROOT / "site/public/install.ps1")
 

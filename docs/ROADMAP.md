@@ -7,9 +7,11 @@ detalhado do ecossistema está em
 ## Baseline atual
 
 Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
-pela própria tag imutável, publicada em 3 de agosto de 2026.
+pela própria tag imutável no commit
+`78dc30b58f9ba2a2ec8aeb31879d9b8072ab576b`, publicada em 3 de agosto de 2026.
 
-Baseline do código corretivo: merge `8ba1f909fc8b4275c5a5001b0c2e1898b6f85c68`.
+Baseline inicial da issue #45: merge
+`afb4f666095e37fe262b87b49339e18d25738522`.
 A correção `0.7.1` passou em 7/7 jobs, 393 testes de manutenção e quatro testes
 do site. A `0.7.0` permanece imutável no histórico.
 
@@ -40,6 +42,7 @@ do site. A `0.7.0` permanece imutável no histórico.
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
 | Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.1` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
+| Downloads remotos | completa no código corretivo da issue #45; ainda não publicada | 507 testes de manutenção e cinco do site aprovados localmente no macOS; dez skips dependentes de plataforma/rede; matriz do PR pendente |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.
@@ -56,6 +59,8 @@ plataformas. A coluna de validação é sempre a autoridade para essa distinçã
    ou gameplay.
 5. Manter bundles publicados imutáveis e preparar uma versão nova somente em
    etapa de release separada.
+6. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
+   confundir esse contrato com os limites de transporte já implementados.
 
 ## Decisões históricas superadas
 

@@ -26,9 +26,7 @@ import textwrap
 import threading
 import time
 import traceback
-import urllib.error
 import urllib.parse
-import urllib.request
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -65,6 +63,20 @@ from maintenance.tools.components import (
     resolve_dependencies,
     validate_runtime_catalog,
 )
+from maintenance.tools.downloader import (
+    BoundedMetadata,
+    DownloadError,
+    DownloadHTTPError,
+    DownloadPolicyError,
+    MAX_ARTIFACT_BYTES,
+    PinnedArtifact,
+    RetryPolicy,
+    build_https_opener,
+    download as bounded_download,
+    download_mirrors as bounded_download_mirrors,
+    safe_url_for_log,
+    validate_https_url as validate_download_url,
+)
 from maintenance.tools.runtime_catalog import (
     load_capabilities,
     load_runtimes,
@@ -81,6 +93,20 @@ CATALOG_URLS = (
     "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
 )
 CATALOG_TIMEOUT = 10.0
+CATALOG_MAX_BYTES = 2 * 1024 * 1024
+HUB_MAX_BYTES = 1024 * 1024
+PUBLIC_UNIX_BOOTSTRAP_COMMAND = "/bin/bash -c \"$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)\""
+PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
+    "& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); "
+    "$h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); "
+    "$c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; "
+    "$r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1')."
+    "GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw \"x86QW: HTTP "
+    "$([int]$r.StatusCode).\" }; if ($r.Content.Headers.ContentLength -gt 262144) { "
+    "throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync()."
+    "GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) "
+    "{ $r.Dispose() }; $c.Dispose(); $h.Dispose() } }"
+)
 METADATA_DIR = ".x86qw"
 COMPONENT_METADATA_DIR = ".x86qw/components"
 EZQUAKE_METADATA_DIR = ".x86qw/clients/ezquake"
@@ -280,12 +306,7 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         self._create_connection = create_resilient_connection
 
 
-class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
-    def https_open(self, request: urllib.request.Request):  # type: ignore[no-untyped-def]
-        return self.do_open(ResilientHTTPSConnection, request, context=self._context)
-
-
-HTTPS_OPENER = urllib.request.build_opener(ResilientHTTPSHandler())
+HTTPS_OPENER = build_https_opener(connection_class=ResilientHTTPSConnection)
 
 
 @dataclass(frozen=True)
@@ -635,12 +656,10 @@ def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
 
 
 def validate_https_url(url: object, label: str) -> urllib.parse.SplitResult:
-    if not isinstance(url, str):
-        raise InstallerError(f"{label} não é uma URL válida")
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
-        raise InstallerError(f"{label} deve ser uma URL HTTPS absoluta")
-    return parsed
+    try:
+        return validate_download_url(url, label)
+    except DownloadPolicyError as error:
+        raise InstallerError(str(error)) from error
 
 
 def https_url_filename(url: object, label: str) -> str:
@@ -1467,54 +1486,201 @@ class Installer:
         destination: Path | None = None,
         headers: dict[str, str] | None = None,
         *,
+        expected_size: int | None = None,
+        expected_sha256: str | None = None,
+        maximum_size: int | None = None,
         timeout: float = 60.0,
         attempts: int = 3,
     ) -> bytes:
-        validate_https_url(url, "URL de download")
+        try:
+            validate_download_url(url, "URL de download")
+        except DownloadPolicyError as error:
+            raise InstallerError(str(error)) from error
+        display_url = safe_url_for_log(url)
+        console.detail(f"GET {display_url}")
+        retry = RetryPolicy(attempts=attempts)
         request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
-        request = urllib.request.Request(url, headers=request_headers)
-        console.detail(f"GET {url}")
-        last_error: Exception | None = None
-        for attempt in range(1, attempts + 1):
+        if destination is None:
+            if maximum_size is None:
+                raise InstallerError("O download de metadados exige um limite máximo explícito.")
+            contract: PinnedArtifact | BoundedMetadata = BoundedMetadata(
+                url=url,
+                maximum_size=maximum_size,
+                deadline_seconds=timeout,
+                retry=retry,
+                headers=request_headers,
+                label="metadados x86QW",
+            )
+        else:
+            if expected_size is None or expected_sha256 is None:
+                raise InstallerError(
+                    "O download de um artefato exige tamanho e SHA-256 esperados."
+                )
+            contract = PinnedArtifact(
+                url=url,
+                destination=destination,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+                maximum_size=maximum_size if maximum_size is not None else expected_size,
+                deadline_seconds=timeout,
+                retry=retry,
+                headers=request_headers,
+                label=destination.name,
+            )
+
+        last_update = 0.0
+
+        def progress(received: int, total: int | None, done: bool) -> None:
+            nonlocal last_update
+            now = time.monotonic()
+            if done or now - last_update >= 0.1:
+                console.download_progress(received, total, done=done)
+                last_update = now
+
+        def retry_notice(next_attempt: int, error: Exception, delay: float) -> None:
+            console.detail(f"Tentativa de download falhou: {error}")
+            console.warning(
+                "Falha temporária no download. "
+                f"Tentando novamente ({next_attempt}/{attempts}) em {delay:.1f}s..."
+            )
+
+        try:
+            result = bounded_download(
+                contract,
+                opener=HTTPS_OPENER,
+                progress=progress if destination is not None else None,
+                on_retry=retry_notice,
+            )
+        except DownloadHTTPError as error:
+            rate_limit_remaining = next((
+                value for name, value in error.headers.items()
+                if name.casefold() == "x-ratelimit-remaining"
+            ), None)
+            if error.status == 403 and rate_limit_remaining == "0":
+                raise InstallerError(
+                    "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
+                    "ou defina GITHUB_TOKEN para ampliar o limite."
+                ) from error
+            console.detail(f"Tentativa de download falhou: {error}")
+            raise InstallerError(f"Não foi possível baixar {display_url}: {error}") from error
+        except DownloadError as error:
+            console.detail(f"Tentativa de download falhou: {error}")
+            raise InstallerError(f"Não foi possível baixar {display_url}: {error}") from error
+        return result.data or b""
+
+    def http_get_mirrors(
+        self,
+        urls: tuple[str, ...],
+        destination: Path | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        expected_size: int | None = None,
+        expected_sha256: str | None = None,
+        maximum_size: int | None = None,
+        timeout: float = 60.0,
+        attempts: int = 3,
+        mirror_label: str = "Mirror",
+    ) -> tuple[bytes, str]:
+        if not urls:
+            raise InstallerError("O download exige ao menos um mirror.")
+        display_urls: list[str] = []
+        for index, url in enumerate(urls, start=1):
             try:
-                with HTTPS_OPENER.open(request, timeout=timeout) as response:
-                    validate_https_url(response.geturl(), "redirecionamento de download")
-                    if destination is None:
-                        return response.read()
-                    total_header = response.headers.get("Content-Length")
-                    total = int(total_header) if total_header and total_header.isdigit() else None
-                    received = 0
-                    last_update = 0.0
-                    with destination.open("wb") as target:
-                        while block := response.read(1024 * 1024):
-                            target.write(block)
-                            received += len(block)
-                            now = time.monotonic()
-                            if now - last_update >= 0.1:
-                                console.download_progress(received, total)
-                                last_update = now
-                    console.download_progress(received, total, done=True)
-                    return b""
-            except urllib.error.HTTPError as error:
-                if error.code == 403 and error.headers.get("X-RateLimit-Remaining") == "0":
-                    raise InstallerError(
-                        "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
-                        "ou defina GITHUB_TOKEN para ampliar o limite."
-                    ) from error
-                last_error = error
-                console.detail(f"Tentativa de download falhou: {last_error}")
-                if attempt < attempts:
-                    console.warning(
-                        f"Falha temporária no download. Tentando novamente ({attempt + 1}/{attempts})..."
-                    )
-            except (OSError, urllib.error.URLError) as error:
-                last_error = error
-                console.detail(f"Tentativa de download falhou: {last_error}")
-                if attempt < attempts:
-                    console.warning(
-                        f"Falha temporária no download. Tentando novamente ({attempt + 1}/{attempts})..."
-                    )
-        raise InstallerError(f"Não foi possível baixar {url}: {last_error}")
+                validate_download_url(url, f"URL do mirror {index}")
+            except DownloadPolicyError as error:
+                raise InstallerError(str(error)) from error
+            display_urls.append(safe_url_for_log(url))
+        retry = RetryPolicy(attempts=attempts)
+        request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
+        if destination is None:
+            if maximum_size is None:
+                raise InstallerError("O download de metadados exige um limite máximo explícito.")
+            contracts: tuple[PinnedArtifact | BoundedMetadata, ...] = tuple(
+                BoundedMetadata(
+                    url=url,
+                    maximum_size=maximum_size,
+                    deadline_seconds=timeout,
+                    retry=retry,
+                    headers=request_headers,
+                    label="metadados x86QW",
+                )
+                for url in urls
+            )
+        else:
+            if expected_size is None or expected_sha256 is None:
+                raise InstallerError(
+                    "O download de um artefato exige tamanho e SHA-256 esperados."
+                )
+            contracts = tuple(
+                PinnedArtifact(
+                    url=url,
+                    destination=destination,
+                    expected_size=expected_size,
+                    expected_sha256=expected_sha256,
+                    maximum_size=maximum_size if maximum_size is not None else expected_size,
+                    deadline_seconds=timeout,
+                    retry=retry,
+                    headers=request_headers,
+                    label=destination.name,
+                )
+                for url in urls
+            )
+
+        last_update = 0.0
+        selected_index = 0
+
+        def progress(received: int, total: int | None, done: bool) -> None:
+            nonlocal last_update
+            now = time.monotonic()
+            if done or now - last_update >= 0.1:
+                console.download_progress(received, total, done=done)
+                last_update = now
+
+        def retry_notice(next_attempt: int, error: Exception, delay: float) -> None:
+            console.detail(f"Tentativa de download falhou: {error}")
+            console.warning(
+                "Falha temporária no download. "
+                f"Tentando novamente ({next_attempt}/{attempts}) em {delay:.1f}s..."
+            )
+
+        def mirror_failure(index: int, contract: object, error: DownloadError) -> None:
+            nonlocal selected_index
+            del contract
+            selected_index = index
+            console.detail(str(error))
+            if index < len(urls):
+                host = urllib.parse.urlsplit(urls[index - 1]).hostname or urls[index - 1]
+                console.warning(
+                    f"{mirror_label} indisponível ou inválido em {host}; "
+                    "tentando a próxima cópia..."
+                )
+
+        for display_url in display_urls:
+            console.detail(f"GET {display_url}")
+        try:
+            result = bounded_download_mirrors(
+                contracts,
+                opener=HTTPS_OPENER,
+                progress=progress if destination is not None else None,
+                on_retry=retry_notice,
+                on_mirror_failure=mirror_failure,
+            )
+        except DownloadHTTPError as error:
+            rate_limit_remaining = next((
+                value for name, value in error.headers.items()
+                if name.casefold() == "x-ratelimit-remaining"
+            ), None)
+            if error.status == 403 and rate_limit_remaining == "0":
+                raise InstallerError(
+                    "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
+                    "ou defina GITHUB_TOKEN para ampliar o limite."
+                ) from error
+            console.detail(f"Tentativa de download falhou: {error}")
+            raise InstallerError(f"O download por mirrors falhou: {error}") from error
+        except DownloadError as error:
+            console.detail(f"Tentativa de download falhou: {error}")
+            raise InstallerError(f"O download por mirrors falhou: {error}") from error
+        return result.data or b"", urls[selected_index]
 
     def catalog_records(
         self,
@@ -1637,7 +1803,7 @@ class Installer:
                 raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
             self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
             self.app_expected_size = int(selected_packages[0]["size"])
-        console.detail(f"Artefato: {self.app_url}")
+        console.detail(f"Artefato: {safe_url_for_log(self.app_url)}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
                 raise InstallerError("invalid stable archive name")
@@ -1695,26 +1861,18 @@ class Installer:
             download = self.stage / f"{self.app_archive_name}.download"
             if not self.update_ui:
                 console.info(f"Baixando {self.app_archive_name}...")
-            last_error: InstallerError | None = None
-            for index, mirror_url in enumerate(self.app_urls or (self.app_url,)):
-                if lexists(download):
-                    remove_path(download)
-                try:
-                    self.http_get(mirror_url, download)
-                    if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
-                        raise InstallerError(f"O arquivo baixado falhou na verificação: {mirror_url}")
-                except InstallerError as error:
-                    last_error = error
-                    console.detail(str(error))
-                    if index + 1 < len(self.app_urls):
-                        console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
-                    continue
-                self.app_url = mirror_url
-                break
-            else:
-                if lexists(download):
-                    remove_path(download)
-                raise InstallerError(f"Nenhum mirror entregou um pacote válido: {last_error}")
+            _, self.app_url = self.http_get_mirrors(
+                self.app_urls or (self.app_url,),
+                download,
+                expected_size=self.app_expected_size,
+                expected_sha256=self.app_expected_checksum,
+                maximum_size=MAX_ARTIFACT_BYTES,
+            )
+            if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
+                raise InstallerError(
+                    "O arquivo baixado falhou na verificação: "
+                    f"{safe_url_for_log(self.app_url)}"
+                )
             download.replace(archive)
             if self.update_ui:
                 console.download_result(
@@ -2601,7 +2759,7 @@ class Installer:
             print(f"  {index:2d}) {component['label']} · {current}{status}")
             console.detail(f"{component['id']}: {component['description']}")
             if package.get("release_url"):
-                console.detail(f"Novidades: {package['release_url']}")
+                console.detail(f"Novidades: {safe_url_for_log(package['release_url'])}")
 
     def choose_components(self) -> list[str]:
         profile = navigation.select_one(
@@ -2667,7 +2825,7 @@ class Installer:
             package = self.component_package_record(identifier)
             print(f"  - {self.components[identifier]['label']}: {package['version']}")
             if package.get("release_url"):
-                print(f"    novidades: {package['release_url']}")
+                print(f"    novidades: {safe_url_for_log(package['release_url'])}")
         return selected
 
     def component_package_record(self, identifier: str) -> dict[str, object]:
@@ -2966,40 +3124,29 @@ class Installer:
             try:
                 if catalog_url:
                     catalog_payload = self.http_get(
-                        catalog_url, timeout=CATALOG_TIMEOUT, attempts=2,
+                        catalog_url,
+                        maximum_size=CATALOG_MAX_BYTES,
+                        timeout=CATALOG_TIMEOUT,
+                        attempts=2,
                     )
                     catalog = json.loads(catalog_payload)
                     catalog_status = "Baixado"
-                    console.detail(f"Catálogo remoto explícito: {catalog_url}")
+                    console.detail(f"Catálogo remoto explícito: {safe_url_for_log(catalog_url)}")
                 elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
                     catalog_payload = local_catalog.read_bytes()
                     catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    last_error: InstallerError | None = None
-                    selected_url: str | None = None
-                    for index, url in enumerate(CATALOG_URLS):
-                        try:
-                            catalog_payload = self.http_get(
-                                url, timeout=CATALOG_TIMEOUT, attempts=1,
-                            )
-                            selected_url = url
-                            break
-                        except InstallerError as error:
-                            last_error = error
-                            console.detail(str(error))
-                            if index + 1 < len(CATALOG_URLS):
-                                host = urllib.parse.urlsplit(url).hostname or url
-                                console.warning(
-                                    f"Catálogo indisponível em {host}; tentando o próximo mirror..."
-                                )
-                    if catalog_payload is None or selected_url is None:
-                        raise InstallerError(
-                            f"Nenhum mirror do catálogo x86QW respondeu: {last_error}"
-                        )
+                    catalog_payload, selected_url = self.http_get_mirrors(
+                        CATALOG_URLS,
+                        maximum_size=CATALOG_MAX_BYTES,
+                        timeout=CATALOG_TIMEOUT,
+                        attempts=1,
+                        mirror_label="Catálogo",
+                    )
                     catalog = json.loads(catalog_payload)
                     catalog_status = "Baixado"
-                    console.detail(f"Catálogo público: {selected_url}")
+                    console.detail(f"Catálogo público: {safe_url_for_log(selected_url)}")
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):
@@ -3089,27 +3236,23 @@ class Installer:
                     console.success(f"Pacote carregado da distribuição local: {distribution_path}")
                 return artifact
         temporary = self.stage / f"{identifier}.download"
-        last_error: InstallerError | None = None
-        for index, url in enumerate(package["urls"]):
-            try:
-                self.http_get(url, temporary)
-                if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
-                    raise InstallerError(f"O mirror entregou um pacote inválido: {url}")
-                temporary.replace(artifact)
-                if self.update_ui:
-                    console.download_result(
-                        f"{identifier} {package['version']}", size=artifact.stat().st_size,
-                    )
-                else:
-                    console.success(f"Pacote baixado e validado: {filename}")
-                return artifact
-            except InstallerError as error:
-                last_error = error
-                if lexists(temporary):
-                    remove_path(temporary)
-                if index + 1 < len(package["urls"]):
-                    console.warning("Mirror indisponível ou inválido; tentando a próxima cópia...")
-        raise InstallerError(f"Nenhum mirror entregou o pacote {identifier}: {last_error}")
+        self.http_get_mirrors(
+            tuple(str(url) for url in package["urls"]),
+            temporary,
+            expected_size=int(package["size"]),
+            expected_sha256=digest,
+            maximum_size=MAX_ARTIFACT_BYTES,
+        )
+        if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
+            raise InstallerError(f"Um mirror entregou um pacote inválido: {identifier}")
+        temporary.replace(artifact)
+        if self.update_ui:
+            console.download_result(
+                f"{identifier} {package['version']}", size=artifact.stat().st_size,
+            )
+        else:
+            console.success(f"Pacote baixado e validado: {filename}")
+        return artifact
 
     def component_source_context(self) -> object | None:
         if self.online_only:
@@ -3653,7 +3796,11 @@ class Installer:
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
         try:
-            servers = json.loads(self.http_get(HUB_SERVERS_API))
+            servers = json.loads(self.http_get(
+                HUB_SERVERS_API,
+                maximum_size=HUB_MAX_BYTES,
+                timeout=CATALOG_TIMEOUT,
+            ))
         except (json.JSONDecodeError, TypeError) as error:
             raise InstallerError("O Hub retornou um catálogo de servidores inválido.") from error
         if not isinstance(servers, list):
@@ -5209,9 +5356,9 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 print("\nA CLI instalada não baixa componentes novos durante o gameplay.")
                 print("Reexecute o bootstrap e informe este mesmo destino:")
                 if os.name == "nt":
-                    print("\n  irm https://x86qw.x86.com.br/install.ps1 | iex")
+                    print(f"\n  {PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND}")
                 else:
-                    print('\n  /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"')
+                    print(f"\n  {PUBLIC_UNIX_BOOTSTRAP_COMMAND}")
                 print(f"\nDestino atual: {target}")
                 try:
                     input("\nPressione Enter para voltar ao menu...")

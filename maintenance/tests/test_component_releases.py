@@ -33,9 +33,72 @@ from component_releases import (  # noqa: E402
     verified_artifact_members,
     verified_package_files,
 )
+from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
 
 
 class ComponentReleaseTests(unittest.TestCase):
+    def test_release_inventory_rejects_artifact_above_global_limit(self) -> None:
+        document = json.loads(
+            (ROOT / "maintenance/inventory/component-releases.json").read_text(
+                encoding="utf-8",
+            ),
+        )
+        document["components"]["ktx"]["artifacts"][0]["size"] = (
+            MAX_ARTIFACT_BYTES + 1
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            inventory = Path(temporary) / "component-releases.json"
+            inventory.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid artifact size: ktx"):
+                load_releases(
+                    inventory,
+                    ROOT / "maintenance/inventory/components.json",
+                )
+
+    def test_release_inventory_rejects_member_above_global_limit(self) -> None:
+        document = json.loads(
+            (ROOT / "maintenance/inventory/component-releases.json").read_text(
+                encoding="utf-8",
+            ),
+        )
+        document["components"]["final-arena"]["artifacts"][0]["members"] = [{
+            "path": "arena/qwprogs.dat",
+            "target_archive": "arena/arena.pk3",
+            "target_member": "qwprogs.dat",
+            "size": MAX_ARTIFACT_BYTES + 1,
+            "sha256": "0" * 64,
+        }]
+        with tempfile.TemporaryDirectory() as temporary:
+            inventory = Path(temporary) / "component-releases.json"
+            inventory.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "invalid artifact member size: final-arena",
+            ):
+                load_releases(
+                    inventory,
+                    ROOT / "maintenance/inventory/components.json",
+                )
+
+    def test_release_inventory_rejects_package_copy_above_global_limit(self) -> None:
+        document = json.loads(
+            (ROOT / "maintenance/inventory/component-releases.json").read_text(
+                encoding="utf-8",
+            ),
+        )
+        document["components"]["total-destruction-2"]["package_copies"][0][
+            "size"
+        ] = MAX_ARTIFACT_BYTES + 1
+        with tempfile.TemporaryDirectory() as temporary:
+            inventory = Path(temporary) / "component-releases.json"
+            inventory.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "invalid package copy size: total-destruction-2",
+            ):
+                load_releases(
+                    inventory,
+                    ROOT / "maintenance/inventory/components.json",
+                )
+
     def test_each_playable_mod_declares_its_characteristic_composition(self) -> None:
         catalog = load_catalog(ROOT / "maintenance/inventory/components.json")
         components = components_by_id(catalog)
@@ -516,7 +579,7 @@ class ComponentReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsafe standalone artifact member"):
                 verified_package_files(root, artifact)
 
-    def test_standalone_update_check_verifies_the_pinned_source_without_github_metadata(self) -> None:
+    def test_standalone_update_check_fingerprints_the_source_without_github_metadata(self) -> None:
         releases = load_releases(
             ROOT / "maintenance/inventory/component-releases.json",
             ROOT / "maintenance/inventory/components.json",
@@ -540,6 +603,29 @@ class ComponentReleaseTests(unittest.TestCase):
             ],
             [call.args[0] for call in fingerprint.call_args_list],
         )
+
+    def test_standalone_update_check_reports_a_changed_source_artifact(self) -> None:
+        releases = load_releases(
+            ROOT / "maintenance/inventory/component-releases.json",
+            ROOT / "maintenance/inventory/components.json",
+        )
+        with mock.patch(
+            "check_component_updates.git_remote_revision",
+            return_value=releases["reference"]["revision"],
+        ), mock.patch(
+            "check_component_updates.github_latest_release", return_value="1.47",
+        ), mock.patch(
+            "check_component_updates.remote_fingerprint", return_value=(1, "0" * 64),
+        ):
+            results = check_updates(releases, online=True)
+
+        changed = [
+            result for result in results
+            if releases["components"][result["component"]]["strategy"] == "upstream-package"
+        ]
+        self.assertTrue(changed)
+        self.assertTrue(all(result["status"] == "update-available" for result in changed))
+        self.assertTrue(all(result["latest_source"] == "source-artifact-changed" for result in changed))
 
 
 if __name__ == "__main__":

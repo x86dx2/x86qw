@@ -7,6 +7,11 @@ import json
 import re
 from pathlib import Path, PurePosixPath
 
+try:
+    from .downloader import MAX_ARTIFACT_BYTES
+except ImportError:  # Executado diretamente por ferramentas em tools/.
+    from downloader import MAX_ARTIFACT_BYTES
+
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -72,6 +77,7 @@ def validate_upstreams(registry: object) -> None:
             if has_file_identity and (
                 not isinstance(source.get("size"), int)
                 or source["size"] <= 0
+                or source["size"] > MAX_ARTIFACT_BYTES
                 or not SHA256.fullmatch(str(source.get("sha256", "")))
             ):
                 raise ValueError(f"invalid preserved source identity: {identifier}")

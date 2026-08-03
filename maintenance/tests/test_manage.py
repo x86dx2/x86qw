@@ -5,14 +5,21 @@ import hashlib
 import json
 import tempfile
 import unittest
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 
 from maintenance.manage import (
+    GITHUB_API_DEADLINE_SECONDS,
+    GITHUB_API_MAX_BYTES,
+    ManagerError,
     PROJECT_ROOT,
     Asset,
     distribution_delta,
     ezquake_source_revision,
+    github_api_object,
+    github_latest_release_tag,
+    github_release,
     github_release_coordinates,
     parser,
     publish_github,
@@ -23,9 +30,73 @@ from maintenance.manage import (
     update_ezquake_catalog,
     update_reference_releases,
 )
+from maintenance.tools.downloader import DownloadHTTPError, DownloadResult
 
 
 class DistributionManagerTests(unittest.TestCase):
+    def test_github_release_uses_bounded_https_metadata_download(self) -> None:
+        payload = json.dumps({"tag_name": "x86qw-installer-0.7.1"}).encode()
+        response = DownloadResult(
+            "https://api.github.com/repos/x86dx2/x86qw/releases/tags/x86qw-installer-0.7.1",
+            len(payload), "a" * 64, 1, {}, data=payload,
+        )
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "secret-token"}, clear=True):
+            with mock.patch("maintenance.manage.download", return_value=response) as bounded:
+                release = github_release("x86dx2/x86qw", "x86qw-installer-0.7.1")
+
+        self.assertEqual("x86qw-installer-0.7.1", release["tag_name"])
+        contract = bounded.call_args.args[0]
+        self.assertEqual(GITHUB_API_MAX_BYTES, contract.maximum_size)
+        self.assertEqual(GITHUB_API_DEADLINE_SECONDS, contract.deadline_seconds)
+        self.assertEqual("https", urllib.parse.urlsplit(contract.url).scheme)
+        self.assertEqual("Bearer secret-token", contract.headers["Authorization"])
+
+    def test_github_latest_release_uses_bounded_json_response(self) -> None:
+        payload = b'{"tag_name":"v1.2.3"}'
+        response = DownloadResult(
+            "https://api.github.com/repos/example/project/releases/latest",
+            len(payload), "b" * 64, 1, {}, data=payload,
+        )
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "secret-token"}, clear=True):
+            with mock.patch("maintenance.manage.download", return_value=response):
+                self.assertEqual("v1.2.3", github_latest_release_tag("example/project"))
+
+    def test_github_api_treats_bounded_404_as_missing(self) -> None:
+        error = DownloadHTTPError(404, "missing", {})
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "secret-token"}, clear=True):
+            with mock.patch("maintenance.manage.download", side_effect=error):
+                self.assertIsNone(github_api_object("example/project", "releases/latest", "latest"))
+
+    def test_github_api_rejects_invalid_json_without_echoing_token(self) -> None:
+        response = DownloadResult(
+            "https://api.github.com/repos/example/project/releases/latest",
+            4, "c" * 64, 1, {}, data=b"nope",
+        )
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "never-print-this"}, clear=True):
+            with mock.patch("maintenance.manage.download", return_value=response):
+                with self.assertRaisesRegex(ManagerError, "resposta JSON inválida") as raised:
+                    github_api_object("example/project", "releases/latest", "latest")
+        self.assertNotIn("never-print-this", str(raised.exception))
+
+    def test_github_release_quotes_tag_as_one_path_segment(self) -> None:
+        payload = b'{"tag_name":"release/../latest"}'
+        response = DownloadResult(
+            "https://api.github.com/repos/example/project/releases/tags/release%2F..%2Flatest",
+            len(payload), "d" * 64, 1, {}, data=payload,
+        )
+        with mock.patch.dict("os.environ", {"GH_TOKEN": "secret-token"}, clear=True):
+            with mock.patch("maintenance.manage.download", return_value=response) as bounded:
+                github_release("example/project", "release/../latest")
+        self.assertTrue(bounded.call_args.args[0].url.endswith("/release%2F..%2Flatest"))
+
+    def test_github_api_rejects_repository_path_injection_before_download(self) -> None:
+        for repository in ("example/project/releases", "../project", "example/.."):
+            with self.subTest(repository=repository):
+                with mock.patch("maintenance.manage.download") as bounded:
+                    with self.assertRaisesRegex(ManagerError, "repositório GitHub inválido"):
+                        github_api_object(repository, "latest", "latest")
+                bounded.assert_not_called()
+
     def test_registered_nightly_revision_does_not_require_github_lookup(self) -> None:
         asset = Asset(
             "ezquake",

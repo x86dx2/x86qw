@@ -130,6 +130,9 @@ fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
                      -> maintenance/build/packages/ -> mirrors -> instalador público
 CLI + catálogos runtime mínimos -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
 dist/game-data/id1 -> pacote x86qw-core-id1 -> GitHub/GitLab -> instalação inicial
+
+metadado HTTPS -> limite + deadline -> memória efêmera
+pacote HTTPS   -> tamanho + SHA-256 -> staging privado -> promoção atômica
 ```
 
 As receitas versionadas ficam em `maintenance/recipes/`. O gerenciador valida
@@ -151,13 +154,43 @@ com uma ordem determinística, registra o arquivo em recibo próprio e rejeita
 divergências na verificação. Os launchers sempre passam `-nohome`, evitando que
 um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
 
+## Fronteira de bytes remotos
+
+O zipapp e as ferramentas Python recebem HTTP exclusivamente por contratos
+tipados em `maintenance/tools/downloader.py`; o bootstrap PowerShell incorpora
+uma projeção mínima antes de o zipapp existir. Artefatos persistentes são fixados por tamanho
+e SHA-256; metadados dinâmicos permanecem efêmeros; a exceção de payload não
+fixado é restrita à manutenção, usa identidade independente quando disponível e
+permanece sujeita a confirmação, validação e revisão quando o upstream não
+publica digest.
+Os limites atuais são 512 MiB para artefatos, 2 MiB para o catálogo, 1 MiB para
+o Hub e 4 MiB para descoberta HTTP. O adaptador Git limita stdout a 32 MiB,
+stderr a 1 MiB e o workspace temporário a 128 MiB, com deadlines de 60 segundos
+para consultas e 300 segundos para árvores.
+
+O deadline monotônico cobre tentativas, leituras e backoff. Retry é restrito a
+falhas transitórias. Temporários privados recebem `flush` e `fsync` antes de uma
+substituição atômica, preservando o destino final anterior até a promoção. Os
+bootstraps aplicam uma projeção mínima desse contrato antes de o zipapp estar
+disponível. Respostas intermediárias de redirect são fechadas sem drenar o corpo,
+e URLs da fronteira HTTP são redigidas nos diagnósticos sem expor credenciais,
+caminho, query ou fragmento. O adaptador Git pode identificar o caminho do
+repositório público previamente validado.
+
+Metadado limitado não é metadado autenticado. Assinatura, expiração e proteção
+contra rollback/freeze permanecem na
+[issue #48](https://github.com/x86dx2/x86qw/issues/48). Consulte o
+[`ADR 0001`](adr/0001-fronteira-limitada-de-bytes-remotos.md).
+
 ## Segurança e recuperação
 
 - workflows de pull request usam somente `contents: read` e não recebem secrets;
 - a matriz Linux, macOS e Windows bloqueia a etapa manual de release;
-- toda URL de artefato usa HTTPS;
+- toda URL inicial, redirecionada e final de artefato usa HTTPS;
 - nomes de arquivo não podem conter caminhos;
-- nenhum pacote é aceito sem tamanho e SHA-256;
+- nenhum artefato persistente é aceito sem tamanho e SHA-256 prévios;
+- cada resposta possui limite explícito e deadline monotônico total;
+- bytes só chegam ao destino final após validação e promoção atômica;
 - versões publicadas não são substituídas, apenas descontinuadas no catálogo;
 - GitHub e GitLab hospedam o mesmo repositório com Git LFS; os registries são
   canais adicionais de entrega. R2 não faz parte da arquitetura atual.

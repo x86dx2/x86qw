@@ -4,17 +4,18 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import urllib.request
+import tempfile
 from pathlib import Path
 
 try:
     from .component_releases import load_releases
-    from .public_upstreams import git_remote_revision, github_latest_release
+    from .downloader import BoundedPayload, DownloadError, MAX_ARTIFACT_BYTES, download
+    from .public_upstreams import git_remote_revision, github_latest_release, remote_content_length
 except ImportError:  # Execucao direta
     from component_releases import load_releases
-    from public_upstreams import git_remote_revision, github_latest_release
+    from downloader import BoundedPayload, DownloadError, MAX_ARTIFACT_BYTES, download
+    from public_upstreams import git_remote_revision, github_latest_release, remote_content_length
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,14 +25,19 @@ USER_AGENT = "x86qw-freshness/1"
 
 
 def remote_fingerprint(url: str) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    digest = hashlib.sha256()
-    size = 0
-    with urllib.request.urlopen(request, timeout=120) as response:
-        while block := response.read(1024 * 1024):
-            size += len(block)
-            digest.update(block)
-    return size, digest.hexdigest()
+    expected_size = remote_content_length(url)
+    with tempfile.TemporaryDirectory(prefix="x86qw-freshness-") as temporary:
+        destination = Path(temporary) / "artifact"
+        result = download(BoundedPayload(
+            url=url,
+            destination=destination,
+            expected_size=expected_size,
+            maximum_size=MAX_ARTIFACT_BYTES,
+            deadline_seconds=120,
+            headers={"User-Agent": USER_AGENT},
+            label="artefato de upstream",
+        ))
+    return result.size, result.sha256
 
 
 def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str, str]]:
@@ -105,6 +111,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (DownloadError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"component update check failed: {error}")
         raise SystemExit(1)

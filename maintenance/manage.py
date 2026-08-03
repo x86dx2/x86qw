@@ -13,8 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -33,6 +32,15 @@ from maintenance.tools.components import (
     load_catalog as load_component_catalog,
     profile_fingerprint,
     validate_tree_partition,
+)
+from maintenance.tools.downloader import (
+    BoundedMetadata,
+    DownloadError,
+    DownloadHTTPError,
+    MAX_ARTIFACT_BYTES,
+    PinnedArtifact,
+    download,
+    safe_url_for_log,
 )
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
@@ -64,6 +72,8 @@ BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
 PRODUCT_CATALOG = PROJECT_ROOT / "site/public/api/v1/product.json"
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+GITHUB_API_MAX_BYTES = 4 * 1024 * 1024
+GITHUB_API_DEADLINE_SECONDS = 60
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 EXPECTED_STABLE_MEMBERS = {
     "linux": ["ezQuake-x86_64.AppImage"],
@@ -992,12 +1002,33 @@ def fetch_definition_file(entry: dict[str, object], base: Path, destination: Pat
         if not origin.is_file() or origin.is_symlink():
             raise ManagerError(f"arquivo local invalido: {origin}")
         shutil.copyfile(origin, destination)
-    elif isinstance(url, str) and url.startswith("https://"):
-        request = urllib.request.Request(url, headers={"User-Agent": "x86qw-maintenance/1"})
-        with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as output:
-            shutil.copyfileobj(response, output)
+    elif isinstance(url, str):
+        expected_size = entry.get("size")
+        expected_sha = entry.get("sha256")
+        if (
+            not isinstance(expected_size, int)
+            or expected_size < 0
+            or not isinstance(expected_sha, str)
+            or not HEX64.fullmatch(expected_sha)
+        ):
+            raise ManagerError(
+                "arquivo remoto da definição exige size e sha256 válidos"
+            )
+        try:
+            download(PinnedArtifact(
+                url=url,
+                destination=destination,
+                expected_size=expected_size,
+                expected_sha256=expected_sha,
+                maximum_size=MAX_ARTIFACT_BYTES,
+                deadline_seconds=120,
+                headers={"User-Agent": "x86qw-maintenance/1"},
+                label=str(entry.get("destination", destination.name)),
+            ))
+        except DownloadError as error:
+            raise ManagerError(f"falha ao baixar arquivo da definição: {error}") from error
     else:
-        raise ManagerError(f"URL de arquivo invalida: {url!r}")
+        raise ManagerError("URL de arquivo invalida")
     size = destination.stat().st_size
     digest = file_sha256(destination)
     expected_size = entry.get("size")
@@ -1156,39 +1187,83 @@ def github_release_coordinates(url: str, filename: str) -> tuple[str, str]:
         url,
     )
     if match is None or match.group(3) != filename:
-        raise ManagerError(f"URL primaria nao representa um GitHub Release: {url}")
+        raise ManagerError(
+            "URL primaria nao representa um GitHub Release: "
+            f"{safe_url_for_log(url)}"
+        )
     return match.group(1), match.group(2)
 
 
-def github_release(repository: str, tag: str) -> dict[str, object] | None:
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repository}/releases/tags/{tag}"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        if "HTTP 404" in result.stderr or "Not Found" in result.stderr:
+def github_api_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "x86qw-maintenance/1",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token is None:
+        try:
+            result = subprocess.run(
+                ["gh", "auth", "token"],
+                cwd=PROJECT_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if result is not None and result.returncode == 0:
+            token = result.stdout.strip()
+    if token:
+        if len(token) > 4096 or any(ord(character) < 33 or ord(character) == 127 for character in token):
+            raise ManagerError("token GitHub inválido")
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def github_api_object(repository: str, endpoint: str, label: str) -> dict[str, object] | None:
+    repository_parts = repository.split("/")
+    if (
+        len(repository_parts) != 2
+        or any(part in {"", ".", ".."} for part in repository_parts)
+        or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None
+    ):
+        raise ManagerError(f"repositório GitHub inválido: {repository!r}")
+    url = f"https://api.github.com/repos/{repository}/{endpoint}"
+    try:
+        result = download(BoundedMetadata(
+            url=url,
+            maximum_size=GITHUB_API_MAX_BYTES,
+            deadline_seconds=GITHUB_API_DEADLINE_SECONDS,
+            headers=github_api_headers(),
+            label=label,
+        ))
+    except DownloadHTTPError as error:
+        if error.status == 404:
             return None
-        raise ManagerError(result.stderr.strip() or f"falha ao consultar release {tag}")
-    value = json.loads(result.stdout)
+        raise ManagerError(f"falha ao consultar {label}: HTTP {error.status}") from error
+    except DownloadError as error:
+        raise ManagerError(f"falha ao consultar {label}: {error}") from error
+    try:
+        value = json.loads((result.data or b"").decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ManagerError(f"resposta JSON inválida ao consultar {label}") from error
     return value if isinstance(value, dict) else None
 
 
+def github_release(repository: str, tag: str) -> dict[str, object] | None:
+    encoded_tag = urllib.parse.quote(tag, safe="")
+    return github_api_object(repository, f"releases/tags/{encoded_tag}", f"release GitHub {tag}")
+
+
 def github_latest_release_tag(repository: str) -> str | None:
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repository}/releases/latest", "--jq", ".tag_name"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        if "HTTP 404" in result.stderr or "Not Found" in result.stderr:
-            return None
-        raise ManagerError(result.stderr.strip() or f"falha ao consultar latest de {repository}")
-    return result.stdout.strip() or None
+    release = github_api_object(repository, "releases/latest", f"latest GitHub de {repository}")
+    if release is None:
+        return None
+    tag = release.get("tag_name")
+    return tag if isinstance(tag, str) and tag else None
 
 
 def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
@@ -1277,7 +1352,9 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
                 fingerprint = (
                     (remote.get("size"), str(digest).removeprefix("sha256:"))
                     if isinstance(digest, str)
-                    else remote_sha256(primary)
+                    else remote_sha256(
+                        primary, int(package["size"]), str(package["sha256"]),
+                    )
                 )
                 if fingerprint != (package["size"], package["sha256"]):
                     raise ManagerError(f"asset GitHub imutavel difere do catalogo: {package['filename']}")
@@ -1389,7 +1466,14 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (ManagerError, OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError, urllib.error.URLError) as error:
+    except (
+        DownloadError,
+        ManagerError,
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+        subprocess.CalledProcessError,
+    ) as error:
         print(f"[ERRO] {error}", file=sys.stderr)
         if "--verbose" in sys.argv:
             raise

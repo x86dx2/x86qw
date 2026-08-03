@@ -1,20 +1,31 @@
 from __future__ import annotations
 
+import ast
 import json
+import hashlib
 import os
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CAPABILITIES = ROOT / "maintenance/inventory/capabilities.json"
 PRODUCT = ROOT / "site/public/api/v1/product.json"
-POWERSHELL = shutil.which("pwsh") or shutil.which("powershell.exe")
+WINDOWS_POWERSHELL = shutil.which("powershell.exe") if os.name == "nt" else None
+POWERSHELL_RUNTIMES = tuple(dict.fromkeys(
+    runtime
+    for runtime in (shutil.which("pwsh"), WINDOWS_POWERSHELL)
+    if runtime is not None
+))
+POWERSHELL = POWERSHELL_RUNTIMES[0] if POWERSHELL_RUNTIMES else None
 
 
 class LauncherContractTests(unittest.TestCase):
@@ -623,11 +634,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 curl = binaries / "curl"
                 curl.write_text(
                     """#!/bin/sh
-output=
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "-o" ]; then output=$2; shift 2; else shift; fi
-done
-exec /bin/cp "$X86QW_TEST_BUNDLE" "$output"
+exec /bin/cat "$X86QW_TEST_BUNDLE"
 """,
                     encoding="utf-8",
                 )
@@ -710,7 +717,7 @@ exec /bin/cp "$X86QW_TEST_BUNDLE" "$output"
                 runtime.write_text(
                     "#!/bin/sh\n"
                     "if [ \"${1:-}\" = \"-c\" ]; then exit 0; fi\n"
-                    f"if [ \"${{1:-}}\" = \"-\" ]; then exec {shlex.quote(sys.executable)} \"$@\"; fi\n"
+                    f"if [ \"${{1:-}}\" = \"/dev/fd/3\" ]; then exec {shlex.quote(sys.executable)} \"$@\"; fi\n"
                     "exit 23\n",
                     encoding="utf-8",
                 )
@@ -718,11 +725,7 @@ exec /bin/cp "$X86QW_TEST_BUNDLE" "$output"
                 curl = binaries / "curl"
                 curl.write_text(
                     """#!/bin/sh
-output=
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "-o" ]; then output=$2; shift 2; else shift; fi
-done
-exec /bin/cp "$X86QW_TEST_BUNDLE" "$output"
+exec /bin/cat "$X86QW_TEST_BUNDLE"
 """,
                     encoding="utf-8",
                 )
@@ -747,8 +750,957 @@ exec /bin/cp "$X86QW_TEST_BUNDLE" "$output"
 
     def test_unix_bootstrap_hashes_in_streaming_blocks(self):
         source = (ROOT / "dist/installer/bin/install.sh").read_text(encoding="utf-8")
-        self.assertIn("stream.read(1024 * 1024)", source)
+        self.assertIn("sys.stdin.buffer.read(min(64 * 1024, expected_size - received + 1))", source)
         self.assertNotIn('open(sys.argv[1],"rb").read()', source)
+
+    def test_unix_bootstrap_has_bounded_https_download_contract(self):
+        source = (ROOT / "dist/installer/bin/install.sh").read_text(encoding="utf-8")
+        for fragment in (
+            "INSTALLER_SIZE=\"157113\"",
+            "DOWNLOAD_BUDGET_SECONDS=\"180\"",
+            "DOWNLOAD_TRANSFER_SECONDS=\"120\"",
+            "DOWNLOAD_ATTEMPTS=\"3\"",
+            "--proto '=https'",
+            "--proto-redir '=https'",
+            "--connect-timeout 15",
+            '--max-time "$remaining_seconds"',
+            '--dump-header "$headers"',
+            '"$url" | receive_archive',
+            'final_header_value "Content-Length"',
+            'final_header_value "Retry-After"',
+            'base * (0.8 + (0.4 * random.random()))',
+            'wait_before_retry "$attempt" "$retry_after"',
+            'Content-Length do instalador é inválido ou divergente',
+            "tempfile.mkstemp(",
+            "output.flush()",
+            "os.fsync(output.fileno())",
+            "if time.monotonic() >= deadline:",
+            "os.replace(temporary_name, destination)",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, source)
+        self.assertNotIn("--retry ", source)
+        self.assertNotIn("--retry-max-time", source)
+        self.assertNotIn("--max-filesize", source)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_falls_back_after_http_200_with_invalid_content(self):
+        bootstrap = ROOT / "dist/installer/bin/install.sh"
+        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
+        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            (binaries / "python3").symlink_to(sys.executable)
+            for command in ("unzip", "mktemp", "rm"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (binaries / command).symlink_to(executable)
+
+            calls = root / "curl-calls"
+            curl = binaries / "curl"
+            curl.write_text(
+                """#!/bin/sh
+count=0
+if [ -f "$X86QW_CURL_CALLS" ]; then
+  while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >> "$X86QW_CURL_CALLS"
+if [ "$count" -eq 1 ]; then
+  printf 'conteudo HTTP 200 corrompido'
+else
+  /bin/cat "$X86QW_TEST_BUNDLE"
+fi
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+
+            completed = subprocess.run(
+                ["/bin/bash", str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_CURL_CALLS": os.fspath(calls),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            received_calls = calls.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(["1", "2"], received_calls)
+        self.assertIn("mirror rejeitado por indisponibilidade ou integridade", completed.stderr)
+        self.assertIn("usage: x86qw", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_rejects_divergent_content_length_before_accepting_mirror(self):
+        bootstrap = ROOT / "dist/installer/bin/install.sh"
+        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
+        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            (binaries / "python3").symlink_to(sys.executable)
+            for command in ("unzip", "mktemp", "rm"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (binaries / command).symlink_to(executable)
+
+            calls = root / "curl-calls"
+            curl = binaries / "curl"
+            curl.write_text(
+                """#!/bin/sh
+headers=
+previous=
+for argument in "$@"; do
+  if [ "$previous" = "--dump-header" ]; then headers=$argument; fi
+  previous=$argument
+done
+count=0
+if [ -f "$X86QW_CURL_CALLS" ]; then
+  while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >> "$X86QW_CURL_CALLS"
+if [ "$count" -eq 1 ]; then declared=1; else declared=$X86QW_TEST_SIZE; fi
+printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$declared" > "$headers"
+/bin/cat "$X86QW_TEST_BUNDLE"
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+
+            completed = subprocess.run(
+                ["/bin/bash", str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_CURL_CALLS": os.fspath(calls),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "X86QW_TEST_SIZE": str(bundle.stat().st_size),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            received_calls = calls.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(["1", "2"], received_calls)
+        self.assertIn("Content-Length do instalador", completed.stderr)
+        self.assertIn("usage: x86qw", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_retries_partial_transfer_with_a_fresh_receiver(self):
+        bootstrap = ROOT / "dist/installer/bin/install.sh"
+        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
+        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            (binaries / "python3").symlink_to(sys.executable)
+            for command in ("unzip", "mktemp", "rm"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (binaries / command).symlink_to(executable)
+
+            calls = root / "curl-calls"
+            curl = binaries / "curl"
+            curl.write_text(
+                """#!/bin/sh
+for argument in "$@"; do
+  if [ "$argument" = "--max-filesize" ]; then exit 99; fi
+done
+count=0
+if [ -f "$X86QW_CURL_CALLS" ]; then
+  while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >> "$X86QW_CURL_CALLS"
+if [ "$count" -eq 1 ]; then
+  printf 'resposta parcial'
+  exit 28
+fi
+/bin/cat "$X86QW_TEST_BUNDLE"
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+
+            completed = subprocess.run(
+                ["/bin/bash", str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_CURL_CALLS": os.fspath(calls),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            received_calls = calls.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(["1", "2"], received_calls)
+        self.assertIn("tentativa 2/3", completed.stdout)
+        self.assertIn("usage: x86qw", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_shares_one_budget_across_mirrors(self):
+        canonical = ROOT / "dist/installer/bin/install.sh"
+        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
+        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bootstrap = root / "install-budget.sh"
+            source = canonical.read_text(encoding="utf-8").replace(
+                'DOWNLOAD_BUDGET_SECONDS="180"',
+                'DOWNLOAD_BUDGET_SECONDS="0.8"',
+                1,
+            )
+            bootstrap.write_text(source, encoding="utf-8")
+            bootstrap.chmod(0o755)
+            binaries = root / "bin"
+            binaries.mkdir()
+            (binaries / "python3").symlink_to(sys.executable)
+            for command in ("unzip", "mktemp", "rm"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (binaries / command).symlink_to(executable)
+
+            calls = root / "curl-calls"
+            curl = binaries / "curl"
+            curl.write_text(
+                """#!/bin/sh
+count=0
+if [ -f "$X86QW_CURL_CALLS" ]; then
+  while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >> "$X86QW_CURL_CALLS"
+if [ "$count" -eq 1 ]; then
+  printf 'mirror corrompido'
+else
+  /bin/sleep 1.0
+  /bin/cat "$X86QW_TEST_BUNDLE"
+fi
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+
+            completed = subprocess.run(
+                ["/bin/bash", str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_CURL_CALLS": os.fspath(calls),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            received_calls = calls.read_text(encoding="utf-8").splitlines()
+        self.assertNotEqual(0, completed.returncode)
+        self.assertEqual(
+            ["1", "2"],
+            received_calls,
+            completed.stdout + completed.stderr,
+        )
+        self.assertIn("prazo total", completed.stderr)
+        self.assertNotIn("usage: x86qw", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_skips_unaffordable_retry_after_for_next_mirror(self):
+        bootstrap = ROOT / "dist/installer/bin/install.sh"
+        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
+        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = root / "bin"
+            binaries.mkdir()
+            (binaries / "python3").symlink_to(sys.executable)
+            for command in ("unzip", "mktemp", "rm"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (binaries / command).symlink_to(executable)
+
+            calls = root / "curl-calls"
+            curl = binaries / "curl"
+            curl.write_text(
+                """#!/bin/sh
+headers=
+previous=
+for argument in "$@"; do
+  if [ "$previous" = "--dump-header" ]; then headers=$argument; fi
+  previous=$argument
+done
+count=0
+if [ -f "$X86QW_CURL_CALLS" ]; then
+  while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" >> "$X86QW_CURL_CALLS"
+if [ "$count" -eq 1 ]; then
+  printf 'HTTP/1.1 503 Busy\r\nRetry-After: 999\r\n\r\n' > "$headers"
+  exit 22
+fi
+printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$headers"
+/bin/cat "$X86QW_TEST_BUNDLE"
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+
+            completed = subprocess.run(
+                ["/bin/bash", str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_CURL_CALLS": os.fspath(calls),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "X86QW_TEST_SIZE": str(bundle.stat().st_size),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            received_calls = calls.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(["1", "2"], received_calls)
+        self.assertIn("mirror rejeitado", completed.stderr)
+        self.assertIn("usage: x86qw", completed.stdout)
+
+    def test_powershell_embedded_downloader_rejects_insecure_redirects_and_oversize(self):
+        source = (ROOT / "dist/installer/bin/install.ps1").read_text(encoding="utf-8")
+        marker = "$DownloaderSource = @'\n"
+        downloader = source.split(marker, 1)[1].split("\n'@", 1)[0]
+        definitions = downloader.split("\ntry:\n    download_mirrors(", 1)[0]
+        namespace: dict[str, object] = {}
+        exec(compile(definitions, "x86qw-bootstrap-download.py", "exec"), namespace)
+
+        urllib_module = namespace["urllib"]
+        handler = namespace["HttpsOnlyRedirectHandler"]()
+        request = urllib_module.request.Request("https://example.invalid/source")
+        with self.assertRaisesRegex(namespace["PolicyError"], "fora de HTTPS"):
+            handler.redirect_request(
+                request, None, 302, "Found", {}, "http://example.invalid/destination"
+            )
+
+        class RedirectBody:
+            def __init__(self):
+                self.closed = False
+
+            def read(self, *_args):
+                raise AssertionError("o corpo 3xx nao pode ser drenado")
+
+            def close(self):
+                self.closed = True
+
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status):
+                body = RedirectBody()
+                parent = mock.Mock()
+                expected = object()
+                parent.open.return_value = expected
+                redirect_handler = namespace["HttpsOnlyRedirectHandler"]()
+                redirect_handler.parent = parent
+                redirected_request = urllib_module.request.Request(
+                    "https://example.invalid/source", method="HEAD",
+                )
+                redirected_request.timeout = 1
+
+                result = getattr(redirect_handler, f"http_error_{status}")(
+                    redirected_request,
+                    body,
+                    status,
+                    "Found",
+                    {"location": "https://example.invalid/destination"},
+                )
+
+                self.assertIs(expected, result)
+                self.assertTrue(body.closed)
+                parent.open.assert_called_once()
+                self.assertEqual("HEAD", parent.open.call_args.args[0].get_method())
+
+        rejected_body = RedirectBody()
+        rejected_parent = mock.Mock()
+        rejected_handler = namespace["HttpsOnlyRedirectHandler"]()
+        rejected_handler.parent = rejected_parent
+        rejected_request = urllib_module.request.Request(
+            "https://example.invalid/source",
+        )
+        rejected_request.timeout = 1
+        with self.assertRaises(namespace["PolicyError"]):
+            rejected_handler.http_error_302(
+                rejected_request,
+                rejected_body,
+                302,
+                "Found",
+                {"location": "http://example.invalid/destination"},
+            )
+        self.assertTrue(rejected_body.closed)
+        rejected_parent.open.assert_not_called()
+
+        missing_body = RedirectBody()
+        missing_handler = namespace["HttpsOnlyRedirectHandler"]()
+        missing_handler.parent = mock.Mock()
+        missing_request = urllib_module.request.Request("https://example.invalid/source")
+        missing_request.timeout = 1
+        self.assertIsNone(missing_handler.http_error_302(
+            missing_request, missing_body, 302, "Found", {},
+        ))
+        self.assertTrue(missing_body.closed)
+        missing_handler.parent.open.assert_not_called()
+
+        loop_body = RedirectBody()
+        loop_handler = namespace["HttpsOnlyRedirectHandler"]()
+        loop_handler.parent = mock.Mock()
+        loop_request = urllib_module.request.Request("https://example.invalid/source")
+        loop_request.timeout = 1
+        loop_request.redirect_dict = {
+            "https://example.invalid/destination": loop_handler.max_repeats,
+        }
+        with self.assertRaises(urllib_module.error.HTTPError) as raised_redirect:
+            loop_handler.http_error_302(
+                loop_request,
+                loop_body,
+                302,
+                "Found",
+                {"location": "https://example.invalid/destination"},
+            )
+        raised_redirect.exception.close()
+        loop_handler.parent.open.assert_not_called()
+
+        class OversizeResponse:
+            status = 200
+            headers: dict[str, str] = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def geturl(self):
+                return "https://example.invalid/archive.zip"
+
+            def read(self, amount):
+                return b"x" * amount
+
+        class OversizeOpener:
+            def open(self, *_args, **_kwargs):
+                return OversizeResponse()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=OversizeOpener()
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "maior que o limite"):
+                    namespace["download_mirrors"](
+                        ["https://example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        5,
+                        "0" * 64,
+                        1,
+                        1,
+                        0,
+                        2,
+                    )
+            self.assertFalse(destination.exists())
+            self.assertFalse(Path(os.fspath(destination) + ".part").exists())
+
+        class IntegrityResponse:
+            status = 200
+
+            def __init__(self, body, url):
+                self.body = body
+                self.url = url
+                self.offset = 0
+                self.headers = {"Content-Length": str(len(body))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def geturl(self):
+                return self.url
+
+            def read(self, amount):
+                block = self.body[self.offset:self.offset + amount]
+                self.offset += len(block)
+                return block
+
+            read1 = read
+
+        class IntegrityFallbackOpener:
+            def __init__(self):
+                self.calls = []
+
+            def open(self, request, **_kwargs):
+                self.calls.append(request.full_url)
+                body = b"wrong" if len(self.calls) == 1 else b"valid"
+                return IntegrityResponse(body, request.full_url)
+
+        fallback = IntegrityFallbackOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=fallback,
+            ):
+                selected = namespace["download_mirrors"](
+                    [
+                        "https://first.example.invalid/archive.zip",
+                        "https://second.example.invalid/archive.zip",
+                    ],
+                    os.fspath(destination),
+                    5,
+                    hashlib.sha256(b"valid").hexdigest(),
+                    1,
+                    1,
+                    0,
+                    3,
+                )
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual("https://second.example.invalid/archive.zip", selected)
+        self.assertEqual(2, len(fallback.calls))
+
+        release = threading.Event()
+
+        class CancelConnection:
+            def close(self):
+                release.set()
+
+        class BlockingOpener:
+            registry = None
+
+            def open(self, _request, **_kwargs):
+                self.registry.register(threading.get_ident(), CancelConnection())
+                release.wait(2)
+                return IntegrityResponse(b"valid", "https://slow.example.invalid/archive.zip")
+
+        blocked = BlockingOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            started = time.monotonic()
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=blocked,
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
+                    namespace["download_mirrors"](
+                        ["https://slow.example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        5,
+                        hashlib.sha256(b"valid").hexdigest(),
+                        1,
+                        1,
+                        0,
+                        0.05,
+                    )
+            self.assertLess(time.monotonic() - started, 0.5)
+            self.assertTrue(release.is_set())
+            self.assertFalse(destination.exists())
+        for _ in range(50):
+            if not any(
+                thread.name == "x86qw-bootstrap-open" and thread.is_alive()
+                for thread in threading.enumerate()
+            ):
+                break
+            time.sleep(0.01)
+        self.assertFalse(any(
+            thread.name == "x86qw-bootstrap-open" and thread.is_alive()
+            for thread in threading.enumerate()
+        ))
+
+        class NotFoundOpener:
+            def __init__(self):
+                self.calls = 0
+
+            def open(self, request, **_kwargs):
+                self.calls += 1
+                raise urllib_module.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None,
+                )
+
+        not_found = NotFoundOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=not_found,
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "HTTP 404"):
+                    namespace["download_mirrors"](
+                        ["https://example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        5,
+                        "0" * 64,
+                        1,
+                        1,
+                        2,
+                        3,
+                    )
+        self.assertEqual(1, not_found.calls)
+
+        for fragment in (
+            "$InstallerConnectTimeoutSeconds = 15",
+            "$InstallerTransferTimeoutSeconds = 120",
+            "$InstallerRetryMaxSeconds = 180",
+            "$InstallerRetries = 2",
+            "time.monotonic() + retry_max_time",
+            "min(total_deadline, attempt_deadline, connection_deadline)",
+            "reader = getattr(response, \"read1\", response.read)",
+            "open_with_deadline(",
+            "tempfile.mkstemp(",
+            "os.fchmod(descriptor, 0o600)",
+            "os.fsync(output.fileno())",
+            "remaining(total_deadline)",
+            "os.replace(part, destination)",
+            "TRANSIENT_HTTP = frozenset({408, 425, 429, 500, 502, 503, 504})",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, source)
+
+    def test_powershell_embedded_controller_retries_transient_failures(self):
+        source = (ROOT / "dist/installer/bin/install.ps1").read_text(encoding="utf-8")
+        marker = "$DownloaderSource = @'\n"
+        downloader = source.split(marker, 1)[1].split("\n'@", 1)[0]
+        definitions = downloader.split("\ntry:\n    download_mirrors(", 1)[0]
+        namespace: dict[str, object] = {}
+        exec(compile(definitions, "x86qw-bootstrap-download.py", "exec"), namespace)
+        urllib_module = namespace["urllib"]
+
+        class Response:
+            status = 200
+
+            def __init__(self, body, url, declared_size=None):
+                self.body = body
+                self.url = url
+                self.offset = 0
+                self.headers = {
+                    "Content-Length": str(
+                        len(body) if declared_size is None else declared_size
+                    )
+                }
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def geturl(self):
+                return self.url
+
+            def read1(self, amount):
+                block = self.body[self.offset:self.offset + amount]
+                self.offset += len(block)
+                return block
+
+            read = read1
+
+        expected = hashlib.sha256(b"valid").hexdigest()
+
+        class RetryAfterFallbackOpener:
+            def __init__(self):
+                self.calls = []
+
+            def open(self, request, **_kwargs):
+                self.calls.append(request.full_url)
+                if len(self.calls) == 1:
+                    raise urllib_module.error.HTTPError(
+                        request.full_url,
+                        503,
+                        "Busy",
+                        {"Retry-After": "999"},
+                        None,
+                    )
+                return Response(b"valid", request.full_url)
+
+        retry_after = RetryAfterFallbackOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=retry_after,
+            ):
+                selected = namespace["download_mirrors"](
+                    [
+                        "https://first.example.invalid/archive.zip",
+                        "https://second.example.invalid/archive.zip",
+                    ],
+                    os.fspath(destination),
+                    5,
+                    expected,
+                    1,
+                    1,
+                    2,
+                    2,
+                )
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual("https://second.example.invalid/archive.zip", selected)
+        self.assertEqual(2, len(retry_after.calls))
+
+        class PartialThenValidOpener:
+            def __init__(self):
+                self.calls = 0
+
+            def open(self, request, **_kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    return Response(b"abc", request.full_url, declared_size=5)
+                return Response(b"valid", request.full_url)
+
+        partial = PartialThenValidOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=partial,
+            ), mock.patch.object(namespace["time"], "sleep", return_value=None):
+                namespace["download_mirrors"](
+                    ["https://partial.example.invalid/archive.zip"],
+                    os.fspath(destination),
+                    5,
+                    expected,
+                    1,
+                    1,
+                    1,
+                    2,
+                )
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual(2, partial.calls)
+
+        class IncompleteThenValidOpener:
+            def __init__(self):
+                self.calls = 0
+
+            def open(self, request, **_kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    response = Response(b"valid", request.full_url)
+
+                    def incomplete(_amount):
+                        raise namespace["http"].client.IncompleteRead(b"abc", 2)
+
+                    response.read1 = incomplete
+                    response.read = incomplete
+                    return response
+                return Response(b"valid", request.full_url)
+
+        incomplete = IncompleteThenValidOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=incomplete,
+            ), mock.patch.object(namespace["time"], "sleep", return_value=None):
+                namespace["download_mirrors"](
+                    ["https://incomplete.example.invalid/archive.zip"],
+                    os.fspath(destination),
+                    5,
+                    expected,
+                    1,
+                    1,
+                    1,
+                    2,
+                )
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual(2, incomplete.calls)
+
+        release = threading.Event()
+
+        class CancelConnection:
+            def close(self):
+                release.set()
+
+        class TimeoutThenValidOpener:
+            registry = None
+
+            def __init__(self):
+                self.calls = 0
+
+            def open(self, request, **_kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    self.registry.register(threading.get_ident(), CancelConnection())
+                    release.wait(1)
+                return Response(b"valid", request.full_url)
+
+        timeout = TimeoutThenValidOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=timeout,
+            ), mock.patch.object(namespace["time"], "sleep", return_value=None):
+                namespace["download_mirrors"](
+                    ["https://timeout.example.invalid/archive.zip"],
+                    os.fspath(destination),
+                    5,
+                    expected,
+                    1,
+                    0.02,
+                    1,
+                    1,
+                )
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual(2, timeout.calls)
+
+        connect_release = threading.Event()
+
+        class ConnectBudgetConnection:
+            def close(self):
+                connect_release.set()
+
+        class ConnectBudgetThenValidOpener:
+            registry = None
+
+            def __init__(self):
+                self.calls = 0
+                self.call_times = []
+
+            def open(self, request, **_kwargs):
+                self.calls += 1
+                self.call_times.append(time.monotonic())
+                if self.calls == 1:
+                    self.registry.register(
+                        threading.get_ident(), ConnectBudgetConnection(),
+                    )
+                    connect_release.wait(1)
+                return Response(b"valid", request.full_url)
+
+        connect_timeout = 0.05
+        connect_budget = ConnectBudgetThenValidOpener()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            started = time.monotonic()
+            with mock.patch.object(
+                urllib_module.request,
+                "build_opener",
+                return_value=connect_budget,
+            ), mock.patch.object(namespace["time"], "sleep", return_value=None):
+                namespace["download_mirrors"](
+                    ["https://connect-timeout.example.invalid/archive.zip"],
+                    os.fspath(destination),
+                    5,
+                    expected,
+                    connect_timeout,
+                    0.5,
+                    1,
+                    0.75,
+                )
+            elapsed = time.monotonic() - started
+            self.assertEqual(b"valid", destination.read_bytes())
+        self.assertEqual(2, connect_budget.calls)
+        self.assertTrue(connect_release.is_set())
+        self.assertGreaterEqual(
+            connect_budget.call_times[1] - connect_budget.call_times[0],
+            connect_timeout * 0.8,
+        )
+        self.assertLess(elapsed, 0.4)
+
+        class ValidOpener:
+            def open(self, request, **_kwargs):
+                return Response(b"valid", request.full_url)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+
+            def slow_fsync(_descriptor):
+                time.sleep(0.2)
+
+            with mock.patch.object(
+                urllib_module.request, "build_opener", return_value=ValidOpener(),
+            ), mock.patch.object(namespace["os"], "fsync", side_effect=slow_fsync):
+                with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
+                    namespace["download_mirrors"](
+                        ["https://valid.example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        5,
+                        expected,
+                        1,
+                        1,
+                        0,
+                        0.1,
+                    )
+            self.assertFalse(destination.exists())
+
+    @unittest.skipUnless(
+        WINDOWS_POWERSHELL,
+        "Windows PowerShell 5.1 é exercitado somente no runner Windows",
+    )
+    def test_public_bootstrap_parses_in_windows_powershell_51(self):
+        parser = (
+            "$tokens=$null; $errors=$null; "
+            "[System.Management.Automation.Language.Parser]::ParseFile("
+            "$args[0], [ref]$tokens, [ref]$errors) > $null; "
+            "if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }"
+        )
+        for bootstrap in (
+            ROOT / "dist/installer/bin/install.ps1",
+            ROOT / "site/public/install.ps1",
+        ):
+            with self.subTest(bootstrap=bootstrap):
+                completed = subprocess.run(
+                    [
+                        WINDOWS_POWERSHELL,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command",
+                        parser,
+                        str(bootstrap),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr)
+
+        manager_tree = ast.parse(
+            (ROOT / "dist/installer/bin/manager.py").read_text(encoding="utf-8")
+        )
+        public_command = next(
+            ast.literal_eval(statement.value)
+            for statement in manager_tree.body
+            if isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND"
+                for target in statement.targets
+            )
+        )
+        parse_command = (
+            "$tokens=$null; $errors=$null; "
+            "[System.Management.Automation.Language.Parser]::ParseInput("
+            "$args[0], [ref]$tokens, [ref]$errors) > $null; "
+            "if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }"
+        )
+        completed = subprocess.run(
+            [
+                WINDOWS_POWERSHELL,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                parse_command,
+                public_command,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, completed.returncode, completed.stderr)
 
     @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_preserves_the_calling_session(self):
@@ -769,7 +1721,7 @@ function Invoke-WebRequest {
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
 }
 function Get-FileHash {
-  param([string]$Algorithm, [string]$Path)
+  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   [pscustomobject]@{ Hash = $MockDigest }
 }
 function Expand-Archive {
@@ -790,6 +1742,15 @@ function python {
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
     return
   }
+  for ($Index = 0; $Index -lt $args.Count; $Index++) {
+    if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
+      $Archive = [string]$args[$Index + 1]
+      $Size = [int]$args[$Index + 2]
+      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+      return
+    }
+  }
   Set-Variable -Name LASTEXITCODE -Scope 1 -Value 7
 }
 $ErrorActionPreference = "Continue"
@@ -807,21 +1768,100 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
 ''',
                 encoding="utf-8",
             )
-            completed = subprocess.run(
-                [
-                    POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", str(harness), str(bootstrap), version, digest,
-                ],
-                check=False, capture_output=True, text=True,
+            for runtime in POWERSHELL_RUNTIMES:
+                with self.subTest(runtime=runtime):
+                    completed = subprocess.run(
+                        [
+                            runtime, "-NoProfile", "-ExecutionPolicy", "Bypass",
+                            "-File", str(harness), str(bootstrap), version, digest,
+                        ],
+                        check=False, capture_output=True, text=True,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stderr)
+                    self.assertIn("X86QW_BOOTSTRAP_SURVIVED:7", completed.stdout)
+                    self.assertIn("X86QW_ERROR_ACTION_AFTER:Continue", completed.stdout)
+                    self.assertIn("X86QW_CONSOLE_ENCODING_RESTORED:True", completed.stdout)
+                    self.assertIn("X86QW_PIPELINE_ENCODING_RESTORED:True", completed.stdout)
+                    self.assertNotIn("X86QW_INSTALLER_VERSION_LEAKED", completed.stdout)
+                    self.assertIn("instalador terminou", completed.stderr)
+                    self.assertIn("7", completed.stderr)
+
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
+    def test_public_powershell_bootstrap_uses_one_bounded_mirror_controller(self):
+        bootstrap = ROOT / "site/public/install.ps1"
+        source = bootstrap.read_text(encoding="utf-8")
+        version = source.split('$InstallerVersion = "', 1)[1].split('"', 1)[0]
+        digest = source.split('$InstallerSha256 = "', 1)[1].split('"', 1)[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            harness = Path(temporary) / "integrity-fallback-harness.ps1"
+            harness.write_text(
+                r'''param(
+  [string]$Bootstrap,
+  [string]$MockVersion,
+  [string]$MockDigest
+)
+$global:X86QWTestDownloadCalls = 0
+$global:X86QWTestHashCalls = 0
+function Get-Command {
+  param([string]$Name, [object]$ErrorAction)
+  if ($Name -eq "python") { return [pscustomobject]@{ Name = "python" } }
+  return $null
+}
+function Get-FileHash {
+  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
+  $global:X86QWTestHashCalls += 1
+  [pscustomobject]@{ Hash = $MockDigest }
+}
+function Expand-Archive {
+  param([string]$Path, [string]$DestinationPath)
+  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
+  New-Item -ItemType Directory -Path $Root | Out-Null
+  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
+}
+function python {
+  if ($args -contains "-c") {
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  for ($Index = 0; $Index -lt $args.Count; $Index++) {
+    if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
+      $global:X86QWTestDownloadCalls += 1
+      $Archive = [string]$args[$Index + 1]
+      $Size = [int]$args[$Index + 2]
+      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+      return
+    }
+  }
+  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+}
+& $Bootstrap "--help"
+Write-Output "X86QW_DOWNLOAD_CALLS:$global:X86QWTestDownloadCalls"
+Write-Output "X86QW_HASH_CALLS:$global:X86QWTestHashCalls"
+''',
+                encoding="utf-8",
             )
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertIn("X86QW_BOOTSTRAP_SURVIVED:7", completed.stdout)
-        self.assertIn("X86QW_ERROR_ACTION_AFTER:Continue", completed.stdout)
-        self.assertIn("X86QW_CONSOLE_ENCODING_RESTORED:True", completed.stdout)
-        self.assertIn("X86QW_PIPELINE_ENCODING_RESTORED:True", completed.stdout)
-        self.assertNotIn("X86QW_INSTALLER_VERSION_LEAKED", completed.stdout)
-        self.assertIn("instalador terminou", completed.stderr)
-        self.assertIn("7", completed.stderr)
+            for runtime in POWERSHELL_RUNTIMES:
+                with self.subTest(runtime=runtime):
+                    completed = subprocess.run(
+                        [
+                            runtime,
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(harness),
+                            str(bootstrap),
+                            version,
+                            digest,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stderr)
+                    self.assertIn("X86QW_DOWNLOAD_CALLS:1", completed.stdout)
+                    self.assertIn("X86QW_HASH_CALLS:1", completed.stdout)
 
     @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_rejects_store_alias_before_download(self):
@@ -895,7 +1935,7 @@ function Invoke-WebRequest {
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
 }
 function Get-FileHash {
-  param([string]$Algorithm, [string]$Path)
+  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   [pscustomobject]@{ Hash = $MockDigest }
 }
 function Expand-Archive {
@@ -908,6 +1948,15 @@ function py {
   if ($args -contains "-c") {
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
     return
+  }
+  for ($Index = 0; $Index -lt $args.Count; $Index++) {
+    if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
+      $Archive = [string]$args[$Index + 1]
+      $Size = [int]$args[$Index + 2]
+      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+      return
+    }
   }
   [System.IO.File]::WriteAllText($ArgumentsPath, ($args | ConvertTo-Json -Compress))
   Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
@@ -965,7 +2014,7 @@ function Invoke-WebRequest {
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
 }
 function Get-FileHash {
-  param([string]$Algorithm, [string]$Path)
+  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   [pscustomobject]@{ Hash = $MockDigest }
 }
 function Expand-Archive {
@@ -978,6 +2027,15 @@ function python3 {
   if ($args -contains "-c") {
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
     return
+  }
+  for ($Index = 0; $Index -lt $args.Count; $Index++) {
+    if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
+      $Archive = [string]$args[$Index + 1]
+      $Size = [int]$args[$Index + 2]
+      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+      return
+    }
   }
   [System.IO.File]::WriteAllText($ArgumentsPath, ($args | ConvertTo-Json -Compress))
   Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0

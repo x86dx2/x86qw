@@ -45,18 +45,22 @@ O x86QW transforma um ecossistema histórico em um produto atual: seleciona vers
 ### macOS e Linux
 
 ```sh
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+/bin/bash -c "$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)"
 ```
 
 ### Windows PowerShell
 
 ```powershell
-irm https://x86qw.x86.com.br/install.ps1 | iex
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
 ```
 
 O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
 falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
 `$LASTEXITCODE`.
+
+Ambos os comandos iniciais bloqueiam downgrade de HTTPS, têm prazo de 60
+segundos e recusam scripts acima de 256 KiB antes de executá-los. No Windows,
+isso é feito pelo buffer limitado do `HttpClient`, sem `irm | iex` ilimitado.
 
 O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.1`,
 o Windows testa, nessa ordem, `py -3`, `python3` e `python`; o atalho da
@@ -79,10 +83,15 @@ Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
 O bootstrap público `0.7.1` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+/bin/bash -c "$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? Consulte o [manual do instalador](dist/installer/docs/installer.md) ou baixe diretamente pela [release mais recente](https://github.com/x86dx2/x86qw/releases/latest).
+
+Na árvore de desenvolvimento, artefatos promovidos à instalação também exigem
+tamanho e SHA-256 exatos, limite máximo e deadline total. Metadados dinâmicos
+possuem limites próprios, mas sua autenticação versionada pertence a uma etapa
+posterior. A versão pública indicada acima continua sendo a `0.7.1`.
 
 ## O que vem no x86QW
 
