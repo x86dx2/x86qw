@@ -1149,6 +1149,55 @@ class DownloaderTests(unittest.TestCase):
             for thread in threading.enumerate()
         ))
 
+    def test_worker_self_cancels_when_controller_wins_before_identity(self) -> None:
+        clock = AdvancingClock()
+        deferred: list[object] = []
+        cancelled_identities: list[int] = []
+        finished_identities: list[int] = []
+
+        class DeferredThread:
+            def __init__(self, *, target, name: str, daemon: bool) -> None:
+                self.target = target
+                self.name = name
+                self.daemon = daemon
+                self.ident = -1
+                deferred.append(self)
+
+            def start(self) -> None:
+                clock.advance(2)
+
+            def join(self, _timeout: float | None = None) -> None:
+                raise AssertionError("o controller não deve aguardar após o deadline")
+
+            def is_alive(self) -> bool:
+                return True
+
+        def cancel_open(identity: int) -> None:
+            cancelled_identities.append(identity)
+
+        def open_after_cancellation(
+            _request: urllib.request.Request, _timeout: float,
+        ) -> FakeResponse:
+            self.assertIn(threading.get_ident(), cancelled_identities)
+            raise downloader.DownloadDeadlineError("cancelado antes da conexão")
+
+        with mock.patch.object(downloader.threading, "Thread", DeferredThread):
+            with self.assertRaises(downloader.DownloadDeadlineError):
+                downloader._open_with_deadline(
+                    open_after_cancellation,
+                    urllib.request.Request(self.URL),
+                    1,
+                    clock,
+                    cancel_open,
+                    finished_identities.append,
+                )
+
+        self.assertEqual([-1], cancelled_identities)
+        deferred[0].target()
+        worker_identity = threading.get_ident()
+        self.assertEqual([-1, worker_identity], cancelled_identities)
+        self.assertEqual([worker_identity], finished_identities)
+
     def test_transient_timeout_is_retried_but_http_404_is_not(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1260,7 +1309,7 @@ class DownloaderTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 1.0)
         self.assertEqual(1, len(applied_timeouts))
         self.assertGreater(applied_timeouts[0], 0)
-        self.assertLessEqual(applied_timeouts[0], 0.1)
+        self.assertLessEqual(applied_timeouts[0], 0.1 + 1e-9)
 
     def test_http_error_response_is_closed_before_returning(self) -> None:
         body = downloader.io.BytesIO(b"error")

@@ -387,12 +387,19 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     lock = threading.Lock()
     state = {}
     cancelled = [False]
+    worker_identity = [None]
 
     def deadline_error():
         return timeout_error
 
     def worker():
+        identity = threading.get_ident()
+        with lock:
+            worker_identity[0] = identity
+            cancelled_before_open = cancelled[0]
         try:
+            if cancelled_before_open:
+                registry.cancel(identity)
             try:
                 value = opener.open(request, timeout=socket_timeout)
                 kind = "response"
@@ -408,7 +415,7 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
                     state[kind] = value
             close_response(late)
         finally:
-            registry.clear(threading.get_ident())
+            registry.clear(identity)
 
     thread = threading.Thread(target=worker, name="x86qw-bootstrap-open")
     thread.daemon = True
@@ -422,16 +429,22 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
         with lock:
             cancelled[0] = True
             response = state.pop("response", None)
-        if thread.ident is not None:
-            registry.cancel(thread.ident)
+            identity = worker_identity[0]
+        if identity is None:
+            identity = thread.ident
+        if identity is not None:
+            registry.cancel(identity)
         close_response(response)
         raise
     if thread.is_alive():
         with lock:
             cancelled[0] = True
             response = state.pop("response", None)
-        if thread.ident is not None:
-            registry.cancel(thread.ident)
+            identity = worker_identity[0]
+        if identity is None:
+            identity = thread.ident
+        if identity is not None:
+            registry.cancel(identity)
         close_response(response)
         raise deadline_error()
     with lock:

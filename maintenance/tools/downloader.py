@@ -678,10 +678,17 @@ def _open_with_deadline(
     lock = threading.Lock()
     state: dict[str, object] = {}
     cancelled = False
+    worker_identity: int | None = None
 
     def worker() -> None:
-        nonlocal cancelled
+        nonlocal cancelled, worker_identity
+        identity = threading.get_ident()
+        with lock:
+            worker_identity = identity
+            cancelled_before_open = cancelled
         try:
+            if cancelled_before_open:
+                cancel_open(identity)
             try:
                 value: object = open_url(request, open_timeout)
                 kind = "response"
@@ -698,7 +705,7 @@ def _open_with_deadline(
             _close_response_safely(close_late)
         finally:
             if finish_open is not None:
-                finish_open(threading.get_ident())
+                finish_open(identity)
 
     thread = threading.Thread(
         target=worker,
@@ -712,16 +719,22 @@ def _open_with_deadline(
         with lock:
             cancelled = True
             response = state.pop("response", None)
-        if thread.ident is not None:
-            cancel_open(thread.ident)
+            identity = worker_identity
+        if identity is None:
+            identity = thread.ident
+        if identity is not None:
+            cancel_open(identity)
         _close_response_safely(response)
         raise
     if thread.is_alive():
         with lock:
             cancelled = True
             response = state.pop("response", None)
-        if thread.ident is not None:
-            cancel_open(thread.ident)
+            identity = worker_identity
+        if identity is None:
+            identity = thread.ident
+        if identity is not None:
+            cancel_open(identity)
         _close_response_safely(response)
         raise DownloadDeadlineError(
             "O deadline total expirou durante conexão, redirects ou headers."
