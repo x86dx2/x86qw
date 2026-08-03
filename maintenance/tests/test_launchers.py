@@ -1279,20 +1279,33 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual("https://second.example.invalid/archive.zip", selected)
         self.assertEqual(2, len(fallback.calls))
 
+        direct_close_calls = []
+
+        class DirectConnection:
+            def close(self):
+                direct_close_calls.append(True)
+
+        direct_registry = namespace["ConnectionRegistry"]()
+        direct_registry.register(7, DirectConnection())
+        direct_registry.cancel(7)
+        self.assertEqual([True], direct_close_calls)
+
         registered = threading.Event()
-        close_calls = []
+        registered_workers = []
+        cancelled_workers = []
         unblock = threading.Event()
 
         class CancelConnection:
             def close(self):
-                close_calls.append(threading.get_ident())
                 unblock.set()
 
         class BlockingOpener:
             registry = None
 
             def open(self, _request, **_kwargs):
-                self.registry.register(threading.get_ident(), CancelConnection())
+                identity = threading.get_ident()
+                registered_workers.append((id(self.registry), identity))
+                self.registry.register(identity, CancelConnection())
                 registered.set()
                 while not unblock.wait(0.1):
                     pass
@@ -1312,6 +1325,13 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                 self.assertTrue(registered.wait(1))
                 clock_offset[0] = 1.0
 
+        registry_class = namespace["ConnectionRegistry"]
+        real_registry_cancel = registry_class.cancel
+
+        def observed_registry_cancel(registry, identity):
+            cancelled_workers.append((id(registry), identity))
+            return real_registry_cancel(registry, identity)
+
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
             try:
@@ -1321,6 +1341,8 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     namespace["threading"].Thread, "start", start_after_registration,
                 ), mock.patch.object(
                     namespace["time"], "monotonic", controlled_monotonic,
+                ), mock.patch.object(
+                    registry_class, "cancel", observed_registry_cancel,
                 ):
                     with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
                         namespace["download_mirrors"](
@@ -1333,10 +1355,9 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                             0,
                             0.05,
                         )
-                was_closed = bool(close_calls)
             finally:
                 unblock.set()
-            self.assertTrue(was_closed)
+            self.assertEqual(registered_workers, cancelled_workers)
             self.assertFalse(destination.exists())
         for _ in range(50):
             if not any(
