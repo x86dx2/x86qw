@@ -14,7 +14,18 @@ fail() {
   exit 1
 }
 
-command -v python3 >/dev/null 2>&1 || fail "Python 3 é necessário para executar o instalador."
+resolve_python() {
+  for candidate in python3 python; do
+    resolved=$(command -v "$candidate" 2>/dev/null) || continue
+    if "$resolved" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  done
+  return 1
+}
+
+python_runtime=$(resolve_python) || fail "Python 3.10 ou mais recente não foi encontrado. Instale-o e execute novamente."
 command -v curl >/dev/null 2>&1 || fail "curl não foi encontrado."
 command -v unzip >/dev/null 2>&1 || fail "unzip não foi encontrado."
 
@@ -32,9 +43,19 @@ for url in "${INSTALLER_URLS[@]}"; do
 done
 [[ "$downloaded" == 1 ]] || fail "nenhum mirror entregou o instalador."
 
-actual=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$archive")
+actual=$("$python_runtime" - "$archive" <<'PY'
+import hashlib
+import sys
+
+digest = hashlib.sha256()
+with open(sys.argv[1], "rb") as stream:
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+print(digest.hexdigest())
+PY
+)
 [[ "$actual" == "$INSTALLER_SHA256" ]] || fail "o instalador baixado falhou na verificação SHA-256."
 
 unzip -q "$archive" -d "$work_dir"
 root="$work_dir/x86qw-installer-$INSTALLER_VERSION"
-python3 "$root/x86qw.pyz" --online-only "$@"
+"$python_runtime" "$root/x86qw.pyz" --online-only "$@"

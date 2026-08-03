@@ -47,6 +47,13 @@ INSTALLER_BIN = Path(__file__).resolve().parent
 if str(INSTALLER_BIN) not in sys.path:
     sys.path.insert(0, str(INSTALLER_BIN))
 
+python_runtime = importlib.import_module("python_runtime")
+try:
+    python_runtime.require_supported_runtime()
+except python_runtime.UnsupportedPythonError as error:
+    print(f"[ERRO] {error}", file=sys.stderr)
+    raise SystemExit(2)
+
 session_control = importlib.import_module("session_control")
 navigation = importlib.import_module("menu")
 
@@ -4860,6 +4867,24 @@ class Installer:
             return
         identity = self.installer_bundle_identity()
         cli_version = str(identity["version"])
+        launchers = (
+            ("x86qw.sh", 0o755),
+            ("x86qw.cmd", 0o644),
+        )
+        rendered_launchers: dict[str, tuple[str, int]] = {}
+        for name, mode in launchers:
+            source = self.project_root / name
+            if not source.is_file() and ZIPAPP_PATH is None:
+                source = self.project_root / "dist/installer/bin" / name
+            if not source.is_file() or source.is_symlink():
+                raise InstallerError(f"Launcher público ausente ou inválido: {source}")
+            try:
+                template = source.read_text(encoding="utf-8")
+                rendered = python_runtime.render_launcher(name, template, sys.executable)
+            except (OSError, UnicodeDecodeError, ValueError) as error:
+                raise InstallerError(f"Launcher público inválido: {source}") from error
+            rendered_launchers[name] = (rendered, mode)
+
         metadata_root = self.target / METADATA_DIR
         metadata_root.mkdir(parents=True, exist_ok=True)
         cli_root = metadata_root / "cli"
@@ -4907,19 +4932,10 @@ class Installer:
         temporary_receipt.replace(cli_receipt)
         remove_path(self.target / LEGACY_CLI_RECEIPT)
 
-        launchers = (
-            ("x86qw.sh", 0o755),
-            ("x86qw.cmd", 0o644),
-        )
-        for name, mode in launchers:
-            source = self.project_root / name
-            if not source.is_file() and ZIPAPP_PATH is None:
-                source = self.project_root / "dist/installer/bin" / name
-            if not source.is_file() or source.is_symlink():
-                raise InstallerError(f"Launcher público ausente ou inválido: {source}")
+        for name, (rendered, mode) in rendered_launchers.items():
             destination = self.target / name
             temporary = destination.with_name(destination.name + ".new")
-            temporary.write_bytes(source.read_bytes())
+            temporary.write_text(rendered, encoding="utf-8", newline="\n")
             if os.name != "nt":
                 temporary.chmod(mode)
             temporary.replace(destination)

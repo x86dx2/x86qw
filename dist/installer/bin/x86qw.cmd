@@ -1,6 +1,11 @@
 @echo off
+setlocal DisableDelayedExpansion
 for %%I in ("%~dp0.") do set "X86QW_ROOT=%%~fI"
 set "X86QW_APP=%X86QW_ROOT%\.x86qw\cli\x86qw.pyz"
+set "X86QW_PYTHON=@X86QW_PYTHON@"
+set "X86QW_PYTHON_ARGS="
+call :resolve_python
+if errorlevel 1 exit /b %ERRORLEVEL%
 if "%~1"=="" goto menu
 if /I "%~1"=="help" goto help
 if /I "%~1"=="-h" goto help
@@ -24,26 +29,26 @@ echo x86qw: comando desconhecido: %~1 1>&2
 goto help_error
 
 :play
-py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" %* --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :menu
-py -3 "%X86QW_APP%" menu "%X86QW_ROOT%"
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" menu "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :service
-py -3 "%X86QW_APP%" %* --target "%X86QW_ROOT%"
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" %* --target "%X86QW_ROOT%"
 exit /b %ERRORLEVEL%
 
 :maintenance
 set "X86QW_ACTION=%~1"
-py -3 "%X86QW_APP%" --online-only --installed-cli %* "%X86QW_ROOT%"
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" --online-only --installed-cli %* "%X86QW_ROOT%"
 set "X86QW_EXIT=%ERRORLEVEL%"
 if /I "%X86QW_ACTION%"=="uninstall" if "%X86QW_EXIT%"=="0" del "%~f0"
 exit /b %X86QW_EXIT%
 
 :help
-py -3 "%X86QW_APP%" --version
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" --version
 echo QuakeWorld moderno
 echo.
 echo Uso: x86qw.cmd ^<comando^> [opcoes]
@@ -75,9 +80,34 @@ echo A instalacao e exclusiva do install.ps1.
 exit /b 0
 
 :version
-py -3 "%X86QW_APP%" --version
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" --version
 exit /b %ERRORLEVEL%
 
 :help_error
 call :help
 exit /b 2
+
+:resolve_python
+if exist "%X86QW_PYTHON%" (
+  "%X86QW_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+  if not errorlevel 1 exit /b 0
+)
+
+set "X86QW_PYTHON=py"
+set "X86QW_PYTHON_ARGS=-3"
+"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 exit /b 0
+
+set "X86QW_PYTHON=python3"
+set "X86QW_PYTHON_ARGS="
+"%X86QW_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 exit /b 0
+
+set "X86QW_PYTHON=python"
+"%X86QW_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 exit /b 0
+
+echo x86QW: Python 3.10 ou mais recente nao foi encontrado. 1>&2
+echo Instale com: winget install --id Python.Python.3.13 -e 1>&2
+echo Depois abra um novo terminal e execute o comando novamente. 1>&2
+exit /b 9009

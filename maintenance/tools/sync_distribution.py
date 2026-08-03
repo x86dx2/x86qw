@@ -585,6 +585,7 @@ def verify_distribution(
         "installer/bin/install.sh",
         "installer/bin/manager.py",
         "installer/bin/menu.py",
+        "installer/bin/python_runtime.py",
         "installer/bin/gameplay.py",
         "installer/bin/services.py",
         "installer/bin/session_control.py",

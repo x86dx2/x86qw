@@ -1,3 +1,6 @@
+& {
+param([object[]]$BootstrapArguments)
+
 $ErrorActionPreference = "Stop"
 $InstallerVersion = "0.7.0"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
@@ -26,18 +29,16 @@ try {
       continue
     }
     try {
-      $ProbeArguments = @($Candidate.Arguments) + @("--version")
-      $VersionOutput = (& $Candidate.Command @ProbeArguments 2>&1 | Out-String).Trim()
-      $VersionExitCode = $LASTEXITCODE
+      $ProbeArguments = @($Candidate.Arguments) + @(
+        "-c",
+        "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+      )
+      & $Candidate.Command @ProbeArguments *> $null
+      $ProbeExitCode = $LASTEXITCODE
     } catch {
       continue
     }
-    if ($VersionExitCode -ne 0 -or $VersionOutput -notmatch "Python\s+(\d+)\.(\d+)") {
-      continue
-    }
-    $PythonMajor = [int]$Matches[1]
-    $PythonMinor = [int]$Matches[2]
-    if ($PythonMajor -gt 3 -or ($PythonMajor -eq 3 -and $PythonMinor -ge 10)) {
+    if ($ProbeExitCode -eq 0) {
       $PythonRuntime = $Candidate
       break
     }
@@ -73,7 +74,7 @@ try {
     if ($Actual -ne $InstallerSha256) { throw "x86QW: o instalador baixado falhou na verificacao SHA-256." }
     Expand-Archive -Path $Archive -DestinationPath $WorkDir
     $Root = Join-Path $WorkDir "x86qw-installer-$InstallerVersion"
-    $InstallerArguments = @($PythonRuntime.Arguments) + @((Join-Path $Root "x86qw.pyz"), "--online-only") + @($args)
+    $InstallerArguments = @($PythonRuntime.Arguments) + @((Join-Path $Root "x86qw.pyz"), "--online-only") + @($BootstrapArguments)
     & $PythonRuntime.Command @InstallerArguments
     $InstallerExitCode = $LASTEXITCODE
   } finally {
@@ -91,3 +92,4 @@ if ($null -ne $InstallerExitCode) {
   }
   $global:LASTEXITCODE = $InstallerExitCode
 }
+} @($args)

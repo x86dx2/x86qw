@@ -44,6 +44,11 @@ class InstallerTests(unittest.TestCase):
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
             bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
             self.assertIn("session_control.py", application.namelist())
+            self.assertIn("python_runtime.py", application.namelist())
+            self.assertIn(
+                b"require_supported_runtime()",
+                application.read("__main__.py"),
+            )
         self.assertEqual(1, catalog["format"])
         self.assertEqual("ktx", catalog["game"])
         self.assertEqual("duel", catalog["modes"][0]["id"])
@@ -570,15 +575,13 @@ class InstallerTests(unittest.TestCase):
                 sorted(path for path in (target / ".x86qw/cli").rglob("*") if path.is_file()),
             )
             self.assertTrue((target / "x86qw.cmd").is_file())
-            self.assertEqual(
-                (ROOT / "dist/installer/bin/x86qw.sh").read_bytes(),
-                (target / "x86qw.sh").read_bytes(),
-            )
+            installed_shell = (target / "x86qw.sh").read_text(encoding="utf-8")
+            installed_batch = (target / "x86qw.cmd").read_text(encoding="utf-8")
+            self.assertNotIn("@X86QW_PYTHON@", installed_shell)
+            self.assertNotIn("@X86QW_PYTHON@", installed_batch)
+            self.assertIn(os.fspath(Path(sys.executable)), installed_shell)
+            self.assertIn(os.fspath(Path(sys.executable)).replace("%", "%%"), installed_batch)
             self.assertFalse((target / "x86qw").exists())
-            self.assertEqual(
-                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes(),
-                (target / "x86qw.cmd").read_bytes(),
-            )
             self.assertEqual("1.0.6", installer.installed_cli_version())
             if os.name == "nt":
                 launcher = target / "x86qw.cmd"
@@ -622,6 +625,30 @@ class InstallerTests(unittest.TestCase):
             )
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
+
+    def test_online_cli_validates_launcher_templates_before_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            target.mkdir()
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            (bundle / "x86qw.sh").write_text("#!/bin/sh\nsem marcador\n", encoding="utf-8")
+            (bundle / "x86qw.cmd").write_bytes(
+                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes()
+            )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            with mock.patch.object(
+                installer, "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ):
+                with self.assertRaisesRegex(install_qw.InstallerError, "Launcher público inválido"):
+                    installer.install_online_cli()
+            self.assertFalse((target / ".x86qw").exists())
+            self.assertFalse((target / "x86qw.sh").exists())
+            self.assertFalse((target / "x86qw.cmd").exists())
 
     def test_flat_metadata_is_migrated_into_contextual_directories(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1492,10 +1519,12 @@ class InstallerTests(unittest.TestCase):
                                 "upgrade", dry_run=False, assume_yes=True,
                             ))
             command = run.call_args.args[0]
+            self.assertEqual(sys.executable, command[0])
             self.assertIn("--installed-cli", command)
             self.assertIn("--skip-cli-update", command)
             self.assertIn("--yes", command)
             self.assertEqual(["upgrade", str(target)], command[-2:])
+            self.assertNotIn("shell", run.call_args.kwargs)
             self.assertFalse(any(target.glob(".x86qw-update.*")))
 
     def test_cli_update_selects_only_the_current_bundle_from_history(self):
