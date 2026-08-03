@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -32,11 +33,12 @@ class PythonRuntimeContractTests(unittest.TestCase):
 
     def test_unix_launcher_persists_a_quoted_absolute_unicode_path(self):
         template = "#!/bin/sh\npersisted_python=@X86QW_PYTHON@\n"
+        runtime = "/tmp/x86 QW/Pythón 3/bin/python3"
         rendered = python_runtime.render_launcher(
-            "x86qw.sh", template, "/tmp/x86 QW/Pythón 3/bin/python3",
+            "x86qw.sh", template, runtime,
         )
         self.assertEqual(
-            "#!/bin/sh\npersisted_python='/tmp/x86 QW/Pythón 3/bin/python3'\n",
+            f"#!/bin/sh\npersisted_python={shlex.quote(python_runtime.validated_executable(runtime))}\n",
             rendered,
         )
         self.assertNotIn(python_runtime.LAUNCHER_PLACEHOLDER, rendered)

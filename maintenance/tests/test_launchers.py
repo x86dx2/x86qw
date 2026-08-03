@@ -441,6 +441,8 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                         self.assertEqual(root.resolve(), Path(received[-1]).resolve())
                     else:
                         self.assertEqual(prefix, received)
+                    if arguments[0] == "uninstall":
+                        self.assertTrue(launcher.is_file())
 
     @unittest.skipUnless(os.name == "nt", "cmd.exe é exercitado somente no runner Windows")
     def test_windows_launcher_resolves_native_exe_candidates_and_precedence(self):

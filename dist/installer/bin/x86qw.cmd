@@ -44,7 +44,7 @@ exit /b %ERRORLEVEL%
 set "X86QW_ACTION=%~1"
 "%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" --online-only --installed-cli %* "%X86QW_ROOT%"
 set "X86QW_EXIT=%ERRORLEVEL%"
-if /I "%X86QW_ACTION%"=="uninstall" if "%X86QW_EXIT%"=="0" del "%~f0"
+if /I "%X86QW_ACTION%"=="uninstall" if "%X86QW_EXIT%"=="0" if /I not "%~2"=="--help" if /I not "%~2"=="-h" del "%~f0"
 exit /b %X86QW_EXIT%
 
 :help
