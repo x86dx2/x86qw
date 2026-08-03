@@ -63,6 +63,27 @@ class ArchiveError(ValueError):
     """An archive failed the canonical safety or integrity contract."""
 
 
+def _private_filesystem_boundary():
+    """Return the runtime boundary, or ``None`` for the standalone bootstrap helper.
+
+    Public bootstraps materialize this archive module as a deliberately small
+    helper package.  Keeping that historical projection executable lets older
+    immutable bootstraps validate newer archives while the complete runtime
+    uses the canonical private-filesystem implementation.
+    """
+    try:
+        import x86qw_runtime.io.private_fs as private_fs
+    except ModuleNotFoundError as error:
+        if error.name not in {
+            "x86qw_runtime",
+            "x86qw_runtime.io",
+            "x86qw_runtime.io.private_fs",
+        }:
+            raise
+        return None
+    return private_fs
+
+
 @dataclass(frozen=True, slots=True)
 class ArchiveLimits:
     """Hard limits applied before and while any member is decompressed."""
@@ -335,6 +356,54 @@ def _ensure_source_stable(
 
 
 @contextlib.contextmanager
+def _private_snapshot(source: Path | bytes) -> Iterator[BinaryIO]:
+    boundary = _private_filesystem_boundary()
+    if boundary is None:
+        # The historical bootstrap helper contains only archive.py.  Its
+        # archive lives inside the bootstrap's private work directory, so keep
+        # the fallback snapshot there instead of the process-wide temp root.
+        directory = source.parent if isinstance(source, Path) else None
+        with tempfile.TemporaryFile(
+            mode="w+b",
+            prefix=".x86qw-archive-",
+            suffix=".snapshot",
+            dir=directory,
+        ) as snapshot:
+            if os.name != "nt":
+                os.fchmod(snapshot.fileno(), 0o600)
+            yield snapshot
+        return
+
+    descriptor, path = boundary.private_mkstemp(
+        directory=Path(tempfile.gettempdir()),
+        prefix=".x86qw-archive-",
+        suffix=".snapshot",
+    )
+    identity: tuple[int, int] | None = None
+    snapshot: BinaryIO | None = None
+    try:
+        metadata = os.fstat(descriptor)
+        identity = int(metadata.st_dev), int(metadata.st_ino)
+        if os.name != "nt":
+            # POSIX keeps the open inode usable after unlink, eliminating a
+            # pathname cleanup race for the archive snapshot.
+            path.unlink()
+            identity = None
+        snapshot = os.fdopen(descriptor, "w+b")
+        descriptor = -1
+        yield snapshot
+    finally:
+        try:
+            if snapshot is not None:
+                snapshot.close()
+            elif descriptor >= 0:
+                os.close(descriptor)
+        finally:
+            if identity is not None:
+                boundary.unlink_private_file(path, expected_identity=identity)
+
+
+@contextlib.contextmanager
 def _source_snapshot(
     source: Path | bytes,
     limits: ArchiveLimits,
@@ -346,13 +415,7 @@ def _source_snapshot(
             source,
             limits.max_source_size,
         )
-        with tempfile.TemporaryFile(
-            mode="w+b",
-            prefix=".x86qw-archive-",
-            suffix=".snapshot",
-        ) as snapshot:
-            if os.name != "nt":
-                os.fchmod(snapshot.fileno(), 0o600)
+        with _private_snapshot(source) as snapshot:
             source_sha256, source_size = _stream_sha256(
                 original,
                 limits.max_source_size,
@@ -1072,9 +1135,19 @@ def _create_staging(anchor: _DirectoryAnchor, target_name: str) -> tuple[str, Pa
             return name, anchor.path / name, descriptor, identity
         raise ArchiveError("could not allocate a unique private extraction staging")
     _assert_parent_path_stable(anchor)
-    path = Path(tempfile.mkdtemp(prefix=prefix, suffix=".tmp", dir=anchor.path))
-    if os.name != "nt":
-        path.chmod(0o700)
+    boundary = _private_filesystem_boundary()
+    if boundary is None:
+        # Standalone bootstrap compatibility: its destination parent is the
+        # already-private bootstrap work directory.
+        path = Path(tempfile.mkdtemp(prefix=prefix, suffix=".tmp", dir=anchor.path))
+        if os.name != "nt":
+            path.chmod(0o700)
+    else:
+        path = boundary.private_mkdtemp(
+            directory=anchor.path,
+            prefix=prefix,
+            suffix=".tmp",
+        )
     identity = _node_identity(path)
     if identity is None or identity[2] != stat.S_IFDIR:
         raise ArchiveError("private extraction staging could not be verified")

@@ -1084,6 +1084,10 @@ class ServiceHardeningTests(unittest.TestCase):
                 "created_directories": [],
             }
             path.write_text(json.dumps(legacy), encoding="utf-8")
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(target / ".x86qw/sessions")
+            services.ensure_private_directory(session)
+            services.private_fs.protect_private_file(path)
 
             with mock.patch.object(
                 services, "process_identity",
@@ -1092,6 +1096,34 @@ class ServiceHardeningTests(unittest.TestCase):
                 services.recover_sessions(target)
 
             self.assertEqual(legacy, json.loads(path.read_text(encoding="utf-8")))
+
+    def test_unfinished_legacy_journal_never_authorizes_recovery_actions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            journal = services.SessionJournal(target, session_id="legacy-untrusted")
+            journal.data.pop("private_filesystem")
+            journal.data["status"] = "interrupted"
+            journal._write()
+
+            with mock.patch.object(
+                services.private_fs,
+                "read_private_file_with_legacy_windows_migration",
+                return_value=(journal.path.read_bytes(), True),
+            ), mock.patch.object(
+                services, "journal_controller_probe",
+            ) as controller_probe, mock.patch.object(
+                services, "journal_process_probe",
+            ) as process_probe, self.assertRaisesRegex(
+                services.InstallerError, "conteúdo histórico.*não pode autorizar",
+            ):
+                services.assert_recovery_processes_confirmable(target)
+
+            controller_probe.assert_not_called()
+            process_probe.assert_not_called()
+            self.assertEqual(
+                "interrupted",
+                json.loads(journal.path.read_text(encoding="utf-8"))["status"],
+            )
 
     def test_recovery_treats_unclassified_legacy_temporary_as_sensitive(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1119,6 +1151,10 @@ class ServiceHardeningTests(unittest.TestCase):
                 "materialized_files": [],
                 "created_directories": [],
             }), encoding="utf-8")
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(target / ".x86qw/sessions")
+            services.ensure_private_directory(session)
+            services.private_fs.protect_private_file(path)
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
@@ -1452,6 +1488,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
                 "command": "host",
             }), encoding="utf-8")
+            services.private_fs.protect_private_file(lock_path)
             acquired = services.SessionLock.acquire(target, "proxy")
             try:
                 services.recover_sessions(target)
@@ -1459,6 +1496,288 @@ class ServiceHardeningTests(unittest.TestCase):
                 self.assertEqual("clean", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
             finally:
                 acquired.release()
+
+    def test_stale_lock_reclaim_is_atomic_between_controllers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            sessions = target / ".x86qw/sessions"
+            sessions.mkdir(parents=True)
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            lock_path = sessions / "active.lock"
+            stale_token = "stale-controller-token"
+            lock_path.write_text(json.dumps({
+                "format": 1, "project": "x86qw", "session_id": "stale-session",
+                "controller_pid": 999999999, "controller_start_token": stale_token,
+                "controller_executable": str(target / "dead-controller"),
+                "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
+                "command": "host",
+            }), encoding="utf-8")
+            services.private_fs.protect_private_file(lock_path)
+
+            stale_observed = threading.Barrier(2)
+            replacement_created = threading.Event()
+            release = threading.Event()
+            results: list[tuple[str, object]] = []
+            results_lock = threading.Lock()
+            replace_lock = threading.Lock()
+            replace_calls = 0
+            real_replace = services.session_control.os.replace
+            real_create = services.session_control.private_fs.create_private_file
+
+            def probe(pid: int, creation_token: str, executable: str):
+                del pid, executable
+                if creation_token == stale_token:
+                    try:
+                        stale_observed.wait(0.25)
+                    except threading.BrokenBarrierError:
+                        pass
+                    return services.ProcessProbe("dead")
+                return services.ProcessProbe(
+                    "alive",
+                    services.ProcessIdentity(os.getpid(), creation_token, sys.executable),
+                )
+
+            def ordered_replace(source: Path, destination: Path):
+                nonlocal replace_calls
+                with replace_lock:
+                    replace_calls += 1
+                    ordinal = replace_calls
+                if ordinal == 2:
+                    self.assertTrue(replacement_created.wait(2))
+                return real_replace(source, destination)
+
+            def observed_create(path: Path):
+                descriptor = real_create(path)
+                if path == lock_path:
+                    replacement_created.set()
+                return descriptor
+
+            def acquire(command: str) -> None:
+                try:
+                    acquired = services.SessionLock.acquire(target, command)
+                except services.InstallerError as error:
+                    with results_lock:
+                        results.append(("blocked", str(error)))
+                    return
+                with results_lock:
+                    results.append(("acquired", acquired))
+                release.wait(2)
+                acquired.release()
+
+            with mock.patch.object(
+                services.session_control, "probe_expected_process", side_effect=probe,
+            ), mock.patch.object(
+                services.session_control.os, "replace", side_effect=ordered_replace,
+            ), mock.patch.object(
+                services.session_control.private_fs, "create_private_file",
+                side_effect=observed_create,
+            ):
+                threads = [
+                    threading.Thread(target=acquire, args=(command,))
+                    for command in ("host", "proxy")
+                ]
+                for thread in threads:
+                    thread.start()
+                deadline = time.monotonic() + 3
+                while len(results) < 2 and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                release.set()
+                for thread in threads:
+                    thread.join(2)
+
+            self.assertEqual(1, sum(kind == "acquired" for kind, _ in results), results)
+            self.assertEqual(1, sum(kind == "blocked" for kind, _ in results), results)
+
+    def test_stale_lock_reclaim_is_atomic_between_cli_processes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            sessions = target / ".x86qw/sessions"
+            sessions.mkdir(parents=True)
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            stale_token = "stale-cli-token"
+            lock_path = sessions / "active.lock"
+            lock_path.write_text(json.dumps({
+                "format": 1, "project": "x86qw", "session_id": "stale-cli-session",
+                "controller_pid": 999999999, "controller_start_token": stale_token,
+                "controller_executable": str(target / "dead-controller"),
+                "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
+                "command": "host",
+            }), encoding="utf-8")
+            services.private_fs.protect_private_file(lock_path)
+            coordination = target / "coordination"
+            coordination.mkdir()
+            start = coordination / "start"
+            release = coordination / "release"
+            script = """
+import os
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import session_control
+
+target = Path(sys.argv[2])
+coordination = Path(sys.argv[3])
+command = sys.argv[4]
+stale_token = "stale-cli-token"
+real_replace = session_control.os.replace
+real_create = session_control.private_fs.create_private_file
+
+while not (coordination / "start").exists():
+    time.sleep(0.005)
+
+def probe(pid, creation_token, executable):
+    if creation_token == stale_token:
+        (coordination / ("observed-" + str(os.getpid()))).touch()
+        deadline = time.monotonic() + 0.75
+        while len(list(coordination.glob("observed-*"))) < 2 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        return session_control.ProcessProbe("dead")
+    return session_control.ProcessProbe(
+        "alive", session_control.ProcessIdentity(pid, creation_token, executable),
+    )
+
+def ordered_replace(source, destination):
+    first = coordination / "first-replacer"
+    try:
+        marker = os.open(first, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        deadline = time.monotonic() + 2
+        while not (coordination / "replacement-created").exists() and time.monotonic() < deadline:
+            time.sleep(0.005)
+    else:
+        os.close(marker)
+    return real_replace(source, destination)
+
+def observed_create(path):
+    descriptor = real_create(path)
+    if path.name == "active.lock":
+        (coordination / "replacement-created").touch()
+    return descriptor
+
+session_control.probe_expected_process = probe
+session_control.os.replace = ordered_replace
+session_control.private_fs.create_private_file = observed_create
+try:
+    lock = session_control.InstallationLock.acquire(target, command, "service")
+except session_control.SessionControlError as error:
+    (coordination / ("blocked-" + str(os.getpid()))).write_text(str(error), encoding="utf-8")
+else:
+    (coordination / ("acquired-" + str(os.getpid()))).touch()
+    deadline = time.monotonic() + 3
+    while not (coordination / "release").exists() and time.monotonic() < deadline:
+        time.sleep(0.005)
+    lock.release()
+"""
+            commands = ("host", "proxy")
+            processes = [
+                subprocess.Popen(
+                    [
+                        sys.executable, "-c", script,
+                        str(ROOT / "dist/installer/bin"), str(target),
+                        str(coordination), command,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for command in commands
+            ]
+            start.touch()
+            deadline = time.monotonic() + 5
+            while (
+                len(list(coordination.glob("acquired-*")))
+                + len(list(coordination.glob("blocked-*"))) < 2
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+            release.touch()
+            completed = [process.communicate(timeout=5) for process in processes]
+            self.assertEqual(
+                [0, 0], [process.returncode for process in processes], completed,
+            )
+            self.assertEqual(1, len(list(coordination.glob("acquired-*"))), completed)
+            blocked = list(coordination.glob("blocked-*"))
+            self.assertEqual(1, len(blocked), completed)
+            self.assertIn(
+                "operação x86QW ativa", blocked[0].read_text(encoding="utf-8"),
+            )
+            self.assertFalse(lock_path.exists())
+
+    def test_installation_mutex_serializes_distinct_cli_processes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            sessions = target / ".x86qw/sessions"
+            sessions.mkdir(parents=True)
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            coordination = target / "mutex-coordination"
+            coordination.mkdir()
+            script = """
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import session_control
+
+target = Path(sys.argv[2])
+sessions = Path(sys.argv[3])
+coordination = Path(sys.argv[4])
+role = sys.argv[5]
+if role == "waiter":
+    (coordination / "waiter-ready").touch()
+with session_control._installation_acquisition_mutex(target, sessions):
+    (coordination / (role + "-entered")).touch()
+    if role == "holder":
+        deadline = time.monotonic() + 3
+        while not (coordination / "release-holder").exists() and time.monotonic() < deadline:
+            time.sleep(0.005)
+"""
+
+            def start(role: str):
+                return subprocess.Popen(
+                    [
+                        sys.executable, "-c", script,
+                        str(ROOT / "dist/installer/bin"), str(target),
+                        str(sessions), str(coordination), role,
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+
+            holder = start("holder")
+            deadline = time.monotonic() + 3
+            while (
+                not (coordination / "holder-entered").exists()
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.005)
+            self.assertTrue((coordination / "holder-entered").exists())
+            waiter = start("waiter")
+            deadline = time.monotonic() + 3
+            while (
+                not (coordination / "waiter-ready").exists()
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.005)
+            self.assertTrue((coordination / "waiter-ready").exists())
+            time.sleep(0.1)
+            self.assertFalse((coordination / "waiter-entered").exists())
+            (coordination / "release-holder").touch()
+            completed = [holder.communicate(timeout=5), waiter.communicate(timeout=5)]
+            self.assertEqual([0, 0], [holder.returncode, waiter.returncode], completed)
+            self.assertTrue((coordination / "waiter-entered").exists())
+
+    def test_windows_installation_mutex_uses_the_global_namespace(self):
+        name = services.session_control._windows_acquisition_mutex_name(
+            Path("C:/x86QW/quake-world"),
+        )
+        self.assertTrue(name.startswith("Global\\x86QW-install-"), name)
 
     def test_missing_lock_does_not_recover_a_live_journal_controller(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1494,6 +1813,9 @@ class ServiceHardeningTests(unittest.TestCase):
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
                 "command": "qtv",
             }), encoding="utf-8")
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            services.private_fs.protect_private_file(lock_path)
             with mock.patch.object(
                 services.session_control, "probe_expected_process",
                 return_value=services.ProcessProbe("inconclusive", detail="acesso negado"),
@@ -1509,9 +1831,92 @@ class ServiceHardeningTests(unittest.TestCase):
             sessions.mkdir(parents=True)
             lock_path = sessions / "active.lock"
             lock_path.write_text("{invalid", encoding="utf-8")
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            services.private_fs.protect_private_file(lock_path)
             with self.assertRaisesRegex(services.InstallerError, "inválido"):
                 services.SessionLock.acquire(target, "host")
             self.assertEqual("{invalid", lock_path.read_text(encoding="utf-8"))
+
+    def test_lock_owner_rejects_boolean_integer_fields(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            sessions = target / ".x86qw/sessions"
+            sessions.mkdir(parents=True)
+            services.ensure_private_directory(target / ".x86qw")
+            services.ensure_private_directory(sessions)
+            lock_path = sessions / "active.lock"
+            owner = {
+                "format": 1, "project": "x86qw", "session_id": "session",
+                "controller_pid": 999999999, "controller_start_token": "token",
+                "controller_executable": str(target / "controller"),
+                "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
+                "command": "host",
+            }
+            for field in ("format", "controller_pid"):
+                with self.subTest(field=field):
+                    invalid = dict(owner)
+                    invalid[field] = True
+                    lock_path.write_text(json.dumps(invalid), encoding="utf-8")
+                    services.private_fs.protect_private_file(lock_path)
+                    with self.assertRaisesRegex(
+                        services.session_control.SessionControlError, "inválido",
+                    ):
+                        services.session_control.read_lock_owner(lock_path)
+
+    def test_current_lock_rejects_boolean_private_filesystem_marker(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            lock = services.SessionLock.acquire(target, "host")
+            invalid = dict(lock.owner)
+            invalid["private_filesystem"] = True
+            lock.path.write_text(json.dumps(invalid), encoding="utf-8")
+            services.private_fs.protect_private_file(lock.path)
+            with self.assertRaisesRegex(
+                services.session_control.SessionControlError, "inválido",
+            ):
+                services.session_control.read_lock_owner(lock.path)
+            # Restore the fixture to let the owner release its exact lock.
+            lock.path.write_text(json.dumps(lock.owner), encoding="utf-8")
+            services.private_fs.protect_private_file(lock.path)
+            lock.release()
+
+    def test_lock_creation_never_unlinks_when_identity_cannot_be_proved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary).resolve()
+            real_fstat = services.session_control.os.fstat
+            real_create = services.session_control.private_fs.create_private_file
+            lock_descriptors: list[int] = []
+
+            def reject_lock_identity(descriptor: int):
+                if descriptor in lock_descriptors:
+                    raise OSError("identity unavailable")
+                return real_fstat(descriptor)
+
+            def capture_lock_descriptor(path: Path):
+                descriptor = real_create(path)
+                lock_descriptors.append(descriptor)
+                return descriptor
+
+            with mock.patch.object(
+                services.session_control.os, "fstat", side_effect=reject_lock_identity,
+            ), mock.patch.object(
+                services.session_control.private_fs,
+                "create_private_file",
+                side_effect=capture_lock_descriptor,
+            ), mock.patch.object(
+                services.session_control.private_fs,
+                "unlink_private_file",
+            ) as unlink:
+                with self.assertRaisesRegex(
+                    services.InstallerError, "identidade não pôde ser comprovada",
+                ):
+                    services.SessionLock.acquire(target, "host")
+
+            unlink.assert_not_called()
+            lock_path = target / ".x86qw/sessions/active.lock"
+            self.assertTrue(lock_path.exists())
+            self.assertEqual(b"", lock_path.read_bytes())
 
     def test_lock_release_never_removes_another_session_owner(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1697,6 +2102,40 @@ class ServiceHardeningTests(unittest.TestCase):
             services.unlink_stop_request(request)
             self.assertFalse(request.exists())
 
+    def test_private_staging_cleanup_never_masks_the_operational_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".x86qw").mkdir()
+            journal = services.SessionJournal(target)
+            journal.data["not_json"] = object()
+            output = io.StringIO()
+            with mock.patch.object(
+                services.private_fs,
+                "unlink_private_file",
+                side_effect=OSError("cleanup-failed"),
+            ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                with self.assertRaises(TypeError) as raised:
+                    journal._write()
+            self.assertIn("not JSON serializable", str(raised.exception))
+            self.assertIn("cleanup-failed", output.getvalue())
+
+    def test_sensitive_config_cleanup_never_masks_the_operational_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            journal = mock.Mock()
+            journal.record_temporary.side_effect = services.InstallerError("journal-failed")
+            output = io.StringIO()
+            with mock.patch.object(
+                services,
+                "unlink_sensitive_temporary",
+                side_effect=services.InstallerError("cleanup-failed"),
+            ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                with self.assertRaisesRegex(services.InstallerError, "journal-failed"):
+                    services.temporary_config(
+                        directory, "secret-", ["rcon_password redigido"], journal,
+                    )
+            self.assertIn("cleanup-failed", output.getvalue())
+
     def test_orphan_with_matching_identity_is_terminated_and_recorded(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -1815,6 +2254,151 @@ class ServiceHardeningTests(unittest.TestCase):
             else:
                 self.fail(f"descendente PID {child_pid} permaneceu ativo")
 
+    def test_windows_job_starts_process_suspended_then_assigns_and_resumes(self):
+        events: list[str] = []
+        process = SimpleNamespace(pid=4312, _handle=8765)
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.assign = lambda candidate: events.append(f"assign:{candidate.pid}")
+        job.resume = lambda candidate: events.append(f"resume:{candidate.pid}")
+
+        def spawn(*arguments, **options):
+            events.append("spawn")
+            self.assertEqual((("fixture", "--flag"),), arguments)
+            self.assertEqual(Path("C:/x86qw"), options["cwd"])
+            self.assertIs(subprocess.DEVNULL, options["stdin"])
+            flags = options["creationflags"]
+            self.assertEqual(0x00000004, flags & 0x00000004)
+            self.assertEqual(0x00000200, flags & 0x00000200)
+            return process
+
+        with mock.patch.object(services.subprocess, "Popen", side_effect=spawn):
+            started = job.start_process(("fixture", "--flag"), Path("C:/x86qw"))
+
+        self.assertIs(process, started)
+        self.assertEqual(["spawn", "assign:4312", "resume:4312"], events)
+
+    def test_windows_job_rolls_back_suspended_leader_when_assignment_fails(self):
+        events: list[tuple[str, int, int]] = []
+
+        class Kernel:
+            def AssignProcessToJobObject(self, job_handle, process_handle):
+                events.append(("assign", job_handle, process_handle))
+                return False
+
+            def TerminateProcess(self, process_handle, exit_code):
+                events.append(("terminate-process", process_handle, exit_code))
+                return True
+
+            def WaitForSingleObject(self, process_handle, timeout_ms):
+                events.append(("wait-process", process_handle, timeout_ms))
+                return 0
+
+        process = SimpleNamespace(pid=4313, _handle=8766)
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+
+        with mock.patch.object(
+            services.ctypes, "get_last_error", return_value=5, create=True,
+        ), mock.patch.object(services.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(services.InstallerError, "associar PID 4313"):
+                job.start_process(("fixture",), Path("C:/x86qw"))
+
+        self.assertEqual(("assign", 99, 8766), events[0])
+        self.assertIn(("terminate-process", 8766, 1), events)
+        self.assertIn(("wait-process", 8766, 4000), events)
+
+    def test_windows_job_rolls_back_assigned_tree_when_resume_fails(self):
+        events: list[tuple[str, int, int]] = []
+
+        class Kernel:
+            def AssignProcessToJobObject(self, job_handle, process_handle):
+                events.append(("assign", job_handle, process_handle))
+                return True
+
+            def TerminateJobObject(self, job_handle, exit_code):
+                events.append(("terminate-job", job_handle, exit_code))
+                return True
+
+            def WaitForSingleObject(self, process_handle, timeout_ms):
+                events.append(("wait-process", process_handle, timeout_ms))
+                return 0
+
+        process = SimpleNamespace(pid=4314, _handle=8767)
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+        job.resume = mock.Mock(side_effect=services.InstallerError("resume recusado"))
+
+        with mock.patch.object(services.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(services.InstallerError, "resume recusado"):
+                job.start_process(("fixture",), Path("C:/x86qw"))
+
+        self.assertEqual(("assign", 99, 8767), events[0])
+        self.assertIn(("terminate-job", 99, 1), events)
+        self.assertIn(("wait-process", 8767, 4000), events)
+
+    def test_windows_job_close_terminates_tree_and_retains_failed_handle_for_retry(self):
+        events: list[tuple[str, int, int] | tuple[str, int]] = []
+
+        class Kernel:
+            close_results = iter((False, True))
+
+            def TerminateJobObject(self, job_handle, exit_code):
+                events.append(("terminate-job", job_handle, exit_code))
+                return True
+
+            def CloseHandle(self, job_handle):
+                events.append(("close", job_handle))
+                return next(self.close_results)
+
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+
+        with mock.patch.object(
+            services.ctypes, "get_last_error", return_value=6, create=True,
+        ):
+            with self.assertRaisesRegex(services.InstallerError, "fechar o Job Object"):
+                job.close()
+            self.assertEqual(99, job.handle)
+            job.close()
+
+        self.assertIsNone(job.handle)
+        self.assertEqual([
+            ("terminate-job", 99, 1), ("close", 99),
+            ("terminate-job", 99, 1), ("close", 99),
+        ], events)
+
+    def test_windows_job_close_reports_termination_failure_after_handle_closes(self):
+        events: list[tuple[str, int, int] | tuple[str, int]] = []
+
+        class Kernel:
+            def TerminateJobObject(self, job_handle, exit_code):
+                events.append(("terminate-job", job_handle, exit_code))
+                return False
+
+            def CloseHandle(self, job_handle):
+                events.append(("close", job_handle))
+                return True
+
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+
+        with mock.patch.object(
+            services.ctypes, "get_last_error", return_value=5, create=True,
+        ), self.assertRaisesRegex(
+            services.InstallerError, "encerramento explícito da árvore falhou",
+        ):
+            job.close()
+
+        self.assertIsNone(job.handle)
+        self.assertEqual([
+            ("terminate-job", 99, 1), ("close", 99),
+        ], events)
+
     @unittest.skipUnless(os.name == "nt", "Job Object é exercitado no runner Windows")
     def test_windows_job_object_kills_process_and_descendant(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1826,12 +2410,21 @@ class ServiceHardeningTests(unittest.TestCase):
                 "time.sleep(60)\n"
             )
             job = services.WindowsJobObject()
-            leader = subprocess.Popen(
-                [sys.executable, "-c", script, str(child_pid_path)],
-                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+            original_assign = job.assign
+
+            def assign_before_user_code(process):
+                self.assertFalse(
+                    child_pid_path.exists(),
+                    "o processo executou código antes de entrar no Job Object",
+                )
+                original_assign(process)
+
+            job.assign = assign_before_user_code
+            leader = job.start_process(
+                (sys.executable, "-c", script, str(child_pid_path)),
+                Path.cwd(),
             )
             try:
-                job.assign(leader)
                 deadline = time.monotonic() + 5
                 while not child_pid_path.exists() and time.monotonic() < deadline:
                     time.sleep(0.02)
@@ -1839,13 +2432,58 @@ class ServiceHardeningTests(unittest.TestCase):
                 child_pid = int(child_pid_path.read_text(encoding="utf-8"))
                 job.close()
                 leader.wait(timeout=5)
+                child_deadline = time.monotonic() + 5
                 probe = services.process_identity(child_pid)
+                while probe.status != "dead" and time.monotonic() < child_deadline:
+                    time.sleep(0.02)
+                    probe = services.process_identity(child_pid)
                 self.assertEqual("dead", probe.status)
             finally:
                 job.close()
                 if leader.poll() is None:
                     leader.kill()
                     leader.wait()
+
+    @unittest.skipUnless(os.name == "nt", "startup suspenso é exercitado no runner Windows")
+    def test_windows_rejected_job_assignment_never_executes_child_code(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            marker = Path(temporary) / "executed.txt"
+            job = services.WindowsJobObject()
+            spawned: list[subprocess.Popen[bytes]] = []
+            original_popen = services.subprocess.Popen
+
+            def capture(*arguments, **options):
+                process = original_popen(*arguments, **options)
+                spawned.append(process)
+                return process
+
+            def reject(_process):
+                raise services.InstallerError("associação recusada para teste")
+
+            job.assign = reject
+            try:
+                with mock.patch.object(services.subprocess, "Popen", side_effect=capture):
+                    with self.assertRaisesRegex(
+                        services.InstallerError, "associação recusada",
+                    ):
+                        job.start_process(
+                            (
+                                sys.executable, "-c",
+                                "import pathlib,sys;pathlib.Path(sys.argv[1]).write_text('ran')",
+                                str(marker),
+                            ),
+                            Path.cwd(),
+                        )
+                self.assertEqual(1, len(spawned))
+                spawned[0].wait(timeout=5)
+                self.assertIsNotNone(spawned[0].returncode)
+                self.assertFalse(marker.exists())
+            finally:
+                job.close()
+                for process in spawned:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
 
     @unittest.skipUnless(os.name == "nt", "assinaturas Win32 são exercitadas no runner Windows")
     def test_windows_api_signatures_are_explicit(self):
@@ -1856,7 +2494,10 @@ class ServiceHardeningTests(unittest.TestCase):
             )),
             (services._windows_job_kernel32(), (
                 "CreateJobObjectW", "SetInformationJobObject",
-                "AssignProcessToJobObject", "CloseHandle",
+                "AssignProcessToJobObject", "CreateToolhelp32Snapshot",
+                "Thread32First", "Thread32Next", "OpenThread",
+                "ResumeThread", "TerminateProcess", "TerminateJobObject",
+                "WaitForSingleObject", "CloseHandle",
             )),
             (services._get_windows_file_api().kernel32, (
                 "CreateFileW", "GetFileInformationByHandleEx",

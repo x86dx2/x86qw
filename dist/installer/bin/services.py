@@ -39,6 +39,7 @@ from x86qw_runtime.io.archive import (
     extract_archive,
     scan_archive,
 )
+from x86qw_runtime.io import private_fs
 
 InstallerError = core.InstallerError
 console = core.console
@@ -250,14 +251,18 @@ def read_password_file(path: Path, label: str) -> str:
         raise InstallerError(f"Não foi possível ler o arquivo de {label}.") from error
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
         raise InstallerError(f"O arquivo de {label} precisa ser regular e não pode ser symlink.")
-    if os.name != "nt" and metadata.st_mode & 0o077:
-        raise InstallerError(f"Permissões inseguras no arquivo de {label}; use chmod 600.")
     if metadata.st_size > 4096:
         raise InstallerError(f"O arquivo de {label} excede o limite de 4096 bytes.")
     try:
-        value = path.read_text(encoding="utf-8")
+        value = private_fs.read_private_user_file(path, maximum_size=4096).decode("utf-8")
     except (OSError, UnicodeError) as error:
-        raise InstallerError(f"Não foi possível ler o arquivo de {label}.") from error
+        guidance = (
+            "proteja a DACL para o usuário atual e LOCAL SYSTEM"
+            if os.name == "nt" else "use chmod 600"
+        )
+        raise InstallerError(
+            f"Permissões inseguras no arquivo de {label}; {guidance}."
+        ) from error
     if value.endswith("\r\n"):
         value = value[:-2]
     elif value.endswith("\n"):
@@ -363,19 +368,37 @@ def warn_external_bind(options: argparse.Namespace) -> None:
 
 
 def ensure_private_directory(path: Path) -> None:
-    if lexists(path):
-        if path.is_symlink() or not path.is_dir():
-            raise InstallerError(f"Diretório de serviço ausente ou inseguro: {path}")
-    else:
-        try:
-            path.mkdir(mode=0o700)
-        except FileExistsError:
-            if path.is_symlink() or not path.is_dir():
-                raise InstallerError(f"Diretório de serviço ausente ou inseguro: {path}")
+    try:
+        private_fs.ensure_private_directory(path)
+    except OSError as error:
+        raise InstallerError(f"Diretório de serviço ausente ou inseguro: {path}") from error
 
 
 _HASH_CHUNK_SIZE = 1024 * 1024
 _MAX_MANAGED_FILE_SIZE = DEFAULT_ARCHIVE_LIMITS.max_member_size
+_MAX_SESSION_JOURNAL_BYTES = 2 * 1024 * 1024
+_MAX_STOP_REQUEST_BYTES = 64 * 1024
+_LEGACY_ACL_MIGRATED = "_x86qw_legacy_acl_migrated"
+
+
+def cleanup_private_staging(
+    path: Path,
+    *,
+    expected_identity: tuple[int, int],
+    label: str,
+    primary_error: BaseException | None,
+) -> None:
+    """Remove private staging without replacing an earlier operational error."""
+    if not lexists(path):
+        return
+    try:
+        private_fs.unlink_private_file(path, expected_identity=expected_identity)
+    except OSError as cleanup_error:
+        message = f"Falha ao remover {label} privado; arquivo preservado: {path}"
+        if primary_error is not None:
+            console.warning(f"{message} ({cleanup_error})")
+            return
+        raise InstallerError(message) from cleanup_error
 
 
 def _bounded_hash_limit(expected_size: int | None) -> int:
@@ -468,12 +491,19 @@ class SessionJournal:
             sessions.parent.chmod(0o700)
             sessions.chmod(0o700)
         self.session_id = session_id or new_session_id()
+        self._sensitive_guards: dict[str, object] = {}
         self.directory = sessions / self.session_id
-        self.directory.mkdir(mode=0o700)
+        try:
+            private_fs.create_private_directory(self.directory)
+        except OSError as error:
+            raise InstallerError(
+                f"Diretório exclusivo da sessão não pôde ser criado: {self.directory}"
+            ) from error
         self.path = self.directory / "session.json"
         self.data: dict[str, object] = {
             "format": 1,
             "project": "x86qw",
+            "private_filesystem": 1,
             "session_id": self.session_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "starting",
@@ -501,22 +531,38 @@ class SessionJournal:
             raise InstallerError("O journal recusou um caminho fora da instalação.") from error
 
     def _write(self) -> None:
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".session-", suffix=".json", dir=self.directory,
-        )
-        temporary = Path(temporary_name)
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
-                json.dump(self.data, output, ensure_ascii=False, indent=2, sort_keys=True)
-                output.write("\n")
-            if os.name != "nt":
-                temporary.chmod(0o600)
-            temporary.replace(self.path)
-            if os.name != "nt":
-                self.path.chmod(0o600)
+            descriptor, temporary = private_fs.private_mkstemp(
+                prefix=".session-", suffix=".json", directory=self.directory,
+            )
+            try:
+                metadata = os.fstat(descriptor)
+                temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
+            except OSError:
+                os.close(descriptor)
+                raise
+        except OSError as error:
+            raise InstallerError("O temporário privado do journal não pôde ser criado.") from error
+        primary_error: BaseException | None = None
+        try:
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
+                    json.dump(self.data, output, ensure_ascii=False, indent=2, sort_keys=True)
+                    output.write("\n")
+                temporary.replace(self.path)
+                private_fs.validate_private_file(self.path)
+            except OSError as error:
+                raise InstallerError("O journal privado da sessão não pôde ser gravado.") from error
+        except BaseException as error:
+            primary_error = error
+            raise
         finally:
-            if lexists(temporary):
-                remove_path(temporary)
+            cleanup_private_staging(
+                temporary,
+                expected_identity=temporary_identity,
+                label="o temporário do journal",
+                primary_error=primary_error,
+            )
 
     def set_status(self, status: str) -> None:
         if status not in {"starting", "running", "stopping", "interrupted", "clean"}:
@@ -529,10 +575,11 @@ class SessionJournal:
         if not lexists(request):
             return False
         try:
-            metadata = request.lstat()
-            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
-                raise ValueError("pedido inseguro")
-            payload = json.loads(request.read_text(encoding="utf-8"))
+            payload = json.loads(
+                private_fs.read_private_file(
+                    request, maximum_size=_MAX_STOP_REQUEST_BYTES,
+                ).decode("utf-8")
+            )
             if (
                 not isinstance(payload, dict)
                 or set(payload) != {"format", "project", "session_id", "requested_at"}
@@ -616,6 +663,31 @@ class SessionJournal:
             entry["inode"] = identity[1]
         entries.append(entry)
         self._write()
+
+    def hold_sensitive_temporary(self, path: Path, lease: object) -> None:
+        key = self._relative(path)
+        previous = self._sensitive_guards.pop(key, None)
+        if previous is not None:
+            previous.close()
+        self._sensitive_guards[key] = lease
+
+    def release_sensitive_temporary(self, path: Path) -> None:
+        lease = self._sensitive_guards.pop(self._relative(path), None)
+        if lease is not None:
+            lease.close()
+
+    def release_all_sensitive_temporaries(self) -> None:
+        guards = tuple(self._sensitive_guards.values())
+        self._sensitive_guards.clear()
+        first_error: BaseException | None = None
+        for lease in guards:
+            try:
+                lease.close()
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
+        if first_error is not None:
+            raise first_error
 
     def record_materialized(self, entry: MaterializedFile) -> None:
         entries = self.data["materialized_files"]
@@ -701,17 +773,35 @@ def journal_path(target: Path, relative: object) -> Path | None:
 
 
 def load_session_journal(path: Path) -> dict[str, object]:
+    def approved_legacy(payload: bytes) -> bool:
+        try:
+            candidate = json.loads(payload.decode("utf-8"))
+        except (UnicodeError, ValueError, json.JSONDecodeError):
+            return False
+        return (
+            isinstance(candidate, dict)
+            and candidate.get("format") == 1
+            and "private_filesystem" not in candidate
+        )
+
     try:
-        if path.is_symlink() or not path.is_file():
-            raise ValueError("journal inseguro")
-        data = json.loads(path.read_text(encoding="utf-8"))
+        payload, migrated_legacy_acl = (
+            private_fs.read_private_file_with_legacy_windows_migration(
+                path,
+                maximum_size=_MAX_SESSION_JOURNAL_BYTES,
+                approve_legacy=approved_legacy,
+            )
+        )
+        data = json.loads(
+            payload.decode("utf-8")
+        )
         required = {
             "format", "project", "session_id", "created_at", "status",
             "processes", "temporary_files", "materialized_files", "created_directories",
         }
         optional = {
             "controller", "recovery_actions", "recovered_at",
-            "background", "background_log",
+            "background", "background_log", "private_filesystem",
         }
         if (
             not isinstance(data, dict)
@@ -719,6 +809,13 @@ def load_session_journal(path: Path) -> dict[str, object]:
             or set(data) - required - optional
             or data.get("format") != 1
             or data.get("project") != "x86qw"
+            or (
+                data.get("private_filesystem") is not None
+                and (
+                    type(data.get("private_filesystem")) is not int
+                    or data.get("private_filesystem") != 1
+                )
+            )
             or not isinstance(data.get("session_id"), str)
             or not data.get("session_id")
             or not isinstance(data.get("created_at"), str)
@@ -810,6 +907,13 @@ def load_session_journal(path: Path) -> dict[str, object]:
             for entry in data["created_directories"]
         ):
             raise ValueError("diretório inválido")
+        if migrated_legacy_acl or (
+            os.name == "nt" and "private_filesystem" not in data
+        ):
+            # Transient process-local evidence.  It is never serialized: an
+            # inherited 0.7.1 DACL can be hardened, but its historical content
+            # must not gain authority to terminate or delete objects.
+            data[_LEGACY_ACL_MIGRATED] = True
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         raise InstallerError(
             f"Journal de sessão inválido preservado para inspeção: {path.parent}"
@@ -852,17 +956,36 @@ def session_journal_paths(target: Path, session_id: str | None = None) -> list[P
         return []
     if sessions.is_symlink() or not sessions.is_dir():
         raise InstallerError(f"Diretório de sessões ausente ou inseguro: {sessions}")
+    try:
+        private_fs.migrate_legacy_private_directory(sessions)
+    except OSError as error:
+        raise InstallerError(
+            f"Diretório de sessões sem privacidade comprovada: {sessions}"
+        ) from error
     directories = [sessions / session_id] if session_id is not None else sorted(sessions.iterdir())
-    return [
-        directory / "session.json"
-        for directory in directories
-        if directory.is_dir() and not directory.is_symlink()
-    ]
+    paths: list[Path] = []
+    for directory in directories:
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        try:
+            private_fs.migrate_legacy_private_directory(directory)
+        except OSError as error:
+            raise InstallerError(
+                f"Diretório de sessão sem privacidade comprovada: {directory}"
+            ) from error
+        paths.append(directory / "session.json")
+    return paths
 
 
 def assert_recovery_processes_confirmable(target: Path, session_id: str | None = None) -> None:
     for path in session_journal_paths(target, session_id):
         data = load_session_journal(path)
+        if data.get(_LEGACY_ACL_MIGRATED) is True:
+            raise InstallerError(
+                "Journal legado do Windows foi protegido, mas seu conteúdo histórico "
+                "não pode autorizar encerramento ou remoção automática. "
+                f"Inspecione a sessão preservada em {path.parent} antes de removê-la manualmente."
+            )
         if data.get("status") == "clean":
             continue
         processes = data.get("processes", [])
@@ -971,29 +1094,56 @@ def terminate_recorded_process(entry: dict[str, object], timeout: float = 4.0) -
 
 
 def write_session_journal(path: Path, data: dict[str, object], prefix: str = ".recovery-") -> None:
-    descriptor, temporary_name = tempfile.mkstemp(prefix=prefix, dir=path.parent)
-    temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
-            json.dump(data, output, ensure_ascii=False, indent=2, sort_keys=True)
-            output.write("\n")
-        if os.name != "nt":
-            temporary.chmod(0o600)
-        temporary.replace(path)
-        if os.name != "nt":
-            path.chmod(0o600)
+        descriptor, temporary = private_fs.private_mkstemp(
+            prefix=prefix, directory=path.parent,
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
+        except OSError:
+            os.close(descriptor)
+            raise
+    except OSError as error:
+        raise InstallerError("O temporário privado de recuperação não pôde ser criado.") from error
+    primary_error: BaseException | None = None
+    try:
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
+                serialized = {
+                    key: value for key, value in data.items()
+                    if key != _LEGACY_ACL_MIGRATED
+                }
+                json.dump(serialized, output, ensure_ascii=False, indent=2, sort_keys=True)
+                output.write("\n")
+            temporary.replace(path)
+            private_fs.validate_private_file(path)
+        except OSError as error:
+            raise InstallerError("O journal privado de recuperação não pôde ser gravado.") from error
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
-        if lexists(temporary):
-            remove_path(temporary)
+        cleanup_private_staging(
+            temporary,
+            expected_identity=temporary_identity,
+            label="o temporário de recuperação",
+            primary_error=primary_error,
+        )
 
 
 def reconcile_journal(target: Path, path: Path) -> None:
     try:
         data = load_session_journal(path)
-        if data.get("status") == "clean":
-            return
     except InstallerError:
         console.warning(f"Journal de sessão inválido preservado para inspeção: {path.parent}")
+        return
+    if data.get(_LEGACY_ACL_MIGRATED) is True:
+        raise InstallerError(
+            "Journal legado do Windows não possui autoridade para autorizar recuperação; "
+            f"estado preservado em {path.parent}."
+        )
+    if data.get("status") == "clean":
         return
     controller_probe = journal_controller_probe(data)
     if controller_probe is not None and controller_probe.status == "alive":
@@ -1318,6 +1468,10 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
         owner = session_control.read_lock_owner(lock_path)
     except session_control.SessionControlError as error:
         raise InstallerError(str(error)) from error
+    if owner.get(_LEGACY_ACL_MIGRATED) is True:
+        raise InstallerError(
+            "O lock legado do Windows não possui autoridade para solicitar encerramento."
+        )
     if owner.get("operation_kind", "service") != "service":
         raise InstallerError(
             f"A operação ativa é {owner['command']}, não uma stack de serviços."
@@ -1338,6 +1492,10 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
             "O journal da stack ativa não está disponível; nenhum processo foi encerrado."
         )
     journal = load_session_journal(paths[0])
+    if journal.get(_LEGACY_ACL_MIGRATED) is True:
+        raise InstallerError(
+            "O journal legado do Windows não possui autoridade para solicitar encerramento."
+        )
     controller = journal.get("controller")
     if (
         not isinstance(controller, dict)
@@ -1381,43 +1539,52 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
 
 def publish_stop_request(request: Path, payload: bytes) -> None:
     """Publish a complete stop request without exposing an open writer on Windows."""
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".stop-", suffix=".request", dir=request.parent,
-    )
-    temporary = Path(temporary_name)
+    try:
+        descriptor, temporary = private_fs.private_mkstemp(
+            prefix=".stop-", suffix=".request", directory=request.parent,
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
+        except OSError:
+            os.close(descriptor)
+            raise
+    except OSError as error:
+        raise InstallerError(
+            "Não foi possível criar o pedido privado de encerramento."
+        ) from error
+    primary_error: BaseException | None = None
     try:
         with os.fdopen(descriptor, "wb") as output:
             output.write(payload)
             output.flush()
             os.fsync(output.fileno())
-        if os.name != "nt":
-            temporary.chmod(0o600)
         try:
             os.link(temporary, request)
+            private_fs.validate_private_file(request)
         except FileExistsError as error:
             raise InstallerError("Já existe um pedido de encerramento para esta stack.") from error
         except OSError as error:
             raise InstallerError(
                 "Não foi possível publicar o pedido privado de encerramento."
             ) from error
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
-        if lexists(temporary):
-            temporary.unlink()
+        cleanup_private_staging(
+            temporary,
+            expected_identity=temporary_identity,
+            label="o temporário do pedido de encerramento",
+            primary_error=primary_error,
+        )
 
 
 def unlink_stop_request(request: Path) -> None:
     """Remove a private request, tolerating short-lived Windows file sharing locks."""
     for attempt in range(20):
         try:
-            metadata = request.lstat()
-        except FileNotFoundError:
-            return
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
-            raise InstallerError(
-                f"Pedido de encerramento inseguro preservado para inspeção: {request}"
-            )
-        try:
-            request.unlink()
+            private_fs.unlink_private_file(request)
             return
         except FileNotFoundError:
             return
@@ -1426,6 +1593,10 @@ def unlink_stop_request(request: Path) -> None:
                 time.sleep(0.025)
                 continue
             raise
+        except OSError as error:
+            raise InstallerError(
+                f"Pedido de encerramento sem privacidade comprovada foi preservado: {request}"
+            ) from error
 
 
 def unlink_sensitive_temporary(path: Path) -> None:
@@ -1471,30 +1642,36 @@ def cleanup_current_session(
                 for entry in entries
                 if isinstance(entry, dict) and entry.get("sensitive") is True
             }
-    for path in temporary_paths:
-        if not lexists(path):
-            continue
-        relative = journal._relative(path) if journal is not None else ""
-        expected = temporary_records.get(relative)
-        if relative in sensitive_paths:
-            unlink_sensitive_temporary(path)
-        elif expected is not None and journal is not None:
-            entry = MaterializedFile(
-                path,
-                expected[0],
-                "temporário de sessão",
-                True,
-                False,
-                journal.target,
-                expected[2],
-                expected[1],
-            )
-            if not _cleanup_materialized_file(entry):
+    try:
+        for path in temporary_paths:
+            relative = journal._relative(path) if journal is not None else ""
+            expected = temporary_records.get(relative)
+            if relative in sensitive_paths and journal is not None:
+                journal.release_sensitive_temporary(path)
+            if not lexists(path):
+                continue
+            if relative in sensitive_paths:
+                unlink_sensitive_temporary(path)
+            elif expected is not None and journal is not None:
+                entry = MaterializedFile(
+                    path,
+                    expected[0],
+                    "temporário de sessão",
+                    True,
+                    False,
+                    journal.target,
+                    expected[2],
+                    expected[1],
+                )
+                if not _cleanup_materialized_file(entry):
+                    console.warning(f"Arquivo temporário alterado foi preservado: {path}")
+            elif journal is None:
+                unlink_sensitive_temporary(path)
+            else:
                 console.warning(f"Arquivo temporário alterado foi preservado: {path}")
-        elif journal is None:
-            unlink_sensitive_temporary(path)
-        else:
-            console.warning(f"Arquivo temporário alterado foi preservado: {path}")
+    finally:
+        if journal is not None:
+            journal.release_all_sensitive_temporaries()
     for materialized in reversed(materialized_packages):
         if journal is not None:
             for entry in materialized.files:
@@ -1620,17 +1797,25 @@ def temporary_config(
 ) -> Path:
     if not directory.is_dir() or directory.is_symlink():
         raise InstallerError(f"Diretório de configuração ausente ou inseguro: {directory}")
-    descriptor, name = tempfile.mkstemp(prefix=prefix, suffix=".cfg", dir=directory)
-    path = Path(name)
+    try:
+        descriptor, path = private_fs.private_mkstemp(
+            prefix=prefix, suffix=".cfg", directory=directory,
+        )
+    except OSError as error:
+        raise InstallerError(
+            "Não foi possível criar a configuração efêmera com acesso privado."
+        ) from error
     tracked: MaterializedFile | None = None
+    sensitive_guard: object | None = None
     try:
         with os.fdopen(descriptor, "wb") as output:
             output.write("// x86QW: configuração efêmera removida ao encerrar.\n".encode("utf-8"))
             for line in lines:
                 output.write(line.encode("utf-8") if isinstance(line, str) else line)
                 output.write(b"\n")
-        if os.name != "nt":
-            path.chmod(0o600)
+        private_fs.validate_private_file(path)
+        if sensitive and journal is not None:
+            sensitive_guard = private_fs.hold_private_path(path, directory=False)
         if not sensitive:
             tracked = _describe_non_sensitive_temporary(
                 path,
@@ -1644,19 +1829,36 @@ def temporary_config(
                 sensitive=sensitive,
                 tracked=tracked,
             )
+            if sensitive_guard is not None:
+                journal.hold_sensitive_temporary(path, sensitive_guard)
+                sensitive_guard = None
         return path
-    except Exception:
-        if lexists(path):
-            if sensitive:
-                unlink_sensitive_temporary(path)
-            elif tracked is not None:
-                if not _cleanup_materialized_file(tracked):
-                    console.warning(
-                        f"Temporário não sensível alterado foi preservado: {path}"
-                    )
-            else:
+    except BaseException as primary_error:
+        if sensitive_guard is not None:
+            try:
+                sensitive_guard.close()
+            except BaseException as guard_error:
                 console.warning(
-                    f"Temporário não sensível sem identidade foi preservado: {path}"
+                    "Falha ao liberar a proteção da configuração efêmera após erro; "
+                    f"o erro original foi preservado: {guard_error}"
+                )
+        if lexists(path):
+            try:
+                if sensitive:
+                    unlink_sensitive_temporary(path)
+                elif tracked is not None:
+                    if not _cleanup_materialized_file(tracked):
+                        console.warning(
+                            f"Temporário não sensível alterado foi preservado: {path}"
+                        )
+                else:
+                    console.warning(
+                        f"Temporário não sensível sem identidade foi preservado: {path}"
+                    )
+            except BaseException as cleanup_error:
+                console.warning(
+                    "Falha ao limpar configuração efêmera após erro operacional; "
+                    f"o erro original foi preservado: {cleanup_error}"
                 )
         raise
 
@@ -3884,7 +4086,19 @@ def posix_process_group_status(process_group: int) -> str:
 def _windows_job_kernel32():
     from ctypes import wintypes
 
+    class ThreadEntry32(ctypes.Structure):
+        _fields_ = [
+            ("size", wintypes.DWORD),
+            ("usage", wintypes.DWORD),
+            ("thread_id", wintypes.DWORD),
+            ("owner_process_id", wintypes.DWORD),
+            ("base_priority", wintypes.LONG),
+            ("delta_priority", wintypes.LONG),
+            ("flags", wintypes.DWORD),
+        ]
+
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32._x86qw_thread_entry_type = ThreadEntry32
     kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
     kernel32.CreateJobObjectW.restype = wintypes.HANDLE
     kernel32.SetInformationJobObject.argtypes = [
@@ -3893,6 +4107,22 @@ def _windows_job_kernel32():
     kernel32.SetInformationJobObject.restype = wintypes.BOOL
     kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.Thread32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(ThreadEntry32)]
+    kernel32.Thread32First.restype = wintypes.BOOL
+    kernel32.Thread32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(ThreadEntry32)]
+    kernel32.Thread32Next.restype = wintypes.BOOL
+    kernel32.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenThread.restype = wintypes.HANDLE
+    kernel32.ResumeThread.argtypes = [wintypes.HANDLE]
+    kernel32.ResumeThread.restype = wintypes.DWORD
+    kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel32.TerminateProcess.restype = wintypes.BOOL
+    kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel32.TerminateJobObject.restype = wintypes.BOOL
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel32.CloseHandle.restype = wintypes.BOOL
     return kernel32
@@ -3962,14 +4192,165 @@ class WindowsJobObject:
                 f"({ctypes.get_last_error()})."
             )
 
+    def resume(self, process: subprocess.Popen[bytes]) -> None:
+        """Resume the sole primary thread of a newly suspended process."""
+        entry_type = self.kernel32._x86qw_thread_entry_type
+        invalid_handle = ctypes.c_void_p(-1).value
+        snapshot = self.kernel32.CreateToolhelp32Snapshot(0x00000004, 0)
+        if not snapshot or snapshot == invalid_handle:
+            raise InstallerError(
+                f"Não foi possível enumerar a thread inicial do PID {process.pid} "
+                f"({ctypes.get_last_error()})."
+            )
+        thread_ids: list[int] = []
+        enumeration_error: InstallerError | None = None
+        try:
+            entry = entry_type()
+            entry.size = ctypes.sizeof(entry_type)
+            if self.kernel32.Thread32First(snapshot, ctypes.byref(entry)):
+                while True:
+                    if int(entry.owner_process_id) == process.pid:
+                        thread_ids.append(int(entry.thread_id))
+                    entry.size = ctypes.sizeof(entry_type)
+                    if not self.kernel32.Thread32Next(snapshot, ctypes.byref(entry)):
+                        error = ctypes.get_last_error()
+                        if error != 18:  # ERROR_NO_MORE_FILES
+                            enumeration_error = InstallerError(
+                                f"Não foi possível enumerar a thread inicial do PID "
+                                f"{process.pid} ({error})."
+                            )
+                        break
+            else:
+                error = ctypes.get_last_error()
+                if error != 18:
+                    enumeration_error = InstallerError(
+                        f"Não foi possível enumerar a thread inicial do PID "
+                        f"{process.pid} ({error})."
+                    )
+        finally:
+            if not self.kernel32.CloseHandle(snapshot) and enumeration_error is None:
+                enumeration_error = InstallerError(
+                    f"Não foi possível fechar o snapshot de threads "
+                    f"({ctypes.get_last_error()})."
+                )
+        if enumeration_error is not None:
+            raise enumeration_error
+        if len(thread_ids) != 1:
+            raise InstallerError(
+                f"A thread inicial suspensa do PID {process.pid} não pôde ser "
+                "identificada de forma inequívoca."
+            )
+        thread = self.kernel32.OpenThread(0x0002, False, thread_ids[0])
+        if not thread:
+            raise InstallerError(
+                f"Não foi possível abrir a thread inicial do PID {process.pid} "
+                f"({ctypes.get_last_error()})."
+            )
+        resume_error: InstallerError | None = None
+        try:
+            previous_count = int(self.kernel32.ResumeThread(thread))
+            if previous_count == 0xFFFFFFFF:
+                resume_error = InstallerError(
+                    f"Não foi possível retomar o PID {process.pid} "
+                    f"({ctypes.get_last_error()})."
+                )
+            elif previous_count != 1:
+                resume_error = InstallerError(
+                    f"O PID {process.pid} apresentou contagem de suspensão "
+                    f"inesperada ({previous_count})."
+                )
+        finally:
+            if not self.kernel32.CloseHandle(thread) and resume_error is None:
+                resume_error = InstallerError(
+                    f"Não foi possível fechar a thread inicial do PID {process.pid} "
+                    f"({ctypes.get_last_error()})."
+                )
+        if resume_error is not None:
+            raise resume_error
+
+    def _rollback_failed_start(
+        self, process: subprocess.Popen[bytes], *, assigned: bool,
+    ) -> None:
+        process_handle = int(process._handle)  # type: ignore[attr-defined]
+        if assigned:
+            if self.handle is None or not self.kernel32.TerminateJobObject(self.handle, 1):
+                raise InstallerError(
+                    f"Não foi possível reverter a árvore do PID {process.pid} "
+                    f"({ctypes.get_last_error()})."
+                )
+        elif not self.kernel32.TerminateProcess(process_handle, 1):
+            raise InstallerError(
+                f"Não foi possível reverter o PID suspenso {process.pid} "
+                f"({ctypes.get_last_error()})."
+            )
+        result = int(self.kernel32.WaitForSingleObject(process_handle, 4000))
+        if result != 0:  # WAIT_OBJECT_0
+            raise InstallerError(
+                f"O PID {process.pid} permaneceu ativo após a reversão "
+                f"(resultado {result})."
+            )
+        poll = getattr(process, "poll", None)
+        if callable(poll):
+            poll()
+
+    def start_process(
+        self, arguments: tuple[str, ...], cwd: Path,
+    ) -> subprocess.Popen[bytes]:
+        """Create a child suspended, assign its whole tree, then let it run."""
+        creation_flags = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            | getattr(subprocess, "CREATE_SUSPENDED", 0x00000004)
+        )
+        process: subprocess.Popen[bytes] | None = None
+        assigned = False
+        try:
+            process = subprocess.Popen(
+                arguments,
+                cwd=cwd,
+                stdin=subprocess.DEVNULL,
+                creationflags=creation_flags,
+            )
+            self.assign(process)
+            assigned = True
+            self.resume(process)
+            return process
+        except BaseException as error:
+            if process is None:
+                raise
+            try:
+                self._rollback_failed_start(process, assigned=assigned)
+            except Exception as cleanup_error:
+                console.warning(
+                    f"Falha ao reverter PID {process.pid} após startup recusado: "
+                    f"{cleanup_error}"
+                )
+                if isinstance(error, Exception):
+                    raise InstallerError(
+                        f"{error} A reversão segura também falhou: {cleanup_error}"
+                    ) from error
+            raise
+
     def close(self) -> None:
         if self.handle is None:
             return
         handle = self.handle
-        self.handle = None
+        termination_error = 0
+        if not self.kernel32.TerminateJobObject(handle, 1):
+            termination_error = ctypes.get_last_error()
         if not self.kernel32.CloseHandle(handle):
+            close_error = ctypes.get_last_error()
+            detail = (
+                f"; encerramento explícito também falhou ({termination_error})"
+                if termination_error else ""
+            )
             raise InstallerError(
-                f"Não foi possível fechar o Job Object ({ctypes.get_last_error()})."
+                f"Não foi possível fechar o Job Object ({close_error}{detail})."
+            )
+        self.handle = None
+        if termination_error:
+            raise InstallerError(
+                "O Job Object foi fechado, mas o encerramento explícito da árvore "
+                f"falhou ({termination_error})."
             )
 
 
@@ -4050,29 +4431,15 @@ def run_processes(specs: list[ProcessSpec], journal: SessionJournal | None = Non
                 pass
         for spec in specs:
             console.detail(f"Iniciando {spec.label}: {spec.arguments[0]}")
-            popen_options: dict[str, object] = {"stdin": subprocess.DEVNULL}
-            if os.name == "nt":
-                popen_options["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-            else:
-                popen_options["start_new_session"] = True
-            process = subprocess.Popen(spec.arguments, cwd=spec.cwd, **popen_options)
             if windows_job is not None:
-                try:
-                    windows_job.assign(process)
-                except Exception:
-                    try:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=4)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait(timeout=1)
-                    except Exception as cleanup_error:
-                        console.warning(
-                            f"Falha ao encerrar PID {process.pid} após associação recusada: "
-                            f"{cleanup_error}"
-                        )
-                    raise
+                process = windows_job.start_process(spec.arguments, spec.cwd)
+            else:
+                process = subprocess.Popen(
+                    spec.arguments,
+                    cwd=spec.cwd,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
             process_group = process.pid
             setattr(process, "_x86qw_process_group", process_group)
             processes.append(process)
@@ -4726,10 +5093,11 @@ def activate_background_log(target: Path, relative: str) -> Path:
     path = target.joinpath(*pure.parts)
     if lexists(path) and (path.is_symlink() or not path.is_file()):
         raise InstallerError(f"Log em segundo plano ausente ou inseguro: {path}")
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
-        if os.name != "nt":
-            os.fchmod(descriptor, 0o600)
+        descriptor = private_fs.open_private_append(path)
+    except OSError as error:
+        raise InstallerError(f"Log em segundo plano não pôde ser protegido: {path}") from error
+    try:
         os.dup2(descriptor, sys.stdout.fileno())
         os.dup2(descriptor, sys.stderr.fileno())
     finally:
@@ -4741,7 +5109,9 @@ def background_log_tail(path: Path, secrets_to_redact: tuple[str, ...]) -> str:
     if not path.is_file() or path.is_symlink():
         return ""
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-8:]
+        lines = private_fs.read_private_file(
+            path, maximum_size=1024 * 1024,
+        ).decode("utf-8", errors="replace").splitlines()[-8:]
     except OSError:
         return ""
     rendered = "\n".join(

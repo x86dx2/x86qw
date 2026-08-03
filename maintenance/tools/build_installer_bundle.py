@@ -67,6 +67,9 @@ ZIPAPP_FILES = (
     ("x86qw_runtime/__init__.py", "x86qw_runtime/__init__.py"),
     ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
     ("x86qw_runtime/io/archive.py", "x86qw_runtime/io/archive.py"),
+    ("x86qw_runtime/io/private_fs.py", "x86qw_runtime/io/private_fs.py"),
+    ("x86qw_runtime/platform/__init__.py", "x86qw_runtime/platform/__init__.py"),
+    ("x86qw_runtime/platform/windows_acl.py", "x86qw_runtime/platform/windows_acl.py"),
 )
 RUNTIME_CONTRACT_FILES = (
     ("capabilities", "maintenance/inventory/capabilities.json", "_x86qw/capabilities.json"),

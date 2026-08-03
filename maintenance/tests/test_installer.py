@@ -41,6 +41,25 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    def test_direct_maintenance_builders_find_the_runtime_boundary(self):
+        scripts = (
+            "build_component_packages.py",
+            "build_core_package.py",
+            "build_installer_bundle.py",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            for name in scripts:
+                with self.subTest(script=name):
+                    completed = subprocess.run(
+                        [sys.executable, str(ROOT / "maintenance/tools" / name), "--help"],
+                        cwd=temporary,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stderr)
+
     def test_future_bootstrap_registration_updates_version_hash_and_size_together(self):
         shell, powershell = public_bootstrap_assignments({
             "version": "0.7.2",
@@ -169,6 +188,9 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("session_control.py", application.namelist())
             self.assertIn("python_runtime.py", application.namelist())
             self.assertIn("maintenance/tools/downloader.py", application.namelist())
+            self.assertIn("x86qw_runtime/io/private_fs.py", application.namelist())
+            self.assertIn("x86qw_runtime/platform/__init__.py", application.namelist())
+            self.assertIn("x86qw_runtime/platform/windows_acl.py", application.namelist())
             self.assertIn(
                 b"require_supported_runtime()",
                 application.read("__main__.py"),
@@ -1715,13 +1737,30 @@ class InstallerTests(unittest.TestCase):
             root = Path(temporary)
             installer, target, _ = self.make_installer(root)
             self.write_cli_receipt(target, "1.0.4")
+            before_target = [
+                (
+                    path.relative_to(target).as_posix(),
+                    path.is_dir(),
+                    b"" if path.is_dir() else path.read_bytes(),
+                )
+                for path in sorted(target.rglob("*"))
+            ]
             archive = root / "x86qw-installer-1.0.5.zip"
             self.write_installer_bundle(archive, "1.0.5")
             record = {"version": "1.0.5"}
             completed = subprocess.CompletedProcess([], 0)
+            observed_stages: list[Path] = []
+
+            def provide_archive(_package):
+                assert installer.stage is not None
+                observed_stages.append(installer.stage)
+                return archive
+
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "installer_bundle_record", return_value=record):
-                    with mock.patch.object(installer, "download_component_package", return_value=archive):
+                    with mock.patch.object(
+                        installer, "download_component_package", side_effect=provide_archive,
+                    ):
                         with mock.patch.object(install_qw.subprocess, "run", return_value=completed) as run:
                             self.assertTrue(installer.handoff_cli_update(
                                 "upgrade", dry_run=False, assume_yes=True,
@@ -1733,7 +1772,77 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("--yes", command)
             self.assertEqual(["upgrade", str(target)], command[-2:])
             self.assertNotIn("shell", run.call_args.kwargs)
+            self.assertTrue(all(target not in path.parents for path in observed_stages))
+            self.assertEqual(before_target, [
+                (
+                    path.relative_to(target).as_posix(),
+                    path.is_dir(),
+                    b"" if path.is_dir() else path.read_bytes(),
+                )
+                for path in sorted(target.rglob("*"))
+            ])
             self.assertFalse(any(target.glob(".x86qw-update.*")))
+
+    def test_cli_update_fails_before_download_when_private_stage_cannot_be_created(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            with mock.patch.object(
+                installer, "installer_bundle_record", return_value={"version": "1.0.5"},
+            ), mock.patch.object(
+                installer, "installed_cli_version", return_value="1.0.4",
+            ), mock.patch.object(
+                install_qw.private_fs, "private_mkdtemp",
+                side_effect=install_qw.private_fs.PrivateFilesystemError("ACL indisponível"),
+            ), mock.patch.object(
+                installer, "download_component_package",
+                side_effect=AssertionError("download iniciou sem stage privado"),
+            ) as download, mock.patch.object(install_qw.subprocess, "run") as run:
+                with self.assertRaisesRegex(install_qw.InstallerError, "área privada"):
+                    installer.handoff_cli_update("update", dry_run=False)
+            download.assert_not_called()
+            run.assert_not_called()
+            self.assertFalse((target / ".x86qw").exists())
+            self.assertFalse(any(target.glob(".x86qw-update.*")))
+
+    def test_cli_update_cleanup_preserves_a_replacement_of_the_stage_path(self):
+        class StopHandoff(RuntimeError):
+            pass
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            self.write_cli_receipt(target, "1.0.4")
+            preserved_stage = target / "preserved-original-stage"
+            personal_file: Path | None = None
+
+            def replace_stage(_package):
+                nonlocal personal_file
+                assert installer.stage is not None
+                installer.stage.rename(preserved_stage)
+                installer.stage.mkdir()
+                personal_file = installer.stage / "personal.txt"
+                personal_file.write_text("preservar\n", encoding="utf-8")
+                raise StopHandoff("interromper depois da troca")
+
+            try:
+                with mock.patch.object(
+                    installer, "installer_bundle_record", return_value={"version": "1.0.5"},
+                ), mock.patch.object(
+                    installer, "download_component_package", side_effect=replace_stage,
+                ):
+                    with self.assertRaisesRegex(
+                        install_qw.InstallerError, "mudou de identidade",
+                    ):
+                        installer.handoff_cli_update("update", dry_run=False)
+                assert personal_file is not None
+                self.assertTrue(personal_file.is_file())
+                self.assertTrue(preserved_stage.is_dir())
+            finally:
+                if installer.stage is not None and install_qw.lexists(installer.stage):
+                    install_qw.remove_path(installer.stage)
+                if install_qw.lexists(preserved_stage):
+                    install_qw.remove_path(preserved_stage)
 
     def test_cli_update_rejects_bundle_missing_required_member_without_handoff(self):
         with tempfile.TemporaryDirectory() as temporary:

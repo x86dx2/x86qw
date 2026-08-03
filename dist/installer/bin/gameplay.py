@@ -31,6 +31,7 @@ from x86qw_runtime.io.archive import (
     read_archive_member,
     scan_archive,
 )
+from x86qw_runtime.io import private_fs
 
 InstallerError = core.InstallerError
 console = core.console
@@ -870,11 +871,10 @@ def write_ktx_runtime_config(
     descriptor = -1
     temporary_name = ""
     try:
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix="x86qw-ktx-session-", suffix=".cfg", dir=directory,
+        descriptor, temporary = private_fs.private_mkstemp(
+            prefix="x86qw-ktx-session-", suffix=".cfg", directory=directory,
         )
-        if hasattr(os, "fchmod"):
-            os.fchmod(descriptor, 0o600)
+        temporary_name = str(temporary)
         pending = memoryview(payload)
         while pending:
             written = os.write(descriptor, pending)
@@ -899,6 +899,7 @@ def write_ktx_runtime_config(
             os.close(descriptor)
     path = Path(temporary_name)
     try:
+        private_fs.validate_private_file(path)
         metadata = path.stat(follow_symlinks=False)
     except OSError as error:
         try:

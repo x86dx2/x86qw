@@ -186,6 +186,7 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
         ("subprocess.Popen", "Installer.launch_runtime", "command"),
     }),
     SERVICES_PATH: frozenset({
+        ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
         ("subprocess.Popen", "launch_background_controller", "command"),
         ("subprocess.Popen", "run_processes", "spec.arguments"),
     }),
@@ -1570,9 +1571,17 @@ class DownloaderTests(unittest.TestCase):
 
         powershell = ROOT / "dist/installer/bin/install.ps1"
         powershell_source = powershell.read_text(encoding="utf-8")
+        downloader_marker = "$DownloaderSource = @'\n"
         terminator = "\n'@\n"
         injected = "\nurllib.request.urlopen('https://invalid/bypass')" + terminator
-        powershell_source = powershell_source.replace(terminator, injected, 1)
+        self.assertEqual(1, powershell_source.count(downloader_marker))
+        downloader_start = powershell_source.index(downloader_marker) + len(downloader_marker)
+        downloader_end = powershell_source.index(terminator, downloader_start)
+        powershell_source = (
+            powershell_source[:downloader_end]
+            + injected
+            + powershell_source[downloader_end + len(terminator):]
+        )
         violations = scan_script_remote_boundary(powershell, powershell_source)
         self.assertTrue(any(
             "Python embutido" in violation.mechanism
@@ -2174,7 +2183,7 @@ class DownloaderTests(unittest.TestCase):
             self.assertEqual([0o600], observed_modes)
 
     @unittest.skipIf(os.name == "nt", "fchmod não se aplica ao Windows")
-    def test_fchmod_failure_closes_and_removes_the_temporary(self) -> None:
+    def test_fchmod_failure_closes_and_preserves_the_private_temporary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "artifact.zip"
             real_close = os.close
@@ -2194,7 +2203,10 @@ class DownloaderTests(unittest.TestCase):
                     )
 
             self.assertEqual(1, len(closed))
-            self.assert_no_download_temporaries(self, destination.parent)
+            residuals = list(destination.parent.glob(".*.download"))
+            self.assertEqual(1, len(residuals))
+            self.assertEqual(b"", residuals[0].read_bytes())
+            self.assertEqual(0o600, stat.S_IMODE(residuals[0].stat().st_mode))
 
     def test_fdopen_failure_closes_and_removes_the_temporary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3778,8 +3790,8 @@ class DownloaderTests(unittest.TestCase):
                 destination.write_bytes(b"preserve")
 
                 with mock.patch.object(
-                    downloader.tempfile,
-                    "mkstemp",
+                    downloader.private_fs,
+                    "private_mkstemp",
                     side_effect=OSError(error_number, message),
                 ), self.assertRaises(downloader.DownloadStorageError):
                     self.download(

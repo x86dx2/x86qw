@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import importlib
 import json
@@ -56,6 +57,7 @@ from x86qw_runtime.io.archive import (
     scan_archive,
     validate_installer_bundle,
 )
+from x86qw_runtime.io import private_fs
 
 from maintenance.tools.components import (
     components_by_id,
@@ -710,6 +712,9 @@ class Installer:
         self.cache_root: Path | None = None
         self.cache_bin: Path | None = None
         self.stage: Path | None = None
+        self._stage_identity: tuple[int, int] | None = None
+        self._stage_created_roots: tuple[tuple[Path, tuple[int, int]], ...] = ()
+        self._stage_lease: object | None = None
         self.spec: PlatformSpec | None = None
         self.channel = ""
         self.selected_version = ""
@@ -1194,9 +1199,10 @@ class Installer:
         ensure_no_symlink(metadata, "metadata directory")
         if lexists(metadata) and not metadata.is_dir():
             raise InstallerError(f"metadata path is not a directory: {metadata}")
-        metadata.mkdir(exist_ok=True)
-        if os.name != "nt":
-            metadata.chmod(0o755)
+        try:
+            private_fs.ensure_private_directory(metadata)
+        except OSError as error:
+            raise InstallerError(f"metadata directory is not private: {metadata}") from error
 
     def select_platform(self, requested: str | None = None) -> PlatformSpec:
         host = host_platform.system() or "desconhecido"
@@ -2297,9 +2303,11 @@ class Installer:
                 self.remove_component("package-order")
             return
         previous_stage = self.stage
+        previous_stage_identity = self._stage_identity
+        previous_stage_created_roots = self._stage_created_roots
         owned_stage = previous_stage is None
         if owned_stage:
-            self.stage = Path(tempfile.mkdtemp(prefix=".quake-order.", dir=self.target))
+            self._create_stage(".quake-order.")
         assert self.stage is not None
         try:
             managed = self.stage / "package-order-managed"
@@ -2319,6 +2327,8 @@ class Installer:
             if owned_stage:
                 self.cleanup_stage()
                 self.stage = previous_stage
+                self._stage_identity = previous_stage_identity
+                self._stage_created_roots = previous_stage_created_roots
 
     def verify_qw_package_order(self) -> None:
         packages = self.expected_qw_package_order()
@@ -2419,7 +2429,7 @@ class Installer:
             console.success(f"Presets gerenciados removidos ({file_count(removed)}); configurações pessoais preservadas.")
             return
         self.check_paks()
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self._create_stage(".quake-install.")
         managed = self.stage / "presets-managed"
         configs = managed / "ezquake/configs"
         configs.mkdir(parents=True)
@@ -2937,7 +2947,7 @@ class Installer:
                 f"CLI x86QW instalada ({current}) é mais nova que o catálogo ({available}); preservada."
             )
             return False
-        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-update.", dir=self.target))
+        self._create_handoff_stage(".x86qw-update.")
         try:
             if self.update_ui:
                 console.heading("Baixando o instalador x86QW")
@@ -3311,7 +3321,9 @@ class Installer:
             if lexists(path) and (not path.is_file() or path.is_symlink()):
                 raise InstallerError(f"Configuração mutável inválida: {path}")
         previous_stage = self.stage
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-migrate.", dir=self.target))
+        previous_stage_identity = self._stage_identity
+        previous_stage_created_roots = self._stage_created_roots
+        self._create_stage(".quake-migrate.")
         try:
             inventory = self.stage / f"{component}.inventory"
             inventory.write_text(
@@ -3329,6 +3341,8 @@ class Installer:
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
+            self._stage_identity = previous_stage_identity
+            self._stage_created_roots = previous_stage_created_roots
         console.success(
             f"Configuração pessoal de {component} retirada do inventário imutável e preservada."
         )
@@ -3690,7 +3704,7 @@ class Installer:
             self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
             return
         selected = self.choose_components()
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self._create_stage(".quake-install.")
         self.install_components(selected)
         self.write_install_state(self.selected_component_profile, self.requested_components)
 
@@ -4194,7 +4208,7 @@ class Installer:
         self.channel = issue.channel
         self.configure_release(issue.release)
         self.ensure_macos_ezquake_closed()
-        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-client-repair.", dir=self.target))
+        self._create_stage(".x86qw-client-repair.")
         try:
             self.prepare_cache()
             archive = self.ensure_archive()
@@ -4290,7 +4304,7 @@ class Installer:
         for issue in payload_clients:
             self.repair_client_runtime(issue)
         if assessment.invalid_components:
-            self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-repair.", dir=self.target))
+            self._create_stage(".x86qw-repair.")
             try:
                 self.install_components(list(assessment.invalid_components))
             finally:
@@ -4383,8 +4397,9 @@ class Installer:
                 remove_path(legacy)
 
         previous_stage = self.stage
-        migration_stage = Path(tempfile.mkdtemp(prefix=".x86qw-metadata.", dir=self.target))
-        self.stage = migration_stage
+        previous_stage_identity = self._stage_identity
+        previous_stage_created_roots = self._stage_created_roots
+        migration_stage = self._create_stage(".x86qw-metadata.")
         try:
             for component in self.metadata_component_ids():
                 canonical = self.component_pair_paths(component, metadata)
@@ -4400,6 +4415,8 @@ class Installer:
         finally:
             self.cleanup_stage()
             self.stage = previous_stage
+            self._stage_identity = previous_stage_identity
+            self._stage_created_roots = previous_stage_created_roots
         remove_empty_directories(metadata / "clients/ezquake")
         console.success("Metadados da instalação reorganizados por contexto.")
         return True
@@ -4560,7 +4577,7 @@ class Installer:
         self.check_runtime_destination_ownership()
         self.prepare_install_target()
         self.reject_target_symlinks()
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-install.", dir=self.target))
+        self._create_stage(".quake-install.")
         self.provision_install_target()
         self.check_paks()
         pak0_before = file_hash(self.target / "id1/pak0.pak")
@@ -4652,7 +4669,7 @@ class Installer:
 
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
-        self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-runtime-update.", dir=self.target))
+        self._create_stage(".x86qw-runtime-update.")
         try:
             self.prepare_cache()
             archive = self.ensure_archive()
@@ -4791,7 +4808,7 @@ class Installer:
                             package_size(package),
                         ))
             else:
-                self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-migrate.", dir=self.target))
+                self._create_stage(".x86qw-components-migrate.")
                 try:
                     self.install_components(replacements)
                 finally:
@@ -4812,7 +4829,7 @@ class Installer:
                             str(receipt["selection"]), available, "Atualizar", package_size(package),
                         ))
             else:
-                self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-components-update.", dir=self.target))
+                self._create_stage(".x86qw-components-update.")
                 try:
                     self.install_components(outdated)
                 finally:
@@ -4893,7 +4910,7 @@ class Installer:
             changed = True
         else:
             console.info("Novos componentes do perfil: " + ", ".join(missing))
-            self.stage = Path(tempfile.mkdtemp(prefix=".x86qw-profile-upgrade.", dir=self.target))
+            self._create_stage(".x86qw-profile-upgrade.")
             try:
                 self.install_components(missing)
             finally:
@@ -4913,9 +4930,168 @@ class Installer:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
         return changed
 
+    def _create_stage(self, prefix: str) -> Path:
+        """Create one private staging root and bind cleanup to its identity."""
+        stage_root = self.target / METADATA_DIR / "staging"
+        created_roots: list[tuple[Path, tuple[int, int]]] = []
+        try:
+            for directory in (stage_root.parent, stage_root):
+                existed = lexists(directory)
+                private_fs.ensure_private_directory(directory)
+                if not existed:
+                    root_metadata = directory.lstat()
+                    if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(
+                        root_metadata.st_mode
+                    ):
+                        raise private_fs.PrivateFilesystemError(
+                            f"Raiz privada de staging inválida: {directory}"
+                        )
+                    created_roots.append((
+                        directory,
+                        (int(root_metadata.st_dev), int(root_metadata.st_ino)),
+                    ))
+            stage = private_fs.private_mkdtemp(directory=stage_root, prefix=prefix)
+            metadata = stage.lstat()
+        except OSError as error:
+            try:
+                self._cleanup_stage_roots(tuple(created_roots))
+            except InstallerError as cleanup_error:
+                raise InstallerError(
+                    "Não foi possível criar nem reconciliar a área privada de staging: "
+                    f"{cleanup_error}"
+                ) from error
+            raise InstallerError(
+                f"Não foi possível criar a área privada de staging em {self.target}: {error}"
+            ) from error
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Área privada de staging inválida: {stage}")
+        self.stage = stage
+        self._stage_identity = (int(metadata.st_dev), int(metadata.st_ino))
+        self._stage_created_roots = tuple(created_roots)
+        self._stage_lease = None
+        return stage
+
+    def _create_handoff_stage(self, prefix: str) -> Path:
+        """Create a guarded private stage outside the installation target."""
+        parent = Path(tempfile.gettempdir()).resolve()
+        try:
+            stage = private_fs.private_mkdtemp(directory=parent, prefix=prefix)
+            metadata = stage.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise private_fs.PrivateFilesystemError(
+                    f"Área privada de handoff inválida: {stage}"
+                )
+            lease = private_fs.hold_private_path(stage, directory=True)
+        except OSError as error:
+            if "stage" in locals() and lexists(stage):
+                try:
+                    stage.rmdir()
+                except OSError:
+                    pass
+            raise InstallerError(
+                f"Não foi possível criar a área privada de handoff fora do destino: {error}"
+            ) from error
+        self.stage = stage
+        self._stage_identity = (int(metadata.st_dev), int(metadata.st_ino))
+        self._stage_created_roots = ()
+        self._stage_lease = lease
+        return stage
+
+    def _cleanup_stage_roots(
+        self, roots: tuple[tuple[Path, tuple[int, int]], ...],
+    ) -> None:
+        for directory, expected_identity in reversed(roots):
+            if not lexists(directory):
+                continue
+            metadata = directory.lstat()
+            identity = (int(metadata.st_dev), int(metadata.st_ino))
+            if (
+                stat.S_ISLNK(metadata.st_mode)
+                or not stat.S_ISDIR(metadata.st_mode)
+                or identity != expected_identity
+            ):
+                raise InstallerError(
+                    f"Raiz de staging mudou de identidade e foi preservada: {directory}"
+                )
+            try:
+                private_fs.validate_private_directory(directory)
+                directory.rmdir()
+            except OSError as error:
+                if error.errno in {errno.ENOTEMPTY, errno.EEXIST}:
+                    continue
+                raise InstallerError(
+                    f"Não foi possível remover a raiz vazia de staging {directory}: {error}"
+                ) from error
+
     def cleanup_stage(self) -> None:
-        if self.stage is not None and self.stage.is_dir():
-            remove_path(self.stage)
+        stage = self.stage
+        if stage is None:
+            self._stage_identity = None
+            lease = self._stage_lease
+            self._stage_lease = None
+            if lease is not None:
+                lease.close()
+            roots = self._stage_created_roots
+            self._cleanup_stage_roots(roots)
+            self._stage_created_roots = ()
+            return
+        if not lexists(stage):
+            self.stage = None
+            self._stage_identity = None
+            lease = self._stage_lease
+            self._stage_lease = None
+            if lease is not None:
+                lease.close()
+            roots = self._stage_created_roots
+            self._cleanup_stage_roots(roots)
+            self._stage_created_roots = ()
+            return
+        metadata = stage.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Área de staging mudou de tipo e foi preservada: {stage}")
+        identity = (int(metadata.st_dev), int(metadata.st_ino))
+        if self._stage_identity is not None and identity != self._stage_identity:
+            raise InstallerError(f"Área de staging mudou de identidade e foi preservada: {stage}")
+        if self._stage_identity is not None:
+            try:
+                private_fs.validate_private_directory(stage)
+            except OSError as error:
+                raise InstallerError(
+                    f"Área de staging deixou de ser privada e foi preservada: {stage}"
+                ) from error
+        lease = self._stage_lease
+        if lease is not None:
+            cleanup_error: BaseException | None = None
+            try:
+                private_fs.validate_private_directory(stage)
+                for child in tuple(stage.iterdir()):
+                    remove_path(child)
+            except BaseException as error:
+                cleanup_error = error
+            finally:
+                self._stage_lease = None
+                try:
+                    lease.close()
+                except BaseException as error:
+                    if cleanup_error is None:
+                        cleanup_error = error
+            if cleanup_error is not None:
+                raise InstallerError(
+                    f"Área privada de handoff foi preservada após falha de limpeza: {stage}"
+                ) from cleanup_error
+            try:
+                stage.rmdir()
+            except OSError as error:
+                raise InstallerError(
+                    f"Área privada de handoff mudou após a liberação e foi preservada: {stage}"
+                ) from error
+        else:
+            remove_path(stage, identity[0])
+        self.stage = None
+        self._stage_identity = None
+        roots = self._stage_created_roots
+        self._cleanup_stage_roots(roots)
+        self._stage_created_roots = ()
 
     def install_online_cli(self) -> None:
         if not self.online_only:
@@ -4941,7 +5117,7 @@ class Installer:
             rendered_launchers[name] = (rendered, mode)
 
         metadata_root = self.target / METADATA_DIR
-        metadata_root.mkdir(parents=True, exist_ok=True)
+        self.ensure_metadata_directory()
         cli_root = metadata_root / "cli"
         replacement = Path(tempfile.mkdtemp(prefix=".cli-new.", dir=metadata_root))
         backup = metadata_root / f".cli-old.{os.getpid()}"
