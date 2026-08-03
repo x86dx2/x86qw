@@ -199,13 +199,17 @@ separada.
 
 ### SEC-01 — PK3/ZIP
 
-**Entrega funcional:** completa para materialização dedicada
-**Validação:** unitária em macOS; matriz portável configurada
+**Entrega funcional:** parcial; materialização dedicada endurecida, fronteira
+única de arquivos ainda pendente no PR 3
+**Validação:** unitária somente para os caminhos já endurecidos; matriz portável
+configurada
 
 Membros são interpretados com semântica POSIX. Traversal, drives, barras
 invertidas, controles, nomes reservados, symlinks, membros especiais e colisões
 de caixa/Unicode são rejeitados. Limites cobrem quantidade, membro, total,
-profundidade, caminho e taxa de compressão.
+profundidade, caminho e taxa de compressão nos consumidores já migrados. O
+instalador principal e as ferramentas ainda possuem leituras ZIP/PK3 paralelas;
+`scan_archive`, `ArchivePlan` e `extract_archive` permanecem o contrato do PR 3.
 
 ### SEC-02 — Segredos e endpoints
 
@@ -219,16 +223,19 @@ IPv6 entre colchetes têm parser próprio.
 
 ### SEC-03 — Downloads remotos limitados
 
-**Entrega funcional:** completa no código corretivo; ainda não publicada
+**Entrega funcional:** completa no código corretivo; em revisão e ainda não
+publicada
 
-**Validação:** 507 testes de manutenção e cinco do site aprovados localmente no
-macOS; dez skips dependentes de plataforma/rede; matriz do PR pendente
+**Validação:** 565 testes de manutenção e cinco do site aprovados localmente;
+oito skips explícitos (sete Windows e um smoke de rede); matriz do PR pendente
 
 Artefatos persistentes exigem HTTPS, tamanho, SHA-256, limite e deadline.
 Metadados dinâmicos são efêmeros e limitados. Retries são restritos a falhas
-transitórias; temporários privados só são promovidos atomicamente depois da
-validação. Autenticação, expiração e proteção contra rollback ou freeze
-permanecem na [issue #48](https://github.com/x86dx2/x86qw/issues/48).
+transitórias; temporários recebem `0600` no POSIX e só são promovidos
+atomicamente depois da validação. A DACL privada dos temporários Windows
+permanece na [issue #47](https://github.com/x86dx2/x86qw/issues/47).
+Autenticação, expiração e proteção contra rollback ou freeze permanecem na
+[issue #48](https://github.com/x86dx2/x86qw/issues/48).
 
 ## Instalador e perfis
 

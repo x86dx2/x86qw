@@ -42,7 +42,7 @@ do site. A `0.7.0` permanece imutável no histórico.
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
 | Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.1` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
-| Downloads remotos | completa no código corretivo da issue #45; ainda não publicada | 507 testes de manutenção e cinco do site aprovados localmente no macOS; dez skips dependentes de plataforma/rede; matriz do PR pendente |
+| Downloads remotos | completa no código corretivo da issue #45; em revisão e ainda não publicada | 565 testes de manutenção e cinco do site aprovados localmente; oito skips explícitos (sete Windows e um smoke de rede); matriz do PR pendente |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.

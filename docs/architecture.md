@@ -159,23 +159,45 @@ um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
 O zipapp e as ferramentas Python recebem HTTP exclusivamente por contratos
 tipados em `maintenance/tools/downloader.py`; o bootstrap PowerShell incorpora
 uma projeção mínima antes de o zipapp existir. Artefatos persistentes são fixados por tamanho
-e SHA-256; metadados dinâmicos permanecem efêmeros; a exceção de payload não
-fixado é restrita à manutenção, usa identidade independente quando disponível e
-permanece sujeita a confirmação, validação e revisão quando o upstream não
-publica digest.
+e SHA-256; metadados dinâmicos permanecem efêmeros e não existe contrato
+autorizado a promover payload não fixado. Stable, nightly e nQuake descobertos só herdam uma
+identidade quando caminho, URL e tamanho coincidem com o manifesto revisado;
+candidatos novos exigem intake pinado antes do download persistente. Esse intake
+vincula destino, namespace, consumidor e pacote a uma release proposta, fonte
+preservada, pacote público proposto ou referência nQuake. Pacotes ezQuake também
+precisam coincidir exatamente com
+`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`.
 Os limites atuais são 512 MiB para artefatos, 2 MiB para o catálogo, 1 MiB para
-o Hub e 4 MiB para descoberta HTTP. O adaptador Git limita stdout a 32 MiB,
-stderr a 1 MiB e o workspace temporário a 128 MiB, com deadlines de 60 segundos
-para consultas e 300 segundos para árvores.
+o Hub e 4 MiB para descoberta HTTP. Referências, commits e árvores do nQuake passam pela
+API oficial do GitHub sob esse limite, com um deadline compartilhado e rejeição
+de árvore truncada ou schema divergente.
 
 O deadline monotônico cobre tentativas, leituras e backoff. Retry é restrito a
-falhas transitórias. Temporários privados recebem `flush` e `fsync` antes de uma
-substituição atômica, preservando o destino final anterior até a promoção. Os
+falhas transitórias. Temporários recebem modo `0600` no POSIX, `flush` e `fsync`
+antes de uma substituição atômica, preservando o destino final anterior até a
+promoção. A criação exclusiva no Windows ainda não impõe DACL privada quando o
+diretório herda uma ACL ampla; esse contrato permanece no PR 4 e na
+[issue #47](https://github.com/x86dx2/x86qw/issues/47). Os
+endereços são resolvidos em subprocesso limitado e cancelável; candidatos TCP
+usam conexão não bloqueante e o cancelamento de TLS/headers executa `shutdown`
+antes do fechamento. A janela de coleta pertence ao deadline, mas um reap
+patologicamente lento do sistema operacional pode terminar depois do retorno,
+já sem DNS ou socket ativo. Os
 bootstraps aplicam uma projeção mínima desse contrato antes de o zipapp estar
-disponível. Respostas intermediárias de redirect são fechadas sem drenar o corpo,
+disponível. O comando público Unix limita a escrita com `head`, valida o status
+do pipeline e o tamanho antes de executar o script, portanto não executa um
+prefixo produzido por pipeline com falha nem um stream excessivo sem
+`Content-Length`. Respostas
+intermediárias de redirect são fechadas sem drenar o corpo,
 e URLs da fronteira HTTP são redigidas nos diagnósticos sem expor credenciais,
-caminho, query ou fragmento. O adaptador Git pode identificar o caminho do
-repositório público previamente validado.
+caminho, query ou fragmento. A descoberta aceita somente coordenadas ou URLs
+canônicas de repositórios públicos do GitHub.
+
+Catálogo, manifesto, inventários de releases e upstreams e definições de intake
+usam o mesmo validador HTTPS; qualquer URL persistente também rejeita query. O
+`curl` usado somente para upload no GitLab inicia com `--disable`, exige HTTPS e
+não segue redirects. Ele continua sendo uma operação de publicação de saída a
+ser substituída pela promoção imutável do PR 10, não uma rota de ingestão.
 
 Metadado limitado não é metadado autenticado. Assinatura, expiração e proteção
 contra rollback/freeze permanecem na
