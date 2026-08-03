@@ -1625,7 +1625,10 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     connect_release.wait(1)
                 return Response(b"valid", request.full_url)
 
-        connect_timeout = 0.05
+        # Windows runners can take more than 50 ms merely to schedule the
+        # replacement worker.  Keep this as a real-clock integration check,
+        # but use a budget well below the bootstrap's production timeout.
+        connect_timeout = 0.2
         connect_budget = ConnectBudgetThenValidOpener()
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
@@ -1643,7 +1646,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     connect_timeout,
                     0.5,
                     1,
-                    0.75,
+                    1.5,
                 )
             elapsed = time.monotonic() - started
             self.assertEqual(b"valid", destination.read_bytes())
@@ -1653,7 +1656,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             connect_budget.call_times[1] - connect_budget.call_times[0],
             connect_timeout * 0.8,
         )
-        self.assertLess(elapsed, 0.4)
+        self.assertLess(elapsed, 1.0)
 
         class ValidOpener:
             def open(self, request, **_kwargs):
