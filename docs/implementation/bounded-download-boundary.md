@@ -278,15 +278,18 @@ smokes nativos dos clientes, serviços ou transporte público.
 
 ## Validação
 
-Esta nota descreve código corretivo ainda não publicado. Nenhum total local é
-registrado enquanto a suíte integral e a matriz do PR não estiverem verdes. A
-evidência final do PR deve registrar separadamente:
+Esta nota descreve código corretivo ainda não publicado. A implementação foi
+validada com 565 testes de manutenção e cinco testes do site; os oito skips
+locais são sete verificações exclusivas do runner Windows e um smoke de rede
+opt-in. A matriz do PR passou em Ubuntu, macOS e Windows com Python 3.10 e 3.13.
+A evidência do PR registra separadamente:
 
 - suíte dedicada do downloader;
 - suíte integral de manutenção e site;
 - `maintenance/manage.py verify`, `git diff --check` e `git lfs fsck`;
 - dry-run do Worker;
-- jobs Ubuntu, macOS e Windows com Python 3.10 e 3.13;
+- sete jobs verdes: gate de qualidade e Ubuntu, macOS e Windows com Python 3.10
+  e 3.13;
 - testes comportamentais dos dois bootstraps.
 
 Nenhum desses testes é apresentado como smoke nativo dos runtimes. A versão

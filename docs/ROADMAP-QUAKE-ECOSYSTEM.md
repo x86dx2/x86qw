@@ -227,7 +227,8 @@ IPv6 entre colchetes têm parser próprio.
 publicada
 
 **Validação:** 565 testes de manutenção e cinco do site aprovados localmente;
-oito skips explícitos (sete Windows e um smoke de rede); matriz do PR pendente
+oito skips explícitos (sete Windows e um smoke de rede); matriz do PR concluída
+em Ubuntu, macOS e Windows com Python 3.10 e 3.13
 
 Artefatos persistentes exigem HTTPS, tamanho, SHA-256, limite e deadline.
 Metadados dinâmicos são efêmeros e limitados. Retries são restritos a falhas
