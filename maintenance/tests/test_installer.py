@@ -1831,10 +1831,10 @@ class InstallerTests(unittest.TestCase):
                 # manager.py cannot remove the active batch safely; x86qw.cmd
                 # deletes itself after a successful uninstall.
                 self.assertTrue((target / "x86qw.cmd").exists())
-                self.assertIn(
-                    'if "%X86QW_EXIT%"=="0" del "%~f0"',
-                    (target / "x86qw.cmd").read_text(encoding="utf-8"),
-                )
+                launcher = (target / "x86qw.cmd").read_text(encoding="utf-8")
+                self.assertIn('"%X86QW_ACTION%"=="uninstall"', launcher)
+                self.assertIn('if /I not "%~2"=="--help"', launcher)
+                self.assertIn('del "%~f0"', launcher)
             else:
                 self.assertFalse((target / "x86qw.cmd").exists())
             self.assertFalse((target / ".x86qw/cli").exists())
