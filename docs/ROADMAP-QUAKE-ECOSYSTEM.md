@@ -4,8 +4,13 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.7.0`. O estado funcional é descrito
-pela própria tag imutável, publicada em 2 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
+pela própria tag imutável, publicada em 3 de agosto de 2026.
+
+Baseline do código corretivo: merge `8ba1f909fc8b4275c5a5001b0c2e1898b6f85c68`.
+A implementação `0.7.1` passou nos sete jobs obrigatórios e em 393 testes de
+manutenção mais quatro testes do site. A `0.7.0` permanece imutável no
+histórico.
 
 ## Escala de estado
 
@@ -19,8 +24,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.7.0`; as linhas anteriores permanecem imutáveis;
-- 60 pacotes e 21 componentes no catálogo;
+- instalador público `0.7.1`; as linhas anteriores permanecem imutáveis;
+- 61 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -235,10 +240,10 @@ separado.
 
 ### INST-02 — Contrato do runtime Python
 
-**Entrega funcional:** candidata na linha corretiva `0.7.1`; não publicada
-**Validação:** unitária específica local; suíte integral e matriz macOS/Linux/Windows obrigatórias antes da publicação
+**Entrega funcional:** completa e publicada na linha corretiva `0.7.1`
+**Validação:** 393 testes de manutenção e quatro do site; 7/7 jobs verdes em macOS/Linux/Windows com Python 3.10 e 3.13
 
-Na implementação candidata, bootstrap e launchers exigem Python 3.10 ou mais
+Na implementação publicada, bootstrap e launchers exigem Python 3.10 ou mais
 recente por `sys.version_info`, antes de rede ou mutação. A instalação gera os
 launchers com o executável efetivamente validado e mantém fallback
 determinístico quando esse runtime desaparece. O bootstrap Unix calcula o
@@ -305,4 +310,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] versão `0.6.0` adiciona lifecycle de serviços em segundo plano e status
   com encerramento coordenado;
 - [x] publicação `0.6.0` executada e verificada em etapa explícita aprovada;
+- [x] contrato Python da `0.7.1` validado em 7/7 jobs e 393 + 4 testes;
+- [x] asset imutável `0.7.1` publicado, verificado e promovido a `current`;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.
