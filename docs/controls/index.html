@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>x86QW — mapa de controles</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --cyan: #8ff7ff;
+      --cyan-strong: #2fcfe1;
+      --panel: rgba(8, 14, 20, .90);
+      --panel-border: rgba(143, 247, 255, .20);
+      --muted: #a8b2bc;
+      --key: #161d25;
+      --key-edge: #34404c;
+      --movement: #2874d0;
+      --weapons: #d96919;
+      --team: #4f943e;
+      --match: #c6a51b;
+      --mode: #008fa4;
+      --bots: #8d51c7;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1180px;
+      min-height: 720px;
+      background: #080c11 url("assets/control-map-background.png") center / cover fixed;
+      color: #f4f7f9;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(3, 8, 12, .30), rgba(3, 8, 12, .72));
+    }
+
+    .poster {
+      position: relative;
+      width: min(1920px, 100vw);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 34px 42px 28px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 22px;
+    }
+
+    .brand { display: flex; align-items: baseline; gap: 18px; }
+    .brand strong {
+      color: var(--cyan);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 42px;
+      letter-spacing: -.06em;
+      line-height: 1;
+    }
+    .brand h1 { margin: 0; font-size: 29px; line-height: 1; }
+    .brand p { margin: 8px 0 0; color: var(--muted); font-size: 16px; }
+
+    .nav-stack { display: grid; justify-items: end; gap: 7px; }
+    .nav-stack-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .nav-label { color: #9cabb6; font-size: 11px; font-weight: 700; }
+    .profile-nav,
+    .layout-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .profile-nav a,
+    .layout-nav a {
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 8px 13px;
+      background: rgba(7, 13, 19, .82);
+      color: #c5d0d9;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .profile-nav a.active,
+    .layout-nav a.active { border-color: var(--cyan-strong); background: #123743; color: var(--cyan); }
+
+    .legend-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.15fr 1.8fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .legend {
+      height: 224px;
+      border: 1px solid color-mix(in srgb, var(--accent) 75%, transparent);
+      border-radius: 10px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--accent) 17%, var(--panel));
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
+    }
+    .legend h2 {
+      margin: 0;
+      padding: 9px 12px;
+      background: color-mix(in srgb, var(--accent) 68%, #111);
+      font-size: 15px;
+      letter-spacing: .02em;
+    }
+    .legend ul { margin: 0; padding: 8px 10px 10px; list-style: none; }
+    .legend.dense ul { columns: 2; column-gap: 10px; }
+    .legend li {
+      display: flex;
+      gap: 5px;
+      margin: 2px 0;
+      break-inside: avoid;
+      color: #dfe6ea;
+      font-size: 10.5px;
+      line-height: 1.18;
+    }
+    .legend kbd {
+      flex: 0 0 auto;
+      color: #fff;
+      font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .legend .empty { color: #aab5bd; }
+
+    .legend.movement { --accent: var(--movement); }
+    .legend.weapons { --accent: var(--weapons); }
+    .legend.team { --accent: var(--team); }
+    .legend.match { --accent: var(--match); }
+    .legend.mode { --accent: var(--mode); }
+    .legend.bots { --accent: var(--bots); }
+
+    .keyboard-shell {
+      max-width: 1460px;
+      margin-inline: auto;
+      border: 1px solid rgba(143, 247, 255, .16);
+      border-radius: 22px;
+      padding: 20px;
+      background: linear-gradient(165deg, rgba(29, 38, 48, .97), rgba(5, 8, 12, .98));
+      box-shadow: 0 26px 65px rgba(0, 0, 0, .58), inset 0 1px rgba(255, 255, 255, .08);
+    }
+
+    .function-row,
+    .row { display: flex; gap: 7px; }
+    .function-row,
+    .keyboard-body {
+      width: 1385px;
+      max-width: 100%;
+      margin-inline: auto;
+    }
+    .function-row { align-items: center; margin-bottom: 16px; }
+    .function-row .spacer { width: 22px; }
+    .keyboard-body {
+      display: grid;
+      grid-template-columns: 917px 179px 241px;
+      align-items: start;
+      gap: 24px;
+    }
+    .main-block,
+    .nav-block,
+    .numpad { min-width: 0; }
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(4, 55px);
+      grid-template-rows: repeat(5, 55px);
+      grid-auto-flow: row dense;
+      gap: 7px;
+    }
+    .numpad .row { display: contents; }
+    .numpad .key { width: auto; height: auto; }
+    .numpad .key.tall { height: auto; grid-row: span 2; }
+    .numpad .key.w2 { width: auto; grid-column: span 2; }
+    .row { margin-bottom: 7px; }
+    .row:last-child { margin-bottom: 0; }
+
+    .key {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      width: 55px;
+      height: 55px;
+      flex: 0 0 auto;
+      border: 1px solid var(--key-edge);
+      border-bottom-width: 4px;
+      border-radius: 7px;
+      padding: 7px 8px;
+      background: linear-gradient(155deg, #222c36, var(--key));
+      color: #f8fbfc;
+      font: 700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, .32), inset 0 1px rgba(255, 255, 255, .08);
+      text-shadow: 0 1px 2px #000;
+    }
+    .key small { position: absolute; right: 7px; bottom: 6px; color: #91a0ad; font-size: 9px; }
+    .key.w125 { width: 69px; }
+    .key.w15 { width: 83px; }
+    .key.w175 { width: 97px; }
+    .key.w2 { width: 111px; }
+    .key.w225 { width: 125px; }
+    .key.space { width: 344px; justify-content: center; }
+    .key.space-compact { width: 300px; justify-content: center; }
+    .key.command { width: 69px; }
+    .key.tall { height: 117px; }
+    .key.blank { visibility: hidden; }
+
+    .key.movement { background: linear-gradient(155deg, #3f8dea, #194e93); border-color: #63a9ff; }
+    .key.weapons { background: linear-gradient(155deg, #ee8737, #9d3c0c); border-color: #ffad67; }
+    .key.team { background: linear-gradient(155deg, #72b85a, #2f6f29); border-color: #9ad785; }
+    .key.match { background: linear-gradient(155deg, #d8ba3a, #856d06); border-color: #f8db62; }
+    .key.mode { background: linear-gradient(155deg, #29b9cf, #057185); border-color: #7fefff; }
+    .key.bots { background: linear-gradient(155deg, #ad73e2, #653294); border-color: #d4a8ff; }
+
+    .mouse-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 18px;
+      align-items: start;
+      margin-top: 14px;
+      padding: 10px 14px;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: rgba(4, 9, 14, .78);
+      font-size: 13px;
+      color: #cad4da;
+    }
+    .mouse-strip strong { color: var(--cyan); }
+    .mouse-strip span { white-space: nowrap; }
+    .mouse-binds { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+    .mouse-strip .note { color: #aeb9c1; white-space: normal; text-align: right; line-height: 1.28; }
+
+    body[data-layout="macos-en-us"] .keyboard-shell,
+    body[data-layout="keychron-k3-v3"] .keyboard-shell { max-width: 1060px; }
+    body[data-layout="macos-en-us"] .function-row,
+    body[data-layout="macos-en-us"] .keyboard-body,
+    body[data-layout="keychron-k3-v3"] .function-row,
+    body[data-layout="keychron-k3-v3"] .keyboard-body { width: 1001px; }
+    body[data-layout="macos-en-us"] .keyboard-body,
+    body[data-layout="keychron-k3-v3"] .keyboard-body { display: block; }
+    body[data-layout="macos-en-us"] .main-block,
+    body[data-layout="keychron-k3-v3"] .main-block { width: 1001px; }
+    body[data-layout="macos-en-us"] .nav-block,
+    body[data-layout="macos-en-us"] .numpad,
+    body[data-layout="keychron-k3-v3"] .nav-block,
+    body[data-layout="keychron-k3-v3"] .numpad { display: none; }
+    body[data-layout="keychron-k3-v3"] .keyboard-shell { border-radius: 12px; }
+    body[data-layout="keychron-k3-v3"] .key { border-radius: 5px; height: 51px; }
+
+    @media (max-width: 1500px) {
+      .poster { transform-origin: top left; width: 1500px; }
+      .legend-grid { grid-template-columns: repeat(3, 1fr); }
+      .legend { height: 190px; }
+      .key { width: 44px; height: 46px; padding: 6px; font-size: 11px; }
+      .key.w125 { width: 56px; } .key.w15 { width: 68px; } .key.w175 { width: 80px; }
+      .key.w2 { width: 92px; } .key.w225 { width: 103px; } .key.space { width: 282px; }
+      .key.tall { height: 99px; }
+      .function-row, .keyboard-body { width: 1146px; }
+      .keyboard-body { grid-template-columns: 755px 146px 197px; }
+      .numpad {
+        grid-template-columns: repeat(4, 44px);
+        grid-template-rows: repeat(5, 46px);
+      }
+      .numpad .key.tall { height: auto; }
+      body[data-layout="macos-en-us"] .function-row,
+      body[data-layout="macos-en-us"] .keyboard-body,
+      body[data-layout="keychron-k3-v3"] .function-row,
+      body[data-layout="keychron-k3-v3"] .keyboard-body { width: 950px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="poster">
+    <header>
+      <div>
+        <div class="brand"><strong>x86QW</strong><h1 id="profile-title">KTX 1.47</h1></div>
+        <p id="profile-subtitle">Mapa de controles padrão · F10 abre a referência dentro do jogo</p>
+      </div>
+      <div class="nav-stack">
+        <div class="nav-stack-row">
+          <span class="nav-label">Jogo</span>
+          <nav class="profile-nav" aria-label="Perfis de jogo">
+            <a href="?profile=ktx" data-profile="ktx">KTX</a>
+            <a href="?profile=final-arena" data-profile="final-arena">Final Arena</a>
+            <a href="?profile=pro-x" data-profile="pro-x">Pro-X</a>
+            <a href="?profile=team-fortress" data-profile="team-fortress">Team Fortress</a>
+            <a href="?profile=td2" data-profile="td2">TD2</a>
+          </nav>
+        </div>
+        <div class="nav-stack-row">
+          <span class="nav-label">Teclado</span>
+          <nav class="layout-nav" aria-label="Layouts de teclado">
+            <a href="?layout=windows-ansi" data-layout="windows-ansi">Windows ANSI</a>
+            <a href="?layout=macos-en-us" data-layout="macos-en-us">macOS en-US</a>
+            <a href="?layout=keychron-k3-v3" data-layout="keychron-k3-v3">Keychron K3 V3</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <section class="legend-grid" id="legends" aria-label="Legenda dos controles"></section>
+
+    <section class="keyboard-shell" aria-label="Teclado com controles destacados">
+      <div class="function-row" id="function-row"></div>
+      <div class="keyboard-body">
+        <div class="main-block" id="main-block"></div>
+        <div class="nav-block" id="nav-block"></div>
+        <div class="numpad" id="numpad"></div>
+      </div>
+      <div class="mouse-strip" id="mouse-strip"></div>
+    </section>
+  </main>
+
+  <script>
+    const ansiMain = [
+      [["TILDE","` ~"],["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"],["7","7"],["8","8"],["9","9"],["0","0"],["MINUS","-"],["EQUAL","="],["BACK","Backspace","w2"]],
+      [["TAB","Tab","w15"],["Q","Q"],["W","W"],["E","E"],["R","R"],["T","T"],["Y","Y"],["U","U"],["I","I"],["O","O"],["P","P"],["LBRACKET","["],["RBRACKET","]"],["BSLASH","\\","w15"]],
+      [["CAPS","Caps","w175"],["A","A"],["S","S"],["D","D"],["F","F"],["G","G"],["H","H"],["J","J"],["K","K"],["L","L"],["SEMICOLON",";"],["QUOTE","'"],["ENTER","Enter","w225"]],
+      [["SHIFT_L","Shift","w225"],["Z","Z"],["X","X"],["C","C"],["V","V"],["B","B"],["N","N"],["M","M"],["COMMA",","],["DOT","."],["SLASH","/"],["SHIFT_R","Shift","w225"]]
+    ];
+
+    const keyboardLayouts = {
+      "windows-ansi": {
+        label: "Windows ANSI · en-US · 104 teclas",
+        function: [["ESC","Esc"], null, ["F1","F1"],["F2","F2"],["F3","F3"],["F4","F4"], null,
+          ["F5","F5"],["F6","F6"],["F7","F7"],["F8","F8"], null,
+          ["F9","F9"],["F10","F10"],["F11","F11"],["F12","F12"], null,
+          ["PRT","Print"],["SCR","Scroll"],["PAUSE","Pause"]],
+        main: [...ansiMain,
+          [["CTRL_L","Ctrl","w15"],["META_L","Win"],["ALT_L","Alt","w15"],["SPACE","Space","space"],["ALT_R","AltGr","w15"],["META_R","Win"],["MENU","Menu"],["CTRL_R","Ctrl","w15"]]],
+        nav: [
+          [["INS","Ins"],["HOME","Home"],["PGUP","PgUp"]],
+          [["DEL","Del"],["END","End"],["PGDN","PgDn"]],
+          [["BLANK1","","blank"],["UP","↑"],["BLANK2","","blank"]],
+          [["LEFT","←"],["DOWN","↓"],["RIGHT","→"]]
+        ],
+        numpad: [
+          [["NUM","Num"],["KP_DIV","/"],["KP_STAR","*"],["KP_MINUS","−"]],
+          [["KP7","7"],["KP8","8"],["KP9","9"],["KP_PLUS","+","tall"]],
+          [["KP4","4"],["KP5","5"],["KP6","6"]],
+          [["KP1","1"],["KP2","2"],["KP3","3"],["KP_ENTER","Enter","tall"]],
+          [["KP0","0","w2"],["KP_DOT","."]]
+        ],
+        note: "Teclas mostradas diretamente no layout ANSI estendido."
+      },
+      "macos-en-us": {
+        label: "macOS · en-US · compacto Apple",
+        function: [["ESC","esc"],["F1","F1","","fn"],["F2","F2","","fn"],["F3","F3","","fn"],["F4","F4","","fn"],
+          ["F5","F5","","fn"],["F6","F6","","fn"],["F7","F7","","fn"],["F8","F8","","fn"],["F9","F9","","fn"],
+          ["F10","F10","","fn"],["F11","F11","","fn"],["F12","F12","","fn"]],
+        main: [...ansiMain,
+          [["FN","fn"],["CTRL_L","⌃ ctrl"],["ALT_L","⌥ opt"],["META_L","⌘ cmd","command"],["SPACE","Space","space-compact"],
+            ["META_R","⌘ cmd","command"],["ALT_R","⌥ opt"],["LEFT","←","","Home"],["DOWN","↓","","PgDn"],["UP","↑","","PgUp"],["RIGHT","→","","End"]]],
+        nav: [],
+        numpad: [],
+        alternateKeys: {LEFT:"HOME", RIGHT:"END", UP:"PGUP", DOWN:"PGDN"},
+        note: "F1–F12 podem exigir fn. fn+←/→ acessa Home/End; fn+↑/↓ acessa PgUp/PgDn."
+      },
+      "keychron-k3-v3": {
+        label: "Keychron K3 Version 3 · ANSI 75% · macOS",
+        function: [["ESC","esc"],["F1","F1","","fn"],["F2","F2","","fn"],["F3","F3","","fn"],["F4","F4","","fn"],
+          ["F5","F5","","fn"],["F6","F6","","fn"],["F7","F7","","fn"],["F8","F8","","fn"],["F9","F9","","fn"],
+          ["F10","F10","","fn"],["F11","F11","","fn"],["F12","F12","","fn"],["PRT","Snap"],["DEL","Del*"],["LIGHT","Light"]],
+        main: [
+          [["TILDE","` ~"],["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"],["7","7"],["8","8"],["9","9"],["0","0"],["MINUS","-"],["EQUAL","="],["BACK","Backspace","w2"],["PGUP","PgUp"]],
+          [["TAB","Tab","w15"],["Q","Q"],["W","W"],["E","E"],["R","R"],["T","T"],["Y","Y"],["U","U"],["I","I"],["O","O"],["P","P"],["LBRACKET","["],["RBRACKET","]"],["BSLASH","\\","w15"],["PGDN","PgDn"]],
+          [["CAPS","Caps","w175"],["A","A"],["S","S"],["D","D"],["F","F"],["G","G"],["H","H"],["J","J"],["K","K"],["L","L"],["SEMICOLON",";"],["QUOTE","'"],["ENTER","Enter","w225"],["HOME","Home"]],
+          [["SHIFT_L","Shift","w225"],["Z","Z"],["X","X"],["C","C"],["V","V"],["B","B"],["N","N"],["M","M"],["COMMA",","],["DOT","."],["SLASH","/"],["SHIFT_R","Shift","w225"],["UP","↑"],["END","End"]],
+          [["CTRL_L","⌃ ctrl"],["ALT_L","⌥ opt","w125"],["META_L","⌘ cmd","w15"],["SPACE","Space","space"],["META_R","⌘ cmd","w15"],["FN","fn"],["CTRL_R","⌃ ctrl"],["LEFT","←"],["DOWN","↓"],["RIGHT","→"]]
+        ],
+        nav: [],
+        numpad: [],
+        alternateKeys: {DEL:"INS"},
+        note: "* Del também representa Insert depois de mapear Fn+Del → Insert no Keychron Launcher."
+      }
+    };
+
+    const common = {
+      movement: ["W","A","S","D","SPACE"],
+      match: ["ESC","TILDE","TAB","ENTER","U","Y","SLASH","F10","F12"]
+    };
+
+    const movementLegend = [["W","frente"],["A","esquerda"],["S","trás"],["D","direita"],["Space","pular"]];
+    const interfaceLegend = [["Esc","menu"],["` / ~","console"],["Tab","placar"],["Enter","chat geral"],["U","chat geral"],
+      ["Y","chat da equipe"],["/","jogadores observáveis"],["F10","ajuda"],["F12","sair do QuakeWorld"]];
+    const standardWeapons = [["1","axe"],["2","shotgun"],["3","super shotgun"],["4","nailgun"],
+      ["5","super nailgun"],["6","grenade launcher"],["7","rocket launcher"],["8","lightning gun"]];
+    const noTeam = [[null,"Sem binds de equipe próprios"]];
+    const noBots = [[null,"Este jogo não oferece Frogbots"]];
+
+    const profiles = {
+      ktx: {
+        title: "KTX 1.47",
+        subtitle: "Mapa competitivo padrão · ações contextuais variam conforme o modo",
+        groups: {
+          movement: common.movement,
+          weapons: ["2","3","4","Q","E"],
+          team: ["1","5","C","F","G","R","T","V","CTRL_L","SHIFT_L","F1","F2"],
+          match: [...common.match,"F3","F4","F5","F6","F7","F8","F9","F11","PGUP","PGDN","PAUSE","LBRACKET","RBRACKET","SHIFT_R","KP_STAR"],
+          mode: ["H","I","M","X","Z"],
+          bots: ["INS","DEL","HOME","END"]
+        },
+        legends: {
+          movement: movementLegend,
+          weapons: [["2","shotgun / axe"],["3","super shotgun / shotgun"],["4","super nailgun / nailgun"],["Q","grenade launcher"],["E","rocket launcher"]],
+          team: [["1","quad morto"],["5","inimigo com powerup"],["C","chegando"],["F","local seguro"],["G","pedir ajuda"],["R","apontar item / jogador"],
+            ["T","local perdido"],["V","pedir substituição"],["Ctrl","item coletado"],["Shift","relatório de status"],["F1","pegar quad"],["F2","pegar pent"]],
+          match: [...interfaceLegend,["F3","timer de quad"],["F4","timer de pent"],["F5","ready"],["F6","break"],["F7","entrar"],["F8","observar"],
+            ["F9","servidores"],["F11","mostrar regras"],["PgUp","ready"],["PgDn","break"],["Pause","menu do proxy"],["[","diminuir volume"],
+            ["]","aumentar volume"],["RShift","enviar sorriso"],["KP *","salvar partida"]],
+          mode: [["H","ação contextual do modo"],["I","ação contextual do modo"],["M","ação contextual do modo"],["X","ação contextual do modo"],["Z","ação contextual do modo"]],
+          bots: [["Ins","adicionar Frogbot"],["Del","remover último Frogbot"],["Home","reduzir habilidade"],["End","aumentar habilidade"]]
+        },
+        mouse: [["M1","atacar"],["M2","lightning gun"],["M4","nailgun"],["M5","shotgun"],["Wheel ↑","aumentar timer"],["Wheel ↓","diminuir timer"]]
+      },
+      "final-arena": {
+        title: "Final Arena 1.20",
+        subtitle: "Duelo individual em fila · o vencedor permanece na arena",
+        groups: { movement: common.movement, weapons: ["1","2","3","4","5","6","7","8","Q","E"], team: [],
+          match: [...common.match,"F1","F2","F3","F4","F5","F6","F7","F8","F9"], mode: [], bots: [] },
+        legends: {
+          movement: movementLegend,
+          weapons: [...standardWeapons,["Q","grenade launcher"],["E","rocket launcher"]],
+          team: noTeam,
+          match: [...interfaceLegend,["F1","entrar"],["F2","posição na fila"],["F3","estatísticas"],["F4","pausa"],["F5","próximo mapa"],
+            ["F6","status"],["F7","mochilas"],["F8","airgib"],["F9","painel do mod"]],
+          mode: [[null,"Fila e vencedor são controlados pelo mod"]],
+          bots: noBots
+        },
+        mouse: [["M1","atacar"],["M2","lightning gun"],["M4","nailgun"],["M5","shotgun"],["Wheel ↑","arma seguinte"],["Wheel ↓","arma anterior"]]
+      },
+      "pro-x": {
+        title: "Pro-X 1.1",
+        subtitle: "Votos, equipes e seleção rápida de mapas",
+        groups: { movement: common.movement, weapons: ["1","2","3","4","5","6","7","8","9","0","Q","E"], team: [],
+          match: [...common.match,"F1","F2","F3","F4","F5","F6","F7","F8","F9","F11"],
+          mode: ["H","I","J","L","M","O","P","KP1","KP2","KP3","KP4","KP5","KP6"], bots: [] },
+        legends: {
+          movement: movementLegend,
+          weapons: [...standardWeapons,["9","ação / arma 9 do Pro-X"],["0","ação / arma 10 do Pro-X"],["Q","grenade launcher"],["E","rocket launcher"]],
+          team: noTeam,
+          match: [...interfaceLegend,["F1","voto sim"],["F2","voto administrativo"],["F3","ready"],["F4","break"],["F5","entrar"],
+            ["F6","observar"],["F7","equipe vermelha"],["F8","equipe azul"],["F9","menu"],["F11","eleição"]],
+          mode: [["H","som de acerto"],["I","identificação"],["J","provocação"],["L","mensagens de morte"],["M","menu"],["O","screenshot automático"],
+            ["P","lista de mapas"],["KP 1","votar mapa 1"],["KP 2","votar mapa 2"],["KP 3","votar mapa 3"],["KP 4","votar mapa 4"],["KP 5","votar mapa 5"],["KP 6","votar mapa 6"]],
+          bots: noBots
+        },
+        mouse: [["M1","atacar"],["M2","lightning gun"],["M4","nailgun"],["M5","shotgun"],["Wheel ↑","arma seguinte"],["Wheel ↓","arma anterior"]]
+      },
+      "team-fortress": {
+        title: "Team Fortress 2.9",
+        subtitle: "Classes, granadas, detpack e comunicação de equipe",
+        groups: { movement: common.movement, weapons: ["1","2","3","4","5","6","7","8","9","0"],
+          team: ["F","R","ALT_L","CTRL_L","SHIFT_L"], match: [...common.match,"F1","F2","F3","F4","F5","F6","F7","F8","F9"],
+          mode: ["C","X","Z"], bots: [] },
+        legends: {
+          movement: movementLegend,
+          weapons: [["1","arma / menu 1 da classe"],["2","arma / menu 2 da classe"],["3","arma / menu 3 da classe"],["4","arma / menu 4 da classe"],
+            ["5","arma / menu 5 da classe"],["6","arma / menu 6 da classe"],["7","arma / menu 7 da classe"],["8","arma / menu 8 da classe"],
+            ["9","arma / menu 9 da classe"],["0","arma / menu 10 da classe"]],
+          team: [["F","pedir médico"],["R","recarregar"],["Alt","informação da bandeira"],["Ctrl","descartar"],["Shift","habilidade especial"]],
+          match: [...interfaceLegend,["F1","inventário"],["F2","listar classes"],["F3","trocar classe"],["F4","ajuda do mapa"],
+            ["F5","informação da bandeira"],["F6","pedir médico"],["F7","descartar"],["F8","recarregar"],["F9","habilidade especial"]],
+          mode: [["C","detpack 50 segundos"],["X","detpack 20 segundos"],["Z","detpack 5 segundos"]],
+          bots: noBots
+        },
+        mouse: [["M1","atacar"],["M2","granada 1"],["M3","granada 2"]]
+      },
+      td2: {
+        title: "Total Destruction 2.22",
+        subtitle: "Armas, magia, especiais, runas e votos de mapa",
+        groups: { movement: common.movement, weapons: ["1","2","3","4","5","6","7","8","9","0","Q","E"], team: [],
+          match: [...common.match,"F1","F2","F3","F4","F5","F6","F7"], mode: ["Z","X"], bots: [] },
+        legends: {
+          movement: movementLegend,
+          weapons: [["1","magia"],["2","arma 2"],["3","arma 3"],["4","arma 4"],["5","arma 5"],["6","arma 6"],["7","arma 7"],["8","arma 8"],
+            ["9","arma especial"],["0","voto sim"],["Q","grenade launcher"],["E","rocket launcher"]],
+          team: noTeam,
+          match: [...interfaceLegend,["F1","próximo mapa"],["F2","largar runa"],["F3","largar especial"],["F4","votar dm2"],
+            ["F5","votar dm4"],["F6","votar dm6"],["F7","votar aerowalk"]],
+          mode: [["Z","largar runa"],["X","largar especial"]],
+          bots: noBots
+        },
+        mouse: [["M1","atacar"],["M2","arma 8"],["M4","magia"],["M5","especial"],["Wheel ↑","arma seguinte"],["Wheel ↓","arma anterior"]]
+      }
+    };
+
+    function validateDescriptions() {
+      for (const [profileId, profile] of Object.entries(profiles)) {
+        for (const [group, entries] of Object.entries(profile.legends)) {
+          for (const [key, description] of entries) {
+            if (key !== null && (!key.trim() || !description?.trim())) {
+              throw new Error(`Bind sem descrição em ${profileId}.${group}`);
+            }
+          }
+        }
+        for (const [key, description] of profile.mouse) {
+          if (!key.trim() || !description?.trim()) {
+            throw new Error(`Bind de mouse sem descrição em ${profileId}`);
+          }
+        }
+      }
+    }
+
+    function keyElement([id, label, className = "", secondary = ""]) {
+      const key = document.createElement("div");
+      key.className = `key ${className}`;
+      key.dataset.key = id;
+      key.textContent = label;
+      if (secondary) {
+        const small = document.createElement("small");
+        small.textContent = secondary;
+        key.append(small);
+      }
+      return key;
+    }
+
+    function buildKeyboard(layoutId) {
+      const layout = keyboardLayouts[layoutId] || keyboardLayouts["windows-ansi"];
+      document.body.dataset.layout = layoutId;
+      const functionRow = document.getElementById("function-row");
+      const blocks = [functionRow, document.getElementById("main-block"), document.getElementById("nav-block"), document.getElementById("numpad")];
+      blocks.forEach(block => block.replaceChildren());
+
+      const appendKey = (target, item) => {
+        const key = keyElement(item);
+        const alternate = layout.alternateKeys?.[item[0]];
+        if (alternate) key.dataset.altKey = alternate;
+        target.append(key);
+      };
+
+      layout.function.forEach(item => {
+        if (!item) {
+          const spacer = document.createElement("span");
+          spacer.className = "spacer";
+          functionRow.append(spacer);
+        } else appendKey(functionRow, item);
+      });
+      for (const [target, rows] of [["main-block", layout.main], ["nav-block", layout.nav], ["numpad", layout.numpad]]) {
+        const block = document.getElementById(target);
+        rows.forEach(items => {
+          const row = document.createElement("div");
+          row.className = "row";
+          items.forEach(item => appendKey(row, item));
+          block.append(row);
+        });
+      }
+      return layout;
+    }
+
+    const legendNames = {
+      movement: "Movimento", weapons: "Armas", team: "Equipe", match: "Partida e interface", mode: "Ações do mod", bots: "Frogbots"
+    };
+
+    function render(profileId, layoutId) {
+      const profile = profiles[profileId] || profiles.ktx;
+      const layout = buildKeyboard(layoutId);
+      document.documentElement.dataset.profile = profileId;
+      document.getElementById("profile-title").textContent = profile.title;
+      document.getElementById("profile-subtitle").textContent = `${profile.subtitle} · ${layout.label}`;
+      document.querySelectorAll(".profile-nav a").forEach(link => {
+        link.classList.toggle("active", link.dataset.profile === profileId);
+        link.href = `?profile=${link.dataset.profile}&layout=${layoutId}`;
+      });
+      document.querySelectorAll(".layout-nav a").forEach(link => {
+        link.classList.toggle("active", link.dataset.layout === layoutId);
+        link.href = `?profile=${profileId}&layout=${link.dataset.layout}`;
+      });
+      document.querySelectorAll(".key").forEach(key => key.classList.remove(...Object.keys(legendNames)));
+      for (const [group, keys] of Object.entries(profile.groups)) {
+        keys.forEach(id => document.querySelectorAll(`[data-key="${id}"], [data-alt-key="${id}"]`).forEach(key => key.classList.add(group)));
+      }
+      const legends = document.getElementById("legends");
+      legends.replaceChildren();
+      for (const group of Object.keys(legendNames)) {
+        const items = profile.legends[group];
+        const article = document.createElement("article");
+        article.className = `legend ${group}`;
+        if (items.length > 8) article.classList.add("dense");
+        article.innerHTML = `<h2>${legendNames[group]}</h2><ul>${items.map(([key, description]) =>
+          key ? `<li><kbd>${key}</kbd><span>— ${description}</span></li>` : `<li class="empty">${description}</li>`
+        ).join("")}</ul>`;
+        legends.append(article);
+      }
+      const represented = new Set();
+      document.querySelectorAll(".key").forEach(key => {
+        represented.add(key.dataset.key);
+        if (key.dataset.altKey) represented.add(key.dataset.altKey);
+      });
+      const missing = [...new Set(Object.values(profile.groups).flat().filter(key => !represented.has(key)))];
+      const keyLabels = {PAUSE:"Pause", KP_STAR:"KP *", INS:"Ins", DEL:"Del", KP1:"KP 1", KP2:"KP 2", KP3:"KP 3", KP4:"KP 4", KP5:"KP 5", KP6:"KP 6"};
+      const mouse = document.getElementById("mouse-strip");
+      const mouseBinds = profile.mouse.map(([key, description]) => `<span><strong>${key}</strong> — ${description}</span>`).join("");
+      const missingText = missing.length ? ` Binds sem tecla física: ${missing.map(key => keyLabels[key] || key).join(", ")}; remapeie se precisar.` : "";
+      mouse.innerHTML = `<div class="mouse-binds"><span><strong>Mouse</strong></span>${mouseBinds}</div>` +
+        `<span class="note">${layout.note}${missingText} A configuração pessoal pode sobrescrever binds.</span>`;
+    }
+
+    const params = new URLSearchParams(location.search);
+    validateDescriptions();
+    render(params.get("profile") || "ktx", params.get("layout") || "windows-ansi");
+  </script>
+</body>
+</html>
