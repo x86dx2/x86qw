@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTROLS = ROOT / "docs" / "controls"
 PROFILES = ("ktx", "final-arena", "pro-x", "team-fortress", "td2")
 LAYOUTS = ("windows-ansi", "macos-en-us", "keychron-k3-v3")
+
+
+def canonical_text_bytes(path: Path) -> bytes:
+    text = path.read_text(encoding="utf-8")
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
 
 
 class ControlMapTests(unittest.TestCase):
@@ -33,7 +39,7 @@ class ControlMapTests(unittest.TestCase):
         manifest = json.loads((CONTROLS / "generated" / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(1, manifest["format"])
         self.assertEqual(
-            hashlib.sha256((CONTROLS / "index.html").read_bytes()).hexdigest(),
+            hashlib.sha256(canonical_text_bytes(CONTROLS / "index.html")).hexdigest(),
             manifest["source_sha256"],
         )
         expected = {
@@ -48,6 +54,13 @@ class ControlMapTests(unittest.TestCase):
                 self.assertEqual(expected_hash, hashlib.sha256(payload).hexdigest())
                 self.assertEqual(b"\x89PNG\r\n\x1a\n", payload[:8])
                 self.assertEqual((1920, 1080), struct.unpack(">II", payload[16:24]))
+
+    def test_source_hash_is_independent_from_checkout_line_endings(self) -> None:
+        source = canonical_text_bytes(CONTROLS / "index.html")
+        with tempfile.TemporaryDirectory() as temporary:
+            windows_checkout = Path(temporary) / "index.html"
+            windows_checkout.write_bytes(source.replace(b"\n", b"\r\n"))
+            self.assertEqual(source, canonical_text_bytes(windows_checkout))
 
     def test_keychron_insert_is_documented_as_a_remap(self) -> None:
         readme = (CONTROLS / "README.md").read_text(encoding="utf-8")

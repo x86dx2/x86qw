@@ -51,6 +51,13 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+
+
+def canonical_text_bytes(path: Path) -> bytes:
+    text = path.read_text(encoding="utf-8")
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
 images = {
     path.name: hashlib.sha256(path.read_bytes()).hexdigest()
     for path in sorted((root / "generated").glob("*.png"))
@@ -58,7 +65,7 @@ images = {
 manifest = {
     "format": 1,
     "source": "../index.html",
-    "source_sha256": hashlib.sha256((root / "index.html").read_bytes()).hexdigest(),
+    "source_sha256": hashlib.sha256(canonical_text_bytes(root / "index.html")).hexdigest(),
     "images": images,
 }
 (root / "generated" / "manifest.json").write_text(
