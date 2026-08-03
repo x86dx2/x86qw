@@ -196,7 +196,10 @@ class HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
         target = urllib.parse.urljoin(req.full_url, newurl)
         validate_https(req.full_url)
         validate_https(target)
-        redirected = super().redirect_request(req, fp, code, msg, headers, target)
+        stdlib_code = 307 if code == 308 else code
+        redirected = super().redirect_request(
+            req, fp, stdlib_code, msg, headers, target,
+        )
         if redirected is not None and req.get_method() == "HEAD":
             redirected.method = "HEAD"
         return redirected
@@ -369,21 +372,24 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     if started >= attempt_deadline:
         raise TransientError("prazo da tentativa excedido durante conexao ou headers")
     connection_deadline = started + connect_timeout
-    deadline = min(total_deadline, attempt_deadline, connection_deadline)
+    if total_deadline <= attempt_deadline and total_deadline <= connection_deadline:
+        deadline = total_deadline
+        timeout_error = DownloadError("prazo total excedido durante conexao ou headers")
+    elif attempt_deadline <= connection_deadline:
+        deadline = attempt_deadline
+        timeout_error = TransientError(
+            "prazo da tentativa excedido durante conexao ou headers"
+        )
+    else:
+        deadline = connection_deadline
+        timeout_error = TransientError("prazo de conexao ou headers excedido")
     socket_timeout = max(0.001, deadline - started)
     lock = threading.Lock()
     state = {}
     cancelled = [False]
 
     def deadline_error():
-        now = time.monotonic()
-        if now >= total_deadline:
-            return DownloadError("prazo total excedido durante conexao ou headers")
-        if now >= attempt_deadline:
-            return TransientError(
-                "prazo da tentativa excedido durante conexao ou headers"
-            )
-        return TransientError("prazo de conexao ou headers excedido")
+        return timeout_error
 
     def worker():
         try:

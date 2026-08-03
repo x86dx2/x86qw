@@ -107,7 +107,8 @@ A suíte dedicada cobre:
   entre chunks;
 - um deadline compartilhado entre retries e mirrors;
 - redirects para HTTP e headers privados entre origens;
-- corpos intermediários dos cinco status de redirect sem leitura ilimitada;
+- corpos intermediários dos cinco status de redirect sem leitura ilimitada e
+  compatibilidade de HTTP 308 com Python 3.10;
 - matriz de HTTP transitório e permanente;
 - `Retry-After` numérico, HTTP-date, inválido e maior que o deadline;
 - backoff e jitter determinísticos;

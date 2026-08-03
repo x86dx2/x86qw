@@ -299,7 +299,14 @@ class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
                 raise DownloadRedirectError(
                     "Um redirecionamento entre origens tentou encaminhar headers privados."
                 )
-        redirected = super().redirect_request(request, fp, code, message, headers, new_url)
+        # Python 3.10 does not include 308 in HTTPRedirectHandler's accepted
+        # status set. 307 has the same method-preserving redirect semantics for
+        # this GET/HEAD-only transport, so use it only for the stdlib request
+        # construction while retaining the original status in our loop policy.
+        stdlib_code = 307 if code == 308 else code
+        redirected = super().redirect_request(
+            request, fp, stdlib_code, message, headers, new_url,
+        )
         if redirected is not None and request.get_method() == "HEAD":
             redirected.method = "HEAD"
         return redirected

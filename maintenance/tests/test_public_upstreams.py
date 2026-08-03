@@ -126,7 +126,7 @@ class PublicUpstreamTests(unittest.TestCase):
                 git_remote_tree("https://example.invalid/repo.git", "master")
 
     def test_bounded_process_does_not_use_a_shell_and_disables_prompts(self) -> None:
-        command = [sys.executable, "-c", "print('ok', end='')"]
+        command = [sys.executable, "-c", "import os; os.write(1, b'ok')"]
         spawn_calls: list[dict[str, object]] = []
         real_popen = subprocess.Popen
 
@@ -154,7 +154,7 @@ class PublicUpstreamTests(unittest.TestCase):
             "ALL_PROXY": "socks5://insecure-proxy.invalid:1080",
         }
         with (
-            mock.patch.dict(os.environ, dangerous_environment, clear=True),
+            mock.patch.dict(os.environ, dangerous_environment, clear=False),
             mock.patch("public_upstreams.subprocess.Popen", side_effect=spawn),
         ):
             result = _run_bounded_command(command, deadline=time.monotonic() + 5)

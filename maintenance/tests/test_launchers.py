@@ -1279,6 +1279,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual("https://second.example.invalid/archive.zip", selected)
         self.assertEqual(2, len(fallback.calls))
 
+        registered = threading.Event()
         release = threading.Event()
 
         class CancelConnection:
@@ -1290,15 +1291,25 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
             def open(self, _request, **_kwargs):
                 self.registry.register(threading.get_ident(), CancelConnection())
+                registered.set()
                 release.wait(2)
                 return IntegrityResponse(b"valid", "https://slow.example.invalid/archive.zip")
 
         blocked = BlockingOpener()
+        real_thread_start = namespace["threading"].Thread.start
+
+        def start_after_registration(thread):
+            real_thread_start(thread)
+            if thread.name == "x86qw-bootstrap-open":
+                self.assertTrue(registered.wait(1))
+
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
             started = time.monotonic()
             with mock.patch.object(
                 urllib_module.request, "build_opener", return_value=blocked,
+            ), mock.patch.object(
+                namespace["threading"].Thread, "start", start_after_registration,
             ):
                 with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
                     namespace["download_mirrors"](
@@ -1361,7 +1372,8 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             "$InstallerRetryMaxSeconds = 180",
             "$InstallerRetries = 2",
             "time.monotonic() + retry_max_time",
-            "min(total_deadline, attempt_deadline, connection_deadline)",
+            "if total_deadline <= attempt_deadline and total_deadline <= connection_deadline:",
+            "timeout_error = DownloadError(\"prazo total excedido durante conexao ou headers\")",
             "reader = getattr(response, \"read1\", response.read)",
             "open_with_deadline(",
             "tempfile.mkstemp(",
@@ -1643,7 +1655,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         parser = (
             "$tokens=$null; $errors=$null; "
             "[System.Management.Automation.Language.Parser]::ParseFile("
-            "$args[0], [ref]$tokens, [ref]$errors) > $null; "
+            "$env:X86QW_TEST_PARSE_PATH, [ref]$tokens, [ref]$errors) > $null; "
             "if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }"
         )
         for bootstrap in (
@@ -1651,6 +1663,8 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             ROOT / "site/public/install.ps1",
         ):
             with self.subTest(bootstrap=bootstrap):
+                environment = os.environ.copy()
+                environment["X86QW_TEST_PARSE_PATH"] = os.fspath(bootstrap)
                 completed = subprocess.run(
                     [
                         WINDOWS_POWERSHELL,
@@ -1659,11 +1673,11 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                         "Bypass",
                         "-Command",
                         parser,
-                        str(bootstrap),
                     ],
                     check=False,
                     capture_output=True,
                     text=True,
+                    env=environment,
                 )
                 self.assertEqual(0, completed.returncode, completed.stderr)
 
@@ -1683,9 +1697,11 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         parse_command = (
             "$tokens=$null; $errors=$null; "
             "[System.Management.Automation.Language.Parser]::ParseInput("
-            "$args[0], [ref]$tokens, [ref]$errors) > $null; "
+            "$env:X86QW_TEST_PARSE_INPUT, [ref]$tokens, [ref]$errors) > $null; "
             "if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }"
         )
+        environment = os.environ.copy()
+        environment["X86QW_TEST_PARSE_INPUT"] = public_command
         completed = subprocess.run(
             [
                 WINDOWS_POWERSHELL,
@@ -1694,11 +1710,11 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                 "Bypass",
                 "-Command",
                 parse_command,
-                public_command,
             ],
             check=False,
             capture_output=True,
             text=True,
+            env=environment,
         )
         self.assertEqual(0, completed.returncode, completed.stderr)
 
@@ -1708,25 +1724,25 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         source = bootstrap.read_text(encoding="utf-8")
         version = source.split('$InstallerVersion = "', 1)[1].split('"', 1)[0]
         digest = source.split('$InstallerSha256 = "', 1)[1].split('"', 1)[0]
+        fixture = ROOT / f"dist/installer/packages/{version}/x86qw-installer-{version}.zip"
+        self.assertEqual(digest, hashlib.sha256(fixture.read_bytes()).hexdigest())
         with tempfile.TemporaryDirectory() as temporary:
             harness = Path(temporary) / "bootstrap-harness.ps1"
             harness.write_text(
                 r'''param(
   [string]$Bootstrap,
   [string]$MockVersion,
-  [string]$MockDigest
+  [string]$Fixture
 )
+$global:X86QWTestMockVersion = $MockVersion
+$global:X86QWTestFixture = $Fixture
 function Invoke-WebRequest {
   param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
 }
-function Get-FileHash {
-  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
-  [pscustomobject]@{ Hash = $MockDigest }
-}
 function Expand-Archive {
   param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
+  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $global:X86QWTestMockVersion)
   New-Item -ItemType Directory -Path $Root | Out-Null
   New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
 }
@@ -1745,8 +1761,7 @@ function python {
   for ($Index = 0; $Index -lt $args.Count; $Index++) {
     if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
       $Archive = [string]$args[$Index + 1]
-      $Size = [int]$args[$Index + 2]
-      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Copy-Item -LiteralPath $global:X86QWTestFixture -Destination $Archive
       Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
       return
     }
@@ -1773,7 +1788,7 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
                     completed = subprocess.run(
                         [
                             runtime, "-NoProfile", "-ExecutionPolicy", "Bypass",
-                            "-File", str(harness), str(bootstrap), version, digest,
+                            "-File", str(harness), str(bootstrap), version, str(fixture),
                         ],
                         check=False, capture_output=True, text=True,
                     )
@@ -1792,16 +1807,20 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
         source = bootstrap.read_text(encoding="utf-8")
         version = source.split('$InstallerVersion = "', 1)[1].split('"', 1)[0]
         digest = source.split('$InstallerSha256 = "', 1)[1].split('"', 1)[0]
+        fixture = ROOT / f"dist/installer/packages/{version}/x86qw-installer-{version}.zip"
+        self.assertEqual(digest, hashlib.sha256(fixture.read_bytes()).hexdigest())
         with tempfile.TemporaryDirectory() as temporary:
             harness = Path(temporary) / "integrity-fallback-harness.ps1"
             harness.write_text(
                 r'''param(
   [string]$Bootstrap,
   [string]$MockVersion,
-  [string]$MockDigest
+  [string]$Fixture
 )
 $global:X86QWTestDownloadCalls = 0
 $global:X86QWTestHashCalls = 0
+$global:X86QWTestMockVersion = $MockVersion
+$global:X86QWTestFixture = $Fixture
 function Get-Command {
   param([string]$Name, [object]$ErrorAction)
   if ($Name -eq "python") { return [pscustomobject]@{ Name = "python" } }
@@ -1810,11 +1829,11 @@ function Get-Command {
 function Get-FileHash {
   param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   $global:X86QWTestHashCalls += 1
-  [pscustomobject]@{ Hash = $MockDigest }
+  Microsoft.PowerShell.Utility\Get-FileHash -Algorithm $Algorithm -LiteralPath $LiteralPath
 }
 function Expand-Archive {
   param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
+  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $global:X86QWTestMockVersion)
   New-Item -ItemType Directory -Path $Root | Out-Null
   New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
 }
@@ -1827,8 +1846,7 @@ function python {
     if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
       $global:X86QWTestDownloadCalls += 1
       $Archive = [string]$args[$Index + 1]
-      $Size = [int]$args[$Index + 2]
-      [System.IO.File]::WriteAllBytes($Archive, (New-Object byte[] $Size))
+      Copy-Item -LiteralPath $global:X86QWTestFixture -Destination $Archive
       Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
       return
     }
@@ -1853,7 +1871,7 @@ Write-Output "X86QW_HASH_CALLS:$global:X86QWTestHashCalls"
                             str(harness),
                             str(bootstrap),
                             version,
-                            digest,
+                            str(fixture),
                         ],
                         check=False,
                         capture_output=True,
