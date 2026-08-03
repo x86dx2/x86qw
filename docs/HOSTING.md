@@ -211,6 +211,18 @@ recuperação encerra somente o processo cuja identidade corresponda exatamente;
 PID reutilizado é preservado. Identidade inconclusiva bloqueia a nova stack e a
 remoção de arquivos dos quais o processo possa depender.
 
+Arquivos materializados e temporários não sensíveis atuais registram também o
+tamanho e a identidade exatos. A recuperação nunca calcula hash além desse
+limite; um journal legado incompleto preserva o arquivo e solicita inspeção. No
+POSIX, a remoção usa rename exclusivo e atômico para uma quarentena, repete
+tamanho, identidade e hash pelo descritor aberto e restaura o nome quando
+encontra alteração. Isso cobre edições e substituições concorrentes pelo nome
+público; Linux e macOS possuem adaptações nativas e outro POSIX falha fechado.
+Não constitui isolamento contra código já executando sob o mesmo usuário com
+descritor gravável, `mmap` obtido antes da quarentena ou acesso direto ao seu
+nome aleatório; os processos controlados pelo x86QW são encerrados antes dessa
+etapa.
+
 Temporários não sensíveis criados pela sessão são removidos quando ainda
 coincidem com o hash; modificados e dados preexistentes são preservados e
 reportados. Configurações efêmeras com senhas são classificadas como sensíveis
@@ -220,22 +232,51 @@ por diretório ou arquivo especial, ele é preservado e a finalização falha se
 remoção recursiva. Symlink é removido sem tocar seu alvo. Isso é remoção lógica
 e não promessa de apagamento físico no dispositivo.
 
-## Limites de PK3/ZIP
+## Limites de ZIP, PK3 e PYZ
 
-A materialização dedicada interpreta nomes internos sempre com semântica
-POSIX, independentemente do sistema hospedeiro. Ela rejeita traversal,
-symlink, membro especial, drive, barra invertida, controles, nomes reservados
-do Windows, colisões por caixa ou Unicode e caminhos incompatíveis com
-Windows. Os limites atuais, medidos com folga sobre os pacotes distribuídos,
-são:
+O candidato corretivo da issue #49 aplica uma única fronteira ao instalador,
+gameplay, serviços, ferramentas e bundles. Todo arquivo é percorrido antes da
+primeira leitura entregue ao consumidor ou do primeiro write de extração. O
+snapshot privado e limitado faz parte do preflight. Nomes internos
+usam semântica POSIX, independentemente do sistema hospedeiro. Traversal,
+absolutos, drives, barra invertida, controles, caracteres Win32 proibidos
+(`<`, `>`, `"`, `|`, `?`, `*`), nomes reservados Windows,
+trailing ponto/espaço, links, membros especiais e colisões exatas, por caixa,
+Unicode ou prefixo são recusados.
+
+Somente Stored e Deflate são aceitos. Os limites, medidos com folga sobre os 59
+ZIP/PK3/PYZ inventariados no início da mudança, são:
 
 - 4.096 membros;
+- 512 MiB para o arquivo-fonte compactado;
+- 32 MiB para os metadados do diretório central;
 - 128 MiB por membro;
 - 512 MiB descompactados no total;
 - 16 níveis de diretório;
-- 240 caracteres por caminho;
+- 240 unidades UTF-16 por caminho;
 - razão máxima de compressão de 500 para 1.
 
-A extração usa arquivo temporário, hash SHA-256 e rename atômico. Arquivo
-pessoal diferente nunca é sobrescrito. Configurações pessoais, logs e demos
-não são tratados como payload imutável de atualização.
+A fonte é copiada com limite estrito para um snapshot privado em disco. Um
+pre-scan estrutural limita e conta ali os registros reais do diretório central
+antes de `zipfile` criar `ZipInfo`, portanto o EOCD não pode subestimar membros
+e uma troca concorrente da fonte não muda os bytes entre as etapas. O scan
+valida envelope, tamanho real, CRC e SHA-256 de todos os membros e liga o plano
+à identidade e ao SHA-256 da fonte. A extração revalida integralmente o plano
+antes do rename, usa diretório irmão privado, aplica somente `0644` ou `0755` e
+sincroniza arquivos e diretórios. Falha antes da promoção remove somente o
+staging comprovado. A confirmação da identidade publicada é o commit; resultado
+de promoção inconclusivo é preservado. Falha posterior preserva o destino
+completo e conteúdo pessoal concorrente. Destino anterior nunca é substituído.
+
+Na materialização dedicada, o PK3 passa primeiro por essa extração canônica e
+só depois é copiado de forma atômica e journalizada para o contexto do MVDSV.
+Arquivo pessoal diferente nunca é sobrescrito. Configurações pessoais, logs e
+demos não são tratados como payload imutável de atualização. No Windows,
+ancestrais permanecem abertos sem compartilhamento de remoção, reparse points
+são recusados e criação, identidade e limpeza usam handles Win32; o arquivo
+confirmado é removido pelo próprio handle, nunca por `DeleteFileW` aplicado a
+um nome reaberto. Consulte o
+[ADR da fronteira de arquivos](adr/0002-fronteira-unica-de-arquivos.md).
+
+Essa implementação ainda não pertence à release pública `0.7.1`; publicação e
+smokes nativos permanecem etapas separadas.
