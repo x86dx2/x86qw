@@ -4,6 +4,7 @@ import io
 import json
 import os
 import plistlib
+import shlex
 import socket
 import struct
 import subprocess
@@ -16,6 +17,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from maintenance.tools import downloader as bounded_downloader
 from maintenance.tools.build_installer_bundle import public_bootstrap_assignments, zipapp_bytes
 
 
@@ -55,6 +57,107 @@ class InstallerTests(unittest.TestCase):
             "$InstallerSha256": "a" * 64,
             "$InstallerSize": "234567",
         }, powershell)
+
+    def test_public_unix_bootstrap_never_executes_a_partial_response(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sentinel = root / "partial-executed"
+            curl = root / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' 'printf partial >\"$X86QW_TEST_SENTINEL\"'\n"
+                "exit 63\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(sentinel)
+            result = subprocess.run(
+                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(sentinel.exists())
+        self.assertEqual([], leftovers)
+
+    def test_public_unix_bootstrap_bounds_unknown_length_before_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sentinel = root / "oversized-executed"
+            curl = root / "curl"
+            curl.write_text(
+                f"#!{sys.executable}\n"
+                "import os, sys\n"
+                "prefix = 'printf oversized >\\\"$X86QW_TEST_SENTINEL\\\"\\n'\n"
+                "try:\n"
+                "    sys.stdout.write(prefix + ('#' * 300000))\n"
+                "    sys.stdout.flush()\n"
+                "except BrokenPipeError:\n"
+                "    os._exit(23)\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(sentinel)
+            result = subprocess.run(
+                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(sentinel.exists())
+        self.assertIn("bootstrap excedeu 262144 bytes", result.stderr)
+        self.assertEqual([], leftovers)
+
+    def test_public_unix_bootstrap_forwards_arguments_and_exit_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            received = root / "received-arguments"
+            curl = root / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "cat <<'BOOTSTRAP'\n"
+                "printf '%s\\n' \"$@\" >\"$X86QW_TEST_SENTINEL\"\n"
+                "exit 7\n"
+                "BOOTSTRAP\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(received)
+            result = subprocess.run(
+                [
+                    *shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                    "--platform", "windows", "caminho com espaço",
+                ],
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            arguments = received.read_text(encoding="utf-8").splitlines()
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertEqual(7, result.returncode)
+        self.assertEqual(
+            ["--platform", "windows", "caminho com espaço"], arguments,
+        )
+        self.assertEqual([], leftovers)
 
     def test_public_zipapp_embeds_the_declarative_ktx_mode_catalog(self):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
@@ -1685,11 +1788,11 @@ class InstallerTests(unittest.TestCase):
 
             def connect_ex(self, address):
                 del address
-                return install_qw.errno.EINPROGRESS
+                return bounded_downloader.errno.EINPROGRESS
 
             def getsockopt(self, level, option):
                 del level, option
-                return 0 if self.reachable else install_qw.errno.EHOSTUNREACH
+                return 0 if self.reachable else bounded_downloader.errno.EHOSTUNREACH
 
             def settimeout(self, value):
                 self.timeout = value
@@ -1724,21 +1827,29 @@ class InstallerTests(unittest.TestCase):
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.0.2.1", 443)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
         ]
-        with mock.patch.object(install_qw.socket, "getaddrinfo", return_value=candidates):
-            with mock.patch.object(install_qw.socket, "socket", side_effect=sockets):
-                with mock.patch.object(install_qw.selectors, "DefaultSelector", FakeSelector):
-                    connection = install_qw.create_resilient_connection(("example.invalid", 443), timeout=2)
+        with mock.patch.object(bounded_downloader, "_resolve_addresses", return_value=candidates):
+            with mock.patch.object(bounded_downloader.socket, "socket", side_effect=sockets):
+                with mock.patch.object(bounded_downloader.selectors, "DefaultSelector", FakeSelector):
+                    connection = bounded_downloader.create_resilient_connection(
+                        ("example.invalid", 443), timeout=2,
+                    )
         self.assertIs(sockets[1], connection)
         self.assertTrue(sockets[0].closed)
         self.assertFalse(sockets[1].closed)
-        self.assertEqual(2, sockets[1].timeout)
+        self.assertGreater(sockets[1].timeout, 0)
+        self.assertLessEqual(sockets[1].timeout, 2)
 
     def test_resilient_connection_limits_dns_resolution_time(self):
-        blocked = threading.Event()
         started = time.monotonic()
-        with mock.patch.object(install_qw.socket, "getaddrinfo", side_effect=lambda *args: blocked.wait(1)):
+        with mock.patch.object(
+            bounded_downloader,
+            "_resolve_addresses",
+            side_effect=TimeoutError("Tempo esgotado ao resolver example.invalid."),
+        ):
             with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
-                install_qw.create_resilient_connection(("example.invalid", 443), timeout=0.01)
+                bounded_downloader.create_resilient_connection(
+                    ("example.invalid", 443), timeout=0.01,
+                )
         self.assertLess(time.monotonic() - started, 0.5)
 
     def test_public_catalog_falls_back_to_the_next_mirror(self):

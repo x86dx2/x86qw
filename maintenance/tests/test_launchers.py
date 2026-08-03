@@ -760,6 +760,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
             "DOWNLOAD_BUDGET_SECONDS=\"180\"",
             "DOWNLOAD_TRANSFER_SECONDS=\"120\"",
             "DOWNLOAD_ATTEMPTS=\"3\"",
+            "curl --disable --fail --location",
             "--proto '=https'",
             "--proto-redir '=https'",
             "--connect-timeout 15",
@@ -802,6 +803,10 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
             curl = binaries / "curl"
             curl.write_text(
                 """#!/bin/sh
+if [ "$1" != "--disable" ]; then
+  printf 'curl config was not disabled first\n' >&2
+  exit 97
+fi
 count=0
 if [ -f "$X86QW_CURL_CALLS" ]; then
   while IFS= read -r line; do count=$line; done < "$X86QW_CURL_CALLS"
@@ -1205,6 +1210,23 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(urllib_module.request, "build_opener") as build_opener:
+                with self.assertRaises(namespace["PolicyError"]):
+                    namespace["download_mirrors"](
+                        [
+                            "https://first.example.invalid/archive.zip",
+                            "http://second.example.invalid/archive.zip",
+                        ],
+                        os.fspath(destination),
+                        5,
+                        "0" * 64,
+                        1,
+                        1,
+                        0,
+                        2,
+                    )
+            build_opener.assert_not_called()
+
             with mock.patch.object(
                 urllib_module.request, "build_opener", return_value=OversizeOpener()
             ):
@@ -1281,14 +1303,46 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
         direct_close_calls = []
 
+        class DirectSocket:
+            def shutdown(self, how):
+                direct_close_calls.append(("shutdown", how))
+
         class DirectConnection:
+            sock = DirectSocket()
+
             def close(self):
-                direct_close_calls.append(True)
+                direct_close_calls.append("close")
 
         direct_registry = namespace["ConnectionRegistry"]()
         direct_registry.register(7, DirectConnection())
         direct_registry.cancel(7)
-        self.assertEqual([True], direct_close_calls)
+        self.assertEqual([
+            ("shutdown", namespace["socket"].SHUT_RDWR), "close",
+        ], direct_close_calls)
+
+        class BlockingResolver:
+            def __init__(self):
+                self.returncode = None
+                self.calls = 0
+                self.killed = False
+
+            def communicate(self, input=None, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise namespace["subprocess"].TimeoutExpired(["python"], timeout)
+                self.returncode = -9
+                return b"", b""
+
+            def kill(self):
+                self.killed = True
+
+        blocked_resolver = BlockingResolver()
+        with mock.patch.object(
+            namespace["subprocess"], "Popen", return_value=blocked_resolver,
+        ), self.assertRaisesRegex(TimeoutError, "resolucao DNS"):
+            namespace["resolve_addresses"]("example.invalid", 443, 0.01)
+        self.assertTrue(blocked_resolver.killed)
+        self.assertEqual(2, blocked_resolver.calls)
 
         registered = threading.Event()
         registered_workers = []
@@ -1595,9 +1649,9 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     5,
                     expected,
                     1,
-                    0.02,
                     1,
                     1,
+                    2,
                 )
             self.assertEqual(b"valid", destination.read_bytes())
         self.assertEqual(2, timeout.calls)
@@ -1622,13 +1676,13 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     self.registry.register(
                         threading.get_ident(), ConnectBudgetConnection(),
                     )
-                    connect_release.wait(1)
+                    connect_release.wait(2)
                 return Response(b"valid", request.full_url)
 
         # Windows runners can take more than 50 ms merely to schedule the
         # replacement worker.  Keep this as a real-clock integration check,
         # but use a budget well below the bootstrap's production timeout.
-        connect_timeout = 0.2
+        connect_timeout = 1.0
         connect_budget = ConnectBudgetThenValidOpener()
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
@@ -1644,9 +1698,9 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     5,
                     expected,
                     connect_timeout,
-                    0.5,
+                    1.2,
                     1,
-                    1.5,
+                    2.5,
                 )
             elapsed = time.monotonic() - started
             self.assertEqual(b"valid", destination.read_bytes())
@@ -1656,7 +1710,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             connect_budget.call_times[1] - connect_budget.call_times[0],
             connect_timeout * 0.8,
         )
-        self.assertLess(elapsed, 1.0)
+        self.assertLess(elapsed, 1.5)
 
         class ValidOpener:
             def open(self, request, **_kwargs):
@@ -1666,7 +1720,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             destination = Path(temporary) / "archive.zip"
 
             def slow_fsync(_descriptor):
-                time.sleep(0.2)
+                time.sleep(1.2)
 
             with mock.patch.object(
                 urllib_module.request, "build_opener", return_value=ValidOpener(),
@@ -1680,9 +1734,163 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                         1,
                         1,
                         0,
-                        0.1,
+                        1,
                     )
             self.assertFalse(destination.exists())
+
+    def test_powershell_embedded_download_collects_blocked_resolver(self):
+        source = (ROOT / "dist/installer/bin/install.ps1").read_text(encoding="utf-8")
+        marker = "$DownloaderSource = @'\n"
+        downloader = source.split(marker, 1)[1].split("\n'@", 1)[0]
+        definitions = downloader.split("\ntry:\n    download_mirrors(", 1)[0]
+        namespace: dict[str, object] = {}
+        exec(compile(definitions, "x86qw-bootstrap-download.py", "exec"), namespace)
+
+        class BlockingResolver:
+            def __init__(self, *, reap_delay=0.2):
+                self.args = ["python", "resolver"]
+                self.returncode = None
+                self.reap_delay = reap_delay
+                self.killed = threading.Event()
+                self.collected = threading.Event()
+                self.inputs = []
+                self.dns_started = threading.Event()
+                self.dns_active = threading.Event()
+
+            def communicate(self, input=None, timeout=None):
+                self.inputs.append(input)
+                if input == b"G":
+                    self.dns_started.set()
+                    self.dns_active.set()
+                if not self.killed.wait(timeout):
+                    raise subprocess.TimeoutExpired(self.args, timeout)
+                time.sleep(self.reap_delay)
+                self.returncode = -9
+                self.collected.set()
+                return b"", b""
+
+            def kill(self):
+                self.killed.set()
+                self.dns_active.clear()
+
+        process = BlockingResolver()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "archive.zip"
+            with mock.patch.object(
+                namespace["subprocess"], "Popen", return_value=process,
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
+                    namespace["download_mirrors"](
+                        ["https://resolver.example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        1,
+                        hashlib.sha256(b"x").hexdigest(),
+                        1,
+                        1,
+                        0,
+                        1,
+                    )
+            self.assertFalse(destination.exists())
+
+        self.assertTrue(process.killed.is_set())
+        self.assertTrue(process.collected.is_set())
+        self.assertEqual(b"G", process.inputs[0])
+        self.assertTrue(process.dns_started.is_set())
+        self.assertFalse(any(
+            thread.name == "x86qw-bootstrap-open" and thread.is_alive()
+            for thread in threading.enumerate()
+        ))
+
+        slow_process = BlockingResolver(reap_delay=1.0)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "slow-reap.zip"
+            started = time.monotonic()
+            with mock.patch.object(
+                namespace["subprocess"], "Popen", return_value=slow_process,
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
+                    namespace["download_mirrors"](
+                        ["https://resolver.example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        1,
+                        hashlib.sha256(b"x").hexdigest(),
+                        1,
+                        1,
+                        0,
+                        1,
+                    )
+            elapsed = time.monotonic() - started
+            self.assertFalse(destination.exists())
+
+        self.assertLess(elapsed, 1.15)
+        self.assertTrue(slow_process.killed.is_set())
+        self.assertTrue(slow_process.dns_started.is_set())
+        self.assertFalse(slow_process.dns_active.is_set())
+        self.assertFalse(slow_process.collected.is_set())
+        residual = [
+            thread for thread in threading.enumerate()
+            if thread.name == "x86qw-bootstrap-open" and thread.is_alive()
+        ]
+        self.assertEqual(1, len(residual))
+        self.assertTrue(slow_process.collected.wait(2))
+        residual[0].join(1)
+        self.assertFalse(residual[0].is_alive())
+
+        late_process = BlockingResolver()
+
+        def delayed_spawn(*_args, **_kwargs):
+            time.sleep(1.2)
+            return late_process
+
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "late-resolver.zip"
+            started = time.monotonic()
+            with mock.patch.object(
+                namespace["subprocess"], "Popen", side_effect=delayed_spawn,
+            ):
+                with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
+                    namespace["download_mirrors"](
+                        ["https://resolver.example.invalid/archive.zip"],
+                        os.fspath(destination),
+                        1,
+                        hashlib.sha256(b"x").hexdigest(),
+                        1,
+                        1,
+                        0,
+                        1,
+                    )
+            elapsed = time.monotonic() - started
+            self.assertFalse(destination.exists())
+
+        self.assertLess(elapsed, 1.15)
+        self.assertTrue(late_process.collected.wait(1))
+        self.assertTrue(late_process.killed.is_set())
+        self.assertNotIn(b"G", late_process.inputs)
+        self.assertFalse(late_process.dns_started.is_set())
+        self.assertFalse(any(
+            thread.name == "x86qw-bootstrap-open" and thread.is_alive()
+            for thread in threading.enumerate()
+        ))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with mock.patch.object(namespace["subprocess"], "Popen") as spawn:
+                for budget in (0.01, namespace["MIN_OPEN_BUDGET_SECONDS"]):
+                    destination = Path(temporary) / f"tiny-{budget}.zip"
+                    with self.subTest(budget=budget), self.assertRaisesRegex(
+                        namespace["DownloadError"], "prazo"
+                    ):
+                        namespace["download_mirrors"](
+                            ["https://resolver.example.invalid/archive.zip"],
+                            os.fspath(destination),
+                            1,
+                            hashlib.sha256(b"x").hexdigest(),
+                            budget,
+                            budget,
+                            0,
+                            budget,
+                        )
+                    self.assertFalse(destination.exists())
+            spawn.assert_not_called()
 
     @unittest.skipUnless(
         WINDOWS_POWERSHELL,

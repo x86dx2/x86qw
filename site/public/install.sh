@@ -264,7 +264,7 @@ for url in "${INSTALLER_URLS[@]}"; do
     rm -f "$archive" "$headers"
     printf 'x86QW: baixando instalador %s (tentativa %d/%d)...\n' \
       "$INSTALLER_VERSION" "$attempt" "$DOWNLOAD_ATTEMPTS"
-    if curl --fail --location \
+    if curl --disable --fail --location \
       --proto '=https' --proto-redir '=https' \
       --connect-timeout 15 --max-time "$remaining_seconds" \
       --dump-header "$headers" \

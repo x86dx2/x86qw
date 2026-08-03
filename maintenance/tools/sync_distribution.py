@@ -9,7 +9,7 @@ import re
 import shutil
 import tempfile
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
@@ -19,20 +19,20 @@ try:
     from .components import component_for_source, load_catalog as load_component_catalog, source_roots
     from .component_releases import component_for_artifact_path, load_releases
     from .downloader import (
-        BoundedMetadata, BoundedPayload, MAX_ARTIFACT_BYTES, PinnedArtifact, RetryPolicy, download,
-        safe_url_for_log,
+        BoundedMetadata, DownloadPolicyError, MAX_ARTIFACT_BYTES, PinnedArtifact,
+        RetryPolicy, download, safe_url_for_log, validate_https_url,
     )
-    from .public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from .public_upstreams import github_latest_release, github_recursive_tree, remote_content_length
     from .upstreams import load_upstreams, source_owner
 except ImportError:  # Execucao direta
     from component_policy import component_for_distribution_path, load_component_policy, require_component
     from components import component_for_source, load_catalog as load_component_catalog, source_roots
     from component_releases import component_for_artifact_path, load_releases
     from downloader import (
-        BoundedMetadata, BoundedPayload, MAX_ARTIFACT_BYTES, PinnedArtifact, RetryPolicy, download,
-        safe_url_for_log,
+        BoundedMetadata, DownloadPolicyError, MAX_ARTIFACT_BYTES, PinnedArtifact,
+        RetryPolicy, download, safe_url_for_log, validate_https_url,
     )
-    from public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from public_upstreams import github_latest_release, github_recursive_tree, remote_content_length
     from upstreams import load_upstreams, source_owner
 
 
@@ -43,7 +43,6 @@ UPSTREAMS = ROOT / "maintenance/inventory/upstreams.json"
 PUBLIC_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 USER_AGENT = "x86qw-maintenance/1"
 DISCOVERY_MAX_BYTES = 4 * 1024 * 1024
-UNPINNED_ASSET_MAX_BYTES = MAX_ARTIFACT_BYTES
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
 
@@ -192,7 +191,7 @@ def discover_nquake() -> list[Asset]:
     catalog = load_component_catalog(COMPONENT_CATALOG)
     used_paths = source_roots(catalog, "reference")
 
-    commit, tree = git_remote_tree(f"https://github.com/{NQUAKE_REPOSITORY}.git", NQUAKE_REF)
+    commit, tree = github_recursive_tree(NQUAKE_REPOSITORY, NQUAKE_REF)
 
     assets: list[Asset] = []
     found_roots: set[str] = set()
@@ -365,6 +364,63 @@ def load_manifest(path: Path) -> dict[str, object]:
     return manifest
 
 
+def pin_assets_from_manifest(
+    assets: list[Asset], manifest: dict[str, object],
+) -> list[Asset]:
+    """Project previously reviewed identities onto matching discoveries.
+
+    Discovery may identify a new URL and its byte count, but it must never make
+    those bytes trusted.  Only an exact path/URL/size identity already committed
+    to the distribution manifest can supply the SHA-256 used by a subsequent
+    persistent download.
+    """
+
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise ValueError("distribution manifest has no files collection")
+    resolved: list[Asset] = []
+    for asset in assets:
+        if asset.expected_sha256 is not None:
+            resolved.append(asset)
+            continue
+        known = files.get(asset.path)
+        if not isinstance(known, dict):
+            resolved.append(asset)
+            continue
+        size = known.get("size")
+        digest = known.get("sha256")
+        if (
+            known.get("url") != asset.url
+            or type(size) is not int
+            or size <= 0
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            or (asset.expected_size is not None and asset.expected_size != size)
+        ):
+            resolved.append(asset)
+            continue
+        resolved.append(replace(
+            asset,
+            expected_size=size,
+            expected_sha256=digest,
+        ))
+    return resolved
+
+
+def unpinned_asset_paths(assets: list[Asset]) -> list[str]:
+    return sorted(
+        asset.path
+        for asset in assets
+        if (
+            type(asset.expected_size) is not int
+            or asset.expected_size <= 0
+            or asset.expected_size > MAX_ARTIFACT_BYTES
+            or not isinstance(asset.expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", asset.expected_sha256) is None
+        )
+    )
+
+
 def validate_manifest_sizes(files: object) -> None:
     if not isinstance(files, dict):
         raise ValueError("invalid distribution manifest files")
@@ -372,6 +428,12 @@ def validate_manifest_sizes(files: object) -> None:
         size = metadata.get("size") if isinstance(metadata, dict) else None
         if not isinstance(size, int) or size <= 0 or size > MAX_ARTIFACT_BYTES:
             raise ValueError(f"invalid distribution file size: {relative}")
+        try:
+            parsed = validate_https_url(metadata.get("url"), "distribution file URL")
+        except DownloadPolicyError as error:
+            raise ValueError(f"invalid distribution file URL: {relative}") from error
+        if parsed.query:
+            raise ValueError(f"persistent distribution file URL has a query: {relative}")
 
 
 def write_manifest(path: Path, manifest: dict[str, object]) -> None:
@@ -500,6 +562,17 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
 
 
 def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[str, object], bool]:
+    if (
+        type(asset.expected_size) is not int
+        or asset.expected_size <= 0
+        or asset.expected_size > MAX_ARTIFACT_BYTES
+        or not isinstance(asset.expected_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", asset.expected_sha256) is None
+    ):
+        raise ValueError(
+            "distribution asset requires reviewed size and SHA-256 before download: "
+            f"{asset.path}"
+        )
     target = root / asset.path
     if target.is_symlink():
         raise ValueError(f"distribution target must not be a symlink: {target}")
@@ -517,37 +590,21 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
             metadata["package"] = asset.subcomponent
         return asset.path, metadata, True
     target.parent.mkdir(parents=True, exist_ok=True)
-    expected_size = (
-        asset.expected_size
-        if asset.expected_size is not None
-        else remote_content_length(asset.url)
-    )
+    expected_size = asset.expected_size
     retry = RetryPolicy(attempts=3)
     with tempfile.TemporaryDirectory(prefix=f".{target.name}.", dir=target.parent) as staging_name:
         staging = Path(staging_name) / "payload"
-        if asset.expected_size is not None and asset.expected_sha256 is not None:
-            contract = PinnedArtifact(
-                url=asset.url,
-                destination=staging,
-                expected_size=asset.expected_size,
-                expected_sha256=asset.expected_sha256,
-                maximum_size=MAX_ARTIFACT_BYTES,
-                deadline_seconds=120,
-                retry=retry,
-                headers={"User-Agent": USER_AGENT},
-                label=asset.path,
-            )
-        else:
-            contract = BoundedPayload(
-                url=asset.url,
-                destination=staging,
-                expected_size=expected_size,
-                maximum_size=asset.expected_size or UNPINNED_ASSET_MAX_BYTES,
-                deadline_seconds=120,
-                retry=retry,
-                headers={"User-Agent": USER_AGENT},
-                label=asset.path,
-            )
+        contract = PinnedArtifact(
+            url=asset.url,
+            destination=staging,
+            expected_size=expected_size,
+            expected_sha256=asset.expected_sha256,
+            maximum_size=MAX_ARTIFACT_BYTES,
+            deadline_seconds=120,
+            retry=retry,
+            headers={"User-Agent": USER_AGENT},
+            label=asset.path,
+        )
         result = download(contract)
         size = result.size
         digest = result.sha256

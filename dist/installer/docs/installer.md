@@ -21,7 +21,7 @@ Esses fatos públicos são validados contra os inventários canônicos.
 Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
 
 ```sh
-/bin/bash -c "$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)"
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
 ```
 
 No Windows PowerShell:
@@ -38,6 +38,11 @@ código antes de devolver o controle ao terminal.
 Ambos os comandos iniciais bloqueiam downgrade de HTTPS, têm prazo de 60
 segundos e recusam scripts acima de 256 KiB antes de executá-los. No Windows,
 o buffer limitado do `HttpClient` substitui o fluxo ilimitado `irm | iex`.
+No Unix, `curl --disable` ignora `.curlrc`; `pipefail` e `head` limitam a escrita
+a 262145 bytes dentro de um diretório temporário criado sob `umask 077`. O
+tamanho e o status do pipeline são validados antes de chamar Bash, que nunca
+executa um prefixo produzido por pipeline com falha nem uma resposta sem
+`Content-Length` que exceda o limite.
 
 Na `0.7.1`, o corpo executa em um escopo de script próprio dentro da
 mesma sessão PowerShell. Isso não cria outra janela nem outro processo: apenas
@@ -89,14 +94,29 @@ tentativas. Somente falhas transitórias recebem retry no mesmo mirror; uma falh
 de integridade pode avançar para outro mirror equivalente, mas erros de política,
 protocolo, limite, armazenamento e deadline encerram a operação. Corpos
 intermediários de redirect são fechados sem leitura. Um destino anterior
-permanece intacto: o conteúdo entra primeiro em temporário privado, recebe
-`flush` e `fsync` e só é promovido por substituição atômica depois de tamanho e
-hash corresponderem.
+permanece intacto: o conteúdo entra primeiro em temporário exclusivo, recebe
+modo `0600` no POSIX, `flush` e `fsync` e só é promovido por substituição atômica
+depois de tamanho e hash corresponderem.
 
 Metadados dinâmicos são efêmeros e limitados, mas limite de recursos e TLS não
 equivalem a autenticação versionada do catálogo. Esse contrato é uma etapa de
 segurança separada. A decisão completa está no
 [`ADR 0001`](../../../docs/adr/0001-fronteira-limitada-de-bytes-remotos.md).
+
+URLs persistidas no catálogo, manifesto e inventários de releases e upstreams
+usam o mesmo validador HTTPS e não aceitam credenciais, fragmentos, queries,
+espaços ou controles. No intake de manutenção, um arquivo remoto novo também
+precisa corresponder exatamente a uma release, fonte preservada, pacote público
+proposto ou referência nQuake, dentro do namespace e consumidor declarados. Um
+pacote ezQuake usa obrigatoriamente
+`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`; essas
+coordenadas precisam coincidir com os metadados do pacote.
+
+No POSIX, os temporários recebem modo `0600`. No Windows, `mkstemp` garante
+criação exclusiva, mas não neutraliza por si só uma DACL ampla herdada do
+diretório. A DACL privada do temporário do bootstrap continua pendente no PR 4 e
+na [issue #47](https://github.com/x86dx2/x86qw/issues/47); ela não é apresentada
+como proteção concluída nesta correção.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
@@ -172,7 +192,7 @@ Para preparar um cliente diferente do host, informe explicitamente
 
 ```sh
 ./dist/installer/bin/manager.py install --platform windows
-/bin/bash -c "$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
 ```
 
 No PowerShell, o equivalente para preparar Linux a partir do Windows é:

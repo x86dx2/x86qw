@@ -96,7 +96,7 @@ def upload(path: Path, package: dict[str, object]) -> None:
     # GitLab's documented generic-package upload uses PUT with --upload-file.
     # Feed the private header over stdin so the token never enters argv or logs.
     result = subprocess.run([
-        "curl", "--fail", "--silent", "--show-error",
+        "curl", "--disable", "--fail", "--silent", "--show-error",
         "--proto", "=https", "--proto-redir", "=https",
         "--connect-timeout", "15", "--max-time", "900",
         "--max-redirs", "0", "--output", os.devnull,

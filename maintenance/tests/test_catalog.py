@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import subprocess
@@ -33,7 +34,7 @@ class CatalogTests(unittest.TestCase):
         with patch.dict(os.environ, {"GLAB_TOKEN": "private-token"}, clear=False):
             upload(Path("bundle.zip"), package)
         arguments = run.call_args.args[0]
-        self.assertEqual("curl", arguments[0])
+        self.assertEqual(["curl", "--disable"], arguments[:2])
         self.assertIn("--upload-file", arguments)
         self.assertIn("--header", arguments)
         self.assertIn("--proto", arguments)
@@ -69,6 +70,111 @@ class CatalogTests(unittest.TestCase):
         catalog["packages"][0]["size"] = MAX_ARTIFACT_BYTES + 1
         with self.assertRaisesRegex(ValueError, "supported download limit"):
             validate_catalog(catalog)
+
+    def test_catalog_rejects_credential_fragment_and_control_urls_without_secret(self) -> None:
+        source = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        package = source["packages"][0]
+        filename = package["filename"]
+        secret = "never-print-catalog-secret"
+        unsafe_urls = (
+            f"https://reviewer:{secret}@example.invalid/{filename}",
+            f"https://example.invalid/{filename}#{secret}",
+            f"https://example.invalid/{filename}?token={secret}",
+            f"https://example.invalid/{filename}?token={secret}\nforged",
+        )
+
+        for url in unsafe_urls:
+            catalog = {**source, "packages": [{**package, "urls": [url]}]}
+            with self.subTest(url=url), self.assertRaises(ValueError) as raised:
+                validate_catalog(catalog)
+            self.assertNotIn(secret, str(raised.exception))
+
+    def test_ezquake_versions_and_distribution_coordinates_are_exact(self) -> None:
+        current = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        clients = [
+            package for package in current["packages"]
+            if package["component"] == "ezquake"
+        ]
+        self.assertEqual(
+            {
+                ("stable", "linux", "x86_64"),
+                ("stable", "macos", "universal"),
+                ("stable", "windows", "x64"),
+                ("nightly", "linux", "x86_64"),
+                ("nightly", "macos", "universal"),
+                ("nightly", "windows", "x64"),
+            },
+            {
+                (package["channel"], package["platform"], package["architecture"])
+                for package in clients
+            },
+        )
+        for source in clients:
+            package = copy.deepcopy(source)
+            package["version"] = (
+                "9.9.9"
+                if package["channel"] == "stable"
+                else "20990101-010203_abcdef0"
+            )
+            package["distribution_path"] = (
+                f"clients/ezquake/{package['channel']}/{package['version']}/"
+                f"{package['platform']}-{package['architecture']}/{package['filename']}"
+            )
+            with self.subTest(
+                channel=package["channel"],
+                platform=package["platform"],
+                architecture=package["architecture"],
+            ):
+                self.assertEqual(1, validate_catalog({
+                    "format": 1,
+                    "project": "x86qw",
+                    "generated_at": None,
+                    "packages": [package],
+                }))
+
+        source = next(
+            package for package in clients
+            if package["channel"] == "stable" and package["platform"] == "linux"
+        )
+        base = copy.deepcopy(source)
+        base["version"] = "9.9.9"
+        base["distribution_path"] = (
+            f"clients/ezquake/stable/9.9.9/linux-x86_64/{base['filename']}"
+        )
+        invalid = {
+            "channel": {
+                **base,
+                "channel": "nightly",
+                "version": "20990101-010203_abcdef0",
+            },
+            "version": {**base, "version": "9.9.8"},
+            "platform": {**base, "platform": "windows"},
+            "architecture": {**base, "architecture": "arm128"},
+            "filename": {
+                **base,
+                "distribution_path": str(base["distribution_path"]).replace(
+                    str(base["filename"]), "other.zip",
+                ),
+            },
+            "stable-version-shape": {**base, "version": "9.9.9-review"},
+            "nightly-version-shape": {
+                **base,
+                "channel": "nightly",
+                "version": "garbage",
+            },
+        }
+        for label, package in invalid.items():
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                validate_catalog({
+                    "format": 1,
+                    "project": "x86qw",
+                    "generated_at": None,
+                    "packages": [package],
+                })
 
     def test_repository_catalog_and_trust_boundary(self) -> None:
         catalog = json.loads(

@@ -8,9 +8,9 @@ import re
 from pathlib import Path, PurePosixPath
 
 try:
-    from .downloader import MAX_ARTIFACT_BYTES
+    from .downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 except ImportError:  # Executado diretamente por ferramentas em tools/.
-    from downloader import MAX_ARTIFACT_BYTES
+    from downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -29,6 +29,19 @@ def _safe_path(value: object, label: str) -> str:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ValueError(f"unsafe {label}: {value}")
+    return value
+
+
+def _persistent_https_url(value: object, label: str, identifier: str) -> str:
+    """Validate a stored URL without ever reflecting attacker-controlled text."""
+
+    try:
+        parsed = validate_https_url(value, label)
+    except DownloadPolicyError as error:
+        raise ValueError(f"invalid persistent {label}: {identifier}") from error
+    if parsed.query:
+        raise ValueError(f"persistent {label} must not contain a query: {identifier}")
+    assert isinstance(value, str)
     return value
 
 
@@ -58,17 +71,17 @@ def validate_upstreams(registry: object) -> None:
         identifiers.add(identifier)
         if not all(isinstance(entry.get(field), str) and entry[field] for field in ("name", "kind", "version", "release_url")):
             raise ValueError(f"upstream lacks metadata: {identifier}")
-        if not str(entry["release_url"]).startswith("https://"):
-            raise ValueError(f"upstream release URL must use HTTPS: {identifier}")
+        _persistent_https_url(entry["release_url"], "upstream release URL", identifier)
         update = entry.get("update")
         if not isinstance(update, dict) or update.get("strategy") not in UPDATE_STRATEGIES:
             raise ValueError(f"invalid update strategy: {identifier}")
+        if update["strategy"] == "git-ref":
+            _persistent_https_url(update.get("repository"), "Git repository URL", identifier)
         source = entry.get("source")
         if not isinstance(source, dict) or source.get("status") not in SOURCE_STATES:
             raise ValueError(f"invalid source status: {identifier}")
         if source["status"] in {"complete", "partial"}:
-            if not isinstance(source.get("url"), str) or not source["url"].startswith("https://"):
-                raise ValueError(f"preserved source lacks HTTPS origin: {identifier}")
+            _persistent_https_url(source.get("url"), "preserved source URL", identifier)
             distribution_path = _safe_path(source.get("distribution_path"), "source distribution path")
             if distribution_path in paths:
                 raise ValueError(f"duplicate source distribution path: {distribution_path}")

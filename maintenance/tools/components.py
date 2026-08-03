@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from pathlib import Path, PurePosixPath
 
 try:
@@ -20,6 +21,18 @@ ALLOWED_KINDS = {
 ALLOWED_MODES = {"overlay", "default", "preserve", "archive", "archive-base"}
 ALLOWED_ORIGINS = {"reference", "release"}
 SERVICE_PLATFORMS = {"macos-arm64", "linux-amd64", "windows-x64"}
+WINDOWS_FORBIDDEN_PATH_CHARACTERS = frozenset('<>:"\\|?*')
+WINDOWS_RESERVED_PATH_NAMES = {
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+    *(f"COM{number}" for number in "¹²³"),
+    *(f"LPT{number}" for number in "¹²³"),
+}
+# 240 UTF-16 code units leave room for the usual ``D:\\a\\x86qw\\x86qw\\``
+# checkout prefix while remaining below the classic 260-unit Win32 path limit.
+PORTABLE_RELATIVE_PATH_MAX_UTF16_UNITS = 240
+PORTABLE_PATH_COMPONENT_MAX_UTF16_UNITS = 255
 
 
 def profile_fingerprint(selected: list[str]) -> str:
@@ -27,13 +40,42 @@ def profile_fingerprint(selected: list[str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _safe_path(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value or ":" in value:
+def _utf16_units(value: str) -> int:
+    return len(value.encode("utf-16-le")) // 2
+
+
+def validate_portable_relative_path(value: object, label: str) -> str:
+    """Validate a repository/runtime path against the common Windows contract."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(unicodedata.category(character).startswith("C") for character in value)
+        or any(character in WINDOWS_FORBIDDEN_PATH_CHARACTERS for character in value)
+    ):
         raise ValueError(f"invalid {label}: {value!r}")
+    raw_parts = value.split("/")
     path = PurePosixPath(value)
-    if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+    if path.is_absolute() or any(part in ("", ".", "..") for part in raw_parts):
         raise ValueError(f"unsafe {label}: {value}")
-    return value
+    for part in raw_parts:
+        base_name = part.split(".", 1)[0].upper()
+        if (
+            unicodedata.normalize("NFC", part) != part
+            or part.endswith((".", " "))
+            or base_name in WINDOWS_RESERVED_PATH_NAMES
+            or _utf16_units(part) > PORTABLE_PATH_COMPONENT_MAX_UTF16_UNITS
+        ):
+            raise ValueError(f"non-portable {label} component: {part!r}")
+    if _utf16_units(value) > PORTABLE_RELATIVE_PATH_MAX_UTF16_UNITS:
+        raise ValueError(
+            f"{label} exceeds {PORTABLE_RELATIVE_PATH_MAX_UTF16_UNITS} UTF-16 code units"
+        )
+    return path.as_posix()
+
+
+def _safe_path(value: object, label: str) -> str:
+    return validate_portable_relative_path(value, label)
 
 
 def load_catalog(path: Path) -> dict[str, object]:

@@ -69,11 +69,15 @@ import email.utils
 import errno
 import hashlib
 import http.client
+import json
+import math
 import os
 import random
+import selectors
 import socket
 import ssl
 import string
+import subprocess
 import sys
 import tempfile
 import threading
@@ -90,6 +94,40 @@ TRANSIENT_ERRNOS = frozenset({
     errno.EHOSTUNREACH, errno.EINTR, errno.ENETDOWN, errno.ENETRESET,
     errno.ENETUNREACH, errno.ETIMEDOUT,
 })
+DNS_MAX_CANDIDATES = 64
+DNS_MAX_OUTPUT_BYTES = 64 * 1024
+OPEN_CLEANUP_RESERVE_SECONDS = 0.5
+MIN_OPEN_BUDGET_SECONDS = 0.5
+DNS_RESOLVER_SCRIPT = r"""
+import json
+import socket
+import sys
+
+if sys.stdin.buffer.read(1) != b"G":
+    raise SystemExit(3)
+host = sys.argv[1]
+port = int(sys.argv[2])
+try:
+    discovered = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+except BaseException:
+    raise SystemExit(2)
+result = []
+seen = set()
+for family, socktype, proto, canonname, address in discovered:
+    if family not in (socket.AF_INET, socket.AF_INET6) or socktype != socket.SOCK_STREAM:
+        continue
+    normalized = [str(address[0]), int(address[1])]
+    if family == socket.AF_INET6:
+        normalized.extend([int(address[2]), int(address[3])])
+    key = (int(family), int(socktype), int(proto), tuple(normalized))
+    if key in seen:
+        continue
+    seen.add(key)
+    result.append([int(family), int(socktype), int(proto), str(canonname), normalized])
+    if len(result) >= 64:
+        break
+sys.stdout.write(json.dumps(result, separators=(",", ":")))
+"""
 
 
 class DownloadError(Exception):
@@ -205,6 +243,253 @@ class HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
         return redirected
 
 
+class TransportController:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.cancelled = False
+        self.resolver = None
+        self.sockets = set()
+
+    def attach_resolver(self, process):
+        with self.lock:
+            if self.cancelled:
+                cancelled = True
+            else:
+                self.resolver = process
+                cancelled = False
+        if cancelled:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            return False
+        return True
+
+    def detach_resolver(self, process):
+        with self.lock:
+            if self.resolver is process:
+                self.resolver = None
+
+    def attach_socket(self, connection):
+        with self.lock:
+            if self.cancelled:
+                cancelled = True
+            else:
+                self.sockets.add(connection)
+                cancelled = False
+        if cancelled:
+            try:
+                connection.close()
+            except OSError:
+                pass
+            return False
+        return True
+
+    def detach_socket(self, connection):
+        with self.lock:
+            self.sockets.discard(connection)
+
+    def cancel(self):
+        with self.lock:
+            self.cancelled = True
+            resolver = self.resolver
+            sockets = tuple(self.sockets)
+        if resolver is not None:
+            try:
+                resolver.kill()
+            except OSError:
+                pass
+        for connection in sockets:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                connection.close()
+            except OSError:
+                pass
+
+
+def resolve_addresses(host, port, timeout, transport_controller=None):
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise TimeoutError("tempo esgotado durante resolucao DNS")
+    deadline = time.monotonic() + timeout
+    creationflags = (
+        getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-I", "-c", DNS_RESOLVER_SCRIPT, host, str(port)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=creationflags,
+    )
+    if (transport_controller is not None
+            and not transport_controller.attach_resolver(process)):
+        process.communicate()
+        raise TimeoutError("tempo esgotado durante resolucao DNS")
+    try:
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+            output, _error = process.communicate(input=b"G", timeout=remaining)
+        except subprocess.TimeoutExpired as error:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            process.communicate()
+            raise TimeoutError("tempo esgotado durante resolucao DNS") from error
+        except BaseException:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            try:
+                process.communicate()
+            except BaseException:
+                pass
+            raise
+    finally:
+        if transport_controller is not None:
+            transport_controller.detach_resolver(process)
+    if process.returncode != 0:
+        raise socket.gaierror(socket.EAI_FAIL, "falha durante resolucao DNS")
+    if len(output) > DNS_MAX_OUTPUT_BYTES:
+        raise OSError("resolucao DNS excedeu o limite de saida")
+    try:
+        document = json.loads(output)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise OSError("resolucao DNS retornou dados invalidos") from error
+    if not isinstance(document, list) or not document:
+        raise OSError("resolucao DNS nao retornou enderecos")
+    candidates = []
+    for item in document[:DNS_MAX_CANDIDATES]:
+        if (
+            not isinstance(item, list) or len(item) != 5
+            or type(item[0]) is not int
+            or item[0] not in {socket.AF_INET, socket.AF_INET6}
+            or type(item[1]) is not int or item[1] != socket.SOCK_STREAM
+            or type(item[2]) is not int or not isinstance(item[3], str)
+            or not isinstance(item[4], list) or len(item[4]) not in {2, 4}
+            or not isinstance(item[4][0], str) or type(item[4][1]) is not int
+            or not 0 <= item[4][1] <= 65535
+        ):
+            raise OSError("resolucao DNS retornou endereco invalido")
+        if item[0] == socket.AF_INET and len(item[4]) != 2:
+            raise OSError("resolucao DNS retornou IPv4 invalido")
+        if item[0] == socket.AF_INET6 and (
+            len(item[4]) != 4
+            or type(item[4][2]) is not int or type(item[4][3]) is not int
+        ):
+            raise OSError("resolucao DNS retornou IPv6 invalido")
+        candidates.append((item[0], item[1], item[2], item[3], tuple(item[4])))
+    return candidates
+
+
+def create_resilient_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                                source_address=None, transport_controller=None):
+    host, port = address
+    effective = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+    if (
+        effective is None or isinstance(effective, bool)
+        or not isinstance(effective, (int, float))
+        or not math.isfinite(effective) or effective <= 0
+    ):
+        raise TimeoutError("tempo de conexao invalido")
+    deadline = time.monotonic() + float(effective)
+    candidates = resolve_addresses(
+        host, port, float(effective), transport_controller,
+    )
+    if time.monotonic() >= deadline:
+        raise TimeoutError("tempo esgotado durante resolucao DNS")
+    pending = []
+    errors = []
+    selector = selectors.DefaultSelector()
+    connected = None
+    in_progress = {
+        errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY, errno.EINTR,
+        *(value for name in ("WSAEINPROGRESS", "WSAEWOULDBLOCK", "WSAEALREADY")
+          if (value := getattr(errno, name, None)) is not None),
+    }
+    try:
+        for family, socktype, proto, _, sockaddr in candidates:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("tempo esgotado durante conexao TCP")
+            connection = socket.socket(family, socktype, proto)
+            if (transport_controller is not None
+                    and not transport_controller.attach_socket(connection)):
+                raise TimeoutError("tempo esgotado durante conexao TCP")
+            pending.append(connection)
+            try:
+                connection.setblocking(False)
+                if source_address:
+                    connection.bind(source_address)
+                result = connection.connect_ex(sockaddr)
+                if result in (0, errno.EISCONN):
+                    connected = connection
+                    break
+                if result not in in_progress:
+                    raise OSError(result, os.strerror(result))
+                selector.register(connection, selectors.EVENT_WRITE)
+            except OSError as error:
+                errors.append(error)
+                connection.close()
+                pending.remove(connection)
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+        while connected is None and selector.get_map():
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining == 0 or not (events := selector.select(remaining)):
+                raise TimeoutError("tempo esgotado durante conexao TCP")
+            for key, _ in events:
+                connection = key.fileobj
+                result = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                if result == 0:
+                    connected = connection
+                    break
+                errors.append(OSError(result, os.strerror(result)))
+                selector.unregister(connection)
+                connection.close()
+                pending.remove(connection)
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+        if connected is None:
+            if errors:
+                raise errors[-1]
+            raise OSError("nao foi possivel conectar")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("tempo esgotado durante conexao TCP")
+        connected.settimeout(remaining)
+        return connected
+    finally:
+        selector.close()
+        for connection in pending:
+            if connection is not connected:
+                connection.close()
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+
+
+class ResilientHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.transport_controller = TransportController()
+
+        def create_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                              source_address=None):
+            return create_resilient_connection(
+                address, timeout, source_address, self.transport_controller,
+            )
+
+        self._create_connection = create_connection
+
+    def cancel_transport(self):
+        self.transport_controller.cancel()
+
+
 class ConnectionRegistry:
     def __init__(self):
         self.lock = threading.Lock()
@@ -231,7 +516,19 @@ class ConnectionRegistry:
             self.cancelled.add(identity)
             connection = self.connections.get(identity)
         if connection is not None:
-            connection.close()
+            cancel_transport = getattr(connection, "cancel_transport", None)
+            if callable(cancel_transport):
+                cancel_transport()
+            active_socket = getattr(connection, "sock", None)
+            if active_socket is not None:
+                try:
+                    active_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+            try:
+                connection.close()
+            except OSError:
+                pass
 
     def clear(self, identity):
         with self.lock:
@@ -244,7 +541,7 @@ class DeadlineHttpsHandler(urllib.request.HTTPSHandler):
         super().__init__()
         self.registry = registry
 
-        class RegisteredConnection(http.client.HTTPSConnection):
+        class RegisteredConnection(ResilientHTTPSConnection):
             def __init__(registered_self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 registry.register(threading.get_ident(), registered_self)
@@ -252,7 +549,11 @@ class DeadlineHttpsHandler(urllib.request.HTTPSHandler):
             def connect(registered_self):
                 identity = threading.get_ident()
                 registry.ensure_active(identity)
-                super().connect()
+                try:
+                    super().connect()
+                except BaseException:
+                    registry.ensure_active(identity)
+                    raise
                 try:
                     registry.ensure_active(identity)
                 except DownloadError:
@@ -383,7 +684,8 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     else:
         deadline = connection_deadline
         timeout_error = TransientError("prazo de conexao ou headers excedido")
-    socket_timeout = max(0.001, deadline - started)
+    if deadline - time.monotonic() < MIN_OPEN_BUDGET_SECONDS:
+        raise timeout_error
     lock = threading.Lock()
     state = {}
     cancelled = [False]
@@ -401,6 +703,9 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
             if cancelled_before_open:
                 registry.cancel(identity)
             try:
+                socket_timeout = deadline - time.monotonic()
+                if socket_timeout <= 0:
+                    raise deadline_error()
                 value = opener.open(request, timeout=socket_timeout)
                 kind = "response"
             except BaseException as error:
@@ -420,32 +725,36 @@ def open_with_deadline(opener, request, connect_timeout, total_deadline,
     thread = threading.Thread(target=worker, name="x86qw-bootstrap-open")
     thread.daemon = True
     thread.start()
+
+    def cancel_and_collect():
+        with lock:
+            cancelled[0] = True
+            response = state.pop("response", None)
+            identity = worker_identity[0]
+        if identity is None:
+            identity = thread.ident
+        if identity is not None:
+            registry.cancel(identity)
+        close_response(response)
+        cleanup_remaining = max(0.0, total_deadline - time.monotonic())
+        if cleanup_remaining > 0:
+            thread.join(min(OPEN_CLEANUP_RESERVE_SECONDS, cleanup_remaining))
+
     try:
         wait = deadline - time.monotonic()
         if wait <= 0:
             raise deadline_error()
-        thread.join(wait)
+        cleanup_budget = min(
+            OPEN_CLEANUP_RESERVE_SECONDS, max(0.25, wait / 10),
+        )
+        cleanup_after_limit = max(0.0, total_deadline - deadline)
+        cleanup_reserve = max(0.0, cleanup_budget - cleanup_after_limit)
+        thread.join(wait - cleanup_reserve)
     except BaseException:
-        with lock:
-            cancelled[0] = True
-            response = state.pop("response", None)
-            identity = worker_identity[0]
-        if identity is None:
-            identity = thread.ident
-        if identity is not None:
-            registry.cancel(identity)
-        close_response(response)
+        cancel_and_collect()
         raise
     if thread.is_alive():
-        with lock:
-            cancelled[0] = True
-            response = state.pop("response", None)
-            identity = worker_identity[0]
-        if identity is None:
-            identity = thread.ident
-        if identity is not None:
-            registry.cancel(identity)
-        close_response(response)
+        cancel_and_collect()
         raise deadline_error()
     with lock:
         response = state.get("response")
@@ -573,6 +882,12 @@ def download_attempt(url, destination, expected_size, expected_sha256,
 
 def download_mirrors(urls, destination, expected_size, expected_sha256,
                      connect_timeout, transfer_timeout, retries, retry_max_time):
+    if not isinstance(urls, (list, tuple)) or not urls:
+        raise PolicyError("ao menos um mirror HTTPS e obrigatorio")
+    validated_urls = []
+    for url in urls:
+        validate_https(url)
+        validated_urls.append(url)
     deadline = time.monotonic() + retry_max_time
     registry = ConnectionRegistry()
     opener = urllib.request.build_opener(
@@ -580,8 +895,7 @@ def download_mirrors(urls, destination, expected_size, expected_sha256,
     )
     opener.registry = registry
     last_error = None
-    for url in urls:
-        validate_https(url)
+    for url in validated_urls:
         for attempt in range(retries + 1):
             try:
                 remaining(deadline)

@@ -10,9 +10,9 @@ import sys
 from pathlib import Path, PurePosixPath
 
 try:
-    from .downloader import MAX_ARTIFACT_BYTES
+    from .downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 except ImportError:  # Execucao direta
-    from downloader import MAX_ARTIFACT_BYTES
+    from downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 from urllib.parse import unquote, urlsplit
 
 try:
@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
+EZQUAKE_STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+EZQUAKE_NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
 PLATFORMS = {"macos", "linux", "windows", "source", "any"}
 CHANNELS = {"stable", "nightly", "content"}
 PACKAGE_FIELDS = (
@@ -60,6 +62,15 @@ def validate_package(
         raise ValueError(f"{label}.package is not a safe path segment")
     if package["channel"] == "content" and package["component"] == "ezquake":
         raise ValueError(f"{label} content packages must use a content component namespace")
+    if package["component"] == "ezquake":
+        version_pattern = {
+            "stable": EZQUAKE_STABLE_VERSION,
+            "nightly": EZQUAKE_NIGHTLY_VERSION,
+        }.get(package["channel"])
+        if version_pattern is None or version_pattern.fullmatch(package["version"]) is None:
+            raise ValueError(
+                f"{label}.version is invalid for ezquake {package['channel']}"
+            )
     filename = package["filename"]
     if Path(filename).name != filename or "/" in filename or "\\" in filename or filename in {".", ".."}:
         raise ValueError(f"{label}.filename must not contain a path")
@@ -86,14 +97,20 @@ def validate_package(
     if not all(isinstance(url, str) for url in source_urls) or len(source_urls) != len(set(source_urls)):
         raise ValueError(f"{label}.source_urls must contain unique strings")
     for url in [package["origin_url"], package["license_url"], *source_urls, *urls]:
-        parsed = urlsplit(url) if isinstance(url, str) else None
-        if parsed is None or parsed.scheme != "https" or not parsed.netloc:
-            raise ValueError(f"{label} accepts only absolute HTTPS URLs")
+        try:
+            parsed = validate_https_url(url, f"{label} URL")
+        except DownloadPolicyError as error:
+            raise ValueError(str(error)) from error
+        if parsed.query:
+            raise ValueError(f"{label} persistent URLs must not contain a query")
     if "release_url" in package:
         release_url = package["release_url"]
-        parsed = urlsplit(release_url) if isinstance(release_url, str) else None
-        if parsed is None or parsed.scheme != "https" or not parsed.netloc:
-            raise ValueError(f"{label}.release_url must be an absolute HTTPS URL")
+        try:
+            parsed = validate_https_url(release_url, f"{label}.release_url")
+        except DownloadPolicyError as error:
+            raise ValueError(str(error)) from error
+        if parsed.query:
+            raise ValueError(f"{label}.release_url must not contain a query")
     if "release_notes" in package and (
         not isinstance(package["release_notes"], str) or not package["release_notes"].strip()
     ):
@@ -128,6 +145,19 @@ def validate_package(
             or relative.name != filename
         ):
             raise ValueError(f"{label}.distribution_path is unsafe")
+        if package["component"] == "ezquake":
+            expected_path = PurePosixPath(
+                "clients",
+                "ezquake",
+                package["channel"],
+                package["version"],
+                f"{package['platform']}-{package['architecture']}",
+                package["filename"],
+            ).as_posix()
+            if distribution_path != expected_path:
+                raise ValueError(
+                    f"{label}.distribution_path does not match ezquake coordinates"
+                )
     for url in [package["origin_url"], *urls]:
         if PurePosixPath(unquote(urlsplit(url).path)).name != filename:
             raise ValueError(f"{label} artifact URLs must end with filename")

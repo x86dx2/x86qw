@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import io
 import json
@@ -37,6 +38,71 @@ from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
 
 
 class ComponentReleaseTests(unittest.TestCase):
+    def test_release_inventory_rejects_unsafe_persistent_urls_without_secret(self) -> None:
+        baseline = json.loads(
+            (ROOT / "maintenance/inventory/component-releases.json").read_text(
+                encoding="utf-8",
+            ),
+        )
+        secret = "never-print-release-secret"
+        documents: dict[str, dict[str, object]] = {}
+
+        document = copy.deepcopy(baseline)
+        document["reference"]["repository"] = f"https://user:{secret}@example.invalid/repo"
+        documents["reference-repository-userinfo"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["license_url"] = (
+            f"https://example.invalid/LICENSE?token={secret}"
+        )
+        documents["license-query"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["license"] = " "
+        documents["empty-license"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["upstream"]["release_url"] = (
+            f"https://example.invalid/release#{secret}"
+        )
+        documents["release-fragment"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["upstream"]["source_url"] = (
+            f"https://user:{secret}@example.invalid/source.zip"
+        )
+        documents["source-userinfo"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["source_mirrors"] = [
+            f"https://example.invalid/source.zip?token={secret}",
+        ]
+        documents["source-mirror-query"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["ktx"]["artifacts"][0]["url"] = (
+            f"https://example.invalid/artifact.zip?token={secret}"
+        )
+        documents["artifact-query"] = document
+
+        document = copy.deepcopy(baseline)
+        document["components"]["nquake-visual-core"]["license"] = "GPL-2.0"
+        document["components"]["nquake-visual-core"]["license_url"] = (
+            f"https://example.invalid/LICENSE?token={secret}"
+        )
+        documents["optional-license-query"] = document
+
+        for label, document in documents.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                inventory = Path(temporary) / "component-releases.json"
+                inventory.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaises(ValueError) as raised:
+                    load_releases(
+                        inventory,
+                        ROOT / "maintenance/inventory/components.json",
+                    )
+                self.assertNotIn(secret, str(raised.exception))
+
     def test_release_inventory_rejects_artifact_above_global_limit(self) -> None:
         document = json.loads(
             (ROOT / "maintenance/inventory/component-releases.json").read_text(
@@ -586,7 +652,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         td2_artifact = releases["components"]["total-destruction-2"]["artifacts"][0]
         with mock.patch(
-            "check_component_updates.git_remote_revision",
+            "check_component_updates.github_ref_revision",
             return_value=releases["reference"]["revision"],
         ), mock.patch("check_component_updates.github_latest_release", return_value="1.47"):
             with mock.patch("check_component_updates.remote_fingerprint", return_value=(
@@ -610,7 +676,7 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
         )
         with mock.patch(
-            "check_component_updates.git_remote_revision",
+            "check_component_updates.github_ref_revision",
             return_value=releases["reference"]["revision"],
         ), mock.patch(
             "check_component_updates.github_latest_release", return_value="1.47",

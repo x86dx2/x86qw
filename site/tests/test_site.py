@@ -1,3 +1,4 @@
+from html import unescape
 from html.parser import HTMLParser
 import ast
 import hashlib
@@ -127,22 +128,9 @@ class SiteTests(unittest.TestCase):
             self.assertIn(command, cli_help)
 
     def test_unix_install_command_restricts_https_consistently(self):
-        command = (
-            "/bin/bash -c \"$(curl --proto '=https' --proto-redir '=https' "
-            "--connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL "
-            "https://x86qw.x86.com.br/install.sh)\""
-        )
-        documents = (
-            PROJECT_ROOT / "README.md",
-            PROJECT_ROOT / "dist/installer/docs/installer.md",
-            ROOT / "index.html",
-        )
-        for path in documents:
-            with self.subTest(path=path.relative_to(PROJECT_ROOT)):
-                self.assertIn(command, path.read_text(encoding="utf-8"))
         manager_path = PROJECT_ROOT / "dist/installer/bin/manager.py"
         manager_tree = ast.parse(manager_path.read_text(encoding="utf-8"))
-        manager_command = next(
+        command = next(
             ast.literal_eval(statement.value)
             for statement in manager_tree.body
             if isinstance(statement, ast.Assign)
@@ -152,7 +140,29 @@ class SiteTests(unittest.TestCase):
                 for target in statement.targets
             )
         )
-        self.assertEqual(command, manager_command)
+        for fragment in (
+            "umask 077",
+            "mktemp -d",
+            "trap cleanup EXIT",
+            "set -o pipefail",
+            'curl --disable --proto "=https" --proto-redir "=https"',
+            "--connect-timeout 15 --max-time 60 --max-filesize 262144",
+            "head -c 262145",
+            'n=$(wc -c <"$f")',
+            '[ "$s" -eq 0 ] || exit "$s"',
+        ):
+            self.assertIn(fragment, command)
+        self.assertNotIn('"$(curl', command)
+        documents = (
+            PROJECT_ROOT / "README.md",
+            PROJECT_ROOT / "dist/installer/docs/installer.md",
+            ROOT / "index.html",
+        )
+        for path in documents:
+            with self.subTest(path=path.relative_to(PROJECT_ROOT)):
+                document = unescape(path.read_text(encoding="utf-8"))
+                self.assertIn(command, document)
+                self.assertNotIn('/bin/bash -c "$(curl', document)
 
         powershell_command = next(
             ast.literal_eval(statement.value)

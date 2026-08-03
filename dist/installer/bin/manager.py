@@ -4,18 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import errno
 import hashlib
-import http.client
 import importlib
 import json
 import os
 import platform as host_platform
 import plistlib
 import re
-import selectors
 import shutil
-import socket
 import stat
 import struct
 import subprocess
@@ -23,7 +19,6 @@ import sys
 import tarfile
 import tempfile
 import textwrap
-import threading
 import time
 import traceback
 import urllib.parse
@@ -71,7 +66,6 @@ from maintenance.tools.downloader import (
     MAX_ARTIFACT_BYTES,
     PinnedArtifact,
     RetryPolicy,
-    build_https_opener,
     download as bounded_download,
     download_mirrors as bounded_download_mirrors,
     safe_url_for_log,
@@ -95,7 +89,18 @@ CATALOG_URLS = (
 CATALOG_TIMEOUT = 10.0
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
 HUB_MAX_BYTES = 1024 * 1024
-PUBLIC_UNIX_BOOTSTRAP_COMMAND = "/bin/bash -c \"$(curl --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh)\""
+PUBLIC_UNIX_BOOTSTRAP_COMMAND = (
+    """/bin/bash -c 'umask 077; """
+    """d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; """
+    """f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; """
+    """abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; """
+    """set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" """
+    """--connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL """
+    """https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; """
+    """n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then """
+    """printf "%s\\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; """
+    """[ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw"""
+)
 PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
     "& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); "
     "$h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); "
@@ -211,102 +216,6 @@ def application_version() -> str:
     return version
 
 
-def create_resilient_connection(
-    address: tuple[str, int],
-    timeout: float | object = socket._GLOBAL_DEFAULT_TIMEOUT,
-    source_address: tuple[str, int] | None = None,
-) -> socket.socket:
-    """Connect to the first reachable DNS address without waiting on a dead first result."""
-    host, port = address
-    effective_timeout = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
-    started = time.monotonic()
-    if effective_timeout is None:
-        candidates = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
-    else:
-        resolved: list[list[tuple[object, ...]]] = []
-        resolution_errors: list[Exception] = []
-        finished = threading.Event()
-
-        def resolve() -> None:
-            try:
-                resolved.append(socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM))
-            except Exception as error:  # propagated in the caller thread below
-                resolution_errors.append(error)
-            finally:
-                finished.set()
-
-        threading.Thread(target=resolve, name="x86qw-dns", daemon=True).start()
-        if not finished.wait(float(effective_timeout)):
-            raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
-        if resolution_errors:
-            raise resolution_errors[0]
-        candidates = resolved[0]
-    if not candidates:
-        raise OSError(f"Nenhum endereço foi encontrado para {host}.")
-    deadline = None if effective_timeout is None else started + float(effective_timeout)
-    pending: list[socket.socket] = []
-    errors: list[OSError] = []
-    selector = selectors.DefaultSelector()
-    connected: socket.socket | None = None
-    in_progress = {
-        errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY, errno.EINTR,
-        *(value for name in ("WSAEINPROGRESS", "WSAEWOULDBLOCK", "WSAEALREADY")
-          if (value := getattr(errno, name, None)) is not None),
-    }
-    try:
-        for family, socktype, proto, _, sockaddr in candidates:
-            connection = socket.socket(family, socktype, proto)
-            pending.append(connection)
-            try:
-                connection.setblocking(False)
-                if source_address:
-                    connection.bind(source_address)
-                result = connection.connect_ex(sockaddr)
-                if result in (0, errno.EISCONN):
-                    connected = connection
-                    break
-                if result not in in_progress:
-                    raise OSError(result, os.strerror(result))
-                selector.register(connection, selectors.EVENT_WRITE)
-            except OSError as error:
-                errors.append(error)
-                connection.close()
-                pending.remove(connection)
-
-        while connected is None and selector.get_map():
-            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-            if remaining == 0 or not (events := selector.select(remaining)):
-                raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
-            for key, _ in events:
-                connection = key.fileobj
-                result = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                if result == 0:
-                    connected = connection
-                    break
-                errors.append(OSError(result, os.strerror(result)))
-                selector.unregister(connection)
-                connection.close()
-                pending.remove(connection)
-        if connected is None:
-            if errors:
-                raise errors[-1]
-            raise OSError(f"Não foi possível conectar a {host}:{port}.")
-        connected.settimeout(effective_timeout)
-        return connected
-    finally:
-        selector.close()
-        for connection in pending:
-            if connection is not connected:
-                connection.close()
-
-
-class ResilientHTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, *args: object, **kwargs: object):
-        super().__init__(*args, **kwargs)
-        self._create_connection = create_resilient_connection
-
-
-HTTPS_OPENER = build_https_opener(connection_class=ResilientHTTPSConnection)
 
 
 @dataclass(frozen=True)
@@ -1547,7 +1456,6 @@ class Installer:
         try:
             result = bounded_download(
                 contract,
-                opener=HTTPS_OPENER,
                 progress=progress if destination is not None else None,
                 on_retry=retry_notice,
             )
@@ -1660,7 +1568,6 @@ class Installer:
         try:
             result = bounded_download_mirrors(
                 contracts,
-                opener=HTTPS_OPENER,
                 progress=progress if destination is not None else None,
                 on_retry=retry_notice,
                 on_mirror_failure=mirror_failure,

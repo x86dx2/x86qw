@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import os
-import subprocess
+import json
 import sys
-import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,336 +12,286 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 import public_upstreams  # noqa: E402
 from public_upstreams import (  # noqa: E402
-    GIT_TREE_MAX_BYTES,
-    _posix_process_group_status,
-    _run_bounded_command,
-    _windows_job_kernel32,
-    _windows_ntdll,
-    git_remote_revision,
-    git_remote_tree,
+    DISCOVERY_MAX_BYTES,
+    GITHUB_API_DEADLINE_SECONDS,
+    GitTreeEntry,
+    _validated_github_tree,
     github_commit_revision,
     github_latest_release,
+    github_recursive_tree,
+    github_ref_revision,
     remote_content_length,
-    run_git,
 )
 
 
-class PublicUpstreamTests(unittest.TestCase):
-    def test_git_remote_revision_uses_the_public_git_protocol(self) -> None:
-        with mock.patch(
-            "public_upstreams.run_git",
-            return_value="a" * 40 + "\trefs/heads/master\n",
-        ) as run:
-            self.assertEqual("a" * 40, git_remote_revision("https://example.invalid/repo.git", "refs/heads/master"))
-        arguments = run.call_args.args[0]
-        self.assertEqual(["ls-remote", "--exit-code"], arguments[:2])
-        self.assertNotIn("api.github.com", " ".join(arguments))
-        self.assertLessEqual(run.call_args.kwargs["stdout_limit"], 4 * 1024 * 1024)
+def response(document: object, *, url: str = "https://api.github.com/") -> mock.Mock:
+    return mock.Mock(
+        url=url,
+        data=json.dumps(document, separators=(",", ":")).encode("utf-8"),
+        headers={"Content-Length": "1"},
+    )
 
-    def test_git_repository_rejects_non_https_and_ambiguous_urls_before_spawn(self) -> None:
-        invalid = (
-            "http://example.invalid/repo.git",
-            "file:///tmp/repo.git",
-            "git@example.invalid:repo.git",
-            "https://user@example.invalid/repo.git",
-            "https://example.invalid:8443/repo.git",
-            "https://example.invalid/repo.git?ref=main",
-            "https://example.invalid/repo.git#main",
-            "https://example.invalid/repo\\name.git",
-            "https://example.invalid/repo git",
+
+def reference_document(revision: str = "a" * 40) -> dict[str, object]:
+    return {
+        "ref": "refs/heads/master",
+        "object": {
+            "type": "commit",
+            "sha": revision,
+            "url": f"https://api.github.com/repos/nQuake/distfiles/git/commits/{revision}",
+        },
+    }
+
+
+def commit_document(
+    revision: str = "a" * 40,
+    tree_sha: str = "b" * 40,
+) -> dict[str, object]:
+    return {
+        "sha": revision,
+        "tree": {
+            "sha": tree_sha,
+            "url": f"https://api.github.com/repos/nQuake/distfiles/git/trees/{tree_sha}",
+        },
+    }
+
+
+def tree_document(
+    entries: list[dict[str, object]],
+    *,
+    revision: str = "a" * 40,
+    truncated: bool = False,
+) -> dict[str, object]:
+    return {
+        "sha": revision,
+        "truncated": truncated,
+        "tree": entries,
+    }
+
+
+class PublicUpstreamTests(unittest.TestCase):
+    def test_github_ref_uses_bounded_metadata_on_the_official_api(self) -> None:
+        with mock.patch(
+            "public_upstreams.download",
+            return_value=response(reference_document()),
+        ) as download:
+            revision = github_ref_revision(
+                "https://github.com/nQuake/distfiles.git", "refs/heads/master",
+            )
+
+        self.assertEqual("a" * 40, revision)
+        contract = download.call_args.args[0]
+        self.assertEqual(
+            "https://api.github.com/repos/nQuake/distfiles/git/ref/heads/master",
+            contract.url,
         )
-        with mock.patch("public_upstreams.run_git") as run:
+        self.assertEqual(DISCOVERY_MAX_BYTES, contract.maximum_size)
+        self.assertLessEqual(contract.deadline_seconds, GITHUB_API_DEADLINE_SECONDS)
+        self.assertGreater(contract.deadline_seconds, 0)
+        self.assertEqual("application/vnd.github+json", contract.headers["Accept"])
+        self.assertNotIn("Authorization", contract.headers)
+
+    def test_github_repository_rejects_other_origins_and_ambiguous_urls_before_network(self) -> None:
+        invalid = (
+            "http://github.com/nQuake/distfiles.git",
+            "https://example.invalid/nQuake/distfiles.git",
+            "file:///tmp/repo.git",
+            "git@github.com:nQuake/distfiles.git",
+            "https://user@github.com/nQuake/distfiles.git",
+            "https://github.com:8443/nQuake/distfiles.git",
+            "https://github.com/nQuake/distfiles.git?ref=main",
+            "https://github.com/nQuake/distfiles.git#main",
+            "https://github.com/nQuake/distfiles\\name.git",
+            "https://github.com/nQuake/distfiles extra.git",
+            "https://github.com/nQuake/distfiles/extra.git",
+            "https://github.com/nQuake/%64istfiles.git",
+        )
+        with mock.patch("public_upstreams.download") as download:
             for repository in invalid:
                 with self.subTest(repository=repository), self.assertRaises(ValueError):
-                    git_remote_revision(repository, "refs/heads/master")
-        run.assert_not_called()
+                    github_ref_revision(repository, "refs/heads/master")
+        download.assert_not_called()
 
-    def test_git_repository_rejection_does_not_echo_credentials_or_controls(self) -> None:
+    def test_github_repository_rejection_redacts_credentials_and_controls(self) -> None:
         sentinel = "X86QW_URL_SECRET_SENTINEL"
         invalid = (
-            f"https://operator:{sentinel}@example.invalid/repo.git",
-            f"https://example.invalid/repo.git?token={sentinel}\nforged",
+            f"https://operator:{sentinel}@github.com/nQuake/distfiles.git",
+            f"https://github.com/nQuake/distfiles.git?token={sentinel}\nforged",
         )
-        with mock.patch("public_upstreams.run_git") as run:
+        with mock.patch("public_upstreams.download") as download:
             for repository in invalid:
                 with self.subTest(repository=repository), self.assertRaises(ValueError) as raised:
-                    git_remote_revision(repository, "refs/heads/master")
+                    github_ref_revision(repository, "refs/heads/master")
                 self.assertNotIn(sentinel, str(raised.exception))
                 self.assertNotIn("\n", str(raised.exception))
-        run.assert_not_called()
+        download.assert_not_called()
 
-    def test_git_ref_rejects_option_and_ref_syntax_injection_before_spawn(self) -> None:
-        invalid = ("--upload-pack=evil", "refs/heads/a..b", "refs/heads/a@{1}", "refs//heads/main")
-        with mock.patch("public_upstreams.run_git") as run:
+    def test_github_ref_rejects_unsafe_or_non_head_refs_before_network(self) -> None:
+        invalid = (
+            "--upload-pack=evil",
+            "refs/heads/a..b",
+            "refs/heads/a@{1}",
+            "refs//heads/main",
+            "refs/tags/1.0",
+            "heads/main.lock",
+        )
+        with mock.patch("public_upstreams.download") as download:
             for ref in invalid:
                 with self.subTest(ref=ref), self.assertRaises(ValueError):
-                    git_remote_revision("https://example.invalid/repo.git", ref)
-        run.assert_not_called()
+                    github_ref_revision("nQuake/distfiles", ref)
+        download.assert_not_called()
 
-    def test_git_tree_is_read_without_checking_out_blobs(self) -> None:
-        outputs = [
-            "",
-            "b" * 40 + "\n",
-            b"100644 blob " + b"c" * 40 + b"\tqw/file.pk3\0",
-        ]
-        with mock.patch("public_upstreams.run_git", side_effect=outputs) as run:
-            revision, entries = git_remote_tree("https://example.invalid/repo.git", "master")
-        self.assertEqual("b" * 40, revision)
-        self.assertEqual(
-            ("qw/file.pk3", "c" * 40, None),
-            (entries[0].path, entries[0].sha1, entries[0].size),
+    def test_github_ref_rejects_an_invalid_response_schema(self) -> None:
+        valid = reference_document()
+        invalid = (
+            {},
+            {**valid, "ref": "refs/heads/other"},
+            {**valid, "object": {**valid["object"], "type": "tag"}},
+            {**valid, "object": {**valid["object"], "sha": "invalid"}},
+            {**valid, "object": {**valid["object"], "url": "https://example.invalid/commit"}},
         )
-        clone = run.call_args_list[0].args[0]
-        self.assertIn("--filter=blob:none", clone)
-        self.assertIn("--no-checkout", clone)
-        self.assertEqual(GIT_TREE_MAX_BYTES, run.call_args_list[0].kwargs["workspace_limit"])
-        self.assertIsNotNone(run.call_args_list[0].kwargs["workspace"])
-        tree = run.call_args_list[2].args[0]
-        self.assertNotIn("-l", tree)
-        self.assertEqual(GIT_TREE_MAX_BYTES, run.call_args_list[2].kwargs["workspace_limit"])
-        deadlines = {call.kwargs["deadline"] for call in run.call_args_list}
-        self.assertEqual(1, len(deadlines))
+        for document in invalid:
+            with self.subTest(document=document), mock.patch(
+                "public_upstreams.download", return_value=response(document),
+            ), self.assertRaisesRegex(ValueError, "referencia invalida"):
+                github_ref_revision("nQuake/distfiles", "master")
 
-    def test_git_tree_rejects_a_record_with_an_unexpected_size_field(self) -> None:
-        outputs = [
-            "",
-            "b" * 40 + "\n",
-            b"100644 blob " + b"c" * 40 + b" 123\tqw/file.pk3\0",
-        ]
-        with mock.patch("public_upstreams.run_git", side_effect=outputs):
-            with self.assertRaisesRegex(ValueError, "entrada invalida"):
-                git_remote_tree("https://example.invalid/repo.git", "master")
+    def test_github_recursive_tree_shares_one_deadline_and_returns_valid_blobs(self) -> None:
+        revision = "b" * 40
+        tree_sha = "e" * 40
+        documents = (
+            response(reference_document(revision)),
+            response(commit_document(revision, tree_sha)),
+            response(tree_document([
+                {
+                    "path": "qw/file.pk3", "mode": "100644", "type": "blob",
+                    "sha": "c" * 40, "size": 321,
+                },
+                {
+                    "path": "qw", "mode": "040000", "type": "tree",
+                    "sha": "d" * 40,
+                },
+            ], revision=tree_sha)),
+        )
+        with mock.patch("public_upstreams.download", side_effect=documents) as download, mock.patch(
+            "public_upstreams.time.monotonic", side_effect=[100.0, 100.0, 101.0, 102.0],
+        ):
+            actual_revision, entries = github_recursive_tree("nQuake/distfiles", "master")
 
-    def test_git_tree_rejects_malformed_blob_identity(self) -> None:
-        outputs = [
-            "",
-            "b" * 40 + "\n",
-            b"100644 blob not-a-sha1\tqw/file.pk3\0",
-        ]
-        with mock.patch("public_upstreams.run_git", side_effect=outputs):
-            with self.assertRaisesRegex(ValueError, "entrada invalida"):
-                git_remote_tree("https://example.invalid/repo.git", "master")
+        self.assertEqual(revision, actual_revision)
+        self.assertEqual([GitTreeEntry("qw/file.pk3", "c" * 40, 321)], entries)
+        contracts = [call.args[0] for call in download.call_args_list]
+        self.assertEqual(3, len(contracts))
+        self.assertEqual(GITHUB_API_DEADLINE_SECONDS, contracts[0].deadline_seconds)
+        self.assertEqual(GITHUB_API_DEADLINE_SECONDS - 1, contracts[1].deadline_seconds)
+        self.assertEqual(GITHUB_API_DEADLINE_SECONDS - 2, contracts[2].deadline_seconds)
+        self.assertEqual(
+            f"https://api.github.com/repos/nQuake/distfiles/git/commits/{revision}",
+            contracts[1].url,
+        )
+        self.assertEqual(
+            f"https://api.github.com/repos/nQuake/distfiles/git/trees/{tree_sha}?recursive=1",
+            contracts[2].url,
+        )
+        self.assertTrue(all(contract.maximum_size == DISCOVERY_MAX_BYTES for contract in contracts))
 
-    def test_bounded_process_does_not_use_a_shell_and_disables_prompts(self) -> None:
-        command = [sys.executable, "-c", "import os; os.write(1, b'ok')"]
-        spawn_calls: list[dict[str, object]] = []
-        real_popen = subprocess.Popen
+    def test_github_recursive_tree_rejects_an_invalid_commit_tree(self) -> None:
+        revision = "a" * 40
+        valid = commit_document(revision)
+        invalid = (
+            {},
+            {**valid, "sha": "c" * 40},
+            {**valid, "tree": {**valid["tree"], "sha": "invalid"}},
+            {**valid, "tree": {**valid["tree"], "url": "https://example.invalid/tree"}},
+        )
+        for commit in invalid:
+            with self.subTest(commit=commit), mock.patch(
+                "public_upstreams.download",
+                side_effect=[response(reference_document(revision)), response(commit)],
+            ), self.assertRaisesRegex(ValueError, "commit invalido"):
+                github_recursive_tree("nQuake/distfiles", "master")
 
-        def spawn(*arguments, **options):
-            spawn_calls.append(options)
-            return real_popen(*arguments, **options)
+    def test_github_recursive_tree_rejects_truncated_or_mismatched_trees(self) -> None:
+        for document in (
+            tree_document([], truncated=True),
+            tree_document([], revision="b" * 40),
+            {"sha": "a" * 40, "truncated": False, "tree": {}},
+        ):
+            with self.subTest(document=document), self.assertRaisesRegex(
+                ValueError, "arvore incompleta ou invalida",
+            ):
+                _validated_github_tree(document, expected_revision="a" * 40)
 
-        dangerous_environment = {
-            "PATH": os.environ.get("PATH", ""),
-            "GIT_CONFIG_COUNT": "1",
-            "GIT_CONFIG_KEY_0": "url.file:///tmp/.insteadOf",
-            "GIT_CONFIG_VALUE_0": "https://",
-            "GIT_CONFIG_GLOBAL": "/tmp/hostile-global-config",
-            "GIT_CONFIG_SYSTEM": "/tmp/hostile-system-config",
-            "GIT_OBJECT_DIRECTORY": "/tmp/outside-workspace",
-            "GIT_SSL_NO_VERIFY": "1",
-            "GIT_CURL_VERBOSE": "1",
-            "GIT_ASKPASS": "/tmp/hostile-askpass",
-            "GIT_PROXY_COMMAND": "/tmp/hostile-proxy",
-            "SSH_ASKPASS": "/tmp/hostile-ssh-askpass",
-            "CURL_CA_BUNDLE": "/tmp/hostile-ca.pem",
-            "SSL_CERT_FILE": "/tmp/hostile-cert.pem",
-            "HTTPS_PROXY": "http://insecure-proxy.invalid:8080",
-            "HTTP_PROXY": "http://insecure-proxy.invalid:8080",
-            "ALL_PROXY": "socks5://insecure-proxy.invalid:1080",
+    def test_github_recursive_tree_rejects_invalid_entry_fields(self) -> None:
+        base = {
+            "path": "qw/file.pk3", "mode": "100644", "type": "blob",
+            "sha": "c" * 40, "size": 321,
         }
-        with (
-            mock.patch.dict(os.environ, dangerous_environment, clear=False),
-            mock.patch("public_upstreams.subprocess.Popen", side_effect=spawn),
+        invalid_changes = (
+            {"path": "../escape"},
+            {"path": "/absolute"},
+            {"path": "qw\\file.pk3"},
+            {"path": "qw/CON"},
+            {"mode": "120000"},
+            {"type": "special"},
+            {"sha": "invalid"},
+            {"size": True},
+            {"size": -1},
+            {"size": public_upstreams.MAX_ARTIFACT_BYTES + 1},
+        )
+        for changes in invalid_changes:
+            entry = {**base, **changes}
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                _validated_github_tree(
+                    tree_document([entry]), expected_revision="a" * 40,
+                )
+
+    def test_github_recursive_tree_rejects_portable_path_collisions(self) -> None:
+        entries = [
+            {
+                "path": path, "mode": "100644", "type": "blob",
+                "sha": character * 40, "size": 1,
+            }
+            for path, character in (("qw/File.cfg", "a"), ("qw/file.cfg", "b"))
+        ]
+        with self.assertRaisesRegex(ValueError, "caminhos.*duplicados"):
+            _validated_github_tree(
+                tree_document(entries), expected_revision="a" * 40,
+            )
+
+    def test_github_recursive_tree_rejects_size_on_non_blob(self) -> None:
+        with self.assertRaisesRegex(ValueError, "tamanho em entrada sem blob"):
+            _validated_github_tree(
+                tree_document([{
+                    "path": "qw", "mode": "040000", "type": "tree",
+                    "sha": "c" * 40, "size": 1,
+                }]),
+                expected_revision="a" * 40,
+            )
+
+    def test_github_recursive_tree_rejects_submodules(self) -> None:
+        with self.assertRaisesRegex(ValueError, "entrada de arvore invalida"):
+            _validated_github_tree(
+                tree_document([{
+                    "path": "vendor/module", "mode": "160000", "type": "commit",
+                    "sha": "c" * 40,
+                }]),
+                expected_revision="a" * 40,
+            )
+
+    def test_github_api_rejects_invalid_json(self) -> None:
+        invalid_response = mock.Mock(data=b"not-json", url="https://api.github.com/", headers={})
+        with mock.patch("public_upstreams.download", return_value=invalid_response), self.assertRaisesRegex(
+            ValueError, "referencia do GitHub invalido",
         ):
-            result = _run_bounded_command(command, deadline=time.monotonic() + 5)
-        self.assertEqual(b"ok", result.stdout)
-        self.assertIs(spawn_calls[0]["shell"], False)
-        child_environment = spawn_calls[0]["env"]
-        self.assertEqual("0", child_environment["GIT_TERMINAL_PROMPT"])
-        self.assertEqual("never", child_environment["GCM_INTERACTIVE"])
-        self.assertEqual("1", child_environment["GIT_CONFIG_NOSYSTEM"])
-        self.assertEqual(os.devnull, child_environment["GIT_CONFIG_GLOBAL"])
-        self.assertNotIn("GIT_CONFIG_COUNT", child_environment)
-        self.assertNotIn("GIT_CONFIG_KEY_0", child_environment)
-        self.assertNotIn("GIT_CONFIG_VALUE_0", child_environment)
-        self.assertNotIn("GIT_OBJECT_DIRECTORY", child_environment)
-        self.assertNotIn("GIT_CONFIG_SYSTEM", child_environment)
-        self.assertNotIn("GIT_SSL_NO_VERIFY", child_environment)
-        self.assertNotIn("GIT_CURL_VERBOSE", child_environment)
-        self.assertNotIn("GIT_ASKPASS", child_environment)
-        self.assertNotIn("GIT_PROXY_COMMAND", child_environment)
-        self.assertNotIn("SSH_ASKPASS", child_environment)
-        self.assertNotIn("CURL_CA_BUNDLE", child_environment)
-        self.assertNotIn("SSL_CERT_FILE", child_environment)
-        self.assertNotIn("HTTPS_PROXY", child_environment)
-        self.assertNotIn("HTTP_PROXY", child_environment)
-        self.assertNotIn("ALL_PROXY", child_environment)
+            github_ref_revision("nQuake/distfiles", "master")
 
-    def test_bounded_process_preserves_only_an_https_proxy_without_credentials(self) -> None:
-        spawn_calls: list[dict[str, object]] = []
-        real_popen = subprocess.Popen
-
-        def spawn(*arguments, **options):
-            spawn_calls.append(options)
-            return real_popen(*arguments, **options)
-
-        environment = {
-            "PATH": os.environ.get("PATH", ""),
-            "HTTPS_PROXY": "https://proxy.example.invalid:8443",
-        }
-        with (
-            mock.patch.dict(os.environ, environment, clear=True),
-            mock.patch("public_upstreams.subprocess.Popen", side_effect=spawn),
-        ):
-            _run_bounded_command(
-                [sys.executable, "-c", "pass"],
-                deadline=time.monotonic() + 5,
-            )
-        child_environment = spawn_calls[0]["env"]
-        self.assertEqual(environment["HTTPS_PROXY"], child_environment["HTTPS_PROXY"])
-        self.assertEqual(environment["HTTPS_PROXY"], child_environment["https_proxy"])
-
-    def test_run_git_forbids_non_https_protocols_and_redirects(self) -> None:
-        completed = subprocess.CompletedProcess([], 0, b"ok", b"")
-        with mock.patch("public_upstreams._run_bounded_command", return_value=completed) as run:
-            self.assertEqual("ok", run_git(["version"]))
-        command = run.call_args.args[0]
-        self.assertIn("protocol.allow=never", command)
-        self.assertIn("protocol.https.allow=always", command)
-        self.assertIn("http.sslVerify=true", command)
-        self.assertIn("http.followRedirects=false", command)
-
-    def test_bounded_process_rejects_excessive_stdout_and_stderr(self) -> None:
-        for stream in ("stdout", "stderr"):
-            script = (
-                "import sys,time; "
-                f"sys.{stream}.write('x' * 65536); sys.{stream}.flush(); time.sleep(5)"
-            )
-            with self.subTest(stream=stream), self.assertRaisesRegex(ValueError, "saida do Git"):
-                _run_bounded_command(
-                    [sys.executable, "-c", script],
-                    deadline=time.monotonic() + 5,
-                    stdout_limit=1024,
-                    stderr_limit=1024,
-                )
-
-    def test_bounded_process_enforces_an_absolute_deadline(self) -> None:
-        started = time.monotonic()
-        with self.assertRaisesRegex(ValueError, "prazo total"):
-            _run_bounded_command(
-                [sys.executable, "-c", "import time; time.sleep(30)"],
-                deadline=started + 0.2,
-            )
-        self.assertLess(time.monotonic() - started, 3)
-
-    def test_bounded_process_terminates_the_child_when_interrupted(self) -> None:
-        with (
-            mock.patch(
-                "public_upstreams._terminate_process",
-                wraps=public_upstreams._terminate_process,
-            ) as terminate,
-            mock.patch("public_upstreams._poll_pause", side_effect=KeyboardInterrupt),
-        ):
-            with self.assertRaises(KeyboardInterrupt):
-                _run_bounded_command(
-                    [sys.executable, "-c", "import time; time.sleep(30)"],
-                    deadline=time.monotonic() + 5,
-                )
-        terminate.assert_called_once()
-
-    def test_bounded_process_stops_when_the_clone_workspace_exceeds_its_quota(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="x86qw-git-limit-") as temporary:
-            workspace = Path(temporary)
-            output = workspace / "pack"
-            script = (
-                "import pathlib,sys,time; "
-                "pathlib.Path(sys.argv[1]).write_bytes(b'x' * 65536); time.sleep(30)"
-            )
-            with self.assertRaisesRegex(ValueError, "cota temporaria"):
-                _run_bounded_command(
-                    [sys.executable, "-c", script, str(output)],
-                    deadline=time.monotonic() + 5,
-                    workspace=workspace,
-                    workspace_limit=1024,
-                )
-            self.assertGreater(os.path.getsize(output), 1024)
-
-    @unittest.skipUnless(os.name == "posix", "grupos POSIX exigem um runner Unix")
-    def test_posix_shutdown_kills_a_descendant_that_ignores_sigterm(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="x86qw-git-group-") as temporary:
-            identity = Path(temporary) / "child.txt"
-            child = (
-                "import os,pathlib,signal,sys,time;"
-                "signal.signal(signal.SIGTERM,signal.SIG_IGN);"
-                "pathlib.Path(sys.argv[1]).write_text("
-                "f'{os.getpid()} {os.getpgrp()}',encoding='ascii');"
-                "time.sleep(30)"
-            )
-            leader = (
-                "import subprocess,sys,time;"
-                "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]]);"
-                "time.sleep(30)"
-            )
-            with self.assertRaisesRegex(ValueError, "prazo total"):
-                _run_bounded_command(
-                    [sys.executable, "-c", leader, child, str(identity)],
-                    deadline=time.monotonic() + 2,
-                )
-            self.assertTrue(identity.exists())
-            child_pid, process_group = map(
-                int,
-                identity.read_text(encoding="ascii").split(),
-            )
-            self.assertEqual("dead", _posix_process_group_status(process_group))
-            for _ in range(40):
-                try:
-                    os.kill(child_pid, 0)
-                except ProcessLookupError:
-                    break
-                time.sleep(0.05)
-            else:
-                self.fail("o descendente POSIX não foi coletado após o encerramento")
-
-    @unittest.skipUnless(os.name == "nt", "Job Object exige um runner Windows")
-    def test_windows_job_object_kills_the_git_descendant_tree(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="x86qw-git-job-") as temporary:
-            identity = Path(temporary) / "child.txt"
-            child = (
-                "import os,pathlib,sys,time;"
-                "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()),encoding='ascii');"
-                "time.sleep(30)"
-            )
-            leader = (
-                "import subprocess,sys,time;"
-                "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]]);"
-                "time.sleep(30)"
-            )
-            with self.assertRaisesRegex(ValueError, "prazo total"):
-                _run_bounded_command(
-                    [sys.executable, "-c", leader, child, str(identity)],
-                    deadline=time.monotonic() + 2,
-                )
-            self.assertTrue(identity.exists())
-            child_pid = int(identity.read_text(encoding="ascii"))
-            with self.assertRaises(OSError):
-                os.kill(child_pid, 0)
-
-    @unittest.skipUnless(os.name == "nt", "assinaturas Win32 exigem um runner Windows")
-    def test_windows_job_api_signatures_are_explicit(self) -> None:
-        kernel32 = _windows_job_kernel32()
-        for name in (
-            "CreateJobObjectW",
-            "SetInformationJobObject",
-            "AssignProcessToJobObject",
-            "CloseHandle",
-        ):
-            function = getattr(kernel32, name)
-            self.assertIsNotNone(function.argtypes, name)
-            self.assertIsNotNone(function.restype, name)
-        resume = _windows_ntdll().NtResumeProcess
-        self.assertIsNotNone(resume.argtypes)
-        self.assertIsNotNone(resume.restype)
+    def test_public_upstreams_has_no_native_git_ingress(self) -> None:
+        source = (ROOT / "maintenance/tools/public_upstreams.py").read_text(encoding="utf-8")
+        self.assertNotIn("subprocess", source)
+        self.assertNotIn("ls-remote", source)
+        self.assertNotIn("git clone", source)
+        self.assertNotIn("run_git", source)
 
     def test_release_commit_and_size_use_public_web_urls_without_authorization(self) -> None:
         release = mock.Mock(

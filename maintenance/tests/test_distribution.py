@@ -29,6 +29,7 @@ from sync_distribution import (  # noqa: E402
     discover_nightlies,
     download_asset,
     load_manifest,
+    pin_assets_from_manifest,
     prune_unconsumed,
     safe_filename,
     verify_distribution,
@@ -59,6 +60,39 @@ class DistributionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid preserved source identity"):
             validate_upstreams(registry)
 
+    def test_upstream_registry_rejects_unsafe_persistent_urls_without_disclosing_them(self) -> None:
+        original = json.loads(
+            (ROOT / "maintenance/inventory/upstreams.json").read_text(encoding="utf-8"),
+        )
+        sentinel = "X86QW_UPSTREAM_SECRET_SENTINEL"
+        mutations = (
+            ("release_url", f"https://reviewer:{sentinel}@example.invalid/release"),
+            ("release_url", f"https://example.invalid/release?token={sentinel}"),
+            ("release_url", "https://example.invalid/release#fragment"),
+            ("source.url", f"https://example.invalid/source?token={sentinel}"),
+            ("update.repository", f"https://reviewer:{sentinel}@github.com/nQuake/distfiles.git"),
+        )
+        for field, value in mutations:
+            registry = json.loads(json.dumps(original))
+            if field == "source.url":
+                target = next(
+                    entry for entry in registry["upstreams"]
+                    if entry["source"].get("status") in {"complete", "partial"}
+                )
+                target["source"]["url"] = value
+            elif field == "update.repository":
+                target = next(
+                    entry for entry in registry["upstreams"]
+                    if entry["update"].get("strategy") == "git-ref"
+                )
+                target["update"]["repository"] = value
+            else:
+                registry["upstreams"][0][field] = value
+
+            with self.subTest(field=field), self.assertRaises(ValueError) as raised:
+                validate_upstreams(registry)
+            self.assertNotIn(sentinel, str(raised.exception))
+
     def test_distribution_manifest_rejects_file_above_global_limit(self) -> None:
         manifest = {
             "format": 1,
@@ -81,6 +115,37 @@ class DistributionTests(unittest.TestCase):
             path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "invalid distribution file size"):
                 load_manifest(path)
+
+    def test_distribution_manifest_rejects_unsafe_urls_without_disclosing_them(self) -> None:
+        sentinel = "X86QW_MANIFEST_SECRET_SENTINEL"
+        for url in (
+            f"https://reviewer:{sentinel}@example.invalid/payload.zip",
+            f"https://example.invalid/payload.zip?token={sentinel}",
+            "https://example.invalid/payload.zip#fragment",
+            "http://example.invalid/payload.zip",
+        ):
+            manifest = {
+                "format": 1,
+                "project": "x86qw",
+                "captured_at": None,
+                "layout": "distribution-v1",
+                "repositories": {},
+                "files": {
+                    "mods/ktx/test/payload.zip": {
+                        "component": "ktx",
+                        "consumer": "install:ktx",
+                        "url": url,
+                        "size": 1,
+                        "sha256": "0" * 64,
+                    },
+                },
+            }
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "manifest.json"
+                path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.subTest(url=url), self.assertRaises(ValueError) as raised:
+                    load_manifest(path)
+            self.assertNotIn(sentinel, str(raised.exception))
 
     def test_top_level_taxonomy_separates_clients_distributions_and_game_data(self) -> None:
         stable = ROOT / "dist/clients/ezquake/stable/3.6.9"
@@ -323,7 +388,7 @@ class DistributionTests(unittest.TestCase):
                 "ktx",
                 "https://example.invalid/qwprogs-qvm.zip",
                 target.relative_to(root).as_posix(),
-                None,
+                len(expected),
                 "ktx",
                 hashlib.sha256(expected).hexdigest(),
                 git_identity,
@@ -343,15 +408,72 @@ class DistributionTests(unittest.TestCase):
                 )
 
             with mock.patch(
-                "sync_distribution.remote_content_length", return_value=len(expected),
-            ) as content_length, mock.patch(
                 "sync_distribution.download", side_effect=transfer,
             ):
                 _, metadata, reused = download_asset(root, asset, known)
-            content_length.assert_called_once_with(asset.url)
             self.assertFalse(reused)
             self.assertEqual(expected, target.read_bytes())
             self.assertEqual(hashlib.sha256(expected).hexdigest(), metadata["sha256"])
+
+    def test_download_rejects_an_unpinned_asset_before_network_or_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            assets = (
+                Asset(
+                    "ezquake",
+                    "https://example.invalid/new.zip",
+                    "clients/ezquake/nightly/new/windows-x64/new.exe",
+                    123,
+                ),
+                Asset(
+                    "ezquake",
+                    "https://example.invalid/new.zip",
+                    "clients/ezquake/nightly/new/windows-x64/new.exe",
+                    None,
+                    expected_sha256=hashlib.sha256(b"candidate").hexdigest(),
+                ),
+            )
+            with mock.patch("sync_distribution.download") as transfer, mock.patch(
+                "sync_distribution.remote_content_length",
+            ) as content_length:
+                for asset in assets:
+                    with self.subTest(asset=asset), self.assertRaisesRegex(
+                        ValueError, "reviewed size and SHA-256",
+                    ):
+                        download_asset(root, asset, None)
+
+            transfer.assert_not_called()
+            content_length.assert_not_called()
+            self.assertFalse((root / "clients").exists())
+
+    def test_manifest_pin_requires_exact_path_url_size_and_reviewed_digest(self) -> None:
+        digest = hashlib.sha256(b"known").hexdigest()
+        asset = Asset(
+            "ezquake",
+            "https://example.invalid/current.zip",
+            "clients/ezquake/stable/current/linux-x86_64/current.zip",
+            5,
+        )
+        manifest = {"files": {asset.path: {
+            "url": asset.url,
+            "size": 5,
+            "sha256": digest,
+        }}}
+
+        pinned = pin_assets_from_manifest([asset], manifest)[0]
+
+        self.assertEqual(5, pinned.expected_size)
+        self.assertEqual(digest, pinned.expected_sha256)
+        for changed in (
+            {**manifest["files"][asset.path], "url": "https://example.invalid/other.zip"},
+            {**manifest["files"][asset.path], "size": 6},
+            {**manifest["files"][asset.path], "sha256": "not-a-digest"},
+        ):
+            with self.subTest(changed=changed):
+                candidate = pin_assets_from_manifest(
+                    [asset], {"files": {asset.path: changed}},
+                )[0]
+                self.assertIsNone(candidate.expected_sha256)
 
     def test_nightly_discovery_records_the_remote_size(self) -> None:
         names = {
@@ -373,14 +495,14 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual([1234, 1234, 1234], [asset.expected_size for asset in assets])
         self.assertEqual(3, content_length.call_count)
 
-    def test_nquake_discovery_reuses_blob_size_when_git_provides_it(self) -> None:
+    def test_nquake_discovery_reuses_blob_size_when_github_api_provides_it(self) -> None:
         entry = GitTreeEntry("qw/file.cfg", "b" * 40, 321)
         with mock.patch(
             "sync_distribution.load_component_catalog", return_value={},
         ), mock.patch(
             "sync_distribution.source_roots", return_value=["qw"],
         ), mock.patch(
-            "sync_distribution.git_remote_tree", return_value=("a" * 40, [entry]),
+            "sync_distribution.github_recursive_tree", return_value=("a" * 40, [entry]),
         ), mock.patch(
             "sync_distribution.component_for_source", return_value="nquake-bootstrap",
         ):

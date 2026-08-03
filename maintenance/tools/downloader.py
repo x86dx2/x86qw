@@ -7,13 +7,17 @@ import errno
 import hashlib
 import http.client
 import io
+import json
 import math
 import os
 import random
 import re
+import selectors
 import socket
 import ssl
 import string
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -45,6 +49,40 @@ HEX64 = frozenset("0123456789abcdef")
 ASCII_DECIMAL = re.compile(r"^[0-9]+$")
 HTTP_HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 SAFE_CROSS_ORIGIN_HEADERS = frozenset({"accept", "accept-encoding", "user-agent"})
+DNS_MAX_CANDIDATES = 64
+DNS_MAX_OUTPUT_BYTES = 64 * 1024
+DNS_RESOLVER_SCRIPT = r"""
+import json
+import socket
+import sys
+
+if sys.stdin.buffer.read(1) != b"G":
+    raise SystemExit(3)
+host = sys.argv[1]
+port = int(sys.argv[2])
+try:
+    discovered = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+except BaseException:
+    raise SystemExit(2)
+result = []
+seen = set()
+for family, socktype, proto, canonname, address in discovered:
+    if family not in (socket.AF_INET, socket.AF_INET6) or socktype != socket.SOCK_STREAM:
+        continue
+    normalized = [str(address[0]), int(address[1])]
+    if family == socket.AF_INET6:
+        normalized.extend([int(address[2]), int(address[3])])
+    key = (int(family), int(socktype), int(proto), tuple(normalized))
+    if key in seen:
+        continue
+    seen.add(key)
+    result.append([int(family), int(socktype), int(proto), str(canonname), normalized])
+    if len(result) >= 64:
+        break
+sys.stdout.write(json.dumps(result, separators=(",", ":")))
+"""
+OPEN_CLEANUP_RESERVE_SECONDS = 0.5
+MIN_OPEN_BUDGET_SECONDS = 0.5
 
 
 class DownloadError(Exception):
@@ -178,27 +216,7 @@ class BoundedMetadata:
     method: str = "GET"
 
 
-@dataclass(frozen=True)
-class BoundedPayload:
-    """Unpinned maintenance intake staged under an explicit byte boundary.
-
-    Its exact byte count must be discovered independently before transfer.
-    The caller either performs an independent identity check, such as a Git
-    blob SHA, or keeps the result in a review-required maintenance transaction.
-    Product installation must use :class:`PinnedArtifact`.
-    """
-
-    url: str
-    destination: Path
-    expected_size: int
-    maximum_size: int
-    deadline_seconds: float
-    retry: RetryPolicy = field(default_factory=RetryPolicy)
-    headers: Mapping[str, str] = field(default_factory=dict)
-    label: str = "payload não fixado"
-
-
-DownloadContract = PinnedArtifact | BoundedMetadata | BoundedPayload
+DownloadContract = PinnedArtifact | BoundedMetadata
 ProgressCallback = Callable[[int, int | None, bool], None]
 RetryCallback = Callable[[int, DownloadTransientError, float], None]
 OpenCallback = Callable[[urllib.request.Request, float], object]
@@ -312,6 +330,286 @@ class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
         return redirected
 
 
+class _TransportController:
+    """Expose resolver and pending sockets to the deadline controller."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._resolver: subprocess.Popen[bytes] | None = None
+        self._sockets: set[socket.socket] = set()
+
+    def attach_resolver(self, process: subprocess.Popen[bytes]) -> bool:
+        with self._lock:
+            if self._cancelled:
+                cancelled = True
+            else:
+                self._resolver = process
+                cancelled = False
+        if cancelled:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            return False
+        return True
+
+    def detach_resolver(self, process: subprocess.Popen[bytes]) -> None:
+        with self._lock:
+            if self._resolver is process:
+                self._resolver = None
+
+    def attach_socket(self, connection: socket.socket) -> bool:
+        with self._lock:
+            if self._cancelled:
+                cancelled = True
+            else:
+                self._sockets.add(connection)
+                cancelled = False
+        if cancelled:
+            try:
+                connection.close()
+            except OSError:
+                pass
+            return False
+        return True
+
+    def detach_socket(self, connection: socket.socket) -> None:
+        with self._lock:
+            self._sockets.discard(connection)
+
+    def cancel(self) -> None:
+        with self._lock:
+            self._cancelled = True
+            resolver = self._resolver
+            sockets = tuple(self._sockets)
+        if resolver is not None:
+            try:
+                resolver.kill()
+            except OSError:
+                pass
+        for connection in sockets:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                connection.close()
+            except OSError:
+                pass
+
+
+def _resolve_addresses(
+    host: str,
+    port: int,
+    timeout: float,
+    transport_controller: _TransportController | None = None,
+) -> list[tuple[int, int, int, str, tuple[object, ...]]]:
+    """Resolve DNS in a killable child so the deadline leaves no DNS thread."""
+
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
+    deadline = time.monotonic() + timeout
+    creationflags = (
+        getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-I", "-c", DNS_RESOLVER_SCRIPT, host, str(port)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=creationflags,
+    )
+    if transport_controller is not None and not transport_controller.attach_resolver(process):
+        process.communicate()
+        raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
+    try:
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+            output, _error = process.communicate(input=b"G", timeout=remaining)
+        except subprocess.TimeoutExpired as error:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            process.communicate()
+            raise TimeoutError(f"Tempo esgotado ao resolver {host}.") from error
+        except BaseException:
+            try:
+                process.kill()
+            except OSError:
+                pass
+            try:
+                process.communicate()
+            except BaseException:
+                pass
+            raise
+    finally:
+        if transport_controller is not None:
+            transport_controller.detach_resolver(process)
+    if process.returncode != 0:
+        raise socket.gaierror(socket.EAI_FAIL, f"Falha ao resolver {host}.")
+    if len(output) > DNS_MAX_OUTPUT_BYTES:
+        raise OSError(f"A resolução de {host} excedeu o limite de saída.")
+    try:
+        document = json.loads(output)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise OSError(f"A resolução de {host} retornou dados inválidos.") from error
+    if not isinstance(document, list) or not document:
+        raise OSError(f"Nenhum endereço foi encontrado para {host}.")
+    candidates: list[tuple[int, int, int, str, tuple[object, ...]]] = []
+    for item in document[:DNS_MAX_CANDIDATES]:
+        if (
+            not isinstance(item, list)
+            or len(item) != 5
+            or type(item[0]) is not int
+            or item[0] not in {socket.AF_INET, socket.AF_INET6}
+            or type(item[1]) is not int
+            or item[1] != socket.SOCK_STREAM
+            or type(item[2]) is not int
+            or not isinstance(item[3], str)
+            or not isinstance(item[4], list)
+            or len(item[4]) not in {2, 4}
+            or not isinstance(item[4][0], str)
+            or type(item[4][1]) is not int
+            or not 0 <= item[4][1] <= 65535
+        ):
+            raise OSError(f"A resolução de {host} retornou um endereço inválido.")
+        if item[0] == socket.AF_INET and len(item[4]) != 2:
+            raise OSError(f"A resolução de {host} retornou um IPv4 inválido.")
+        if item[0] == socket.AF_INET6 and (
+            len(item[4]) != 4
+            or type(item[4][2]) is not int
+            or type(item[4][3]) is not int
+        ):
+            raise OSError(f"A resolução de {host} retornou um IPv6 inválido.")
+        candidates.append((item[0], item[1], item[2], item[3], tuple(item[4])))
+    return candidates
+
+
+def create_resilient_connection(
+    address: tuple[str, int],
+    timeout: float | object = socket._GLOBAL_DEFAULT_TIMEOUT,
+    source_address: tuple[str, int] | None = None,
+    *,
+    transport_controller: _TransportController | None = None,
+) -> socket.socket:
+    """Resolve and connect every candidate under one absolute deadline."""
+
+    host, port = address
+    effective = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+    if (
+        effective is None
+        or isinstance(effective, bool)
+        or not isinstance(effective, (int, float))
+        or not math.isfinite(effective)
+        or effective <= 0
+    ):
+        raise TimeoutError(f"Tempo de conexão inválido para {host}:{port}.")
+    started = time.monotonic()
+    deadline = started + float(effective)
+    candidates = _resolve_addresses(
+        host, port, float(effective), transport_controller,
+    )
+    if time.monotonic() >= deadline:
+        raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
+    pending: list[socket.socket] = []
+    errors: list[OSError] = []
+    selector = selectors.DefaultSelector()
+    connected: socket.socket | None = None
+    in_progress = {
+        errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY, errno.EINTR,
+        *(value for name in ("WSAEINPROGRESS", "WSAEWOULDBLOCK", "WSAEALREADY")
+          if (value := getattr(errno, name, None)) is not None),
+    }
+    try:
+        for family, socktype, proto, _, sockaddr in candidates:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
+            connection = socket.socket(family, socktype, proto)
+            if (
+                transport_controller is not None
+                and not transport_controller.attach_socket(connection)
+            ):
+                raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
+            pending.append(connection)
+            try:
+                connection.setblocking(False)
+                if source_address:
+                    connection.bind(source_address)
+                result = connection.connect_ex(sockaddr)
+                if result in (0, errno.EISCONN):
+                    connected = connection
+                    break
+                if result not in in_progress:
+                    raise OSError(result, os.strerror(result))
+                selector.register(connection, selectors.EVENT_WRITE)
+            except OSError as error:
+                errors.append(error)
+                connection.close()
+                pending.remove(connection)
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+
+        while connected is None and selector.get_map():
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining == 0 or not (events := selector.select(remaining)):
+                raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
+            for key, _ in events:
+                connection = key.fileobj
+                result = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                if result == 0:
+                    connected = connection
+                    break
+                errors.append(OSError(result, os.strerror(result)))
+                selector.unregister(connection)
+                connection.close()
+                pending.remove(connection)
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+        if connected is None:
+            if errors:
+                raise errors[-1]
+            raise OSError(f"Não foi possível conectar a {host}:{port}.")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Tempo esgotado ao conectar a {host}:{port}.")
+        connected.settimeout(remaining)
+        return connected
+    finally:
+        selector.close()
+        for connection in pending:
+            if connection is not connected:
+                connection.close()
+                if transport_controller is not None:
+                    transport_controller.detach_socket(connection)
+
+
+class ResilientHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._transport_controller = _TransportController()
+
+        def create_connection(
+            address: tuple[str, int],
+            timeout: float | object = socket._GLOBAL_DEFAULT_TIMEOUT,
+            source_address: tuple[str, int] | None = None,
+        ) -> socket.socket:
+            return create_resilient_connection(
+                address,
+                timeout,
+                source_address,
+                transport_controller=self._transport_controller,
+            )
+
+        self._create_connection = create_connection
+
+    def cancel_transport(self) -> None:
+        self._transport_controller.cancel()
+
+
 class _ConnectionRegistry:
     """Track the connection used while urllib opens and reads response headers."""
 
@@ -340,7 +638,19 @@ class _ConnectionRegistry:
             self._cancelled.add(identity)
             connection = self._connections.get(identity)
         if connection is not None:
-            connection.close()
+            cancel_transport = getattr(connection, "cancel_transport", None)
+            if callable(cancel_transport):
+                cancel_transport()
+            active_socket = getattr(connection, "sock", None)
+            if active_socket is not None:
+                try:
+                    active_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+            try:
+                connection.close()
+            except OSError:
+                pass
 
     def clear(self, identity: int) -> None:
         with self._lock:
@@ -366,7 +676,11 @@ class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
             def connect(registered_self) -> None:
                 identity = threading.get_ident()
                 registry.ensure_active(identity)
-                super().connect()
+                try:
+                    super().connect()
+                except BaseException:
+                    registry.ensure_active(identity)
+                    raise
                 try:
                     registry.ensure_active(identity)
                 except DownloadDeadlineError:
@@ -388,9 +702,9 @@ class _DeadlineHTTPSHandler(urllib.request.HTTPSHandler):
             self._registry.unregister(identity)
 
 
-def build_https_opener(
+def _build_https_opener(
     *handlers: object,
-    connection_class: type[http.client.HTTPSConnection] = http.client.HTTPSConnection,
+    connection_class: type[http.client.HTTPSConnection] = ResilientHTTPSConnection,
 ) -> urllib.request.OpenerDirector:
     registry = _ConnectionRegistry()
     opener = urllib.request.build_opener(
@@ -400,9 +714,6 @@ def build_https_opener(
     )
     setattr(opener, "_x86qw_connection_registry", registry)
     return opener
-
-
-DEFAULT_OPENER = build_https_opener()
 
 
 def validate_https_url(url: object, label: str = "URL") -> urllib.parse.SplitResult:
@@ -489,11 +800,9 @@ def _validate_contract(contract: DownloadContract) -> None:
             raise DownloadPolicyError("Um nome de header de download é inválido.")
         if any(ord(character) < 32 or ord(character) == 127 for character in value):
             raise DownloadPolicyError("Um header de download contém caractere de controle.")
-    if isinstance(contract, (PinnedArtifact, BoundedPayload)):
+    if isinstance(contract, PinnedArtifact):
         if type(contract.expected_size) is not int or contract.expected_size < 0:
             raise DownloadPolicyError("O tamanho esperado não pode ser negativo.")
-        if isinstance(contract, BoundedPayload) and contract.expected_size < 1:
-            raise DownloadPolicyError("O tamanho esperado do payload deve ser positivo.")
         if contract.expected_size > contract.maximum_size:
             raise DownloadPolicyError("O tamanho esperado excede o limite do download.")
     if isinstance(contract, PinnedArtifact):
@@ -509,9 +818,6 @@ def _validate_contract(contract: DownloadContract) -> None:
             raise DownloadPolicyError("O destino do artefato deve ser um Path.")
     elif isinstance(contract, BoundedMetadata) and contract.method not in {"GET", "HEAD"}:
         raise DownloadPolicyError("Metadados remotos aceitam somente GET ou HEAD.")
-    elif isinstance(contract, BoundedPayload):
-        if not isinstance(contract.destination, Path):
-            raise DownloadPolicyError("O destino do payload deve ser um Path.")
 
 
 def _remaining(deadline: float, clock: Callable[[], float]) -> float:
@@ -669,11 +975,11 @@ def _open_with_deadline(
     response is closed as soon as the underlying call returns.
     """
 
-    open_timeout = _remaining(deadline, clock)
-    if cancel_open is None:
-        response = open_url(request, open_timeout)
-        _remaining(deadline, clock)
-        return response
+    initial_budget = _remaining(deadline, clock)
+    if cancel_open is not None and initial_budget < MIN_OPEN_BUDGET_SECONDS:
+        raise DownloadDeadlineError(
+            "O orçamento restante é insuficiente para iniciar uma conexão segura."
+        )
 
     lock = threading.Lock()
     state: dict[str, object] = {}
@@ -687,9 +993,10 @@ def _open_with_deadline(
             worker_identity = identity
             cancelled_before_open = cancelled
         try:
-            if cancelled_before_open:
+            if cancelled_before_open and cancel_open is not None:
                 cancel_open(identity)
             try:
+                open_timeout = _remaining(deadline, clock)
                 value: object = open_url(request, open_timeout)
                 kind = "response"
             except BaseException as error:
@@ -713,29 +1020,39 @@ def _open_with_deadline(
         daemon=True,
     )
     thread.start()
-    try:
-        thread.join(_remaining(deadline, clock))
-    except BaseException:
+
+    def cancel_and_collect() -> None:
+        nonlocal cancelled
         with lock:
             cancelled = True
             response = state.pop("response", None)
             identity = worker_identity
         if identity is None:
             identity = thread.ident
-        if identity is not None:
+        if identity is not None and cancel_open is not None:
             cancel_open(identity)
         _close_response_safely(response)
+        if cancel_open is not None:
+            cleanup_remaining = max(0.0, deadline - clock())
+            if cleanup_remaining > 0:
+                thread.join(cleanup_remaining)
+
+    try:
+        wait_budget = _remaining(deadline, clock)
+        cleanup_reserve = (
+            min(
+                OPEN_CLEANUP_RESERVE_SECONDS,
+                max(0.25, wait_budget / 10),
+            )
+            if cancel_open is not None
+            else 0.0
+        )
+        thread.join(wait_budget - cleanup_reserve)
+    except BaseException:
+        cancel_and_collect()
         raise
     if thread.is_alive():
-        with lock:
-            cancelled = True
-            response = state.pop("response", None)
-            identity = worker_identity
-        if identity is None:
-            identity = thread.ident
-        if identity is not None:
-            cancel_open(identity)
-        _close_response_safely(response)
+        cancel_and_collect()
         raise DownloadDeadlineError(
             "O deadline total expirou durante conexão, redirects ou headers."
         )
@@ -799,9 +1116,7 @@ def _read_response(
     headers = _response_headers(response)
     declared = _content_length(headers)
     expected = (
-        contract.expected_size
-        if isinstance(contract, (PinnedArtifact, BoundedPayload))
-        else None
+        contract.expected_size if isinstance(contract, PinnedArtifact) else None
     )
     if declared is not None:
         if declared > contract.maximum_size:
@@ -902,7 +1217,7 @@ def _attempt(
     output: BinaryIO
     temporary: Path | None = None
     memory: io.BytesIO | None = None
-    if isinstance(contract, (PinnedArtifact, BoundedPayload)):
+    if isinstance(contract, PinnedArtifact):
         output, temporary = _open_temporary(contract.destination)
     else:
         memory = io.BytesIO()
@@ -943,7 +1258,7 @@ def _attempt(
         if isinstance(contract, PinnedArtifact):
             if actual_sha256 != contract.expected_sha256:
                 raise DownloadIntegrityError(f"O SHA-256 de {contract.label} não corresponde ao esperado.")
-        if isinstance(contract, (PinnedArtifact, BoundedPayload)):
+        if isinstance(contract, PinnedArtifact):
             try:
                 output.flush()
                 os.fsync(output.fileno())
@@ -997,25 +1312,18 @@ def _retry_delay(
     return max(0.0, base * (1 + policy.jitter * ((2 * random_value()) - 1)))
 
 
-def _select_transport(
-    opener: urllib.request.OpenerDirector | None,
-    open_url: OpenCallback | None,
-) -> tuple[
+def _select_transport() -> tuple[
     OpenCallback,
     Callable[[int], None] | None,
     Callable[[int], None] | None,
 ]:
-    if opener is not None and open_url is not None:
-        raise DownloadPolicyError("Informe opener ou open_url, não ambos.")
-    if open_url is not None:
-        return open_url, None, None
-
-    selected_opener = opener or DEFAULT_OPENER
+    # Build a fresh transport for every public operation. Keeping a module-level
+    # opener would let an otherwise read-only caller mutate ``open`` and replace
+    # the bytes received by a later production download.
+    selected_opener = _build_https_opener()
     registry = getattr(selected_opener, "_x86qw_connection_registry", None)
     if not isinstance(registry, _ConnectionRegistry):
-        raise DownloadPolicyError(
-            "O opener HTTPS deve ser criado por build_https_opener()."
-        )
+        raise DownloadPolicyError("O opener HTTPS selado perdeu seu registro interno.")
 
     def selected_open(request: urllib.request.Request, timeout: float) -> object:
         return selected_opener.open(request, timeout=timeout)
@@ -1079,7 +1387,7 @@ def _validate_mirror_contracts(
     if not contracts:
         raise DownloadPolicyError("Informe ao menos um mirror para download.")
     for contract in contracts:
-        if not isinstance(contract, (PinnedArtifact, BoundedMetadata, BoundedPayload)):
+        if not isinstance(contract, (PinnedArtifact, BoundedMetadata)):
             raise DownloadPolicyError("Um contrato de mirror é inválido.")
         _validate_contract(contract)
 
@@ -1111,18 +1419,6 @@ def _validate_mirror_contracts(
                 raise DownloadPolicyError(
                     "Mirrors fixados devem apontar para o mesmo destino e identidade."
                 )
-    elif isinstance(first, BoundedPayload):
-        identity = (first.destination, first.expected_size, first.maximum_size)
-        for contract in contracts[1:]:
-            assert isinstance(contract, BoundedPayload)
-            if (
-                contract.destination,
-                contract.expected_size,
-                contract.maximum_size,
-            ) != identity:
-                raise DownloadPolicyError(
-                    "Mirrors de payload devem compartilhar destino, tamanho e limite."
-                )
     else:
         assert isinstance(first, BoundedMetadata)
         identity = (first.maximum_size, first.method)
@@ -1135,11 +1431,9 @@ def _validate_mirror_contracts(
     return first
 
 
-def download(
+def _download_impl(
     contract: DownloadContract,
     *,
-    opener: urllib.request.OpenerDirector | None = None,
-    open_url: OpenCallback | None = None,
     clock: Callable[[], float] = time.monotonic,
     wall_clock: Callable[[], float] = time.time,
     sleep: Callable[[float], None] = time.sleep,
@@ -1147,10 +1441,10 @@ def download(
     progress: ProgressCallback | None = None,
     on_retry: RetryCallback | None = None,
 ) -> DownloadResult:
-    """Download one bounded response under a single total deadline."""
+    """Internal dependency-injected implementation used by focused tests."""
 
     _validate_contract(contract)
-    selected_open, cancel_open, finish_open = _select_transport(opener, open_url)
+    selected_open, cancel_open, finish_open = _select_transport()
     deadline = clock() + contract.deadline_seconds
     return _download_until_deadline(
         contract,
@@ -1167,11 +1461,24 @@ def download(
     )
 
 
-def download_mirrors(
+def download(
+    contract: DownloadContract,
+    *,
+    progress: ProgressCallback | None = None,
+    on_retry: RetryCallback | None = None,
+) -> DownloadResult:
+    """Download one bounded response through the sealed production transport."""
+
+    return _download_impl(
+        contract,
+        progress=progress,
+        on_retry=on_retry,
+    )
+
+
+def _download_mirrors_impl(
     contracts: tuple[DownloadContract, ...],
     *,
-    opener: urllib.request.OpenerDirector | None = None,
-    open_url: OpenCallback | None = None,
     clock: Callable[[], float] = time.monotonic,
     wall_clock: Callable[[], float] = time.time,
     sleep: Callable[[float], None] = time.sleep,
@@ -1180,7 +1487,7 @@ def download_mirrors(
     on_retry: RetryCallback | None = None,
     on_mirror_failure: MirrorFailureCallback | None = None,
 ) -> DownloadResult:
-    """Try equivalent mirrors under one shared monotonic deadline.
+    """Internal dependency-injected mirror implementation used by tests.
 
     All contracts are validated before network I/O. Storage, policy, deadline,
     protocol and limit failures are local or terminal and therefore never
@@ -1189,7 +1496,7 @@ def download_mirrors(
     """
 
     first = _validate_mirror_contracts(contracts)
-    selected_open, cancel_open, finish_open = _select_transport(opener, open_url)
+    selected_open, cancel_open, finish_open = _select_transport()
     deadline = clock() + first.deadline_seconds
     last_error: DownloadError | None = None
     for index, contract in enumerate(contracts, start=1):
@@ -1213,3 +1520,20 @@ def download_mirrors(
                 on_mirror_failure(index, contract, error)
     assert last_error is not None
     raise last_error
+
+
+def download_mirrors(
+    contracts: tuple[DownloadContract, ...],
+    *,
+    progress: ProgressCallback | None = None,
+    on_retry: RetryCallback | None = None,
+    on_mirror_failure: MirrorFailureCallback | None = None,
+) -> DownloadResult:
+    """Try equivalent mirrors through the sealed production transport."""
+
+    return _download_mirrors_impl(
+        contracts,
+        progress=progress,
+        on_retry=on_retry,
+        on_mirror_failure=on_mirror_failure,
+    )
