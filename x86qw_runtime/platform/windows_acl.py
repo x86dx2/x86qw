@@ -392,11 +392,15 @@ def _assert_handle_type(handle: int, *, directory: bool) -> None:
         raise WindowsAclError(f"private path is not a {expected}")
 
 
-def _open_path(path: Path, *, directory: bool, writable_dacl: bool) -> int:
+def _open_path(
+    path: Path, *, directory: bool, writable_dacl: bool, guard_delete: bool = False,
+) -> int:
     api = _api()
     access = api.READ_CONTROL | api.FILE_READ_ATTRIBUTES
     if writable_dacl:
         access |= api.WRITE_DAC
+    if guard_delete:
+        access |= api.DELETE
     flags = api.FILE_FLAG_OPEN_REPARSE_POINT
     if directory:
         flags |= api.FILE_FLAG_BACKUP_SEMANTICS
@@ -584,7 +588,9 @@ def hold_private_path(path: Path, *, directory: bool) -> WindowsPathLease:
     """Pin a canonical private object so its parent cannot delete or rename it."""
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
-        handle = _open_path(path, directory=directory, writable_dacl=False)
+        handle = _open_path(
+            path, directory=directory, writable_dacl=False, guard_delete=True,
+        )
         try:
             _assert_acl(_acl_from_handle(handle, directory=directory))
             return WindowsPathLease(handle, path)

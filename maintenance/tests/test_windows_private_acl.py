@@ -204,9 +204,8 @@ class WindowsPrivateAclTests(unittest.TestCase):
 
             def inspect_stage(_package):
                 assert installer.stage is not None
-                self.assertEqual(target / ".x86qw/staging", installer.stage.parent)
-                self._assert_canonical(target / ".x86qw", directory=True)
-                self._assert_canonical(target / ".x86qw/staging", directory=True)
+                self.assertNotEqual(target, installer.stage)
+                self.assertNotIn(target, installer.stage.parents)
                 self._assert_canonical(installer.stage, directory=True)
                 observed.append(installer.stage)
                 raise StopAfterAclCheck("stage validado antes do download")
@@ -234,10 +233,8 @@ class WindowsPrivateAclTests(unittest.TestCase):
             outside.mkdir()
             junction = root / "junction"
             completed = subprocess.run(
-                [
-                    "cmd.exe", "/d", "/s", "/c",
-                    f'mklink /J "{junction}" "{outside}"',
-                ],
+                ["cmd.exe", "/d", "/c", "mklink", "/J", "junction", "outside"],
+                cwd=root,
                 check=False,
                 capture_output=True,
                 text=True,
@@ -387,7 +384,7 @@ class WindowsPrivateAclTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(
-                services.InstallerError, "não possui autoridade",
+                services.InstallerError, "conteúdo histórico não pode autorizar",
             ):
                 services.recover_sessions(target)
 
@@ -414,11 +411,14 @@ class WindowsPrivateAclTests(unittest.TestCase):
                 None,
             )
             self.assertNotEqual(api.INVALID_HANDLE_VALUE, handle)
+            released = False
             try:
                 lock.release()
-                self.assertFalse(lock.path.exists())
+                released = True
             finally:
                 api.kernel32.CloseHandle(handle)
+            self.assertTrue(released)
+            self.assertFalse(lock.path.exists())
 
 
 if __name__ == "__main__":

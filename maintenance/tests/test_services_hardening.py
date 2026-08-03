@@ -961,7 +961,9 @@ class ServiceHardeningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             password_file = Path(temporary) / "secret"
             password_file.write_text("arquivo-secreto\n", encoding="utf-8")
-            if os.name != "nt":
+            if os.name == "nt":
+                services.private_fs.protect_private_file(password_file)
+            else:
                 password_file.chmod(0o600)
             self.assertEqual("arquivo-secreto", services.read_password_file(password_file, "senha"))
 
@@ -1061,6 +1063,7 @@ class ServiceHardeningTests(unittest.TestCase):
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
             self.assertEqual("clean", recovered["status"])
 
+    @unittest.skipIf(os.name == "nt", "journals pre-DACL are quarantined on Windows")
     def test_recovery_accepts_clean_legacy_journal_without_new_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -1125,6 +1128,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 json.loads(journal.path.read_text(encoding="utf-8"))["status"],
             )
 
+    @unittest.skipIf(os.name == "nt", "journals pre-DACL are quarantined on Windows")
     def test_recovery_treats_unclassified_legacy_temporary_as_sensitive(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -1482,7 +1486,8 @@ class ServiceHardeningTests(unittest.TestCase):
             journal = services.SessionJournal(target, session_id=old_session)
             lock_path = target / ".x86qw/sessions/active.lock"
             lock_path.write_text(json.dumps({
-                "format": 1, "project": "x86qw", "session_id": old_session,
+                "format": 3, "project": "x86qw", "session_id": old_session,
+                "operation_kind": "service", "private_filesystem": 1,
                 "controller_pid": 999999999, "controller_start_token": "dead-token",
                 "controller_executable": str(target / "dead-controller"),
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
@@ -1507,7 +1512,8 @@ class ServiceHardeningTests(unittest.TestCase):
             lock_path = sessions / "active.lock"
             stale_token = "stale-controller-token"
             lock_path.write_text(json.dumps({
-                "format": 1, "project": "x86qw", "session_id": "stale-session",
+                "format": 3, "project": "x86qw", "session_id": "stale-session",
+                "operation_kind": "service", "private_filesystem": 1,
                 "controller_pid": 999999999, "controller_start_token": stale_token,
                 "controller_executable": str(target / "dead-controller"),
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
@@ -1599,7 +1605,8 @@ class ServiceHardeningTests(unittest.TestCase):
             stale_token = "stale-cli-token"
             lock_path = sessions / "active.lock"
             lock_path.write_text(json.dumps({
-                "format": 1, "project": "x86qw", "session_id": "stale-cli-session",
+                "format": 3, "project": "x86qw", "session_id": "stale-cli-session",
+                "operation_kind": "service", "private_filesystem": 1,
                 "controller_pid": 999999999, "controller_start_token": stale_token,
                 "controller_executable": str(target / "dead-controller"),
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
@@ -1807,7 +1814,8 @@ with session_control._installation_acquisition_mutex(target, sessions):
             sessions.mkdir(parents=True)
             lock_path = sessions / "active.lock"
             lock_path.write_text(json.dumps({
-                "format": 1, "project": "x86qw", "session_id": "unknown-session",
+                "format": 3, "project": "x86qw", "session_id": "unknown-session",
+                "operation_kind": "service", "private_filesystem": 1,
                 "controller_pid": 424242, "controller_start_token": "unknown-token",
                 "controller_executable": str(target / "controller"),
                 "created_at": "2026-07-31T00:00:00+00:00", "installation": str(target),
@@ -2603,13 +2611,17 @@ with session_control._installation_acquisition_mutex(target, sessions):
         processes = [mock.Mock(pid=101), mock.Mock(pid=102)]
         for process in processes:
             process.poll.return_value = None
+        windows_job = mock.Mock()
+        windows_job.start_process.side_effect = processes
         with mock.patch.object(
             services.subprocess, "Popen", side_effect=processes,
         ) as popen, mock.patch.object(
             services, "apply_startup_rcon",
         ), mock.patch.object(
             services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou"),
-        ), mock.patch.object(services, "WindowsJobObject"):
+        ), mock.patch.object(
+            services, "WindowsJobObject", return_value=windows_job,
+        ):
             specs = [
                 services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
                 services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),
@@ -2618,6 +2630,8 @@ with session_control._installation_acquisition_mutex(target, sessions):
                 services.run_processes(specs)
         for process in processes:
             process.terminate.assert_called_once()
+        if os.name == "nt":
+            windows_job.close.assert_called_once_with()
         for call in popen.call_args_list:
             self.assertIs(call.kwargs["stdin"], subprocess.DEVNULL)
 
