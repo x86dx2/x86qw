@@ -4,7 +4,7 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.6.0`. O estado funcional é descrito
+Baseline publicada: tag `x86qw-installer-0.7.0`. O estado funcional é descrito
 pela própria tag imutável, publicada em 2 de agosto de 2026.
 
 ## Escala de estado
@@ -19,8 +19,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.6.0`; as linhas anteriores permanecem imutáveis;
-- 59 pacotes e 21 componentes no catálogo;
+- instalador público `0.7.0`; as linhas anteriores permanecem imutáveis;
+- 60 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;

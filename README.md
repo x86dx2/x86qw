@@ -69,7 +69,7 @@ winget install --id Python.Python.3.13 -e
 Depois da instalação, abra um novo PowerShell e execute novamente o comando do
 x86QW.
 
-O bootstrap público `0.6.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.7.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
