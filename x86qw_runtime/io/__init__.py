@@ -17,6 +17,7 @@ _ARCHIVE_EXPORTS = frozenset({
     "read_archive_members",
     "scan_archive",
     "validate_installer_bundle",
+    "validate_installer_history_bundle",
 })
 
 __all__ = sorted(_ARCHIVE_EXPORTS)

@@ -25,6 +25,7 @@ from x86qw_runtime.io.archive import (
     read_archive_members,
     scan_archive,
     validate_installer_bundle,
+    validate_installer_history_bundle,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,6 +64,22 @@ class ArchiveTests(unittest.TestCase):
         return self.archive_bytes([
             (f"{prefix}/x86qw.pyz", application),
             (f"{prefix}/VERSION", f"{version}\n".encode("ascii")),
+            (f"{prefix}/x86qw.sh", b"#!/bin/sh\n"),
+            (f"{prefix}/x86qw.cmd", b"@echo off\r\n"),
+            (f"{prefix}/installer.json", identity),
+            (f"{prefix}/dist/installer/bin/manager.py", b"#!/usr/bin/env python3\n"),
+            (f"{prefix}/_x86qw/installer.json", identity),
+        ])
+
+    def historical_installer_bundle(self, version: str = "0.1.19") -> bytes:
+        prefix = f"x86qw-installer-{version}"
+        identity = self.identity_bytes(version)
+        application = self.archive_bytes([
+            ("__main__.py", b"print('x86QW')\n"),
+            ("_x86qw/installer.json", identity),
+        ])
+        return self.archive_bytes([
+            (f"{prefix}/x86qw.pyz", application),
             (f"{prefix}/x86qw.sh", b"#!/bin/sh\n"),
             (f"{prefix}/x86qw.cmd", b"@echo off\r\n"),
             (f"{prefix}/installer.json", identity),
@@ -978,6 +995,17 @@ class ArchiveTests(unittest.TestCase):
         )
         with self.assertRaises(ArchiveError):
             validate_installer_bundle(self.installer_bundle() + b"unexpected", "1.2.3")
+
+    def test_installer_history_contract_preserves_the_six_member_legacy_layout(self) -> None:
+        legacy = self.historical_installer_bundle()
+        plan = validate_installer_history_bundle(legacy, "0.1.19")
+        self.assertEqual(6, len(plan.members))
+        with self.assertRaises(ArchiveError):
+            validate_installer_bundle(legacy, "0.1.19")
+        with self.assertRaises(ArchiveError):
+            validate_installer_history_bundle(
+                self.historical_installer_bundle("0.1.20"), "0.1.20",
+            )
 
     def test_installer_bundle_rejects_extra_member_and_nested_identity_drift(self) -> None:
         version = "1.2.3"

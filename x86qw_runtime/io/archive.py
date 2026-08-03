@@ -1484,34 +1484,48 @@ def _identity_document(payload: bytes, label: str) -> dict[str, object]:
     return value
 
 
-def validate_installer_bundle(source: Path | bytes, version: str) -> ArchivePlan:
-    """Validate the immutable seven-member public installer bundle contract."""
+def _validate_installer_bundle_layout(
+    source: Path | bytes,
+    version: str,
+    *,
+    includes_version_member: bool,
+) -> ArchivePlan:
     if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
         raise ArchiveError(f"invalid installer bundle version: {version!r}")
     prefix = f"x86qw-installer-{version}"
-    names = (
+    names = [
         f"{prefix}/x86qw.pyz",
-        f"{prefix}/VERSION",
         f"{prefix}/x86qw.sh",
         f"{prefix}/x86qw.cmd",
         f"{prefix}/installer.json",
         f"{prefix}/dist/installer/bin/manager.py",
         f"{prefix}/_x86qw/installer.json",
-    )
+    ]
+    if includes_version_member:
+        names.insert(1, f"{prefix}/VERSION")
     executables = (
         f"{prefix}/x86qw.sh",
         f"{prefix}/dist/installer/bin/manager.py",
     )
     plan = scan_archive(source, required_members=names, executable_members=executables)
     if len(plan.members) != len(names) or set(plan.member_names) != set(names):
-        raise ArchiveError("installer bundle does not contain the exact seven-member layout")
-    payloads = read_archive_members(plan, (
-        f"{prefix}/VERSION",
+        count = "seven" if includes_version_member else "six"
+        raise ArchiveError(f"installer bundle does not contain the exact {count}-member layout")
+    identity_names = (
         f"{prefix}/installer.json",
         f"{prefix}/_x86qw/installer.json",
         f"{prefix}/x86qw.pyz",
-    ))
-    if payloads[f"{prefix}/VERSION"] != f"{version}\n".encode("ascii"):
+    )
+    requested = (
+        (f"{prefix}/VERSION", *identity_names)
+        if includes_version_member
+        else identity_names
+    )
+    payloads = read_archive_members(plan, requested)
+    if (
+        includes_version_member
+        and payloads[f"{prefix}/VERSION"] != f"{version}\n".encode("ascii")
+    ):
         raise ArchiveError("installer bundle VERSION does not match its requested version")
     expected_identity: dict[str, object] = {
         "format": 1,
@@ -1532,6 +1546,25 @@ def validate_installer_bundle(source: Path | bytes, version: str) -> ArchivePlan
     if nested_identity != expected_identity:
         raise ArchiveError("x86qw.pyz identity does not match the installer bundle")
     return plan
+
+
+def validate_installer_bundle(source: Path | bytes, version: str) -> ArchivePlan:
+    """Validate the immutable seven-member public installer bundle contract."""
+    return _validate_installer_bundle_layout(
+        source, version, includes_version_member=True,
+    )
+
+
+def validate_installer_history_bundle(source: Path | bytes, version: str) -> ArchivePlan:
+    """Validate the exact layout used by every immutable published bundle."""
+    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
+        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    numeric_version = tuple(int(part) for part in version.split("."))
+    return _validate_installer_bundle_layout(
+        source,
+        version,
+        includes_version_member=numeric_version >= (0, 1, 20),
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
