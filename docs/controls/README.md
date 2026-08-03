@@ -8,8 +8,9 @@ Abra [`index.html`](index.html) e selecione o jogo e o teclado no topo. Os três
 formatos físicos atuais são:
 
 - Windows ANSI en-US, 104 teclas;
-- macOS en-US, compacto Apple;
-- Keychron K3 Version 3, ANSI 75%, camada macOS.
+- macOS en-US, compacto Apple, com as combinações `fn` explícitas;
+- Keychron K3 Version 3, ANSI en-US de 84 teclas, compacto slim 75%, em modo
+  macOS.
 
 Também é possível abrir uma combinação diretamente:
 
@@ -29,9 +30,12 @@ index.html?profile=ktx&layout=keychron-k3-v3
 - **Frogbots:** `Ins`, `Del`, `Home` e `End` são destacados apenas no perfil KTX
   e só funcionam quando a sessão foi iniciada com bots.
 - **Legenda explícita:** cada bind destacado possui uma descrição individual;
-  ranges como `1–0` não escondem funções diferentes.
+  ranges como `1–0` não escondem funções diferentes. A página valida também que
+  nenhuma tecla destacada ficou sem item correspondente na legenda.
 
-O Keychron K3 Version 3 não declara `Insert` no keymap QMK oficial. A variante
+O nome oficial do teclado é Keychron K3 Version 3; “Keychron Slim V3” descreve a
+categoria, mas poderia ser confundido com o Keychron V3 TKL. O K3 Version 3 não
+declara `Insert` no keymap QMK oficial. A variante
 marca `Fn+Del → Insert` como remapeamento x86QW recomendado no Keychron Launcher,
 necessário para adicionar Frogbots com o bind atual. Teclas ausentes em layouts
 compactos são listadas no rodapé em vez de serem desenhadas como se existissem.
