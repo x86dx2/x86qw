@@ -1,7 +1,7 @@
 # ADR 0002 — Fronteira única de arquivos ZIP, PK3 e PYZ
 
-**Status:** proposto; implementado no candidato local da PR 3, com matriz CI
-pendente e sem publicação
+**Status:** aceito no código corretivo da PR 3; matriz CI concluída e sem
+publicação
 
 **Data:** 2026-08-03
 

@@ -4,8 +4,8 @@
 
 **Versão pública preservada:** `0.7.1`
 
-**Estado:** implementação e regressão local concluídas; PR 3 não publicada e
-matriz CI pendente
+**Estado:** implementação, regressão local e matriz CI concluídas; PR 3 não
+publicada
 
 ## Problemas confirmados no baseline
 
@@ -182,19 +182,18 @@ Arquivos antes tolerados somente por validação incompleta passam a falhar ante
 do primeiro write de extração ou payload visível. Esse é o único contrato
 deliberadamente incompatível.
 
-## Evidência atual e gate restante
+## Evidência atual
 
 Na validação local deste candidato, a suíte de manutenção reportou
 `Ran 695 tests` e `OK (skipped=15)` tanto no Python 3.10 quanto no Python 3.14;
-os cinco testes do site também reportaram `OK`. Dos 15 skips locais, quatorze exigem
-o runner Windows e um é o smoke de rede opt-in. `verify`, Git LFS,
+os cinco testes do site também reportaram `OK`. Dos 15 skips locais, quatorze
+exigem o runner Windows e um é o smoke de rede opt-in. `verify`, Git LFS,
 `git diff --check`, os parsers dos bootstraps e o dry-run do Worker também
-passaram. A PR 3 permanece não publicada, e sua matriz Ubuntu, macOS e Windows
-continua sendo o gate pendente antes de classificar SEC-01 como
-multiplataforma completa.
+passaram.
 
-Antes de classificar a validação de SEC-01 como multiplataforma completa, o CI
-ainda precisa repetir:
+A execução
+[#30856293818](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
+repetiu com sucesso:
 
 - testes positivos, negativos e adversariais da fronteira;
 - regressão de instalador, serviços, gameplay, componentes, recipes,
@@ -205,8 +204,11 @@ ainda precisa repetir:
 - matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo os casos
   nativos Windows.
 
-Esses gates validam a portabilidade da implementação, mas não substituem smoke
-nativo de ezQuake, MVDSV, QTV ou QWFWD.
+Os sete jobs passaram. Nos dois jobs Windows, os casos nativos aceitaram fontes
+`.exe`/`.cmd`, rejeitaram reparse points e validaram as identidades reais de
+Python 3.10 e 3.13. Essa evidência classifica o contrato de arquivos como
+multiplataforma completo, mas não substitui smoke nativo de ezQuake, MVDSV, QTV
+ou QWFWD.
 
 ## Riscos residuais
 

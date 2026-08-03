@@ -233,9 +233,12 @@ qualquer write de extração ou payload visível, com snapshot privado limitado,
 modos canônicos e promoção atômica. A regressão local em Python 3.14 e Python
 3.10 reporta `Ran 695 tests` e `OK (skipped=15)` na manutenção, além de
 `Ran 5 tests` e `OK` no site; quatorze skips exigem o runner Windows e um é o
-smoke de rede opt-in. Os casos nativos Windows e a matriz da PR permanecem
-pendentes no CI. O candidato não foi publicado e não pertence à release
-pública imutável `0.7.1`; o contrato está no
+smoke de rede opt-in. A
+[matriz da PR 3](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
+passou em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo
+os casos nativos Windows de identidade e reparse point. Isso não substitui os
+smokes nativos dos runtimes. O candidato não foi publicado e não pertence à
+release pública imutável `0.7.1`; o contrato está no
 [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
 
 ## Arquitetura

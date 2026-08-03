@@ -204,13 +204,13 @@ separada.
 
 ### SEC-01 — ZIP/PK3/PYZ
 
-**Entrega funcional:** completa no candidato local da issue #49; PR 3 ainda não
+**Entrega funcional:** completa no código corretivo da issue #49; ainda não
 publicada
 **Validação:** regressão local concluída em Python 3.14 e 3.10: `Ran 695 tests`
-e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; quatorze
-skips exigem o runner Windows e um é o smoke de rede opt-in; matriz portável e
-casos nativos Windows pendentes no CI; smokes nativos dos runtimes permanecem
-pendentes
+e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da
+PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13,
+incluindo identidade e reparse point nativos Windows; smokes nativos dos
+runtimes permanecem pendentes
 
 O candidato centraliza ZIP, PK3 e PYZ em `scan_archive`, `ArchivePlan` e
 `extract_archive`. O preflight integral usa semântica POSIX e rejeita
@@ -228,9 +228,9 @@ inconclusivas são preservadas e falhas posteriores preservam o destino.
 
 Os bootstraps candidatos projetam a mesma fonte canônica byte a byte e não usam
 `unzip` ou `Expand-Archive`. A release pública `0.7.1` ainda não contém essa
-fronteira. A validação de SEC-01 só muda para multiplataforma completa depois
-da matriz verde; testes portáveis de arquivos não são smokes nativos de ezQuake,
-MVDSV, QTV ou QWFWD. Consulte o
+fronteira. A validação do contrato de arquivos é multiplataforma completa após
+a matriz verde da PR 3; esses testes não são smokes nativos de ezQuake, MVDSV,
+QTV ou QWFWD. Consulte o
 [ADR 0002](adr/0002-fronteira-unica-de-arquivos.md).
 
 ### SEC-02 — Segredos e endpoints
@@ -359,5 +359,5 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] contrato Python da `0.7.1` validado em 7/7 jobs e 393 + 4 testes;
 - [x] asset imutável `0.7.1` publicado, verificado e promovido a `current`;
 - [x] matriz da PR 2 verde nos três sistemas;
-- [ ] matriz da PR 3 verde nos três sistemas, inclusive os casos nativos Windows;
+- [x] matriz da PR 3 verde nos três sistemas, inclusive os casos nativos Windows;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.
