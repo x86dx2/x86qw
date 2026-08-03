@@ -1280,12 +1280,12 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual(2, len(fallback.calls))
 
         registered = threading.Event()
-        close_called = threading.Event()
+        close_calls = []
         unblock = threading.Event()
 
         class CancelConnection:
             def close(self):
-                close_called.set()
+                close_calls.append(threading.get_ident())
                 unblock.set()
 
         class BlockingOpener:
@@ -1333,7 +1333,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                             0,
                             0.05,
                         )
-                was_closed = close_called.is_set()
+                was_closed = bool(close_calls)
             finally:
                 unblock.set()
             self.assertTrue(was_closed)
