@@ -11,7 +11,6 @@ import shutil
 import sys
 import tarfile
 import tempfile
-import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -19,10 +18,12 @@ try:
     from .add_package import register_package
     from .validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
     from .validate_recipes import validate_recipe
+    from .downloader import DownloadError, MAX_ARTIFACT_BYTES, PinnedArtifact, download as bounded_download
 except ImportError:  # Execucao direta
     from add_package import register_package
     from validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
     from validate_recipes import validate_recipe
+    from downloader import DownloadError, MAX_ARTIFACT_BYTES, PinnedArtifact, download as bounded_download
 
 
 DEFAULT_OUTPUT = ROOT / "dist"
@@ -95,15 +96,17 @@ def verify_artifact(path: Path, package: dict[str, object]) -> None:
         verify_tar_gz(path, package["expected_members"])
 
 
-def download(url: str, destination: Path, expected_size: int) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "x86qw-ingest/1"})
-    with urllib.request.urlopen(request, timeout=60) as response, destination.open("wb") as output:
-        received = 0
-        while block := response.read(1024 * 1024):
-            received += len(block)
-            if received > expected_size:
-                raise ValueError(f"download exceeds declared size of {expected_size} bytes")
-            output.write(block)
+def download(url: str, destination: Path, expected_size: int, expected_sha256: str) -> None:
+    bounded_download(PinnedArtifact(
+        url=url,
+        destination=destination,
+        expected_size=expected_size,
+        expected_sha256=expected_sha256,
+        maximum_size=MAX_ARTIFACT_BYTES,
+        deadline_seconds=120,
+        headers={"User-Agent": "x86qw-ingest/1"},
+        label=destination.name,
+    ))
 
 
 def build_package(
@@ -130,7 +133,9 @@ def build_package(
     with tempfile.TemporaryDirectory(prefix="x86qw-ingest-") as temporary:
         candidate = Path(temporary) / package["filename"]
         if artifact is None:
-            download(package["origin_url"], candidate, package["size"])
+            download(
+                package["origin_url"], candidate, package["size"], package["sha256"],
+            )
         else:
             if artifact.is_symlink() or not artifact.is_file():
                 raise ValueError(f"artifact must be a regular file: {artifact}")
@@ -205,6 +210,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (DownloadError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"package not built: {error}", file=sys.stderr)
         raise SystemExit(1)

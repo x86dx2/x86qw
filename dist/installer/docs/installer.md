@@ -21,19 +21,28 @@ Esses fatos públicos são validados contra os inventários canônicos.
 Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
 
 ```sh
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
 ```
 
 No Windows PowerShell:
 
 ```powershell
-irm https://x86qw.x86.com.br/install.ps1 | iex
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
 ```
 
 O bootstrap não usa `exit`: a janela atual do PowerShell permanece aberta ao
 fim da instalação. O código devolvido pelo instalador Python fica disponível em
 `$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
 código antes de devolver o controle ao terminal.
+
+Ambos os comandos iniciais bloqueiam downgrade de HTTPS, têm prazo de 60
+segundos e recusam scripts acima de 256 KiB antes de executá-los. No Windows,
+o buffer limitado do `HttpClient` substitui o fluxo ilimitado `irm | iex`.
+No Unix, `curl --disable` ignora `.curlrc`; `pipefail` e `head` limitam a escrita
+a 262145 bytes dentro de um diretório temporário criado sob `umask 077`. O
+tamanho e o status do pipeline são validados antes de chamar Bash, que nunca
+executa um prefixo produzido por pipeline com falha nem uma resposta sem
+`Content-Length` que exceda o limite.
 
 Na `0.7.1`, o corpo executa em um escopo de script próprio dentro da
 mesma sessão PowerShell. Isso não cria outra janela nem outro processo: apenas
@@ -70,6 +79,44 @@ o instalador.
 O layout atual é criado por um bootstrap limpo. Instalações antigas podem ser
 mantidas em outro diretório para consulta, mas não são convertidas pelo fluxo
 atual.
+
+## Fronteira de downloads
+
+O código corretivo posterior à `0.7.1`, ainda não publicado como nova release,
+centraliza bytes HTTP recebidos pelo Python. Artefatos persistentes exigem antes
+da chamada uma URL HTTPS, tamanho exato, SHA-256, limite máximo e deadline total.
+O limite global aceito pelo catálogo é 512 MiB; o catálogo do instalador tem
+limite de 2 MiB e a consulta do Hub, 1 MiB.
+
+`Content-Length` é validado quando existe. Sua ausência não remove o limite de
+streaming. O deadline monotônico cobre conexão, leitura, pausas e todas as
+tentativas. Somente falhas transitórias recebem retry no mesmo mirror; uma falha
+de integridade pode avançar para outro mirror equivalente, mas erros de política,
+protocolo, limite, armazenamento e deadline encerram a operação. Corpos
+intermediários de redirect são fechados sem leitura. Um destino anterior
+permanece intacto: o conteúdo entra primeiro em temporário exclusivo, recebe
+modo `0600` no POSIX, `flush` e `fsync` e só é promovido por substituição atômica
+depois de tamanho e hash corresponderem.
+
+Metadados dinâmicos são efêmeros e limitados, mas limite de recursos e TLS não
+equivalem a autenticação versionada do catálogo. Esse contrato é uma etapa de
+segurança separada. A decisão completa está no
+[`ADR 0001`](../../../docs/adr/0001-fronteira-limitada-de-bytes-remotos.md).
+
+URLs persistidas no catálogo, manifesto e inventários de releases e upstreams
+usam o mesmo validador HTTPS e não aceitam credenciais, fragmentos, queries,
+espaços ou controles. No intake de manutenção, um arquivo remoto novo também
+precisa corresponder exatamente a uma release, fonte preservada, pacote público
+proposto ou referência nQuake, dentro do namespace e consumidor declarados. Um
+pacote ezQuake usa obrigatoriamente
+`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`; essas
+coordenadas precisam coincidir com os metadados do pacote.
+
+No POSIX, os temporários recebem modo `0600`. No Windows, `mkstemp` garante
+criação exclusiva, mas não neutraliza por si só uma DACL ampla herdada do
+diretório. A DACL privada do temporário do bootstrap continua pendente no PR 4 e
+na [issue #47](https://github.com/x86dx2/x86qw/issues/47); ela não é apresentada
+como proteção concluída nesta correção.
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
@@ -145,13 +192,13 @@ Para preparar um cliente diferente do host, informe explicitamente
 
 ```sh
 ./dist/installer/bin/manager.py install --platform windows
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
 ```
 
 No PowerShell, o equivalente para preparar Linux a partir do Windows é:
 
 ```powershell
-& ([scriptblock]::Create((irm https://x86qw.x86.com.br/install.ps1))) --platform linux
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } } --platform linux
 ```
 
 O argumento substitui apenas a detecção do cliente; não tenta executar o
@@ -738,7 +785,7 @@ No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\instal
 
 ## Saída e diagnóstico
 
-A saída padrão prioriza decisões, andamento e resultado. Downloads exibem uma barra de progresso quando o instalador roda em um terminal interativo. Em logs, redirecionamentos e automações, a barra é omitida para não poluir a saída.
+A saída padrão prioriza decisões, andamento e resultado. Downloads exibem uma barra de progresso quando o instalador roda em um terminal interativo. Em logs, redirecionamentos e automações, a barra é omitida para não poluir a saída. Downloads incompletos ou divergentes não são promovidos ao destino, e o modo detalhado nunca imprime o conteúdo remoto.
 
 Para investigar uma falha ou auditar exatamente o que será usado, ative o modo detalhado:
 
@@ -826,7 +873,8 @@ No diretório instalado, execute:
 ./x86qw.sh upgrade
 ```
 
-Os dois comandos atualizam primeiro a própria CLI por um bundle x86QW validado
+Os dois comandos atualizam primeiro a própria CLI por um bundle x86QW fixado
+simultaneamente por versão, tamanho e SHA-256, então validado
 e consultam o catálogo atual. `update` é conservador: cada ezQuake
 stable/nightly já registrado avança no mesmo SO e canal, e somente componentes
 já instalados são atualizados. Itens ausentes são detectados e informados, mas

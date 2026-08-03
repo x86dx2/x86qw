@@ -8,11 +8,8 @@ import os
 import re
 import shutil
 import tempfile
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
@@ -21,13 +18,21 @@ try:
     from .component_policy import component_for_distribution_path, load_component_policy, require_component
     from .components import component_for_source, load_catalog as load_component_catalog, source_roots
     from .component_releases import component_for_artifact_path, load_releases
-    from .public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from .downloader import (
+        BoundedMetadata, DownloadPolicyError, MAX_ARTIFACT_BYTES, PinnedArtifact,
+        RetryPolicy, download, safe_url_for_log, validate_https_url,
+    )
+    from .public_upstreams import github_latest_release, github_recursive_tree, remote_content_length
     from .upstreams import load_upstreams, source_owner
 except ImportError:  # Execucao direta
     from component_policy import component_for_distribution_path, load_component_policy, require_component
     from components import component_for_source, load_catalog as load_component_catalog, source_roots
     from component_releases import component_for_artifact_path, load_releases
-    from public_upstreams import git_remote_tree, github_latest_release, remote_content_length
+    from downloader import (
+        BoundedMetadata, DownloadPolicyError, MAX_ARTIFACT_BYTES, PinnedArtifact,
+        RetryPolicy, download, safe_url_for_log, validate_https_url,
+    )
+    from public_upstreams import github_latest_release, github_recursive_tree, remote_content_length
     from upstreams import load_upstreams, source_owner
 
 
@@ -37,6 +42,7 @@ COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 UPSTREAMS = ROOT / "maintenance/inventory/upstreams.json"
 PUBLIC_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 USER_AGENT = "x86qw-maintenance/1"
+DISCOVERY_MAX_BYTES = 4 * 1024 * 1024
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
 
@@ -109,9 +115,15 @@ def utc_now() -> str:
 
 
 def request_bytes(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=90) as response:
-        return response.read()
+    result = download(BoundedMetadata(
+        url=url,
+        maximum_size=DISCOVERY_MAX_BYTES,
+        deadline_seconds=90,
+        headers={"User-Agent": USER_AGENT},
+        label="metadados de descoberta",
+    ))
+    assert result.data is not None
+    return result.data
 
 
 def links(url: str) -> list[str]:
@@ -168,7 +180,10 @@ def discover_nightlies() -> list[Asset]:
         if not names:
             raise ValueError(f"no nightly found for {platform}")
         name = names[-1]
-        assets.append(Asset("ezquake", urllib.parse.urljoin(root, name), nightly_path(platform, name)))
+        url = urllib.parse.urljoin(root, name)
+        assets.append(Asset(
+            "ezquake", url, nightly_path(platform, name), remote_content_length(url),
+        ))
     return assets
 
 
@@ -176,7 +191,7 @@ def discover_nquake() -> list[Asset]:
     catalog = load_component_catalog(COMPONENT_CATALOG)
     used_paths = source_roots(catalog, "reference")
 
-    commit, tree = git_remote_tree(f"https://github.com/{NQUAKE_REPOSITORY}.git", NQUAKE_REF)
+    commit, tree = github_recursive_tree(NQUAKE_REPOSITORY, NQUAKE_REF)
 
     assets: list[Asset] = []
     found_roots: set[str] = set()
@@ -195,7 +210,7 @@ def discover_nquake() -> list[Asset]:
             "nquake",
             f"https://raw.githubusercontent.com/{NQUAKE_REPOSITORY}/{commit}/{quoted}",
             f"distributions/nquake/{commit}/{path}",
-            None,
+            item.size,
             subcomponent,
             None,
             blob_sha,
@@ -345,7 +360,80 @@ def load_manifest(path: Path) -> dict[str, object]:
         raise ValueError(f"invalid distribution manifest: {path}")
     if not isinstance(manifest.get("files"), dict) or not isinstance(manifest.get("repositories"), dict):
         raise ValueError(f"invalid distribution manifest collections: {path}")
+    validate_manifest_sizes(manifest["files"])
     return manifest
+
+
+def pin_assets_from_manifest(
+    assets: list[Asset], manifest: dict[str, object],
+) -> list[Asset]:
+    """Project previously reviewed identities onto matching discoveries.
+
+    Discovery may identify a new URL and its byte count, but it must never make
+    those bytes trusted.  Only an exact path/URL/size identity already committed
+    to the distribution manifest can supply the SHA-256 used by a subsequent
+    persistent download.
+    """
+
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise ValueError("distribution manifest has no files collection")
+    resolved: list[Asset] = []
+    for asset in assets:
+        if asset.expected_sha256 is not None:
+            resolved.append(asset)
+            continue
+        known = files.get(asset.path)
+        if not isinstance(known, dict):
+            resolved.append(asset)
+            continue
+        size = known.get("size")
+        digest = known.get("sha256")
+        if (
+            known.get("url") != asset.url
+            or type(size) is not int
+            or size <= 0
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            or (asset.expected_size is not None and asset.expected_size != size)
+        ):
+            resolved.append(asset)
+            continue
+        resolved.append(replace(
+            asset,
+            expected_size=size,
+            expected_sha256=digest,
+        ))
+    return resolved
+
+
+def unpinned_asset_paths(assets: list[Asset]) -> list[str]:
+    return sorted(
+        asset.path
+        for asset in assets
+        if (
+            type(asset.expected_size) is not int
+            or asset.expected_size <= 0
+            or asset.expected_size > MAX_ARTIFACT_BYTES
+            or not isinstance(asset.expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", asset.expected_sha256) is None
+        )
+    )
+
+
+def validate_manifest_sizes(files: object) -> None:
+    if not isinstance(files, dict):
+        raise ValueError("invalid distribution manifest files")
+    for relative, metadata in files.items():
+        size = metadata.get("size") if isinstance(metadata, dict) else None
+        if not isinstance(size, int) or size <= 0 or size > MAX_ARTIFACT_BYTES:
+            raise ValueError(f"invalid distribution file size: {relative}")
+        try:
+            parsed = validate_https_url(metadata.get("url"), "distribution file URL")
+        except DownloadPolicyError as error:
+            raise ValueError(f"invalid distribution file URL: {relative}") from error
+        if parsed.query:
+            raise ValueError(f"persistent distribution file URL has a query: {relative}")
 
 
 def write_manifest(path: Path, manifest: dict[str, object]) -> None:
@@ -474,6 +562,17 @@ def prune_unconsumed(root: Path, manifest: dict[str, object]) -> tuple[int, int]
 
 
 def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[str, object], bool]:
+    if (
+        type(asset.expected_size) is not int
+        or asset.expected_size <= 0
+        or asset.expected_size > MAX_ARTIFACT_BYTES
+        or not isinstance(asset.expected_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", asset.expected_sha256) is None
+    ):
+        raise ValueError(
+            "distribution asset requires reviewed size and SHA-256 before download: "
+            f"{asset.path}"
+        )
     target = root / asset.path
     if target.is_symlink():
         raise ValueError(f"distribution target must not be a symlink: {target}")
@@ -481,6 +580,7 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
         isinstance(known, dict)
         and target.is_file()
         and target.stat().st_size == known.get("size")
+        and file_sha256(target) == known.get("sha256")
         and known.get("url") == asset.url
         and (asset.expected_size is None or known.get("size") == asset.expected_size)
         and (asset.expected_sha256 is None or known.get("sha256") == asset.expected_sha256)
@@ -490,53 +590,55 @@ def download_asset(root: Path, asset: Asset, known: object) -> tuple[str, dict[s
             metadata["package"] = asset.subcomponent
         return asset.path, metadata, True
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(target.name + ".part")
-    last_error: Exception | None = None
-    for attempt in range(3):
-        try:
-            request = urllib.request.Request(asset.url, headers={"User-Agent": USER_AGENT})
-            digest = hashlib.sha256()
-            size = 0
-            with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
-                while block := response.read(1024 * 1024):
-                    size += len(block)
-                    if asset.expected_size is not None and size > asset.expected_size:
-                        raise ValueError(f"download exceeds declared size: {asset.url}")
-                    digest.update(block)
-                    output.write(block)
-            if asset.expected_size is not None and size != asset.expected_size:
-                raise ValueError(f"download size mismatch for {asset.url}: expected {asset.expected_size}, got {size}")
-            if asset.expected_sha256 is not None and digest.hexdigest() != asset.expected_sha256:
-                raise ValueError(f"download SHA-256 mismatch for {asset.url}")
-            if asset.expected_git_sha1 is not None:
-                git_digest = hashlib.sha1(f"blob {size}\0".encode())
-                with temporary.open("rb") as downloaded:
-                    for block in iter(lambda: downloaded.read(1024 * 1024), b""):
-                        git_digest.update(block)
-                if git_digest.hexdigest() != asset.expected_git_sha1:
-                    raise ValueError(f"download Git blob identity mismatch for {asset.url}")
-            os.replace(temporary, target)
-            component = load_component_policy()[asset.component]
-            consumers = component["consumers"]
-            assert isinstance(consumers, list)
-            metadata: dict[str, object] = {
-                "component": asset.component,
-                "consumer": consumers[0],
-                "url": asset.url,
-                "size": size,
-                "sha256": digest.hexdigest(),
-            }
-            if asset.subcomponent is not None:
-                metadata["package"] = asset.subcomponent
-            return asset.path, metadata, False
-        except (OSError, ValueError, urllib.error.URLError) as error:
-            last_error = error
-        if temporary.exists():
-            temporary.unlink()
-        if attempt < 2:
-            time.sleep(1 + attempt)
-    assert last_error is not None
-    raise last_error
+    expected_size = asset.expected_size
+    retry = RetryPolicy(attempts=3)
+    with tempfile.TemporaryDirectory(prefix=f".{target.name}.", dir=target.parent) as staging_name:
+        staging = Path(staging_name) / "payload"
+        contract = PinnedArtifact(
+            url=asset.url,
+            destination=staging,
+            expected_size=expected_size,
+            expected_sha256=asset.expected_sha256,
+            maximum_size=MAX_ARTIFACT_BYTES,
+            deadline_seconds=120,
+            retry=retry,
+            headers={"User-Agent": USER_AGENT},
+            label=asset.path,
+        )
+        result = download(contract)
+        size = result.size
+        digest = result.sha256
+        if asset.expected_size is not None and size != asset.expected_size:
+            raise ValueError(
+                f"download size mismatch for {safe_url_for_log(asset.url)}: "
+                f"expected {asset.expected_size}, got {size}"
+            )
+        if asset.expected_sha256 is not None and digest != asset.expected_sha256:
+            raise ValueError(f"download SHA-256 mismatch for {safe_url_for_log(asset.url)}")
+        if asset.expected_git_sha1 is not None:
+            git_digest = hashlib.sha1(f"blob {size}\0".encode())
+            with staging.open("rb") as downloaded:
+                for block in iter(lambda: downloaded.read(1024 * 1024), b""):
+                    git_digest.update(block)
+            if git_digest.hexdigest() != asset.expected_git_sha1:
+                raise ValueError(
+                    "download Git blob identity mismatch for "
+                    f"{safe_url_for_log(asset.url)}"
+                )
+        os.replace(staging, target)
+    component = load_component_policy()[asset.component]
+    consumers = component["consumers"]
+    assert isinstance(consumers, list)
+    metadata: dict[str, object] = {
+        "component": asset.component,
+        "consumer": consumers[0],
+        "url": asset.url,
+        "size": size,
+        "sha256": digest,
+    }
+    if asset.subcomponent is not None:
+        metadata["package"] = asset.subcomponent
+    return asset.path, metadata, False
 
 
 def verify_distribution(
@@ -549,6 +651,7 @@ def verify_distribution(
 ) -> int:
     files = manifest["files"]
     assert isinstance(files, dict)
+    validate_manifest_sizes(files)
     if manifest.get("layout") != "distribution-v1" or manifest.get("repositories") != {}:
         raise ValueError("distribution still contains a legacy or repository-oriented layout")
     expected = set(files)

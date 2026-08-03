@@ -10,11 +10,12 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
+import unicodedata
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
@@ -27,12 +28,34 @@ from maintenance.tools.build_component_packages import build_packages, register_
 from maintenance.tools.build_core_package import build_core_package
 from maintenance.tools.build_package import verify_artifact
 from maintenance.tools.check_component_updates import check_updates
-from maintenance.tools.component_releases import load_releases
+from maintenance.tools.component_releases import (
+    load_releases,
+    validate_releases,
+)
+from maintenance.tools.component_policy import (
+    component_for_distribution_path,
+    load_component_policy,
+    require_component,
+)
 from maintenance.tools.component_sources import discover_snapshot
 from maintenance.tools.components import (
+    component_for_source,
+    components_by_id,
     load_catalog as load_component_catalog,
     profile_fingerprint,
+    validate_catalog as validate_component_catalog,
+    validate_portable_relative_path,
     validate_tree_partition,
+)
+from maintenance.tools.downloader import (
+    BoundedMetadata,
+    DownloadError,
+    DownloadHTTPError,
+    MAX_ARTIFACT_BYTES,
+    PinnedArtifact,
+    download,
+    safe_url_for_log,
+    validate_https_url,
 )
 from maintenance.tools.publish_gitlab_packages import artifact_url, local_artifact, remote_sha256
 from maintenance.tools.public_upstreams import github_commit_revision
@@ -40,16 +63,19 @@ from maintenance.tools.product_catalog import encoded_product_catalog
 from maintenance.tools.runtime_catalog import load_inventory as load_runtime_inventory
 from maintenance.tools.sync_distribution import (
     Asset,
+    consumed_component,
     discover_assets,
     download_asset,
     file_sha256,
     load_manifest,
+    pin_assets_from_manifest,
+    unpinned_asset_paths,
     verify_distribution,
     write_manifest,
 )
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
-from maintenance.tools.upstreams import load_upstreams, verify_preserved_sources
+from maintenance.tools.upstreams import load_upstreams, source_owner, verify_preserved_sources
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -64,7 +90,13 @@ BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
 PRODUCT_CATALOG = PROJECT_ROOT / "site/public/api/v1/product.json"
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
+GITHUB_API_MAX_BYTES = 4 * 1024 * 1024
+GITHUB_API_DEADLINE_SECONDS = 60
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
+SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
+SAFE_COMPONENT_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SAFE_CONSUMER = re.compile(r"^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$")
 EXPECTED_STABLE_MEMBERS = {
     "linux": ["ezQuake-x86_64.AppImage"],
     "macos": ["ezQuake.app/Contents/MacOS/ezQuake"],
@@ -142,15 +174,144 @@ def copy_tree(source: Path, destination: Path) -> None:
     )
 
 
+def copy_local_file_atomically(
+    origin: Path,
+    destination: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+    mode: int,
+) -> tuple[int, str]:
+    """Copia um source validado sem escrever sobre um hardlink do workspace."""
+
+    if expected_size <= 0 or expected_size > MAX_ARTIFACT_BYTES:
+        raise ManagerError("size local planejado invalido")
+    if HEX64.fullmatch(expected_sha256) is None:
+        raise ManagerError("sha256 local planejado invalido")
+    if mode not in {0o644, 0o755}:
+        raise ManagerError("modo local planejado invalido")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}-",
+        suffix=".tmp",
+        dir=destination.parent,
+    )
+    temporary = Path(temporary_name)
+    source_descriptor = -1
+    try:
+        source_flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        source_descriptor = os.open(origin, source_flags)
+        with os.fdopen(source_descriptor, "rb") as source_stream:
+            source_descriptor = -1
+            details = os.fstat(source_stream.fileno())
+            if not stat.S_ISREG(details.st_mode):
+                raise ManagerError("source local deixou de ser arquivo regular")
+
+            with os.fdopen(temporary_descriptor, "wb") as output:
+                temporary_descriptor = -1
+                digest = hashlib.sha256()
+                size = 0
+                while chunk := source_stream.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > expected_size:
+                        raise ManagerError("source local mudou depois da validacao")
+                    output.write(chunk)
+                    digest.update(chunk)
+
+                copied_sha256 = digest.hexdigest()
+                if size != expected_size or copied_sha256 != expected_sha256:
+                    raise ManagerError("source local mudou depois da validacao")
+
+                output.flush()
+                if hasattr(os, "fchmod"):
+                    os.fchmod(output.fileno(), mode)
+                else:  # pragma: no cover - Python sem fchmod
+                    os.chmod(temporary, mode)
+                os.fsync(output.fileno())
+
+        os.replace(temporary, destination)
+        return size, copied_sha256
+    except ManagerError:
+        raise
+    except OSError as error:
+        raise ManagerError(f"nao foi possivel copiar o source local: {error}") from error
+    finally:
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        if temporary_descriptor >= 0:
+            os.close(temporary_descriptor)
+        temporary.unlink(missing_ok=True)
+
+
 def safe_relative(value: object, prefix: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value or "\0" in value:
-        raise ManagerError(f"caminho invalido: {value!r}")
-    relative = PurePosixPath(value)
-    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+    try:
+        portable = validate_portable_relative_path(value, "caminho")
+    except ValueError as error:
+        raise ManagerError(str(error)) from error
+    relative = PurePosixPath(portable)
+    if len(relative.parts) < 2:
         raise ManagerError(f"caminho inseguro: {value}")
     if relative.parts[0] != prefix:
         raise ManagerError(f"o caminho precisa ficar em {prefix}/: {value}")
     return relative.as_posix()
+
+
+def semantic_path_identity(value: str) -> str:
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+def validate_destination_tree(destination: str) -> None:
+    """Reject semantic collisions and non-file targets already present in dist/."""
+
+    relative = PurePosixPath(destination).relative_to("dist")
+    existing: dict[str, str] = {}
+    if DIST.exists():
+        for path in DIST.rglob("*"):
+            name = path.relative_to(DIST).as_posix()
+            existing.setdefault(semantic_path_identity(name), name)
+
+    for depth in range(1, len(relative.parts) + 1):
+        candidate = PurePosixPath(*relative.parts[:depth]).as_posix()
+        known = existing.get(semantic_path_identity(candidate))
+        if known is not None and known != candidate:
+            raise ManagerError(
+                f"destino colide com caminho existente em caixa ou Unicode: {candidate}"
+            )
+        target = DIST / Path(*relative.parts[:depth])
+        if target.is_symlink():
+            raise ManagerError(f"destino atravessa symlink existente: {candidate}")
+        if target.exists():
+            if depth < len(relative.parts) and not target.is_dir():
+                raise ManagerError(f"pai do destino nao e diretorio: {candidate}")
+            if depth == len(relative.parts) and not target.is_file():
+                raise ManagerError(f"destino existente nao e arquivo regular: {candidate}")
+
+
+def validate_local_source_path(base: Path, value: object) -> Path:
+    try:
+        portable = validate_portable_relative_path(value, "source local")
+    except ValueError as error:
+        raise ManagerError(str(error)) from error
+    raw_parts = portable.split("/")
+
+    base_resolved = base.resolve()
+    candidate = base_resolved
+    for part in raw_parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise ManagerError("source local precisa ser arquivo regular sem symlink")
+    try:
+        details = candidate.stat()
+    except OSError as error:
+        raise ManagerError("source local precisa ser arquivo regular sem symlink") from error
+    if not stat.S_ISREG(details.st_mode):
+        raise ManagerError("source local precisa ser arquivo regular sem symlink")
+    try:
+        candidate.resolve().relative_to(base_resolved)
+    except ValueError as error:
+        raise ManagerError("source local escapa do diretorio da definicao") from error
+    return candidate
 
 
 def remove_empty_directories(root: Path) -> None:
@@ -428,6 +589,78 @@ def update_reference_releases(releases: dict[str, object], revision: str) -> boo
                 )
     releases["checked_at"] = now()
     return True
+
+
+def apply_reference_transition(
+    releases: dict[str, object],
+    proposed: object,
+) -> tuple[str, str] | None:
+    """Apply one explicit, stale-safe nQuake reference transition in memory."""
+
+    if proposed is None:
+        return None
+    if not isinstance(proposed, dict) or set(proposed) != {
+        "repository", "previous_revision", "revision",
+    }:
+        raise ManagerError(
+            "reference precisa declarar somente repository, previous_revision e revision"
+        )
+    current = releases.get("reference")
+    if not isinstance(current, dict):
+        raise ManagerError("inventario de releases nao possui referencia nQuake")
+    repository = proposed.get("repository")
+    previous = proposed.get("previous_revision")
+    revision = proposed.get("revision")
+    if (
+        not isinstance(repository, str)
+        or not isinstance(previous, str)
+        or HEX40.fullmatch(previous) is None
+        or not isinstance(revision, str)
+        or HEX40.fullmatch(revision) is None
+    ):
+        raise ManagerError("transicao da referencia nQuake possui campos invalidos")
+    try:
+        parsed_repository = validate_https_url(
+            repository, "repository da referencia nQuake",
+        )
+    except DownloadError as error:
+        raise ManagerError("repository da referencia nQuake invalido") from error
+    if parsed_repository.query:
+        raise ManagerError("repository da referencia nQuake nao pode conter query")
+    current_repository = current.get("repository")
+    current_revision = current.get("revision")
+    if repository != current_repository:
+        raise ManagerError("transicao da referencia nQuake nao pode trocar o repository")
+    if previous != current_revision:
+        raise ManagerError(
+            "previous_revision da referencia nQuake diverge do inventario atual"
+        )
+    if revision == previous:
+        raise ManagerError("transicao da referencia nQuake precisa alterar a revisao")
+    update_reference_releases(releases, revision)
+    return previous, revision
+
+
+def reference_asset_url(repository: str, revision: str, upstream_path: str) -> str:
+    """Derive the only raw GitHub origin authorized by the pinned reference."""
+
+    try:
+        parsed = validate_https_url(repository, "repository da referencia nQuake")
+    except DownloadError as error:
+        raise ManagerError("repository da referencia nQuake invalido") from error
+    repository_parts = parsed.path.strip("/").split("/")
+    if (
+        parsed.hostname is None
+        or parsed.hostname.casefold() != "github.com"
+        or parsed.port not in (None, 443)
+        or parsed.query
+        or len(repository_parts) != 2
+        or any(not part for part in repository_parts)
+    ):
+        raise ManagerError("repository da referencia nQuake nao e um repositorio GitHub canonico")
+    owner, name = repository_parts
+    quoted_path = urllib.parse.quote(upstream_path, safe="/")
+    return f"https://raw.githubusercontent.com/{owner}/{name}/{revision}/{quoted_path}"
 
 
 def asset_platform(asset: Asset) -> str:
@@ -736,6 +969,7 @@ def command_check(options: argparse.Namespace) -> int:
     releases = load_releases(RELEASES, COMPONENTS)
     component_results = check_updates(releases, online=not options.offline)
     delta: list[dict[str, str]] = []
+    review_required: list[str] = []
     reference_note: dict[str, object] | None = None
     if not options.offline:
         print("[INFO] Consultando clientes e arquivos incorporados...", file=sys.stderr if options.json else sys.stdout)
@@ -751,6 +985,8 @@ def command_check(options: argparse.Namespace) -> int:
                 if item["strategy"] in {"reference-snapshot", "reference-overlay"}:
                     item["status"] = "current"
                     item["latest_source"] = item["installed"]
+        assets = pin_assets_from_manifest(assets, manifest)
+        review_required = unpinned_asset_paths(assets)
         delta = distribution_delta(assets, manifest)
     outdated = [item for item in component_results if item["status"] != "current"]
     if options.json:
@@ -758,6 +994,7 @@ def command_check(options: argparse.Namespace) -> int:
             "components": component_results,
             "distribution": delta,
             "reference": reference_note,
+            "review_required": review_required,
         }, ensure_ascii=False, indent=2))
     else:
         reference_updates = [
@@ -782,8 +1019,13 @@ def command_check(options: argparse.Namespace) -> int:
             )
         for summary in summarize_delta(delta):
             print(f"[ATUALIZAR] {summary}")
+        if review_required:
+            print(
+                f"[REVISAR] {len(review_required)} candidato(s) remoto(s) ainda não possuem "
+                "SHA-256 previamente fixado; nenhum deles pode ser promovido por update."
+            )
         print(f"\n{len(outdated)} componente(s) e {len(delta)} arquivo(s) envolvidos em mudancas.")
-    return 2 if outdated or delta else 0
+    return 2 if outdated or delta or review_required else 0
 
 
 def command_verify(options: argparse.Namespace) -> int:
@@ -931,14 +1173,24 @@ def command_update(options: argparse.Namespace) -> int:
         new_reference = old_reference
     else:
         new_reference = discovered_reference
+    assets = pin_assets_from_manifest(assets, current_manifest)
+    review_required = unpinned_asset_paths(assets)
     delta = distribution_delta(assets, current_manifest)
-    if not delta and new_reference == old_reference:
+    if not delta and new_reference == old_reference and not review_required:
         print("[OK] O dist e os inventarios ja representam os upstreams atuais.")
         return 0
     print(f"[INFO] {len(delta)} alteracao(oes) de arquivo; nQuake {old_reference[:12]} -> {new_reference[:12]}.")
     if options.dry_run:
         for summary in summarize_delta(delta):
             print(f"  - {summary}")
+    if review_required:
+        raise ManagerError(
+            f"{len(review_required)} candidato(s) remoto(s) exige(m) tamanho e SHA-256 "
+            f"revisados antes do update; primeiro: {review_required[0]}. "
+            "Use 'add' com uma definição revisada para incorporar o arquivo sem confiar "
+            "na própria transferência. Nenhum payload candidato foi baixado."
+        )
+    if options.dry_run:
         return 0
     require_clean_worktree()
     confirm("Aplicar esta atualizacao ao Git working tree?", yes=options.yes)
@@ -981,30 +1233,627 @@ def command_update(options: argparse.Namespace) -> int:
     return 0
 
 
-def fetch_definition_file(entry: dict[str, object], base: Path, destination: Path) -> tuple[int, str]:
+def validate_definition_file(
+    entry: object,
+    base: Path,
+) -> dict[str, object]:
+    if not isinstance(entry, dict):
+        raise ManagerError("entrada de arquivo invalida")
+    destination = safe_relative(entry.get("destination"), "dist")
     source = entry.get("source")
     url = entry.get("url")
-    if bool(source) == bool(url):
+    if (source is None) == (url is None):
         raise ManagerError("cada arquivo da definicao deve possuir exatamente source ou url")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if isinstance(source, str):
-        origin = (base / source).resolve()
-        if not origin.is_file() or origin.is_symlink():
-            raise ManagerError(f"arquivo local invalido: {origin}")
-        shutil.copyfile(origin, destination)
-    elif isinstance(url, str) and url.startswith("https://"):
-        request = urllib.request.Request(url, headers={"User-Agent": "x86qw-maintenance/1"})
-        with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as output:
-            shutil.copyfileobj(response, output)
+
+    plan: dict[str, object] = {"entry": entry, "destination": destination}
+    if source is not None:
+        origin = validate_local_source_path(base, source)
+        expected_size = entry.get("size")
+        expected_sha = entry.get("sha256")
+        if expected_size is not None and (
+            type(expected_size) is not int
+            or expected_size <= 0
+            or expected_size > MAX_ARTIFACT_BYTES
+        ):
+            raise ManagerError("size local invalido na definicao")
+        if expected_sha is not None and (
+            not isinstance(expected_sha, str)
+            or HEX64.fullmatch(expected_sha) is None
+        ):
+            raise ManagerError("sha256 local invalido na definicao")
+        source_details = origin.stat()
+        actual_size = source_details.st_size
+        if actual_size <= 0 or actual_size > MAX_ARTIFACT_BYTES:
+            raise ManagerError("arquivo local precisa ser nao vazio e respeitar o limite global")
+        if expected_size is not None and expected_size != actual_size:
+            raise ManagerError("size local nao corresponde ao arquivo da definicao")
+        actual_sha = file_sha256(origin)
+        if expected_sha is not None and expected_sha != actual_sha:
+            raise ManagerError("sha256 local nao corresponde ao arquivo da definicao")
+        plan.update({
+            "source": origin,
+            "origin": "arquivo local validado",
+            "size": actual_size,
+            "sha256": actual_sha,
+            "mode": 0o755 if source_details.st_mode & 0o111 else 0o644,
+        })
     else:
-        raise ManagerError(f"URL de arquivo invalida: {url!r}")
-    size = destination.stat().st_size
-    digest = file_sha256(destination)
-    expected_size = entry.get("size")
-    expected_sha = entry.get("sha256")
-    if expected_size is not None and expected_size != size:
+        if not isinstance(url, str):
+            raise ManagerError("URL de arquivo invalida")
+        try:
+            parsed_url = validate_https_url(url, "URL do arquivo da definicao")
+        except DownloadError as error:
+            raise ManagerError(str(error)) from error
+        expected_size = entry.get("size")
+        expected_sha = entry.get("sha256")
+        if (
+            type(expected_size) is not int
+            or expected_size <= 0
+            or expected_size > MAX_ARTIFACT_BYTES
+            or not isinstance(expected_sha, str)
+            or HEX64.fullmatch(expected_sha) is None
+        ):
+            raise ManagerError(
+                "arquivo remoto da definição exige size e sha256 válidos"
+            )
+        plan.update({
+            "url": url,
+            "origin": safe_url_for_log(url),
+            "size": expected_size,
+            "sha256": expected_sha,
+        })
+
+    managed = entry.get("managed", False)
+    if type(managed) is not bool:
+        raise ManagerError("managed precisa ser booleano")
+    if managed:
+        if source is not None:
+            raise ManagerError("arquivo upstream gerenciado precisa usar URL HTTPS fixada")
+        assert url is not None
+        if parsed_url.query:
+            raise ManagerError(
+                "URL persistente de arquivo gerenciado nao pode conter query"
+            )
+        component_name = entry.get("distribution_component")
+        consumer = entry.get("consumer")
+        if (
+            not isinstance(component_name, str)
+            or SAFE_COMPONENT_ID.fullmatch(component_name) is None
+            or not isinstance(consumer, str)
+            or SAFE_CONSUMER.fullmatch(consumer) is None
+        ):
+            raise ManagerError(
+                "arquivo upstream gerenciado exige distribution_component e consumer seguros"
+            )
+        package = entry.get("package")
+        if package is not None and (
+            not isinstance(package, str) or SAFE_IDENTIFIER.fullmatch(package) is None
+        ):
+            raise ManagerError("package do arquivo gerenciado precisa ser identificador seguro")
+    return plan
+
+
+def validate_distribution_change(
+    definition: dict[str, object],
+    definition_path: Path,
+) -> list[dict[str, object]]:
+    if (
+        definition.get("format") != 1
+        or definition.get("project") != "x86qw"
+        or definition.get("kind") != "distribution-change"
+    ):
+        raise ManagerError("a definicao precisa ser x86qw/distribution-change formato 1")
+    files = definition.get("files", [])
+    if not isinstance(files, list) or not files:
+        raise ManagerError("a definicao precisa incorporar ao menos um arquivo diretamente utilizado")
+    plans = [validate_definition_file(entry, definition_path.parent) for entry in files]
+    destinations = [str(plan["destination"]) for plan in plans]
+    destination_identities = [semantic_path_identity(item) for item in destinations]
+    if len(destination_identities) != len(set(destination_identities)):
+        raise ManagerError("a definicao possui destinos duplicados ou colidentes")
+    for destination in destinations:
+        validate_destination_tree(destination)
+
+    try:
+        policy = load_component_policy(POLICY)
+        current_manifest = load_manifest(DIST / "manifest.json")
+        upstream_registry = load_upstreams(UPSTREAMS)
+    except (OSError, ValueError) as error:
+        raise ManagerError(f"inventario da distribuicao invalido: {error}") from error
+    current_files = current_manifest.get("files")
+    if not isinstance(current_files, dict):
+        raise ManagerError("manifesto atual nao possui arquivos validos")
+
+    current_catalog = load_json(CATALOG)
+    try:
+        validate_catalog(current_catalog)
+    except ValueError as error:
+        raise ManagerError(f"catalogo publico atual invalido: {error}") from error
+
+    package = definition.get("package")
+    if package is not None:
+        try:
+            validate_package(package, "definition.package")
+        except ValueError as error:
+            raise ManagerError(str(error)) from error
+        assert isinstance(package, dict)
+        if package.get("component") == "installer":
+            raise ManagerError(
+                "pacotes do instalador so podem ser preparados pelo fluxo de release imutavel"
+            )
+
+    staged_components = load_json(COMPONENTS)
+    staged_releases = load_json(RELEASES)
+    reference_transition = apply_reference_transition(
+        staged_releases, definition.get("reference"),
+    )
+
+    component = definition.get("component")
+    replace = definition.get("replace", False)
+    if type(replace) is not bool:
+        raise ManagerError("replace precisa ser booleano")
+    if component is not None:
+        if not isinstance(component, dict):
+            raise ManagerError("component precisa ser um objeto")
+        if (
+            not isinstance(component.get("id"), str)
+            or SAFE_COMPONENT_ID.fullmatch(component["id"]) is None
+        ):
+            raise ManagerError("component.id precisa ser identificador seguro")
+        profiles = definition.get("profiles", [])
+        if not isinstance(profiles, list) or not all(
+            isinstance(item, str) and SAFE_COMPONENT_ID.fullmatch(item)
+            for item in profiles
+        ):
+            raise ManagerError("profiles precisa ser uma lista de identificadores seguros")
+        if not isinstance(definition.get("release"), dict):
+            raise ManagerError("todo componente novo ou substituido precisa declarar release")
+        release_entries = staged_releases.get("components")
+        if not isinstance(release_entries, dict):
+            raise ManagerError("inventario de releases nao possui componentes validos")
+        component_id = str(component["id"])
+        current_release = release_entries.get(component_id)
+        proposed_release = definition["release"]
+        assert isinstance(proposed_release, dict)
+        if (
+            replace
+            and isinstance(current_release, dict)
+        ):
+            current_namespace = current_release.get("distribution_component", "nquake")
+            proposed_namespace = proposed_release.get("distribution_component", "nquake")
+            if proposed_namespace != current_namespace:
+                raise ManagerError(
+                    "release substituta precisa preservar distribution_component "
+                    f"{current_namespace}: {component_id}"
+                )
+        preserve_profile_fingerprints(staged_components)
+        upsert_component(staged_components, component, replace)
+        profile_map = staged_components.get("profiles")
+        assert isinstance(profile_map, dict)
+        for profile in profiles:
+            members = profile_map.get(profile)
+            if not isinstance(members, list):
+                raise ManagerError(f"perfil desconhecido: {profile}")
+            if component["id"] not in members:
+                members.append(component["id"])
+        preserve_profile_fingerprints(staged_components)
+        release_entries[component_id] = proposed_release
+    elif "profiles" in definition or "release" in definition:
+        raise ManagerError("profiles e release exigem component")
+
+    try:
+        validate_component_catalog(staged_components)
+        component_ids = set(components_by_id(staged_components))
+        namespaces = staged_components.get("content_namespaces")
+        if not isinstance(namespaces, list):
+            raise ValueError("component catalog has no content namespaces")
+        validate_releases(staged_releases, component_ids, set(namespaces))
+    except ValueError as error:
+        raise ManagerError(f"inventarios propostos invalidos: {error}") from error
+
+    staged_component_entries = staged_components.get("components")
+    if not isinstance(staged_component_entries, list):
+        raise ManagerError("inventario de componentes proposto invalido")
+
+    def project_consumers(path: str) -> set[str]:
+        consumers: set[str] = set()
+        for candidate in staged_component_entries:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get("id"), str):
+                continue
+            for field in (
+                "project_sources", "project_inputs", "project_overrides",
+                "project_archive_overrides",
+            ):
+                entries = candidate.get(field, [])
+                if not isinstance(entries, list):
+                    continue
+                if any(
+                    isinstance(item, dict) and item.get("path") == path
+                    for item in entries
+                ):
+                    consumers.add(str(candidate["id"]))
+        return consumers
+
+    def staged_artifact_authority(
+        path: str,
+    ) -> tuple[str, str, dict[str, object]] | None:
+        release_entries = staged_releases.get("components")
+        if not isinstance(release_entries, dict):
+            return None
+        matches = [
+            (
+                str(release_id),
+                str(release.get("distribution_component", "nquake")),
+                artifact,
+            )
+            for release_id, release in release_entries.items()
+            if isinstance(release, dict)
+            for artifact in release.get("artifacts", [])
+            if isinstance(artifact, dict) and artifact.get("distribution_path") == path
+        ]
+        if len(matches) > 1:
+            raise ManagerError(f"destino aparece em mais de uma release proposta: {path}")
+        return matches[0] if matches else None
+
+    def require_remote_identity(
+        plan: dict[str, object],
+        record: dict[str, object],
+        *,
+        label: str,
+        url_field: str,
+    ) -> None:
+        entry = plan["entry"]
+        assert isinstance(entry, dict)
+        if (
+            entry.get("url") != record.get(url_field)
+            or plan["size"] != record.get("size")
+            or plan["sha256"] != record.get("sha256")
+        ):
+            raise ManagerError(
+                f"URL, tamanho ou SHA-256 diverge do {label}: {plan['destination']}"
+            )
+
+    upstream_entries = upstream_registry.get("upstreams")
+    if not isinstance(upstream_entries, list):
+        raise ManagerError("registro de upstreams nao possui entradas validas")
+
+    def preserved_source(path: str) -> dict[str, object] | None:
+        matches: list[dict[str, object]] = []
+        for upstream in upstream_entries:
+            if not isinstance(upstream, dict):
+                continue
+            source = upstream.get("source")
+            if isinstance(source, dict) and source.get("distribution_path") == path:
+                matches.append(source)
+        if len(matches) > 1:
+            raise ManagerError(f"fonte preservada duplicada no inventario: {path}")
+        return matches[0] if matches else None
+
+    for plan in plans:
+        entry = plan["entry"]
+        assert isinstance(entry, dict)
+        destination = str(plan["destination"])
+        relative = PurePosixPath(destination).relative_to("dist").as_posix()
+
+        if "source" in plan:
+            if relative in current_files:
+                raise ManagerError(
+                    f"fonte local nao pode substituir arquivo upstream gerenciado: {relative}"
+                )
+            consumers = project_consumers(destination)
+            if len(consumers) != 1:
+                raise ManagerError(
+                    f"fonte local precisa de um consumidor exato no BOM proposto: {destination}"
+                )
+            continue
+
+        if entry.get("managed") is not True:
+            raise ManagerError(
+                "todo arquivo remoto persistente precisa declarar managed: true"
+            )
+        component_name = entry["distribution_component"]
+        consumer = entry["consumer"]
+        assert isinstance(component_name, str)
+        assert isinstance(consumer, str)
+        try:
+            require_component(policy, component_name, relative)
+            owner = component_for_distribution_path(policy, relative)
+        except ValueError as error:
+            raise ManagerError(str(error)) from error
+        if owner != component_name:
+            raise ManagerError(
+                f"componente declarado nao e dono do destino: {component_name} != {owner}"
+            )
+
+        existing = current_files.get(relative)
+        existing_metadata = existing if isinstance(existing, dict) else None
+        source_component = source_owner(upstream_registry, relative)
+        allowed_consumers = set(policy[component_name]["consumers"])
+        if source_component is not None:
+            allowed_consumers.add(f"development:{source_component}")
+        if (
+            existing_metadata is not None
+            and existing_metadata.get("component") == component_name
+            and isinstance(existing_metadata.get("consumer"), str)
+        ):
+            allowed_consumers.add(str(existing_metadata["consumer"]))
+        if consumer not in allowed_consumers:
+            raise ManagerError(
+                f"consumer nao declarado para {component_name}: {consumer}"
+            )
+
+        reference_package: str | None = None
+        if component_name == "nquake":
+            parts = PurePosixPath(relative).parts
+            if len(parts) >= 4 and parts[:2] == ("distributions", "nquake"):
+                reference = staged_releases.get("reference")
+                if not isinstance(reference, dict):
+                    raise ManagerError("inventario de releases nao possui referencia nQuake")
+                reference_revision = reference.get("revision")
+                if (
+                    not isinstance(reference_revision, str)
+                    or HEX40.fullmatch(reference_revision) is None
+                    or parts[2] != reference_revision
+                ):
+                    raise ManagerError(
+                        "revisao do snapshot nQuake diverge da referencia fixada: "
+                        f"{parts[2]}"
+                    )
+                upstream_path = PurePosixPath(*parts[3:]).as_posix()
+                repository = reference.get("repository")
+                if not isinstance(repository, str):
+                    raise ManagerError("inventario de releases nao possui repository nQuake")
+                entry = plan["entry"]
+                assert isinstance(entry, dict)
+                if entry.get("url") != reference_asset_url(
+                    repository, reference_revision, upstream_path,
+                ):
+                    raise ManagerError(
+                        "URL do snapshot nQuake diverge da referencia fixada: "
+                        f"{relative}"
+                    )
+                reference_package = component_for_source(
+                    staged_components, upstream_path, "reference",
+                )
+        artifact_authority = staged_artifact_authority(relative)
+        if artifact_authority is not None:
+            artifact_package, artifact_owner, _ = artifact_authority
+            if artifact_owner != component_name:
+                raise ManagerError(
+                    "distribution_component da release diverge do plano gerenciado: "
+                    f"{artifact_owner} != {component_name}: {relative}"
+                )
+        expected_package = reference_package
+        if expected_package is None and artifact_authority is not None:
+            expected_package = artifact_package
+        if expected_package is None:
+            expected_package = source_component
+        if expected_package is None and existing_metadata is not None:
+            current_package = existing_metadata.get("package")
+            if current_package is not None and not isinstance(current_package, str):
+                raise ManagerError(f"package atual invalido no manifesto: {relative}")
+            expected_package = current_package
+
+        try:
+            current_consumer_owner = consumed_component(relative)
+        except ValueError as error:
+            raise ManagerError(f"destino gerenciado invalido: {error}") from error
+        staged_consumer_owner = (
+            artifact_authority[1] if artifact_authority is not None else None
+        )
+        if (
+            current_consumer_owner != component_name
+            and staged_consumer_owner != component_name
+            and not (
+                component_name == "nquake"
+                and reference_package is not None
+                and source_component is None
+            )
+        ):
+            raise ManagerError(
+                f"destino nao possui consumidor operacional declarado: {relative}"
+            )
+
+        provided_package = entry.get("package")
+        if expected_package is None and provided_package is not None:
+            raise ManagerError(f"package nao pertence ao destino gerenciado: {relative}")
+        if expected_package is not None and provided_package != expected_package:
+            raise ManagerError(
+                f"package do arquivo gerenciado deve ser {expected_package}: {relative}"
+            )
+
+        if existing_metadata is not None:
+            require_remote_identity(
+                plan,
+                existing_metadata,
+                label="manifesto imutavel atual",
+                url_field="url",
+            )
+            immutable_fields = {
+                "component": entry.get("distribution_component"),
+                "consumer": entry.get("consumer"),
+                "package": entry.get("package"),
+            }
+            for field, proposed_value in immutable_fields.items():
+                if proposed_value != existing_metadata.get(field):
+                    raise ManagerError(
+                        f"metadado {field} diverge do manifesto imutavel atual: {relative}"
+                    )
+            continue
+
+        if relative.startswith("installer/"):
+            raise ManagerError(
+                "novos pacotes do instalador exigem o fluxo de release imutavel"
+            )
+
+        authorities = 0
+        if artifact_authority is not None:
+            artifact_package, _, artifact = artifact_authority
+            if entry.get("package") != artifact_package:
+                raise ManagerError(
+                    "package do arquivo gerenciado diverge da release proposta: "
+                    f"{relative}"
+                )
+            require_remote_identity(
+                plan, artifact, label="release proposta", url_field="url",
+            )
+            authorities += 1
+        source_record = preserved_source(relative)
+        if source_record is not None:
+            require_remote_identity(
+                plan, source_record, label="registro de upstream", url_field="url",
+            )
+            authorities += 1
+        if isinstance(package, dict) and package.get("distribution_path") == relative:
+            require_remote_identity(
+                plan, package, label="pacote publico proposto", url_field="origin_url",
+            )
+            authorities += 1
+        if component_name == "nquake" and reference_package is not None:
+            authorities += 1
+        if authorities == 0:
+            raise ManagerError(
+                f"arquivo remoto nao esta vinculado a release, upstream ou pacote proposto: {relative}"
+            )
+
+    if reference_transition is not None:
+        _, proposed_revision = reference_transition
+        proposed_prefix = f"dist/distributions/nquake/{proposed_revision}/"
+        if not any(
+            isinstance(plan.get("destination"), str)
+            and str(plan["destination"]).startswith(proposed_prefix)
+            for plan in plans
+        ):
+            raise ManagerError(
+                "transicao da referencia nQuake precisa incorporar o novo snapshot"
+            )
+
+    if package is not None:
+        assert isinstance(package, dict)
+        distribution_path = package.get("distribution_path")
+        if isinstance(distribution_path, str) and distribution_path in current_files:
+            raise ManagerError(
+                "um pacote proposto nao pode reutilizar caminho ja registrado no manifesto"
+            )
+        matching_plan = next(
+            (
+                plan for plan in plans
+                if isinstance(distribution_path, str)
+                and plan["destination"] == f"dist/{distribution_path}"
+            ),
+            None,
+        )
+        if matching_plan is None:
+            raise ManagerError("o pacote declarado precisa corresponder a um arquivo da definicao")
+        if package["size"] != matching_plan["size"] or package["sha256"] != matching_plan["sha256"]:
+            raise ManagerError("o pacote declarado diverge dos pins do arquivo da definicao")
+        matching_entry = matching_plan["entry"]
+        assert isinstance(matching_entry, dict)
+        if matching_entry.get("url") != package["origin_url"]:
+            raise ManagerError("a origem do pacote diverge da URL do arquivo da definicao")
+        if matching_entry.get("managed") is not True:
+            raise ManagerError("o pacote declarado precisa corresponder a arquivo gerenciado")
+        if matching_entry.get("distribution_component") != package["component"]:
+            raise ManagerError("componente do pacote diverge do dono do arquivo gerenciado")
+        expected_public_package = (
+            matching_entry.get("package")
+            or matching_entry["distribution_component"]
+        )
+        public_package = package.get("package", package["component"])
+        if public_package != expected_public_package:
+            raise ManagerError(
+                "identidade logica do pacote publico diverge do arquivo gerenciado: "
+                f"{public_package} != {expected_public_package}"
+            )
+        package_entries = current_catalog.get("packages")
+        if not isinstance(package_entries, list):
+            raise ManagerError("catalogo publico atual nao possui pacotes validos")
+        identity = tuple(
+            package.get(key)
+            for key in ("component", "version", "channel", "platform", "architecture")
+        )
+        if any(
+            isinstance(item, dict)
+            and tuple(
+                item.get(key)
+                for key in ("component", "version", "channel", "platform", "architecture")
+            ) == identity
+            for item in package_entries
+        ):
+            raise ManagerError(f"a identidade de pacote ja existe: {identity}")
+        proposed_catalog = {
+            **current_catalog,
+            "packages": [*package_entries, package],
+        }
+        try:
+            validate_catalog(proposed_catalog)
+        except ValueError as error:
+            raise ManagerError(f"catalogo publico proposto invalido: {error}") from error
+    return plans
+
+
+def fetch_definition_file(
+    entry: dict[str, object],
+    base: Path,
+    destination: Path,
+    *,
+    validated_plan: dict[str, object] | None = None,
+) -> tuple[int, str]:
+    plan = validated_plan if validated_plan is not None else validate_definition_file(entry, base)
+    if plan.get("entry") is not entry:
+        raise ManagerError("plano de arquivo nao corresponde a definicao validada")
+    source = plan.get("source")
+    url = plan.get("url")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(source, Path):
+        origin = source
+        planned_size = plan["size"]
+        planned_sha256 = plan["sha256"]
+        planned_mode = plan["mode"]
+        assert isinstance(planned_size, int)
+        assert isinstance(planned_sha256, str)
+        assert isinstance(planned_mode, int)
+        size, digest = copy_local_file_atomically(
+            origin,
+            destination,
+            expected_size=planned_size,
+            expected_sha256=planned_sha256,
+            mode=planned_mode,
+        )
+    elif isinstance(url, str):
+        expected_size = plan.get("size")
+        expected_sha = plan.get("sha256")
+        if (
+            not isinstance(expected_size, int)
+            or expected_size < 0
+            or not isinstance(expected_sha, str)
+            or not HEX64.fullmatch(expected_sha)
+        ):
+            raise ManagerError(
+                "arquivo remoto da definição exige size e sha256 válidos"
+            )
+        try:
+            download(PinnedArtifact(
+                url=url,
+                destination=destination,
+                expected_size=expected_size,
+                expected_sha256=expected_sha,
+                maximum_size=MAX_ARTIFACT_BYTES,
+                deadline_seconds=120,
+                headers={"User-Agent": "x86qw-maintenance/1"},
+                label=str(entry.get("destination", destination.name)),
+            ))
+        except DownloadError as error:
+            raise ManagerError(f"falha ao baixar arquivo da definição: {error}") from error
+        size = destination.stat().st_size
+        digest = file_sha256(destination)
+    else:
+        raise ManagerError("URL de arquivo invalida")
+    expected_size = plan.get("size")
+    expected_sha = plan.get("sha256")
+    if expected_size != size:
         raise ManagerError(f"tamanho inesperado para {entry.get('destination')}")
-    if expected_sha is not None and (not isinstance(expected_sha, str) or not HEX64.fullmatch(expected_sha) or expected_sha != digest):
+    if not isinstance(expected_sha, str) or not HEX64.fullmatch(expected_sha) or expected_sha != digest:
         raise ManagerError(f"SHA-256 inesperado para {entry.get('destination')}")
     return size, digest
 
@@ -1041,13 +1890,14 @@ def preserve_profile_fingerprints(catalog: dict[str, object]) -> None:
 def command_add(options: argparse.Namespace) -> int:
     definition_path = options.definition.resolve()
     definition = load_json(definition_path)
-    if definition.get("format") != 1 or definition.get("project") != "x86qw" or definition.get("kind") != "distribution-change":
-        raise ManagerError("a definicao precisa ser x86qw/distribution-change formato 1")
-    files = definition.get("files", [])
-    if not isinstance(files, list) or not files:
-        raise ManagerError("a definicao precisa incorporar ao menos um arquivo diretamente utilizado")
+    plans = validate_distribution_change(definition, definition_path)
+    files = definition["files"]
+    assert isinstance(files, list)
     if options.dry_run:
-        print(json.dumps(definition, ensure_ascii=False, indent=2))
+        print(f"[PLANO] Definicao valida: {len(plans)} arquivo(s).")
+        for plan in plans:
+            print(f"  {plan['destination']} | {plan['origin']}")
+        print("[OK] Simulacao concluida; nenhum byte remoto foi baixado e nenhum arquivo foi alterado.")
         return 0
     require_clean_worktree()
     confirm(f"Incorporar {len(files)} arquivo(s) e atualizar os inventarios?", yes=options.yes)
@@ -1056,6 +1906,9 @@ def command_add(options: argparse.Namespace) -> int:
         staged_components = load_json(work / "components.json")
         staged_releases = load_json(work / "component-releases.json")
         staged_catalog = load_json(work / "catalog.json")
+        reference_transition = apply_reference_transition(
+            staged_releases, definition.get("reference"),
+        )
         component = definition.get("component")
         if component is not None:
             if not isinstance(component, dict):
@@ -1085,13 +1938,35 @@ def command_add(options: argparse.Namespace) -> int:
         manifest = load_manifest(work / "dist/manifest.json")
         manifest_files = manifest["files"]
         assert isinstance(manifest_files, dict)
-        for raw in files:
+        if reference_transition is not None:
+            previous_revision, _ = reference_transition
+            previous_prefix = f"distributions/nquake/{previous_revision}/"
+            previous_snapshot = (
+                work / "dist/distributions/nquake" / previous_revision
+            )
+            if (
+                not previous_snapshot.is_dir()
+                or previous_snapshot.is_symlink()
+            ):
+                raise ManagerError(
+                    "snapshot nQuake anterior ausente ou inseguro no workspace"
+                )
+            shutil.rmtree(previous_snapshot)
+            for relative in tuple(manifest_files):
+                if relative.startswith(previous_prefix):
+                    del manifest_files[relative]
+        for index, raw in enumerate(files):
             if not isinstance(raw, dict):
                 raise ManagerError("entrada de arquivo invalida")
             destination = safe_relative(raw.get("destination"), "dist")
             relative = PurePosixPath(destination).relative_to("dist").as_posix()
             target = work / "dist" / relative
-            size, digest = fetch_definition_file(raw, definition_path.parent, target)
+            size, digest = fetch_definition_file(
+                raw,
+                definition_path.parent,
+                target,
+                validated_plan=plans[index],
+            )
             if raw.get("managed") is True:
                 component_name = raw.get("distribution_component")
                 consumer = raw.get("consumer")
@@ -1156,39 +2031,83 @@ def github_release_coordinates(url: str, filename: str) -> tuple[str, str]:
         url,
     )
     if match is None or match.group(3) != filename:
-        raise ManagerError(f"URL primaria nao representa um GitHub Release: {url}")
+        raise ManagerError(
+            "URL primaria nao representa um GitHub Release: "
+            f"{safe_url_for_log(url)}"
+        )
     return match.group(1), match.group(2)
 
 
-def github_release(repository: str, tag: str) -> dict[str, object] | None:
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repository}/releases/tags/{tag}"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        if "HTTP 404" in result.stderr or "Not Found" in result.stderr:
+def github_api_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "x86qw-maintenance/1",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token is None:
+        try:
+            result = subprocess.run(
+                ["gh", "auth", "token"],
+                cwd=PROJECT_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+        if result is not None and result.returncode == 0:
+            token = result.stdout.strip()
+    if token:
+        if len(token) > 4096 or any(ord(character) < 33 or ord(character) == 127 for character in token):
+            raise ManagerError("token GitHub inválido")
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def github_api_object(repository: str, endpoint: str, label: str) -> dict[str, object] | None:
+    repository_parts = repository.split("/")
+    if (
+        len(repository_parts) != 2
+        or any(part in {"", ".", ".."} for part in repository_parts)
+        or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None
+    ):
+        raise ManagerError(f"repositório GitHub inválido: {repository!r}")
+    url = f"https://api.github.com/repos/{repository}/{endpoint}"
+    try:
+        result = download(BoundedMetadata(
+            url=url,
+            maximum_size=GITHUB_API_MAX_BYTES,
+            deadline_seconds=GITHUB_API_DEADLINE_SECONDS,
+            headers=github_api_headers(),
+            label=label,
+        ))
+    except DownloadHTTPError as error:
+        if error.status == 404:
             return None
-        raise ManagerError(result.stderr.strip() or f"falha ao consultar release {tag}")
-    value = json.loads(result.stdout)
+        raise ManagerError(f"falha ao consultar {label}: HTTP {error.status}") from error
+    except DownloadError as error:
+        raise ManagerError(f"falha ao consultar {label}: {error}") from error
+    try:
+        value = json.loads((result.data or b"").decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ManagerError(f"resposta JSON inválida ao consultar {label}") from error
     return value if isinstance(value, dict) else None
 
 
+def github_release(repository: str, tag: str) -> dict[str, object] | None:
+    encoded_tag = urllib.parse.quote(tag, safe="")
+    return github_api_object(repository, f"releases/tags/{encoded_tag}", f"release GitHub {tag}")
+
+
 def github_latest_release_tag(repository: str) -> str | None:
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repository}/releases/latest", "--jq", ".tag_name"],
-        cwd=PROJECT_ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        if "HTTP 404" in result.stderr or "Not Found" in result.stderr:
-            return None
-        raise ManagerError(result.stderr.strip() or f"falha ao consultar latest de {repository}")
-    return result.stdout.strip() or None
+    release = github_api_object(repository, "releases/latest", f"latest GitHub de {repository}")
+    if release is None:
+        return None
+    tag = release.get("tag_name")
+    return tag if isinstance(tag, str) and tag else None
 
 
 def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
@@ -1277,7 +2196,9 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
                 fingerprint = (
                     (remote.get("size"), str(digest).removeprefix("sha256:"))
                     if isinstance(digest, str)
-                    else remote_sha256(primary)
+                    else remote_sha256(
+                        primary, int(package["size"]), str(package["sha256"]),
+                    )
                 )
                 if fingerprint != (package["size"], package["sha256"]):
                     raise ManagerError(f"asset GitHub imutavel difere do catalogo: {package['filename']}")
@@ -1389,7 +2310,14 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (ManagerError, OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError, urllib.error.URLError) as error:
+    except (
+        DownloadError,
+        ManagerError,
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+        subprocess.CalledProcessError,
+    ) as error:
         print(f"[ERRO] {error}", file=sys.stderr)
         if "--verbose" in sys.argv:
             raise

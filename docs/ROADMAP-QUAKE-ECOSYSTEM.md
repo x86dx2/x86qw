@@ -5,9 +5,11 @@ validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza releas
 publicação ou incorporação automática de conteúdo.
 
 Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
-pela própria tag imutável, publicada em 3 de agosto de 2026.
+pela própria tag imutável no commit
+`78dc30b58f9ba2a2ec8aeb31879d9b8072ab576b`, publicada em 3 de agosto de 2026.
 
-Baseline do código corretivo: merge `8ba1f909fc8b4275c5a5001b0c2e1898b6f85c68`.
+Baseline inicial da issue #45: merge
+`afb4f666095e37fe262b87b49339e18d25738522`.
 A implementação `0.7.1` passou nos sete jobs obrigatórios e em 393 testes de
 manutenção mais quatro testes do site. A `0.7.0` permanece imutável no
 histórico.
@@ -197,13 +199,17 @@ separada.
 
 ### SEC-01 — PK3/ZIP
 
-**Entrega funcional:** completa para materialização dedicada
-**Validação:** unitária em macOS; matriz portável configurada
+**Entrega funcional:** parcial; materialização dedicada endurecida, fronteira
+única de arquivos ainda pendente no PR 3
+**Validação:** unitária somente para os caminhos já endurecidos; matriz portável
+configurada
 
 Membros são interpretados com semântica POSIX. Traversal, drives, barras
 invertidas, controles, nomes reservados, symlinks, membros especiais e colisões
 de caixa/Unicode são rejeitados. Limites cobrem quantidade, membro, total,
-profundidade, caminho e taxa de compressão.
+profundidade, caminho e taxa de compressão nos consumidores já migrados. O
+instalador principal e as ferramentas ainda possuem leituras ZIP/PK3 paralelas;
+`scan_archive`, `ArchivePlan` e `extract_archive` permanecem o contrato do PR 3.
 
 ### SEC-02 — Segredos e endpoints
 
@@ -215,12 +221,29 @@ opções legadas permanecem por compatibilidade com alerta. Segredos nunca entra
 nos argumentos dos filhos nem em mensagens de erro. Endpoints IPv4, hostname e
 IPv6 entre colchetes têm parser próprio.
 
+### SEC-03 — Downloads remotos limitados
+
+**Entrega funcional:** completa no código corretivo; em revisão e ainda não
+publicada
+
+**Validação:** 565 testes de manutenção e cinco do site aprovados localmente;
+oito skips explícitos (sete Windows e um smoke de rede); matriz do PR concluída
+em Ubuntu, macOS e Windows com Python 3.10 e 3.13
+
+Artefatos persistentes exigem HTTPS, tamanho, SHA-256, limite e deadline.
+Metadados dinâmicos são efêmeros e limitados. Retries são restritos a falhas
+transitórias; temporários recebem `0600` no POSIX e só são promovidos
+atomicamente depois da validação. A DACL privada dos temporários Windows
+permanece na [issue #47](https://github.com/x86dx2/x86qw/issues/47).
+Autenticação, expiração e proteção contra rollback ou freeze permanecem na
+[issue #48](https://github.com/x86dx2/x86qw/issues/48).
+
 ## Instalador e perfis
 
 ### INST-01 — Ciclo de vida instalado
 
 **Entrega funcional:** completa para o escopo atual
-**Validação:** unitária; matriz de CI pendente
+**Validação:** unitária e CI portável macOS/Linux/Windows; smokes nativos permanecem parciais
 
 Instalação nova, stable, nightly, coexistência, perfis, custom, update, upgrade,
 verify, cleanup e uninstall permanecem cobertos. `repair` recompõe somente o

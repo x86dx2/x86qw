@@ -130,6 +130,9 @@ fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
                      -> maintenance/build/packages/ -> mirrors -> instalador público
 CLI + catálogos runtime mínimos -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
 dist/game-data/id1 -> pacote x86qw-core-id1 -> GitHub/GitLab -> instalação inicial
+
+metadado HTTPS -> limite + deadline -> memória efêmera
+pacote HTTPS   -> tamanho + SHA-256 -> staging privado -> promoção atômica
 ```
 
 As receitas versionadas ficam em `maintenance/recipes/`. O gerenciador valida
@@ -151,13 +154,65 @@ com uma ordem determinística, registra o arquivo em recibo próprio e rejeita
 divergências na verificação. Os launchers sempre passam `-nohome`, evitando que
 um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
 
+## Fronteira de bytes remotos
+
+O zipapp e as ferramentas Python recebem HTTP exclusivamente por contratos
+tipados em `maintenance/tools/downloader.py`; o bootstrap PowerShell incorpora
+uma projeção mínima antes de o zipapp existir. Artefatos persistentes são fixados por tamanho
+e SHA-256; metadados dinâmicos permanecem efêmeros e não existe contrato
+autorizado a promover payload não fixado. Stable, nightly e nQuake descobertos só herdam uma
+identidade quando caminho, URL e tamanho coincidem com o manifesto revisado;
+candidatos novos exigem intake pinado antes do download persistente. Esse intake
+vincula destino, namespace, consumidor e pacote a uma release proposta, fonte
+preservada, pacote público proposto ou referência nQuake. Pacotes ezQuake também
+precisam coincidir exatamente com
+`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`.
+Os limites atuais são 512 MiB para artefatos, 2 MiB para o catálogo, 1 MiB para
+o Hub e 4 MiB para descoberta HTTP. Referências, commits e árvores do nQuake passam pela
+API oficial do GitHub sob esse limite, com um deadline compartilhado e rejeição
+de árvore truncada ou schema divergente.
+
+O deadline monotônico cobre tentativas, leituras e backoff. Retry é restrito a
+falhas transitórias. Temporários recebem modo `0600` no POSIX, `flush` e `fsync`
+antes de uma substituição atômica, preservando o destino final anterior até a
+promoção. A criação exclusiva no Windows ainda não impõe DACL privada quando o
+diretório herda uma ACL ampla; esse contrato permanece no PR 4 e na
+[issue #47](https://github.com/x86dx2/x86qw/issues/47). Os
+endereços são resolvidos em subprocesso limitado e cancelável; candidatos TCP
+usam conexão não bloqueante e o cancelamento de TLS/headers executa `shutdown`
+antes do fechamento. A janela de coleta pertence ao deadline, mas um reap
+patologicamente lento do sistema operacional pode terminar depois do retorno,
+já sem DNS ou socket ativo. Os
+bootstraps aplicam uma projeção mínima desse contrato antes de o zipapp estar
+disponível. O comando público Unix limita a escrita com `head`, valida o status
+do pipeline e o tamanho antes de executar o script, portanto não executa um
+prefixo produzido por pipeline com falha nem um stream excessivo sem
+`Content-Length`. Respostas
+intermediárias de redirect são fechadas sem drenar o corpo,
+e URLs da fronteira HTTP são redigidas nos diagnósticos sem expor credenciais,
+caminho, query ou fragmento. A descoberta aceita somente coordenadas ou URLs
+canônicas de repositórios públicos do GitHub.
+
+Catálogo, manifesto, inventários de releases e upstreams e definições de intake
+usam o mesmo validador HTTPS; qualquer URL persistente também rejeita query. O
+`curl` usado somente para upload no GitLab inicia com `--disable`, exige HTTPS e
+não segue redirects. Ele continua sendo uma operação de publicação de saída a
+ser substituída pela promoção imutável do PR 10, não uma rota de ingestão.
+
+Metadado limitado não é metadado autenticado. Assinatura, expiração e proteção
+contra rollback/freeze permanecem na
+[issue #48](https://github.com/x86dx2/x86qw/issues/48). Consulte o
+[`ADR 0001`](adr/0001-fronteira-limitada-de-bytes-remotos.md).
+
 ## Segurança e recuperação
 
 - workflows de pull request usam somente `contents: read` e não recebem secrets;
 - a matriz Linux, macOS e Windows bloqueia a etapa manual de release;
-- toda URL de artefato usa HTTPS;
+- toda URL inicial, redirecionada e final de artefato usa HTTPS;
 - nomes de arquivo não podem conter caminhos;
-- nenhum pacote é aceito sem tamanho e SHA-256;
+- nenhum artefato persistente é aceito sem tamanho e SHA-256 prévios;
+- cada resposta possui limite explícito e deadline monotônico total;
+- bytes só chegam ao destino final após validação e promoção atômica;
 - versões publicadas não são substituídas, apenas descontinuadas no catálogo;
 - GitHub e GitLab hospedam o mesmo repositório com Git LFS; os registries são
   canais adicionais de entrega. R2 não faz parte da arquitetura atual.

@@ -4,6 +4,7 @@ import io
 import json
 import os
 import plistlib
+import shlex
 import socket
 import struct
 import subprocess
@@ -16,7 +17,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
-from maintenance.tools.build_installer_bundle import zipapp_bytes
+from maintenance.tools import downloader as bounded_downloader
+from maintenance.tools.build_installer_bundle import public_bootstrap_assignments, zipapp_bytes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,12 +41,134 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    def test_future_bootstrap_registration_updates_version_hash_and_size_together(self):
+        shell, powershell = public_bootstrap_assignments({
+            "version": "0.7.2",
+            "sha256": "a" * 64,
+            "size": 234567,
+        })
+        self.assertEqual({
+            "INSTALLER_VERSION": "0.7.2",
+            "INSTALLER_SHA256": "a" * 64,
+            "INSTALLER_SIZE": "234567",
+        }, shell)
+        self.assertEqual({
+            "$InstallerVersion": "0.7.2",
+            "$InstallerSha256": "a" * 64,
+            "$InstallerSize": "234567",
+        }, powershell)
+
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
+    def test_public_unix_bootstrap_never_executes_a_partial_response(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sentinel = root / "partial-executed"
+            curl = root / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' 'printf partial >\"$X86QW_TEST_SENTINEL\"'\n"
+                "exit 63\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(sentinel)
+            result = subprocess.run(
+                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(sentinel.exists())
+        self.assertEqual([], leftovers)
+
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
+    def test_public_unix_bootstrap_bounds_unknown_length_before_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sentinel = root / "oversized-executed"
+            curl = root / "curl"
+            curl.write_text(
+                f"#!{sys.executable}\n"
+                "import os, sys\n"
+                "prefix = 'printf oversized >\\\"$X86QW_TEST_SENTINEL\\\"\\n'\n"
+                "try:\n"
+                "    sys.stdout.write(prefix + ('#' * 300000))\n"
+                "    sys.stdout.flush()\n"
+                "except BrokenPipeError:\n"
+                "    os._exit(23)\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(sentinel)
+            result = subprocess.run(
+                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(sentinel.exists())
+        self.assertIn("bootstrap excedeu 262144 bytes", result.stderr)
+        self.assertEqual([], leftovers)
+
+    @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
+    def test_public_unix_bootstrap_forwards_arguments_and_exit_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            received = root / "received-arguments"
+            curl = root / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "cat <<'BOOTSTRAP'\n"
+                "printf '%s\\n' \"$@\" >\"$X86QW_TEST_SENTINEL\"\n"
+                "exit 7\n"
+                "BOOTSTRAP\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(received)
+            result = subprocess.run(
+                [
+                    *shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
+                    "--platform", "windows", "caminho com espaço",
+                ],
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            arguments = received.read_text(encoding="utf-8").splitlines()
+            leftovers = list(root.glob("x86qw-bootstrap.*"))
+        self.assertEqual(7, result.returncode)
+        self.assertEqual(
+            ["--platform", "windows", "caminho com espaço"], arguments,
+        )
+        self.assertEqual([], leftovers)
+
     def test_public_zipapp_embeds_the_declarative_ktx_mode_catalog(self):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
             bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
             self.assertIn("session_control.py", application.namelist())
             self.assertIn("python_runtime.py", application.namelist())
+            self.assertIn("maintenance/tools/downloader.py", application.namelist())
             self.assertIn(
                 b"require_supported_runtime()",
                 application.read("__main__.py"),
@@ -57,6 +181,48 @@ class InstallerTests(unittest.TestCase):
         luffy = bot_names["groups"][0]["characters"][0]
         self.assertEqual("Luffy", luffy["name"])
         self.assertEqual({"name"}, set(luffy))
+
+    def test_fresh_zipapp_runs_version_and_help_without_network(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            application = root / "x86qw.pyz"
+            application.write_bytes(zipapp_bytes("9.9.9"))
+            (root / "sitecustomize.py").write_text(
+                "import sys\n"
+                "def reject_network(event, args):\n"
+                "    if event in {'socket.connect', 'socket.getaddrinfo'}:\n"
+                "        raise RuntimeError('network access is forbidden in zipapp smoke')\n"
+                "sys.addaudithook(reject_network)\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = str(root)
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+
+            version = subprocess.run(
+                [sys.executable, str(application), "--version"],
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=30,
+            )
+            help_result = subprocess.run(
+                [sys.executable, str(application), "--help"],
+                capture_output=True,
+                check=False,
+                env=environment,
+                text=True,
+                timeout=30,
+            )
+
+        self.assertEqual(0, version.returncode, version.stderr)
+        self.assertEqual("x86QW 9.9.9\n", version.stdout)
+        self.assertEqual("", version.stderr)
+        self.assertEqual(0, help_result.returncode, help_result.stderr)
+        self.assertIn("usage: x86qw", help_result.stdout)
+        self.assertIn("x86QW 9.9.9", help_result.stdout)
+        self.assertEqual("", help_result.stderr)
 
     @staticmethod
     def write_installer_bundle(path: Path, version: str) -> None:
@@ -478,7 +644,11 @@ class InstallerTests(unittest.TestCase):
             }
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
+                with mock.patch.object(
+                    installer,
+                    "http_get_mirrors",
+                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
+                ):
                     self.assertEqual(
                         [("3.6.9", tuple(package["urls"]), "a" * 64)],
                         installer.stable_catalog(),
@@ -486,7 +656,11 @@ class InstallerTests(unittest.TestCase):
             package["redistribution_reviewed"] = False
             installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()):
+                with mock.patch.object(
+                    installer,
+                    "http_get_mirrors",
+                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
+                ):
                     with self.assertRaises(install_qw.InstallerError):
                         installer.stable_catalog()
 
@@ -498,11 +672,19 @@ class InstallerTests(unittest.TestCase):
                 (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
             )
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(catalog).encode()) as get:
+                with mock.patch.object(
+                    installer,
+                    "http_get_mirrors",
+                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
+                ) as get:
                     installer.stable_catalog()
                     installer.component_package_record("nquake-bootstrap")
             get.assert_called_once_with(
-                install_qw.CATALOG_URL, timeout=install_qw.CATALOG_TIMEOUT, attempts=1,
+                install_qw.CATALOG_URLS,
+                maximum_size=install_qw.CATALOG_MAX_BYTES,
+                timeout=install_qw.CATALOG_TIMEOUT,
+                attempts=1,
+                mirror_label="Catálogo",
             )
 
     def test_online_mode_asks_for_a_target_and_ignores_local_distribution(self):
@@ -539,10 +721,18 @@ class InstallerTests(unittest.TestCase):
             installer = install_qw.Installer(project, target, online_only=True)
             remote = {"format": 1, "project": "x86qw", "packages": []}
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(remote).encode()) as get:
+                with mock.patch.object(
+                    installer,
+                    "http_get_mirrors",
+                    return_value=(json.dumps(remote).encode(), install_qw.CATALOG_URL),
+                ) as get:
                     self.assertEqual(remote, installer.public_catalog("remote"))
             get.assert_called_once_with(
-                install_qw.CATALOG_URL, timeout=install_qw.CATALOG_TIMEOUT, attempts=1,
+                install_qw.CATALOG_URLS,
+                maximum_size=install_qw.CATALOG_MAX_BYTES,
+                timeout=install_qw.CATALOG_TIMEOUT,
+                attempts=1,
+                mirror_label="Catálogo",
             )
             self.assertIsNone(installer.distribution_artifact(
                 "test/file.zip", "file.zip", expected_size=5,
@@ -1601,11 +1791,11 @@ class InstallerTests(unittest.TestCase):
 
             def connect_ex(self, address):
                 del address
-                return install_qw.errno.EINPROGRESS
+                return bounded_downloader.errno.EINPROGRESS
 
             def getsockopt(self, level, option):
                 del level, option
-                return 0 if self.reachable else install_qw.errno.EHOSTUNREACH
+                return 0 if self.reachable else bounded_downloader.errno.EHOSTUNREACH
 
             def settimeout(self, value):
                 self.timeout = value
@@ -1640,21 +1830,29 @@ class InstallerTests(unittest.TestCase):
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.0.2.1", 443)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
         ]
-        with mock.patch.object(install_qw.socket, "getaddrinfo", return_value=candidates):
-            with mock.patch.object(install_qw.socket, "socket", side_effect=sockets):
-                with mock.patch.object(install_qw.selectors, "DefaultSelector", FakeSelector):
-                    connection = install_qw.create_resilient_connection(("example.invalid", 443), timeout=2)
+        with mock.patch.object(bounded_downloader, "_resolve_addresses", return_value=candidates):
+            with mock.patch.object(bounded_downloader.socket, "socket", side_effect=sockets):
+                with mock.patch.object(bounded_downloader.selectors, "DefaultSelector", FakeSelector):
+                    connection = bounded_downloader.create_resilient_connection(
+                        ("example.invalid", 443), timeout=2,
+                    )
         self.assertIs(sockets[1], connection)
         self.assertTrue(sockets[0].closed)
         self.assertFalse(sockets[1].closed)
-        self.assertEqual(2, sockets[1].timeout)
+        self.assertGreater(sockets[1].timeout, 0)
+        self.assertLessEqual(sockets[1].timeout, 2)
 
     def test_resilient_connection_limits_dns_resolution_time(self):
-        blocked = threading.Event()
         started = time.monotonic()
-        with mock.patch.object(install_qw.socket, "getaddrinfo", side_effect=lambda *args: blocked.wait(1)):
+        with mock.patch.object(
+            bounded_downloader,
+            "_resolve_addresses",
+            side_effect=TimeoutError("Tempo esgotado ao resolver example.invalid."),
+        ):
             with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
-                install_qw.create_resilient_connection(("example.invalid", 443), timeout=0.01)
+                bounded_downloader.create_resilient_connection(
+                    ("example.invalid", 443), timeout=0.01,
+                )
         self.assertLess(time.monotonic() - started, 0.5)
 
     def test_public_catalog_falls_back_to_the_next_mirror(self):
@@ -1663,19 +1861,93 @@ class InstallerTests(unittest.TestCase):
             installer.online_only = True
             catalog = {"format": 1, "project": "x86qw", "packages": []}
             payload = json.dumps(catalog).encode()
+
+            def fallback(contracts, **options):
+                self.assertEqual(install_qw.CATALOG_URLS, tuple(item.url for item in contracts))
+                options["on_mirror_failure"](
+                    1, contracts[0], install_qw.DownloadError("timeout"),
+                )
+                return mock.Mock(data=payload)
+
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get",
-                    side_effect=[install_qw.InstallerError("timeout"), payload],
+                    install_qw, "bounded_download_mirrors", side_effect=fallback,
                 ) as get:
                     self.assertEqual(catalog, installer.public_catalog("remote"))
-            self.assertEqual(2, get.call_count)
-            self.assertEqual(
-                install_qw.CATALOG_URLS[1], get.call_args_list[1].args[0],
-            )
+            get.assert_called_once()
 
-    def test_download_falls_back_to_the_next_catalog_mirror(self):
+    def test_http_get_preserves_the_github_rate_limit_diagnostic(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            error = install_qw.DownloadHTTPError(
+                403,
+                "O servidor respondeu HTTP 403.",
+                {"x-ratelimit-remaining": "0"},
+            )
+            with mock.patch.object(
+                install_qw, "bounded_download", side_effect=error,
+            ), self.assertRaisesRegex(
+                install_qw.InstallerError, "limite temporário de consultas do GitHub"
+            ):
+                installer.http_get(
+                    "https://github.com/example/catalog.json",
+                    maximum_size=1024,
+                    attempts=1,
+                )
+
+    def test_http_get_redacts_query_secrets_from_verbose_and_errors(self):
+        sentinel = "X86QW_URL_SECRET_SENTINEL"
+        url = f"https://example.invalid/catalog.json?token={sentinel}"
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            with mock.patch.object(
+                install_qw, "bounded_download",
+                side_effect=install_qw.DownloadError("falha controlada"),
+            ) as download, mock.patch.object(install_qw.console, "detail") as detail:
+                with self.assertRaises(install_qw.InstallerError) as raised:
+                    installer.http_get(url, maximum_size=1024, attempts=1)
+
+        self.assertEqual(url, download.call_args.args[0].url)
+        diagnostics = [str(call.args[0]) for call in detail.call_args_list]
+        self.assertTrue(any("/<redigido>" in message for message in diagnostics))
+        self.assertNotIn(sentinel, "\n".join(diagnostics))
+        self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_http_get_rejects_control_injected_url_before_detail_or_transport(self):
+        sentinel = "X86QW_URL_SECRET_SENTINEL"
+        url = f"https://example.invalid/catalog.json?token={sentinel}\n[ERRO] forged"
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            with mock.patch.object(install_qw, "bounded_download") as download, mock.patch.object(
+                install_qw.console, "detail",
+            ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
+                installer.http_get(url, maximum_size=1024, attempts=1)
+
+        download.assert_not_called()
+        detail.assert_not_called()
+        self.assertNotIn(sentinel, str(raised.exception))
+        self.assertNotIn("\n", str(raised.exception))
+
+    def test_http_get_mirrors_validates_every_url_before_detail_or_transport(self):
+        sentinel = "X86QW_URL_SECRET_SENTINEL"
+        urls = (
+            "https://first.example.invalid/catalog.json",
+            f"https://second.example.invalid/catalog.json?token={sentinel}\nforged",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            with mock.patch.object(
+                install_qw, "bounded_download_mirrors",
+            ) as download, mock.patch.object(
+                install_qw.console, "detail",
+            ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
+                installer.http_get_mirrors(urls, maximum_size=1024, attempts=1)
+
+        download.assert_not_called()
+        detail.assert_not_called()
+        self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_client_download_falls_back_to_the_next_mirror(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
@@ -1689,21 +1961,34 @@ class InstallerTests(unittest.TestCase):
             installer.app_archive_name = filename
             installer.app_checksum_kind = "sha256"
             installer.app_expected_checksum = install_qw.hashlib.sha256(payload).hexdigest()
+            installer.app_expected_size = len(payload)
             installer.app_urls = (
                 f"https://first.invalid/{filename}",
                 f"https://second.invalid/{filename}",
             )
             installer.app_url = installer.app_urls[0]
 
-            def fake_http_get(url, destination=None, headers=None):
-                del headers
-                if url == installer.app_urls[0]:
-                    raise install_qw.InstallerError("first mirror unavailable")
-                destination.write_bytes(payload)
-                return b""
+            def fallback(contracts, **options):
+                self.assertEqual(installer.app_urls, tuple(item.url for item in contracts))
+                self.assertTrue(all(item.expected_size == len(payload) for item in contracts))
+                self.assertTrue(all(
+                    item.expected_sha256 == installer.app_expected_checksum
+                    for item in contracts
+                ))
+                self.assertTrue(all(
+                    item.maximum_size == install_qw.MAX_ARTIFACT_BYTES
+                    for item in contracts
+                ))
+                options["on_mirror_failure"](
+                    1, contracts[0], install_qw.DownloadError("first mirror unavailable"),
+                )
+                contracts[1].destination.write_bytes(payload)
+                return mock.Mock(data=None)
 
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", side_effect=fake_http_get):
+                with mock.patch.object(
+                    install_qw, "bounded_download_mirrors", side_effect=fallback,
+                ):
                     archive = installer.ensure_archive()
             self.assertEqual(payload, archive.read_bytes())
             self.assertEqual(installer.app_urls[1], installer.app_url)
@@ -1724,7 +2009,9 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch("builtins.input", return_value="1"):
                     installer.choose_release()
-                with mock.patch.object(installer, "http_get", side_effect=AssertionError("network used")):
+                with mock.patch.object(
+                    installer, "http_get_mirrors", side_effect=AssertionError("network used"),
+                ):
                     artifact = installer.ensure_archive()
             source = ROOT / "dist" / installer.app_distribution_path
             self.assertEqual(source.read_bytes(), artifact.read_bytes())

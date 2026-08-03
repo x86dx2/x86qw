@@ -4,17 +4,22 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import urllib.request
+import tempfile
 from pathlib import Path
 
 try:
     from .component_releases import load_releases
-    from .public_upstreams import git_remote_revision, github_latest_release
+    from .downloader import (
+        DownloadError, DownloadIntegrityError, MAX_ARTIFACT_BYTES, PinnedArtifact, download,
+    )
+    from .public_upstreams import github_latest_release, github_ref_revision
 except ImportError:  # Execucao direta
     from component_releases import load_releases
-    from public_upstreams import git_remote_revision, github_latest_release
+    from downloader import (
+        DownloadError, DownloadIntegrityError, MAX_ARTIFACT_BYTES, PinnedArtifact, download,
+    )
+    from public_upstreams import github_latest_release, github_ref_revision
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,15 +28,24 @@ RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 USER_AGENT = "x86qw-freshness/1"
 
 
-def remote_fingerprint(url: str) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    digest = hashlib.sha256()
-    size = 0
-    with urllib.request.urlopen(request, timeout=120) as response:
-        while block := response.read(1024 * 1024):
-            size += len(block)
-            digest.update(block)
-    return size, digest.hexdigest()
+def remote_fingerprint(
+    url: str, expected_size: int, expected_sha256: str,
+) -> tuple[int, str]:
+    """Verify an immutable upstream against its already reviewed identity."""
+
+    with tempfile.TemporaryDirectory(prefix="x86qw-freshness-") as temporary:
+        destination = Path(temporary) / "artifact"
+        result = download(PinnedArtifact(
+            url=url,
+            destination=destination,
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+            maximum_size=MAX_ARTIFACT_BYTES,
+            deadline_seconds=120,
+            headers={"User-Agent": USER_AGENT},
+            label="artefato de upstream",
+        ))
+    return result.size, result.sha256
 
 
 def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str, str]]:
@@ -41,7 +55,7 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
     current_reference = reference_revision
     if online:
         repository = str(reference["repository"])
-        current_reference = git_remote_revision(repository, "refs/heads/master")
+        current_reference = github_ref_revision(repository, "refs/heads/master")
 
     results: list[dict[str, str]] = []
     components = releases["components"]
@@ -68,8 +82,14 @@ def check_updates(releases: dict[str, object], *, online: bool) -> list[dict[str
             assert isinstance(artifacts, list) and len(artifacts) == 1
             artifact = artifacts[0]
             assert isinstance(artifact, dict)
-            fingerprint = remote_fingerprint(str(artifact["url"]))
-            if fingerprint != (artifact["size"], artifact["sha256"]):
+            expected_fingerprint = (int(artifact["size"]), str(artifact["sha256"]))
+            try:
+                fingerprint = remote_fingerprint(
+                    str(artifact["url"]), *expected_fingerprint,
+                )
+            except DownloadIntegrityError:
+                fingerprint = None
+            if fingerprint != expected_fingerprint:
                 actual = "source-artifact-changed"
                 status = "update-available"
         results.append({
@@ -105,6 +125,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (DownloadError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"component update check failed: {error}")
         raise SystemExit(1)

@@ -45,18 +45,26 @@ O x86QW transforma um ecossistema histórico em um produto atual: seleciona vers
 ### macOS e Linux
 
 ```sh
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)"
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
 ```
 
 ### Windows PowerShell
 
 ```powershell
-irm https://x86qw.x86.com.br/install.ps1 | iex
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
 ```
 
 O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
 falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
 `$LASTEXITCODE`.
+
+Ambos os comandos iniciais bloqueiam downgrade de HTTPS, têm prazo de 60
+segundos e recusam scripts acima de 256 KiB antes de executá-los. No Windows,
+isso é feito pelo buffer limitado do `HttpClient`, sem `irm | iex` ilimitado.
+No Unix, `curl --disable` ignora `.curlrc`; `pipefail` e `head` limitam a escrita
+a 262145 bytes em diretório temporário privado. O tamanho e o status do pipeline
+são conferidos antes de chamar Bash, que nunca executa um prefixo produzido por
+pipeline com falha nem uma resposta sem `Content-Length` que exceda o limite.
 
 O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.1`,
 o Windows testa, nessa ordem, `py -3`, `python3` e `python`; o atalho da
@@ -79,10 +87,20 @@ Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
 O bootstrap público `0.7.1` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
-/bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? Consulte o [manual do instalador](dist/installer/docs/installer.md) ou baixe diretamente pela [release mais recente](https://github.com/x86dx2/x86qw/releases/latest).
+
+Na árvore de desenvolvimento, artefatos promovidos à instalação também exigem
+tamanho e SHA-256 exatos, limite máximo e deadline total. Metadados dinâmicos
+possuem limites próprios, mas nunca são promovidos como payload. Um candidato
+upstream novo precisa ter tamanho e SHA-256 revisados e corresponder a uma
+autoridade declarada de release, upstream, pacote ou referência nQuake antes do
+download persistente. URLs armazenadas em catálogo, manifesto e inventários
+passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
+espaços ou controles. Sua autenticação versionada pertence a uma etapa
+posterior. A versão pública indicada acima continua sendo a `0.7.1`.
 
 ## O que vem no x86QW
 

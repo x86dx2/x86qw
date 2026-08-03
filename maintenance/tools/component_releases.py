@@ -11,8 +11,10 @@ from pathlib import Path, PurePosixPath
 
 try:
     from .components import components_by_id, load_catalog as load_component_catalog
+    from .downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 except ImportError:  # Executado diretamente por ferramentas em tools/.
     from components import components_by_id, load_catalog as load_component_catalog
+    from downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 
 
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
@@ -33,6 +35,17 @@ def _safe_path(value: object, label: str) -> str:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
         raise ValueError(f"unsafe {label}: {value}")
+    return value
+
+
+def _persistent_https_url(value: object, label: str) -> str:
+    try:
+        parsed = validate_https_url(value, label)
+    except DownloadPolicyError as error:
+        raise ValueError(f"invalid persistent HTTPS URL: {label}") from error
+    if parsed.query:
+        raise ValueError(f"persistent HTTPS URL contains query: {label}")
+    assert isinstance(value, str)
     return value
 
 
@@ -58,6 +71,7 @@ def validate_releases(
     reference = releases.get("reference")
     if not isinstance(reference, dict) or not HEX40.fullmatch(str(reference.get("revision", ""))):
         raise ValueError("invalid nQuake reference revision")
+    _persistent_https_url(reference.get("repository"), "nQuake reference repository")
     reference_revision = str(reference["revision"])
     components = releases.get("components")
     if not isinstance(components, dict) or set(components) != component_ids:
@@ -78,10 +92,25 @@ def validate_releases(
             or version.startswith(reference_revision[:12] + "+x86qw.")
         ):
             raise ValueError(f"reference component version differs from snapshot: {identifier}")
-        upstream = release.get("upstream")
-        if release["strategy"] in {
+        external_strategy = release["strategy"] in {
             "reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed",
-        }:
+        }
+        has_license_metadata = "license" in release or "license_url" in release
+        if external_strategy or has_license_metadata:
+            if not isinstance(release.get("license"), str) or not release["license"].strip():
+                raise ValueError(f"invalid release license: {identifier}")
+            _persistent_https_url(
+                release.get("license_url"), f"release license URL: {identifier}",
+            )
+        source_mirrors = release.get("source_mirrors", [])
+        if not isinstance(source_mirrors, list):
+            raise ValueError(f"invalid source mirrors: {identifier}")
+        for index, url in enumerate(source_mirrors):
+            _persistent_https_url(
+                url, f"source mirror {index}: {identifier}",
+            )
+        upstream = release.get("upstream")
+        if external_strategy:
             if not isinstance(upstream, dict):
                 raise ValueError(f"upstream release has no upstream metadata: {identifier}")
             if release["strategy"] in {"upstream-overlay", "upstream-composed"} and not REPOSITORY.fullmatch(str(upstream.get("repository", ""))):
@@ -91,8 +120,9 @@ def validate_releases(
             if release["strategy"] in {"upstream-overlay", "upstream-composed"} and not HEX40.fullmatch(str(upstream.get("source_revision", ""))):
                 raise ValueError(f"invalid upstream source revision: {identifier}")
             for field in ("release_url", "source_url"):
-                if not isinstance(upstream.get(field), str) or not upstream[field].startswith("https://"):
-                    raise ValueError(f"invalid upstream {field}: {identifier}")
+                _persistent_https_url(
+                    upstream.get(field), f"upstream {field}: {identifier}",
+                )
             if not isinstance(release.get("notes"), str) or not release["notes"].strip():
                 raise ValueError(f"upstream overlay has no release notes: {identifier}")
             if not VERSION.fullmatch(str(release.get("distribution_tag", ""))):
@@ -100,12 +130,6 @@ def validate_releases(
             for field in ("distribution_component",):
                 if not DISTRIBUTION_COMPONENT.fullmatch(str(release.get(field, ""))):
                     raise ValueError(f"invalid {field}: {identifier}")
-            source_mirrors = release.get("source_mirrors", [])
-            if (
-                not isinstance(source_mirrors, list)
-                or not all(isinstance(url, str) and url.startswith("https://") for url in source_mirrors)
-            ):
-                raise ValueError(f"invalid source mirrors: {identifier}")
             compatibility = release.get("compatibility")
             if (
                 not isinstance(compatibility, dict)
@@ -117,6 +141,8 @@ def validate_releases(
                 or not isinstance(compatibility.get("gamecode_runtime"), str)
             ):
                 raise ValueError(f"invalid compatibility evidence: {identifier}")
+        elif upstream is not None:
+            raise ValueError(f"unexpected upstream metadata: {identifier}")
         artifacts = release.get("artifacts", [])
         if not isinstance(artifacts, list):
             raise ValueError(f"invalid artifacts: {identifier}")
@@ -142,9 +168,14 @@ def validate_releases(
             distribution_paths.add(distribution_path)
             if PurePosixPath(distribution_path).name != filename:
                 raise ValueError(f"artifact path and filename differ: {identifier}")
-            if not isinstance(artifact.get("url"), str) or not artifact["url"].startswith("https://"):
-                raise ValueError(f"invalid artifact URL: {identifier}")
-            if not isinstance(artifact.get("size"), int) or artifact["size"] <= 0:
+            _persistent_https_url(
+                artifact.get("url"), f"artifact URL: {identifier}",
+            )
+            if (
+                not isinstance(artifact.get("size"), int)
+                or artifact["size"] <= 0
+                or artifact["size"] > MAX_ARTIFACT_BYTES
+            ):
                 raise ValueError(f"invalid artifact size: {identifier}")
             if not HEX64.fullmatch(str(artifact.get("sha256", ""))):
                 raise ValueError(f"invalid artifact hash: {identifier}")
@@ -161,7 +192,11 @@ def validate_releases(
                 _safe_path(member.get("target_member"), "target member")
                 if member.get("target_mode", "replace") not in {"replace", "add"}:
                     raise ValueError(f"invalid artifact member target mode: {identifier}")
-                if not isinstance(member.get("size"), int) or member["size"] <= 0:
+                if (
+                    not isinstance(member.get("size"), int)
+                    or member["size"] <= 0
+                    or member["size"] > MAX_ARTIFACT_BYTES
+                ):
                     raise ValueError(f"invalid artifact member size: {identifier}")
                 if not HEX64.fullmatch(str(member.get("sha256", ""))):
                     raise ValueError(f"invalid artifact member hash: {identifier}")
@@ -255,7 +290,11 @@ def validate_releases(
             destination = _safe_path(copy.get("destination"), "package copy destination")
             if source == destination or destination in copy_destinations:
                 raise ValueError(f"duplicate or ineffective package copy: {identifier}")
-            if not isinstance(copy.get("size"), int) or copy["size"] <= 0:
+            if (
+                not isinstance(copy.get("size"), int)
+                or copy["size"] <= 0
+                or copy["size"] > MAX_ARTIFACT_BYTES
+            ):
                 raise ValueError(f"invalid package copy size: {identifier}")
             if not HEX64.fullmatch(str(copy.get("sha256", ""))):
                 raise ValueError(f"invalid package copy hash: {identifier}")
