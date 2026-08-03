@@ -12,6 +12,7 @@ from maintenance.tools.runtime_catalog import (
     games_by_id,
     load_inventory,
     runtimes_by_id,
+    validate_ktx_mode_catalog,
     validate_inventory,
 )
 
@@ -93,6 +94,38 @@ class RuntimeCatalogTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "personal bot names config"):
             self.validate(documents)
+
+    def test_ktx_modes_are_cross_checked_against_real_map_assets(self):
+        path = ROOT / "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        validate_ktx_mode_catalog(ROOT, self.components, mode_catalog=catalog)
+
+        cases = (
+            ("duel", "default_map", "dm2", "default lacks Frogbot route"),
+            ("ctf", "suggested_maps", ["e2m2", "dm6"], "CTF suggestions"),
+            ("race", "suggested_maps", ["dm6"], "Race suggestions"),
+            ("tot", "suggested_maps", ["dm4", "dm6"], "ToT suggestions"),
+            ("duel", "usermode", "missing-mode", "missing usermode"),
+            (
+                "duel", "help_commands",
+                [["cmd missing_command", "comando ausente"]],
+                "missing server command",
+            ),
+            (
+                "midair", "entry_config", "x86qw-ktx-mode-missing.cfg",
+                "missing entry config",
+            ),
+        )
+        for mode_id, field, value, message in cases:
+            mutated = copy.deepcopy(catalog)
+            mode = next(item for item in mutated["modes"] if item["id"] == mode_id)
+            mode[field] = value
+            if field == "default_map":
+                mode["suggested_maps"] = [value]
+            with self.subTest(mode=mode_id), self.assertRaisesRegex(ValueError, message):
+                validate_ktx_mode_catalog(
+                    ROOT, self.components, mode_catalog=mutated,
+                )
 
     def test_fixture_game_can_be_added_without_editing_python(self):
         documents = copy.deepcopy(self.inventory)

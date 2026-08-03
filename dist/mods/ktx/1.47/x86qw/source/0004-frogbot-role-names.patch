@@ -1,0 +1,27 @@
+--- a/src/bot_botimp.c
++++ b/src/bot_botimp.c
+@@ -405,7 +405,7 @@
+ {
+ 	char *names[] =
+ 		{ ": Timber", ": Sujoy", ": Nightwing", ": Cenobite", ": Thresh", ": Frick", ": Unholy",
+-				": Reptile", ": Nikodemus", ": Paralyzer", ": Xenon", ": Spice"
++				": Reptile", ": Nikodemus", ": Paralyzer", ": Xenon", ": Spice",
+ 						": Kornelia", ": Rix", ": Batch", ": Gollum" };
+ 	char *custom_name = FrogbotCachedName(FROGBOT_ROLE_ENEMY, botNumber);
+ 
+--- a/src/bot_commands.c
++++ b/src/bot_commands.c
+@@ -334,11 +334,11 @@
+ 
+ 				if (selectedTeamHasHumans && !anotherTeamHasHumans)
+ 				{
+-					strlcpy(bots[i].name, BotNameFriendly(team->bots), sizeof(bots[i].name));
++					strlcpy(bots[i].name, BotNameFriendly(i), sizeof(bots[i].name));
+ 				}
+ 				else if (anotherTeamHasHumans && !selectedTeamHasHumans)
+ 				{
+-					strlcpy(bots[i].name, BotNameEnemy(team->bots), sizeof(bots[i].name));
++					strlcpy(bots[i].name, BotNameEnemy(i), sizeof(bots[i].name));
+ 				}
+ 				else
+ 				{

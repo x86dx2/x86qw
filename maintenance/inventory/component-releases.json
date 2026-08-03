@@ -39,14 +39,14 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.17",
+      "version": "1.47+x86qw.18",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.17",
+      "distribution_tag": "ktx-1.47-x86qw.18",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória e balanceamento automático conforme as equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida e nomes. Camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
+      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória, balanceamento automático e nomes únicos por função nas equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus e oferece somente mapas compatíveis com as rotas Frogbot, rotas Race ou ENTs de CTF realmente disponíveis. Arma, vida e interrupção por morte ficam restritas ao ToT; camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -58,7 +58,7 @@
           "managed-file-integrity",
           "uninstall"
         ],
-        "gamecode_runtime": "KTX 1.47 QVM with the reviewed x86QW Frogbot appearance and team-balance patches, running in the ezQuake local server"
+        "gamecode_runtime": "KTX 1.47 QVM with the reviewed x86QW Frogbot identity, random-skill, team-balance and role-name patches, running in the ezQuake local server"
       },
       "upstream": {
         "repository": "QW-Group/ktx",

@@ -5,7 +5,7 @@
     {
       "id": "ktx",
       "label": "KTX",
-      "description": "QuakeWorld competitivo com o QVM oficial do KTX.",
+      "description": "QuakeWorld competitivo com o QVM KTX 1.47 derivado e reproduzível do x86QW.",
       "version": "1.47",
       "protocol": "quakeworld",
       "component": "ktx",

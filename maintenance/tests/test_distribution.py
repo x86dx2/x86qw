@@ -92,8 +92,9 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(
             {
                 "0001-reproducible-build-date.patch",
-                "0002-frogbot-appearances.patch",
+                "0002-frogbot-identities.patch",
                 "0003-frogbot-team-balance.patch",
+                "0004-frogbot-role-names.patch",
             },
             {path.name for path in (ktx_x86qw / "source").iterdir()},
         )

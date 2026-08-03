@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import struct
+import tarfile
 from pathlib import Path, PurePosixPath
 
 
@@ -116,6 +118,284 @@ def _validate_cycles(dependencies: dict[str, list[str]]) -> None:
         visit(identifier)
 
 
+def _pak_map_names(path: Path) -> set[str]:
+    payload = path.read_bytes()
+    if len(payload) < 12 or payload[:4] != b"PACK":
+        raise ValueError(f"invalid Quake PAK: {path}")
+    offset, size = struct.unpack_from("<II", payload, 4)
+    if size % 64 or offset + size > len(payload):
+        raise ValueError(f"invalid Quake PAK directory: {path}")
+    maps: set[str] = set()
+    for cursor in range(offset, offset + size, 64):
+        raw_name = payload[cursor:cursor + 56].split(b"\0", 1)[0]
+        try:
+            name = raw_name.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"invalid Quake PAK member: {path}") from error
+        match = re.fullmatch(r"maps/([A-Za-z0-9][A-Za-z0-9_.-]{0,63})\.bsp", name)
+        if match:
+            maps.add(match.group(1).casefold())
+    return maps
+
+
+def validate_ktx_mode_catalog(
+    project_root: Path,
+    component_catalog: dict[str, object],
+    *,
+    mode_catalog: dict[str, object] | None = None,
+) -> None:
+    """Cross-check KTX modes against the exact routes, maps and CTF assets."""
+    catalog_path = project_root / "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
+    if mode_catalog is None:
+        try:
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"cannot read KTX mode catalog: {catalog_path}") from error
+    else:
+        catalog = mode_catalog
+    if not isinstance(catalog, dict):
+        raise ValueError("invalid KTX mode catalog identity")
+    policies = catalog.get("map_asset_policies") if isinstance(catalog, dict) else None
+    defaults = catalog.get("defaults") if isinstance(catalog, dict) else None
+    modes = catalog.get("modes") if isinstance(catalog, dict) else None
+    if (
+        catalog.get("format") != 1
+        or catalog.get("game") != "ktx"
+        or not isinstance(policies, dict)
+        or not isinstance(defaults, dict)
+        or not isinstance(modes, list)
+        or not modes
+    ):
+        raise ValueError("invalid KTX mode catalog identity")
+    for key, policy in policies.items():
+        asset = policy.get("asset") if isinstance(policy, dict) else None
+        if (
+            not isinstance(key, str)
+            or not IDENTIFIER.fullmatch(key)
+            or not isinstance(asset, str)
+            or "{map}" not in asset
+        ):
+            raise ValueError(f"invalid KTX map policy: {key}")
+        _safe_path(asset.replace("{map}", "map"), "KTX map policy")
+    expected_policies = {
+        "frogbot-route": ("bots/maps/{map}.bot", "frogbots"),
+        "ctf-entities": ("id1/maps/ctf/{map}.ent", "always"),
+        "race-route": ("race/routes/{map}.route", "always"),
+    }
+    if set(policies) != set(expected_policies) or any(
+        (policies[key].get("asset"), policies[key].get("when")) != value
+        for key, value in expected_policies.items()
+    ):
+        raise ValueError("KTX map policies disagree with the runtime contract")
+
+    source = project_root / "dist/mods/ktx/1.47/source/ktx-1.47.tar.gz"
+    try:
+        with tarfile.open(source, "r:gz") as archive:
+            names = archive.getnames()
+            bot_routes = {
+                PurePosixPath(name).stem.casefold()
+                for name in names
+                if "/resources/example-configs/ktx/bots/maps/" in name
+                and name.endswith(".bot")
+            }
+            race_routes = {
+                PurePosixPath(name).stem.casefold()
+                for name in names
+                if "/resources/example-configs/ktx/race/routes/" in name
+                and name.endswith(".route")
+            }
+            tot_configs = {
+                PurePosixPath(name).stem.casefold()
+                for name in names
+                if "/resources/example-configs/ktx/configs/usermodes/tot/" in name
+                and name.endswith(".cfg")
+            }
+            usermodes = {
+                match.group(1).casefold()
+                for name in names
+                if (match := re.search(
+                    r"/resources/example-configs/ktx/configs/usermodes/"
+                    r"([^/]+)/default\.cfg$",
+                    name,
+                ))
+            }
+            command_source_name = next(
+                (name for name in names if name.endswith("/src/commands.c")),
+                None,
+            )
+            if command_source_name is None:
+                raise ValueError("KTX command registry is missing")
+            command_source_file = archive.extractfile(command_source_name)
+            if command_source_file is None:
+                raise ValueError("cannot read KTX command registry")
+            command_source = command_source_file.read().decode("latin-1")
+            server_commands = {
+                match.group(1).casefold()
+                for match in re.finditer(r'^\s*\{\s*"([A-Za-z0-9_]+)"\s*,', command_source, re.M)
+            }
+            bot_commands = {
+                "CreateMarker", "SetGoal", "SetMarkerFlag", "SetMarkerPath",
+                "SetMarkerPathAngleHint", "SetMarkerPathFlags",
+                "SetMarkerViewOfs", "SetRocketJumpPathFields", "SetZone",
+            }
+            race_commands = {
+                "race_add_route_node", "race_route_add_end",
+                "race_route_add_start", "race_set_node_size",
+                "race_set_route_falsestart_mode", "race_set_route_name",
+                "race_set_route_timeout", "race_set_route_weapon_mode",
+                "race_set_teleport_flags_by_name",
+            }
+            for name in names:
+                if not (
+                    ("/resources/example-configs/ktx/bots/maps/" in name and name.endswith(".bot"))
+                    or ("/resources/example-configs/ktx/race/routes/" in name and name.endswith(".route"))
+                ):
+                    continue
+                member = archive.getmember(name)
+                if not member.isfile() or not 0 < member.size <= 1024 * 1024:
+                    raise ValueError(f"unsafe KTX route member: {name}")
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    raise ValueError(f"cannot read KTX route member: {name}")
+                payload = extracted.read()
+                if b"\0" in payload or any(
+                    byte < 32 and byte not in {9, 10, 13} for byte in payload
+                ):
+                    raise ValueError(f"KTX route contains control bytes: {name}")
+                commands = [
+                    line.lstrip().split(None, 1)[0]
+                    for line in payload.decode("latin-1").splitlines()
+                    if line.strip() and not line.lstrip().startswith("//")
+                ]
+                if any(
+                    ";" in line
+                    for line in payload.decode("latin-1").splitlines()
+                    if line.strip() and not line.lstrip().startswith("//")
+                ):
+                    raise ValueError(f"KTX route contains a command separator: {name}")
+                allowed = bot_commands if name.endswith(".bot") else race_commands
+                if not commands or any(command not in allowed for command in commands):
+                    raise ValueError(f"KTX route contains an unknown directive: {name}")
+                if name.endswith(".bot") and "CreateMarker" not in commands:
+                    raise ValueError(f"KTX Frogbot route has no markers: {name}")
+                if name.endswith(".route") and (
+                    commands.count("race_route_add_start")
+                    != commands.count("race_route_add_end")
+                    or "race_add_route_node" not in commands
+                ):
+                    raise ValueError(f"KTX Race route is structurally incomplete: {name}")
+    except (OSError, tarfile.TarError) as error:
+        raise ValueError("cannot inspect KTX 1.47 source assets") from error
+    if len(bot_routes) != 77 or len(race_routes) != 54:
+        raise ValueError("KTX route inventory changed without catalog review")
+
+    essential_maps: set[str] = set()
+    for filename in ("pak0.pak", "pak1.pak"):
+        essential_maps.update(_pak_map_names(project_root / "dist/game-data/id1" / filename))
+    manifest = json.loads((project_root / "dist/manifest.json").read_text(encoding="utf-8"))
+    manifest_files = manifest.get("files")
+    if not isinstance(manifest_files, dict):
+        raise ValueError("invalid distribution manifest for KTX map validation")
+    managed_maps = essential_maps | {
+        PurePosixPath(path).stem.casefold()
+        for path in manifest_files
+        if re.fullmatch(r"distributions/nquake/[^/]+/non-gpl/qw/maps/[^/]+\.bsp", path)
+    }
+
+    components = component_catalog.get("components")
+    ktx_component = next(
+        (entry for entry in components if isinstance(entry, dict) and entry.get("id") == "ktx"),
+        None,
+    ) if isinstance(components, list) else None
+    if not isinstance(ktx_component, dict):
+        raise ValueError("KTX component missing during mode validation")
+    ctf_entities = {
+        PurePosixPath(str(entry.get("destination"))).stem.casefold()
+        for entry in ktx_component.get("sources", [])
+        if isinstance(entry, dict)
+        and re.fullmatch(r"id1/maps/ctf/[^/]+\.ent", str(entry.get("destination")))
+    }
+    entry_configs = {
+        PurePosixPath(str(entry.get("destination"))).name.casefold()
+        for entry in ktx_component.get("project_sources", [])
+        if isinstance(entry, dict)
+        and re.fullmatch(r"qw/x86qw-ktx-mode-[a-z0-9-]+\.cfg", str(entry.get("destination")))
+    }
+
+    default_bot_policies = defaults.get("frogbot_map_policies")
+    if default_bot_policies != ["frogbot-route"]:
+        raise ValueError("KTX Frogbot map policy default is inconsistent")
+    mode_ids: set[str] = set()
+    for mode in modes:
+        identifier = mode.get("id") if isinstance(mode, dict) else None
+        suggestions = mode.get("suggested_maps") if isinstance(mode, dict) else None
+        if (
+            not isinstance(identifier, str)
+            or identifier in mode_ids
+            or not isinstance(suggestions, list)
+            or not suggestions
+            or mode.get("default_map") not in suggestions
+            or not all(isinstance(value, str) for value in suggestions)
+            or len(folded := {value.casefold() for value in suggestions}) != len(suggestions)
+        ):
+            raise ValueError(f"invalid KTX mode map contract: {identifier}")
+        mode_ids.add(identifier)
+        usermode = mode.get("usermode")
+        if not isinstance(usermode, str) or (
+            usermode.casefold() not in usermodes
+            and usermode.casefold() not in server_commands
+        ):
+            raise ValueError(f"KTX mode references missing usermode: {identifier}")
+        entry_config = mode.get("entry_config")
+        if entry_config is not None and (
+            not isinstance(entry_config, str)
+            or entry_config.casefold() not in entry_configs
+        ):
+            raise ValueError(f"KTX mode references missing entry config: {identifier}")
+        command_values: list[object] = []
+        for field, command_index in (("help_commands", 0), ("key_bindings", 1)):
+            entries = mode.get(field)
+            if not isinstance(entries, list):
+                raise ValueError(f"KTX mode has invalid {field}: {identifier}")
+            command_values.extend(
+                entry[command_index]
+                for entry in entries
+                if isinstance(entry, list) and len(entry) > command_index
+            )
+        direct_client_commands = {"break", "hmstats", "join", "observe", "toggleready"}
+        for command in command_values:
+            if not isinstance(command, str) or not command:
+                raise ValueError(f"KTX mode has an invalid help command: {identifier}")
+            words = command.split()
+            if words[0].casefold() == "cmd":
+                if len(words) < 2 or words[1].casefold() not in server_commands:
+                    raise ValueError(f"KTX mode references missing server command: {identifier}")
+            elif command.casefold() not in direct_client_commands:
+                raise ValueError(f"KTX mode references unsupported client command: {identifier}")
+        if str(mode["default_map"]).casefold() not in essential_maps:
+            raise ValueError(f"KTX mode default is unavailable in Essential: {identifier}")
+        if mode.get("bots", True):
+            if str(mode["default_map"]).casefold() not in bot_routes:
+                raise ValueError(f"KTX mode default lacks Frogbot route: {identifier}")
+            if not folded & bot_routes & managed_maps:
+                raise ValueError(f"KTX mode has no managed Frogbot map: {identifier}")
+        mode_policies = mode.get("map_policies", [])
+        if not isinstance(mode_policies, list) or any(value not in policies for value in mode_policies):
+            raise ValueError(f"KTX mode references invalid map policy: {identifier}")
+        expected_mode_policies = {
+            "ctf": ["ctf-entities"],
+            "race": ["race-route"],
+        }.get(identifier, [])
+        if mode_policies != expected_mode_policies:
+            raise ValueError(f"KTX mode map policy is inconsistent: {identifier}")
+        if identifier == "ctf" and folded != ctf_entities:
+            raise ValueError("KTX CTF suggestions disagree with managed ENT files")
+        if identifier == "race" and folded != race_routes:
+            raise ValueError("KTX Race suggestions disagree with shipped routes")
+        if identifier == "tot" and folded != tot_configs:
+            raise ValueError("KTX ToT suggestions disagree with map-specific configs")
+
+
 def validate_inventory(
     capabilities: dict[str, object],
     runtimes: dict[str, object],
@@ -126,6 +406,8 @@ def validate_inventory(
     project_root: Path | None = None,
     public_catalog: dict[str, object] | None = None,
 ) -> None:
+    if component_catalog is not None and project_root is not None:
+        validate_ktx_mode_catalog(project_root, component_catalog)
     for document, key in ((runtimes, "runtimes"), (games, "games"), (compatibility, "compatibility")):
         if document.get("format") != 1 or document.get("project") != "x86qw" or not isinstance(document.get(key), list):
             raise ValueError(f"invalid {key} catalog identity")

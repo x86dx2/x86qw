@@ -123,9 +123,17 @@ class KtxModeSpec:
     key_bindings: tuple[tuple[str, str, str], ...]
     launch_settings: tuple[tuple[str, str], ...]
     entry_config: str | None
-    required_map_asset: str | None
+    map_requirements: tuple[KtxMapRequirement, ...]
     bots: bool
     bot_teams: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class KtxMapRequirement:
+    key: str
+    asset: str
+    when: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -149,7 +157,7 @@ class KtxLaunchOptions:
     bot_team: str | None = None
     bot_weapon: str | None = None
     bot_health: int | None = None
-    bot_break_on_death: bool = False
+    bot_break_on_death: bool | None = None
     bot_names_profile: str = "default"
     bot_name_pool: tuple[FrogbotIdentity, ...] = ()
     ctf_hook: str | None = None
@@ -265,6 +273,52 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
     catalog = read_ktx_mode_catalog(project_root)
     if catalog.get("format") != 1 or catalog.get("game") != "ktx":
         raise InstallerError("Catálogo de modos KTX possui identidade inválida.")
+    raw_policies = catalog.get("map_asset_policies")
+    defaults = catalog.get("defaults")
+    if not isinstance(raw_policies, dict) or not raw_policies:
+        raise InstallerError("Catálogo de modos KTX não declara políticas de mapas.")
+    if not isinstance(defaults, dict):
+        raise InstallerError("Catálogo de modos KTX não declara padrões de mapas.")
+    policies: dict[str, KtxMapRequirement] = {}
+    for policy_key, raw_policy in raw_policies.items():
+        asset_path = (
+            PurePosixPath(raw_policy["asset"].replace("{map}", "map"))
+            if isinstance(raw_policy, dict) and isinstance(raw_policy.get("asset"), str)
+            else None
+        )
+        if (
+            not isinstance(policy_key, str)
+            or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", policy_key) is None
+            or not isinstance(raw_policy, dict)
+            or set(raw_policy) != {"asset", "when", "label"}
+            or not isinstance(raw_policy.get("asset"), str)
+            or re.fullmatch(
+                r"[a-z0-9_./-]*\{map\}[a-z0-9_./-]*", raw_policy["asset"],
+            ) is None
+            or asset_path is None
+            or asset_path.is_absolute()
+            or any(part in {"", ".", ".."} for part in asset_path.parts)
+            or "//" in raw_policy["asset"]
+            or raw_policy.get("when") not in {"always", "frogbots"}
+            or not isinstance(raw_policy.get("label"), str)
+            or not raw_policy["label"]
+        ):
+            raise InstallerError(f"Política de mapa KTX inválida: {policy_key!r}.")
+        policies[policy_key] = KtxMapRequirement(
+            policy_key,
+            str(raw_policy["asset"]),
+            str(raw_policy["when"]),
+            str(raw_policy["label"]),
+        )
+    default_bot_policies = defaults.get("frogbot_map_policies")
+    if (
+        not isinstance(default_bot_policies, list)
+        or not default_bot_policies
+        or not all(isinstance(value, str) and value in policies for value in default_bot_policies)
+        or len(default_bot_policies) != len(set(default_bot_policies))
+        or any(policies[value].when != "frogbots" for value in default_bot_policies)
+    ):
+        raise InstallerError("Políticas padrão de mapas Frogbot inválidas.")
     raw_modes = catalog.get("modes")
     if not isinstance(raw_modes, list) or not raw_modes:
         raise InstallerError("Catálogo de modos KTX não declara nenhum modo.")
@@ -280,7 +334,7 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
         key_bindings = raw.get("key_bindings")
         launch_settings = raw.get("launch_settings", [])
         entry_config = raw.get("entry_config")
-        required_map_asset = raw.get("required_map_asset")
+        raw_mode_policies = raw.get("map_policies", [])
         bots = raw.get("bots", True)
         bot_teams = raw.get("bot_teams", [])
         text_fields = (
@@ -303,6 +357,7 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", name)
                 for name in suggested_maps
             )
+            or len({name.casefold() for name in suggested_maps}) != len(suggested_maps)
             or not isinstance(help_commands, list)
             or not help_commands
             or not all(
@@ -343,14 +398,14 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 for entry in launch_settings
             )
             or entry_config not in {None, f"x86qw-ktx-mode-{key}.cfg"}
-            or (
-                required_map_asset is not None
-                and (
-                    not isinstance(required_map_asset, str)
-                    or re.fullmatch(r"[a-z0-9_./-]*\{map\}[a-z0-9_./-]*", required_map_asset)
-                    is None
-                    or ".." in PurePosixPath(required_map_asset.replace("{map}", "map")).parts
-                )
+            or not isinstance(raw_mode_policies, list)
+            or not all(
+                isinstance(value, str) and value in policies
+                for value in raw_mode_policies
+            )
+            or len(raw_mode_policies) != len(set(raw_mode_policies))
+            or any(
+                policies[value].when == "frogbots" for value in raw_mode_policies
             )
             or not isinstance(bots, bool)
             or not isinstance(bot_teams, list)
@@ -396,7 +451,13 @@ def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
                 (str(entry[0]), str(entry[1])) for entry in launch_settings
             ),
             entry_config=entry_config,
-            required_map_asset=required_map_asset,
+            map_requirements=tuple(
+                policies[value]
+                for value in (
+                    [*default_bot_policies, *raw_mode_policies]
+                    if bots else raw_mode_policies
+                )
+            ),
             bots=bots,
             bot_teams=tuple(str(team) for team in bot_teams),
         ))
@@ -464,8 +525,10 @@ def ktx_options_cli_arguments(options: KtxLaunchOptions) -> list[str]:
             arguments.extend(["--bot-weapon", options.bot_weapon])
         if options.bot_health is not None:
             arguments.extend(["--bot-health", str(options.bot_health)])
-        if options.bot_break_on_death:
+        if options.bot_break_on_death is True:
             arguments.append("--bot-break-on-death")
+        elif options.bot_break_on_death is False:
+            arguments.append("--no-bot-break-on-death")
     if options.ctf_hook is not None:
         arguments.extend(["--ctf-hook", options.ctf_hook])
     if options.ctf_runes is not None:
@@ -509,7 +572,12 @@ def ktx_summary_lines(options: KtxLaunchOptions) -> list[str]:
         if options.bot_weapon is not None:
             lines.append(f"  Arma    | {options.bot_weapon}")
         if options.bot_health is not None:
-            lines.append(f"  Vida    | {options.bot_health}")
+            lines.append(f"  Vida    | {options.bot_health} HP")
+        if options.bot_break_on_death is not None:
+            lines.append(
+                "  Morte   | "
+                + ("encerra a tentativa" if options.bot_break_on_death else "mantém a tentativa")
+            )
     if options.ctf_hook is not None:
         lines.append(
             "  CTF     | gancho " + options.ctf_hook
@@ -623,17 +691,9 @@ def validate_frogbot_name_document(
         if isinstance(value, str) and profile == "personal":
             identities.append(FrogbotIdentity(validate_frogbot_name(value, label)))
             continue
-        if not isinstance(value, dict) or set(value) - {
-            "name", "top_color", "bottom_color", "palette",
-        }:
+        if not isinstance(value, dict) or set(value) != {"name"}:
             raise InstallerError(f"Identidade Frogbot inválida: {label}")
         name = validate_frogbot_name(value.get("name"), label)
-        palette = value.get("palette")
-        if (
-            palette is not None
-            and (not isinstance(palette, str) or not palette.strip())
-        ):
-            raise InstallerError(f"Anotação Frogbot inválida para {name}: {label}")
         identities.append(FrogbotIdentity(name))
     result = tuple(identities)
     if len({identity.name.casefold() for identity in result}) != len(result):
@@ -737,15 +797,16 @@ def ktx_bot_name_settings(
     if not options.bot_name_pool or count == 0:
         return ()
     pool = options.bot_name_pool
-    offsets = {
-        "k_fb_name": 0,
-        "k_fb_name_team": count,
-        "k_fb_name_enemy": count * 2,
-    }
+    if len(pool) < count:
+        raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
+    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
     settings: list[tuple[str, str]] = []
-    for prefix, offset in offsets.items():
+    for prefix in prefixes:
         for index in range(count):
-            identity = frogbot_identity(pool[(index + offset) % len(pool)])
+            # A bot keeps the same identity if KTX classifies it as generic,
+            # allied or enemy. Together with the QVM's global bot index, this
+            # prevents cross-role duplicates even in large rosters.
+            identity = frogbot_identity(pool[index])
             settings.append((
                 f"{prefix}_{index}", quake_colored_frogbot_name(identity.name),
             ))
@@ -767,15 +828,13 @@ def ktx_bot_name_binary_settings(
     if not options.bot_name_pool or count == 0:
         return ()
     pool = options.bot_name_pool
-    offsets = {
-        "k_fb_name": 0,
-        "k_fb_name_team": count,
-        "k_fb_name_enemy": count * 2,
-    }
+    if len(pool) < count:
+        raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
+    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
     settings: list[tuple[str, bytes]] = []
-    for prefix, offset in offsets.items():
+    for prefix in prefixes:
         for index in range(count):
-            identity = frogbot_identity(pool[(index + offset) % len(pool)])
+            identity = frogbot_identity(pool[index])
             settings.append((
                 f"{prefix}_{index}", quake_colored_frogbot_bytes(identity.name),
             ))
@@ -869,6 +928,87 @@ def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
     return True
 
 
+def ktx_external_assets(target: Path) -> frozenset[str]:
+    """Discover safe user-editable KTX map assets outside the managed PK3."""
+    locations = (
+        (target / "qw/bots/maps", "bots/maps", ".bot"),
+        (target / "qw/race/routes", "race/routes", ".route"),
+        (target / "id1/maps/ctf", "id1/maps/ctf", ".ent"),
+    )
+    assets: set[str] = set()
+    for directory, virtual_root, suffix in locations:
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for path in directory.iterdir():
+            if (
+                path.is_file()
+                and not path.is_symlink()
+                and path.suffix.casefold() == suffix
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.#-]{0,63}", path.stem)
+                and valid_personal_ktx_asset(path, suffix)
+            ):
+                assets.add(f"{virtual_root}/{path.name}".casefold())
+    return frozenset(assets)
+
+
+def valid_personal_ktx_asset(path: Path, suffix: str) -> bool:
+    """Reject route/config payloads that could execute unrelated commands."""
+    try:
+        metadata = path.stat(follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 1024 * 1024:
+            return False
+        payload = path.read_bytes()
+    except OSError:
+        return False
+    if b"\0" in payload or any(
+        byte < 32 and byte not in {9, 10, 13} for byte in payload
+    ):
+        return False
+    lines = [
+        line.lstrip()
+        for line in payload.decode("latin-1").splitlines()
+        if line.strip() and not line.lstrip().startswith("//")
+    ]
+    if suffix == ".ent":
+        # Entity overrides are engine data, not console scripts. Require the
+        # normal entity envelope and reject console command separators.
+        text = "\n".join(lines)
+        return (
+            text.startswith("{")
+            and text.endswith("}")
+            and text.count('"classname" "item_flag_team1"') == 1
+            and text.count('"classname" "item_flag_team2"') == 1
+            and ";" not in text
+        )
+    commands = [line.split(None, 1)[0] for line in lines]
+    if any(";" in line for line in lines):
+        return False
+    if suffix == ".bot":
+        allowed = {
+            "CreateMarker", "SetGoal", "SetMarkerFlag", "SetMarkerPath",
+            "SetMarkerPathAngleHint", "SetMarkerPathFlags",
+            "SetMarkerViewOfs", "SetRocketJumpPathFields", "SetZone",
+        }
+        return bool(commands) and "CreateMarker" in commands and all(
+            command in allowed for command in commands
+        )
+    if suffix == ".route":
+        allowed = {
+            "race_add_route_node", "race_route_add_end", "race_route_add_start",
+            "race_set_node_size", "race_set_route_falsestart_mode",
+            "race_set_route_name", "race_set_route_timeout",
+            "race_set_route_weapon_mode", "race_set_teleport_flags_by_name",
+        }
+        return (
+            bool(commands)
+            and all(command in allowed for command in commands)
+            and "race_add_route_node" in commands
+            and commands.count("race_route_add_start")
+            == commands.count("race_route_add_end")
+        )
+    return False
+
+
 # Compatibility names for integrations that used the Frogbot-specific helper.
 FrogbotRuntimeConfig = KtxRuntimeConfig
 write_frogbot_runtime_config = write_ktx_runtime_config
@@ -900,18 +1040,86 @@ def ktx_key_alias_commands(
             f"{alias_key} echo {colored_key}$x20$x7c$x20{description}",
         ))
     if ktx_bot_options_requested(options):
-        random_skill = options.bot_skill == "random"
-        base_skill = 5 if random_skill else int(options.bot_skill)
-        lower_skill = max(1, base_skill - 1)
-        higher_skill = min(20, base_skill + 1)
-        add_command = "cmd botcmd addbot" if random_skill else f"cmd botcmd addbot {base_skill}"
+        commands.extend(ktx_bot_management_alias_commands(mode, options))
+    return tuple(commands)
+
+
+def ktx_bot_management_alias_commands(
+    mode: KtxModeSpec,
+    options: KtxLaunchOptions,
+) -> tuple[str, ...]:
+    """Create a bounded, reversible runtime roster and skill state machine."""
+    initial_count = requested_frogbot_names(options, mode)
+    fixed_limit = ktx_mode_bot_limit(mode)
+    maximum = fixed_limit if fixed_limit is not None else 31
+    commands: list[str] = []
+    explicit_team = f" {options.bot_team}" if options.bot_team is not None else ""
+    for count in range(maximum + 1):
+        if count < maximum:
+            action = (
+                "x86qw_ktx_bot_add_command;"
+                f"x86qw_ktx_bot_roster_{count + 1}"
+            )
+        else:
+            action = "echo Limite de Frogbots deste modo atingido"
+        commands.append(
+            f"tempalias x86qw_ktx_bot_add_{count} {quote_console_command(action)}"
+        )
+        if count > 0:
+            action = (
+                "cmd botcmd removebot;"
+                f"x86qw_ktx_bot_roster_{count - 1}"
+            )
+        else:
+            action = "echo Nenhum Frogbot para remover"
+        commands.append(
+            f"tempalias x86qw_ktx_bot_remove_{count} {quote_console_command(action)}"
+        )
+        roster = (
+            f"tempalias x86qw_ktx_bot_add x86qw_ktx_bot_add_{count};"
+            f"tempalias x86qw_ktx_bot_remove x86qw_ktx_bot_remove_{count}"
+        )
+        commands.append(
+            f"tempalias x86qw_ktx_bot_roster_{count} {quote_console_command(roster)}"
+        )
+    if options.bot_skill == "random":
+        random_message = "echo Habilidade aleatoria ativa para cada novo Frogbot"
         commands.extend((
-            f"tempalias x86qw_ktx_bot_add {add_command}",
-            "tempalias x86qw_ktx_bot_remove cmd botcmd removebot",
-            f"tempalias x86qw_ktx_bot_skill_down cmd botcmd skill {lower_skill}",
-            f"tempalias x86qw_ktx_bot_skill_up cmd botcmd skill {higher_skill}",
-            "tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg",
+            "tempalias x86qw_ktx_bot_add_command "
+            f"{quote_console_command(f'cmd botcmd addbot random{explicit_team}')}",
+            f"tempalias x86qw_ktx_bot_skill_down {quote_console_command(random_message)}",
+            f"tempalias x86qw_ktx_bot_skill_up {quote_console_command(random_message)}",
         ))
+    else:
+        for skill in range(1, 21):
+            lower = max(1, skill - 1)
+            higher = min(20, skill + 1)
+            down_action = (
+                "echo Habilidade dos proximos Frogbots: "
+                f"{lower};cmd botcmd skill {lower};x86qw_ktx_bot_skill_{lower}"
+            )
+            up_action = (
+                "echo Habilidade dos proximos Frogbots: "
+                f"{higher};cmd botcmd skill {higher};x86qw_ktx_bot_skill_{higher}"
+            )
+            commands.extend((
+                f"tempalias x86qw_ktx_bot_skill_down_{skill} "
+                f"{quote_console_command(down_action)}",
+                f"tempalias x86qw_ktx_bot_skill_up_{skill} "
+                f"{quote_console_command(up_action)}",
+                f"tempalias x86qw_ktx_bot_skill_{skill} "
+                f"{quote_console_command(';'.join((
+                    f'tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_{skill}',
+                    f'tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_{skill}',
+                    'tempalias x86qw_ktx_bot_add_command '
+                    f'cmd botcmd addbot {skill}{explicit_team}',
+                )))}",
+            ))
+        commands.append(f"x86qw_ktx_bot_skill_{int(options.bot_skill)}")
+    commands.extend((
+        f"x86qw_ktx_bot_roster_{initial_count}",
+        "tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg",
+    ))
     return tuple(commands)
 
 
@@ -946,14 +1154,42 @@ def ktx_chunked_setup_alias_commands(
         f"x86qw_ktx_launch_setup_{index}"
         for index in range(1, len(chunks) + 1)
     )
-    definitions = tuple(
+    definitions = list(
         f"tempalias {alias} {quote_console_command(';'.join(chunk))}"
         for alias, chunk in zip(aliases, chunks)
     )
-    return (*definitions, (
+    current_aliases = aliases
+    level = 1
+    while len(";".join(current_aliases)) > maximum_body:
+        parent_aliases: list[str] = []
+        group: list[str] = []
+        group_length = 0
+        for alias in current_aliases:
+            added = len(alias) + (1 if group else 0)
+            if group and group_length + added > maximum_body:
+                parent = f"x86qw_ktx_launch_group_{level}_{len(parent_aliases) + 1}"
+                definitions.append(
+                    f"tempalias {parent} {quote_console_command(';'.join(group))}"
+                )
+                parent_aliases.append(parent)
+                group = []
+                group_length = 0
+                added = len(alias)
+            group.append(alias)
+            group_length += added
+        if group:
+            parent = f"x86qw_ktx_launch_group_{level}_{len(parent_aliases) + 1}"
+            definitions.append(
+                f"tempalias {parent} {quote_console_command(';'.join(group))}"
+            )
+            parent_aliases.append(parent)
+        current_aliases = tuple(parent_aliases)
+        level += 1
+    definitions.append(
         "tempalias x86qw_ktx_launch_setup "
-        f"{quote_console_command(';'.join(aliases))}"
-    ))
+        f"{quote_console_command(';'.join(current_aliases))}"
+    )
+    return tuple(definitions)
 
 
 def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
@@ -964,8 +1200,31 @@ def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
         options.bot_team is not None,
         options.bot_weapon is not None,
         options.bot_health is not None,
-        options.bot_break_on_death,
+        options.bot_break_on_death is not None,
     ))
+
+
+def active_ktx_map_requirements(
+    mode: KtxModeSpec,
+    options: KtxLaunchOptions,
+) -> tuple[KtxMapRequirement, ...]:
+    """Return the map assets required by the actual launch context."""
+    frogbots = ktx_bot_options_requested(options)
+    return tuple(
+        requirement
+        for requirement in mode.map_requirements
+        if requirement.when == "always"
+        or (requirement.when == "frogbots" and frogbots)
+    )
+
+
+def required_ktx_map_assets(
+    mode: KtxModeSpec,
+    options: KtxLaunchOptions,
+) -> tuple[str, ...]:
+    return tuple(
+        requirement.asset for requirement in active_ktx_map_requirements(mode, options)
+    )
 
 
 def without_frogbots(options: KtxLaunchOptions) -> KtxLaunchOptions:
@@ -978,7 +1237,7 @@ def without_frogbots(options: KtxLaunchOptions) -> KtxLaunchOptions:
         bot_team=None,
         bot_weapon=None,
         bot_health=None,
-        bot_break_on_death=False,
+        bot_break_on_death=None,
         bot_names_profile="default",
         bot_name_pool=(),
     )
@@ -1034,18 +1293,41 @@ def ktx_launch_commands(
     options: KtxLaunchOptions,
 ) -> tuple[str, ...]:
     commands: list[str] = []
+    for requirement in active_ktx_map_requirements(mode, options):
+        asset = requirement.asset.replace("{map}", map_name.casefold()).casefold()
+        if asset not in assets:
+            raise InstallerError(
+                f"O mapa {map_name} não possui o recurso {requirement.label} "
+                f"exigido pelo modo {mode.label} ({asset})."
+            )
     bot_options = ktx_bot_options_requested(options)
     if bot_options:
         if not mode.bots:
             raise InstallerError(f"Bots Frogbot não são compatíveis com o modo {mode.label}.")
         validate_ktx_bot_count(mode, options)
-        route = f"bots/maps/{map_name.casefold()}.bot"
-        if route not in assets:
-            raise InstallerError(
-                f"O mapa {map_name} não possui rota Frogbot no pacote KTX ({route})."
-            )
         if options.bot_team is not None and not options.bots:
             raise InstallerError("--bot-team exige --bots; o comando fill distribui as equipes.")
+        if (
+            options.bot_team is not None
+            and mode.bot_teams
+            and options.bot_team.casefold() not in {
+                team.casefold() for team in mode.bot_teams
+            }
+        ):
+            expected = ", ".join(mode.bot_teams)
+            raise InstallerError(
+                f"A equipe {options.bot_team} não pertence ao modo {mode.label}; "
+                f"use uma destas: {expected}."
+            )
+        if mode.key != "tot" and any((
+            options.bot_weapon is not None,
+            options.bot_health is not None,
+            options.bot_break_on_death is not None,
+        )):
+            raise InstallerError(
+                "--bot-weapon, --bot-health e --[no-]bot-break-on-death "
+                "só podem ser usados com o modo KTX tot."
+            )
         bot_count = requested_frogbot_names(options, mode)
         if not options.fill_bots or mode.bot_teams:
             required_clients = bot_count + 1
@@ -1065,7 +1347,14 @@ def ktx_launch_commands(
         else:
             team_sequence = ktx_bot_team_sequence(mode, options)
             for index, selected_team in enumerate(team_sequence):
-                team = f" {selected_team}" if selected_team is not None else ""
+                # Without an explicit override, let KTX apply its native team
+                # colors and role-aware names while the patched gamecode uses
+                # the declared usermode's team count for balancing.
+                team = (
+                    f" {selected_team}"
+                    if options.bot_team is not None and selected_team is not None
+                    else ""
+                )
                 commands.append(f"cmd botcmd addbot {options.bot_skill}{team}")
                 if index + 1 < len(team_sequence):
                     commands.extend(("wait",) * FROGBOT_ADD_WAIT_FRAMES)
@@ -1578,15 +1867,21 @@ class Player(core.Installer):
             if package.is_symlink() or not package.is_file() or not zipfile.is_zipfile(package):
                 raise InstallerError(f"Pacote KTX inválido: {package}")
             with zipfile.ZipFile(package) as archive:
-                return frozenset(name.casefold() for name in archive.namelist())
+                managed = frozenset(name.casefold() for name in archive.namelist())
+            return managed | ktx_external_assets(self.target)
         except (OSError, zipfile.BadZipFile) as error:
             raise InstallerError(f"Não foi possível consultar os recursos do KTX: {package}") from error
 
     @staticmethod
-    def ktx_required_asset(mode: KtxModeSpec, map_name: str) -> str | None:
-        if mode.required_map_asset is None:
-            return None
-        return mode.required_map_asset.replace("{map}", map_name.casefold())
+    def ktx_required_assets(
+        mode: KtxModeSpec,
+        options: KtxLaunchOptions,
+        map_name: str,
+    ) -> tuple[str, ...]:
+        return tuple(
+            asset.replace("{map}", map_name.casefold())
+            for asset in required_ktx_map_assets(mode, options)
+        )
 
     def choose_local_map(
         self,
@@ -1597,31 +1892,32 @@ class Player(core.Installer):
         label: str | None = None,
         requested_map: str | None = None,
         required_asset: str | None = None,
+        required_assets: tuple[str, ...] = (),
         available_assets: frozenset[str] | None = None,
         breadcrumb: str | None = None,
     ) -> str | None:
         maps = self.local_map_names(game.gamedir)
-        if required_asset is not None:
+        effective_assets = (
+            (required_asset,) if required_asset is not None else ()
+        ) + required_assets
+        if effective_assets:
             assert available_assets is not None
             maps = [
                 name for name in maps
-                if required_asset.replace("{map}", name.casefold()).casefold() in available_assets
+                if all(
+                    asset.replace("{map}", name.casefold()).casefold() in available_assets
+                    for asset in effective_assets
+                )
             ]
             if not maps:
                 raise InstallerError(
                     f"Nenhum mapa instalado possui o recurso exigido por {label or game.label}: "
-                    f"{required_asset}."
+                    f"{', '.join(effective_assets)}."
                 )
         lookup = {name.casefold(): name for name in maps}
         requested_default = default_map or game.default_map
         requested_suggestions = suggested_maps or game.suggested_maps
         display_label = label or game.label
-        default = lookup.get(requested_default.casefold())
-        if default is None:
-            raise InstallerError(
-                f"O mapa padrão {requested_default} não está disponível para {display_label}. "
-                "Reexecute o bootstrap x86QW no mesmo destino para reparar o conteúdo."
-            )
         if requested_map is not None:
             selected = lookup.get(requested_map.casefold())
             if selected is None:
@@ -1633,6 +1929,13 @@ class Player(core.Installer):
         suggestions = [
             lookup[name.casefold()] for name in requested_suggestions if name.casefold() in lookup
         ]
+        default = lookup.get(requested_default.casefold())
+        if default is None:
+            default = suggestions[0] if suggestions else (maps[0] if maps else None)
+        if default is None:
+            raise InstallerError(
+                f"Nenhum mapa compatível está disponível para {display_label}."
+            )
         ordered = suggestions + [name for name in maps if name not in suggestions]
         default_index = ordered.index(default)
         selected = navigation.select_one(
@@ -1642,12 +1945,15 @@ class Player(core.Installer):
                     name,
                     name,
                     "sugerido" if name in suggestions else "",
-                    "rota compatível e instalada" if required_asset is not None else "mapa instalado",
+                    "recursos compatíveis e instalados" if effective_assets else "mapa instalado",
                 )
                 for name in ordered
             ),
             breadcrumb=breadcrumb or f"x86QW › {display_label} › Mapa",
-            subtitle=f"{len(maps)} mapa(s) compatível(is). Use a busca para filtrar.",
+            subtitle=(
+                f"{len(maps)} mapa(s) compatível(is) com esta configuração. "
+                "Use a busca para filtrar."
+            ),
             default=default_index,
             searchable=True,
             allow_back=True,
@@ -1773,7 +2079,9 @@ class Player(core.Installer):
                     navigation.MenuOption("1", "1 bot", "adicionar um oponente"),
                     navigation.MenuOption("2", "2 bots", "partida pequena"),
                     navigation.MenuOption("4", "4 bots", "partida intermediária"),
-                    navigation.MenuOption("fill", "Preencher servidor", "até oito Frogbots"),
+                    navigation.MenuOption(
+                        "fill", "Preencher servidor", "até oito Frogbots neste modo aberto",
+                    ),
                     navigation.MenuOption("custom", "Quantidade personalizada", "escolher de 1 a 31"),
                 )
             else:
@@ -1864,12 +2172,66 @@ class Player(core.Installer):
                     )
                     if names_profile is None:
                         continue
-                    return replace(
+                    configured = replace(
                         selected,
                         bots=0 if bot_choice == "fill" else int(bot_choice),
                         fill_bots=bot_choice == "fill",
                         bot_skill="random" if skill == "random" else int(skill),
                         bot_names_profile=names_profile,
+                    )
+                    if mode.key != "tot":
+                        return configured
+                    weapon = navigation.select_one(
+                        "Arma dos Frogbots no ToT",
+                        (
+                            navigation.MenuOption(
+                                "default", "Padrão do mapa", "usar a configuração ToT carregada",
+                            ),
+                            navigation.MenuOption("random", "Aleatória", "sortear entre as armas"),
+                            *(navigation.MenuOption(str(number), f"Arma {number}") for number in range(1, 9)),
+                        ),
+                        breadcrumb=breadcrumb + " › Frogbots › ToT",
+                        allow_back=True,
+                    )
+                    if weapon is None:
+                        continue
+                    health = navigation.select_one(
+                        "Vida inicial dos Frogbots no ToT",
+                        (
+                            navigation.MenuOption(
+                                "default", "Padrão do mapa", "usar a configuração ToT carregada",
+                            ),
+                            *(navigation.MenuOption(str(number), str(number), "HP") for number in range(1, 301)),
+                        ),
+                        breadcrumb=breadcrumb + " › Frogbots › ToT",
+                        default=0,
+                        searchable=True,
+                        allow_back=True,
+                    )
+                    if health is None:
+                        continue
+                    break_on_death = navigation.select_one(
+                        "Encerrar tentativa quando o jogador morrer?",
+                        (
+                            navigation.MenuOption(
+                                "default", "Padrão do mapa", "preservar dm4, e1m2 ou schloss",
+                            ),
+                            navigation.MenuOption("on", "Sim", "encerrar a tentativa"),
+                            navigation.MenuOption("off", "Não", "continuar a tentativa"),
+                        ),
+                        breadcrumb=breadcrumb + " › Frogbots › ToT",
+                        allow_back=True,
+                    )
+                    if break_on_death is None:
+                        continue
+                    return replace(
+                        configured,
+                        bot_weapon=None if weapon == "default" else weapon,
+                        bot_health=None if health == "default" else int(health),
+                        bot_break_on_death=(
+                            None if break_on_death == "default"
+                            else break_on_death == "on"
+                        ),
                     )
         return selected
 
@@ -1952,11 +2314,11 @@ class Player(core.Installer):
                     launch_options = resolve_frogbot_name_profile(
                         self.project_root, self.target, game, launch_options, ktx_mode,
                     )
+                    required_assets = required_ktx_map_assets(
+                        ktx_mode, launch_options,
+                    )
                     ktx_assets = (
-                        self.ktx_archive_members()
-                        if ktx_mode.required_map_asset is not None
-                        or ktx_bot_options_requested(launch_options)
-                        else frozenset()
+                        self.ktx_archive_members() if required_assets else frozenset()
                     )
                     map_name = self.choose_local_map(
                         game,
@@ -1964,7 +2326,7 @@ class Player(core.Installer):
                         suggested_maps=ktx_mode.suggested_maps,
                         label=f"KTX · {ktx_mode.label}",
                         requested_map=map_key,
-                        required_asset=ktx_mode.required_map_asset,
+                        required_assets=required_assets,
                         available_assets=ktx_assets,
                         breadcrumb=f"x86QW › Jogar › KTX › {ktx_mode.label} › Mapa",
                     )
@@ -2039,15 +2401,18 @@ class Player(core.Installer):
             assert ktx_mode is not None
             assert ktx_assets is not None
             bot_name_settings = ktx_bot_name_settings(launch_options, ktx_mode)
-            setup_commands = (
+            key_alias_commands = (
                 "tempalias ktx_mode echo "
                 f"x86QW KTX preset: {ktx_mode.label} [{ktx_mode.key}]",
                 *ktx_key_alias_commands(ktx_mode, launch_options),
+            )
+            post_map_commands = (
                 *ktx_launch_commands(
                     ktx_mode, map_name, ktx_assets, launch_options,
                 ),
                 ktx_mode_help_alias(ktx_mode),
             )
+            setup_commands = (*key_alias_commands, *post_map_commands)
             if ktx_bot_options_requested(launch_options):
                 # ToT registers and enables this server cvar from its own
                 # usermode. Remove values persisted by older launchers before
@@ -2058,8 +2423,6 @@ class Player(core.Installer):
                     ])
                 else:
                     arguments.extend(["+set", "k_fb_enabled", "1"])
-                if launch_options.bot_break_on_death and ktx_mode.key != "tot":
-                    arguments.extend(["+set", "k_fb_break_on_death", "1"])
             for name, value in ktx_mode.launch_settings:
                 arguments.extend([f"+{name}", value])
             setup_body = ";".join((
@@ -2082,7 +2445,16 @@ class Player(core.Installer):
                 # engine's bounded startup command line. The ephemeral file is
                 # read before the map and removed immediately after startup.
                 ktx_startup_commands = (
-                    *ktx_chunked_setup_alias_commands(setup_commands),
+                    *(
+                        key_alias_commands
+                        if ktx_bot_options_requested(launch_options)
+                        else ()
+                    ),
+                    *ktx_chunked_setup_alias_commands(
+                        post_map_commands
+                        if ktx_bot_options_requested(launch_options)
+                        else setup_commands
+                    ),
                     f"tempalias {event} {quote_console_command(event_body)}",
                 )
                 arguments.extend([
@@ -2106,9 +2478,12 @@ class Player(core.Installer):
         if (
             ktx_mode is not None
             and ktx_mode.key == "tot"
-            and launch_options.bot_break_on_death
+            and launch_options.bot_break_on_death is not None
         ):
-            arguments.extend(["+k_fb_break_on_death", "1"])
+            arguments.extend([
+                "+k_fb_break_on_death",
+                "1" if launch_options.bot_break_on_death else "0",
+            ])
         arguments.extend(game.post_map_arguments)
         # This is an invariant of the launcher, not a suggested profile bind.
         # Keep it after every managed and personal config so no mod can leave
@@ -2328,10 +2703,10 @@ def add_game_launch_arguments(
     )
     bots.add_argument(
         "--fill-bots", action="store_true",
-        help="preenche o servidor KTX com até 8 bots Frogbot",
+        help="preenche as vagas do modo KTX; modos abertos usam até 8 Frogbots",
     )
     parser.add_argument(
-        "--bot-skill", type=bot_skill, default=5, metavar="1-20|random",
+        "--bot-skill", type=bot_skill, default=None, metavar="1-20|random",
         help="define a habilidade dos bots ou sorteia 1-20 por bot (padrão: 5)",
     )
     if not dedicated:
@@ -2341,16 +2716,22 @@ def add_game_launch_arguments(
         )
     parser.add_argument(
         "--bot-weapon", choices=("random", *map(str, range(1, 9))), metavar="ARMA",
-        help="limita os bots à arma 1-8 ou random",
+        help="no ToT, limita os bots à arma 1-8 ou random",
     )
     parser.add_argument(
         "--bot-health", type=bounded_integer(1, 300), metavar="HP",
-        help="define a vida dos bots entre 1 e 300",
+        help="no ToT, define a vida dos bots entre 1 e 300",
     )
-    parser.add_argument(
-        "--bot-break-on-death", action="store_true",
-        help="encerra a tentativa quando o jogador humano morre",
+    break_on_death = parser.add_mutually_exclusive_group()
+    break_on_death.add_argument(
+        "--bot-break-on-death", dest="bot_break_on_death", action="store_true",
+        help="no ToT, encerra a tentativa quando o jogador humano morre",
     )
+    break_on_death.add_argument(
+        "--no-bot-break-on-death", dest="bot_break_on_death", action="store_false",
+        help="no ToT, mantém a tentativa quando o jogador humano morre",
+    )
+    parser.set_defaults(bot_break_on_death=None)
     parser.add_argument(
         "--bot-names", choices=("default", "x86qw", "personal"), default="default",
         help="seleciona nomes padrão KTX, x86QW aleatórios ou a lista pessoal",
@@ -2399,8 +2780,16 @@ def resolve_ktx_launch_options(
     race_pacemaker = getattr(namespace, "race_pacemaker", None)
     race_hide_players = getattr(namespace, "race_hide_players", False)
     bot_names_profile = namespace.bot_names
-    if bot_names_profile != "default" and not (namespace.bots or namespace.fill_bots):
-        parser.error("--bot-names exige --bots ou --fill-bots")
+    bot_modifiers = any((
+        namespace.bot_skill is not None,
+        bot_team is not None,
+        namespace.bot_weapon is not None,
+        namespace.bot_health is not None,
+        namespace.bot_break_on_death is not None,
+        bot_names_profile != "default",
+    ))
+    if bot_modifiers and not (namespace.bots or namespace.fill_bots):
+        parser.error("opções --bot-* exigem --bots ou --fill-bots")
     if bot_team is not None and re.fullmatch(
         r"[A-Za-z0-9_-]{1,9}", bot_team,
     ) is None:
@@ -2408,7 +2797,7 @@ def resolve_ktx_launch_options(
     ktx_specific = any((
         namespace.bots,
         namespace.fill_bots,
-        namespace.bot_skill != 5,
+        namespace.bot_skill is not None,
         bot_team is not None,
         namespace.bot_weapon is not None,
         namespace.bot_health is not None,
@@ -2429,7 +2818,7 @@ def resolve_ktx_launch_options(
     return game, KtxLaunchOptions(
         bots=namespace.bots or 0,
         fill_bots=namespace.fill_bots,
-        bot_skill=namespace.bot_skill,
+        bot_skill=namespace.bot_skill if namespace.bot_skill is not None else 5,
         bot_team=bot_team,
         bot_weapon=namespace.bot_weapon,
         bot_health=namespace.bot_health,

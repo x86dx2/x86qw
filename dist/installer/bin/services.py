@@ -1507,11 +1507,12 @@ def ktx_assets(target: Path) -> frozenset[str]:
         raise InstallerError(f"Pacote KTX ausente ou inseguro: {package}")
     try:
         with zipfile.ZipFile(package) as archive:
-            return frozenset(
+            managed = frozenset(
                 relative.as_posix().casefold()
                 for info, relative in validate_zip_members(archive)
                 if not info.is_dir()
             )
+        return managed | gameplay.ktx_external_assets(target)
     except (OSError, zipfile.BadZipFile) as error:
         raise InstallerError(f"Pacote KTX inválido: {package}") from error
 
@@ -1705,13 +1706,14 @@ def select_hosted_game(
                 player.project_root, player.target, game, launch_options, mode,
             )
             assets = ktx_assets(player.target)
+            required_assets = gameplay.required_ktx_map_assets(mode, resolved)
             map_name = player.choose_local_map(
                 game,
                 default_map=mode.default_map,
                 suggested_maps=mode.suggested_maps,
                 label=f"KTX · {mode.label}",
                 requested_map=options.map,
-                required_asset=mode.required_map_asset,
+                required_assets=required_assets,
                 available_assets=assets,
                 breadcrumb=f"x86QW › Hospedar › KTX › {mode.label} › Mapa",
             )
@@ -1779,8 +1781,10 @@ def dedicated_ktx_settings(
             ))
         if options.bot_health is not None:
             settings.append(("k_fb_health", str(options.bot_health)))
-        if options.bot_break_on_death:
-            settings.append(("k_fb_break_on_death", "1"))
+        if options.bot_break_on_death is not None:
+            settings.append((
+                "k_fb_break_on_death", "1" if options.bot_break_on_death else "0",
+            ))
     if mode.key == "ctf":
         if options.ctf_hook is not None:
             hook_styles = {"smooth": "1", "fast": "2", "classic": "3", "crhook": "4"}
@@ -1832,6 +1836,11 @@ def host_spec(
         post_map_settings = dedicated_ktx_settings(
             mode, map_name, selection.assets, selection.ktx_options, options.maxclients,
         )
+        if (
+            gameplay.ktx_bot_options_requested(selection.ktx_options)
+            and is_external_bind(options.bind)
+        ):
+            post_map_settings = (*post_map_settings, ("k_fb_admin_only", "1"))
     bootstrap_password = secrets.token_urlsafe(24)
     initial_rcon_password = bootstrap_password
     lines = [
@@ -1856,6 +1865,10 @@ def host_spec(
         ))
         for name, value in mode.launch_settings:
             lines.append(f"{name} {value}")
+        if any(name == "k_fb_admin_only" for name, _value in post_map_settings):
+            # Remote players and spectators must not be able to mutate the
+            # Frogbot roster of an externally reachable host.
+            lines.append("k_fb_admin_only 1")
     else:
         lines.extend((
             "sv_progtype 0",
