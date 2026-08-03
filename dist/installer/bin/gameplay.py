@@ -1102,18 +1102,19 @@ def ktx_bot_management_alias_commands(
                 "echo Habilidade dos proximos Frogbots: "
                 f"{higher};cmd botcmd skill {higher};x86qw_ktx_bot_skill_{higher}"
             )
+            skill_setup = ";".join((
+                f"tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_{skill}",
+                f"tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_{skill}",
+                "tempalias x86qw_ktx_bot_add_command "
+                f"cmd botcmd addbot {skill}{explicit_team}",
+            ))
             commands.extend((
                 f"tempalias x86qw_ktx_bot_skill_down_{skill} "
                 f"{quote_console_command(down_action)}",
                 f"tempalias x86qw_ktx_bot_skill_up_{skill} "
                 f"{quote_console_command(up_action)}",
                 f"tempalias x86qw_ktx_bot_skill_{skill} "
-                f"{quote_console_command(';'.join((
-                    f'tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_{skill}',
-                    f'tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_{skill}',
-                    'tempalias x86qw_ktx_bot_add_command '
-                    f'cmd botcmd addbot {skill}{explicit_team}',
-                )))}",
+                f"{quote_console_command(skill_setup)}",
             ))
         commands.append(f"x86qw_ktx_bot_skill_{int(options.bot_skill)}")
     commands.extend((

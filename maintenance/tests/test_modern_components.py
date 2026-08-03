@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import hashlib
 import importlib.util
@@ -86,6 +87,12 @@ def ktx_entry_aliases(usermode: str = "1on1") -> list[str]:
 
 
 class ModernComponentTests(unittest.TestCase):
+    def test_installed_runtime_modules_parse_with_python_310_grammar(self):
+        for filename in ("gameplay.py", "services.py", "manager.py", "menu.py"):
+            with self.subTest(filename=filename):
+                source = (ROOT / "dist/installer/bin" / filename).read_text(encoding="utf-8")
+                ast.parse(source, filename=filename, feature_version=(3, 10))
+
     def setUp(self):
         install_qw.console.configure(verbose=False, no_color=True)
 

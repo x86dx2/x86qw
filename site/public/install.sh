@@ -3,7 +3,7 @@ set -euo pipefail
 
 INSTALLER_VERSION="0.7.0"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
-INSTALLER_SHA256="78be0bbf16ea78ec838f4db32757f547e42cf1cc6fb2c59f28cefc1b8d6f50aa"
+INSTALLER_SHA256="abdf43ef026d25b9eecae327a559ba81dcd65844e20412d8f367f12d91a6f4af"
 INSTALLER_URLS=(
   "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-${INSTALLER_VERSION}/${INSTALLER_FILE}"
   "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/${INSTALLER_VERSION}/${INSTALLER_FILE}"
