@@ -134,6 +134,9 @@ Ao entrar no mapa, o console imprime as teclas do modo ativo. Em Duel, `F5`
 marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
 `DEL`, `HOME` e `END` gerenciam bots e habilidade. O perfil One Piece também
 preserva as cores de camisa, calça e equipe definidas pelo KTX.
+Os [mapas visuais de controles](docs/controls/README.md) reúnem a base comum e
+as variantes de KTX, Final Arena, Pro-X, Team Fortress e TD2 em uma fonte
+editável, com PNGs prontos para consulta e divulgação.
 `--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
 um bot entra. `INS` respeita a lotação do modo, `DEL` libera a vaga e
 `HOME`/`END` alteram cumulativamente a habilidade dos próximos bots. Arma, vida
