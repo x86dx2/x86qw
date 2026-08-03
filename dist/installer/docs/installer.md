@@ -5,7 +5,7 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 Requisito: Python 3.10 ou mais recente.
 
 O instalador usa apenas a biblioteca padrão do Python.
-O bundle público corrente é `0.6.0`; o catálogo registra 59 pacotes e 21
+O bundle público corrente é `0.7.0`; o catálogo registra 60 pacotes e 21
 componentes. Esses fatos são validados contra os inventários canônicos.
 
 ## Instalação pública
@@ -375,10 +375,13 @@ movimento**. **Todos os modos** preserva uma lista pesquisável do catálogo
 completo:
 
 ```text
-duel  2on2  3on3  4on4  10on10  ffa  ctf  hoony  blitz-2on2  blitz-4on4
-2on2on2  3on3on3  4on4on4  xonx  wipeout  clan-arena  tw-tot
+duel  2on2  3on3  4on4  10on10  ffa  ctf  hoony  blitz-2on2  blitz-4on4  2on2on2
+3on3on3  4on4on4  xonx  wipeout  clan-arena  tw-tot
 midair  dmm4  instagib  lgc  rocket-arena  race  practice
 ```
+
+`3on3` significa duas equipes de três jogadores; `2on2on2`, três equipes de
+dois. Os aliases `3v3` e `2v2v2` continuam aceitos pela CLI.
 
 O mesmo fluxo pode ser automatizado, sem atravessar os menus:
 
@@ -398,19 +401,21 @@ oficiais do KTX para seis mapas clássicos; o launcher seleciona o diretório CT
 antes de carregar o mapa, garantindo a presença das duas bandeiras.
 
 Os Frogbots são acionados com `--bots <quantidade>` ou `--fill-bots`. A CLI
-também aceita habilidade 1–20 ou `random` por bot, equipe, arma e vida e valida previamente se o
-mapa possui uma das 77 rotas `.bot` incorporadas. CTF e Race rejeitam bots por
-serem combinações não suportadas pelo QVM fixado. Race valida uma das 54 rotas
-oficiais e expõe estilo, pontuação e pacemaker; CTF expõe hook e runas.
+também aceita habilidade 1–20 ou `random` por bot e equipe. Arma, vida e
+interrupção por morte ficam restritas ao ToT. O menu oferece somente mapas que
+tenham BSP e uma das 77 rotas `.bot` incorporadas ou uma rota pessoal regular.
+CTF e Race rejeitam bots por serem combinações não suportadas pelo QVM fixado.
+Race cruza os BSPs com as 54 rotas oficiais ou pessoais; CTF cruza os BSPs com
+os seis ENTs gerenciados ou um ENT pessoal seguro.
 
 `--bot-names default` mantém os nomes originais do KTX sem definir cvars de
 customização. `--bot-names x86qw` sorteia por lançamento uma lista One Piece,
 priorizando os dez Chapéus de Palha. `--bot-names personal` usa na ordem
 declarada `quake-world/qw/x86qw-frogbot-names.json`, criado pelo bootstrap e
 nunca sobrescrito depois de uma edição. O launcher aplica automaticamente o
-prefixo `/ ` e a cor clássica compatível com o protocolo; escreva no JSON
-somente o nome, sem prefixo ou códigos no valor. Aparências legadas são ignoradas
-para que as cores continuem sob controle do KTX. O contrato completo está em
+prefixo `/` e a cor clássica compatível com o protocolo; escreva no JSON
+somente o nome, sem prefixo ou códigos no valor. Campos de aparência são
+rejeitados para que as cores continuem inequivocamente sob controle do KTX. O contrato completo está em
 [`docs/FROGBOTS.md`](../../../docs/FROGBOTS.md).
 
 No menu, `x86QW aleatório` é a seleção inicial e o perfil sem customização
@@ -418,7 +423,8 @@ aparece como `KTX Default`. A CLI conserva `default` como padrão por
 compatibilidade. Modos de tamanho fixo oferecem somente as vagas restantes —
 Duel aceita um bot com o jogador humano — enquanto FFA e Practice mantêm
 preenchimento e quantidade personalizada. Vários bots entram em frames
-separados.
+separados. Durante a sessão, `INS` respeita a lotação, `DEL` reabre a vaga e
+`HOME`/`END` percorrem cumulativamente a habilidade 1–20 dos próximos bots.
 
 Todos os itens do menu exibem o número equivalente; `→`/Enter avança, `←`
 volta somente para a etapa imediatamente anterior e Esc encerra o navegador.

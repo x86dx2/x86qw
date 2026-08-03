@@ -6,11 +6,11 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline publicada: tag `x86qw-installer-0.6.0`. O estado funcional é descrito
+Baseline publicada: tag `x86qw-installer-0.7.0`. O estado funcional é descrito
 pela própria tag imutável, publicada em 2 de agosto de 2026.
 
-- instalador público `0.6.0`; as linhas anteriores permanecem imutáveis no histórico;
-- 59 pacotes e 21 componentes;
+- instalador público `0.7.0`; as linhas anteriores permanecem imutáveis no histórico;
+- 60 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
@@ -34,7 +34,7 @@ pela própria tag imutável, publicada em 2 de agosto de 2026.
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker verificado na `0.6.0` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker preparado para a `0.7.0` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
 
 “MVP entregue” não significa que o runtime foi executado em todas as

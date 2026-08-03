@@ -63,9 +63,12 @@ quebra de linha final é removida; conteúdo multilinha é recusado. Senhas nunc
 entram nos argumentos do processo filho nem nos logs detalhados. Bind externo
 sem senha produz um alerta explícito, sem bloquear uma escolha intencional.
 
-O KTX distribuído inclui 77 rotas Frogbot e 54 rotas Race. No dedicado, bots
-são adicionados automaticamente quando o primeiro jogador entra; habilidade,
-arma, vida e limite são configurados por cvars nativas do servidor:
+O KTX distribuído inclui 77 rotas Frogbot e 54 rotas Race. O menu cruza esses
+recursos com os BSPs instalados; rotas pessoais regulares nos diretórios
+documentados em [Nomes dos Frogbots](FROGBOTS.md) também são reconhecidas. No
+dedicado, bots são adicionados automaticamente quando o primeiro jogador
+entra; habilidade e limite são configurados por cvars nativas do servidor.
+Arma, vida e interrupção por morte pertencem exclusivamente ao ToT:
 
 ```sh
 ./x86qw.sh host ktx --mode duel --bots 1 --bot-skill 8 --bot-names x86qw
@@ -80,14 +83,19 @@ cliente e permanecem disponíveis em `play`, não em `host`.
 
 O dedicado aceita os mesmos três perfis de nome: `default` não customiza o
 KTX, `x86qw` sorteia a lista One Piece da distribuição e `personal` lê
-`qw/x86qw-frogbot-names.json`. O prefixo `/ ` e a cor Quake são aplicados pelo
+`qw/x86qw-frogbot-names.json`. O prefixo `/` e a cor Quake são aplicados pelo
 launcher. Consulte [Nomes dos Frogbots](FROGBOTS.md) para editar a lista
 pessoal.
 No jogo local, cada modo imprime seu plano de teclas ao abrir o mapa; sessões
 com bots acrescentam `INS`/`DEL` para adicionar e remover e `HOME`/`END` para
-ajustar a habilidade em torno do valor escolhido.
+ajustar cumulativamente a habilidade dos próximos bots. A lotação declarada do
+modo continua valendo durante toda a sessão.
 Com `--bot-skill random`, cada novo bot recebe independentemente uma habilidade
 de 1 a 20.
+
+Quando o bind do host é externo e há bots, o x86QW reaplica
+`k_fb_admin_only 1` depois da configuração pessoal. Jogadores remotos não
+podem alterar o roster; um host restrito a loopback conserva o padrão KTX.
 
 ## QTV
 

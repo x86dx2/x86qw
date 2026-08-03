@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-02T15:42:59Z",
+  "generated_at": "2026-08-03T02:27:39Z",
   "packages": [
     {
       "component": "core",
@@ -1114,7 +1114,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.6.0",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1138,19 +1138,49 @@
       "release_notes": "# x86QW 0.6.0\n\nRelease funcional do lifecycle de serviços em segundo plano e da revisão\nintegral dos menus do instalador.\n\n## Serviços\n\n- permite iniciar MVDSV, QTV e QWFWD em primeiro ou segundo plano;\n- adiciona visualização centralizada da stack ativa, seus endpoints e parâmetros\n  públicos;\n- permite solicitar o encerramento coordenado pelo menu ou por `status --stop`;\n- preserva senhas fora da linha de comando, do journal e da saída de status;\n- valida lock, identidade do controlador e journal antes de encerrar processos;\n- mantém logs privados da sessão em segundo plano e remove o lock ao finalizar.\n\n## Interface\n\n- mostra `x86qw.cmd` nos comandos equivalentes do Windows e `./x86qw.sh` em\n  macOS/Linux;\n- evita cortes no plano e no resultado de `update` em terminais estreitos;\n- mostra configurações, resumo e comando seguro antes de jogar ou hospedar;\n- mantém opções numeradas, descrições alinhadas e navegação consistente entre\n  menus pais;\n- inclui as ações de visualizar e encerrar serviços no agrupamento Serviços.\n\n## KTX e gameplay\n\n- mantém os 24 modos declarados e a composição de Frogbots conforme as regras\n  de cada usermode;\n- preserva skins, cores e equipes controladas pelo KTX;\n- mantém os planos de teclas contextuais e o encerramento direto por F12 nos\n  cinco jogos atuais;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 362 testes de manutenção e quatro testes do site;\n- smoke real de QTV e QWFWD em segundo plano no macOS, incluindo consulta e\n  encerramento coordenado;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- catálogo, Git LFS, zipapp, bundle imutável e site validados antes da\n  publicação.",
       "mirror_title": "x86QW Installer 0.6.0",
       "mirror_notes": "# x86QW 0.6.0\n\nRelease funcional do lifecycle de serviços em segundo plano e da revisão\nintegral dos menus do instalador.\n\n## Serviços\n\n- permite iniciar MVDSV, QTV e QWFWD em primeiro ou segundo plano;\n- adiciona visualização centralizada da stack ativa, seus endpoints e parâmetros\n  públicos;\n- permite solicitar o encerramento coordenado pelo menu ou por `status --stop`;\n- preserva senhas fora da linha de comando, do journal e da saída de status;\n- valida lock, identidade do controlador e journal antes de encerrar processos;\n- mantém logs privados da sessão em segundo plano e remove o lock ao finalizar.\n\n## Interface\n\n- mostra `x86qw.cmd` nos comandos equivalentes do Windows e `./x86qw.sh` em\n  macOS/Linux;\n- evita cortes no plano e no resultado de `update` em terminais estreitos;\n- mostra configurações, resumo e comando seguro antes de jogar ou hospedar;\n- mantém opções numeradas, descrições alinhadas e navegação consistente entre\n  menus pais;\n- inclui as ações de visualizar e encerrar serviços no agrupamento Serviços.\n\n## KTX e gameplay\n\n- mantém os 24 modos declarados e a composição de Frogbots conforme as regras\n  de cada usermode;\n- preserva skins, cores e equipes controladas pelo KTX;\n- mantém os planos de teclas contextuais e o encerramento direto por F12 nos\n  cinco jogos atuais;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 362 testes de manutenção e quatro testes do site;\n- smoke real de QTV e QWFWD em segundo plano no macOS, incluindo consulta e\n  encerramento coordenado;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13;\n- catálogo, Git LFS, zipapp, bundle imutável e site validados antes da\n  publicação.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.0",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.0.zip",
+      "size": 155094,
+      "sha256": "abdf43ef026d25b9eecae327a559ba81dcd65844e20412d8f367f12d91a6f4af",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.0/x86qw-installer-0.7.0.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.0/x86qw-installer-0.7.0.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.0/x86qw-installer-0.7.0.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.0/x86qw-installer-0.7.0.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.0",
+      "release_title": "x86QW Installer 0.7.0",
+      "release_notes": "# x86QW 0.7.0\n\nRelease de consistência dos modos KTX e da integração Frogbot.\n\n## Modos e mapas\n\n- oferece somente mapas que possuam os recursos exigidos pelo modo selecionado:\n  rota Frogbot, rota Race ou entidade CTF;\n- mantém `3on3` como duas equipes de três jogadores e `2on2on2` como três\n  equipes de dois;\n- preserva `3v3` e `2v2v2` como aliases de linha de comando;\n- valida usermodes, configurações de entrada, comandos de ajuda e binds contra\n  o conteúdo real do KTX 1.47.\n\n## Frogbots\n\n- completa elencos fixos conforme a quantidade de jogadores e equipes de cada\n  usermode;\n- aplica habilidade aleatória independentemente a cada bot;\n- mantém perfis de nomes KTX, x86QW aleatório e lista pessoal;\n- corrige identidades repetidas entre aliados e adversários;\n- remove do QVM as antigas cvars experimentais de aparência: skins e cores\n  voltam a seguir integralmente o comportamento do KTX.\n\n## Integridade\n\n- recompila o QVM KTX 1.47 de maneira reproduzível e registra fontes, patches,\n  símbolos e hashes;\n- fortalece o verificador declarativo para detectar mapas, recursos, usermodes,\n  configurações ou comandos inconsistentes antes da publicação;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 373 testes de manutenção e quatro testes do site;\n- build determinístico do componente KTX;\n- smoke em janela no macOS com preenchimento de Frogbots, habilidade aleatória,\n  múltiplas equipes e encerramento por F12;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13 obrigatória antes da\n  publicação.",
+      "mirror_title": "x86QW Installer 0.7.0",
+      "mirror_notes": "# x86QW 0.7.0\n\nRelease de consistência dos modos KTX e da integração Frogbot.\n\n## Modos e mapas\n\n- oferece somente mapas que possuam os recursos exigidos pelo modo selecionado:\n  rota Frogbot, rota Race ou entidade CTF;\n- mantém `3on3` como duas equipes de três jogadores e `2on2on2` como três\n  equipes de dois;\n- preserva `3v3` e `2v2v2` como aliases de linha de comando;\n- valida usermodes, configurações de entrada, comandos de ajuda e binds contra\n  o conteúdo real do KTX 1.47.\n\n## Frogbots\n\n- completa elencos fixos conforme a quantidade de jogadores e equipes de cada\n  usermode;\n- aplica habilidade aleatória independentemente a cada bot;\n- mantém perfis de nomes KTX, x86QW aleatório e lista pessoal;\n- corrige identidades repetidas entre aliados e adversários;\n- remove do QVM as antigas cvars experimentais de aparência: skins e cores\n  voltam a seguir integralmente o comportamento do KTX.\n\n## Integridade\n\n- recompila o QVM KTX 1.47 de maneira reproduzível e registra fontes, patches,\n  símbolos e hashes;\n- fortalece o verificador declarativo para detectar mapas, recursos, usermodes,\n  configurações ou comandos inconsistentes antes da publicação;\n- não incorpora runtime, jogo, mod ou mapa novo.\n\n## Validação\n\n- 373 testes de manutenção e quatro testes do site;\n- build determinístico do componente KTX;\n- smoke em janela no macOS com preenchimento de Frogbots, habilidade aleatória,\n  múltiplas equipes e encerramento por F12;\n- matriz CI Ubuntu, macOS e Windows com Python 3.10 e 3.13 obrigatória antes da\n  publicação.",
       "mirror_latest": true
     },
     {
       "component": "ktx",
       "package": "ktx",
-      "version": "1.47+x86qw.17",
+      "version": "1.47+x86qw.18",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "ktx-1.47+x86qw.17.zip",
-      "size": 2542852,
-      "sha256": "6b8ba40f1952ed8964a9c62626e50fd0ec9d5d8bcb4a666efdce83c138ef4f4c",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.17/ktx-1.47+x86qw.17.zip",
+      "filename": "ktx-1.47+x86qw.18.zip",
+      "size": 2542594,
+      "sha256": "ea52b40e9e91a832470077a697067e23f657bd7a17fa1e6b59aa6a8cf04c89a5",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.18/ktx-1.47+x86qw.18.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "source_urls": [
@@ -1160,16 +1190,16 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.17/ktx-1.47+x86qw.17.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.17/ktx-1.47+x86qw.17.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/ktx-1.47-x86qw.18/ktx-1.47+x86qw.18.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/ktx/1.47+x86qw.18/ktx-1.47+x86qw.18.zip"
       ],
-      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.17",
+      "mirror_title": "x86QW Content · KTX competitivo 1.47+x86qw.18",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "ce329889f97cc5bacf85b6388d3c5d8f242769fd",
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://github.com/QW-Group/ktx/releases/tag/1.47",
-      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória e balanceamento automático conforme as equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus, rotas Race, ENTs de CTF e bots com validação de rota, habilidade, equipe, arma, vida e nomes. Camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
+      "release_notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória, balanceamento automático e nomes únicos por função nas equipes nativas de cada usermode. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus e oferece somente mapas compatíveis com as rotas Frogbot, rotas Race ou ENTs de CTF realmente disponíveis. Arma, vida e interrupção por morte ficam restritas ao ToT; camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
       "upstream_version": "1.47"
     },
     {

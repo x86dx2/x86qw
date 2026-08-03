@@ -69,7 +69,7 @@ winget install --id Python.Python.3.13 -e
 Depois da instalação, abra um novo PowerShell e execute novamente o comando do
 x86QW.
 
-O bootstrap público `0.6.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.7.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://x86qw.x86.com.br/install.sh)" -- --platform windows
@@ -101,7 +101,7 @@ Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? C
 <details>
 <summary><strong>Modos KTX e opções avançadas</strong></summary>
 
-O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX, Wipeout, Clan Arena e ThunderWalker ToT. Também inclui Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice.
+O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX, Wipeout, Clan Arena e ThunderWalker ToT. `3on3` identifica duas equipes de três jogadores; `2on2on2`, três equipes de dois. Os aliases `3v3` e `2v2v2` continuam aceitos pela CLI. Também inclui Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice.
 
 ```sh
 ./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-skill 8 --bot-names x86qw
@@ -110,7 +110,7 @@ O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF
 ./x86qw.sh play ktx --mode race --map slide1 --race-style match --race-scoring formula1
 ```
 
-`--help` detalha Frogbots, regras de CTF e formatos de Race. O launcher valida mapas, combinações e limitações do QVM antes de iniciar o cliente.
+`--help` detalha Frogbots, regras de CTF e formatos de Race. O launcher valida mapas, combinações e limitações do QVM antes de iniciar o cliente. Com bots, o menu mostra somente BSPs com rota Frogbot; CTF e Race cruzam os mapas instalados com seus ENTs e rotas. Rotas pessoais regulares também são reconhecidas.
 No navegador interativo, essas opções aparecem somente quando fazem sentido:
 os 24 modos são primeiro agrupados em recomendados, individuais, equipes,
 arena/alternativos e treino, com uma entrada adicional para consultar o catálogo
@@ -128,7 +128,10 @@ marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
 `DEL`, `HOME` e `END` gerenciam bots e habilidade. O perfil One Piece também
 preserva as cores de camisa, calça e equipe definidas pelo KTX.
 `--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
-um bot entra. `F12` fecha diretamente o QuakeWorld em todos os cinco jogos.
+um bot entra. `INS` respeita a lotação do modo, `DEL` libera a vaga e
+`HOME`/`END` alteram cumulativamente a habilidade dos próximos bots. Arma, vida
+e interrupção por morte são opções exclusivas do ToT. `F12` fecha diretamente
+o QuakeWorld em todos os cinco jogos.
 
 </details>
 

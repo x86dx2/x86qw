@@ -2,6 +2,26 @@
   "format": 1,
   "game": "ktx",
   "upstream_version": "1.47",
+  "map_asset_policies": {
+    "frogbot-route": {
+      "asset": "bots/maps/{map}.bot",
+      "when": "frogbots",
+      "label": "rota Frogbot"
+    },
+    "ctf-entities": {
+      "asset": "id1/maps/ctf/{map}.ent",
+      "when": "always",
+      "label": "entidades de bandeiras CTF"
+    },
+    "race-route": {
+      "asset": "race/routes/{map}.route",
+      "when": "always",
+      "label": "rota Race"
+    }
+  },
+  "defaults": {
+    "frogbot_map_policies": ["frogbot-route"]
+  },
   "menu_groups": [
     {
       "id": "recommended",
@@ -174,8 +194,8 @@
       "suggested_maps": ["dm6", "dm4", "dm2", "aerowalk", "death32c"],
       "help_commands": [
         ["cmd ffa", "reaplicar as regras de Free For All"],
-        ["cmd join", "entrar na partida"],
-        ["cmd observe", "voltar para espectador"],
+        ["join", "entrar na partida"],
+        ["observe", "voltar para espectador"],
         ["cmd rules", "mostrar as regras ativas"],
         ["cmd scores", "mostrar tempo e placar"]
       ],
@@ -244,8 +264,8 @@
       "description": "Combate de sobrevivência com progressão e bots Frogbot.",
       "recommended_players": "1+",
       "usermode": "tot",
-      "default_map": "dm6",
-      "suggested_maps": ["dm6", "dm4", "aerowalk", "povdmm4"],
+      "default_map": "dm4",
+      "suggested_maps": ["dm4", "e1m2", "schloss"],
       "help_commands": [
         ["cmd tot", "reaplicar as regras de ThunderWalker ToT"],
         ["cmd botcmd", "listar comandos de bot"],
@@ -428,7 +448,7 @@
         ["cmd pickspawn", "escolher o spawn do proximo round"],
         ["cmd roundsup", "aumentar o numero de rounds"],
         ["cmd roundsdown", "diminuir o numero de rounds"],
-        ["cmd hmstats", "mostrar estatisticas por ponto"]
+        ["hmstats", "mostrar estatisticas por ponto"]
       ],
       "key_bindings": [
         ["F5", "toggleready", "marcar jogador como pronto"],
@@ -436,7 +456,7 @@
         ["H", "cmd pickspawn", "escolher o spawn do proximo round"],
         ["I", "cmd roundsdown", "diminuir o numero de rounds"],
         ["M", "cmd roundsup", "aumentar o numero de rounds"],
-        ["F11", "cmd hmstats", "mostrar estatisticas por ponto"]
+        ["F11", "hmstats", "mostrar estatisticas por ponto"]
       ],
       "entry_config": null
     },
@@ -476,6 +496,7 @@
         ["sv_loadentfiles", "1"],
         ["sv_loadentfiles_dir", "ctf"]
       ],
+      "map_policies": ["ctf-entities"],
       "bots": false,
       "entry_config": null
     },
@@ -486,8 +507,8 @@
       "description": "Combate aéreo com rockets e pontuação por altura.",
       "recommended_players": "2+",
       "usermode": "1on1",
-      "default_map": "povdmm4",
-      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "default_map": "dm4",
+      "suggested_maps": ["dm4", "dm6", "povdmm4"],
       "help_commands": [
         ["cmd midair", "ativar ou desativar Midair"],
         ["cmd midair_minheight", "consultar ou ajustar altura minima"],
@@ -510,8 +531,8 @@
       "description": "Combate com todas as armas e munição ilimitada.",
       "recommended_players": "2+",
       "usermode": "1on1",
-      "default_map": "povdmm4",
-      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "default_map": "dm4",
+      "suggested_maps": ["dm4", "dm6", "povdmm4"],
       "help_commands": [
         ["cmd dmm4", "ativar ou desativar DMM4"],
         ["cmd ready", "marcar jogador como pronto"],
@@ -534,13 +555,13 @@
       "description": "Eliminação instantânea com shaft em DMM4.",
       "recommended_players": "2+",
       "usermode": "ffa",
-      "default_map": "povdmm4",
-      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "default_map": "dm4",
+      "suggested_maps": ["dm4", "dm6", "povdmm4"],
       "help_commands": [
         ["cmd instagib", "ativar ou desativar Instagib"],
         ["cmd dmm4", "ativar ou desativar a base DMM4"],
-        ["cmd join", "entrar na partida"],
-        ["cmd observe", "voltar para espectador"],
+        ["join", "entrar na partida"],
+        ["observe", "voltar para espectador"],
         ["cmd rules", "mostrar as regras ativas"]
       ],
       "key_bindings": [
@@ -557,8 +578,8 @@
       "description": "Duelo de shaft com regras LGC sobre a base DMM4.",
       "recommended_players": "2",
       "usermode": "1on1",
-      "default_map": "povdmm4",
-      "suggested_maps": ["povdmm4", "dm4", "dm6"],
+      "default_map": "dm4",
+      "suggested_maps": ["dm4", "dm6", "povdmm4"],
       "help_commands": [
         ["cmd lgcmode", "ativar ou desativar LGC"],
         ["cmd dmm4", "ativar ou desativar a base DMM4"],
@@ -636,7 +657,7 @@
         ["X", "cmd race_chasecam", "alternar acompanhamento de corredores"],
         ["F11", "cmd race_scoring", "alternar sistema de pontuacao"]
       ],
-      "required_map_asset": "race/routes/{map}.route",
+      "map_policies": ["race-route"],
       "bots": false,
       "entry_config": "x86qw-ktx-mode-race.cfg"
     },

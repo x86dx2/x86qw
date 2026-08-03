@@ -71,7 +71,7 @@ intencional e auditável, não um segundo padrão de organização.
 | --- | --- | --- | --- |
 | Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.17` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, bots na primeira entrada e balanceamento por equipes nativas; QVM e símbolos reproduzíveis |
+| KTX | `1.47+x86qw.18` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, mapas filtrados pelos recursos reais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, roster gerenciável e nomes únicos por função/equipe; QVM e símbolos reproduzíveis |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |

@@ -1,0 +1,161 @@
+--- a/include/fb_globals.h
++++ b/include/fb_globals.h
+@@ -192,6 +192,7 @@
+ char* BotNameGeneric(int botNumber);
+ char* BotNameFriendly(int botNumber);
+ char* BotNameEnemy(int botNumber);
++void FrogbotCacheNames(void);
+ 
+ qbool Visible_360(gedict_t *self, gedict_t *visible_object);
+ qbool Visible_infront(gedict_t *self, gedict_t *visible_object);
+@@ -401,6 +402,7 @@
+ #define FB_CVAR_AUTOREMOVE_AT     "k_fb_autoremove_at"
+ #define FB_CVAR_AUTO_DELAY        "k_fb_auto_delay"
+ #define FB_CVAR_SKILL             "k_fb_skill"
++#define FB_CVAR_SKILL_RANDOM      "k_fb_skill_random"
+ #define FB_CVAR_DEBUG             "k_fb_debug"
+ #define FB_CVAR_ADMIN_ONLY        "k_fb_admin_only"
+ #define FB_CVAR_FREEZE_PREWAR     "k_fb_freeze_prewar"
+--- a/src/bot_botimp.c
++++ b/src/bot_botimp.c
+@@ -358,13 +358,56 @@
+ 	self->fb.skill.customised = customised;
+ }
+ 
++#define FROGBOT_NAME_ROLES 3
++#define FROGBOT_ROLE_GENERIC 0
++#define FROGBOT_ROLE_FRIENDLY 1
++#define FROGBOT_ROLE_ENEMY 2
++
++static char cached_bot_names[FROGBOT_NAME_ROLES][MAX_CLIENTS][64];
++
++static const char* FrogbotNameSuffix(int role)
++{
++	switch (role)
++	{
++		case FROGBOT_ROLE_FRIENDLY: return "_team";
++		case FROGBOT_ROLE_ENEMY: return "_enemy";
++		default: return "";
++	}
++}
++
++void FrogbotCacheNames(void)
++{
++	int role, botNumber;
++
++	for (role = 0; role < FROGBOT_NAME_ROLES; ++role)
++	{
++		const char *suffix = FrogbotNameSuffix(role);
++
++		for (botNumber = 0; botNumber < MAX_CLIENTS; ++botNumber)
++		{
++			const char *name = cvar_string(va("k_fb_name%s_%d", suffix, botNumber));
++
++			if (!strnull(name))
++			{
++				strlcpy(cached_bot_names[role][botNumber], name,
++						sizeof(cached_bot_names[role][botNumber]));
++			}
++		}
++	}
++}
++
++static char* FrogbotCachedName(int role, int botNumber)
++{
++	return cached_bot_names[role][(int)bound(0, botNumber, MAX_CLIENTS - 1)];
++}
++
+ char* BotNameEnemy(int botNumber)
+ {
+ 	char *names[] =
+ 		{ ": Timber", ": Sujoy", ": Nightwing", ": Cenobite", ": Thresh", ": Frick", ": Unholy",
+ 				": Reptile", ": Nikodemus", ": Paralyzer", ": Xenon", ": Spice"
+ 						": Kornelia", ": Rix", ": Batch", ": Gollum" };
+-	char *custom_name = cvar_string(va("k_fb_name_enemy_%d", botNumber));
++	char *custom_name = FrogbotCachedName(FROGBOT_ROLE_ENEMY, botNumber);
+ 
+ 	if (strnull(custom_name))
+ 	{
+@@ -380,7 +423,7 @@
+ 		{ "> MrJustice", "> DanJ", "> Gunner", "> Tele", "> Jakey", "> Parrais", "> Thurg",
+ 				"> Kool", "> Zaphod", "> Dreamer", "> Mandrixx", "> Skill5", "> Vid", "> Soul99",
+ 				"> Jon", "> Gaz" };
+-	char *custom_name = cvar_string(va("k_fb_name_team_%d", botNumber));
++	char *custom_name = FrogbotCachedName(FROGBOT_ROLE_FRIENDLY, botNumber);
+ 
+ 	if (strnull(custom_name))
+ 	{
+@@ -402,7 +445,7 @@
+ 			"mrlame", "aptiva", "nepra", "nikke", "parasite", "rushing",
+ 			"lipton", "xorcist" };
+ 
+-	char *custom_name = cvar_string(va("k_fb_name_%d", botNumber));
++	char *custom_name = FrogbotCachedName(FROGBOT_ROLE_GENERIC, botNumber);
+ 
+ 	if (strnull(custom_name))
+ 	{
+--- a/src/bot_commands.c
++++ b/src/bot_commands.c
+@@ -272,6 +272,10 @@
+ 	char skill_level_str[3];
+ 	int i;
+ 
++	if (cvar(FB_CVAR_SKILL_RANDOM))
++	{
++		skill_level = i_rnd(MIN_FROGBOT_SKILL, MAX_FROGBOT_SKILL);
++	}
+ 	skill_level = bound(MIN_FROGBOT_SKILL, skill_level, MAX_FROGBOT_SKILL);
+ 	snprintf(skill_level_str, sizeof(skill_level_str), "%d", skill_level);
+ 
+@@ -467,10 +471,17 @@
+ 
+ 	if (trap_CmdArgc() <= 2)
+ 	{
+-		G_sprint(self, 2, "Usage: /botcmd skill <skill>\n");
++		G_sprint(self, 2, "Usage: /botcmd skill <skill|random>\n");
+ 		G_sprint(self, 2, "       <skill> must be in range %d and %d\n", MIN_FROGBOT_SKILL,
+ 					MAX_FROGBOT_SKILL);
+-		G_sprint(self, 2, "bot skill is currently \"%d\"\n", FrogbotSkillLevel());
++		if (cvar(FB_CVAR_SKILL_RANDOM))
++		{
++			G_sprint(self, 2, "bot skill is currently random (1-20)\n");
++		}
++		else
++		{
++			G_sprint(self, 2, "bot skill is currently \"%d\"\n", FrogbotSkillLevel());
++		}
+ 	}
+ 	else
+ 	{
+@@ -479,6 +490,13 @@
+ 		int old_skill = FrogbotSkillLevel();
+ 
+ 		trap_CmdArgv(2, argument, sizeof(argument));
++		if (strcmp(argument, "random") == 0)
++		{
++			cvar_fset(FB_CVAR_SKILL_RANDOM, 1);
++			G_sprint(self, 2, "bot skill changed to random (1-20)\n");
++			return;
++		}
++		cvar_fset(FB_CVAR_SKILL_RANDOM, 0);
+ 		new_skill = bound(MIN_FROGBOT_SKILL, atoi(argument), MAX_FROGBOT_SKILL);
+ 
+ 		if (new_skill != old_skill)
+--- a/src/world.c
++++ b/src/world.c
+@@ -1057,6 +1057,7 @@
+ 	RegisterCvarEx(FB_CVAR_AUTOREMOVE_AT, "0");
+ 	RegisterCvarEx(FB_CVAR_AUTO_DELAY, "1");
+ 	RegisterCvarEx(FB_CVAR_SKILL, "10");
++	RegisterCvarEx(FB_CVAR_SKILL_RANDOM, "0");
+ 	RegisterCvarEx(FB_CVAR_DEBUG, "0");
+ 	RegisterCvarEx(FB_CVAR_ADMIN_ONLY, "0");
+ 	RegisterCvarEx(FB_CVAR_FREEZE_PREWAR, "0");
+@@ -1073,6 +1074,7 @@
+ 		RegisterCvarEx(va("k_fb_name_enemy_%d", i), "");
+ 		RegisterCvarEx(va("k_fb_name_team_%d", i), "");
+ 	}
++	FrogbotCacheNames();
+ 
+ 	RegisterSkillVariables();
+ // }

@@ -110,7 +110,7 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.17", ktx["version"])
+        self.assertEqual("1.47+x86qw.18", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
@@ -209,11 +209,11 @@ class ComponentReleaseTests(unittest.TestCase):
             names = set(package.namelist())
             self.assertEqual(710, len(names))
             self.assertEqual(
-                "996f2e5b91cd76cf9b104a17ac1f1a9a5b70478dc66545413cc865c1806b2d29",
+                "6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655",
                 hashlib.sha256(package.read("qwprogs.qvm")).hexdigest(),
             )
             self.assertEqual(
-                "4fc9e51431a08a3e08faa3fe0dc08d0b7547377379c02b5536e8d80e4f22b991",
+                "9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea",
                 hashlib.sha256(package.read("qwprogs.map")).hexdigest(),
             )
             self.assertIn("bots/maps/anarena.bot", names)

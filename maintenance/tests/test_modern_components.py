@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import hashlib
 import importlib.util
@@ -86,6 +87,12 @@ def ktx_entry_aliases(usermode: str = "1on1") -> list[str]:
 
 
 class ModernComponentTests(unittest.TestCase):
+    def test_installed_runtime_modules_parse_with_python_310_grammar(self):
+        for filename in ("gameplay.py", "services.py", "manager.py", "menu.py"):
+            with self.subTest(filename=filename):
+                source = (ROOT / "dist/installer/bin" / filename).read_text(encoding="utf-8")
+                ast.parse(source, filename=filename, feature_version=(3, 10))
+
     def setUp(self):
         install_qw.console.configure(verbose=False, no_color=True)
 
@@ -225,7 +232,7 @@ class ModernComponentTests(unittest.TestCase):
             bot_break_on_death=True,
         )
         settings = dict(services_qw.dedicated_ktx_settings(
-            modes["2on2"], "dm6", frozenset({"bots/maps/dm6.bot"}), bot_options, 16,
+            modes["tot"], "dm4", frozenset({"bots/maps/dm4.bot"}), bot_options, 16,
         ))
         self.assertEqual("1", settings["k_fb_enabled"])
         self.assertEqual("12", settings["k_fb_skill"])
@@ -239,10 +246,10 @@ class ModernComponentTests(unittest.TestCase):
             ), 16,
         ))
         self.assertEqual(b"/\xa0\xcc\xf5\xe6\xe6\xf9", named_settings["k_fb_name_0"])
-        self.assertEqual(b"/\xa0\xce\xe1\xed\xe9", named_settings["k_fb_name_team_0"])
-        self.assertEqual(b"/\xa0\xd3\xe1\xee\xea\xe9", named_settings["k_fb_name_enemy_0"])
+        self.assertEqual(b"/\xa0\xcc\xf5\xe6\xe6\xf9", named_settings["k_fb_name_team_0"])
+        self.assertEqual(b"/\xa0\xcc\xf5\xe6\xe6\xf9", named_settings["k_fb_name_enemy_0"])
         ctf = dict(services_qw.dedicated_ktx_settings(
-            modes["ctf"], "e2m2", frozenset(), play_qw.KtxLaunchOptions(
+            modes["ctf"], "e2m2", frozenset({"id1/maps/ctf/e2m2.ent"}), play_qw.KtxLaunchOptions(
                 ctf_hook="smooth", ctf_runes="off", ctf_based_spawn=True,
             ), 16,
         ))
@@ -254,7 +261,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_dedicated_fixed_roster_is_not_truncated_by_maxclients(self):
         mode = next(
             mode for mode in play_qw.load_ktx_modes(ROOT)
-            if mode.key == "2on2on2"
+            if mode.key == "3on3"
         )
         options = play_qw.KtxLaunchOptions(fill_bots=True, bot_skill=6)
         settings = dict(services_qw.dedicated_ktx_settings(
@@ -267,6 +274,43 @@ class ModernComponentTests(unittest.TestCase):
             services_qw.dedicated_ktx_settings(
                 mode, "dm3", frozenset({"bots/maps/dm3.bot"}), options, 5,
             )
+
+    def test_external_ktx_bot_host_restricts_roster_management(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "duel")
+            (target / game.gamedir).mkdir()
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset({"bots/maps/dm6.bot"}),
+                play_qw.KtxLaunchOptions(bots=1),
+            )
+            for bind, expected in (("0.0.0.0", True), ("127.0.0.1", False)):
+                with self.subTest(bind=bind):
+                    options = services_qw.parse_arguments([
+                        "host", "ktx", "--mode", "duel", "--map", "dm6",
+                        "--bots", "1", "--bind", bind,
+                        "--target", str(target),
+                    ], ROOT)
+                    sessions: list[Path] = []
+                    with mock.patch.object(
+                        services_qw, "runtime_binary", return_value=target / "mvdsv",
+                    ), mock.patch.object(
+                        services_qw, "materialize_hosted_game", return_value=None,
+                    ):
+                        services_qw.host_spec(
+                            player, options, selection, sessions, [],
+                        )
+                    startup = sessions[0].read_text(encoding="utf-8")
+                    post_map = sessions[1].read_text(encoding="utf-8")
+                    self.assertEqual(
+                        expected, "k_fb_admin_only 1" in startup,
+                    )
+                    self.assertEqual(
+                        expected, "set k_fb_admin_only 1" in post_map,
+                    )
+                    for path in sessions:
+                        path.unlink()
 
     def test_non_ktx_host_spec_uses_only_mvdsv_and_the_selected_gamedir(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -309,7 +353,7 @@ class ModernComponentTests(unittest.TestCase):
                 "--target", str(target),
             ], ROOT)
             selection = services_qw.HostedGame(
-                game, mode, "e2m2", frozenset(), options.ktx_options,
+                game, mode, "e2m2", frozenset({"id1/maps/ctf/e2m2.ent"}), options.ktx_options,
             )
             sessions = []
             with mock.patch.object(
@@ -703,6 +747,11 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual("x86qw-ktx-mode-race.cfg", next(
             mode.entry_config for mode in modes if mode.key == "race"
         ))
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            self.assertEqual("2on2on2", player.choose_ktx_mode(modes, "2on2on2").key)
+            self.assertEqual("2on2on2", player.choose_ktx_mode(modes, "2v2v2").key)
+            self.assertEqual("3on3", player.choose_ktx_mode(modes, "3v3").key)
         ctf = next(mode for mode in modes if mode.key == "ctf")
         self.assertEqual("ctf", ctf.usermode)
         self.assertFalse(ctf.bots)
@@ -710,7 +759,14 @@ class ModernComponentTests(unittest.TestCase):
             ("sv_loadentfiles", "1"), ("sv_loadentfiles_dir", "ctf"),
         ), ctf.launch_settings)
         race = next(mode for mode in modes if mode.key == "race")
-        self.assertEqual("race/routes/{map}.route", race.required_map_asset)
+        self.assertEqual(
+            ("race/routes/{map}.route",),
+            tuple(requirement.asset for requirement in race.map_requirements),
+        )
+        self.assertEqual(
+            ("id1/maps/ctf/{map}.ent",),
+            tuple(requirement.asset for requirement in ctf.map_requirements),
+        )
         self.assertEqual(54, len(race.suggested_maps))
         self.assertFalse(race.bots)
         groups = play_qw.load_ktx_menu_groups(ROOT)
@@ -739,8 +795,11 @@ class ModernComponentTests(unittest.TestCase):
         modes = play_qw.load_ktx_modes(ROOT)
         maps = sorted({mode.default_map for mode in modes})
         assets = frozenset(
-            f"race/routes/{mode.default_map.casefold()}.route"
-            for mode in modes if mode.required_map_asset is not None
+            requirement.asset.replace("{map}", mode.default_map.casefold())
+            for mode in modes
+            for requirement in play_qw.active_ktx_map_requirements(
+                mode, play_qw.KtxLaunchOptions(),
+            )
         )
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -798,8 +857,7 @@ class ModernComponentTests(unittest.TestCase):
                     play_qw.KtxLaunchOptions(bots=1, bot_skill=7),
                 )
                 self.assertIn("cmd botcmd skill 7", commands)
-                expected_team = f" {mode.bot_teams[1]}" if mode.bot_teams else ""
-                self.assertEqual(f"cmd botcmd addbot 7{expected_team}", commands[-1])
+                self.assertEqual("cmd botcmd addbot 7", commands[-1])
 
     def test_tot_leaves_frogbot_enable_registration_to_the_server(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -914,6 +972,45 @@ class ModernComponentTests(unittest.TestCase):
         ], ROOT)
         self.assertEqual("random", randomized.ktx_options.bot_skill)
 
+    def test_ktx_cli_rejects_bot_modifiers_without_a_roster(self):
+        target = ROOT / "custom-quake"
+        for modifier in (
+            ("--bot-skill", "8"),
+            ("--bot-names", "x86qw"),
+            ("--bot-health", "200"),
+            ("--no-bot-break-on-death",),
+        ):
+            with self.subTest(modifier=modifier):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        play_qw.parse_arguments([
+                            "ktx", "--mode", "duel", *modifier,
+                            "--target", str(target),
+                        ], ROOT)
+
+    def test_mode_specific_bot_team_and_tot_controls_are_enforced(self):
+        modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
+        route = frozenset({"bots/maps/dm6.bot", "bots/maps/dm4.bot"})
+        with self.assertRaisesRegex(play_qw.InstallerError, "não pertence ao modo"):
+            play_qw.ktx_launch_commands(
+                modes["2on2"], "dm6", route,
+                play_qw.KtxLaunchOptions(bots=1, bot_team="green"),
+            )
+        with self.assertRaisesRegex(play_qw.InstallerError, "só podem ser usados"):
+            play_qw.ktx_launch_commands(
+                modes["duel"], "dm6", route,
+                play_qw.KtxLaunchOptions(bots=1, bot_health=200),
+            )
+        commands = play_qw.ktx_launch_commands(
+            modes["tot"], "dm4", route,
+            play_qw.KtxLaunchOptions(
+                bots=1, bot_weapon="8", bot_health=200,
+                bot_break_on_death=False,
+            ),
+        )
+        self.assertIn("cmd botcmd weapon 8", commands)
+        self.assertIn("cmd botcmd health 200", commands)
+
     def test_random_frogbot_skill_is_applied_independently_by_the_qvm(self):
         ffa = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "ffa")
         options = play_qw.KtxLaunchOptions(bots=4, bot_skill="random")
@@ -923,10 +1020,86 @@ class ModernComponentTests(unittest.TestCase):
         self.assertIn("cmd botcmd skill random", commands)
         self.assertEqual(4, commands.count("cmd botcmd addbot random"))
         patch = (
-            ROOT / "dist/mods/ktx/1.47/x86qw/source/0002-frogbot-appearances.patch"
+            ROOT / "dist/mods/ktx/1.47/x86qw/source/0002-frogbot-identities.patch"
         ).read_text(encoding="utf-8")
         self.assertIn('#define FB_CVAR_SKILL_RANDOM      "k_fb_skill_random"', patch)
         self.assertIn("skill_level = i_rnd(MIN_FROGBOT_SKILL, MAX_FROGBOT_SKILL);", patch)
+
+    def test_frogbot_map_menu_only_offers_maps_with_routes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            seen: list[str] = []
+
+            def select(_question, options, **_kwargs):
+                choices = list(options)
+                seen.extend(option.key for option in choices)
+                return choices[0].key
+
+            with mock.patch.object(
+                player, "local_map_names", return_value=["dm2", "dm6"],
+            ), mock.patch.object(play_qw.navigation, "select_one", side_effect=select):
+                selected = player.choose_local_map(
+                    game,
+                    default_map="dm2",
+                    suggested_maps=("dm2", "dm6"),
+                    required_assets=("bots/maps/{map}.bot",),
+                    available_assets=frozenset({"bots/maps/dm6.bot"}),
+                )
+            self.assertEqual("dm6", selected)
+            self.assertEqual(["dm6"], seen)
+
+    def test_map_without_frogbot_route_remains_available_without_bots(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            with mock.patch.object(
+                player, "local_map_names", return_value=["dm2", "dm6"],
+            ):
+                self.assertEqual(
+                    "dm2",
+                    player.choose_local_map(game, requested_map="dm2"),
+                )
+
+    def test_personal_ktx_routes_extend_assets_without_following_symlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            bots = target / "qw/bots/maps"
+            race = target / "qw/race/routes"
+            ctf = target / "id1/maps/ctf"
+            bots.mkdir(parents=True)
+            race.mkdir(parents=True)
+            ctf.mkdir(parents=True)
+            (bots / "personal.bot").write_text(
+                "CreateMarker 0 0 0\nSetZone 1 1\n", encoding="ascii",
+            )
+            (race / "personal.route").write_text(
+                "race_route_add_start\nrace_add_route_node 0 0 0 0 0\n"
+                "race_route_add_end\n",
+                encoding="ascii",
+            )
+            (ctf / "personal.ent").write_text(
+                '{\n"classname" "item_flag_team1"\n}\n'
+                '{\n"classname" "item_flag_team2"\n}\n',
+                encoding="ascii",
+            )
+            (bots / "command.bot").write_text("quit\n", encoding="ascii")
+            (bots / "separator.bot").write_text(
+                "CreateMarker 0 0 0;quit\n", encoding="ascii",
+            )
+            outside = target / "outside.bot"
+            outside.write_text("private\n", encoding="ascii")
+            try:
+                (bots / "linked.bot").symlink_to(outside)
+            except OSError:
+                pass
+            assets = play_qw.ktx_external_assets(target)
+            self.assertIn("bots/maps/personal.bot", assets)
+            self.assertIn("race/routes/personal.route", assets)
+            self.assertIn("id1/maps/ctf/personal.ent", assets)
+            self.assertNotIn("bots/maps/linked.bot", assets)
+            self.assertNotIn("bots/maps/command.bot", assets)
+            self.assertNotIn("bots/maps/separator.bot", assets)
 
     def test_f12_quits_every_managed_game_after_personal_overrides(self):
         profiles = (
@@ -1067,14 +1240,41 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("x86qw", options.bot_names_profile)
             self.assertEqual("Adicionar Frogbots?", select.call_args_list[2].args[0])
 
+    def test_tot_menu_preserves_map_defaults_until_explicitly_overridden(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            tot = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "tot")
+            with mock.patch.object(
+                play_qw.navigation, "select_one",
+                side_effect=("1", "5", "x86qw", "default", "default", "default"),
+            ) as select:
+                options = player.choose_ktx_launch_options(tot)
+            self.assertEqual(1, options.bots)
+            self.assertIsNone(options.bot_weapon)
+            self.assertIsNone(options.bot_health)
+            self.assertIsNone(options.bot_break_on_death)
+            health_call = next(
+                call for call in select.call_args_list
+                if call.args[0] == "Vida inicial dos Frogbots no ToT"
+            )
+            self.assertEqual(0, health_call.kwargs["default"])
+
+    def test_tot_summary_does_not_duplicate_weapon_or_health(self):
+        lines = play_qw.ktx_summary_lines(play_qw.KtxLaunchOptions(
+            bots=1, bot_weapon="8", bot_health=200, bot_break_on_death=False,
+        ))
+        self.assertEqual(1, sum(line.startswith("  Arma") for line in lines))
+        self.assertEqual(1, sum(line.startswith("  Vida") for line in lines))
+        self.assertEqual(1, sum(line.startswith("  Morte") for line in lines))
+
     def test_frogbot_menu_respects_fixed_modes_and_keeps_open_modes_flexible(self):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
         expectations = {
             "duel": ("none", "1"),
             "2on2": ("none", "3"),
             "3on3": ("none", "5"),
-            "4on4": ("none", "7"),
             "2on2on2": ("none", "5"),
+            "4on4": ("none", "7"),
             "ffa": ("none", "1", "2", "4", "fill", "custom"),
             "practice": ("none", "1", "2", "4", "fill", "custom"),
         }
@@ -1156,7 +1356,7 @@ class ModernComponentTests(unittest.TestCase):
                     options,
                 )
                 self.assertEqual(
-                    tuple(f"cmd botcmd addbot 5 {team}" for team in sequence),
+                    ("cmd botcmd addbot 5",) * len(sequence),
                     tuple(
                         command for command in commands
                         if command.startswith("cmd botcmd addbot")
@@ -1176,17 +1376,11 @@ class ModernComponentTests(unittest.TestCase):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
         assets = frozenset({"bots/maps/dm3.bot"})
         commands = play_qw.ktx_launch_commands(
-            modes["2on2on2"], "dm3", assets,
+            modes["3on3"], "dm3", assets,
             play_qw.KtxLaunchOptions(fill_bots=True, bot_skill=5),
         )
         addbots = tuple(command for command in commands if command.startswith("cmd botcmd addbot"))
-        self.assertEqual((
-            "cmd botcmd addbot 5 blue",
-            "cmd botcmd addbot 5 yellow",
-            "cmd botcmd addbot 5 red",
-            "cmd botcmd addbot 5 blue",
-            "cmd botcmd addbot 5 yellow",
-        ), addbots)
+        self.assertEqual(("cmd botcmd addbot 5",) * 5, addbots)
         self.assertNotIn("cmd botcmd fill 5", commands)
         self.assertIn("if ($maxclients < 6) then maxclients 6", commands)
 
@@ -1194,19 +1388,30 @@ class ModernComponentTests(unittest.TestCase):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
         assets = frozenset({"bots/maps/dm6.bot", "race/routes/dm6.route"})
         options = play_qw.KtxLaunchOptions(
-            bots=2, bot_skill=12, bot_team="red", bot_weapon="8", bot_health=200,
-            bot_break_on_death=True,
+            bots=2, bot_skill=12, bot_team="red",
         )
         self.assertEqual((
             "if ($k_maxclients < 3) then k_maxclients 3",
             "if ($maxclients < 3) then maxclients 3",
             "cmd botcmd skill 12",
-            "cmd botcmd health 200",
-            "cmd botcmd weapon 8",
             "cmd botcmd addbot 12 red",
             *("wait",) * play_qw.FROGBOT_ADD_WAIT_FRAMES,
             "cmd botcmd addbot 12 red",
         ), play_qw.ktx_launch_commands(modes["2on2"], "dm6", assets, options))
+        tot_options = play_qw.KtxLaunchOptions(
+            bots=1, bot_skill=12, bot_weapon="8", bot_health=200,
+            bot_break_on_death=False,
+        )
+        tot_commands = play_qw.ktx_launch_commands(
+            modes["tot"], "dm4", frozenset({"bots/maps/dm4.bot"}), tot_options,
+        )
+        self.assertIn("cmd botcmd health 200", tot_commands)
+        self.assertIn("cmd botcmd weapon 8", tot_commands)
+        with self.assertRaisesRegex(play_qw.InstallerError, "só podem ser usados"):
+            play_qw.ktx_launch_commands(
+                modes["2on2"], "dm6", assets,
+                play_qw.KtxLaunchOptions(bots=1, bot_health=200),
+            )
         with self.assertRaisesRegex(play_qw.InstallerError, "no máximo 1 Frogbot"):
             play_qw.ktx_launch_commands(
                 modes["duel"], "dm6", assets,
@@ -1225,12 +1430,12 @@ class ModernComponentTests(unittest.TestCase):
         self.assertEqual((
             "cmd hook_smooth", "cmd norunes", "cmd ctfbasedspawn",
         ), play_qw.ktx_launch_commands(
-            modes["ctf"], "e2m2", frozenset(),
+            modes["ctf"], "e2m2", frozenset({"id1/maps/ctf/e2m2.ent"}),
             play_qw.KtxLaunchOptions(
                 ctf_hook="smooth", ctf_runes="off", ctf_based_spawn=True,
             ),
         ))
-        with self.assertRaisesRegex(play_qw.InstallerError, "não possui rota Frogbot"):
+        with self.assertRaisesRegex(play_qw.InstallerError, "não possui o recurso rota Frogbot"):
             play_qw.ktx_launch_commands(
                 modes["duel"], "dm2", assets, play_qw.KtxLaunchOptions(bots=1),
             )
@@ -2509,8 +2714,7 @@ class ModernComponentTests(unittest.TestCase):
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             options = play_qw.KtxLaunchOptions(
-                bots=2, bot_skill=10, bot_team="red", bot_weapon="8",
-                bot_health=150, bot_break_on_death=True,
+                bots=2, bot_skill=10, bot_team="red",
             )
             assets = frozenset({"bots/maps/dm6.bot"})
             captured: dict[str, object] = {}
@@ -2549,16 +2753,18 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(runtime, captured["runtime"])
             self.assertEqual(local_server_baseline("ktx"), arguments[:len(local_server_baseline("ktx"))])
             self.assertIn(["+set", "k_fb_enabled", "1"], [arguments[index:index + 3] for index in range(len(arguments) - 2)])
-            self.assertIn(["+set", "k_fb_break_on_death", "1"], [arguments[index:index + 3] for index in range(len(arguments) - 2)])
             self.assertNotIn("+tempalias", arguments)
             self.assertLess(arguments.index("+exec"), arguments.index("+map"))
             config = str(captured["config"])
             self.assertIn("unset_re ^k_fb_name_", config)
             self.assertIn("if ($k_maxclients < 3) then k_maxclients 3", config)
             self.assertIn("if ($maxclients < 3) then maxclients 3", config)
-            self.assertIn("cmd botcmd health 150", config)
-            self.assertIn("cmd botcmd weapon 8", config)
-            self.assertEqual(2, config.count("cmd botcmd addbot 10 red"))
+            # The runtime state machine also carries this command in the
+            # managed INS aliases; the launch sequence itself must contain at
+            # least the two requested additions.
+            self.assertGreaterEqual(
+                config.count("cmd botcmd addbot 10 red"), 2,
+            )
             self.assertGreaterEqual(config.count(";wait"), play_qw.FROGBOT_ADD_WAIT_FRAMES)
             self.assertFalse(Path(captured["config_path"]).exists())
 
@@ -2606,26 +2812,37 @@ class ModernComponentTests(unittest.TestCase):
             set(settings),
         )
         self.assertFalse(any("color" in name for name in settings))
+        qvm = (
+            ROOT / "dist/mods/ktx/1.47/x86qw/runtime/qwprogs.qvm"
+        ).read_bytes()
+        self.assertNotIn(b"k_fb_topcolor", qvm)
+        self.assertNotIn(b"k_fb_bottomcolor", qvm)
 
     def test_x86qw_ktx_qvm_is_reproducible_and_extends_frogbots_declaratively(self):
         expected = {
-            "qwprogs.qvm": "996f2e5b91cd76cf9b104a17ac1f1a9a5b70478dc66545413cc865c1806b2d29",
-            "qwprogs.map": "4fc9e51431a08a3e08faa3fe0dc08d0b7547377379c02b5536e8d80e4f22b991",
+            "qwprogs.qvm": "6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655",
+            "qwprogs.map": "9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea",
         }
         root = ROOT / "dist/mods/ktx/1.47/x86qw/runtime"
         for filename, digest in expected.items():
             with self.subTest(filename=filename):
                 self.assertEqual(digest, hashlib.sha256((root / filename).read_bytes()).hexdigest())
         source = ROOT / "dist/mods/ktx/1.47/x86qw/source"
-        patch = (source / "0002-frogbot-appearances.patch").read_text(encoding="utf-8")
-        self.assertIn("FrogbotCacheAppearances", patch)
-        self.assertIn("k_fb_topcolor", patch)
-        self.assertIn("k_fb_bottomcolor", patch)
+        patch = (source / "0002-frogbot-identities.patch").read_text(encoding="utf-8")
+        self.assertIn("FrogbotCacheNames", patch)
+        self.assertNotIn("k_fb_topcolor", patch)
+        self.assertNotIn("k_fb_bottomcolor", patch)
+        self.assertNotIn("BotColors", patch)
         team_patch = (source / "0003-frogbot-team-balance.patch").read_text(encoding="utf-8")
         self.assertIn("FrogbotAutomaticTeamCount", team_patch)
         self.assertIn("FrogbotLeastPopulatedTeam", team_patch)
         self.assertIn("um2on2on2", team_patch)
         self.assertIn("um4on4on4", team_patch)
+        role_patch = (source / "0004-frogbot-role-names.patch").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn('": Spice",', role_patch)
+        self.assertIn("BotNameEnemy(i)", role_patch)
         build_patch = (source / "0001-reproducible-build-date.patch").read_text(
             encoding="utf-8",
         )
@@ -2698,6 +2915,21 @@ class ModernComponentTests(unittest.TestCase):
             with self.assertRaisesRegex(play_qw.InstallerError, "ausente ou insegura"):
                 play_qw.load_personal_frogbot_names(target, str(game.bot_names_personal_config))
 
+    def test_frogbot_name_schema_rejects_silently_ignored_appearance_fields(self):
+        document = {
+            "format": 1,
+            "project": "x86qw",
+            "game": "ktx",
+            "profile": "personal",
+            "prefix": "/",
+            "color": "quake-high-bit",
+            "names": [{"name": "Luffy", "topcolor": 4}],
+        }
+        with self.assertRaisesRegex(play_qw.InstallerError, "Identidade Frogbot inválida"):
+            play_qw.validate_frogbot_name_document(
+                document, profile="personal", label="lista pessoal",
+            )
+
     def test_named_frogbot_settings_cover_all_name_roles(self):
         options = play_qw.KtxLaunchOptions(
             bots=1, bot_name_pool=("Luffy", "Zoro", "Nami"),
@@ -2735,6 +2967,12 @@ class ModernComponentTests(unittest.TestCase):
             play_qw.KtxLaunchOptions(bots=31, bot_name_pool=names),
         )
         self.assertEqual(93, len(settings))
+        values = dict(settings)
+        generic = [values[f"k_fb_name_{index}"] for index in range(31)]
+        self.assertEqual(31, len(set(generic)))
+        for index, identity in enumerate(generic):
+            self.assertEqual(identity, values[f"k_fb_name_team_{index}"])
+            self.assertEqual(identity, values[f"k_fb_name_enemy_{index}"])
 
     def test_frogbot_runtime_config_is_private_and_identity_safe(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2821,8 +3059,8 @@ class ModernComponentTests(unittest.TestCase):
             arguments = launch.call_args.args[1]
             config = str(captured["config"])
             self.assertIn("set_ex k_fb_name_0 $qt/$xa0$xcc$xf5$xe6$xe6$xf9$qt", config)
-            self.assertIn("set_ex k_fb_name_team_0 $qt/$xa0$xda$xef$xf2$xef$qt", config)
-            self.assertIn("set_ex k_fb_name_enemy_0 $qt/$xa0$xce$xe1$xed$xe9$qt", config)
+            self.assertIn("set_ex k_fb_name_team_0 $qt/$xa0$xcc$xf5$xe6$xe6$xf9$qt", config)
+            self.assertIn("set_ex k_fb_name_enemy_0 $qt/$xa0$xcc$xf5$xe6$xe6$xf9$qt", config)
             self.assertFalse(Path(captured["config_path"]).exists())
             config_index = next(
                 index for index, argument in enumerate(arguments)
@@ -2866,7 +3104,10 @@ class ModernComponentTests(unittest.TestCase):
                     with mock.patch.object(installer, "available_local_games", return_value=[game]):
                         with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
                             with mock.patch.object(installer, "verify_component"):
-                                with mock.patch.object(installer, "local_map_names", return_value=["e2m2"]):
+                                with mock.patch.object(
+                                    installer, "ktx_archive_members",
+                                    return_value=frozenset({"id1/maps/ctf/e2m2.ent"}),
+                                ), mock.patch.object(installer, "local_map_names", return_value=["e2m2"]):
                                     with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                         with mock.patch.object(
                                             installer, "launch_runtime", side_effect=capture_launch,
@@ -3428,10 +3669,25 @@ class ModernComponentTests(unittest.TestCase):
         aliases = play_qw.ktx_key_alias_commands(
             duel, play_qw.KtxLaunchOptions(bots=1, bot_skill=5),
         )
-        self.assertIn("tempalias x86qw_ktx_bot_add cmd botcmd addbot 5", aliases)
-        self.assertIn("tempalias x86qw_ktx_bot_remove cmd botcmd removebot", aliases)
-        self.assertIn("tempalias x86qw_ktx_bot_skill_down cmd botcmd skill 4", aliases)
-        self.assertIn("tempalias x86qw_ktx_bot_skill_up cmd botcmd skill 6", aliases)
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_add_1 "echo Limite de Frogbots deste modo atingido"',
+            aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_remove_1 "cmd botcmd removebot;x86qw_ktx_bot_roster_0"',
+            aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_skill_down_5 '
+            '"echo Habilidade dos proximos Frogbots: 4;cmd botcmd skill 4;x86qw_ktx_bot_skill_4"',
+            aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_skill_up_5 '
+            '"echo Habilidade dos proximos Frogbots: 6;cmd botcmd skill 6;x86qw_ktx_bot_skill_6"',
+            aliases,
+        )
+        self.assertIn("x86qw_ktx_bot_roster_1", aliases)
         self.assertIn(
             "tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg", aliases,
         )
@@ -3463,7 +3719,6 @@ class ModernComponentTests(unittest.TestCase):
             bot_name_pool=play_qw.load_x86qw_frogbot_names(ROOT),
         )
         commands = (
-            *play_qw.ktx_key_alias_commands(ffa, maximum),
             *play_qw.ktx_launch_commands(
                 ffa, "dm6", frozenset({"bots/maps/dm6.bot"}), maximum,
             ),
@@ -3472,7 +3727,55 @@ class ModernComponentTests(unittest.TestCase):
         setup_aliases = play_qw.ktx_chunked_setup_alias_commands(commands)
         self.assertGreater(len(setup_aliases), 2)
         self.assertTrue(all(len(command) < 800 for command in setup_aliases))
-        self.assertIn("x86qw_ktx_launch_setup_1", setup_aliases[-1])
+        self.assertTrue(
+            "x86qw_ktx_launch_setup_1" in setup_aliases[-1]
+            or "x86qw_ktx_launch_group_" in setup_aliases[-1]
+        )
+
+        two_on_two = next(
+            mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "2on2"
+        )
+        team_aliases = play_qw.ktx_bot_management_alias_commands(
+            two_on_two,
+            play_qw.KtxLaunchOptions(bots=1, bot_skill=5, bot_team="red"),
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_add_1 '
+            '"x86qw_ktx_bot_add_command;x86qw_ktx_bot_roster_2"',
+            team_aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_skill_5 '
+            '"tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_5;'
+            'tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_5;'
+            'tempalias x86qw_ktx_bot_add_command cmd botcmd addbot 5 red"',
+            team_aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_skill_6 '
+            '"tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_6;'
+            'tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_6;'
+            'tempalias x86qw_ktx_bot_add_command cmd botcmd addbot 6 red"',
+            team_aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_add_3 '
+            '"echo Limite de Frogbots deste modo atingido"',
+            team_aliases,
+        )
+
+        random_aliases = play_qw.ktx_bot_management_alias_commands(
+            duel, play_qw.KtxLaunchOptions(bots=1, bot_skill="random"),
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_add_command "cmd botcmd addbot random"',
+            random_aliases,
+        )
+        self.assertIn(
+            'tempalias x86qw_ktx_bot_skill_up '
+            '"echo Habilidade aleatoria ativa para cada novo Frogbot"',
+            random_aliases,
+        )
 
     def test_ktx_help_files_stay_below_the_console_line_limit(self):
         profiles = [

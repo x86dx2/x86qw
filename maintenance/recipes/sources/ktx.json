@@ -4,10 +4,10 @@
   "upstream": "ktx",
   "status": "reproducible",
   "toolchain": "KTX 1.47 CMake qvm target with ec-/q3lcc 814e3808346aba20f994fa83fca4f9d37124c67c",
-  "instructions": "Extract ktx-1.47.tar.gz, apply 0001-reproducible-build-date.patch, 0002-frogbot-appearances.patch and 0003-frogbot-team-balance.patch from dist/mods/ktx/1.47/x86qw/source with patch -p1, build ec-/q3lcc at commit 814e3808346aba20f994fa83fca4f9d37124c67c, then use the upstream CMake qvm target.",
+  "instructions": "Extract ktx-1.47.tar.gz, apply the numbered patches 0001 through 0004 from dist/mods/ktx/1.47/x86qw/source with patch -p1, build ec-/q3lcc at commit 814e3808346aba20f994fa83fca4f9d37124c67c, then use the upstream CMake qvm target.",
   "outputs": [
-    {"path": "dist/mods/ktx/1.47/x86qw/runtime/qwprogs.qvm", "sha256": "996f2e5b91cd76cf9b104a17ac1f1a9a5b70478dc66545413cc865c1806b2d29"},
-    {"path": "dist/mods/ktx/1.47/x86qw/runtime/qwprogs.map", "sha256": "4fc9e51431a08a3e08faa3fe0dc08d0b7547377379c02b5536e8d80e4f22b991"}
+    {"path": "dist/mods/ktx/1.47/x86qw/runtime/qwprogs.qvm", "sha256": "6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655"},
+    {"path": "dist/mods/ktx/1.47/x86qw/runtime/qwprogs.map", "sha256": "9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea"}
   ],
   "verification": "Rebuild the QVM, compare both SHA-256 values, then run the KTX package-integrity and native local-game diagnostics before publishing."
 }

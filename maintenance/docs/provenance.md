@@ -55,15 +55,16 @@ Seu membro `qwprogs.qvm` possui 1.578.544 bytes e SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 O empacotador preserva os demais membros do `ktx.pk3` de referência, troca o
 QVM e acrescenta seu mapa de símbolos oficial. O pacote x86QW resultante é
-`1.47+x86qw.17`; fontes, override, catálogo de modos, gameplay e hashes ficam no inventário
+`1.47+x86qw.18`; fontes, override, catálogo de modos, gameplay e hashes ficam no inventário
 versionado e nos metadados internos do ZIP.
 
-O QVM x86QW recompilado possui 1.581.228 bytes e SHA-256
-`996f2e5b91cd76cf9b104a17ac1f1a9a5b70478dc66545413cc865c1806b2d29`;
-seu mapa possui 113.404 bytes e SHA-256
-`4fc9e51431a08a3e08faa3fe0dc08d0b7547377379c02b5536e8d80e4f22b991`.
+O QVM x86QW recompilado possui 1.579.696 bytes e SHA-256
+`6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655`;
+seu mapa possui 113.174 bytes e SHA-256
+`9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea`.
 A receita fixa a revisão da `ec-/q3lcc`, aplica separadamente metadado de build,
-aparência e balanceamento Frogbot e reproduz esses dois hashes a partir do
+identidade, habilidade aleatória, balanceamento e nomes por função dos Frogbots,
+e reproduz esses dois hashes a partir do
 tarball 1.47.
 
 O fluxo completo de instalar, verificar e desinstalar foi executado com ezQuake

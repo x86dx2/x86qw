@@ -10,6 +10,11 @@
 
 - recompila o QVM 1.47 com patches isolados que cacheiam identidades Frogbot
   e distribuem inclusões automáticas pelo número de equipes do usermode;
+- corrige a tabela upstream de nomes Frogbot e usa o índice global do bot nas
+  listas de aliados e inimigos, evitando identidades repetidas nos modos com
+  três equipes;
+- remove do QVM x86QW as cvars experimentais de camisa e calça; nomes continuam
+  customizáveis, mas cores, skins e cores de equipe seguem somente o KTX;
 - fixa o metadado de compilação na data do tag 1.47, eliminando a variação de
   `__DATE__` e `__TIME__` entre reconstruções do mesmo QVM;
   quando não recebe um perfil, o sorteio e os nomes originais permanecem intactos;
@@ -24,20 +29,27 @@
   depois que o KTX confirma a conexão local; a remoção imediata do alias evita
   alternância ou recarga em ciclo;
 - expõe no launcher os bots Frogbot por quantidade ou preenchimento, habilidade
-  1-20, equipe, arma e vida; habilita o subsistema antes do mapa e só aceita
-  mapas com uma das 77 rotas oficiais empacotadas;
-- declara a composição de equipes de cada modo no catálogo: `3on3` forma duas
-  equipes de três, enquanto `2on2on2` forma três equipes de dois; modos com
+  1-20 e equipe; arma, vida e interrupção por morte ficam limitadas ao ToT;
+  habilita o subsistema antes do mapa e só oferece mapas que possuam uma rota
+  oficial empacotada ou uma rota pessoal regular;
+- preserva a nomenclatura nativa do KTX: `3on3` forma duas equipes de três e
+  `2on2on2` forma três equipes de dois; os aliases `3v3` e `2v2v2` continuam
+  aceitos pela CLI; modos com
   elenco fixo oferecem exatamente as vagas restantes e distribuem os bots para
   completar cada equipe;
 - oferece identidades Frogbot em três perfis: padrão KTX sem customização, catálogo
   One Piece x86QW embaralhado por lançamento e lista pessoal preservada pelo
   instalador; mantém o prefixo `/` e deixa camisa/calça sob controle do KTX;
-- filtra Race pelas 54 rotas oficiais e expõe corrida solo, simultânea ou em
+- filtra Race pelas 54 rotas oficiais ou rotas pessoais e expõe corrida solo, simultânea ou em
   match, os três sistemas de pontuação, pacemaker e ocultação de corredores;
 - habilita CTF com os seis ENTs oficiais da rotação KTX (`e2m2`, `e1m5`,
   `e1m3`, `e2m5`, `e1m4` e `e3m3`), cada um validado com uma bandeira por
   equipe, e configura o carregamento dos ENTs antes de abrir o mapa;
+- declara Frogbot, CTF e Race como políticas de recurso de mapa no catálogo; o
+  menu cruza essas políticas com os BSPs efetivamente instalados antes de
+  mostrar uma escolha;
+- usa `dm4` como fallback Essential para Midair, DMM4, Instagib e LGC, e limita
+  o ToT aos três mapas que possuem configuração específica no upstream;
 - expõe no CTF os cinco estilos de gancho, gancho desligado, runas, troca de
   equipes e spawn baseado na base; Race e CTF recusam bots como exige o QVM;
 - ao iniciar KTX, aplica exclusivamente ao perfil KTX o mapa de teclas
@@ -48,6 +60,9 @@
   carrega o arquivo pessoal ao fim do perfil e reaplica depois dele somente o
   bind universal `F12` para sair, preservando todos os demais controles;
 - mantém os exemplos do arquivo pessoal independentes de aliases internos;
+- mantém em aliases de sessão o número atual de bots e a habilidade dos
+  próximos bots: a lotação do modo não pode ser excedida, `DEL` reabre a vaga e
+  `HOME`/`END` alteram a habilidade cumulativamente;
 - substitui a mensagem genérica do nQuake pela ajuda contextual composta apenas
   por teclas realmente vinculadas;
 - apresenta em `F10`, em blocos coloridos e multilinha, todos os controles do
@@ -73,6 +88,8 @@
   configuração pessoal, inclusive nas sessões que contêm Frogbots;
 - não envia cores individuais dos perfis de nomes, mantendo camisa, calça e
   cores de equipe sob as regras nativas do KTX;
+- força `k_fb_admin_only 1` somente em hosts com bots ligados a uma interface
+  externa, depois da configuração pessoal;
 - organiza a camada mantida pelo projeto em `catalog/`, `config/`, `runtime/`,
   `source/` e `policy/`, sem alterar os caminhos instalados.
 
@@ -110,6 +127,7 @@
 ## Deliberadamente não alterado
 
 - nenhum modo, votação, arma, regra, bot ou mapa foi criado no gamecode; as
-  extensões apenas leem a aparência declarativa e corrigem o balanceamento
-  automático nos usermodes nativos de duas ou três equipes;
+  extensões apenas leem identidades declarativas, sorteiam a habilidade quando
+  solicitado e corrigem o balanceamento automático nos usermodes nativos de
+  duas ou três equipes; cores e skins continuam integralmente sob o KTX;
 - o launcher apenas expõe usermodes e comandos já existentes no KTX 1.47.
