@@ -33,18 +33,35 @@ index.html?profile=ktx&layout=keychron-k3-v3
   ranges como `1–0` não escondem funções diferentes. A página valida também que
   nenhuma tecla destacada ficou sem item correspondente na legenda.
 
+O escopo visual é o plano de controles gerenciado pelo x86QW. Binds de reprodução
+de demos herdados da configuração-base e personalizações do usuário não são
+apresentados como se fizessem parte do perfil do mod.
+
 O nome oficial do teclado é Keychron K3 Version 3; “Keychron Slim V3” descreve a
 categoria, mas poderia ser confundido com o Keychron V3 TKL. O K3 Version 3 não
 declara `Insert` no keymap QMK oficial. A variante
 marca `Fn+Del → Insert` como remapeamento x86QW recomendado no Keychron Launcher,
 necessário para adicionar Frogbots com o bind atual. Teclas ausentes em layouts
 compactos são listadas no rodapé em vez de serem desenhadas como se existissem.
+No Magic Keyboard, `Fn+Delete` representa `Del` (forward delete); `Insert`
+continua ausente. No K3 V3, o `Del` dedicado existe, mas `Insert` só aparece
+depois do remapeamento descrito acima.
+
+A geometria usa a unidade física do teclado (`1u`) em vez de larguras visuais
+aproximadas. O perfil macOS reproduz o Magic Keyboard USB-C compacto en-US de
+`14.5u`, inferido da imagem frontal oficial da Apple, e não reaproveita a matriz
+ANSI de `15u`. As cinco linhas do Keychron reproduzem as coordenadas do
+`LAYOUT_ansi_84` oficial: `Shift` direito de `1.75u`, barra de espaço de `6.25u`
+e seis teclas de `1u` à direita. Antes de gerar cada PNG, a página verifica
+limites, sobreposição, alinhamento das setas, trilho de navegação e recorte das
+legendas; uma geometria inválida interrompe `render.sh`.
 
 Referências dos layouts:
 
 - [Apple: usar as teclas de função no Mac](https://support.apple.com/guide/mac-help/use-keyboard-function-keys-mchlp2596/mac);
+- [Apple Magic Keyboard USB-C, US English](https://www.apple.com/us-edu/shop/product/mxcl3ll/a/magic-keyboard-usb-c-us-english);
 - [Keychron K3 Version 3](https://www.keychron.com/products/keychron-k3-qmk-wireless-mechanical-keyboard-version-3);
-- [keymap QMK oficial do Keychron K3 V3](https://github.com/Keychron/qmk_firmware/blob/wls_2025q1/keyboards/keychron/k3_version_3/ansi/rgb/keymaps/default/keymap.c).
+- [geometria QMK oficial do Keychron K3 V3](https://github.com/Keychron/qmk_firmware/blob/wls_2025q1/keyboards/keychron/k3_version_3/info.json).
 
 Os 15 PNGs em `generated/` são projeções para documentação e divulgação. A fonte
 canônica visual continua sendo `index.html`; ao alterar binds no produto, ajuste
