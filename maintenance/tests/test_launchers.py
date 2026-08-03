@@ -1280,11 +1280,13 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual(2, len(fallback.calls))
 
         registered = threading.Event()
-        release = threading.Event()
+        close_called = threading.Event()
+        unblock = threading.Event()
 
         class CancelConnection:
             def close(self):
-                release.set()
+                close_called.set()
+                unblock.set()
 
         class BlockingOpener:
             registry = None
@@ -1292,7 +1294,8 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             def open(self, _request, **_kwargs):
                 self.registry.register(threading.get_ident(), CancelConnection())
                 registered.set()
-                release.wait(2)
+                while not unblock.wait(0.1):
+                    pass
                 return IntegrityResponse(b"valid", "https://slow.example.invalid/archive.zip")
 
         blocked = BlockingOpener()
@@ -1311,25 +1314,29 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "archive.zip"
-            with mock.patch.object(
-                urllib_module.request, "build_opener", return_value=blocked,
-            ), mock.patch.object(
-                namespace["threading"].Thread, "start", start_after_registration,
-            ), mock.patch.object(
-                namespace["time"], "monotonic", controlled_monotonic,
-            ):
-                with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
-                    namespace["download_mirrors"](
-                        ["https://slow.example.invalid/archive.zip"],
-                        os.fspath(destination),
-                        5,
-                        hashlib.sha256(b"valid").hexdigest(),
-                        1,
-                        1,
-                        0,
-                        0.05,
-                    )
-            self.assertTrue(release.is_set())
+            try:
+                with mock.patch.object(
+                    urllib_module.request, "build_opener", return_value=blocked,
+                ), mock.patch.object(
+                    namespace["threading"].Thread, "start", start_after_registration,
+                ), mock.patch.object(
+                    namespace["time"], "monotonic", controlled_monotonic,
+                ):
+                    with self.assertRaisesRegex(namespace["DownloadError"], "prazo total"):
+                        namespace["download_mirrors"](
+                            ["https://slow.example.invalid/archive.zip"],
+                            os.fspath(destination),
+                            5,
+                            hashlib.sha256(b"valid").hexdigest(),
+                            1,
+                            1,
+                            0,
+                            0.05,
+                        )
+                was_closed = close_called.is_set()
+            finally:
+                unblock.set()
+            self.assertTrue(was_closed)
             self.assertFalse(destination.exists())
         for _ in range(50):
             if not any(
@@ -1813,9 +1820,25 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
         source = bootstrap.read_text(encoding="utf-8")
         version = source.split('$InstallerVersion = "', 1)[1].split('"', 1)[0]
         digest = source.split('$InstallerSha256 = "', 1)[1].split('"', 1)[0]
+        self.assertEqual(
+            1,
+            source.count(
+                "$Actual = (Get-FileHash -Algorithm SHA256 "
+                "-LiteralPath $Archive).Hash.ToLowerInvariant()"
+            ),
+        )
+        self.assertIn(
+            "if ($ArchiveSize -ne $InstallerSize -or "
+            "$Actual -ne $InstallerSha256)",
+            source,
+        )
         fixture = ROOT / f"dist/installer/packages/{version}/x86qw-installer-{version}.zip"
         self.assertEqual(digest, hashlib.sha256(fixture.read_bytes()).hexdigest())
         with tempfile.TemporaryDirectory() as temporary:
+            corrupt_fixture = Path(temporary) / fixture.name
+            corrupt_bytes = bytearray(fixture.read_bytes())
+            corrupt_bytes[0] ^= 0xFF
+            corrupt_fixture.write_bytes(corrupt_bytes)
             harness = Path(temporary) / "integrity-fallback-harness.ps1"
             harness.write_text(
                 r'''param(
@@ -1824,18 +1847,12 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
   [string]$Fixture
 )
 $global:X86QWTestDownloadCalls = 0
-$global:X86QWTestHashCalls = 0
 $global:X86QWTestMockVersion = $MockVersion
 $global:X86QWTestFixture = $Fixture
 function Get-Command {
   param([string]$Name, [object]$ErrorAction)
   if ($Name -eq "python") { return [pscustomobject]@{ Name = "python" } }
   return $null
-}
-function global:Get-FileHash {
-  param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
-  $global:X86QWTestHashCalls += 1
-  Microsoft.PowerShell.Utility\Get-FileHash -Algorithm $Algorithm -LiteralPath $LiteralPath
 }
 function Expand-Archive {
   param([string]$Path, [string]$DestinationPath)
@@ -1861,7 +1878,6 @@ function python {
 }
 & $Bootstrap "--help"
 Write-Output "X86QW_DOWNLOAD_CALLS:$global:X86QWTestDownloadCalls"
-Write-Output "X86QW_HASH_CALLS:$global:X86QWTestHashCalls"
 ''',
                 encoding="utf-8",
             )
@@ -1885,7 +1901,28 @@ Write-Output "X86QW_HASH_CALLS:$global:X86QWTestHashCalls"
                     )
                     self.assertEqual(0, completed.returncode, completed.stderr)
                     self.assertIn("X86QW_DOWNLOAD_CALLS:1", completed.stdout)
-                    self.assertIn("X86QW_HASH_CALLS:1", completed.stdout)
+
+                    rejected = subprocess.run(
+                        [
+                            runtime,
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(harness),
+                            str(bootstrap),
+                            version,
+                            str(corrupt_fixture),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertNotEqual(0, rejected.returncode)
+                    self.assertIn(
+                        "downloader retornou um instalador divergente",
+                        rejected.stderr,
+                    )
 
     @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_rejects_store_alias_before_download(self):
