@@ -88,13 +88,47 @@ def _full_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, i
     )
 
 
+def _nanoseconds(metadata: os.stat_result, field: str, fallback: str) -> int:
+    exact = getattr(metadata, field, None)
+    if exact is not None:
+        return int(exact)
+    return int(getattr(metadata, fallback) * 1_000_000_000)
+
+
+def _windows_path_handle_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    """Normalize fields whose Windows path/fstat semantics are identical."""
+    birthtime = getattr(metadata, "st_birthtime_ns", None)
+    if birthtime is None:
+        birthtime = _nanoseconds(metadata, "st_ctime_ns", "st_ctime")
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        stat.S_IFMT(int(metadata.st_mode)),
+        int(metadata.st_size),
+        _nanoseconds(metadata, "st_mtime_ns", "st_mtime"),
+        int(birthtime),
+        int(getattr(metadata, "st_file_attributes", 0)),
+    )
+
+
+def _path_handle_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    if os.name == "nt":
+        return _windows_path_handle_identity(metadata)
+    return _full_identity(metadata)
+
+
 def read_regular_file(path: Path, *, maximum_size: int | None = None) -> bytes:
     """Read one stable regular file without following a replacement symlink."""
     try:
         before = path.lstat()
     except OSError as error:
         raise ValueError(f"build input is unavailable: {path}") from error
-    if not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode):
+    before_attributes = int(getattr(before, "st_file_attributes", 0))
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or stat.S_ISLNK(before.st_mode)
+        or before_attributes & _WINDOWS_REPARSE_POINT
+    ):
         raise ValueError(f"build input must be a regular non-symlink file: {path}")
     declared_size = int(before.st_size)
     if maximum_size is not None and declared_size > maximum_size:
@@ -107,7 +141,11 @@ def read_regular_file(path: Path, *, maximum_size: int | None = None) -> bytes:
         raise ValueError(f"build input could not be opened safely: {path}") from error
     try:
         opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode) or _full_identity(opened) != _full_identity(before):
+        opened_identity = _full_identity(opened)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or _path_handle_identity(opened) != _path_handle_identity(before)
+        ):
             raise ValueError(f"build input changed while opening: {path}")
         limit = declared_size if maximum_size is None else min(declared_size, maximum_size)
         payload = bytearray()
@@ -125,7 +163,11 @@ def read_regular_file(path: Path, *, maximum_size: int | None = None) -> bytes:
             current = path.lstat()
         except OSError as error:
             raise ValueError(f"build input changed while reading: {path}") from error
-        if _full_identity(after) != _full_identity(before) or _full_identity(current) != _full_identity(before):
+        if (
+            _full_identity(after) != opened_identity
+            or _path_handle_identity(current) != _path_handle_identity(after)
+            or _path_handle_identity(current) != _path_handle_identity(before)
+        ):
             raise ValueError(f"build input changed while reading: {path}")
         return bytes(payload)
     finally:

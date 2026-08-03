@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -12,7 +13,9 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
+from maintenance.tools import build_installer_bundle
 from maintenance.tools.build_installer_bundle import (
     ARCHIVE_BASE64_ASSIGNMENTS,
     ARCHIVE_SOURCE,
@@ -21,6 +24,7 @@ from maintenance.tools.build_installer_bundle import (
     PUBLIC_SHELL_BOOTSTRAP,
     SHELL_BOOTSTRAP,
     embedded_archive_source,
+    update_public_bootstrap,
     validate_bootstrap_archive_source,
     zipapp_bytes,
 )
@@ -34,6 +38,127 @@ PUBLISHED_SHA256 = "a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c
 
 
 class ArchiveBootstrapTests(unittest.TestCase):
+    def test_embedded_archive_assignment_accepts_lf_and_crlf(self):
+        payload = b"canonical archive helper\n"
+        encoded = base64.b64encode(payload).decode("ascii")
+        for newline in (b"\n", b"\r\n"):
+            with self.subTest(newline=newline), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "bootstrap.sh"
+                source.write_bytes(
+                    f'ARCHIVE_HELPER_BASE64="{encoded}"'.encode("ascii") + newline
+                )
+                self.assertEqual(
+                    payload,
+                    embedded_archive_source(source, "ARCHIVE_HELPER_BASE64"),
+                )
+
+    def test_bootstrap_update_preserves_crlf(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.ps1"
+            source.write_bytes(b'VALUE="old"\r\nOTHER="kept"\r\n')
+            if os.name != "nt":
+                source.chmod(0o750)
+            update_public_bootstrap(source, {"VALUE": "new"})
+            self.assertEqual(
+                b'VALUE="new"\r\nOTHER="kept"\r\n',
+                source.read_bytes(),
+            )
+            if os.name != "nt":
+                self.assertEqual(0o750, stat.S_IMODE(source.stat().st_mode))
+
+    def test_bootstrap_update_does_not_follow_a_concurrent_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "bootstrap.sh"
+            victim = root / "personal.sh"
+            source.write_bytes(b'VALUE="old"\n')
+            victim.write_bytes(b'VALUE="personal"\n')
+            real_read = build_installer_bundle.read_regular_file
+            swapped = False
+
+            def read_then_swap(path: Path, **kwargs: object) -> bytes:
+                nonlocal swapped
+                payload = real_read(path, **kwargs)
+                if not swapped and path == source:
+                    swapped = True
+                    source.unlink()
+                    try:
+                        source.symlink_to(victim)
+                    except OSError as error:
+                        self.skipTest(f"symlink indisponível: {error}")
+                return payload
+
+            with mock.patch.object(
+                build_installer_bundle,
+                "read_regular_file",
+                side_effect=read_then_swap,
+            ), self.assertRaisesRegex(ValueError, "changed while reading"):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
+            self.assertTrue(source.is_symlink())
+            self.assertEqual(b'VALUE="personal"\n', victim.read_bytes())
+
+    def test_bootstrap_atomic_replace_does_not_follow_a_late_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "bootstrap.sh"
+            victim = root / "personal.sh"
+            source.write_bytes(b'VALUE="old"\n')
+            victim.write_bytes(b'VALUE="personal"\n')
+            real_replace = build_installer_bundle.os.replace
+
+            def plant_then_replace(staged: Path, destination: Path) -> None:
+                Path(destination).unlink()
+                try:
+                    Path(destination).symlink_to(victim)
+                except OSError as error:
+                    self.skipTest(f"symlink indisponível: {error}")
+                real_replace(staged, destination)
+
+            with mock.patch.object(
+                build_installer_bundle.os,
+                "replace",
+                side_effect=plant_then_replace,
+            ):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
+            self.assertFalse(source.is_symlink())
+            self.assertEqual(b'VALUE="new"\n', source.read_bytes())
+            self.assertEqual(b'VALUE="personal"\n', victim.read_bytes())
+
+    def test_bootstrap_update_preserves_original_when_staging_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.sh"
+            original = b'VALUE="old"\n'
+            source.write_bytes(original)
+            with mock.patch(
+                "maintenance.tools.build_artifacts.StagedArtifact.seal",
+                side_effect=OSError("simulated disk failure"),
+            ), self.assertRaisesRegex(OSError, "simulated disk failure"):
+                update_public_bootstrap(source, {"VALUE": "new"})
+            self.assertEqual(original, source.read_bytes())
+            self.assertEqual([], list(source.parent.glob(f".{source.name}.*")))
+
+    def test_archive_helper_and_bootstraps_are_pinned_to_lf(self):
+        paths = (
+            "x86qw_runtime/io/archive.py",
+            "dist/installer/bin/install.sh",
+            "dist/installer/bin/install.ps1",
+            "site/public/install.sh",
+            "site/public/install.ps1",
+        )
+        result = subprocess.run(
+            ["git", "check-attr", "text", "eol", "--", *paths],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(f"{path}: text: set\n", result.stdout)
+                self.assertIn(f"{path}: eol: lf\n", result.stdout)
+
     def test_bootstraps_are_synchronized_with_the_canonical_archive_source(self):
         validate_bootstrap_archive_source()
         expected = ARCHIVE_SOURCE.read_bytes()

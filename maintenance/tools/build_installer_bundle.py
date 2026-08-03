@@ -243,14 +243,61 @@ def update_latest_link(package_root: Path) -> str:
     return version
 
 
+def _path_stat_identity(path: Path) -> tuple[int, int, int, int, int, int]:
+    metadata = path.lstat()
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_mode),
+        int(metadata.st_size),
+        int(getattr(metadata, "st_mtime_ns", metadata.st_mtime * 1_000_000_000)),
+        int(getattr(metadata, "st_ctime_ns", metadata.st_ctime * 1_000_000_000)),
+    )
+
+
+def _fsync_parent(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(
+        path.parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
-    content = path.read_text(encoding="utf-8")
+    try:
+        initial_identity = _path_stat_identity(path)
+        original = read_regular_file(path, maximum_size=MAX_TEXT_INPUT_BYTES)
+        if _path_stat_identity(path) != initial_identity:
+            raise ValueError(f"public bootstrap changed while reading: {path}")
+    except OSError as error:
+        raise ValueError(f"public bootstrap is unavailable: {path}") from error
+    try:
+        content = original.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"public bootstrap is not valid UTF-8: {path}") from error
     for name, value in assignments.items():
-        pattern = rf"(?m)^({re.escape(name)}\s*=\s*)\"[^\"]*\"$"
-        content, count = re.subn(pattern, rf'\g<1>"{value}"', content)
+        pattern = rf'(?m)^({re.escape(name)}[ \t]*=[ \t]*)"[^"\r\n]*"(\r?)$'
+        content, count = re.subn(pattern, rf'\g<1>"{value}"\g<2>', content)
         if count != 1:
             raise ValueError(f"public bootstrap assignment is missing or duplicated: {path}:{name}")
-    path.write_text(content, encoding="utf-8")
+    updated = content.encode("utf-8")
+    mode = stat.S_IMODE(initial_identity[2])
+    with staged_artifact(path, root=path.parent, prefix=f".{path.name}.") as staged:
+        if staged.stream.write(updated) != len(updated):
+            raise OSError(f"public bootstrap write was incomplete: {path}")
+        staged.seal(mode=mode)
+        current = read_regular_file(path, maximum_size=MAX_TEXT_INPUT_BYTES)
+        if current != original or _path_stat_identity(path) != initial_identity:
+            raise ValueError(f"public bootstrap changed before replacement: {path}")
+        os.replace(staged.path, path)
+        if read_regular_file(path, maximum_size=len(updated)) != updated:
+            raise ValueError(f"public bootstrap changed during replacement: {path}")
+        _fsync_parent(path)
 
 
 def archive_source_bytes() -> bytes:
@@ -266,7 +313,10 @@ def embedded_archive_source(path: Path, assignment: str) -> bytes:
         content = read_regular_file(path, maximum_size=MAX_TEXT_INPUT_BYTES).decode("utf-8")
     except UnicodeDecodeError as error:
         raise ValueError(f"bootstrap source is not valid UTF-8: {path}") from error
-    pattern = rf'(?m)^{re.escape(assignment)}\s*=\s*"([A-Za-z0-9+/]*={{0,2}})"$'
+    pattern = (
+        rf'(?m)^{re.escape(assignment)}[ \t]*=[ \t]*'
+        rf'"([A-Za-z0-9+/]*={{0,2}})"\r?$'
+    )
     matches = re.findall(pattern, content)
     if len(matches) != 1:
         raise ValueError(

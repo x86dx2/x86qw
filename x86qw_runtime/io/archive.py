@@ -146,6 +146,7 @@ class ArchiveMember:
 
 
 _SourceIdentity = tuple[int, int, int, int, int, int]
+_PathHandleIdentity = tuple[int, ...]
 _NodeIdentity = tuple[int, int, int]
 
 
@@ -185,14 +186,56 @@ def _stat_identity(value: os.stat_result) -> _SourceIdentity:
     )
 
 
-def _checked_lstat(path: Path) -> _SourceIdentity:
+def _nanoseconds(value: os.stat_result, field: str, fallback: str) -> int:
+    exact = getattr(value, field, None)
+    if exact is not None:
+        return int(exact)
+    return int(getattr(value, fallback) * 1_000_000_000)
+
+
+def _windows_path_handle_identity(value: os.stat_result) -> _PathHandleIdentity:
+    """Normalize fields whose Windows path/fstat semantics are identical."""
+    birthtime = getattr(value, "st_birthtime_ns", None)
+    if birthtime is None:
+        birthtime = _nanoseconds(value, "st_ctime_ns", "st_ctime")
+    return (
+        int(value.st_dev),
+        int(value.st_ino),
+        stat.S_IFMT(int(value.st_mode)),
+        int(value.st_size),
+        _nanoseconds(value, "st_mtime_ns", "st_mtime"),
+        int(birthtime),
+        int(getattr(value, "st_file_attributes", 0)),
+    )
+
+
+def _path_handle_identity(value: os.stat_result) -> _PathHandleIdentity:
+    """Return fields with identical semantics for path stat and fstat.
+
+    CPython 3.13 reports Windows ``st_ctime`` as creation time for a path but
+    as change time for a descriptor.  Windows also synthesizes executable mode
+    bits only for path-based stats.  Keep the full descriptor identity for
+    handle-to-handle checks and use this normalized key only across that API
+    boundary.
+    """
+    if os.name == "nt":
+        return _windows_path_handle_identity(value)
+    return _stat_identity(value)
+
+
+def _checked_lstat(path: Path) -> _PathHandleIdentity:
     try:
         metadata = path.lstat()
     except OSError as error:
         raise ArchiveError(f"archive source is unavailable: {path}") from error
-    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+    attributes = int(getattr(metadata, "st_file_attributes", 0))
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or attributes & _WINDOWS_REPARSE_POINT_ATTRIBUTE
+        or not stat.S_ISREG(metadata.st_mode)
+    ):
         raise ArchiveError(f"archive source must be a regular non-symlink file: {path}")
-    return _stat_identity(metadata)
+    return _path_handle_identity(metadata)
 
 
 @contextlib.contextmanager
@@ -208,7 +251,7 @@ def _open_path(path: Path) -> Iterator[tuple[BinaryIO, _SourceIdentity]]:
     try:
         opened = os.fstat(descriptor)
         identity = _stat_identity(opened)
-        if not stat.S_ISREG(opened.st_mode) or identity != before:
+        if not stat.S_ISREG(opened.st_mode) or _path_handle_identity(opened) != before:
             raise ArchiveError(f"archive source changed while opening: {path}")
         with os.fdopen(descriptor, "rb", closefd=True) as stream:
             descriptor = -1
@@ -282,8 +325,12 @@ def _ensure_source_stable(
     if actual_sha256 != expected_sha256 or actual_size != expected_size:
         raise ArchiveError("archive source changed during validation")
     if isinstance(source, Path):
-        current = _stat_identity(os.fstat(stream.fileno()))
-        if current != identity or _checked_lstat(source) != identity:
+        current_metadata = os.fstat(stream.fileno())
+        current = _stat_identity(current_metadata)
+        if (
+            current != identity
+            or _checked_lstat(source) != _path_handle_identity(current_metadata)
+        ):
             raise ArchiveError("archive source identity changed during validation")
 
 

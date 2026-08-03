@@ -13,6 +13,7 @@ import warnings
 import zipfile
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from x86qw_runtime.io import archive as archive_module
@@ -43,7 +44,18 @@ class ArchiveTests(unittest.TestCase):
             warnings.simplefilter("ignore", UserWarning)
             with zipfile.ZipFile(output, "w", compression=compression, allowZip64=True) as archive:
                 for name, payload in members:
-                    archive.writestr(name, payload)
+                    if isinstance(name, str) and "\\" in name:
+                        # ZipInfo normalizes the host separator in its
+                        # constructor.  Assign the original spelling after
+                        # construction so hostile-name fixtures are identical
+                        # on Unix and Windows.
+                        member = zipfile.ZipInfo("placeholder")
+                        member.filename = name
+                        member.orig_filename = name
+                        member.compress_type = compression
+                        archive.writestr(member, payload)
+                    else:
+                        archive.writestr(name, payload)
         return output.getvalue()
 
     def identity_bytes(self, version: str) -> bytes:
@@ -337,10 +349,66 @@ class ArchiveTests(unittest.TestCase):
                 self.assertEqual(0o644, (destination / "share/data").stat().st_mode & 0o777)
 
     def test_rejects_absolute_drive_unc_backslash_and_noncanonical_paths(self) -> None:
+        backslash = self.archive_bytes([("a\\b", b"payload")])
+        self.assertEqual(2, backslash.count(b"a\\b"))
+        with self.assertRaises(ArchiveError):
+            scan_archive(backslash)
         self.assert_rejected_names(
-            "/absolute", "//server/share", "C:/drive", "c:relative", "a\\b",
+            "/absolute", "//server/share", "C:/drive", "c:relative",
             "a//b", "./a", "a/../b", "a/", "name.", "name ",
         )
+
+    def test_windows_path_handle_key_normalizes_ctime_and_executable_bits(self) -> None:
+        common = {
+            "st_dev": 7,
+            "st_ino": 11,
+            "st_size": 13,
+            "st_mtime": 17.0,
+            "st_mtime_ns": 17,
+            "st_birthtime_ns": 19,
+            "st_file_attributes": 0x20,
+        }
+        path_metadata = SimpleNamespace(
+            **common,
+            st_mode=stat.S_IFREG | 0o777,
+            st_ctime=23.0,
+            st_ctime_ns=23,
+        )
+        handle_metadata = SimpleNamespace(
+            **common,
+            st_mode=stat.S_IFREG | 0o666,
+            st_ctime=29.0,
+            st_ctime_ns=29,
+        )
+        self.assertEqual(
+            archive_module._windows_path_handle_identity(path_metadata),
+            archive_module._windows_path_handle_identity(handle_metadata),
+        )
+        self.assertNotEqual(
+            archive_module._stat_identity(path_metadata),
+            archive_module._stat_identity(handle_metadata),
+        )
+
+    @unittest.skipUnless(os.name == "nt", "identidade path/fstat exercitada no Windows")
+    def test_windows_archive_source_accepts_executable_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "fixture.exe"
+            source.write_bytes(self.archive_bytes([("payload", b"safe")]))
+            self.assertEqual(("payload",), scan_archive(source).member_names)
+
+    @unittest.skipUnless(os.name == "nt", "reparse point exercitado no Windows")
+    def test_windows_archive_source_rejects_file_reparse_point(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.zip"
+            source.write_bytes(self.archive_bytes([("payload", b"safe")]))
+            link = root / "link.zip"
+            try:
+                link.symlink_to(source)
+            except OSError as error:
+                self.skipTest(f"privilégio para symlink indisponível: {error}")
+            with self.assertRaisesRegex(ArchiveError, "regular non-symlink"):
+                scan_archive(link)
 
     def test_rejects_empty_member_name_before_zipfile_parsing(self) -> None:
         with mock.patch.object(

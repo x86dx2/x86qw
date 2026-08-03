@@ -119,6 +119,61 @@ class BuilderArchiveBindingTests(unittest.TestCase):
                     build_artifacts_runtime.read_regular_file(source)
             self.assertEqual(b"personal", replacement.read_bytes())
 
+    def test_regular_build_input_rejects_same_size_regular_swap(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.bin"
+            replacement = root / "replacement.bin"
+            source.write_bytes(b"expected")
+            replacement.write_bytes(b"personal")
+            source_metadata = source.stat()
+            os.utime(
+                replacement,
+                ns=(source_metadata.st_atime_ns, source_metadata.st_mtime_ns),
+            )
+            real_open = os.open
+            swapped = False
+
+            def swap_then_open(
+                path: str | os.PathLike[str], flags: int, *args: object, **kwargs: object,
+            ) -> int:
+                nonlocal swapped
+                if not swapped and Path(path) == source:
+                    swapped = True
+                    source.unlink()
+                    replacement.replace(source)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(
+                build_artifacts_runtime.os, "open", side_effect=swap_then_open,
+            ):
+                with self.assertRaisesRegex(ValueError, "changed while opening"):
+                    build_artifacts_runtime.read_regular_file(source)
+
+    @unittest.skipUnless(os.name == "nt", "identidade path/fstat exercitada no Windows")
+    def test_windows_regular_build_input_accepts_command_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "fixture.cmd"
+            source.write_bytes(b"@echo off\r\n")
+            self.assertEqual(
+                b"@echo off\r\n",
+                build_artifacts_runtime.read_regular_file(source),
+            )
+
+    @unittest.skipUnless(os.name == "nt", "reparse point exercitado no Windows")
+    def test_windows_regular_build_input_rejects_file_reparse_point(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.bin"
+            source.write_bytes(b"safe")
+            link = root / "link.bin"
+            try:
+                link.symlink_to(source)
+            except OSError as error:
+                self.skipTest(f"privilégio para symlink indisponível: {error}")
+            with self.assertRaisesRegex(ValueError, "regular non-symlink"):
+                build_artifacts_runtime.read_regular_file(link)
+
     def test_installer_reads_bundle_sources_through_stable_snapshots(self) -> None:
         version = installer_builder.VERSION
         with tempfile.TemporaryDirectory(
