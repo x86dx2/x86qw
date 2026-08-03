@@ -42,15 +42,17 @@ plataformas. A coluna de validação é sempre a autoridade para essa distinçã
 
 ## Próximos marcos do núcleo
 
-1. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
+1. Publicar a correção `0.7.1` do contrato Python somente depois de a matriz
+   macOS/Linux/Windows comprovar os bootstraps e launchers da issue #44.
+2. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
    Windows x64, além do cliente em macOS Intel.
-2. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
+3. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
    QWFWD em suíte de rede isolada.
-3. Transformar a validação de release em evidência publicada somente após
+4. Transformar a validação de release em evidência publicada somente após
    aprovação humana dos checks das três plataformas.
-4. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
+5. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
    ou gameplay.
-5. Manter bundles publicados imutáveis e preparar uma versão nova somente em
+6. Manter bundles publicados imutáveis e preparar uma versão nova somente em
    etapa de release separada.
 
 ## Decisões históricas superadas

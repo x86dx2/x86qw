@@ -58,9 +58,10 @@ O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
 falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
 `$LASTEXITCODE`.
 
-O Windows precisa de Python 3.10 ou mais recente. O bootstrap testa, nessa
-ordem, `py -3`, `python3` e `python`; o atalho da Microsoft Store só é aceito
-quando realmente executa uma versão compatível. Se nenhuma for encontrada:
+O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.0`,
+o Windows testa, nessa ordem, `py -3`, `python3` e `python`; o atalho da
+Microsoft Store só é aceito quando realmente executa uma versão compatível. Se
+nenhuma instalação compatível for encontrada:
 
 ```powershell
 winget install --id Python.Python.3.13 -e
@@ -68,6 +69,12 @@ winget install --id Python.Python.3.13 -e
 
 Depois da instalação, abra um novo PowerShell e execute novamente o comando do
 x86QW.
+
+A correção `0.7.1`, ainda não publicada, está sendo validada para aplicar o
+mesmo teste por `sys.version_info` antes do download em todos os sistemas e
+para gravar no launcher o executável Python que concluiu a instalação. Se esse
+runtime desaparecer, o launcher candidato repete a resolução segura. Até a
+promoção explícita, essas mudanças não descrevem o bootstrap público.
 
 O bootstrap público `0.7.0` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 

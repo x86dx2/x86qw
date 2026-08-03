@@ -233,6 +233,19 @@ habilitado, somente a lista vazia é aceita. Perfis atuais permanecem intactos;
 capacidades adicionais exigem componentes e migrações aprovados em trabalho
 separado.
 
+### INST-02 — Contrato do runtime Python
+
+**Entrega funcional:** candidata na linha corretiva `0.7.1`; não publicada
+**Validação:** unitária específica local; suíte integral e matriz macOS/Linux/Windows obrigatórias antes da publicação
+
+Na implementação candidata, bootstrap e launchers exigem Python 3.10 ou mais
+recente por `sys.version_info`, antes de rede ou mutação. A instalação gera os
+launchers com o executável efetivamente validado e mantém fallback
+determinístico quando esse runtime desaparece. O bootstrap Unix calcula o
+SHA-256 em streaming. A issue
+[#44](https://github.com/x86dx2/x86qw/issues/44) registra critérios, contratos e
+evidência da correção.
+
 ## Site e documentação
 
 ### DOC-01 — Fatos públicos

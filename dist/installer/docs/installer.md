@@ -4,9 +4,18 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
+O bundle público corrente continua sendo `0.7.0`, com 60 pacotes e 21
+componentes registrados no catálogo. A correção `0.7.1`, ainda não publicada,
+está sendo validada para conferir o requisito Python por `sys.version_info`
+antes de qualquer download ou mutação. Na implementação candidata,
+macOS/Linux testam `python3` e `python`, nessa ordem; Windows testa `py -3`,
+`python3` e `python`. A instalação grava no launcher o executável validado e o
+launcher repete a resolução caso esse caminho desapareça ou fique
+incompatível. Esse contrato só passa a descrever o produto público depois da
+promoção explícita da `0.7.1`.
+
 O instalador usa apenas a biblioteca padrão do Python.
-O bundle público corrente é `0.7.0`; o catálogo registra 60 pacotes e 21
-componentes. Esses fatos são validados contra os inventários canônicos.
+Esses fatos públicos são validados contra os inventários canônicos.
 
 ## Instalação pública
 
@@ -27,6 +36,13 @@ fim da instalação. O código devolvido pelo instalador Python fica disponível
 `$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
 código antes de devolver o controle ao terminal.
 
+Na candidata `0.7.1`, o corpo executa em um escopo de script próprio dentro da
+mesma sessão PowerShell. Isso não cria outra janela nem outro processo: apenas
+impede que variáveis internas e `$ErrorActionPreference` vazem para o chamador,
+restaura as codificações de saída e mantém como efeito intencional somente o
+`$global:LASTEXITCODE` do instalador. A matriz Windows precisa comprovar esse
+isolamento antes da publicação.
+
 No Windows, o bootstrap exige Python 3.10 ou mais recente e testa `py -3`,
 `python3` e `python`, nessa ordem. A presença do alias `python.exe` de
 `WindowsApps` não basta: o comando precisa responder com uma versão compatível.
@@ -37,8 +53,10 @@ PowerShell e repita o bootstrap:
 winget install --id Python.Python.3.13 -e
 ```
 
-O bootstrap tenta os mirrors GitHub e GitLab, valida o SHA-256 do bundle antes
-de extrair e ativa o modo remoto estrito. Nesse modo, o catálogo e todos os
+O bootstrap público tenta os mirrors GitHub e GitLab e valida o SHA-256 do
+bundle antes de extrair. A candidata `0.7.1` passa a calcular esse hash em
+blocos de 1 MiB no Unix; essa alteração ainda não foi publicada. O instalador
+ativa o modo remoto estrito. Nesse modo, o catálogo e todos os
 pacotes vêm dos endpoints públicos x86QW; a árvore temporária nunca é tratada
 como fonte da distribuição. Antes de criar a instalação, o programa pergunta o
 destino e apresenta `~/Games/x86qw` somente como sugestão confirmável.

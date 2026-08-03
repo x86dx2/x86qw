@@ -36,6 +36,7 @@ BUNDLE_FILES = (
 )
 ZIPAPP_FILES = (
     ("dist/installer/bin/manager.py", "manager.py"),
+    ("dist/installer/bin/python_runtime.py", "python_runtime.py"),
     ("dist/installer/bin/menu.py", "menu.py"),
     ("dist/installer/bin/gameplay.py", "gameplay.py"),
     ("dist/installer/bin/services.py", "services.py"),
@@ -106,7 +107,17 @@ def zipapp_bytes(version: str) -> bytes:
         write_member(
             application,
             "__main__.py",
-            b"from manager import main\nraise SystemExit(main())\n",
+            (
+                b"import sys\n"
+                b"from python_runtime import require_supported_runtime, UnsupportedPythonError\n"
+                b"try:\n"
+                b"    require_supported_runtime()\n"
+                b"except UnsupportedPythonError as error:\n"
+                b"    print(f'[ERRO] {error}', file=sys.stderr)\n"
+                b"    raise SystemExit(2)\n"
+                b"from manager import main\n"
+                b"raise SystemExit(main())\n"
+            ),
         )
         for source_name, member in ZIPAPP_FILES:
             source = ROOT / source_name
