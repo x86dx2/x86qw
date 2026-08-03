@@ -2586,6 +2586,9 @@ class DownloaderTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.sock = ActiveSocket()
 
+            def cancel_transport(self) -> None:
+                actions.append("cancel_transport")
+
             def close(self) -> None:
                 actions.append("close")
 
@@ -2593,62 +2596,29 @@ class DownloaderTests(unittest.TestCase):
         registry.register(17, ActiveConnection())
         registry.cancel(17)
 
-        self.assertEqual([("shutdown", socket.SHUT_RDWR), "close"], actions)
+        self.assertEqual([
+            "cancel_transport",
+            ("shutdown", socket.SHUT_RDWR),
+            "close",
+        ], actions)
+        with self.assertRaises(downloader.DownloadDeadlineError):
+            registry.ensure_active(17)
 
-    def test_connection_registry_interrupts_blocked_http_headers(self) -> None:
+    def test_socket_makefile_lifetime_is_not_a_cancellation_primitive(self) -> None:
         client, peer = socket.socketpair()
-        blocked = threading.Event()
-        finished = threading.Event()
-
-        class ObservableReader:
-            def __init__(self, reader: object) -> None:
-                self.reader = reader
-
-            def readline(self, *args: object, **kwargs: object) -> bytes:
-                blocked.set()
-                return self.reader.readline(*args, **kwargs)
-
-            def __getattr__(self, name: str) -> object:
-                return getattr(self.reader, name)
-
-        class ObservableSocket:
-            def makefile(self, *args: object, **kwargs: object) -> ObservableReader:
-                return ObservableReader(client.makefile(*args, **kwargs))
-
-        response = http.client.HTTPResponse(ObservableSocket())
-
-        class HeaderConnection:
-            def __init__(self) -> None:
-                self.sock = client
-
-            def close(self) -> None:
-                client.close()
-
-        def read_headers() -> None:
-            try:
-                response.begin()
-            except (OSError, http.client.HTTPException):
-                pass
-            finally:
-                finished.set()
-
-        reader = threading.Thread(target=read_headers, name="x86qw-test-headers")
-        reader.start()
+        stream = client.makefile("rb")
         try:
-            self.assertTrue(blocked.wait(2), "a leitura de headers não iniciou")
-            registry = downloader._ConnectionRegistry()
-            registry.register(23, HeaderConnection())
-            registry.cancel(23)
-            self.assertTrue(finished.wait(2))
+            # socket.close() only marks the socket closed while a makefile()
+            # stream still owns a reference to the underlying transport.  A
+            # cancellation contract must therefore not depend on cross-thread
+            # close interrupting BufferedReader.readline(), notably on Windows.
+            client.close()
+            peer.sendall(b"HTTP/1.1 200 OK\r\n")
+            self.assertEqual(b"HTTP/1.1 200 OK\r\n", stream.readline())
         finally:
-            try:
-                peer.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+            stream.close()
             peer.close()
             client.close()
-            reader.join(1)
-        self.assertFalse(reader.is_alive())
 
     def test_dns_resolver_process_is_killed_and_collected_at_deadline(self) -> None:
         class BlockingResolver:
@@ -2747,7 +2717,9 @@ class DownloaderTests(unittest.TestCase):
                     )
                 )
 
-        self.assertTrue(process.collected.is_set())
+        # The controller kills the resolver before returning, while the daemon
+        # worker may need one final scheduler turn to finish reaping it.
+        self.assertTrue(process.collected.wait(1))
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())
         self.assertFalse(any(
@@ -3065,9 +3037,12 @@ class DownloaderTests(unittest.TestCase):
         self.assertEqual(0, response.read_calls)
         self.assertEqual(2, response.read1_calls)
 
-    def test_blocking_socket_read_receives_timeout_and_terminates_promptly(self) -> None:
+    def test_blocking_socket_read_times_out_before_late_peer_data(self) -> None:
         reader_socket, writer_socket = socket.socketpair()
         applied_timeouts: list[float] = []
+        download_finished = threading.Event()
+        peer_started = threading.Event()
+        peer_sent = threading.Event()
 
         class RecordingSocket:
             def settimeout(self, value: float) -> None:
@@ -3085,8 +3060,22 @@ class DownloaderTests(unittest.TestCase):
             def read1(self, size: int) -> bytes:
                 return self._sock.recv(size)
 
-        started = time.monotonic()
+        def delayed_peer() -> None:
+            peer_started.set()
+            if not download_finished.wait(3):
+                try:
+                    writer_socket.sendall(b"late")
+                except OSError:
+                    return
+                peer_sent.set()
+
+        peer = threading.Thread(
+            target=delayed_peer,
+            name="x86qw-test-late-peer",
+        )
+        peer.start()
         try:
+            self.assertTrue(peer_started.wait(1))
             with self.assertRaises(downloader.DownloadTransientError):
                 self.download(
                     downloader.BoundedMetadata(
@@ -3098,10 +3087,13 @@ class DownloaderTests(unittest.TestCase):
                     testing_open_url=self.response_opener(BlockingSocketResponse()),
                 )
         finally:
+            download_finished.set()
             reader_socket.close()
             writer_socket.close()
+            peer.join(1)
 
-        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertFalse(peer.is_alive())
+        self.assertFalse(peer_sent.is_set())
         self.assertEqual(1, len(applied_timeouts))
         self.assertGreater(applied_timeouts[0], 0)
         self.assertLessEqual(applied_timeouts[0], 0.1 + 1e-9)
