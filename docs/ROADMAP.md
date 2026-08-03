@@ -48,7 +48,7 @@ catálogo.
 | Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.1` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
 | Downloads remotos | completa no código corretivo da PR 2, mesclado no baseline da issue #49; ainda não publicado em release | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
-| Arquivos ZIP/PK3/PYZ | completa no candidato local da issue #49; PR 3 ainda não publicada | regressão local em Python 3.14 e 3.10: 683 testes de manutenção e cinco do site aprovados; 11 skips explícitos (dez Windows e um smoke de rede); casos nativos Windows e matriz da PR 3 pendentes no CI; smokes nativos dos runtimes separados |
+| Arquivos ZIP/PK3/PYZ | completa no candidato local da issue #49; PR 3 ainda não publicada | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; quatorze skips exigem o runner Windows e um é o smoke de rede opt-in; casos nativos Windows e matriz da PR 3 pendentes no CI; smokes nativos dos runtimes separados |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.

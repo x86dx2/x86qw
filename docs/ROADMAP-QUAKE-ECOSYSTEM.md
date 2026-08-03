@@ -206,10 +206,11 @@ separada.
 
 **Entrega funcional:** completa no candidato local da issue #49; PR 3 ainda não
 publicada
-**Validação:** regressão local concluída em Python 3.14 e 3.10: 683 testes de
-manutenção e cinco do site aprovados, com 11 skips explícitos (dez Windows e um
-smoke de rede); matriz portável e casos nativos Windows pendentes no CI; smokes
-nativos dos runtimes permanecem pendentes
+**Validação:** regressão local concluída em Python 3.14 e 3.10: `Ran 695 tests`
+e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; quatorze
+skips exigem o runner Windows e um é o smoke de rede opt-in; matriz portável e
+casos nativos Windows pendentes no CI; smokes nativos dos runtimes permanecem
+pendentes
 
 O candidato centraliza ZIP, PK3 e PYZ em `scan_archive`, `ArchivePlan` e
 `extract_archive`. O preflight integral usa semântica POSIX e rejeita

@@ -4,8 +4,8 @@
 
 **Versão pública preservada:** `0.7.1`
 
-**Estado:** implementação e regressão local concluídas; PR 3 em validação no CI
-e não publicada
+**Estado:** implementação e regressão local concluídas; PR 3 não publicada e
+matriz CI pendente
 
 ## Problemas confirmados no baseline
 
@@ -184,12 +184,14 @@ deliberadamente incompatível.
 
 ## Evidência atual e gate restante
 
-Na validação local deste candidato, 683 testes de manutenção e cinco testes do
-site passaram tanto no Python 3.10 quanto no Python 3.14. Os 11 skips locais
-são dez verificações que exigem o runner Windows e um smoke de rede opt-in.
-`verify`, Git LFS, `git diff --check`, os parsers dos bootstraps e o dry-run do
-Worker também passaram. A matriz Ubuntu, macOS e Windows do PR continua sendo
-o gate que falta antes de classificar SEC-01 como completa.
+Na validação local deste candidato, a suíte de manutenção reportou
+`Ran 695 tests` e `OK (skipped=15)` tanto no Python 3.10 quanto no Python 3.14;
+os cinco testes do site também reportaram `OK`. Dos 15 skips locais, quatorze exigem
+o runner Windows e um é o smoke de rede opt-in. `verify`, Git LFS,
+`git diff --check`, os parsers dos bootstraps e o dry-run do Worker também
+passaram. A PR 3 permanece não publicada, e sua matriz Ubuntu, macOS e Windows
+continua sendo o gate pendente antes de classificar SEC-01 como
+multiplataforma completa.
 
 Antes de classificar a validação de SEC-01 como multiplataforma completa, o CI
 ainda precisa repetir:
@@ -215,6 +217,10 @@ nativo de ezQuake, MVDSV, QTV ou QWFWD.
 - smokes nativos e evidência do candidato pertencem aos PRs 10 e 11;
 - TAR não é extraído para o filesystem pelos fluxos atuais e permanece fora do
   contrato desta PR;
+- a sincronização build-time dos bootstraps detecta trocas, não segue symlink e
+  publica por replace atômico, mas a biblioteca padrão não oferece CAS portável
+  sobre um pathname existente; o build exige checkout exclusivo, e essa
+  garantia operacional será formalizada pela promoção imutável da PR 10;
 - `0.7.1` continua sendo a release pública e não recebe esta implementação.
 
 Nenhuma versão, catálogo, bootstrap público implantado ou bundle publicado foi

@@ -231,10 +231,11 @@ Serviços usam loopback por padrão e só são expostos com `--bind` explícito.
 O candidato corretivo da PR 3 centraliza a inspeção de ZIP, PK3 e PYZ antes de
 qualquer write de extração ou payload visível, com snapshot privado limitado,
 modos canônicos e promoção atômica. A regressão local em Python 3.14 e Python
-3.10 reporta 683 testes de manutenção e cinco testes do site aprovados, com 11
-skips explícitos; os casos nativos Windows e a matriz da PR permanecem
-pendentes no CI. O candidato não foi publicado e não pertence à release pública
-imutável `0.7.1`; o contrato está no
+3.10 reporta `Ran 695 tests` e `OK (skipped=15)` na manutenção, além de
+`Ran 5 tests` e `OK` no site; quatorze skips exigem o runner Windows e um é o
+smoke de rede opt-in. Os casos nativos Windows e a matriz da PR permanecem
+pendentes no CI. O candidato não foi publicado e não pertence à release
+pública imutável `0.7.1`; o contrato está no
 [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
 
 ## Arquitetura
