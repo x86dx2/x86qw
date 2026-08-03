@@ -14,6 +14,11 @@ A implementação `0.7.1` passou nos sete jobs obrigatórios e em 393 testes de
 manutenção mais quatro testes do site. A `0.7.0` permanece imutável no
 histórico.
 
+Baseline inicial da issue #49: merge
+`b833ba45e08a9de644dc7368f82c905522a0a558`. O candidato corretivo da
+fronteira ZIP/PK3/PYZ está em validação e não altera a release pública, o
+catálogo `current` nem os bootstraps já implantados da `0.7.1`.
+
 ## Escala de estado
 
 **Entrega funcional:** não iniciada · parcial · MVP entregue · completa
@@ -197,19 +202,36 @@ separada.
 
 ## Segurança
 
-### SEC-01 — PK3/ZIP
+### SEC-01 — ZIP/PK3/PYZ
 
-**Entrega funcional:** parcial; materialização dedicada endurecida, fronteira
-única de arquivos ainda pendente no PR 3
-**Validação:** unitária somente para os caminhos já endurecidos; matriz portável
-configurada
+**Entrega funcional:** completa no código corretivo da issue #49; ainda não
+publicada
+**Validação:** regressão local concluída em Python 3.14 e 3.10: `Ran 695 tests`
+e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da
+PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13,
+incluindo identidade e reparse point nativos Windows; smokes nativos dos
+runtimes permanecem pendentes
 
-Membros são interpretados com semântica POSIX. Traversal, drives, barras
-invertidas, controles, nomes reservados, symlinks, membros especiais e colisões
-de caixa/Unicode são rejeitados. Limites cobrem quantidade, membro, total,
-profundidade, caminho e taxa de compressão nos consumidores já migrados. O
-instalador principal e as ferramentas ainda possuem leituras ZIP/PK3 paralelas;
-`scan_archive`, `ArchivePlan` e `extract_archive` permanecem o contrato do PR 3.
+O candidato centraliza ZIP, PK3 e PYZ em `scan_archive`, `ArchivePlan` e
+`extract_archive`. O preflight integral usa semântica POSIX e rejeita
+traversal, drives, barras invertidas, controles, caracteres Win32 proibidos,
+reservados Windows, links,
+membros especiais, colisões exatas, de caixa, Unicode e de prefixo. Limites
+cobrem fonte compactada, metadados centrais, quantidade, membro, total,
+profundidade, caminho em unidades UTF-16 e razão de compressão. Um pre-scan
+estrutural conta os registros centrais antes de `zipfile`; ambas as etapas usam
+o mesmo snapshot privado e limitado, imune à troca concorrente da fonte. Reads
+validam o arquivo inteiro; extrações usam staging privado, modos canônicos
+`0644`/`0755`, `fsync` e promoção exclusiva. O destino confirmado é commit
+irreversível; falhas anteriores limpam somente o staging comprovado, promoções
+inconclusivas são preservadas e falhas posteriores preservam o destino.
+
+Os bootstraps candidatos projetam a mesma fonte canônica byte a byte e não usam
+`unzip` ou `Expand-Archive`. A release pública `0.7.1` ainda não contém essa
+fronteira. A validação do contrato de arquivos é multiplataforma completa após
+a matriz verde da PR 3; esses testes não são smokes nativos de ezQuake, MVDSV,
+QTV ou QWFWD. Consulte o
+[ADR 0002](adr/0002-fronteira-unica-de-arquivos.md).
 
 ### SEC-02 — Segredos e endpoints
 
@@ -223,12 +245,13 @@ IPv6 entre colchetes têm parser próprio.
 
 ### SEC-03 — Downloads remotos limitados
 
-**Entrega funcional:** completa no código corretivo; em revisão e ainda não
-publicada
+**Entrega funcional:** completa no código da PR 2, mesclado no baseline
+`b833ba45e08a9de644dc7368f82c905522a0a558`; ainda não publicada em uma versão
+do instalador
 
-**Validação:** 565 testes de manutenção e cinco do site aprovados localmente;
-oito skips explícitos (sete Windows e um smoke de rede); matriz do PR concluída
-em Ubuntu, macOS e Windows com Python 3.10 e 3.13
+**Validação:** evidência da PR 2: 565 testes de manutenção e cinco do site
+aprovados localmente; oito skips explícitos (sete Windows e um smoke de rede);
+matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13
 
 Artefatos persistentes exigem HTTPS, tamanho, SHA-256, limite e deadline.
 Metadados dinâmicos são efêmeros e limitados. Retries são restritos a falhas
@@ -335,4 +358,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] publicação `0.6.0` executada e verificada em etapa explícita aprovada;
 - [x] contrato Python da `0.7.1` validado em 7/7 jobs e 393 + 4 testes;
 - [x] asset imutável `0.7.1` publicado, verificado e promovido a `current`;
+- [x] matriz da PR 2 verde nos três sistemas;
+- [x] matriz da PR 3 verde nos três sistemas, inclusive os casos nativos Windows;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

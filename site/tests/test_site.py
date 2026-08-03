@@ -2,7 +2,6 @@ from html import unescape
 from html.parser import HTMLParser
 import ast
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
@@ -11,11 +10,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import zipfile
-
 
 ROOT = Path(__file__).resolve().parents[1] / "public"
 PROJECT_ROOT = ROOT.parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from x86qw_runtime.io.archive import (  # noqa: E402
+    extract_archive,
+    read_archive_members,
+    scan_archive,
+)
 
 
 class Page(HTMLParser):
@@ -215,22 +220,27 @@ class SiteTests(unittest.TestCase):
         bundle = ROOT.parents[1] / "dist" / package["distribution_path"]
         self.assertEqual(package["size"], bundle.stat().st_size)
         self.assertEqual(package["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
-        with zipfile.ZipFile(bundle) as archive:
-            names = archive.namelist()
-            prefix = f"x86qw-installer-{package['version']}"
-            identity = json.loads(archive.read(
-                f"{prefix}/installer.json"
-            ))
-            outer_version = archive.read(f"{prefix}/VERSION").decode()
-            application = archive.read(f"{prefix}/x86qw.pyz")
-            legacy_identity = json.loads(archive.read(f"{prefix}/_x86qw/installer.json"))
-            with tempfile.TemporaryDirectory() as temporary:
-                archive.extractall(temporary)
-                legacy_entrypoint = Path(temporary) / prefix / "dist/installer/bin/manager.py"
-                legacy_result = subprocess.run(
-                    [sys.executable, str(legacy_entrypoint), "--help"],
-                    check=False, capture_output=True, text=True,
-                )
+        prefix = f"x86qw-installer-{package['version']}"
+        bundle_plan = scan_archive(bundle)
+        names = bundle_plan.member_names
+        bundle_members = read_archive_members(bundle_plan, (
+            f"{prefix}/installer.json",
+            f"{prefix}/VERSION",
+            f"{prefix}/x86qw.pyz",
+            f"{prefix}/_x86qw/installer.json",
+        ))
+        identity = json.loads(bundle_members[f"{prefix}/installer.json"])
+        outer_version = bundle_members[f"{prefix}/VERSION"].decode()
+        application = bundle_members[f"{prefix}/x86qw.pyz"]
+        legacy_identity = json.loads(bundle_members[f"{prefix}/_x86qw/installer.json"])
+        with tempfile.TemporaryDirectory() as temporary:
+            extracted = Path(temporary) / "bundle"
+            extract_archive(bundle_plan, extracted)
+            legacy_entrypoint = extracted / prefix / "dist/installer/bin/manager.py"
+            legacy_result = subprocess.run(
+                [sys.executable, str(legacy_entrypoint), "--help"],
+                check=False, capture_output=True, text=True,
+            )
         self.assertEqual(
             {
                 f"{prefix}/installer.json", f"{prefix}/x86qw.pyz",
@@ -241,9 +251,14 @@ class SiteTests(unittest.TestCase):
             },
             set(names),
         )
-        with zipfile.ZipFile(io.BytesIO(application)) as zipapp:
-            embedded_identity = json.loads(zipapp.read("_x86qw/installer.json"))
-            runtime = json.loads(zipapp.read("_x86qw/components.json"))
+        application_plan = scan_archive(application, required_members=(
+            "_x86qw/installer.json", "_x86qw/components.json",
+        ))
+        application_members = read_archive_members(application_plan, (
+            "_x86qw/installer.json", "_x86qw/components.json",
+        ))
+        embedded_identity = json.loads(application_members["_x86qw/installer.json"])
+        runtime = json.loads(application_members["_x86qw/components.json"])
         self.assertEqual(
             {"format": 1, "project": "x86qw", "version": package["version"]},
             identity,

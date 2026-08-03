@@ -225,12 +225,30 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("", help_result.stderr)
 
     @staticmethod
-    def write_installer_bundle(path: Path, version: str) -> None:
+    def write_installer_bundle(
+        path: Path,
+        version: str,
+        *,
+        omit: str | None = None,
+        extra_member: str | None = None,
+    ) -> None:
         identity = json.dumps({"format": 1, "project": "x86qw", "version": version})
+        members = {
+            "x86qw.pyz": zipapp_bytes(version),
+            "VERSION": f"{version}\n",
+            "x86qw.sh": "#!/bin/sh\n",
+            "x86qw.cmd": "@echo off\r\n",
+            "installer.json": identity,
+            "dist/installer/bin/manager.py": "#!/usr/bin/env python3\n",
+            "_x86qw/installer.json": identity,
+        }
         with zipfile.ZipFile(path, "w") as package:
             prefix = f"x86qw-installer-{version}"
-            package.writestr(f"{prefix}/x86qw.pyz", zipapp_bytes(version))
-            package.writestr(f"{prefix}/installer.json", identity)
+            for name, payload in members.items():
+                if name != omit:
+                    package.writestr(f"{prefix}/{name}", payload)
+            if extra_member is not None:
+                package.writestr(f"{prefix}/{extra_member}", b"unexpected")
 
     @staticmethod
     def write_cli_receipt(target: Path, version: str, *, legacy: bool = False) -> Path:
@@ -1717,6 +1735,48 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn("shell", run.call_args.kwargs)
             self.assertFalse(any(target.glob(".x86qw-update.*")))
 
+    def test_cli_update_rejects_bundle_missing_required_member_without_handoff(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            self.write_cli_receipt(target, "1.0.4")
+            archive = root / "x86qw-installer-1.0.5.zip"
+            self.write_installer_bundle(archive, "1.0.5", omit="VERSION")
+            record = {"version": "1.0.5"}
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "installer_bundle_record", return_value=record):
+                    with mock.patch.object(installer, "download_component_package", return_value=archive):
+                        with mock.patch.object(
+                            install_qw.subprocess,
+                            "run",
+                            return_value=subprocess.CompletedProcess([], 0),
+                        ) as run:
+                            with self.assertRaises(install_qw.InstallerError):
+                                installer.handoff_cli_update("upgrade", dry_run=False)
+            run.assert_not_called()
+            self.assertFalse(any(target.glob(".x86qw-update.*")))
+
+    def test_cli_update_rejects_bundle_with_extra_member_without_handoff(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            self.write_cli_receipt(target, "1.0.4")
+            archive = root / "x86qw-installer-1.0.5.zip"
+            self.write_installer_bundle(archive, "1.0.5", extra_member="unexpected.txt")
+            record = {"version": "1.0.5"}
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "installer_bundle_record", return_value=record):
+                    with mock.patch.object(installer, "download_component_package", return_value=archive):
+                        with mock.patch.object(
+                            install_qw.subprocess,
+                            "run",
+                            return_value=subprocess.CompletedProcess([], 0),
+                        ) as run:
+                            with self.assertRaises(install_qw.InstallerError):
+                                installer.handoff_cli_update("upgrade", dry_run=False)
+            run.assert_not_called()
+            self.assertFalse(any(target.glob(".x86qw-update.*")))
+
     def test_cli_update_selects_only_the_current_bundle_from_history(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
@@ -2170,16 +2230,21 @@ class InstallerTests(unittest.TestCase):
             root = Path(temporary)
             archive = root / "bad.zip"
             destination = root / "output"
-            destination.mkdir()
             with zipfile.ZipFile(archive, "w") as package:
                 package.writestr("../escape", b"bad")
-            with self.assertRaisesRegex(install_qw.InstallerError, "unsafe archive path"):
+            with self.assertRaisesRegex(install_qw.InstallerError, "Pacote ZIP inválido"):
                 install_qw.safe_extract_zip(archive, destination)
             self.assertFalse((root / "escape").exists())
+            self.assertFalse(destination.exists())
 
     def test_windows_drive_archive_path_is_rejected(self):
-        with self.assertRaisesRegex(install_qw.InstallerError, "unsafe archive path"):
-            install_qw.archive_relative_path("C:/escape")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "bad-drive.zip"
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr("C:/escape", b"bad")
+            with self.assertRaisesRegex(install_qw.InstallerError, "Pacote ZIP inválido"):
+                install_qw.safe_extract_zip(archive, root / "output")
 
     def test_portable_binary_formats(self):
         with tempfile.TemporaryDirectory() as temporary:

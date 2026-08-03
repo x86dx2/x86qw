@@ -6,9 +6,20 @@ import hashlib
 import io
 import json
 import struct
+import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    read_archive_members,
+    scan_archive,
+)
 
 try:
     from .components import (
@@ -141,15 +152,7 @@ def rewrite_zip_members(
     additions = additions or set()
     if not additions <= set(replacements):
         raise ValueError("component archive additions must have a declared payload")
-    source = io.BytesIO(payload)
-    output = io.BytesIO()
-    with zipfile.ZipFile(source) as original:
-        if original.testzip() is not None:
-            raise ValueError("base component archive contains a corrupt member")
-        original_files = {
-            info.filename: original.read(info.filename)
-            for info in original.infolist() if not info.is_dir()
-        }
+    original_files = read_zip_members(payload, "base component archive")
     original_names = set(original_files)
     missing = set(replacements) - original_names - additions
     collisions = additions & original_names
@@ -158,13 +161,7 @@ def rewrite_zip_members(
     if collisions:
         raise ValueError(f"component archive addition already exists: {sorted(collisions)[0]}")
     original_files.update(replacements)
-    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
-        for name, data in sorted(original_files.items()):
-            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            rebuilt.writestr(info, data)
-    return output.getvalue()
+    return build_zip_members(original_files)
 
 
 def build_zip_members(files: dict[str, bytes]) -> bytes:
@@ -174,33 +171,25 @@ def build_zip_members(files: dict[str, bytes]) -> bytes:
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
         for name, data in sorted(files.items()):
-            relative = PurePosixPath(name)
-            if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
-                raise ValueError(f"unsafe component archive member: {name}")
             info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
             rebuilt.writestr(info, data)
-    return output.getvalue()
+    payload = output.getvalue()
+    try:
+        scan_archive(payload)
+    except ArchiveError as error:
+        raise ValueError(f"unsafe component archive member: {error}") from error
+    return payload
 
 
 def read_zip_members(payload: bytes, label: str) -> dict[str, bytes]:
     """Read a ZIP/PK3 into a safe, duplicate-free member map."""
-    members: dict[str, bytes] = {}
-    with zipfile.ZipFile(io.BytesIO(payload)) as package:
-        corrupt = package.testzip()
-        if corrupt is not None:
-            raise ValueError(f"{label} contains a corrupt member: {corrupt}")
-        for info in package.infolist():
-            if info.is_dir():
-                continue
-            name = info.filename
-            relative = PurePosixPath(name)
-            if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
-                raise ValueError(f"{label} contains an unsafe member: {name}")
-            if name in members:
-                raise ValueError(f"{label} contains a duplicate member: {name}")
-            members[name] = package.read(info)
+    try:
+        plan = scan_archive(payload)
+        members = read_archive_members(plan)
+    except ArchiveError as error:
+        raise ValueError(f"{label} is not a safe archive: {error}") from error
     if not members:
         raise ValueError(f"{label} contains no files")
     return members
@@ -400,46 +389,38 @@ def apply_archive_text_replacements(
     ]
     if not replacements:
         return payload, []
+    current = read_zip_members(payload, f"archive text target {target_archive}")
     member_payloads: dict[str, bytes] = {}
     applied: list[dict[str, str]] = []
-    with zipfile.ZipFile(io.BytesIO(payload)) as package:
-        for replacement in replacements:
-            member = str(replacement["member"])
-            if member in member_payloads:
-                member_payload = member_payloads[member]
-            else:
-                try:
-                    member_payload = package.read(member)
-                except KeyError as error:
-                    raise ValueError(f"archive text replacement member is missing: {member}") from error
-            source_sha256 = file_sha256_bytes(member_payload)
-            if source_sha256 != replacement["source_sha256"]:
-                raise ValueError(f"archive member source failed integrity: {member}")
-            before = str(replacement["before"]).encode("utf-8")
-            after = str(replacement["after"]).encode("utf-8")
-            count = int(replacement.get("count", 1))
-            if member_payload.count(before) != count:
-                raise ValueError(f"archive text replacement is not uniquely applicable: {member}")
-            member_payloads[member] = member_payload.replace(before, after, count)
-            applied.append({
-                "target_archive": target_archive,
-                "member": member,
-                "source_sha256": source_sha256,
-                "replacement_sha256": file_sha256_bytes(after),
-            })
+    for replacement in replacements:
+        member = str(replacement["member"])
+        if member in member_payloads:
+            member_payload = member_payloads[member]
+        else:
+            try:
+                member_payload = current[member]
+            except KeyError as error:
+                raise ValueError(f"archive text replacement member is missing: {member}") from error
+        source_sha256 = file_sha256_bytes(member_payload)
+        if source_sha256 != replacement["source_sha256"]:
+            raise ValueError(f"archive member source failed integrity: {member}")
+        before = str(replacement["before"]).encode("utf-8")
+        after = str(replacement["after"]).encode("utf-8")
+        count = int(replacement.get("count", 1))
+        if member_payload.count(before) != count:
+            raise ValueError(f"archive text replacement is not uniquely applicable: {member}")
+        member_payloads[member] = member_payload.replace(before, after, count)
+        applied.append({
+            "target_archive": target_archive,
+            "member": member,
+            "source_sha256": source_sha256,
+            "replacement_sha256": file_sha256_bytes(after),
+        })
     return rewrite_zip_members(payload, member_payloads), applied
 
 
 def move_zip_members(payload: bytes, moves: dict[str, str]) -> bytes:
-    source = io.BytesIO(payload)
-    output = io.BytesIO()
-    with zipfile.ZipFile(source) as original:
-        if original.testzip() is not None:
-            raise ValueError("base component archive contains a corrupt member")
-        original_files = {
-            info.filename: original.read(info.filename)
-            for info in original.infolist() if not info.is_dir()
-        }
+    original_files = read_zip_members(payload, "base component archive")
     missing = set(moves) - set(original_files)
     collisions = set(moves.values()) & (set(original_files) - set(moves))
     if missing:
@@ -448,37 +429,17 @@ def move_zip_members(payload: bytes, moves: dict[str, str]) -> bytes:
         raise ValueError(f"component archive move destination already exists: {sorted(collisions or moves.values())[0]}")
     for old, new in moves.items():
         original_files[new] = original_files.pop(old)
-    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
-        for name, data in sorted(original_files.items()):
-            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            rebuilt.writestr(info, data)
-    return output.getvalue()
+    return build_zip_members(original_files)
 
 
 def remove_zip_members(payload: bytes, removals: set[str]) -> bytes:
-    source = io.BytesIO(payload)
-    output = io.BytesIO()
-    with zipfile.ZipFile(source) as original:
-        if original.testzip() is not None:
-            raise ValueError("base component archive contains a corrupt member")
-        original_files = {
-            info.filename: original.read(info.filename)
-            for info in original.infolist() if not info.is_dir()
-        }
+    original_files = read_zip_members(payload, "base component archive")
     missing = removals - set(original_files)
     if missing:
         raise ValueError(f"component archive removal target is missing: {sorted(missing)[0]}")
     for name in removals:
         del original_files[name]
-    with zipfile.ZipFile(output, "w", allowZip64=True) as rebuilt:
-        for name, data in sorted(original_files.items()):
-            info = zipfile.ZipInfo(name, (2020, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            rebuilt.writestr(info, data)
-    return output.getvalue()
+    return build_zip_members(original_files)
 
 
 def read_pak_members(payload: bytes) -> list[tuple[str, bytes]]:

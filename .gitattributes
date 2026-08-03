@@ -15,10 +15,10 @@ dist/services/**/x86qw/runtime/** filter=lfs diff=lfs merge=lfs -text
 
 # Project-authored metadata and overlays remain reviewable as text.
 dist/manifest.json diff merge text
-dist/installer/**/*.py diff merge text
+dist/installer/**/*.py diff merge text eol=lf
 dist/installer/**/*.md diff merge text
-dist/installer/**/*.sh diff merge text
-dist/installer/**/*.ps1 diff merge text
+dist/installer/**/*.sh diff merge text eol=lf
+dist/installer/**/*.ps1 diff merge text eol=lf
 dist/installer/bin/x86qw diff merge text
 dist/installer/**/*.cmd diff merge text
 dist/mods/**/*.cfg diff merge text
@@ -31,3 +31,6 @@ dist/mods/**/x86qw/runtime/qwprogs.map filter=lfs diff=lfs merge=lfs -text
 
 # Generated public contracts are byte-compared by verify on every platform.
 site/public/api/v1/*.json text eol=lf
+site/public/install.sh text eol=lf
+site/public/install.ps1 text eol=lf
+x86qw_runtime/io/archive.py text eol=lf

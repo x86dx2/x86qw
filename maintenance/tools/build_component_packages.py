@@ -7,33 +7,37 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from .build_artifacts import (
+        exact_bytes_validator,
+        publish_verified_file,
+        staged_artifact,
+    )
     from .component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
     from .validate_catalog import DEFAULT_CATALOG, validate_catalog
 except ImportError:  # Execucao direta
+    from build_artifacts import exact_bytes_validator, publish_verified_file, staged_artifact
     from component_sources import load_source_context, resolve_component_payloads, rewrite_zip_members
     from validate_catalog import DEFAULT_CATALOG, validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.archive import ArchiveError, read_archive_members, scan_archive
+
 COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
 FIXED_ZIP_TIME = (2020, 1, 1, 0, 0, 0)
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 GITLAB_PROJECT_ID = "84813414"
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def component_package_metadata(
@@ -80,7 +84,6 @@ def build_packages(
     reference_release = f"nquake-{commit}"
     build_id = f"components-{commit}"
     release_root = output / build_id
-    release_root.mkdir(parents=True, exist_ok=True)
     packages = []
     for identifier in components:
         release_metadata, source_revision, payloads = resolve_component_payloads(context, identifier)
@@ -89,31 +92,59 @@ def build_packages(
         filename = f"{identifier}-{version}.zip"
         artifact = release_root / filename
         members: list[dict[str, str]] = []
-        with zipfile.ZipFile(artifact, "w", allowZip64=True) as package:
-            for upstream_path, member_name, payload, overrides in payloads:
-                member_metadata: dict[str, object] = {
-                    "path": member_name,
-                    "sha256": hashlib.sha256(payload).hexdigest(),
-                    "source": upstream_path,
-                }
-                if overrides:
-                    member_metadata["overrides"] = overrides
-                members.append(member_metadata)
-                info, data = zip_member(member_name, payload)
+        with staged_artifact(
+            artifact, root=output, prefix=f".{identifier}-",
+        ) as staged:
+            with zipfile.ZipFile(staged.stream, "w", allowZip64=True) as package:
+                for upstream_path, member_name, payload, overrides in payloads:
+                    member_metadata: dict[str, object] = {
+                        "path": member_name,
+                        "sha256": hashlib.sha256(payload).hexdigest(),
+                        "source": upstream_path,
+                    }
+                    if overrides:
+                        member_metadata["overrides"] = overrides
+                    members.append(member_metadata)
+                    info, data = zip_member(member_name, payload)
+                    package.writestr(info, data)
+                metadata = component_package_metadata(
+                    identifier,
+                    version,
+                    strategy,
+                    source_revision,
+                    members,
+                    commit if release_metadata.get("archive_layers") else None,
+                )
+                package_metadata = json.dumps(
+                    metadata, ensure_ascii=False, indent=2, sort_keys=True,
+                ).encode() + b"\n"
+                info, data = zip_member("_x86qw/component.json", package_metadata)
                 package.writestr(info, data)
-            metadata = component_package_metadata(
-                identifier,
-                version,
-                strategy,
-                source_revision,
-                members,
-                commit if release_metadata.get("archive_layers") else None,
+            staged.seal()
+
+            def validate(path: Path):
+                try:
+                    plan = scan_archive(
+                        path,
+                        required_members=(
+                            *(str(member["path"]) for member in members),
+                            "_x86qw/component.json",
+                        ),
+                    )
+                    read_archive_members(plan, ())
+                except ArchiveError as error:
+                    raise ValueError(
+                        f"component package failed canonical archive validation: {path}: {error}"
+                    ) from error
+                return plan
+
+            plan = publish_verified_file(
+                staged,
+                artifact,
+                validate=validate,
+                fingerprint=lambda value: (value.source_size, value.source_sha256),
+                conflict_message=f"component package target already differs: {artifact}",
             )
-            package_metadata = json.dumps(
-                metadata, ensure_ascii=False, indent=2, sort_keys=True,
-            ).encode() + b"\n"
-            info, data = zip_member("_x86qw/component.json", package_metadata)
-            package.writestr(info, data)
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
         gitlab_url = (
@@ -143,8 +174,8 @@ def build_packages(
             "platform": "any",
             "architecture": "any",
             "filename": filename,
-            "size": artifact.stat().st_size,
-            "sha256": file_sha256(artifact),
+            "size": plan.source_size,
+            "sha256": plan.source_sha256,
             "origin_url": mirror_url,
             "license": str(release_metadata.get("license", "upstream-distfiles-terms")),
             "license_url": str(release_metadata.get("license_url", f"https://github.com/nQuake/distfiles/tree/{commit}")),
@@ -174,10 +205,22 @@ def build_packages(
         "release_inventory": component_releases.name,
         "packages": packages,
     }
-    (release_root / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    manifest_path = release_root / "manifest.json"
+    manifest_bytes = (
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    with staged_artifact(
+        manifest_path, root=output, prefix=".manifest-",
+    ) as staged:
+        staged.stream.write(manifest_bytes)
+        staged.seal()
+        publish_verified_file(
+            staged,
+            manifest_path,
+            validate=exact_bytes_validator(manifest_bytes),
+            fingerprint=lambda value: value,
+            conflict_message=f"component manifest already differs: {manifest_path}",
+        )
     return manifest
 
 

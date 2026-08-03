@@ -1817,6 +1817,24 @@ class ModernComponentTests(unittest.TestCase):
             )
             self.assertEqual(1, count)
             self.assertEqual(1, installer.verify_component("ktx"))
+            managed_pk3 = target / "qw/ktx.pk3"
+            replacement = io.BytesIO()
+            with zipfile.ZipFile(replacement, "w") as package:
+                package.writestr("progs.dat", b"different but valid")
+            managed_pk3.write_bytes(replacement.getvalue())
+            real_file_hash = install_qw.file_hash
+
+            def stale_hash(path: Path) -> str:
+                if path == managed_pk3:
+                    return hashlib.sha256(payload).hexdigest()
+                return real_file_hash(path)
+
+            with mock.patch.object(install_qw, "file_hash", side_effect=stale_hash):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError,
+                    "Arquivo gerenciado foi alterado",
+                ):
+                    installer.verify_component("ktx")
 
     def test_ktx_component_accepts_an_independent_upstream_version(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3870,7 +3888,6 @@ class ModernComponentTests(unittest.TestCase):
             (maps / "custom.bsp").write_bytes(b"bsp")
             with zipfile.ZipFile(target / "td2/addon.pk3", "w") as archive:
                 archive.writestr("maps/zipmap.bsp", b"bsp")
-                archive.writestr("../maps/escape.bsp", b"bad")
             id1 = target / "id1"
             id1.mkdir()
             payload = b"bsp"
@@ -3879,6 +3896,11 @@ class ModernComponentTests(unittest.TestCase):
                 b"PACK" + struct.pack("<II", 12 + len(payload), len(member)) + payload + member
             )
             self.assertEqual(["custom", "dm6", "zipmap"], installer.local_map_names("td2"))
+            with zipfile.ZipFile(target / "td2/addon.pk3", "w") as archive:
+                archive.writestr("maps/zipmap.bsp", b"bsp")
+                archive.writestr("../maps/escape.bsp", b"bad")
+            with self.assertRaisesRegex(play_qw.InstallerError, "Pacote de mapas inválido"):
+                installer.local_map_names("td2")
 
     def test_hub_uses_native_join_observe_and_qtv_commands(self):
         with tempfile.TemporaryDirectory() as temporary:

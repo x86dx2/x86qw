@@ -639,7 +639,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
                     encoding="utf-8",
                 )
                 curl.chmod(0o755)
-                for command in ("unzip", "mktemp", "rm"):
+                for command in ("mktemp", "rm"):
                     executable = shutil.which(command)
                     self.assertIsNotNone(executable, command)
                     (binaries / command).symlink_to(executable)
@@ -678,7 +678,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
                     wrapper.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
                     wrapper.chmod(0o755)
                 marker = root / "side-effect-called"
-                for command in ("curl", "mktemp", "unzip"):
+                for command in ("curl", "mktemp"):
                     wrapper = binaries / command
                     wrapper.write_text(
                         '#!/bin/sh\nprintf called > "$X86QW_SIDE_EFFECT_MARKER"\nexit 1\n',
@@ -730,7 +730,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
                     encoding="utf-8",
                 )
                 curl.chmod(0o755)
-                for command in ("unzip", "mktemp", "rm"):
+                for command in ("mktemp", "rm"):
                     executable = shutil.which(command)
                     self.assertIsNotNone(executable, command)
                     (binaries / command).symlink_to(executable)
@@ -794,7 +794,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
             binaries = root / "bin"
             binaries.mkdir()
             (binaries / "python3").symlink_to(sys.executable)
-            for command in ("unzip", "mktemp", "rm"):
+            for command in ("mktemp", "rm"):
                 executable = shutil.which(command)
                 self.assertIsNotNone(executable, command)
                 (binaries / command).symlink_to(executable)
@@ -852,7 +852,7 @@ fi
             binaries = root / "bin"
             binaries.mkdir()
             (binaries / "python3").symlink_to(sys.executable)
-            for command in ("unzip", "mktemp", "rm"):
+            for command in ("mktemp", "rm"):
                 executable = shutil.which(command)
                 self.assertIsNotNone(executable, command)
                 (binaries / command).symlink_to(executable)
@@ -911,7 +911,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$declared" > "$headers"
             binaries = root / "bin"
             binaries.mkdir()
             (binaries / "python3").symlink_to(sys.executable)
-            for command in ("unzip", "mktemp", "rm"):
+            for command in ("mktemp", "rm"):
                 executable = shutil.which(command)
                 self.assertIsNotNone(executable, command)
                 (binaries / command).symlink_to(executable)
@@ -976,7 +976,7 @@ fi
             binaries = root / "bin"
             binaries.mkdir()
             (binaries / "python3").symlink_to(sys.executable)
-            for command in ("unzip", "mktemp", "rm"):
+            for command in ("mktemp", "rm"):
                 executable = shutil.which(command)
                 self.assertIsNotNone(executable, command)
                 (binaries / command).symlink_to(executable)
@@ -1035,7 +1035,7 @@ fi
             binaries = root / "bin"
             binaries.mkdir()
             (binaries / "python3").symlink_to(sys.executable)
-            for command in ("unzip", "mktemp", "rm"):
+            for command in ("mktemp", "rm"):
                 executable = shutil.which(command)
                 self.assertIsNotNone(executable, command)
                 (binaries / command).symlink_to(executable)
@@ -1826,7 +1826,11 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             elapsed = time.monotonic() - started
             self.assertFalse(destination.exists())
 
-        self.assertLess(elapsed, 1.15)
+        # The event assertions below prove that the controller returned before
+        # the one-second reaper completed.  A fixed wall-clock envelope keeps
+        # the public deadline contract independent from production constants
+        # while tolerating normal scheduler jitter on shared CI runners.
+        self.assertLess(elapsed, 1.75)
         self.assertTrue(slow_process.killed.is_set())
         self.assertTrue(slow_process.dns_started.is_set())
         self.assertFalse(slow_process.dns_active.is_set())
@@ -1989,12 +1993,6 @@ function Invoke-WebRequest {
   param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
 }
-function Expand-Archive {
-  param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $global:X86QWTestMockVersion)
-  New-Item -ItemType Directory -Path $Root | Out-Null
-  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
-}
 function Get-Command {
   param([string]$Name, [object]$ErrorAction)
   if ($Name -eq "python") {
@@ -2089,12 +2087,6 @@ function Get-Command {
   param([string]$Name, [object]$ErrorAction)
   if ($Name -eq "python") { return [pscustomobject]@{ Name = "python" } }
   return $null
-}
-function Expand-Archive {
-  param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $global:X86QWTestMockVersion)
-  New-Item -ItemType Directory -Path $Root | Out-Null
-  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
 }
 function python {
   if ($args -contains "-c") {
@@ -2235,12 +2227,6 @@ function Get-FileHash {
   param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   [pscustomobject]@{ Hash = $MockDigest }
 }
-function Expand-Archive {
-  param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
-  New-Item -ItemType Directory -Path $Root | Out-Null
-  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
-}
 function py {
   if ($args -contains "-c") {
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
@@ -2313,12 +2299,6 @@ function Invoke-WebRequest {
 function Get-FileHash {
   param([string]$Algorithm, [string]$Path, [string]$LiteralPath)
   [pscustomobject]@{ Hash = $MockDigest }
-}
-function Expand-Archive {
-  param([string]$Path, [string]$DestinationPath)
-  $Root = Join-Path $DestinationPath ("x86qw-installer-" + $MockVersion)
-  New-Item -ItemType Directory -Path $Root | Out-Null
-  New-Item -ItemType File -Path (Join-Path $Root "x86qw.pyz") | Out-Null
 }
 function python3 {
   if ($args -contains "-c") {

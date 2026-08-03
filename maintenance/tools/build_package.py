@@ -6,21 +6,36 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import sys
 import tarfile
 import tempfile
-import zipfile
 from pathlib import Path, PurePosixPath
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from x86qw_runtime.io.archive import (
+    ArchiveError,
+    ArchivePlan,
+    read_archive_members,
+    scan_archive,
+)
 
 try:
     from .add_package import register_package
+    from .build_artifacts import (
+        exact_bytes_validator,
+        publish_verified_file,
+        staged_artifact,
+    )
     from .validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
     from .validate_recipes import validate_recipe
     from .downloader import DownloadError, MAX_ARTIFACT_BYTES, PinnedArtifact, download as bounded_download
 except ImportError:  # Execucao direta
     from add_package import register_package
+    from build_artifacts import exact_bytes_validator, publish_verified_file, staged_artifact
     from validate_catalog import DEFAULT_CATALOG, PACKAGE_FIELDS, ROOT
     from validate_recipes import validate_recipe
     from downloader import DownloadError, MAX_ARTIFACT_BYTES, PinnedArtifact, download as bounded_download
@@ -37,27 +52,11 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_zip(path: Path, expected_members: list[str]) -> None:
-    if not zipfile.is_zipfile(path):
-        raise ValueError("artifact is not a ZIP archive")
-    with zipfile.ZipFile(path) as archive:
-        names: set[str] = set()
-        for member in archive.infolist():
-            name = member.filename.rstrip("/")
-            if not name:
-                continue
-            relative = PurePosixPath(name)
-            if relative.is_absolute() or ".." in relative.parts or "\\" in name:
-                raise ValueError(f"archive contains an unsafe path: {member.filename}")
-            if member.flag_bits & 0x1:
-                raise ValueError(f"archive contains an encrypted member: {member.filename}")
-            names.add(name)
-        missing = sorted(set(expected_members) - names)
-        if missing:
-            raise ValueError(f"archive is missing expected member: {missing[0]}")
-        bad = archive.testzip()
-        if bad is not None:
-            raise ValueError(f"archive member failed CRC validation: {bad}")
+def verify_zip(path: Path, expected_members: list[str]) -> ArchivePlan:
+    try:
+        return scan_archive(path, required_members=expected_members)
+    except ArchiveError as error:
+        raise ValueError(f"artifact is not a safe ZIP archive: {error}") from error
 
 
 def verify_tar_gz(path: Path, expected_members: list[str]) -> None:
@@ -81,19 +80,31 @@ def verify_tar_gz(path: Path, expected_members: list[str]) -> None:
         raise ValueError(f"archive is missing expected member: {missing[0]}")
 
 
-def verify_artifact(path: Path, package: dict[str, object]) -> None:
+def verify_artifact(path: Path, package: dict[str, object]) -> tuple[int, str]:
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"artifact must be a regular file: {path}")
-    size = path.stat().st_size
+    initial_size = path.stat().st_size
+    if initial_size != package["size"]:
+        raise ValueError(
+            f"artifact size mismatch: expected {package['size']}, got {initial_size}"
+        )
+    if package["artifact_format"] == "zip":
+        plan = verify_zip(path, package["expected_members"])
+        read_archive_members(plan, ())
+        size = plan.source_size
+        digest = plan.source_sha256
+    else:
+        size = path.stat().st_size
+        digest = file_sha256(path)
+    # The authenticated archive plan remains authoritative if the path changes
+    # after the inexpensive early size check.
     if size != package["size"]:
         raise ValueError(f"artifact size mismatch: expected {package['size']}, got {size}")
-    digest = file_sha256(path)
     if digest != package["sha256"]:
         raise ValueError(f"artifact SHA-256 mismatch: expected {package['sha256']}, got {digest}")
-    if package["artifact_format"] == "zip":
-        verify_zip(path, package["expected_members"])
-    elif package["artifact_format"] == "tar.gz":
+    if package["artifact_format"] == "tar.gz":
         verify_tar_gz(path, package["expected_members"])
+    return int(size), str(digest)
 
 
 def download(url: str, destination: Path, expected_size: int, expected_sha256: str) -> None:
@@ -126,7 +137,6 @@ def build_package(
         package["component"], package["version"], package["channel"],
         f"{package['platform']}-{package['architecture']}",
     )
-    target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / package["filename"]
     manifest = target_dir / "manifest.json"
 
@@ -141,20 +151,19 @@ def build_package(
                 raise ValueError(f"artifact must be a regular file: {artifact}")
             shutil.copyfile(artifact, candidate)
         verify_artifact(candidate, package)
-
-        if target.exists():
-            verify_artifact(target, package)
-        else:
-            descriptor, temporary_name = tempfile.mkstemp(prefix=".artifact-", dir=target_dir)
-            os.close(descriptor)
-            temporary_target = Path(temporary_name)
-            try:
-                shutil.copyfile(candidate, temporary_target)
-                os.replace(temporary_target, target)
-            finally:
-                if temporary_target.exists():
-                    temporary_target.unlink()
-            target.chmod(0o644)
+        with staged_artifact(
+            target, root=output_root, prefix=".artifact-",
+        ) as staged:
+            with candidate.open("rb") as source:
+                shutil.copyfileobj(source, staged.stream)
+            staged.seal()
+            publish_verified_file(
+                staged,
+                target,
+                validate=lambda path: verify_artifact(path, package),
+                fingerprint=lambda value: value,
+                conflict_message=f"artifact target already differs: {target}",
+            )
 
     public_package = {key: package[key] for key in PACKAGE_FIELDS}
     public_package["distribution_path"] = target.relative_to(output_root).as_posix()
@@ -166,10 +175,18 @@ def build_package(
         "package": public_package,
     }
     encoded = (json.dumps(manifest_data, ensure_ascii=False, indent=2) + "\n").encode()
-    if manifest.exists() and manifest.read_bytes() != encoded:
-        raise ValueError(f"manifest already exists with different contents: {manifest}")
-    manifest.write_bytes(encoded)
-    manifest.chmod(0o644)
+    with staged_artifact(
+        manifest, root=output_root, prefix=".manifest-",
+    ) as staged:
+        staged.stream.write(encoded)
+        staged.seal()
+        publish_verified_file(
+            staged,
+            manifest,
+            validate=exact_bytes_validator(encoded),
+            fingerprint=lambda value: value,
+            conflict_message=f"manifest already exists with different contents: {manifest}",
+        )
     return target, manifest, public_package
 
 

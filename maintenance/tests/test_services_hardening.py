@@ -22,6 +22,115 @@ sys.path.insert(0, str(ROOT / "dist/installer/bin"))
 import services  # noqa: E402
 
 
+class FakeWindowsFileApi:
+    """Portable filesystem-backed stand-in for the narrow Win32 handle API."""
+
+    GENERIC_READ = services._WindowsFileApi.GENERIC_READ
+    GENERIC_WRITE = services._WindowsFileApi.GENERIC_WRITE
+    DELETE = services._WindowsFileApi.DELETE
+    FILE_READ_ATTRIBUTES = services._WindowsFileApi.FILE_READ_ATTRIBUTES
+    CREATE_NEW = services._WindowsFileApi.CREATE_NEW
+    OPEN_EXISTING = services._WindowsFileApi.OPEN_EXISTING
+
+    def __init__(self):
+        self.paths = {}
+        self.moves = []
+        self.deleted = []
+        self.next_handle = 1
+
+    def open_handle(self, path, *, access, creation, directory):
+        path = Path(path)
+        stream = None
+        if directory:
+            metadata = path.lstat()
+            if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+                raise OSError("diretório inseguro")
+        else:
+            mode = "x+b" if creation == self.CREATE_NEW else "rb"
+            stream = path.open(mode)
+            metadata = path.lstat()
+            if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+                stream.close()
+                raise OSError("arquivo inseguro")
+        handle = self.next_handle
+        self.next_handle += 1
+        self.paths[handle] = {
+            "path": path,
+            "directory": directory,
+            "stream": stream,
+            "identity": (metadata.st_dev, metadata.st_ino),
+            "delete": False,
+        }
+        return handle
+
+    def close(self, handle):
+        opened = self.paths.pop(handle)
+        stream = opened["stream"]
+        if stream is not None:
+            stream.close()
+        if opened["delete"]:
+            path = opened["path"]
+            metadata = path.lstat()
+            if (metadata.st_dev, metadata.st_ino) != opened["identity"]:
+                raise OSError("nome substituído")
+            if opened["directory"]:
+                path.rmdir()
+            else:
+                path.unlink()
+            self.deleted.append(path)
+
+    def checked_identity(self, handle, *, directory):
+        opened = self.paths[handle]
+        if opened["directory"] != directory:
+            raise OSError("tipo incompatível")
+        return opened["identity"]
+
+    def write(self, handle, payload):
+        self.paths[handle]["stream"].write(payload)
+
+    def flush(self, handle):
+        stream = self.paths[handle]["stream"]
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    def size(self, handle):
+        return os.fstat(self.paths[handle]["stream"].fileno()).st_size
+
+    def hash(self, handle, *, expected_size):
+        stream = self.paths[handle]["stream"]
+        limit = services._assert_hashable_size(self.size(handle), expected_size)
+        stream.seek(0)
+        digest = services.hashlib.sha256()
+        total = 0
+        while True:
+            block = stream.read(min(1024 * 1024, limit - total + 1))
+            if not block:
+                break
+            total += len(block)
+            if total > limit:
+                raise OSError("arquivo excedeu o limite")
+            digest.update(block)
+        if expected_size is not None and total != expected_size:
+            raise OSError("tamanho divergente")
+        if self.size(handle) != total:
+            raise OSError("arquivo mudou durante o hashing")
+        return digest.hexdigest()
+
+    def move_no_replace(self, source, destination):
+        if os.path.lexists(destination):
+            raise FileExistsError(destination)
+        os.rename(source, destination)
+        self.moves.append((Path(source), Path(destination)))
+
+    def mark_delete(self, handle):
+        opened = self.paths[handle]
+        path = opened["path"]
+        current = path.lstat()
+        if opened["identity"] != (current.st_dev, current.st_ino):
+            raise OSError("nome substituído")
+        opened["delete"] = True
+
+
 class ServiceHardeningTests(unittest.TestCase):
     def package(self, root: Path, members: list[tuple[str, bytes]]) -> tuple[Path, Path]:
         destination = root / "qw"
@@ -81,6 +190,753 @@ class ServiceHardeningTests(unittest.TestCase):
             )
             with self.assertRaises(services.InstallerError):
                 services.materialize_dedicated_pk3(package, destination, "teste")
+
+    def test_pk3_materialization_and_cleanup_are_reversible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            self.assertEqual(b"managed", destination.read_bytes())
+            self.assertTrue(materialized.files[0].created_by_session)
+
+            services.cleanup_dedicated_ktx(materialized)
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.parent.exists())
+            self.assertTrue(package.exists())
+
+    def test_pk3_journal_records_created_directory_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            journal = services.SessionJournal(root)
+
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste", journal,
+            )
+
+            recorded = journal.data["created_directories"]
+            self.assertEqual(1, len(recorded))
+            self.assertEqual("qw/configs", recorded[0]["path"])
+            self.assertIsInstance(recorded[0]["device"], int)
+            self.assertIsInstance(recorded[0]["inode"], int)
+            self.assertEqual(
+                materialized.directories[0].identity,
+                (recorded[0]["device"], recorded[0]["inode"]),
+            )
+            recorded_file = journal.data["materialized_files"][0]
+            self.assertEqual(len(b"managed"), recorded_file["expected_size"])
+            services.cleanup_dedicated_ktx(materialized)
+
+    def test_managed_hashing_rejects_oversize_before_reading_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "oversize.cfg"
+            with path.open("wb") as output:
+                output.truncate(8 * 1024 * 1024)
+            descriptor = os.open(path, os.O_RDONLY)
+            try:
+                with mock.patch.object(services.os, "read", wraps=os.read) as read:
+                    with self.assertRaises(OSError):
+                        services._hash_open_file(descriptor, expected_size=7)
+                read.assert_not_called()
+            finally:
+                os.close(descriptor)
+            with self.assertRaises(OSError):
+                services.file_sha256(path, expected_size=7)
+
+    def test_managed_hashing_caps_legacy_files_without_expected_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "oversize.cfg"
+            with path.open("wb") as output:
+                output.truncate(services._MAX_MANAGED_FILE_SIZE + 1)
+            with self.assertRaises(OSError):
+                services.file_sha256(path)
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported() or os.name == "nt",
+        "recuperação ancorada requer handles POSIX ou Win32",
+    )
+    def test_pk3_recovery_uses_recorded_file_and_directory_identities(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            journal = services.SessionJournal(root)
+            services.materialize_dedicated_pk3(
+                package, destination_root, "teste", journal,
+            )
+
+            services.recover_sessions(root)
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.parent.exists())
+            self.assertEqual("clean", json.loads(
+                journal.path.read_text(encoding="utf-8"),
+            )["status"])
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "corrida requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_never_overwrites_personal_file_created_before_promotion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            real_link = os.link
+
+            def create_personal_then_link(source, target, **kwargs):
+                descriptor = os.open(
+                    target,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=kwargs["dst_dir_fd"],
+                )
+                with os.fdopen(descriptor, "wb") as output:
+                    output.write(b"personal")
+                return real_link(source, target, **kwargs)
+
+            with mock.patch.object(services.os, "link", side_effect=create_personal_then_link):
+                with self.assertRaisesRegex(
+                    services.InstallerError, "surgiu durante a preparação",
+                ):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual(b"personal", destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "corrida requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_parent_swapped_to_symlink_causes_zero_external_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            parent = destination_root / "configs"
+            parent.mkdir()
+            original_parent = destination_root / "configs-original"
+            external = root / "external"
+            external.mkdir()
+            marker = external / "personal.txt"
+            marker.write_text("personal", encoding="utf-8")
+            real_open_parent = services._secure_archive_parent
+            calls = 0
+
+            def swap_before_second_pass(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    parent.rename(original_parent)
+                    parent.symlink_to(external, target_is_directory=True)
+                return real_open_parent(*args, **kwargs)
+
+            with mock.patch.object(
+                services, "_secure_archive_parent", side_effect=swap_before_second_pass,
+            ):
+                with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual([marker], list(external.iterdir()))
+            self.assertEqual("personal", marker.read_text(encoding="utf-8"))
+            self.assertEqual([], list(original_parent.iterdir()))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "corrida requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_detects_destination_replaced_after_atomic_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            real_link = os.link
+
+            def replace_after_link(source, target, **kwargs):
+                result = real_link(source, target, **kwargs)
+                os.unlink(target, dir_fd=kwargs["dst_dir_fd"])
+                descriptor = os.open(
+                    target,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=kwargs["dst_dir_fd"],
+                )
+                with os.fdopen(descriptor, "wb") as output:
+                    output.write(b"personal")
+                return result
+
+            with mock.patch.object(services.os, "link", side_effect=replace_after_link):
+                with self.assertRaisesRegex(
+                    services.InstallerError, "substituído durante a preparação",
+                ):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual(b"personal", destination.read_bytes())
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "rollback requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_posix_journal_failure_preserves_modified_promoted_inode(self):
+        class FailingJournal:
+            def record_directory(self, entry):
+                return None
+
+            def record_materialized(self, entry):
+                entry.path.write_bytes(b"personal-concurrent-data")
+                raise RuntimeError("journal indisponível")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            output = io.StringIO()
+
+            with contextlib.redirect_stdout(output), self.assertRaisesRegex(
+                services.InstallerError, "journal indisponível",
+            ):
+                services.materialize_dedicated_pk3(
+                    package, destination_root, "teste", FailingJournal(),
+                )
+
+            self.assertEqual(b"personal-concurrent-data", destination.read_bytes())
+            self.assertIn("foi preservado", output.getvalue())
+
+    def test_pk3_fallback_detects_destination_replaced_after_atomic_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination_root = root / "qw"
+            destination_root.mkdir()
+            source = root / "source.cfg"
+            source.write_bytes(b"managed")
+            destination = destination_root / "server.cfg"
+            member = SimpleNamespace(
+                path=services.PurePosixPath("server.cfg"),
+                size=len(b"managed"),
+                sha256=services.hashlib.sha256(b"managed").hexdigest(),
+            )
+            real_link = os.link
+
+            def replace_after_link(source_path, target_path, **kwargs):
+                result = real_link(source_path, target_path, **kwargs)
+                Path(target_path).unlink()
+                Path(target_path).write_bytes(b"personal")
+                return result
+
+            with mock.patch.object(services.os, "link", side_effect=replace_after_link):
+                with self.assertRaisesRegex(
+                    services.InstallerError, "substituído durante a preparação",
+                ):
+                    services._fallback_materialize_member(
+                        source, destination, member, "teste", destination_root,
+                    )
+
+            self.assertEqual(b"personal", destination.read_bytes())
+            self.assertEqual([], list(destination_root.glob(".x86qw_ktx_*")))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "corrida requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_cleanup_preserves_file_replaced_after_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            destination = destination_root / "configs/server.cfg"
+            real_hash = services._hash_open_file
+            replaced = False
+
+            def replace_after_hash(descriptor, **kwargs):
+                nonlocal replaced
+                digest = real_hash(descriptor, **kwargs)
+                if not replaced:
+                    replaced = True
+                    destination.unlink()
+                    destination.write_bytes(b"personal")
+                return digest
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), mock.patch.object(
+                services, "_hash_open_file", side_effect=replace_after_hash,
+            ):
+                services.cleanup_dedicated_ktx(materialized)
+
+            self.assertEqual(b"personal", destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".x86qw_cleanup_*")))
+            self.assertIn("foi preservado", output.getvalue())
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "quarentena requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_cleanup_preserves_same_inode_modified_after_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            destination = destination_root / "configs/server.cfg"
+            original_identity = destination.stat().st_ino
+            real_hash = services._hash_open_file
+            calls = 0
+
+            def modify_same_inode_after_hash(descriptor, **kwargs):
+                nonlocal calls
+                digest = real_hash(descriptor, **kwargs)
+                calls += 1
+                if calls == 1:
+                    destination.write_bytes(b"personal-concurrent-data")
+                    self.assertEqual(original_identity, destination.stat().st_ino)
+                return digest
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), mock.patch.object(
+                services, "_hash_open_file", side_effect=modify_same_inode_after_hash,
+            ):
+                services.cleanup_dedicated_ktx(materialized)
+
+            self.assertEqual(b"personal-concurrent-data", destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".x86qw_cleanup_*")))
+            self.assertIn("foi preservado", output.getvalue())
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported()
+        and services._get_posix_rename_api() is not None,
+        "rename exclusivo requer Linux ou macOS compatível",
+    )
+    def test_posix_exclusive_rename_never_replaces_destination(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "destination"
+            source.write_text("managed", encoding="utf-8")
+            destination.write_text("personal", encoding="utf-8")
+            descriptor = os.open(root, services._directory_open_flags())
+            api = services._get_posix_rename_api()
+            self.assertIsNotNone(api)
+            try:
+                with self.assertRaises(FileExistsError):
+                    api.move_no_replace(descriptor, source.name, descriptor, destination.name)
+                self.assertEqual("managed", source.read_text(encoding="utf-8"))
+                self.assertEqual("personal", destination.read_text(encoding="utf-8"))
+                destination.unlink()
+                api.move_no_replace(descriptor, source.name, descriptor, destination.name)
+            finally:
+                os.close(descriptor)
+            self.assertFalse(source.exists())
+            self.assertEqual("managed", destination.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported()
+        and services._get_posix_rename_api() is not None,
+        "rename exclusivo requer Linux ou macOS compatível",
+    )
+    def test_pk3_cleanup_preserves_public_replacement_at_atomic_move(self):
+        for timing in ("before", "after"):
+            with self.subTest(timing=timing), tempfile.TemporaryDirectory() as temporary:
+                package, destination_root = self.package(
+                    Path(temporary), [("configs/server.cfg", b"managed")],
+                )
+                materialized = services.materialize_dedicated_pk3(
+                    package, destination_root, "teste",
+                )
+                destination = destination_root / "configs/server.cfg"
+                api = services._get_posix_rename_api()
+                self.assertIsNotNone(api)
+                real_move = api.move_no_replace
+                triggered = False
+
+                def race_public_name(source_directory, source_name, destination_directory, destination_name):
+                    nonlocal triggered
+                    if not triggered and source_name == destination.name:
+                        triggered = True
+                        if timing == "before":
+                            os.unlink(source_name, dir_fd=source_directory)
+                            descriptor = os.open(
+                                source_name,
+                                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                                0o600,
+                                dir_fd=source_directory,
+                            )
+                            with os.fdopen(descriptor, "wb") as output:
+                                output.write(b"personal-concurrent-data")
+                            return real_move(
+                                source_directory,
+                                source_name,
+                                destination_directory,
+                                destination_name,
+                            )
+                        result = real_move(
+                            source_directory,
+                            source_name,
+                            destination_directory,
+                            destination_name,
+                        )
+                        descriptor = os.open(
+                            source_name,
+                            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                            0o600,
+                            dir_fd=source_directory,
+                        )
+                        with os.fdopen(descriptor, "wb") as output:
+                            output.write(b"personal-concurrent-data")
+                        return result
+                    return real_move(
+                        source_directory,
+                        source_name,
+                        destination_directory,
+                        destination_name,
+                    )
+
+                with mock.patch.object(api, "move_no_replace", side_effect=race_public_name):
+                    services.cleanup_dedicated_ktx(materialized)
+
+                self.assertTrue(triggered)
+                self.assertEqual(b"personal-concurrent-data", destination.read_bytes())
+                self.assertEqual([], list(destination.parent.glob(".x86qw_cleanup_*")))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "fail-closed requer operações POSIX relativas a descritor",
+    )
+    def test_pk3_cleanup_preserves_when_exclusive_rename_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            destination = destination_root / "configs/server.cfg"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), mock.patch.object(
+                services, "_get_posix_rename_api", return_value=None,
+            ):
+                services.cleanup_dedicated_ktx(materialized)
+            self.assertEqual(b"managed", destination.read_bytes())
+            self.assertIn("foi preservado", output.getvalue())
+
+    def test_pk3_fallback_cleanup_never_unlinks_a_replacement_by_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "server.cfg"
+            destination.write_bytes(b"managed")
+            metadata = destination.lstat()
+            entry = services.MaterializedFile(
+                destination,
+                services.hashlib.sha256(b"managed").hexdigest(),
+                "fixture.pk3",
+                True,
+                False,
+                root,
+                (metadata.st_dev, metadata.st_ino),
+            )
+            destination.unlink()
+            destination.write_bytes(b"personal")
+            output = io.StringIO()
+
+            with contextlib.redirect_stdout(output), mock.patch.object(
+                services, "_secure_archive_dir_fd_supported", return_value=False,
+            ), mock.patch.object(
+                Path, "unlink", side_effect=AssertionError("unlink por caminho proibido"),
+            ):
+                services.cleanup_dedicated_ktx(
+                    services.MaterializedKtx((entry,), (), root),
+                )
+
+            self.assertEqual(b"personal", destination.read_bytes())
+            self.assertIn("foi preservado", output.getvalue())
+
+    def test_pk3_windows_backend_promotes_without_hardlink_and_cleans_normally(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = FakeWindowsFileApi()
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api), mock.patch.object(
+                services,
+                "_fallback_materialize_member",
+                side_effect=AssertionError("fallback hardlink não deve ser usado"),
+            ):
+                materialized = services.materialize_dedicated_pk3(
+                    package, destination_root, "teste",
+                )
+                self.assertEqual(b"managed", destination.read_bytes())
+                self.assertEqual(1, len(api.moves))
+                self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
+
+                services.cleanup_dedicated_ktx(materialized)
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.parent.exists())
+
+    def test_pk3_windows_backend_journal_failure_does_not_orphan_promotion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = FakeWindowsFileApi()
+            journal = mock.Mock()
+            journal.record_materialized.side_effect = RuntimeError("journal indisponível")
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+                with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste", journal,
+                    )
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.parent.exists())
+            self.assertEqual([], list(destination_root.rglob(".x86qw_ktx_*")))
+            journal.record_materialized.assert_called_once()
+
+    def test_pk3_windows_backend_journal_failure_preserves_modified_same_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = FakeWindowsFileApi()
+            journal = mock.Mock()
+
+            def modify_then_fail(entry):
+                entry.path.write_bytes(b"personal-concurrent-data")
+                raise RuntimeError("journal indisponível")
+
+            journal.record_materialized.side_effect = modify_then_fail
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+                with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste", journal,
+                    )
+
+            self.assertEqual(b"personal-concurrent-data", destination.read_bytes())
+            journal.record_materialized.assert_called_once()
+
+    def test_pk3_windows_backend_no_replace_preserves_file_appearing_at_promotion(self):
+        class AppearingDestinationApi(FakeWindowsFileApi):
+            def move_no_replace(self, source, destination):
+                Path(destination).write_bytes(b"personal")
+                return super().move_no_replace(source, destination)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = AppearingDestinationApi()
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+                with self.assertRaisesRegex(services.InstallerError, "surgiu durante"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual(b"personal", destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
+
+    def test_pk3_windows_backend_inconclusive_open_preserves_modified_same_identity(self):
+        class ModifiedBeforeConfirmationApi(FakeWindowsFileApi):
+            fail_path = None
+
+            def move_no_replace(self, source, destination):
+                super().move_no_replace(source, destination)
+                destination = Path(destination)
+                destination.write_bytes(b"personal-concurrent-data")
+                self.fail_path = destination
+
+            def open_handle(self, path, *, access, creation, directory):
+                if self.fail_path is not None and Path(path) == self.fail_path:
+                    self.fail_path = None
+                    raise OSError("confirmação pós-promoção inconclusiva")
+                return super().open_handle(
+                    path, access=access, creation=creation, directory=directory,
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = ModifiedBeforeConfirmationApi()
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+                with self.assertRaisesRegex(
+                    services.InstallerError, "alterado foi preservado",
+                ):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual(b"personal-concurrent-data", destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
+
+    def test_pk3_windows_backend_cleanup_preserves_replacement_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = FakeWindowsFileApi()
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+                materialized = services.materialize_dedicated_pk3(
+                    package, destination_root, "teste",
+                )
+                destination.unlink()
+                destination.write_bytes(b"personal")
+                services.cleanup_dedicated_ktx(materialized)
+
+            self.assertEqual(b"personal", destination.read_bytes())
+
+    def test_pk3_windows_backend_rejects_reparse_parent_without_external_write(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            external = root / "external"
+            external.mkdir()
+            marker = external / "personal.txt"
+            marker.write_text("personal", encoding="utf-8")
+            link = destination_root / "configs"
+            try:
+                link.symlink_to(external, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlink de diretório indisponível: {error}")
+
+            with mock.patch.object(services, "_WINDOWS_FILE_API", FakeWindowsFileApi()):
+                with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste",
+                    )
+
+            self.assertEqual([marker], list(external.iterdir()))
+
+    @unittest.skipUnless(os.name == "nt", "handles de arquivo são exercitados no runner Windows")
+    def test_pk3_windows_native_materialization_identity_and_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = services._get_windows_file_api()
+            self.assertIsNotNone(api)
+
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            handle = api.open_handle(
+                destination,
+                access=api.GENERIC_READ,
+                creation=api.OPEN_EXISTING,
+                directory=False,
+            )
+            try:
+                self.assertEqual(
+                    materialized.files[0].identity,
+                    api.checked_identity(handle, directory=False),
+                )
+            finally:
+                api.close(handle)
+            self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
+
+            services.cleanup_dedicated_ktx(materialized)
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.parent.exists())
+
+    @unittest.skipUnless(os.name == "nt", "replacement é exercitado no runner Windows")
+    def test_pk3_windows_native_cleanup_preserves_replacement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            destination.unlink()
+            destination.write_bytes(b"personal")
+
+            services.cleanup_dedicated_ktx(materialized)
+
+            self.assertEqual(b"personal", destination.read_bytes())
+
+    @unittest.skipUnless(os.name == "nt", "reparse point é exercitado no runner Windows")
+    def test_pk3_windows_native_reparse_parent_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            external = root / "external"
+            external.mkdir()
+            marker = external / "personal.txt"
+            marker.write_text("personal", encoding="utf-8")
+            link = destination_root / "configs"
+            try:
+                link.symlink_to(external, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"privilégio para symlink indisponível: {error}")
+
+            with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
+                services.materialize_dedicated_pk3(
+                    package, destination_root, "teste",
+                )
+
+            self.assertEqual([marker], list(external.iterdir()))
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported() or os.name == "nt",
+        "identidade de diretório requer handles POSIX ou Win32",
+    )
+    def test_pk3_cleanup_preserves_replacement_directory_with_new_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            materialized = services.materialize_dedicated_pk3(
+                package, destination_root, "teste",
+            )
+            directory_entry = materialized.directories[0]
+            self.assertTrue(services._cleanup_materialized_file(materialized.files[0]))
+            directory_entry.path.rmdir()
+            directory_entry.path.mkdir()
+            replacement_identity = services._file_identity(directory_entry.path.lstat())
+            self.assertNotEqual(directory_entry.identity, replacement_identity)
+
+            self.assertFalse(services._cleanup_materialized_directory(directory_entry))
+            self.assertTrue(directory_entry.path.is_dir())
 
     def test_endpoint_parser_accepts_ipv4_ipv6_and_hostname(self):
         self.assertEqual("127.0.0.1:28501", services.parse_network_endpoint("127.0.0.1:28501"))
@@ -292,6 +1148,47 @@ class ServiceHardeningTests(unittest.TestCase):
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
             self.assertTrue(recovered["materialized_files"][0]["modified_during_session"])
 
+    def test_session_recovery_preserves_legacy_materialized_file_without_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".x86qw").mkdir()
+            created = target / "qw" / "created.cfg"
+            created.parent.mkdir()
+            created.write_text("managed", encoding="utf-8")
+            journal = services.SessionJournal(target)
+            journal.record_materialized(services.MaterializedFile(
+                created, services.file_sha256(created), "fixture.pk3", True, False,
+            ))
+            entry = journal.data["materialized_files"][0]
+            entry.pop("expected_size")
+            journal._write()
+
+            services.recover_sessions(target)
+
+            self.assertEqual("managed", created.read_text(encoding="utf-8"))
+            recovered = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertTrue(recovered["materialized_files"][0]["modified_during_session"])
+
+    def test_session_journal_rejects_boolean_or_oversize_expected_size(self):
+        for invalid_size in (True, services._MAX_MANAGED_FILE_SIZE + 1):
+            with self.subTest(expected_size=invalid_size), tempfile.TemporaryDirectory() as temporary:
+                target = Path(temporary)
+                (target / ".x86qw").mkdir()
+                created = target / "qw" / "created.cfg"
+                created.parent.mkdir()
+                created.write_text("managed", encoding="utf-8")
+                journal = services.SessionJournal(target)
+                journal.record_materialized(services.MaterializedFile(
+                    created, services.file_sha256(created), "fixture.pk3", True, False,
+                ))
+                journal.data["materialized_files"][0]["expected_size"] = invalid_size
+                journal._write()
+
+                with self.assertRaisesRegex(
+                    services.InstallerError, "Journal de sessão inválido",
+                ):
+                    services.load_session_journal(journal.path)
+
     def test_session_recovery_removes_modified_sensitive_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -310,6 +1207,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertNotIn(secret, journal.path.read_text(encoding="utf-8"))
             entry = json.loads(journal.path.read_text(encoding="utf-8"))["temporary_files"][0]
             self.assertNotIn("expected_hash", entry)
+            self.assertNotIn("expected_size", entry)
 
     def test_sensitive_temporary_replaced_by_directory_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -368,10 +1266,104 @@ class ServiceHardeningTests(unittest.TestCase):
             config = services.temporary_config(
                 config_dir, "session-", ["hostname local"], journal, sensitive=False,
             )
+            recorded = journal.data["temporary_files"][0]
+            self.assertEqual(config.stat().st_size, recorded["expected_size"])
+            self.assertIsInstance(recorded["device"], int)
+            self.assertIsInstance(recorded["inode"], int)
             config.write_text("// configuração pessoalizada\n", encoding="utf-8")
             services.recover_sessions(target)
             self.assertTrue(config.exists())
             self.assertIn("pessoalizada", config.read_text(encoding="utf-8"))
+
+    def test_session_recovery_removes_unchanged_non_sensitive_temporary_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".x86qw").mkdir()
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            config = services.temporary_config(
+                config_dir, "session-", ["hostname local"], journal, sensitive=False,
+            )
+
+            services.recover_sessions(target)
+
+            self.assertFalse(config.exists())
+            self.assertEqual("clean", json.loads(
+                journal.path.read_text(encoding="utf-8"),
+            )["status"])
+
+    @unittest.skipUnless(
+        services._secure_archive_dir_fd_supported(),
+        "corrida requer operações POSIX relativas a descritor",
+    )
+    def test_non_sensitive_temporary_recovery_preserves_replacement_after_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".x86qw").mkdir()
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            config = services.temporary_config(
+                config_dir, "session-", ["hostname local"], journal, sensitive=False,
+            )
+            real_hash = services._hash_open_file
+            replaced = False
+
+            def replace_after_hash(descriptor, **kwargs):
+                nonlocal replaced
+                digest = real_hash(descriptor, **kwargs)
+                if not replaced:
+                    replaced = True
+                    config.unlink()
+                    config.write_text("personal-concurrent-data", encoding="utf-8")
+                return digest
+
+            with mock.patch.object(
+                services, "_hash_open_file", side_effect=replace_after_hash,
+            ):
+                services.recover_sessions(target)
+
+            self.assertEqual("personal-concurrent-data", config.read_text(encoding="utf-8"))
+            self.assertEqual([], list(config_dir.glob(".x86qw_cleanup_*")))
+            recovered = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertTrue(recovered["temporary_files"][0]["modified_during_session"])
+
+    def test_non_sensitive_temporary_creation_failure_preserves_replacement_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / ".x86qw").mkdir()
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            replaced: Path | None = None
+
+            def replace_with_directory(path, _origin, **_kwargs):
+                nonlocal replaced
+                replaced = Path(path)
+                replaced.unlink()
+                replaced.mkdir()
+                (replaced / "personal.txt").write_text("personal", encoding="utf-8")
+                raise RuntimeError("journal indisponível")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(
+                output,
+            ), mock.patch.object(
+                journal, "record_temporary", side_effect=replace_with_directory,
+            ), self.assertRaisesRegex(RuntimeError, "journal indisponível"):
+                services.temporary_config(
+                    config_dir,
+                    "session-",
+                    ["hostname local"],
+                    journal,
+                    sensitive=False,
+                )
+
+            self.assertIsNotNone(replaced)
+            assert replaced is not None
+            self.assertEqual("personal", (replaced / "personal.txt").read_text(encoding="utf-8"))
+            self.assertIn("foi preservado", output.getvalue())
 
     def test_active_session_lock_blocks_recovery_and_preserves_files(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -866,6 +1858,12 @@ class ServiceHardeningTests(unittest.TestCase):
                 "CreateJobObjectW", "SetInformationJobObject",
                 "AssignProcessToJobObject", "CloseHandle",
             )),
+            (services._get_windows_file_api().kernel32, (
+                "CreateFileW", "GetFileInformationByHandleEx",
+                "SetFileInformationByHandle", "MoveFileExW", "ReadFile",
+                "WriteFile", "SetFilePointerEx", "GetFileSizeEx",
+                "FlushFileBuffers", "CloseHandle",
+            )),
         )
         for kernel32, names in groups:
             for name in names:
@@ -901,6 +1899,8 @@ class ServiceHardeningTests(unittest.TestCase):
                         with services.finalize_service_operation(resources):
                             pass
                 lock.release.assert_called_once()
+                if failing_step == "session":
+                    journal.set_status.assert_any_call("interrupted")
 
     def test_finalization_preserves_original_error_while_reporting_cleanup(self):
         resources = services.ServiceResources([], [])
