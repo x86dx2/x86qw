@@ -1553,6 +1553,51 @@ class InstallerTests(unittest.TestCase):
 
             self.assertEqual("c" * 64, updated["binary_sha256"])
 
+    def test_macos_nightly_repair_rolls_back_bundle_when_receipt_commit_fails(self):
+        """Offline preparation and its receipt must publish as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+            receipt_before = receipt_path.read_bytes()
+            mutation_results = []
+
+            def prepare(app):
+                (app / "Contents/x86qw-prepared").write_bytes(b"prepared")
+                return True
+
+            with mock.patch.object(
+                installer, "macos_app_needs_preparation", return_value=True,
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                installer, "prepare_macos_nightly_app", side_effect=prepare,
+            ), mock.patch.object(
+                installer,
+                "inspect_macos_app",
+                return_value=(receipt["bundle_version"], "c" * 64),
+            ), mock.patch.object(
+                installer,
+                "_apply_runtime_receipt",
+                side_effect=OSError("simulated receipt promotion failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.repair_installed_macos_runtime(
+                        spec,
+                        "nightly",
+                        receipt_path,
+                        receipt,
+                        mutation_results=mutation_results,
+                    )
+
+            self.assertFalse((runtime / "Contents/x86qw-prepared").exists())
+            self.assertEqual(receipt_before, receipt_path.read_bytes())
+            self.assertEqual([], mutation_results)
+
     def test_macos_nightly_local_repair_configures_runtime_context(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -3258,7 +3303,13 @@ class InstallerTests(unittest.TestCase):
                                 self.assertTrue(installer.repair(
                                     dry_run=False, plan_rows=[], allow_download=False,
                                 ))
-            prepare.assert_called_once_with(spec, "nightly", receipt_path, receipt)
+            prepare.assert_called_once_with(
+                spec,
+                "nightly",
+                receipt_path,
+                receipt,
+                mutation_results=mock.ANY,
+            )
 
     def test_repair_diagnoses_partial_component_metadata_in_both_directions(self):
         for missing in ("receipt", "inventory"):

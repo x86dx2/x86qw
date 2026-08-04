@@ -2406,6 +2406,8 @@ class Installer:
         channel: str,
         receipt_path: Path,
         receipt: dict[str, str],
+        *,
+        mutation_results: list[MutationResult] | None = None,
     ) -> dict[str, str]:
         runtime = self.target / spec.runtime(channel)
         if channel == "stable":
@@ -2417,20 +2419,29 @@ class Installer:
         self.spec = spec
         self.channel = channel
         self.ensure_macos_ezquake_closed()
-        self.prepare_macos_nightly_app(runtime)
-        _, binary_hash = self.inspect_macos_app(runtime)
-        updated = dict(receipt)
-        updated["binary_sha256"] = binary_hash
-        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{receipt_path.name}.", dir=receipt_path.parent)
-        os.close(descriptor)
-        temporary = Path(temporary_name)
-        try:
-            self.write_ezquake_receipt_record(temporary, updated)
-            self.validate_ezquake_receipt(temporary, spec, channel)
-            temporary.replace(receipt_path)
-        finally:
-            if lexists(temporary):
-                remove_path(temporary)
+        reject_tree_symlinks(runtime, "bundle macOS gerenciado")
+        parent_managed = mutation_results is not None
+        with self.runtime_mutation_stage(
+            ".x86qw-macos-repair.", parent_managed=parent_managed,
+        ):
+            assert self.stage is not None
+            prepared = self.stage / "prepared-runtime"
+            shutil.copytree(runtime, prepared)
+            self.prepare_macos_nightly_app(prepared)
+            _, binary_hash = self.inspect_macos_app(prepared)
+            updated = dict(receipt)
+            updated["binary_sha256"] = binary_hash
+            staged_receipt = self.stage / "ezquake-receipt"
+            self.write_ezquake_receipt_record(staged_receipt, updated)
+            self.validate_ezquake_receipt(staged_receipt, spec, channel)
+            try:
+                result = self.commit_runtime(prepared, staged_receipt)
+            except RuntimeCommitPersistenceError as error:
+                if mutation_results is not None:
+                    mutation_results.append(error.result)
+                raise
+            if mutation_results is not None:
+                mutation_results.append(result)
         console.success(f"ezQuake {channel} reparado para o macOS atual.")
         return updated
 
@@ -6229,7 +6240,11 @@ class Installer:
                     self.repair_runtime_permission(runtime, mutation_results)
                 elif issue.mode == "macos-preparation":
                     self.repair_installed_macos_runtime(
-                        issue.spec, issue.channel, issue.receipt_path, issue.receipt,
+                        issue.spec,
+                        issue.channel,
+                        issue.receipt_path,
+                        issue.receipt,
+                        mutation_results=mutation_results,
                     )
             for binary in assessment.permission_repairs:
                 self.repair_runtime_permission(binary, mutation_results)
