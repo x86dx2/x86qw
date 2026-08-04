@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import io
+import json
 import os
 import subprocess
 import sys
@@ -11,13 +12,80 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from maintenance.tools import build_installer_bundle as installer_builder
 from maintenance.tools.build_installer_bundle import zipapp_bytes
 
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER_BIN = ROOT / "dist/installer/bin"
+RUNTIME_MEMBER_MANIFEST = (
+    ROOT / "maintenance/inventory/installer-runtime-members.json"
+)
 if str(INSTALLER_BIN) not in sys.path:
     sys.path.insert(0, str(INSTALLER_BIN))
+
+
+class RuntimeMemberContractTests(unittest.TestCase):
+    def test_every_installed_member_has_an_independent_consumer_contract(self) -> None:
+        """An unused or undeclared file must not silently enter the public zipapp."""
+
+        manifest = json.loads(RUNTIME_MEMBER_MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["format"], 1)
+        self.assertEqual(manifest["project"], "x86qw")
+
+        entries = manifest["members"]
+        self.assertIsInstance(entries, list)
+        self.assertTrue(entries)
+        for entry in entries:
+            self.assertEqual(
+                set(entry),
+                {"member", "source", "consumer", "contract"},
+            )
+            for field in ("member", "source", "consumer", "contract"):
+                self.assertIsInstance(entry[field], str)
+                self.assertTrue(entry[field].strip(), (entry["member"], field))
+
+        declared_members = [entry["member"] for entry in entries]
+        self.assertEqual(len(declared_members), len(set(declared_members)))
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            installed_members = application.namelist()
+        self.assertEqual(set(installed_members), set(declared_members))
+        self.assertFalse(
+            any(
+                member == "maintenance" or member.startswith("maintenance/")
+                for member in installed_members
+            ),
+        )
+
+        static_projection = {
+            (entry["source"], entry["member"])
+            for entry in entries
+            if not entry["source"].startswith("generated:")
+        }
+        self.assertEqual(static_projection, set(installer_builder.ZIPAPP_FILES))
+        for source, member in static_projection:
+            with self.subTest(member=member):
+                source_path = ROOT / source
+                self.assertTrue(source_path.is_file(), source)
+                self.assertFalse(source_path.is_symlink(), source)
+
+        generated_projection = {
+            entry["source"]: entry["member"]
+            for entry in entries
+            if entry["source"].startswith("generated:")
+        }
+        self.assertEqual(
+            generated_projection,
+            {
+                "generated:entrypoint": "__main__.py",
+                "generated:capabilities": "_x86qw/capabilities.json",
+                "generated:runtimes": "_x86qw/runtimes.json",
+                "generated:games": "_x86qw/games.json",
+                "generated:identity": "_x86qw/installer.json",
+                "generated:component-catalog": "_x86qw/components.json",
+            },
+        )
 
 
 class RuntimeMenuBoundaryTests(unittest.TestCase):
