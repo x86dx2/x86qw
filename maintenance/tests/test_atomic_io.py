@@ -312,10 +312,17 @@ class AtomicWriteTests(unittest.TestCase):
                     self.fail("identity swap was reported as success")
 
             self.assertFalse(captured.committed)
-            self.assertIsNotNone(captured.cleanup_error)
             self.assertEqual(destination.read_bytes(), b"stable\n")
             self.assertIsNotNone(replacement)
             assert replacement is not None
+            if os.name == "nt":
+                # The private staging handle denies DELETE sharing, so Windows
+                # blocks the injected pathname swap before a replacement can
+                # exist and the original staging object is cleaned normally.
+                self.assertIsNone(captured.cleanup_error)
+                self.assertFalse(replacement.exists())
+                return
+            self.assertIsNotNone(captured.cleanup_error)
             self.assertEqual(replacement.read_bytes(), b"foreign\n")
 
     @unittest.skipIf(os.name == "nt", "POSIX mode durability is not a Windows contract")

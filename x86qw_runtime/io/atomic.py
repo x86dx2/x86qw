@@ -205,9 +205,9 @@ def atomic_copy_file(
 def sync_directory(path: Path) -> None:
     """Flush one directory entry set on POSIX and no-op on Windows."""
 
-    path = Path(path)
     if os.name == "nt":
         return
+    path = Path(path)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)

@@ -536,21 +536,8 @@ def persistent_descriptor_identity(
 ) -> tuple[int, int]:
     """Return the canonical persistent identity of one open file descriptor."""
 
-    metadata = os.fstat(descriptor)
-    valid_type = (
-        stat.S_ISDIR(metadata.st_mode)
-        if directory
-        else stat.S_ISREG(metadata.st_mode)
-    )
-    if not valid_type:
-        raise OSError("tipo de descritor materializado inseguro")
-    api = _get_windows_file_api()
-    if api is None:
-        return _file_identity(metadata)
-    import msvcrt
-
-    return api.checked_identity(
-        msvcrt.get_osfhandle(descriptor), directory=directory,
+    return private_fs.persistent_descriptor_identity(
+        descriptor, directory=directory,
     )
 
 

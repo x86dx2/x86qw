@@ -235,6 +235,29 @@ def private_mkstemp(
     raise PrivateFilesystemError(f"could not allocate a unique private file in {directory}")
 
 
+def persistent_descriptor_identity(
+    descriptor: int, *, directory: bool,
+) -> tuple[int, int]:
+    """Return one platform-native persistent identity for an open descriptor."""
+
+    metadata = os.fstat(descriptor)
+    valid_type = (
+        stat.S_ISDIR(metadata.st_mode)
+        if directory
+        else stat.S_ISREG(metadata.st_mode)
+    )
+    if not valid_type:
+        raise PrivateFilesystemError("private descriptor has an unsafe type")
+    if os.name != "nt":
+        return int(metadata.st_dev), int(metadata.st_ino)
+
+    import msvcrt
+
+    return _windows_acl().persistent_file_identity(
+        msvcrt.get_osfhandle(descriptor)
+    )
+
+
 def create_private_file(path: Path) -> int:
     """Atomically create exactly ``path`` as a private regular file."""
     _directory(path.parent)

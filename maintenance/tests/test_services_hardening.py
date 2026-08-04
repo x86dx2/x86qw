@@ -3297,6 +3297,12 @@ os.write(2, b'stderr-restored\\n')
                 target, fail_at=2, replace_log=True,
             )
 
+            if os.name == "nt":
+                # The append handle intentionally denies DELETE sharing.  The
+                # attempted replacement is rejected and the unchanged log
+                # created by this activation is then removed during rollback.
+                self.assertFalse(log.exists())
+                return
             self.assertEqual(b"concurrent replacement\n", log.read_bytes())
 
     def test_session_journal_fsync_failure_preserves_previous_bytes(self):
