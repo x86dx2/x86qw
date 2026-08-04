@@ -1765,15 +1765,19 @@ class ModernComponentTests(unittest.TestCase):
                 for relative in installer.component_metadata("nquake-maps")
             )
             previous_metadata = (receipt.read_bytes(), inventory.read_bytes())
-            real_copy = install_qw.shutil.copy2
+            real_copy = install_qw.atomic_copy_file
 
             def fail_second_payload_copy(source: Path, destination: Path, *args, **kwargs):
                 if source == second / "qw/maps/b.loc":
-                    raise OSError("injected payload copy failure")
+                    raise install_qw.AtomicWriteError(
+                        "injected payload copy failure", committed=False,
+                    )
                 return real_copy(source, destination, *args, **kwargs)
 
             with mock.patch.object(
-                install_qw.shutil, "copy2", side_effect=fail_second_payload_copy,
+                install_qw,
+                "atomic_copy_file",
+                side_effect=fail_second_payload_copy,
             ):
                 with self.assertRaises(install_qw.InstallerError):
                     installer.install_component_overlay(
@@ -1788,6 +1792,56 @@ class ModernComponentTests(unittest.TestCase):
                 ),
             )
             self.assertEqual(previous_metadata, (receipt.read_bytes(), inventory.read_bytes()))
+
+    def test_component_payload_uses_verified_atomic_copy_boundary(self):
+        """Payload publication must not write directly into the managed destination."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            first = installer.stage / "first"
+            (first / "qw/maps").mkdir(parents=True)
+            (first / "qw/maps/dm6.loc").write_text(
+                "old-managed-content", encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "nquake-maps", first, "v1", "https://example.invalid/v1.zip",
+                )
+
+            second = installer.stage / "second"
+            (second / "qw/maps").mkdir(parents=True)
+            source = second / "qw/maps/dm6.loc"
+            source.write_text("new-managed-content", encoding="utf-8")
+            destination = target / "qw/maps/dm6.loc"
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("nquake-maps")
+            )
+            previous_metadata = (receipt.read_bytes(), inventory.read_bytes())
+            with mock.patch.object(
+                install_qw,
+                "atomic_copy_file",
+                wraps=install_qw.atomic_copy_file,
+            ) as atomic_copy:
+                installer.install_component_overlay(
+                    "nquake-maps", second, "v2", "https://example.invalid/v2.zip",
+                )
+
+            self.assertEqual(
+                "new-managed-content", destination.read_text(encoding="utf-8"),
+            )
+            self.assertNotEqual(previous_metadata, (receipt.read_bytes(), inventory.read_bytes()))
+            matching = [
+                call for call in atomic_copy.call_args_list
+                if call.args[:2] == (source, destination)
+            ]
+            self.assertEqual(1, len(matching))
+            self.assertEqual(
+                hashlib.sha256(source.read_bytes()).hexdigest(),
+                matching[0].kwargs["expected_sha256"],
+            )
 
     def test_component_phase_state_failure_rolls_back_payload_and_metadata(self):
         """state.json failure must reverse every component committed by the phase."""

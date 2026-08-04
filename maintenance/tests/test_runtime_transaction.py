@@ -168,6 +168,84 @@ class RuntimeTransactionTests(unittest.TestCase):
         self.assertEqual(len(raised.exception.rollback_errors), 1)
         self.assertEqual(raised.exception.rollback_errors[0][0], "payload")
 
+    def test_committed_step_error_preserves_prior_effects_and_reports_barrier(self) -> None:
+        """A post-promotion durability error must not roll state behind its bytes."""
+
+        transaction = importlib.import_module("x86qw_runtime.transaction")
+        errors = importlib.import_module("x86qw_runtime.errors")
+        events: list[str] = []
+
+        def commit_state_then_fail_durability() -> None:
+            events.append("apply:state")
+            raise errors.PersistenceError(
+                "state directory fsync failed", committed=True,
+            )
+
+        plan = transaction.MutationPlan(
+            identifier="install:update",
+            summary="atualizar instalação",
+            steps=(
+                transaction.MutationStep(
+                    key="payload",
+                    description="payload",
+                    observe=lambda: None,
+                    apply=lambda: events.append("apply:payload") or "payload",
+                    rollback=lambda token: events.append(f"rollback:{token}"),
+                ),
+                transaction.MutationStep(
+                    key="state",
+                    description="state",
+                    observe=lambda: None,
+                    apply=commit_state_then_fail_durability,
+                    rollback=lambda token: events.append(f"rollback:{token}"),
+                ),
+            ),
+        )
+
+        with self.assertRaises(transaction.MutationCommittedError) as raised:
+            transaction.execute_mutation(transaction.prepare_mutation(plan))
+
+        self.assertIsInstance(raised.exception.operation_error, errors.PersistenceError)
+        self.assertEqual(raised.exception.committed_steps, ("payload", "state"))
+        self.assertEqual(events, ["apply:payload", "apply:state"])
+
+    def test_uncommitted_persistence_error_rolls_prior_steps_back(self) -> None:
+        """A failed promotion remains a normal reversible apply failure."""
+
+        transaction = importlib.import_module("x86qw_runtime.transaction")
+        errors = importlib.import_module("x86qw_runtime.errors")
+        events: list[str] = []
+
+        def fail_before_commit() -> None:
+            raise errors.PersistenceError("state promotion failed", committed=False)
+
+        plan = transaction.MutationPlan(
+            identifier="install:update",
+            summary="atualizar instalação",
+            steps=(
+                transaction.MutationStep(
+                    key="payload",
+                    description="payload",
+                    observe=lambda: None,
+                    apply=lambda: events.append("apply:payload") or "payload",
+                    rollback=lambda token: events.append(f"rollback:{token}"),
+                ),
+                transaction.MutationStep(
+                    key="state",
+                    description="state",
+                    observe=lambda: None,
+                    apply=fail_before_commit,
+                    rollback=lambda token: None,
+                ),
+            ),
+        )
+
+        with self.assertRaises(transaction.MutationApplyError) as raised:
+            transaction.execute_mutation(transaction.prepare_mutation(plan))
+
+        self.assertNotIsInstance(raised.exception, transaction.MutationCommittedError)
+        self.assertEqual(events, ["apply:payload", "rollback:payload"])
+
     def test_successful_subtransaction_can_be_rolled_back_by_its_parent(self) -> None:
         """A later state failure must be able to reverse an installed component."""
 

@@ -59,7 +59,11 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
 )
 from x86qw_runtime.io import private_fs
-from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_bytes
+from x86qw_runtime.io.atomic import (
+    AtomicWriteError,
+    atomic_copy_file,
+    atomic_write_bytes,
+)
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
 from x86qw_runtime.migrations import migrate_install_state
@@ -2660,7 +2664,13 @@ class Installer:
                     token.created_directories.setdefault(
                         created, (int(metadata.st_dev), int(metadata.st_ino)),
                     )
-                shutil.copy2(source, destination)
+                source_mode = source.stat().st_mode
+                atomic_copy_file(
+                    source,
+                    destination,
+                    expected_sha256=digest,
+                    mode=0o755 if source_mode & 0o111 else 0o644,
+                )
                 if file_hash(destination) != digest:
                     raise InstallerError(f"Arquivo copiado diverge do plano: {destination}")
             for name in stale_hashes:

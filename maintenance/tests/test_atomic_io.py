@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import errno
+import hashlib
 import json
 import os
 import stat
@@ -13,6 +14,76 @@ from unittest import mock
 
 
 class AtomicWriteTests(unittest.TestCase):
+    def test_stream_copy_promotes_only_the_expected_complete_payload(self) -> None:
+        """Managed component payloads need bounded-memory atomic promotion."""
+
+        atomic = importlib.import_module("x86qw_runtime.io.atomic")
+        payload = (b"x86qw-component\n" * 131_072) + b"complete\n"
+        digest = hashlib.sha256(payload).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pk3"
+            destination = root / "installed.pk3"
+            source.write_bytes(payload)
+            destination.write_bytes(b"old\n")
+
+            result = atomic.atomic_copy_file(
+                source, destination, expected_sha256=digest,
+            )
+
+            self.assertEqual(payload, destination.read_bytes())
+            self.assertEqual(len(payload), result.bytes_written)
+            self.assertTrue(result.replaced)
+            self.assertEqual(list(root.glob(".installed.pk3.*.tmp")), [])
+
+    def test_stream_copy_hash_mismatch_preserves_previous_destination(self) -> None:
+        """A divergent staged source must never replace the installed payload."""
+
+        atomic = importlib.import_module("x86qw_runtime.io.atomic")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pk3"
+            destination = root / "installed.pk3"
+            source.write_bytes(b"unexpected\n")
+            destination.write_bytes(b"stable\n")
+
+            with self.assertRaises(atomic.AtomicWriteError) as captured:
+                atomic.atomic_copy_file(
+                    source, destination, expected_sha256="a" * 64,
+                )
+
+            self.assertFalse(captured.exception.committed)
+            self.assertEqual(b"stable\n", destination.read_bytes())
+            self.assertEqual(list(root.glob(".installed.pk3.*.tmp")), [])
+
+    def test_stream_copy_staging_fsync_failure_preserves_previous_destination(self) -> None:
+        """A fully or partially staged copy is not visible before durable promotion."""
+
+        atomic = importlib.import_module("x86qw_runtime.io.atomic")
+        payload = b"new component payload\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pk3"
+            destination = root / "installed.pk3"
+            source.write_bytes(payload)
+            destination.write_bytes(b"stable\n")
+
+            with mock.patch.object(
+                atomic.os,
+                "fsync",
+                side_effect=OSError(errno.EIO, "injected staging fsync failure"),
+            ):
+                with self.assertRaises(atomic.AtomicWriteError) as captured:
+                    atomic.atomic_copy_file(
+                        source,
+                        destination,
+                        expected_sha256=hashlib.sha256(payload).hexdigest(),
+                    )
+
+            self.assertFalse(captured.exception.committed)
+            self.assertEqual(b"stable\n", destination.read_bytes())
+            self.assertEqual(list(root.glob(".installed.pk3.*.tmp")), [])
+
     def test_bytes_replace_existing_file_and_leave_no_staging_file(self) -> None:
         """Skipping promotion or cleanup would expose old bytes or staging debris."""
 

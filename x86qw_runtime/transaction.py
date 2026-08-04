@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from .errors import InstallerError
+from .errors import InstallerError, PersistenceError
 
 
 Observe = Callable[[], object]
@@ -62,6 +62,27 @@ class MutationRollbackError(MutationApplyError):
             operation_error=operation_error,
         )
         self.rollback_errors = rollback_errors
+
+
+class MutationCommittedError(MutationApplyError):
+    """A persistence barrier committed, but its durability could not be proven."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        plan_identifier: str,
+        step_key: str,
+        operation_error: BaseException,
+        committed_steps: tuple[str, ...],
+    ) -> None:
+        super().__init__(
+            message,
+            plan_identifier=plan_identifier,
+            step_key=step_key,
+            operation_error=operation_error,
+        )
+        self.committed_steps = committed_steps
 
 
 @dataclass(frozen=True)
@@ -173,6 +194,19 @@ def execute_mutation(prepared: PreparedMutation) -> MutationResult:
         try:
             rollback_token = item.step.apply()
         except BaseException as operation_error:
+            if (
+                isinstance(operation_error, PersistenceError)
+                and operation_error.committed
+            ):
+                raise MutationCommittedError(
+                    f"A etapa {item.step.key} foi promovida, mas sua durabilidade não pôde ser confirmada; efeitos preservados.",
+                    plan_identifier=prepared.plan.identifier,
+                    step_key=item.step.key,
+                    operation_error=operation_error,
+                    committed_steps=tuple(
+                        [*(step.key for step, _ in completed), item.step.key]
+                    ),
+                ) from operation_error
             rollback_errors: list[tuple[str, BaseException]] = []
             for completed_step, token in reversed(completed):
                 try:

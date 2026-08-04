@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import stat
 from dataclasses import dataclass
@@ -31,6 +32,169 @@ class AtomicWriteResult:
     path: Path
     bytes_written: int
     replaced: bool
+
+
+def atomic_copy_file(
+    source: Path,
+    path: Path,
+    *,
+    expected_sha256: str,
+    mode: int = 0o644,
+    chunk_size: int = 1024 * 1024,
+) -> AtomicWriteResult:
+    """Stream one verified regular file into an atomic managed replacement."""
+
+    if (
+        len(expected_sha256) != 64
+        or expected_sha256 != expected_sha256.casefold()
+        or any(character not in "0123456789abcdef" for character in expected_sha256)
+    ):
+        raise ValueError("expected_sha256 must be a lowercase SHA-256 digest")
+    if mode not in {0o644, 0o755}:
+        raise ValueError("managed copied file mode must be 0644 or 0755")
+    if not isinstance(chunk_size, int) or chunk_size <= 0:
+        raise ValueError("chunk_size must be a positive integer")
+    source = Path(source)
+    path = Path(path)
+    try:
+        source_metadata = source.lstat()
+    except OSError as error:
+        raise AtomicWriteError(
+            f"managed source could not be inspected: {source}", committed=False,
+        ) from error
+    if stat.S_ISLNK(source_metadata.st_mode) or not stat.S_ISREG(
+        source_metadata.st_mode
+    ):
+        raise AtomicWriteError(
+            f"managed source is not a regular file: {source}", committed=False,
+        )
+    source_identity = (int(source_metadata.st_dev), int(source_metadata.st_ino))
+
+    parent = path.parent
+    replaced = os.path.lexists(path)
+    if replaced:
+        try:
+            destination_metadata = path.lstat()
+        except OSError as error:
+            raise AtomicWriteError(
+                f"managed destination could not be inspected: {path}",
+                committed=False,
+            ) from error
+        if stat.S_ISLNK(destination_metadata.st_mode) or not stat.S_ISREG(
+            destination_metadata.st_mode
+        ):
+            raise AtomicWriteError(
+                f"managed destination is not a regular file: {path}", committed=False,
+            )
+
+    source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    source_flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        source_descriptor = os.open(source, source_flags)
+    except OSError as error:
+        raise AtomicWriteError(
+            f"managed source could not be opened: {source}", committed=False,
+        ) from error
+    opened_source = os.fstat(source_descriptor)
+    if (
+        not stat.S_ISREG(opened_source.st_mode)
+        or (int(opened_source.st_dev), int(opened_source.st_ino)) != source_identity
+    ):
+        os.close(source_descriptor)
+        raise AtomicWriteError(
+            f"managed source changed before copy: {source}", committed=False,
+        )
+
+    try:
+        descriptor, temporary = private_fs.private_mkstemp(
+            directory=parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        )
+    except BaseException:
+        os.close(source_descriptor)
+        raise
+    temporary_metadata = os.fstat(descriptor)
+    temporary_identity = (
+        int(temporary_metadata.st_dev), int(temporary_metadata.st_ino),
+    )
+    committed = False
+    copied = 0
+    result: AtomicWriteResult | None = None
+    primary_error: BaseException | None = None
+    try:
+        try:
+            digest = hashlib.sha256()
+            with os.fdopen(source_descriptor, "rb", closefd=False) as input_file, os.fdopen(
+                descriptor, "wb", closefd=False,
+            ) as output_file:
+                while True:
+                    block = input_file.read(chunk_size)
+                    if not block:
+                        break
+                    output_file.write(block)
+                    digest.update(block)
+                    copied += len(block)
+                if digest.hexdigest() != expected_sha256:
+                    raise AtomicWriteError(
+                        f"managed source SHA-256 mismatch: {source}", committed=False,
+                    )
+                output_file.flush()
+                os.fsync(descriptor)
+            try:
+                private_fs.replace_open_private_file(descriptor, temporary, path)
+            except OSError as error:
+                raise AtomicWriteError(
+                    f"managed file promotion failed: {path}", committed=False,
+                ) from error
+            committed = True
+            if os.name != "nt":
+                os.fchmod(descriptor, mode)
+                os.fsync(descriptor)
+            try:
+                _fsync_directory(parent)
+            except OSError as error:
+                raise AtomicWriteError(
+                    f"managed file directory sync failed: {path}", committed=True,
+                ) from error
+            result = AtomicWriteResult(path=path, bytes_written=copied, replaced=replaced)
+        except BaseException as error:
+            primary_error = error
+    finally:
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        os.close(descriptor)
+        try:
+            private_fs.unlink_private_file(
+                temporary,
+                expected_identity=temporary_identity,
+            )
+        except FileNotFoundError:
+            cleanup_error: OSError | None = None
+        except OSError as error:
+            cleanup_error = error
+        else:
+            cleanup_error = None
+
+    if primary_error is not None:
+        if isinstance(primary_error, AtomicWriteError):
+            primary_error.cleanup_error = cleanup_error
+            raise primary_error
+        if isinstance(primary_error, OSError):
+            raise AtomicWriteError(
+                f"managed file copy failed: {path}",
+                committed=committed,
+                cleanup_error=cleanup_error,
+            ) from primary_error
+        raise primary_error
+    if cleanup_error is not None:
+        raise AtomicWriteError(
+            f"managed file staging cleanup failed: {path}",
+            committed=committed,
+            cleanup_error=cleanup_error,
+        ) from cleanup_error
+    assert result is not None
+    return result
 
 
 def _fsync_directory(path: Path) -> None:
