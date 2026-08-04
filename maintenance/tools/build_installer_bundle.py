@@ -98,7 +98,6 @@ RUNTIME_CONTRACT_FILES = (
     ("capabilities", "maintenance/inventory/capabilities.json", "_x86qw/capabilities.json"),
     ("runtimes", "maintenance/inventory/runtimes.json", "_x86qw/runtimes.json"),
     ("games", "maintenance/inventory/games.json", "_x86qw/games.json"),
-    ("compatibility", "maintenance/inventory/compatibility.json", "_x86qw/compatibility.json"),
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"

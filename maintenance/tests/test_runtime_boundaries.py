@@ -160,7 +160,6 @@ class LazyCatalogBoundaryTests(unittest.TestCase):
             "_x86qw/capabilities.json",
             "_x86qw/runtimes.json",
             "_x86qw/games.json",
-            "_x86qw/compatibility.json",
             "_x86qw/components.json",
         }
         with zipfile.ZipFile(io.BytesIO(payload)) as source:

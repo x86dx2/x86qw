@@ -184,10 +184,11 @@ class RuntimeCatalogTests(unittest.TestCase):
             names = set(archive.namelist())
             for name in (
                 "_x86qw/runtimes.json", "_x86qw/games.json",
-                "_x86qw/capabilities.json", "_x86qw/compatibility.json",
+                "_x86qw/capabilities.json",
                 "_x86qw/ktx-modes.json", "_x86qw/ktx-frogbot-names.json",
             ):
                 self.assertIn(name, names)
+            self.assertNotIn("_x86qw/compatibility.json", names)
             for name in names:
                 if name.startswith("catalog/") and name.endswith(".json"):
                     document = json.loads(archive.read(name))
