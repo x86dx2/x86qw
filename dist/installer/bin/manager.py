@@ -48,7 +48,7 @@ except python_runtime.UnsupportedPythonError as error:
     print(f"[ERRO] {error}", file=sys.stderr)
     raise SystemExit(2)
 
-session_control = importlib.import_module("session_control")
+session_control = importlib.import_module("x86qw_runtime.session_control")
 from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (

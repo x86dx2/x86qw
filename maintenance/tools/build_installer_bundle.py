@@ -58,6 +58,7 @@ ZIPAPP_FILES = (
     ("dist/installer/bin/gameplay.py", "gameplay.py"),
     ("dist/installer/bin/services.py", "services.py"),
     ("dist/installer/bin/session_control.py", "session_control.py"),
+    ("x86qw_runtime/session_control.py", "x86qw_runtime/session_control.py"),
     ("dist/mods/ktx/1.47/x86qw/catalog/modes.json", "_x86qw/ktx-modes.json"),
     ("dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "_x86qw/ktx-frogbot-names.json"),
     ("x86qw_runtime/io/downloader.py", "x86qw_runtime/io/downloader.py"),

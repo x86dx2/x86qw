@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 
 gameplay = importlib.import_module("gameplay")
-session_control = importlib.import_module("session_control")
+session_control = importlib.import_module("x86qw_runtime.session_control")
 from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (

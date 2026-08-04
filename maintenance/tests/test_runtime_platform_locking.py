@@ -8,8 +8,12 @@ import sys
 import tempfile
 import time
 import unittest
+import io
+import zipfile
 from pathlib import Path
 from unittest import mock
+
+from maintenance.tools.build_installer_bundle import zipapp_bytes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +32,21 @@ def runtime_locking():
 
 
 class RuntimePlatformLockingTests(unittest.TestCase):
+    def test_session_control_facade_is_the_canonical_runtime_module(self) -> None:
+        """Lock schema and ownership live in runtime, not in an entrypoint copy."""
+
+        canonical = importlib.import_module("x86qw_runtime.session_control")
+        legacy = importlib.import_module("session_control")
+        self.assertIs(legacy, canonical)
+        self.assertIs(legacy.InstallationLock, canonical.InstallationLock)
+
+    def test_zipapp_contains_canonical_session_control_and_compatibility_facade(self) -> None:
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/session_control.py", names)
+        self.assertIn("session_control.py", names)
+
     def test_session_control_reexports_canonical_locking_contracts(self) -> None:
         """The compatibility facade must not grow a second native mutex backend."""
 
