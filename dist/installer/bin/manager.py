@@ -3706,6 +3706,7 @@ class Installer:
         *,
         known: list[str] | None = None,
         capabilities: list[str] | None = None,
+        mutation_results: list[MutationResult] | None = None,
     ) -> dict[str, object]:
         self.ensure_metadata_directory()
         recorded = self.installed_components()
@@ -3720,11 +3721,64 @@ class Installer:
             "component_fingerprint": profile_fingerprint(recorded),
         })
         destination = self.target / INSTALL_STATE
-        try:
-            atomic_write_bytes(
-                destination,
-                serialize_install_state(self._parse_install_state(state)),
+        payload = serialize_install_state(self._parse_install_state(state))
+        if mutation_results is not None:
+            if lexists(destination) and (
+                not destination.is_file() or destination.is_symlink()
+            ):
+                raise InstallerError(f"Estado da instalação inválido: {destination}")
+            if self.stage is None:
+                self._create_stage(".x86qw-state.")
+            assert self.stage is not None
+            staged = self.stage / f"state-{len(mutation_results)}.json"
+            try:
+                atomic_write_bytes(staged, payload)
+            except AtomicWriteError as error:
+                raise PersistenceError(
+                    f"Estado preparado não pôde ser gravado: {staged}",
+                    committed=error.committed,
+                ) from error
+            plan = MutationPlan(
+                identifier=f"install-state:{profile}",
+                summary="Publicar o estado coerente da instalação",
+                steps=(MutationStep(
+                    key="state",
+                    description="Publicar state.json",
+                    observe=lambda: (
+                        self._mutation_path_observation(staged),
+                        self._mutation_path_observation(destination),
+                    ),
+                    apply=lambda: self._apply_runtime_payload(staged, destination),
+                    rollback=self._rollback_runtime_payload,
+                ),),
             )
+            try:
+                result = execute_mutation(prepare_mutation(plan))
+                if self.read_install_state_document(destination) != state:
+                    raise InstallerError(
+                        "O estado publicado diverge do plano da instalação."
+                    )
+            except MutationApplyError as error:
+                if isinstance(error.operation_error, InstallerError):
+                    raise error.operation_error
+                raise PersistenceError(
+                    f"Estado da instalação não pôde ser publicado: {destination}",
+                    committed=False,
+                ) from error
+            except BaseException as error:
+                if "result" in locals():
+                    try:
+                        rollback_mutation(result)
+                    except BaseException as rollback_error:
+                        raise InstallerError(
+                            "A validação do estado falhou e o rollback ficou incompleto: "
+                            f"{rollback_error}"
+                        ) from error
+                raise
+            mutation_results.append(result)
+            return state
+        try:
+            atomic_write_bytes(destination, payload)
         except AtomicWriteError as error:
             raise PersistenceError(
                 f"Estado da instalação não pôde ser gravado de forma atômica: {destination}",
@@ -5247,13 +5301,18 @@ class Installer:
                 self.write_install_state(
                     "custom" if self.installed_components() else "none",
                     self.installed_components(),
+                    mutation_results=mutation_results,
                 )
             return
         selected = self.choose_components()
         self._create_stage(".quake-install.")
         results = self.install_components(selected)
         try:
-            self.write_install_state(self.selected_component_profile, self.requested_components)
+            self.write_install_state(
+                self.selected_component_profile,
+                self.requested_components,
+                mutation_results=results,
+            )
         except BaseException as error:
             if not isinstance(error, PersistenceError) or not error.committed:
                 self.rollback_component_transactions(results, error)
@@ -5265,7 +5324,11 @@ class Installer:
         selected = self.choose_components()
         results = self.install_components(selected)
         try:
-            self.write_install_state(self.selected_component_profile, self.requested_components)
+            self.write_install_state(
+                self.selected_component_profile,
+                self.requested_components,
+                mutation_results=results,
+            )
         except BaseException as error:
             if not isinstance(error, PersistenceError) or not error.committed:
                 self.rollback_component_transactions(results, error)
@@ -5974,10 +6037,11 @@ class Installer:
                 )
             if assessment.package_order_invalid:
                 self.refresh_qw_package_order(mutation_results=mutation_results)
-            state = assessment.recovered_state or self.load_install_state(persist_migration=True)
+            state = assessment.recovered_state or self.load_install_state(persist_migration=False)
             self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]),
                 known=list(state["known_components"]), capabilities=list(state["capabilities"]),
+                mutation_results=mutation_results,
             )
         self.verify_installation()
         return True
@@ -6354,7 +6418,9 @@ class Installer:
                 installation_results.extend(self.install_component_phase())
             else:
                 console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
-                self.write_install_state("none", [])
+                self.write_install_state(
+                    "none", [], mutation_results=installation_results,
+                )
             if (
                 file_hash(self.target / "id1/pak0.pak") != pak0_before
                 or file_hash(self.target / "id1/pak1.pak") != pak1_before
@@ -6517,7 +6583,7 @@ class Installer:
         if state_path.is_file() and not state_path.is_symlink():
             persisted_state = self.read_install_state_document(state_path)
         state = self.current_install_state(
-            self.load_install_state(persist_migration=not dry_run)
+            self.load_install_state(persist_migration=False)
         )
         state_change = persisted_state != state
         if dry_run and state_change and plan_rows is not None:
@@ -6661,6 +6727,7 @@ class Installer:
                 state = self.write_install_state(
                     str(state["profile"]), list(state["requested_components"]), known=list(self.components),
                     capabilities=list(state["capabilities"]),
+                    mutation_results=mutation_results,
                 )
         if not dry_run and changed and not profile_upgrade:
             console.section("Verificação final")
@@ -6677,7 +6744,7 @@ class Installer:
             dry_run=dry_run, profile_upgrade=True, preview=preview, plan_rows=plan_rows,
         )
         state = self.current_install_state(
-            self.load_install_state(persist_migration=not dry_run)
+            self.load_install_state(persist_migration=False)
         )
         desired = self.desired_components(state)
         installed = self.installed_components()
@@ -6717,6 +6784,7 @@ class Installer:
                 self.write_install_state(
                     str(state["profile"]), list(state["requested_components"]), known=list(self.components),
                     capabilities=list(state["capabilities"]),
+                    mutation_results=component_results,
                 )
         if not dry_run and changed:
             console.section("Verificação final do perfil")

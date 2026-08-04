@@ -2752,6 +2752,33 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(state_path.read_bytes(), previous)
             self.assertEqual(list(state_path.parent.glob(".state.json.*.tmp")), [])
 
+    def test_install_state_transaction_restores_present_and_absent_parent_snapshots(self):
+        for present in (False, True):
+            with self.subTest(present=present), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                state_path = target / install_qw.INSTALL_STATE
+                with mock.patch.object(installer, "installed_components", return_value=[]):
+                    if present:
+                        installer.write_install_state("none", [], known=[])
+                        original = state_path.read_bytes()
+                    else:
+                        original = None
+                    installer._create_stage(".state-parent-test.")
+                    results = []
+                    installer.write_install_state(
+                        "none", [], known=list(installer.components),
+                        mutation_results=results,
+                    )
+                    self.assertTrue(state_path.is_file())
+                    installer.rollback_component_transactions(
+                        results, install_qw.InstallerError("simulated parent failure"),
+                    )
+                if original is None:
+                    self.assertFalse(state_path.exists())
+                else:
+                    self.assertEqual(original, state_path.read_bytes())
+                installer.cleanup_stage()
+
     def test_install_state_loader_rejects_oversized_valid_json(self):
         """The manager facade must consume the runtime's bounded state reader."""
 
