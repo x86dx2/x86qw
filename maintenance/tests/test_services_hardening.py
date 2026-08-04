@@ -1808,14 +1808,31 @@ with session_control._installation_acquisition_mutex(target, sessions):
             config_dir.mkdir()
             config = services.temporary_config(config_dir, "session-", ["hostname ativo"], journal)
             first.path.unlink()
-            second = services.SessionLock.acquire(target, "proxy")
             try:
-                with self.assertRaisesRegex(services.InstallerError, "controlador.*continua ativo"):
-                    services.recover_sessions(target)
+                if os.name == "nt":
+                    with self.assertRaisesRegex(
+                        services.InstallerError, "raiz privada.*protegida",
+                    ):
+                        services.SessionLock.acquire(target, "proxy")
+                    self.assertFalse(first.path.exists())
+                else:
+                    second = services.SessionLock.acquire(target, "proxy")
+                    try:
+                        with self.assertRaisesRegex(
+                            services.InstallerError, "controlador.*continua ativo",
+                        ):
+                            services.recover_sessions(target)
+                    finally:
+                        second.release()
+                self.assertTrue(config.exists())
+                self.assertEqual(
+                    "starting",
+                    json.loads(journal.path.read_text(encoding="utf-8"))["status"],
+                )
             finally:
-                second.release()
-            self.assertTrue(config.exists())
-            self.assertEqual("starting", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
+                journal.release_sensitive_temporary(config)
+                services.unlink_sensitive_temporary(config)
+                first.release()
 
     def test_inconclusive_controller_identity_preserves_lock(self):
         with tempfile.TemporaryDirectory() as temporary:
