@@ -1805,6 +1805,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw").exists())
             self.assertFalse(any(target.glob(".x86qw-update.*")))
 
+    @unittest.skipIf(os.name == "nt", "o lease Windows impede substituir o stage ativo")
     def test_cli_update_cleanup_preserves_a_replacement_of_the_stage_path(self):
         class StopHandoff(RuntimeError):
             pass

@@ -429,22 +429,8 @@ class InstallationLock:
         sessions = target / ".x86qw" / "sessions"
         _ensure_private_directory(sessions.parent, created)
         _ensure_private_directory(sessions, created)
-        try:
-            control_lease = private_fs.hold_private_path(
-                sessions.parent, directory=True,
-            )
-        except OSError as error:
-            for directory in reversed(created):
-                try:
-                    directory.rmdir()
-                except OSError:
-                    pass
-            raise SessionControlError(
-                f"A raiz privada da instalação não pôde ser protegida durante o uso: {sessions.parent}"
-            ) from error
         identity_probe = process_identity(os.getpid())
         if identity_probe.status != "alive" or identity_probe.identity is None:
-            control_lease.close()
             for directory in reversed(created):
                 try:
                     directory.rmdir()
@@ -472,17 +458,14 @@ class InstallationLock:
         try:
             with _installation_acquisition_mutex(target, sessions):
                 return cls._acquire_serialized(
-                    target, sessions, path, owner, created, control_lease,
+                    target, sessions, path, owner, created,
                 )
         except BaseException:
-            try:
-                control_lease.close()
-            finally:
-                for directory in reversed(created):
-                    try:
-                        directory.rmdir()
-                    except OSError:
-                        pass
+            for directory in reversed(created):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
             raise
 
     @classmethod
@@ -493,7 +476,6 @@ class InstallationLock:
         path: Path,
         owner: dict[str, object],
         created: list[Path],
-        control_lease: object,
     ) -> "InstallationLock":
         session_id = str(owner["session_id"])
         reclaimed_path: Path | None = None
@@ -597,6 +579,36 @@ class InstallationLock:
                     "Lock de operação não pôde ser gravado e validado com segurança: "
                     f"{path}.{cleanup_detail}"
                 ) from failure
+            try:
+                control_lease = private_fs.hold_private_path(
+                    sessions.parent, directory=True,
+                )
+            except OSError as error:
+                cleanup_detail = ""
+                try:
+                    private_fs.unlink_private_file(
+                        path, expected_identity=created_identity,
+                    )
+                except OSError as cleanup_error:
+                    cleanup_detail = (
+                        " O lock privado foi preservado para inspeção "
+                        f"({cleanup_error})."
+                    )
+                if reclaimed_path is not None and lexists(reclaimed_path):
+                    try:
+                        if lexists(path):
+                            raise OSError("o novo lock ainda ocupa o caminho ativo")
+                        os.replace(reclaimed_path, path)
+                        reclaimed_path = None
+                    except OSError as restore_error:
+                        cleanup_detail += (
+                            " O lock anterior também não pôde ser restaurado "
+                            f"({restore_error})."
+                        )
+                raise SessionControlError(
+                    "A raiz privada da instalação não pôde ser protegida durante o uso: "
+                    f"{sessions.parent}.{cleanup_detail}"
+                ) from error
             return cls(
                 target, path, owner, reclaimed_path=reclaimed_path,
                 created_directories=tuple(created),

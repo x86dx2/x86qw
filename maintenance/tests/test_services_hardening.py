@@ -1237,6 +1237,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config_dir.mkdir()
             journal = services.SessionJournal(target)
             config = services.temporary_config(config_dir, "session-", ["hostname local"], journal)
+            journal.release_all_sensitive_temporaries()
             secret = "segredo-que-nao-pode-vazar"
             config.write_text(f'password "{secret}"\n', encoding="utf-8")
             output = io.StringIO()
@@ -1257,6 +1258,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config_dir.mkdir()
             journal = services.SessionJournal(target)
             config = services.temporary_config(config_dir, "session-", ["password secret"], journal)
+            journal.release_all_sensitive_temporaries()
             config.unlink()
             config.mkdir()
             personal = config / "personal.cfg"
@@ -1275,6 +1277,7 @@ class ServiceHardeningTests(unittest.TestCase):
             personal.write_text("preservar", encoding="utf-8")
             journal = services.SessionJournal(target)
             config = services.temporary_config(config_dir, "session-", ["password secret"], journal)
+            journal.release_all_sensitive_temporaries()
             config.unlink()
             config.symlink_to(personal)
             services.recover_sessions(target)
@@ -1290,6 +1293,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config_dir.mkdir()
             journal = services.SessionJournal(target)
             config = services.temporary_config(config_dir, "session-", ["password secret"], journal)
+            journal.release_all_sensitive_temporaries()
             config.unlink()
             os.mkfifo(config)
             with self.assertRaisesRegex(services.InstallerError, "arquivo especial"):
@@ -1410,6 +1414,8 @@ class ServiceHardeningTests(unittest.TestCase):
             target = Path(temporary)
             (target / ".x86qw").mkdir()
             first = services.SessionLock.acquire(target, "host")
+            journal = None
+            config = None
             try:
                 journal = services.SessionJournal(
                     target, session_id=first.session_id, controller=first.owner,
@@ -1424,6 +1430,10 @@ class ServiceHardeningTests(unittest.TestCase):
                 self.assertTrue(config.exists())
                 self.assertEqual("starting", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
             finally:
+                if journal is not None:
+                    journal.release_all_sensitive_temporaries()
+                if config is not None:
+                    services.unlink_sensitive_temporary(config)
                 first.release()
 
     def test_session_lock_acquisition_is_atomic_between_controllers(self):

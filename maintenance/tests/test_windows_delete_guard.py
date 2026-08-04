@@ -23,6 +23,7 @@ class WindowsDeleteGuardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "quake-world"
             target.mkdir()
+            (target / ".x86qw").mkdir()
             lock = services.SessionLock.acquire(target, "host")
             control = target / ".x86qw"
             moved = target / ".x86qw-moved"

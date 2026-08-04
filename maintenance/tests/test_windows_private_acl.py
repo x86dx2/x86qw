@@ -172,6 +172,7 @@ class WindowsPrivateAclTests(unittest.TestCase):
                     self._assert_canonical(path, directory=False)
             finally:
                 services.unlink_stop_request(stop)
+                journal.release_sensitive_temporary(sensitive)
                 services.unlink_sensitive_temporary(sensitive)
                 services.gameplay.remove_ktx_runtime_config(ktx)
                 lock.release()
