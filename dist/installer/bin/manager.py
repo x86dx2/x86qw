@@ -1283,32 +1283,76 @@ class Installer:
             managed.update(name for name, _ in self.validate_inventory(inventory))
         return managed
 
+    @staticmethod
+    def _minimal_removal_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
+        """Drop descendants when an already selected ancestor removes the same data."""
+
+        selected: list[Path] = []
+        for path in sorted(set(paths), key=lambda item: (len(item.parts), str(item))):
+            if any(parent == path or parent in path.parents for parent in selected):
+                continue
+            selected.append(path)
+        return tuple(selected)
+
+    def _remove_paths_transaction(
+        self,
+        paths: Iterable[Path],
+        *,
+        identifier: str,
+        summary: str,
+    ) -> MutationResult | None:
+        selected = self._minimal_removal_paths(paths)
+        if not selected:
+            return None
+        if self.stage is None:
+            self._create_stage(f".{identifier}.")
+        steps = tuple(
+            MutationStep(
+                key=f"remove-{index}",
+                description=f"Recolher {path.relative_to(self.target)}",
+                observe=lambda path=path: self._mutation_path_observation(path),
+                apply=lambda path=path: self._apply_managed_path_removal(
+                    path, label=f"caminho selecionado {path}",
+                ),
+                rollback=self._rollback_runtime_payload,
+            )
+            for index, path in enumerate(selected, 1)
+        )
+        plan = MutationPlan(identifier=identifier, summary=summary, steps=steps)
+        try:
+            return execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                f"{summary} falhou; a instalação anterior foi restaurada."
+            ) from error
+
     def cleanup_runtime_data(self, *, downloads: bool, personal_data: bool) -> tuple[int, int]:
         if not self.target.is_dir() or self.target.is_symlink():
             console.info(f"Nenhuma instalação local foi encontrada em {self.target}.")
             return 0, 0
-        removed_cache = 0
-        removed_personal = 0
+        cache_paths: list[Path] = []
+        personal_paths: list[Path] = []
 
         for relative in ("ezquake/sb/cache", "ezquake/temp"):
             path = self.target / relative
             if lexists(path):
-                remove_path(path, self.target.stat().st_dev)
-                removed_cache += 1
+                cache_paths.append(path)
 
         fortress = self.target / "fortress"
         if fortress.is_dir() and not fortress.is_symlink():
             for temporary in sorted(fortress.rglob("*.tmp")):
                 if temporary.is_file() and not temporary.is_symlink():
-                    remove_path(temporary)
-                    removed_cache += 1
+                    cache_paths.append(temporary)
 
         demos = self.target / "td2/demos"
         if demos.is_dir() and not demos.is_symlink():
             for artifact in sorted(demos.iterdir()):
                 if artifact.is_file() and not artifact.is_symlink() and artifact.stat().st_size == 0:
-                    remove_path(artifact)
-                    removed_cache += 1
+                    cache_paths.append(artifact)
 
         if downloads and fortress.is_dir() and not fortress.is_symlink():
             managed = self.managed_runtime_paths()
@@ -1321,8 +1365,7 @@ class Installer:
                         continue
                     relative = artifact.relative_to(self.target).as_posix()
                     if relative not in managed:
-                        remove_path(artifact)
-                        removed_cache += 1
+                        cache_paths.append(artifact)
 
         if personal_data:
             personal = (
@@ -1334,15 +1377,32 @@ class Installer:
             for relative in personal:
                 path = self.target / relative
                 if lexists(path):
-                    remove_path(path, self.target.stat().st_dev)
-                    removed_personal += 1
+                    personal_paths.append(path)
 
-        for relative in (
-            "ezquake/sb", "ezquake", "fortress/progs", "fortress/sound",
-            "fortress", "td2/demos", "td2", "logs",
-        ):
-            remove_empty_directories(self.target / relative)
-        return removed_cache, removed_personal
+        selected_personal = self._minimal_removal_paths(personal_paths)
+        selected_cache = tuple(
+            path
+            for path in self._minimal_removal_paths(cache_paths)
+            if not any(parent == path or parent in path.parents for parent in selected_personal)
+        )
+        selected = (*selected_cache, *selected_personal)
+        if selected:
+            owned_stage = self.stage is None
+            cleanup_stage = True
+            try:
+                self._remove_paths_transaction(
+                    selected,
+                    identifier="cleanup-runtime-data",
+                    summary="Remover dados selecionados pela limpeza",
+                )
+            except MutationRollbackError:
+                cleanup_stage = False
+                raise
+            finally:
+                if owned_stage and cleanup_stage:
+                    self.cleanup_stage()
+                    self.stage = None
+        return len(selected_cache), len(selected_personal)
 
     def validate_pak_file(self, pak: Path, expected: str, label: str = "PAK") -> None:
         if not pak.is_file() or pak.is_symlink():

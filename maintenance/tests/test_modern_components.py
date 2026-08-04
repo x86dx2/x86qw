@@ -3018,6 +3018,43 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse(valid_demo.exists())
             self.assertFalse(log.exists())
 
+    def test_cleanup_rolls_back_every_selected_path_when_a_later_removal_fails(self):
+        """A partial cleanup must not leave the installation between snapshots."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            browser_cache = target / "ezquake/sb/cache/index"
+            browser_cache.parent.mkdir(parents=True)
+            browser_cache.write_bytes(b"cache")
+            runtime_temp = target / "ezquake/temp/download.tmp"
+            runtime_temp.parent.mkdir(parents=True)
+            runtime_temp.write_bytes(b"temporary")
+
+            apply_removal = installer._apply_managed_path_removal
+            attempts = 0
+
+            def fail_second(destination, *, label):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated second cleanup removal failure")
+                return apply_removal(destination, label=label)
+
+            with mock.patch.object(
+                installer,
+                "_apply_managed_path_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.cleanup_runtime_data(
+                        downloads=False,
+                        personal_data=False,
+                    )
+
+            self.assertEqual(b"cache", browser_cache.read_bytes())
+            self.assertEqual(b"temporary", runtime_temp.read_bytes())
+            self.assertFalse((target / install_qw.METADATA_DIR).exists())
+
     def test_hub_filters_bad_addresses_and_launches_macos_binary_with_arguments(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
