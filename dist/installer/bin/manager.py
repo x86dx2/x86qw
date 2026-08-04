@@ -7092,8 +7092,9 @@ class Installer:
     def upgrade(
         self, *, dry_run: bool = False, preview: bool = False,
         plan_rows: list[UpdatePlanRow] | None = None,
+        mutation_results: list[MutationResult] | None = None,
     ) -> bool:
-        with self.component_state_transaction() as component_results:
+        with self.component_state_transaction(mutation_results) as component_results:
             changed = self.update(
                 dry_run=dry_run,
                 profile_upgrade=True,
@@ -7317,7 +7318,9 @@ class Installer:
         self._cleanup_stage_roots(roots)
         self._stage_created_roots = ()
 
-    def install_online_cli(self) -> None:
+    def install_online_cli(
+        self, *, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         if not self.online_only:
             return
         identity = self.installer_bundle_identity()
@@ -7362,7 +7365,7 @@ class Installer:
             ):
                 raise InstallerError(f"Launcher instalado inválido: {destination}")
 
-        parent_managed = self.stage is not None
+        parent_managed = mutation_results is not None or self.stage is not None
         with self.runtime_mutation_stage(
             ".x86qw-cli.", parent_managed=parent_managed,
         ):
@@ -7453,6 +7456,9 @@ class Installer:
                         f"A validação da CLI falhou e o rollback ficou incompleto: {rollback_error}"
                     ) from error
                 raise
+
+        if mutation_results is not None:
+            mutation_results.append(result)
 
         shell_launcher = self.target / "x86qw.sh"
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
@@ -7979,10 +7985,11 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             console.heading(
                 "Atualizando pacotes" if options.action == "update" else "Incorporando novidades"
             )
-            if content_changed:
-                operation(dry_run=False)
-            if options.skip_cli_update:
-                installer.install_online_cli()
+            with installer.component_state_transaction() as operation_results:
+                if content_changed:
+                    operation(dry_run=False, mutation_results=operation_results)
+                if options.skip_cli_update:
+                    installer.install_online_cli(mutation_results=operation_results)
         else:
             if options.action in {"components", "presets"}:
                 acquire_operation_lock()

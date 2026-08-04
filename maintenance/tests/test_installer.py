@@ -1998,6 +1998,52 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw/staging").exists())
             self.assertFalse(any(target.rglob("*.new")))
 
+    def test_online_cli_retains_its_inverse_until_the_parent_transaction_finishes(self):
+        """A later generation failure must restore every previous CLI file."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            cli = target / ".x86qw/cli"
+            cli.mkdir(parents=True)
+            old_identity = {"format": 1, "project": "x86qw", "version": "1.0.5"}
+            old_receipt = json.dumps(old_identity, sort_keys=True).encode("utf-8") + b"\n"
+            old_paths = {
+                cli / "x86qw.pyz": b"old application",
+                cli / "receipt": old_receipt,
+                target / "x86qw.sh": b"old shell launcher\n",
+                target / "x86qw.cmd": b"old batch launcher\r\n",
+            }
+            for path, payload in old_paths.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "late generation failure",
+                ):
+                    with installer.component_state_transaction() as results:
+                        installer.install_online_cli(mutation_results=results)
+                        raise install_qw.InstallerError("late generation failure")
+
+            for path, payload in old_paths.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((target / ".x86qw/staging").exists())
+
     def test_online_cli_failed_first_install_leaves_no_metadata_or_launcher(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -2302,6 +2348,107 @@ class InstallerTests(unittest.TestCase):
         final_cli.handoff_cli_update.assert_not_called()
         operation_lock.release.assert_called_once()
 
+    def test_cli_publication_failure_rolls_back_the_content_update(self):
+        """Content and the installed CLI must publish as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "qw/content-generation.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b"old\n")
+
+            def update(*, dry_run, plan_rows=None, mutation_results=None, **_options):
+                if dry_run:
+                    assert plan_rows is not None
+                    plan_rows.append(install_qw.UpdatePlanRow(
+                        "Componente", "KTX", "old", "new", "Atualizar",
+                    ))
+                    return True
+                old_payload = marker.read_bytes()
+                result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                    install_qw.MutationPlan(
+                        identifier="test:content-cli-generation",
+                        summary="publish content before the CLI",
+                        steps=(install_qw.MutationStep(
+                            key="content",
+                            description="replace the managed content",
+                            observe=marker.read_bytes,
+                            apply=lambda: marker.write_bytes(b"new\n"),
+                            rollback=lambda _token: marker.write_bytes(old_payload),
+                        ),),
+                    )
+                ))
+                if mutation_results is not None:
+                    mutation_results.append(result)
+                return True
+
+            installer.update = mock.Mock(side_effect=update)
+            installer.handoff_cli_update = mock.Mock(return_value=False)
+            installer.cli_update_plan_row = mock.Mock(return_value=None)
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.install_online_cli = mock.Mock(
+                side_effect=install_qw.InstallerError("CLI publication failed"),
+            )
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire",
+                return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                io.StringIO(),
+            ):
+                self.assertEqual(1, install_qw.main([
+                    "--online-only", "--installed-cli", "--skip-cli-update",
+                    "update", str(target), "--yes",
+                ]))
+
+            self.assertEqual(b"old\n", marker.read_bytes())
+
+    def test_cli_only_handoff_publishes_without_rewriting_content(self):
+        """A validated CLI plan must not depend on a content update."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            published = target / "cli-published"
+            installer.update = mock.Mock(return_value=False)
+            installer.handoff_cli_update = mock.Mock(return_value=False)
+            installer.cli_update_plan_row = mock.Mock(return_value=install_qw.UpdatePlanRow(
+                "CLI", "x86QW", "1.0.5", "1.0.6", "Atualizar",
+            ))
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.install_online_cli = mock.Mock(
+                side_effect=lambda **_options: published.write_bytes(b"published\n"),
+            )
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire",
+                return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main([
+                    "--online-only", "--installed-cli", "--skip-cli-update",
+                    "update", str(target), "--yes",
+                ]))
+
+            self.assertTrue(published.is_file())
+            self.assertEqual(b"published\n", published.read_bytes())
+            self.assertEqual(1, installer.update.call_count)
+            self.assertTrue(installer.update.call_args.kwargs["dry_run"])
+
     def test_maintenance_recovery_does_not_load_service_or_gameplay_entrypoints(self):
         """Maintenance must recover journals through the canonical runtime boundary."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -2360,7 +2507,8 @@ class InstallerTests(unittest.TestCase):
         confirm = install_qw.Installer.confirm_update_plan
         installer = mock.Mock()
         installer.target = target
-        def upgrade(*, dry_run, preview=False, plan_rows=None):
+        def upgrade(*, dry_run, preview=False, plan_rows=None, mutation_results=None):
+            del mutation_results
             del preview
             if dry_run and plan_rows is not None:
                 plan_rows.append(install_qw.UpdatePlanRow(
@@ -2369,6 +2517,10 @@ class InstallerTests(unittest.TestCase):
             return True
         installer.upgrade.side_effect = upgrade
         installer.confirm_update_plan.side_effect = confirm
+        @contextlib.contextmanager
+        def transaction():
+            yield []
+        installer.component_state_transaction.side_effect = transaction
         output = io.StringIO()
         with mock.patch.object(install_qw, "Installer", return_value=installer):
             with mock.patch("builtins.input") as prompt:
