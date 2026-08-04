@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import os
 import random
@@ -25,7 +24,6 @@ from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 
-core = importlib.import_module("manager")
 from x86qw_runtime.ui import menu as navigation
 from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
@@ -70,11 +68,40 @@ from x86qw_runtime.gameplay import (
     without_frogbots,
 )
 
-console = core.console
-file_count = core.file_count
-file_hash = core.file_hash
-lexists = core.lexists
-remove_path = core.remove_path
+_player_adapters: dict[type, type] = {}
+
+
+def _manager_api() -> object:
+    manager_api = sys.modules.get("manager")
+    if manager_api is None:
+        raise RuntimeError(
+            "O adapter gameplay requer a API do manager injetada antes da execução."
+        )
+    return manager_api
+
+
+class _ConsoleProxy:
+    def __getattr__(self, name: str) -> object:
+        return getattr(_manager_api().console, name)
+
+
+console = _ConsoleProxy()
+
+
+def file_count(*arguments, **keywords):  # type: ignore[no-untyped-def]
+    return _manager_api().file_count(*arguments, **keywords)
+
+
+def file_hash(*arguments, **keywords):  # type: ignore[no-untyped-def]
+    return _manager_api().file_hash(*arguments, **keywords)
+
+
+def lexists(*arguments, **keywords):  # type: ignore[no-untyped-def]
+    return _manager_api().lexists(*arguments, **keywords)
+
+
+def remove_path(*arguments, **keywords):  # type: ignore[no-untyped-def]
+    return _manager_api().remove_path(*arguments, **keywords)
 
 PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
@@ -120,9 +147,10 @@ class KtxRuntimeConfig:
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
-    if core.ZIPAPP_PATH is not None:
-        document = core.read_zipapp_json(
-            core.ZIPAPP_PATH, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
+    manager_api = _manager_api()
+    if manager_api.ZIPAPP_PATH is not None:
+        document = manager_api.read_zipapp_json(
+            manager_api.ZIPAPP_PATH, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
         )
     else:
         document = load_games(project_root / DEVELOPMENT_GAME_CATALOG)
@@ -131,7 +159,7 @@ def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
 
 @lru_cache(maxsize=1)
 def local_games() -> tuple[LocalGameSpec, ...]:
-    return load_local_games(core.PROJECT_ROOT)
+    return load_local_games(_manager_api().PROJECT_ROOT)
 
 
 class LazyTuple(Sequence[object]):
@@ -173,9 +201,10 @@ NQUAKE_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
 
 
 def read_ktx_mode_catalog(project_root: Path) -> dict[str, object]:
-    if core.ZIPAPP_PATH is not None:
-        catalog = core.read_zipapp_json(
-            core.ZIPAPP_PATH, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
+    manager_api = _manager_api()
+    if manager_api.ZIPAPP_PATH is not None:
+        catalog = manager_api.read_zipapp_json(
+            manager_api.ZIPAPP_PATH, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
         )
     else:
         path = project_root / DEVELOPMENT_KTX_MODE_CATALOG
@@ -386,9 +415,10 @@ def validate_frogbot_name_document(
 
 
 def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
-    if core.ZIPAPP_PATH is not None:
-        document = core.read_zipapp_json(
-            core.ZIPAPP_PATH,
+    manager_api = _manager_api()
+    if manager_api.ZIPAPP_PATH is not None:
+        document = manager_api.read_zipapp_json(
+            manager_api.ZIPAPP_PATH,
             RUNTIME_KTX_BOT_NAME_CATALOG,
             "Catálogo de nomes Frogbot",
         )
@@ -682,7 +712,7 @@ remove_frogbot_runtime_config = remove_ktx_runtime_config
 
 
 
-class Player(core.Installer):
+class GameplayPlayerMixin:
     @staticmethod
     def config_cvars(payload: bytes, names: tuple[str, ...]) -> dict[str, str]:
         values: dict[str, str] = {}
@@ -1931,6 +1961,40 @@ class Player(core.Installer):
         raise InstallerError(f"Gamecode {member_name} não encontrado em {package}.")
 
 
+def create_player_adapter(installer_base: type) -> type:
+    """Compose gameplay behavior with an explicitly supplied installer base."""
+    if not isinstance(installer_base, type):
+        raise TypeError("installer_base deve ser uma classe")
+    adapter = _player_adapters.get(installer_base)
+    if adapter is None:
+        adapter = type(
+            "Player",
+            (GameplayPlayerMixin, installer_base),
+            {
+                "__module__": __name__,
+                "__qualname__": "Player",
+                "__doc__": "Gameplay adapter composed with the manager installer base.",
+            },
+        )
+        _player_adapters[installer_base] = adapter
+    return adapter
+
+
+def player_class(installer_base: type | None = None) -> type:
+    """Return the public Player class, resolving the manager only on demand."""
+    if installer_base is None:
+        installer_base = _manager_api().Installer
+    return create_player_adapter(installer_base)
+
+
+def __getattr__(name: str) -> object:
+    if name == "Player":
+        adapter = player_class()
+        globals()[name] = adapter
+        return adapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def bounded_integer(minimum: int, maximum: int):
     def parse(value: str) -> int:
         try:
@@ -2099,8 +2163,9 @@ def resolve_ktx_launch_options(
 
 
 def parse_arguments(arguments: list[str], project_root: Path):
-    public_cli = core.ZIPAPP_PATH is not None
-    parser = core.FriendlyArgumentParser(
+    manager_api = _manager_api()
+    public_cli = manager_api.ZIPAPP_PATH is not None
+    parser = manager_api.FriendlyArgumentParser(
         prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
         description="Abre os mods locais da distribuição x86QW no ezQuake.",
         epilog=(
@@ -2154,7 +2219,7 @@ def show_banner(target: Path) -> None:
 def main(
     arguments: list[str] | None = None, *, propagate_menu_exit: bool = False,
 ) -> int:
-    project_root = core.INSTALLER_ROOT
+    project_root = _manager_api().INSTALLER_ROOT
     options = None
     player = None
     try:
@@ -2162,7 +2227,8 @@ def main(
         console.configure(verbose=options.verbose, no_color=options.no_color)
         navigation.configure(no_color=options.no_color)
         show_banner(options.target)
-        player = Player(project_root, options.target)
+        player_type = globals().get("Player") or player_class()
+        player = player_type(project_root, options.target)
         player.validate_target("play")
         console.detail(f"Destino normalizado: {player.target}")
         player.reject_target_symlinks()
