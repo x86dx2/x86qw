@@ -273,7 +273,7 @@ class InstallerTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
             bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
-            self.assertIn("session_control.py", application.namelist())
+            self.assertNotIn("session_control.py", application.namelist())
             self.assertIn("python_runtime.py", application.namelist())
             self.assertIn("x86qw_runtime/io/downloader.py", application.namelist())
             self.assertNotIn("maintenance/tools/downloader.py", application.namelist())

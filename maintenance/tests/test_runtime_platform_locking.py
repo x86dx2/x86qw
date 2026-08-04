@@ -40,12 +40,12 @@ class RuntimePlatformLockingTests(unittest.TestCase):
         self.assertIs(legacy, canonical)
         self.assertIs(legacy.InstallationLock, canonical.InstallationLock)
 
-    def test_zipapp_contains_canonical_session_control_and_compatibility_facade(self) -> None:
+    def test_zipapp_contains_only_canonical_session_control(self) -> None:
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             names = set(application.namelist())
 
         self.assertIn("x86qw_runtime/session_control.py", names)
-        self.assertIn("session_control.py", names)
+        self.assertNotIn("session_control.py", names)
 
     def test_session_control_reexports_canonical_locking_contracts(self) -> None:
         """The compatibility facade must not grow a second native mutex backend."""

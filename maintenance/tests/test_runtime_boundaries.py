@@ -56,15 +56,15 @@ class RuntimeMenuBoundaryTests(unittest.TestCase):
             with self.subTest(symbol=name):
                 self.assertIs(getattr(legacy, name), getattr(canonical, name))
 
-    def test_installed_zipapp_contains_canonical_ui_and_the_legacy_facade(self) -> None:
-        """The installed CLI must ship both its canonical import and compatibility path."""
+    def test_installed_zipapp_contains_only_the_consumed_canonical_ui(self) -> None:
+        """The local compatibility facade is not a runtime zipapp dependency."""
 
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             names = set(application.namelist())
 
         self.assertIn("x86qw_runtime/ui/__init__.py", names)
         self.assertIn("x86qw_runtime/ui/menu.py", names)
-        self.assertIn("menu.py", names)
+        self.assertNotIn("menu.py", names)
 
 
 class RuntimeDownloaderBoundaryTests(unittest.TestCase):
