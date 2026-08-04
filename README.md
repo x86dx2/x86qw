@@ -262,6 +262,17 @@ Consulte o
 
 O repositório é a fonte canônica. `dist/` preserva os inputs; inventários declaram consumidores e dependências; o catálogo projeta pacotes públicos; o instalador materializa apenas o perfil e a plataforma escolhidos. GitHub Releases é o canal principal de artefatos e GitLab Generic Packages mantém o mirror de contingência.
 
+No código corretivo ainda não publicado da PR 6, contratos reutilizáveis estão
+sendo movidos incrementalmente para `x86qw_runtime`: downloader, archive,
+persistência atômica, catálogos, estado e recibos, transações, UI, gameplay,
+adapters de processo e supervisor. A direção de dependências impede o runtime
+de importar manutenção ou entrypoints, e o zipapp não incorpora
+`maintenance/`. O trabalho permanece parcial — transações da CLI, defaults,
+remoções, migrações mutáveis e uninstall ainda estão abertos — e não altera a
+release pública `0.7.1`. Consulte o
+[ADR 0005](docs/adr/0005-fronteiras-incrementais-x86qw-runtime.md) e a
+[evidência parcial](docs/implementation/runtime-boundaries-pr6.md).
+
 ```text
 dist/           produto canônico, upstreams preservados e customizações x86QW
 maintenance/    inventários, receitas, validação, build e publicação

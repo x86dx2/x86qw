@@ -77,6 +77,28 @@ Capacidades, runtimes, jogos e compatibilidade são declarados em
 catálogo de pacotes; `verify` rejeita qualquer projeção ou texto factual
 divergente.
 
+## Fronteiras do runtime instalado
+
+A PR 6 migra incrementalmente regras reutilizáveis dos entrypoints e de
+`maintenance.tools` para `x86qw_runtime`. O sentido permitido é manutenção,
+builders e fachadas instaladas consumirem o runtime; `x86qw_runtime` não pode
+importar `maintenance`, `dist` ou os entrypoints. O zipapp leva somente módulos
+runtime e projeções declarativas necessárias, sem a árvore `maintenance/`.
+
+No recorte parcial `23194fd..49594cd`, o runtime já possui versioning e erros,
+download limitado, scanner/extrator de arquivos, escrita atômica, modelos de
+catálogo, estado, recibos, migração, transações, UI, gameplay, identidade de
+processo e supervisor/readiness. Fachadas antigas permanecem apenas onde a
+compatibilidade de imports ainda precisa ser preservada.
+
+Essa etapa não está concluída: mutações da própria CLI, defaults, remoções
+residuais,
+migrações mutáveis e uninstall ainda precisam entrar em planos explícitos. A
+decisão, a evidência focal e os riscos estão no
+[ADR 0005](adr/0005-fronteiras-incrementais-x86qw-runtime.md) e na
+[nota de implementação](implementation/runtime-boundaries-pr6.md). A release
+pública `0.7.1` não contém essa refatoração e permanece imutável.
+
 ## Regra de entrada de componentes
 
 `maintenance/inventory/component-policy.json` é a fronteira geral da distribuição.
