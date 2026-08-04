@@ -589,7 +589,7 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
         _assert_handle_type(native_handle, directory=False)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
         api = _api()
-        encoded = destination.name.encode("utf-16-le")
+        encoded = str(destination).encode("utf-16-le")
         name_offset = _FileRenameInfo.file_name.offset
         buffer = ctypes.create_string_buffer(
             name_offset + len(encoded) + ctypes.sizeof(ctypes.c_wchar)
