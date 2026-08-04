@@ -1845,32 +1845,42 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertFalse(residual[0].is_alive())
 
         late_process = BlockingResolver()
+        spawn_entered = threading.Event()
+        release_spawn = threading.Event()
 
         def delayed_spawn(*_args, **_kwargs):
-            time.sleep(1.2)
+            spawn_entered.set()
+            if not release_spawn.wait(5):
+                raise AssertionError("the delayed resolver fixture was not released")
             return late_process
 
+        release_timer = threading.Timer(3, release_spawn.set)
+        release_timer.start()
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "late-resolver.zip"
-            started = time.monotonic()
-            with mock.patch.object(
-                namespace["subprocess"], "Popen", side_effect=delayed_spawn,
-            ):
-                with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
-                    namespace["download_mirrors"](
-                        ["https://resolver.example.invalid/archive.zip"],
-                        os.fspath(destination),
-                        1,
-                        hashlib.sha256(b"x").hexdigest(),
-                        1,
-                        1,
-                        0,
-                        1,
-                    )
-            elapsed = time.monotonic() - started
-            self.assertFalse(destination.exists())
+            try:
+                with mock.patch.object(
+                    namespace["subprocess"], "Popen", side_effect=delayed_spawn,
+                ):
+                    with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
+                        namespace["download_mirrors"](
+                            ["https://resolver.example.invalid/archive.zip"],
+                            os.fspath(destination),
+                            1,
+                            hashlib.sha256(b"x").hexdigest(),
+                            1,
+                            1,
+                            0,
+                            1,
+                        )
+                returned_before_spawn = not release_spawn.is_set()
+                self.assertFalse(destination.exists())
+            finally:
+                release_spawn.set()
+                release_timer.cancel()
 
-        self.assertLess(elapsed, 1.15)
+        self.assertTrue(spawn_entered.is_set())
+        self.assertTrue(returned_before_spawn)
         self.assertTrue(late_process.collected.wait(1))
         self.assertTrue(late_process.killed.is_set())
         self.assertNotIn(b"G", late_process.inputs)
