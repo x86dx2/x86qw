@@ -526,6 +526,61 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(pak0, (target / "id1/pak0.pak").read_bytes())
             self.assertEqual(pak1, (target / "id1/pak1.pak").read_bytes())
 
+    def test_core_paks_roll_back_as_one_unit_when_second_promotion_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            bundled = installer.project_root / "dist/game-data/id1"
+            bundled.mkdir(parents=True)
+            pak0 = b"PACK" + b"pak0"
+            pak1 = b"PACK" + b"pak1"
+            (bundled / "pak0.pak").write_bytes(pak0)
+            (bundled / "pak1.pak").write_bytes(pak1)
+            replace = os.replace
+
+            def fail_second_pak(source, destination):
+                if Path(destination) == target / "id1/pak1.pak":
+                    raise OSError("simulated second PAK promotion failure")
+                return replace(source, destination)
+
+            with mock.patch.object(
+                install_qw, "ID1_PAK0_SHA256",
+                install_qw.hashlib.sha256(pak0).hexdigest(),
+            ), mock.patch.object(
+                install_qw, "ID1_PAK1_SHA256",
+                install_qw.hashlib.sha256(pak1).hexdigest(),
+            ), mock.patch.object(
+                install_qw.os, "replace", side_effect=fail_second_pak,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.provision_install_target()
+
+            self.assertFalse((target / "id1/pak0.pak").exists())
+            self.assertFalse((target / "id1/pak1.pak").exists())
+            self.assertFalse(any((target / "id1").glob(".*.x86qw-part")))
+
+    def test_core_paks_keep_an_inverse_for_the_parent_install_transaction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            bundled = installer.project_root / "dist/game-data/id1"
+            bundled.mkdir(parents=True)
+            pak0 = b"PACK" + b"pak0"
+            pak1 = b"PACK" + b"pak1"
+            (bundled / "pak0.pak").write_bytes(pak0)
+            (bundled / "pak1.pak").write_bytes(pak1)
+            with mock.patch.object(
+                install_qw, "ID1_PAK0_SHA256",
+                install_qw.hashlib.sha256(pak0).hexdigest(),
+            ), mock.patch.object(
+                install_qw, "ID1_PAK1_SHA256",
+                install_qw.hashlib.sha256(pak1).hexdigest(),
+            ):
+                result = installer.provision_install_target()
+            self.assertIsInstance(result, install_qw.MutationResult)
+            assert result is not None
+            install_qw.rollback_mutation(result)
+            self.assertFalse((target / "id1/pak0.pak").exists())
+            self.assertFalse((target / "id1/pak1.pak").exists())
+
     def test_public_install_downloads_registered_paks_as_a_separate_core_package(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

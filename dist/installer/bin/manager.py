@@ -841,6 +841,11 @@ class RuntimeReceiptRollback:
     previous: list[tuple[Path, Path, tuple[int, int]]]
 
 
+@dataclass
+class CorePakRollback:
+    installed: list[tuple[Path, tuple[int, int]]]
+
+
 @dataclass(frozen=True)
 class CreatedDefaultRollback:
     destination: Path
@@ -1360,7 +1365,47 @@ class Installer:
             raise InstallerError(f"O caminho id1 não é um diretório: {id1}")
         id1.mkdir(exist_ok=True)
 
-    def provision_install_target(self) -> None:
+    def _rollback_core_paks(self, token: CorePakRollback) -> None:
+        errors: list[str] = []
+        for destination, expected_identity in reversed(token.installed):
+            try:
+                if not lexists(destination):
+                    continue
+                if self._regular_identity(destination) != expected_identity:
+                    raise InstallerError(
+                        f"PAK instalado mudou e foi preservado: {destination}"
+                    )
+                destination.unlink()
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                "Rollback dos PAKs registrados ficou incompleto: " + "; ".join(errors)
+            )
+
+    def _apply_core_paks(
+        self, prepared: tuple[tuple[Path, Path], ...],
+    ) -> CorePakRollback:
+        token = CorePakRollback([])
+        try:
+            for source, destination in prepared:
+                if lexists(destination):
+                    raise InstallerError(
+                        f"O destino do PAK passou a existir durante a instalação: {destination}"
+                    )
+                os.replace(source, destination)
+                token.installed.append((destination, self._regular_identity(destination)))
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_core_paks(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"A instalação dos PAKs falhou e o rollback ficou incompleto: {rollback_error}"
+                ) from error
+            raise
+
+    def provision_install_target(self) -> MutationResult | None:
         self.prepare_install_target()
         requirements = (
             ("pak0.pak", ID1_PAK0_SHA256),
@@ -1374,7 +1419,7 @@ class Installer:
             else:
                 missing.append(name)
         if not missing:
-            return
+            return None
 
         local_id1 = self.project_root / DEVELOPMENT_ID1_DIR
         local_sources = not self.online_only and local_id1.is_dir() and not local_id1.is_symlink()
@@ -1400,29 +1445,51 @@ class Installer:
             for name, expected in requirements:
                 self.validate_pak_file(sources[name], expected, "PAK do pacote de dados base")
 
-        copied = 0
-        for name, expected in requirements:
-            destination = self.target / "id1" / name
-            if name not in missing:
-                continue
-            temporary = self.target / "id1" / f".{name}.x86qw-part"
-            ensure_no_symlink(temporary, "temporary PAK")
-            try:
-                shutil.copyfile(sources[name], temporary)
+        parent_managed = self.stage is not None
+        with self.runtime_mutation_stage(
+            ".x86qw-core-paks.", parent_managed=parent_managed,
+        ):
+            assert self.stage is not None
+            prepared: list[tuple[Path, Path]] = []
+            for name, expected in requirements:
+                if name not in missing:
+                    continue
+                staged = self.stage / name
+                shutil.copyfile(sources[name], staged)
                 if os.name != "nt":
-                    temporary.chmod(0o644)
-                self.validate_pak_file(temporary, expected, "Cópia temporária do PAK")
-                os.replace(temporary, destination)
-            finally:
-                if lexists(temporary):
-                    remove_path(temporary)
-            copied += 1
-        if copied:
-            console.success(
-                f"Dados base preparados em {self.target / 'id1'} ({file_count(copied)} copiados)."
+                    staged.chmod(0o644)
+                self.validate_pak_file(staged, expected, "Cópia temporária do PAK")
+                prepared.append((staged, self.target / "id1" / name))
+            frozen_prepared = tuple(prepared)
+            plan = MutationPlan(
+                identifier="core-paks",
+                summary="Publicar os PAKs registrados da distribuição",
+                steps=(MutationStep(
+                    key="pak-files",
+                    description="Publicar todos os PAKs registrados como uma unidade",
+                    observe=lambda: tuple(
+                        (
+                            self._mutation_path_observation(source),
+                            self._mutation_path_observation(destination),
+                        )
+                        for source, destination in frozen_prepared
+                    ),
+                    apply=lambda: self._apply_core_paks(frozen_prepared),
+                    rollback=self._rollback_core_paks,
+                ),),
             )
-        else:
-            console.detail("PAKs registrados já estavam presentes e foram preservados.")
+            try:
+                result = execute_mutation(prepare_mutation(plan))
+            except MutationApplyError as error:
+                if isinstance(error.operation_error, InstallerError):
+                    raise error.operation_error
+                raise InstallerError(
+                    "Os PAKs registrados não puderam ser publicados como uma unidade."
+                ) from error
+        console.success(
+            f"Dados base preparados em {self.target / 'id1'} ({file_count(len(prepared))} copiados)."
+        )
+        return result
 
     def ensure_metadata_directory(self) -> None:
         metadata = self.target / METADATA_DIR
