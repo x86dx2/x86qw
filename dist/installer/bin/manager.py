@@ -10,13 +10,10 @@ import hashlib
 import importlib
 import json
 import os
-import platform as host_platform
-import plistlib
 import re
 import shutil
 import stat
 import struct
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -26,6 +23,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 sys.dont_write_bytecode = True
 
@@ -47,8 +45,15 @@ except python_runtime.UnsupportedPythonError as error:
 
 session_control = importlib.import_module("x86qw_runtime.session_control")
 macos = importlib.import_module("x86qw_runtime.platform.macos")
+host_adapter = importlib.import_module("x86qw_runtime.platform.host")
+host_platform = host_adapter
+supervisor_core = importlib.import_module("x86qw_runtime.supervisor.core")
 from x86qw_runtime.ui import menu as navigation
-from x86qw_runtime.ui.arguments import FriendlyArgumentParser
+from x86qw_runtime.ui.arguments import (
+    FriendlyArgumentParser,
+    public_bootstrap_command,
+    public_launcher_name,
+)
 from x86qw_runtime.ui.console import (
     Console,
     UpdatePlanRow,
@@ -69,7 +74,9 @@ from x86qw_runtime.io.atomic import (
     atomic_copy_file,
     atomic_write_bytes,
 )
+from x86qw_runtime.io.managed_files import file_sha256 as file_hash
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
+from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
 from x86qw_runtime.migrations import migrate_install_state
 from x86qw_runtime.state import (
@@ -571,18 +578,6 @@ def file_count(count: int) -> str:
     return f"{count} {'arquivo' if count == 1 else 'arquivos'}"
 
 
-def lexists(path: Path) -> bool:
-    return os.path.lexists(path)
-
-
-def file_hash(path: Path, algorithm: str = "sha256") -> str:
-    digest = hashlib.new(algorithm)
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
     if not pattern.fullmatch(value):
         raise InstallerError(f"invalid {label}")
@@ -591,27 +586,6 @@ def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
 def ensure_no_symlink(path: Path, label: str) -> None:
     if path.is_symlink():
         raise InstallerError(f"{label} must not be a symlink: {path}")
-
-
-def remove_path(path: Path, root_device: int | None = None) -> None:
-    """Delete without following symlinks or crossing filesystem boundaries."""
-    if not lexists(path):
-        return
-    info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
-        path.unlink()
-        return
-    device = info.st_dev if root_device is None else root_device
-    if info.st_dev != device:
-        raise InstallerError(f"refusing to cross filesystem boundary: {path}")
-    with os.scandir(path) as entries:
-        for entry in entries:
-            child = Path(entry.path)
-            child_info = child.lstat()
-            if not stat.S_ISLNK(child_info.st_mode) and child_info.st_dev != device:
-                raise InstallerError(f"refusing to cross filesystem boundary: {child}")
-            remove_path(child, device)
-    path.rmdir()
 
 
 def remove_empty_directories(root: Path) -> None:
@@ -671,6 +645,7 @@ class ComponentMetadataRollback:
     previous: Path
     previous_identity: tuple[int, int] | None
     legacy_backups: list[tuple[Path, Path, tuple[int, int]]]
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
 
 
 @dataclass
@@ -700,11 +675,22 @@ class RuntimeReceiptRollback:
     destination: Path
     installed_identity: tuple[int, int] | None
     previous: list[tuple[Path, Path, tuple[int, int]]]
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
 
 
 @dataclass
 class CorePakRollback:
     installed: list[tuple[Path, tuple[int, int]]]
+
+
+@dataclass(frozen=True)
+class InstallTopologyRollback:
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+
+
+@dataclass(frozen=True)
+class MetadataTopologyRollback:
+    directories: tuple[tuple[Path, tuple[int, int], int], ...]
 
 
 @dataclass(frozen=True)
@@ -796,6 +782,7 @@ class Installer:
         self._component_catalog: dict[str, object] | None = None
         self._components: dict[str, dict[str, object]] | None = None
         self._content_component_namespaces: set[str] | None = None
+        self._runtime_launch_hashes: dict[Path, str] = {}
 
     @property
     def component_catalog(self) -> dict[str, object]:
@@ -831,23 +818,6 @@ class Installer:
                 self.component_catalog["content_namespaces"],
             )
         return self._content_component_namespaces
-
-    def run_command(self, arguments: list[str], *, capture: bool = False) -> str:
-        console.detail("$ " + " ".join(arguments))
-        quiet = capture or not console.verbose
-        try:
-            result = subprocess.run(
-                arguments, check=True, text=True,
-                stdout=subprocess.PIPE if quiet else None,
-                stderr=subprocess.PIPE if quiet else None,
-            )
-        except FileNotFoundError as error:
-            raise InstallerError(f"Comando obrigatório não encontrado: {arguments[0]}") from error
-        except subprocess.CalledProcessError as error:
-            detail = (error.stderr or error.stdout or "").strip()
-            suffix = f": {detail}" if detail else ""
-            raise InstallerError(f"O comando {arguments[0]} falhou{suffix}") from error
-        return (result.stdout or "").strip()
 
     def is_native_macos_install(self) -> bool:
         return host_platform.system() == "Darwin" and self.spec is not None and self.spec.key == "macos"
@@ -901,28 +871,10 @@ class Installer:
     def macos_app_is_sandboxed(self, app: Path) -> bool:
         if host_platform.system() != "Darwin":
             return False
-        try:
-            result = subprocess.run(
-                ["codesign", "-d", "--entitlements", "-", str(app)],
-                check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            )
-        except FileNotFoundError as error:
-            raise InstallerError("O utilitário nativo codesign não foi encontrado no macOS.") from error
-        detail = f"{result.stdout}\n{result.stderr}"
-        if result.returncode != 0:
-            raise InstallerError(f"Não foi possível ler os entitlements do ezQuake: {detail.strip()}")
-        return "com.apple.security.app-sandbox" in detail
+        return macos.app_is_sandboxed(app)
 
     def macos_app_uses_full_display(self, app: Path) -> bool:
-        plist = app / "Contents/Info.plist"
-        if not plist.is_file() or plist.is_symlink():
-            raise InstallerError(f"Info.plist inválido no bundle macOS: {app}")
-        try:
-            with plist.open("rb") as source:
-                metadata = plistlib.load(source)
-        except (OSError, plistlib.InvalidFileException) as error:
-            raise InstallerError(f"Info.plist inválido no bundle macOS: {app}") from error
-        return metadata.get(MACOS_SAFE_AREA_KEY) is False
+        return macos.app_uses_full_display(app)
 
     def prepare_macos_nightly_app(self, app: Path) -> bool:
         if self.channel != "nightly":
@@ -931,35 +883,11 @@ class Installer:
             )
         if host_platform.system() != "Darwin":
             return False
-        sandboxed = self.macos_app_is_sandboxed(app)
-        full_display = self.macos_app_uses_full_display(app)
-        if not full_display:
-            plist = app / "Contents/Info.plist"
-            original = plist.read_bytes()
-            file_format = plistlib.FMT_BINARY if original.startswith(b"bplist00") else plistlib.FMT_XML
-            metadata = plistlib.loads(original)
-            metadata[MACOS_SAFE_AREA_KEY] = False
-            descriptor, temporary_name = tempfile.mkstemp(prefix=".Info.plist.", dir=plist.parent)
-            os.close(descriptor)
-            temporary = Path(temporary_name)
-            try:
-                with temporary.open("wb") as destination:
-                    plistlib.dump(metadata, destination, fmt=file_format, sort_keys=False)
-                temporary.chmod(stat.S_IMODE(plist.stat().st_mode))
-                temporary.replace(plist)
-            finally:
-                if lexists(temporary):
-                    remove_path(temporary)
+        sandboxed, display_enabled = macos.prepare_nightly_bundle(app)
         if sandboxed:
             console.info("Ajustando o bundle macOS para acessar diretamente o diretório x86QW...")
-        if not full_display:
+        if display_enabled:
             console.info("Preparando o fullscreen do ezQuake para utilizar toda a tela no macOS...")
-        self.run_command(["codesign", "--force", "--deep", "--sign", "-", str(app)])
-        self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
-        if self.macos_app_is_sandboxed(app):
-            raise InstallerError(f"Não foi possível remover o sandbox incompatível de {app}.")
-        if not self.macos_app_uses_full_display(app):
-            raise InstallerError(f"Não foi possível habilitar o fullscreen integral em {app}.")
         console.success("Bundle macOS preparado para acesso direto e fullscreen integral.")
         return True
 
@@ -1079,25 +1007,10 @@ class Installer:
             root = self._cache_root.absolute()
         else:
             system = host_platform.system()
-            if system == "Darwin":
-                base = self.run_command(["getconf", "DARWIN_USER_CACHE_DIR"], capture=True)
-                if not base:
-                    raise InstallerError("could not resolve the native macOS user cache directory")
-                root = Path(base) / CACHE_DIR_NAME
-            elif system == "Windows":
-                base = os.environ.get("LOCALAPPDATA")
-                if not base:
-                    raise InstallerError("LOCALAPPDATA is not defined")
-                root = Path(base) / CACHE_DIR_NAME
-            else:
-                base = os.environ.get("XDG_CACHE_HOME")
-                root = (Path(base) if base else Path.home() / ".cache") / CACHE_DIR_NAME
+            root = host_adapter.user_cache_directory(CACHE_DIR_NAME, system=system)
         if not root.is_absolute() or root == Path(root.anchor):
             raise InstallerError(f"unsafe cache path: {root}")
-        parent = root.parent
-        if not parent.is_dir():
-            parent.mkdir(parents=True, exist_ok=True)
-        parent = parent.resolve()
+        parent = root.parent.resolve(strict=False)
         root = parent / root.name
         try:
             root.relative_to(self.project_root)
@@ -1109,34 +1022,87 @@ class Installer:
         self.cache_bin = root / "bin"
         return root
 
-    def validate_cache_marker_at(self, root: Path, marker_name: str, marker_value: str) -> None:
+    def _cache_marker_at(self, root: Path, marker_name: str, marker_value: str) -> Path:
         marker = root / marker_name
         if not marker.is_file() or marker.is_symlink():
             raise InstallerError(f"O diretório de cache não pertence a este instalador e foi preservado: {root}")
         first_line = marker.read_text(encoding="utf-8").splitlines()[:1]
         if first_line != [marker_value]:
             raise InstallerError(f"O marcador de propriedade do cache é inválido: {marker}")
+        return marker
+
+    def validate_cache_marker_at(self, root: Path, marker_name: str, marker_value: str) -> None:
+        marker = self._cache_marker_at(root, marker_name, marker_value)
+        expected = marker.lstat()
+        try:
+            private_fs.validate_private_file(marker)
+        except OSError as error:
+            raise InstallerError(
+                f"O marcador de propriedade do cache não pôde ser protegido: {marker}"
+            ) from error
+        current = marker.lstat()
+        if (
+            stat.S_ISLNK(current.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (int(current.st_dev), int(current.st_ino))
+            != (int(expected.st_dev), int(expected.st_ino))
+        ):
+            raise InstallerError(
+                f"O marcador de propriedade do cache mudou: {marker}"
+            )
+        self._cache_marker_at(root, marker_name, marker_value)
+
+    def _prepare_cache_marker_at(
+        self, root: Path, marker_name: str, marker_value: str,
+    ) -> None:
+        marker = self._cache_marker_at(root, marker_name, marker_value)
+        expected = marker.lstat()
+        try:
+            private_fs.protect_private_file(
+                marker,
+                expected_identity=(int(expected.st_dev), int(expected.st_ino)),
+            )
+        except OSError as error:
+            raise InstallerError(
+                f"O marcador de propriedade do cache não pôde ser protegido: {marker}"
+            ) from error
+        self.validate_cache_marker_at(root, marker_name, marker_value)
 
     def validate_cache_marker(self) -> None:
         assert self.cache_root is not None
         self.validate_cache_marker_at(self.cache_root, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)
 
-    def owned_cache_roots(self, *, include_legacy: bool) -> list[Path]:
+    def _owned_cache_targets(
+        self, *, include_legacy: bool,
+    ) -> list[tuple[Path, tuple[object, ...]]]:
         current = self.resolve_cache_root()
         candidates = [(current, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)]
         if include_legacy and self._cache_root is None:
             legacy_name, legacy_marker, legacy_value = LEGACY_CACHE
             candidates.append((current.parent / legacy_name, legacy_marker, legacy_value))
-        owned = []
+        owned: list[tuple[Path, tuple[object, ...]]] = []
         for root, marker_name, marker_value in candidates:
             if not lexists(root):
                 continue
             ensure_no_symlink(root, "cache root")
             if not root.is_dir():
                 raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
+            before = quarantine.observe_quarantine_target(root)
             self.validate_cache_marker_at(root, marker_name, marker_value)
-            owned.append(root)
+            after = quarantine.observe_quarantine_target(root)
+            if before != after:
+                raise InstallerError(
+                    f"O diretório de cache mudou durante a validação: {root}"
+                )
+            owned.append((root, after))
         return owned
+
+    def owned_cache_roots(self, *, include_legacy: bool) -> list[Path]:
+        return [
+            root for root, _ in self._owned_cache_targets(
+                include_legacy=include_legacy,
+            )
+        ]
 
     def prepare_cache(self) -> None:
         root = self.resolve_cache_root()
@@ -1154,19 +1120,125 @@ class Installer:
         else:
             raise InstallerError("O cache do instalador não pode ficar dentro do destino da instalação.")
         ensure_no_symlink(root, "cache root")
-        if lexists(root):
-            if not root.is_dir():
-                raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
-            marker = root / CACHE_MARKER_NAME
-            if lexists(marker):
-                self.validate_cache_marker()
-            elif any(root.iterdir()):
-                raise InstallerError(f"O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: {root}")
+        if not lexists(root):
+            root.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                private_fs.create_private_directory(root)
+            except FileExistsError:
+                pass
+            except OSError as error:
+                raise InstallerError(f"Não foi possível preparar o cache privado: {root}") from error
+        ensure_no_symlink(root, "cache root")
+        if not root.is_dir():
+            raise InstallerError(f"O caminho reservado ao cache não é um diretório: {root}")
+        marker = root / CACHE_MARKER_NAME
+        if lexists(marker):
+            self._prepare_cache_marker_at(root, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)
         else:
-            root.mkdir()
-        (root / CACHE_MARKER_NAME).write_text(CACHE_MARKER_VALUE + "\n", encoding="utf-8")
+            if any(root.iterdir()):
+                raise InstallerError(f"O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: {root}")
+            try:
+                descriptor = private_fs.create_private_file(marker)
+            except FileExistsError:
+                self._prepare_cache_marker_at(root, CACHE_MARKER_NAME, CACHE_MARKER_VALUE)
+            except OSError as error:
+                raise InstallerError(f"Não foi possível criar o marcador privado do cache: {marker}") from error
+            else:
+                try:
+                    reservation = os.fstat(descriptor)
+                except OSError as error:
+                    raise InstallerError(
+                        f"Não foi possível confirmar o marcador privado do cache: {marker}"
+                    ) from error
+                finally:
+                    os.close(descriptor)
+                reservation_identity = (
+                    int(reservation.st_dev), int(reservation.st_ino),
+                )
+                try:
+                    private_fs.protect_private_directory(root)
+                    current = marker.lstat()
+                    if (
+                        stat.S_ISLNK(current.st_mode)
+                        or not stat.S_ISREG(current.st_mode)
+                        or (int(current.st_dev), int(current.st_ino))
+                        != reservation_identity
+                    ):
+                        raise InstallerError(
+                            f"O marcador reservado do cache mudou de identidade: {marker}"
+                        )
+                    atomic_write_bytes(
+                        marker,
+                        (CACHE_MARKER_VALUE + "\n").encode("utf-8"),
+                        mode=0o600,
+                    )
+                    published = marker.lstat()
+                    published_identity = (
+                        int(published.st_dev), int(published.st_ino),
+                    )
+                    foreign = tuple(entry for entry in root.iterdir() if entry != marker)
+                    if foreign:
+                        private_fs.unlink_private_file(
+                            marker,
+                            expected_identity=published_identity,
+                        )
+                        raise InstallerError(
+                            "O diretório de cache contém arquivos que não pertencem ao "
+                            f"instalador e foi preservado: {root}"
+                        )
+                    private_fs.validate_private_file(marker)
+                except InstallerError:
+                    raise
+                except OSError as error:
+                    try:
+                        private_fs.unlink_private_file(
+                            marker,
+                            expected_identity=reservation_identity,
+                        )
+                    except OSError:
+                        pass
+                    raise InstallerError(
+                        f"Não foi possível finalizar o marcador privado do cache: {marker}"
+                    ) from error
         assert self.cache_bin is not None
         ensure_no_symlink(self.cache_bin, "cache directory")
+
+    def publish_cache_artifact(
+        self,
+        source: Path,
+        destination: Path,
+        *,
+        expected_size: int,
+        expected_sha256: str,
+        label: str,
+    ) -> Path:
+        """Copy verified bytes through a private sibling before cache publication."""
+
+        try:
+            source_info = source.lstat()
+        except OSError as error:
+            raise InstallerError(f"Não foi possível inspecionar {label}: {source}") from error
+        if (
+            stat.S_ISLNK(source_info.st_mode)
+            or not stat.S_ISREG(source_info.st_mode)
+            or source_info.st_size != expected_size
+        ):
+            raise InstallerError(f"O tamanho de {label} é inválido: {source}")
+        try:
+            result = atomic_copy_file(
+                source,
+                destination,
+                expected_sha256=expected_sha256,
+            )
+        except (AtomicWriteError, OSError) as error:
+            raise InstallerError(f"Não foi possível publicar {label} no cache.") from error
+        if (
+            result.bytes_written != expected_size
+            or destination.stat().st_size != expected_size
+            or file_hash(destination) != expected_sha256
+        ):
+            raise InstallerError(f"{label.capitalize()} falhou na verificação após a cópia.")
+        return destination
 
     def cache_is_present(self) -> bool:
         root = self.resolve_cache_root()
@@ -1179,7 +1251,8 @@ class Installer:
         return True
 
     def cleanup_cache(self) -> None:
-        roots = self.owned_cache_roots(include_legacy=True)
+        targets = self._owned_cache_targets(include_legacy=True)
+        roots = [root for root, _ in targets]
         if not roots:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
             return
@@ -1187,6 +1260,7 @@ class Installer:
             roots,
             identifier="cleanup-native-cache",
             summary="Recolher caches nativos gerenciados",
+            expected_observations=dict(targets),
         )
         if result is not None:
             finalize_mutation(result)
@@ -1259,10 +1333,20 @@ class Installer:
         *,
         identifier: str,
         summary: str,
+        expected_observations: Mapping[Path, tuple[object, ...]] | None = None,
     ) -> MutationResult | None:
         selected = self._minimal_removal_paths(paths)
         if not selected:
             return None
+        observations = {
+            path: (
+                expected_observations[path]
+                if expected_observations is not None
+                and path in expected_observations
+                else quarantine.observe_quarantine_target(path)
+            )
+            for path in selected
+        }
         plan = MutationPlan(
             identifier=identifier,
             summary=summary,
@@ -1273,8 +1357,10 @@ class Installer:
                     observe=lambda path=path: (
                         quarantine.observe_quarantine_target(path)
                     ),
-                    apply=lambda path=path: (
-                        quarantine.apply_quarantine_removal(path)
+                    apply=lambda path=path, expected=observations[path]: (
+                        quarantine.apply_quarantine_removal(
+                            path, expected_observation=expected,
+                        )
                     ),
                     rollback=quarantine.rollback_quarantine,
                     finalize=quarantine.finalize_quarantine,
@@ -1360,11 +1446,13 @@ class Installer:
         cache_paths, personal_paths = self._runtime_cleanup_selection(
             downloads=downloads, personal_data=personal_data,
         )
-        native_caches = self.owned_cache_roots(include_legacy=True)
+        native_targets = self._owned_cache_targets(include_legacy=True)
+        native_caches = [root for root, _ in native_targets]
         result = self._quarantine_paths_transaction(
             (*native_caches, *cache_paths, *personal_paths),
             identifier="cleanup-all-data",
             summary="Recolher caches e dados locais selecionados",
+            expected_observations=dict(native_targets),
         )
         if result is not None:
             finalize_mutation(result)
@@ -1418,16 +1506,110 @@ class Installer:
         self.check_pak("id1/pak1.pak", ID1_PAK1_SHA256)
         console.detail("PAKs registrados validados por SHA-256.")
 
-    def prepare_install_target(self) -> None:
-        ensure_no_symlink(self.target, "installation target")
-        if lexists(self.target) and not self.target.is_dir():
-            raise InstallerError(f"O destino não é um diretório: {self.target}")
-        self.target.mkdir(parents=True, exist_ok=True)
+    def _missing_install_directories(self) -> tuple[Path, ...]:
+        missing_target: list[Path] = []
+        current = self.target
+        while not lexists(current):
+            missing_target.append(current)
+            parent = current.parent
+            if parent == current:
+                raise InstallerError(f"Não foi possível localizar o pai do destino: {self.target}")
+            current = parent
+        ensure_no_symlink(current, "installation target parent")
+        if not current.is_dir():
+            raise InstallerError(f"O pai do destino não é um diretório: {current}")
+
+        if lexists(self.target):
+            ensure_no_symlink(self.target, "installation target")
+            if not self.target.is_dir():
+                raise InstallerError(f"O destino não é um diretório: {self.target}")
+
         id1 = self.target / "id1"
-        ensure_no_symlink(id1, "id1 directory")
-        if lexists(id1) and not id1.is_dir():
-            raise InstallerError(f"O caminho id1 não é um diretório: {id1}")
-        id1.mkdir(exist_ok=True)
+        if lexists(id1):
+            ensure_no_symlink(id1, "id1 directory")
+            if not id1.is_dir():
+                raise InstallerError(f"O caminho id1 não é um diretório: {id1}")
+            missing_id1: tuple[Path, ...] = ()
+        else:
+            missing_id1 = (id1,)
+        return (*reversed(missing_target), *missing_id1)
+
+    def _rollback_install_topology(self, token: InstallTopologyRollback) -> None:
+        errors: list[str] = []
+        for directory, expected_identity in reversed(token.created_directories):
+            if not lexists(directory):
+                continue
+            try:
+                if self._directory_identity(directory) != expected_identity:
+                    raise InstallerError(
+                        f"Diretório criado mudou e foi preservado: {directory}"
+                    )
+                directory.rmdir()
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                "Rollback da topologia inicial ficou incompleto: " + "; ".join(errors)
+            )
+
+    def _apply_install_topology(
+        self, directories: tuple[Path, ...],
+    ) -> InstallTopologyRollback:
+        created: list[tuple[Path, tuple[int, int]]] = []
+        token = InstallTopologyRollback(())
+        try:
+            for directory in directories:
+                if lexists(directory):
+                    raise InstallerError(
+                        f"Diretório apareceu durante a preparação: {directory}"
+                    )
+                parent = directory.parent
+                ensure_no_symlink(parent, "installation directory parent")
+                if not parent.is_dir():
+                    raise InstallerError(
+                        f"O pai da instalação deixou de ser um diretório: {parent}"
+                    )
+                directory.mkdir()
+                created.append((directory, self._directory_identity(directory)))
+            return InstallTopologyRollback(tuple(created))
+        except BaseException as error:
+            token = InstallTopologyRollback(tuple(created))
+            try:
+                self._rollback_install_topology(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    "A preparação do destino falhou e o rollback ficou incompleto: "
+                    f"{rollback_error}"
+                ) from error
+            raise
+
+    def prepare_install_target(self) -> MutationResult | None:
+        directories = self._missing_install_directories()
+        if not directories:
+            return None
+        observed_paths = tuple(dict.fromkeys(
+            (*(directory.parent for directory in directories), *directories)
+        ))
+        plan = MutationPlan(
+            identifier="install-topology",
+            summary="Preparar a topologia inicial da instalação",
+            steps=(MutationStep(
+                key="directories",
+                description="Criar somente os diretórios ausentes do destino",
+                observe=lambda: tuple(
+                    (path, self._mutation_path_observation(path))
+                    for path in observed_paths
+                ),
+                apply=lambda: self._apply_install_topology(directories),
+                rollback=self._rollback_install_topology,
+            ),),
+        )
+        try:
+            return execute_mutation(prepare_mutation(plan))
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError("Não foi possível preparar o destino da instalação.") from error
 
     def _rollback_core_paks(self, token: CorePakRollback) -> None:
         errors: list[str] = []
@@ -1470,7 +1652,11 @@ class Installer:
             raise
 
     def provision_install_target(self) -> MutationResult | None:
-        self.prepare_install_target()
+        ensure_no_symlink(self.target, "installation target")
+        id1 = self.target / "id1"
+        ensure_no_symlink(id1, "id1 directory")
+        if not self.target.is_dir() or not id1.is_dir():
+            raise InstallerError("A topologia inicial da instalação não foi preparada.")
         requirements = (
             ("pak0.pak", ID1_PAK0_SHA256),
             ("pak1.pak", ID1_PAK1_SHA256),
@@ -1520,8 +1706,7 @@ class Installer:
                     continue
                 staged = self.stage / name
                 shutil.copyfile(sources[name], staged)
-                if os.name != "nt":
-                    staged.chmod(0o644)
+                host_adapter.apply_mode(staged, 0o644)
                 self.validate_pak_file(staged, expected, "Cópia temporária do PAK")
                 prepared.append((staged, self.target / "id1" / name))
             frozen_prepared = tuple(prepared)
@@ -1678,8 +1863,8 @@ class Installer:
                 )
             destination.parent.mkdir(parents=True, exist_ok=True)
             source.replace(destination)
-            if os.name != "nt" and runtime_platform.get("permissions") == "executable":
-                destination.chmod(0o755)
+            if runtime_platform.get("permissions") == "executable":
+                host_adapter.apply_mode(destination, 0o755)
         remove_empty_directories(managed / "platforms")
 
     def prompt_catalog(self, label: str, catalog: list[ReleaseRecord]) -> ReleaseRecord:
@@ -1910,7 +2095,7 @@ class Installer:
         archive = self.cache_bin / cache_name
         ensure_no_symlink(archive, "cached archive")
         if archive.is_file():
-            if file_hash(archive, self.app_checksum_kind) != self.app_expected_checksum:
+            if file_hash(archive) != self.app_expected_checksum:
                 raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
             if self.update_ui:
                 console.download_result(
@@ -1925,7 +2110,13 @@ class Installer:
                 expected_size=self.app_expected_size or None, expected_sha256=self.app_expected_checksum,
             ) if self.app_distribution_path else None
             if local is not None:
-                shutil.copy2(local, archive)
+                self.publish_cache_artifact(
+                    local,
+                    archive,
+                    expected_size=self.app_expected_size,
+                    expected_sha256=self.app_expected_checksum,
+                    label="o artefato ezQuake",
+                )
                 if self.update_ui:
                     console.download_result(
                         f"ezQuake {self.selected_version}", size=archive.stat().st_size, status="Loaded",
@@ -1944,12 +2135,18 @@ class Installer:
                 expected_sha256=self.app_expected_checksum,
                 maximum_size=MAX_ARTIFACT_BYTES,
             )
-            if file_hash(download, self.app_checksum_kind) != self.app_expected_checksum:
+            if file_hash(download) != self.app_expected_checksum:
                 raise InstallerError(
                     "O arquivo baixado falhou na verificação: "
                     f"{safe_url_for_log(self.app_url)}"
                 )
-            download.replace(archive)
+            self.publish_cache_artifact(
+                download,
+                archive,
+                expected_size=self.app_expected_size,
+                expected_sha256=self.app_expected_checksum,
+                label="o download do ezQuake",
+            )
             if self.update_ui:
                 console.download_result(
                     f"ezQuake {self.selected_version}", size=archive.stat().st_size,
@@ -1961,59 +2158,16 @@ class Installer:
         return archive
 
     def inspect_macos_app(self, app: Path) -> tuple[str, str]:
-        binary = app / "Contents/MacOS/ezQuake"
-        plist = app / "Contents/Info.plist"
-        code_resources = app / "Contents/_CodeSignature/CodeResources"
-        if not app.is_dir() or not binary.is_file() or binary.is_symlink() or not plist.is_file():
-            raise InstallerError(f"invalid ezQuake app bundle: {app}")
-        if not code_resources.is_file():
-            raise InstallerError(f"missing app code signature resources: {app}")
-        with plist.open("rb") as source:
-            metadata = plistlib.load(source)
-        version = metadata.get("CFBundleShortVersionString")
-        if not isinstance(version, str) or version != metadata.get("CFBundleVersion"):
-            raise InstallerError(f"bundle version fields disagree in {app}")
-        data = binary.read_bytes()[:4096]
-        if len(data) < 8:
-            raise InstallerError(f"invalid Mach-O executable: {binary}")
-        magic, count = struct.unpack_from(">II", data)
-        if magic not in (0xCAFEBABE, 0xCAFEBABF) or count < 2 or count > 32:
-            raise InstallerError(f"expected universal Mach-O executable: {binary}")
-        entry_size = 20 if magic == 0xCAFEBABE else 32
-        if len(data) < 8 + count * entry_size:
-            raise InstallerError(f"invalid universal Mach-O header: {binary}")
-        architectures = set()
-        for index in range(count):
-            cpu_type = struct.unpack_from(">I", data, 8 + index * entry_size)[0]
-            architectures.add(cpu_type)
-        if 0x01000007 not in architectures or 0x0100000C not in architectures:
-            raise InstallerError(f"{app} does not contain arm64 and x86_64")
+        verify = False
         if host_platform.system() == "Darwin":
-            self.run_command(["codesign", "--verify", "--deep", "--strict", str(app)])
-        return version, file_hash(binary)
+            verify = macos.verify_app_signature
+        return macos.inspect_ezquake_bundle(app, verify_signature=verify)
 
     def inspect_portable_binary(self, spec: PlatformSpec, binary: Path) -> str:
-        if not binary.is_file() or binary.is_symlink() or binary.stat().st_size == 0:
-            raise InstallerError(f"invalid ezQuake binary: {binary}")
-        with binary.open("rb") as source:
-            header = source.read(512)
-        if spec.key == "linux":
-            if len(header) < 20 or header[:5] != b"\x7fELF\x02" or struct.unpack_from("<H", header, 18)[0] != 62:
-                raise InstallerError(f"unexpected Linux binary format: {binary}")
-            if os.name != "nt" and not os.access(binary, os.X_OK):
-                raise InstallerError(f"Linux AppImage is not executable: {binary}")
-        elif spec.key == "windows":
-            if len(header) < 64 or header[:2] != b"MZ":
-                raise InstallerError(f"unexpected Windows binary format: {binary}")
-            pe_offset = struct.unpack_from("<I", header, 0x3C)[0]
-            with binary.open("rb") as source:
-                source.seek(pe_offset)
-                pe = source.read(26)
-            if len(pe) < 26 or pe[:4] != b"PE\0\0" or struct.unpack_from("<H", pe, 4)[0] != 0x8664 or struct.unpack_from("<H", pe, 24)[0] != 0x20B:
-                raise InstallerError(f"unexpected Windows binary format: {binary}")
-        else:
-            raise InstallerError(f"unsupported portable binary platform: {spec.key}")
-        return file_hash(binary)
+        return host_adapter.inspect_portable_binary(
+            binary,
+            platform_id=spec.key,
+        )
 
     def prepare_runtime(self, archive: Path) -> Path:
         assert self.stage is not None and self.spec is not None
@@ -2054,8 +2208,8 @@ class Installer:
             if not source.is_file() or source.is_symlink():
                 raise InstallerError(f"artifact is missing {self.spec.archive_binary}")
             shutil.copy2(source, prepared)
-            if self.spec.key == "linux" and os.name != "nt":
-                prepared.chmod(0o755)
+            if self.spec.key == "linux":
+                host_adapter.apply_mode(prepared, 0o755)
             self.app_binary_sha256 = self.inspect_portable_binary(self.spec, prepared)
             self.app_bundle_version = self.selected_version
         return prepared
@@ -2132,12 +2286,14 @@ class Installer:
             raise InstallerError(
                 "O ezQuake stable deve ser restaurado do artefato upstream integral pelo bootstrap."
             )
-        if spec.key != "macos" or not self.macos_app_needs_preparation(runtime):
+        if spec.key != "macos":
+            return receipt
+        reject_tree_symlinks(runtime, "bundle macOS gerenciado")
+        if not self.macos_app_needs_preparation(runtime):
             return receipt
         self.spec = spec
         self.channel = channel
         self.ensure_macos_ezquake_closed()
-        reject_tree_symlinks(runtime, "bundle macOS gerenciado")
         parent_managed = mutation_results is not None
         with self.runtime_mutation_stage(
             ".x86qw-macos-repair.", parent_managed=parent_managed,
@@ -2308,6 +2464,12 @@ class Installer:
                 backup.replace(original)
             except BaseException as error:
                 errors.append(str(error))
+        try:
+            self._rollback_created_directory_chain(
+                token.created_directories, label="recibo ezQuake",
+            )
+        except BaseException as error:
+            errors.append(str(error))
         if errors:
             raise InstallerError(
                 "Rollback do recibo ezQuake ficou incompleto: " + "; ".join(errors)
@@ -2322,7 +2484,14 @@ class Installer:
     ) -> RuntimeReceiptRollback:
         assert self.spec is not None and self.stage is not None
         backup_root = Path(tempfile.mkdtemp(prefix=".runtime-receipts-old.", dir=self.stage))
-        token = RuntimeReceiptRollback(destination, None, [])
+        created_directories = self._create_private_directory_chain(
+            destination.parent,
+            root=self.target / METADATA_DIR,
+            label="recibo ezQuake",
+        )
+        token = RuntimeReceiptRollback(
+            destination, None, [], created_directories,
+        )
         try:
             for index, original in enumerate(previous_paths, 1):
                 if not lexists(original):
@@ -2369,7 +2538,6 @@ class Installer:
         assert self.spec is not None and self.stage is not None
         runtime = self.target / self.spec.runtime(self.channel)
         receipt = self.target / self.spec.receipt(self.channel)
-        receipt.parent.mkdir(parents=True, exist_ok=True)
         legacy_receipt = self.target / self.spec.legacy_receipt(self.channel)
         previous_receipts = tuple(dict.fromkeys((receipt, legacy_receipt)))
         self.ezquake_receipt_path(self.spec, self.channel)
@@ -2622,6 +2790,67 @@ class Installer:
             raise InstallerError(f"Arquivo gerenciado inválido: {path}")
         return int(metadata.st_dev), int(metadata.st_ino)
 
+    def _rollback_created_directory_chain(
+        self,
+        created: tuple[tuple[Path, tuple[int, int]], ...],
+        *,
+        label: str,
+    ) -> None:
+        errors: list[str] = []
+        for directory, expected_identity in reversed(created):
+            if not lexists(directory):
+                continue
+            try:
+                if self._directory_identity(directory) != expected_identity:
+                    raise InstallerError(
+                        f"Diretório mudou e foi preservado: {directory}"
+                    )
+                directory.rmdir()
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                f"Rollback da topologia de {label} ficou incompleto: "
+                + "; ".join(errors)
+            )
+
+    def _create_private_directory_chain(
+        self, destination: Path, *, root: Path, label: str,
+    ) -> tuple[tuple[Path, tuple[int, int]], ...]:
+        try:
+            destination.relative_to(root)
+        except ValueError as error:
+            raise InstallerError(
+                f"Diretório de {label} escapa da raiz privada: {destination}"
+            ) from error
+        if not root.is_dir() or root.is_symlink():
+            raise InstallerError(f"Raiz privada de {label} inválida: {root}")
+        missing: list[Path] = []
+        current = destination
+        while current != root and not lexists(current):
+            missing.append(current)
+            current = current.parent
+        if current != root:
+            if not current.is_dir() or current.is_symlink():
+                raise InstallerError(f"Diretório de {label} inválido: {current}")
+        created: list[tuple[Path, tuple[int, int]]] = []
+        try:
+            for directory in reversed(missing):
+                private_fs.ensure_private_directory(directory)
+                created.append((directory, self._directory_identity(directory)))
+            return tuple(created)
+        except BaseException as error:
+            try:
+                self._rollback_created_directory_chain(
+                    tuple(created), label=label,
+                )
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"A criação da topologia de {label} falhou e o rollback "
+                    f"ficou incompleto: {rollback_error}"
+                ) from error
+            raise
+
     def _rollback_component_metadata(self, token: ComponentMetadataRollback) -> None:
         errors: list[str] = []
         if token.installed_identity is not None and lexists(token.destination):
@@ -2660,6 +2889,12 @@ class Installer:
                 backup.replace(original)
             except BaseException as error:
                 errors.append(str(error))
+        try:
+            self._rollback_created_directory_chain(
+                token.created_directories, label="metadados de componente",
+            )
+        except BaseException as error:
+            errors.append(str(error))
         if errors:
             raise InstallerError(
                 "Rollback dos metadados ficou incompleto: " + "; ".join(errors)
@@ -2672,7 +2907,6 @@ class Installer:
         self.ensure_metadata_directory()
         metadata = self.target / METADATA_DIR
         destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
-        destination.parent.mkdir(parents=True, exist_ok=True)
         if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
             raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
         prepared = Path(tempfile.mkdtemp(
@@ -2685,12 +2919,18 @@ class Installer:
         shutil.copy2(receipt, prepared / "receipt")
         shutil.copy2(inventory, prepared / "inventory")
         self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
+        created_directories = self._create_private_directory_chain(
+            destination.parent,
+            root=metadata,
+            label="metadados de componente",
+        )
         token = ComponentMetadataRollback(
             destination=destination,
             installed_identity=None,
             previous=previous,
             previous_identity=None,
             legacy_backups=[],
+            created_directories=created_directories,
         )
         try:
             if lexists(destination):
@@ -3367,15 +3607,6 @@ class Installer:
             raise
         return len(unchanged), result
 
-    def _prune_component_directories(self) -> None:
-        for name in (
-            "qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2",
-            "qtv", "qwfwd", "docs/licenses", "docs",
-        ):
-            remove_empty_directories(self.target / name)
-        remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
-        remove_empty_directories(self.target / METADATA_DIR)
-
     def remove_component(self, component: str) -> int:
         present, _, _ = self.validate_component_pair(component)
         if not present:
@@ -3386,7 +3617,6 @@ class Installer:
         cleanup = True
         try:
             removed, _ = self.remove_component_transaction(component)
-            self._prune_component_directories()
             return removed
         except MutationRollbackError:
             cleanup = False
@@ -3428,7 +3658,9 @@ class Installer:
         console.success(f"Componente {component} íntegro ({file_count(len(entries))}; seleção {receipt['selection']}).")
         return len(entries)
 
-    def manage_presets(self) -> None:
+    def manage_presets(
+        self, *, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         action = navigation.select_one(
             "O que deseja fazer com os presets?",
             (
@@ -3439,19 +3671,36 @@ class Installer:
         )
         if action is None:
             raise InstallerError("Nenhuma operação de presets foi selecionada.")
+        with self.component_state_transaction(mutation_results) as results:
+            if self.stage is None:
+                self._create_stage(
+                    ".quake-presets-remove." if action == "remove" else ".quake-install."
+                )
+            if action == "remove":
+                removed, result = self.remove_component_transaction("presets")
+                results.append(result)
+            else:
+                self.check_paks()
+                assert self.stage is not None
+                managed = self.stage / "presets-managed"
+                configs = managed / "ezquake/configs"
+                configs.mkdir(parents=True)
+                for name, contents in PRESETS.items():
+                    (configs / name).write_text(contents, encoding="utf-8")
+                count, result = self.install_component_overlay_transaction(
+                    "presets", managed, "v1", "x86-qw built-in presets",
+                )
+                results.append(result)
         if action == "remove":
-            removed = self.remove_component("presets")
-            console.success(f"Presets gerenciados removidos ({file_count(removed)}); configurações pessoais preservadas.")
-            return
-        self.check_paks()
-        self._create_stage(".quake-install.")
-        managed = self.stage / "presets-managed"
-        configs = managed / "ezquake/configs"
-        configs.mkdir(parents=True)
-        for name, contents in PRESETS.items():
-            (configs / name).write_text(contents, encoding="utf-8")
-        count = self.install_component_overlay("presets", managed, "v1", "x86-qw built-in presets")
-        console.success(f"Presets instalados ({file_count(count)}). Carregue um deles com cfg_load x86-qw-modern.")
+            console.success(
+                f"Presets gerenciados removidos ({file_count(removed)}); "
+                "configurações pessoais preservadas."
+            )
+        else:
+            console.success(
+                f"Presets instalados ({file_count(count)}). "
+                "Carregue um deles com cfg_load x86-qw-modern."
+            )
 
     def validate_nquake_receipt(self, path: Path) -> dict[str, str]:
         try:
@@ -3696,7 +3945,7 @@ class Installer:
                 return self.validate_install_state(migrated)
         return state
 
-    def load_install_state(self, *, persist_migration: bool) -> dict[str, object]:
+    def load_install_state(self) -> dict[str, object]:
         path = self.target / INSTALL_STATE
         if path.is_file() and not path.is_symlink():
             state = self.read_install_state_document(path)
@@ -3705,28 +3954,15 @@ class Installer:
             migrated = self.migrate_stale_custom_profile(state)
             if migrated != original:
                 profile = str(migrated["profile"])
-                if persist_migration:
-                    migrated = self.write_install_state(
-                        profile, list(migrated["requested_components"]),
-                        known=list(migrated["known_components"]),
-                        capabilities=list(migrated["capabilities"]),
-                    )
-                    console.success(f"Estado histórico da instalação migrado para o formato 2: {profile}.")
-                else:
-                    console.info(f"Migração do estado para o formato 2 prevista na simulação: {profile}.")
+                console.info(
+                    "Estado histórico interpretado no formato 2; a próxima operação "
+                    f"mutável persistirá o perfil {profile}."
+                )
             return migrated
         if lexists(path):
             raise InstallerError(f"Estado da instalação inválido: {path}")
         state = self.infer_install_state()
-        if persist_migration:
-            state = self.write_install_state(
-                str(state["profile"]), list(state["requested_components"]),
-                known=list(state["known_components"]),
-                capabilities=list(state["capabilities"]),
-            )
-            console.success(f"Perfil da instalação registrado: {state['profile']}.")
-        else:
-            console.info(f"Perfil inferido para a simulação: {state['profile']}.")
+        console.info(f"Perfil inferido sem alterar a instalação: {state['profile']}.")
         return state
 
     def read_install_state_document(self, path: Path) -> dict[str, object]:
@@ -4059,21 +4295,21 @@ class Installer:
                 raise InstallerError(f"Bundle de atualização x86QW inválido: {error}") from error
             bundle = extracted / f"x86qw-installer-{available}"
             application = bundle / CLI_ARCHIVE_NAME
-            command = [
-                sys.executable, str(application), "--online-only", "--installed-cli", "--skip-cli-update",
+            arguments = [
+                "--online-only", "--installed-cli", "--skip-cli-update",
             ]
             if console.verbose:
-                command.append("--verbose")
+                arguments.append("--verbose")
             if not console.color:
-                command.append("--no-color")
+                arguments.append("--no-color")
             if dry_run:
-                command.append("--dry-run")
+                arguments.append("--dry-run")
             if assume_yes:
-                command.append("--yes")
-            command.extend([action, str(self.target)])
-            result = subprocess.run(command, check=False)
-            if result.returncode:
-                raise InstallerError(f"A atualização x86QW terminou com código {result.returncode}.")
+                arguments.append("--yes")
+            arguments.extend([action, str(self.target)])
+            returncode = python_runtime.run_handoff(application, arguments)
+            if returncode:
+                raise InstallerError(f"A atualização x86QW terminou com código {returncode}.")
             return True
         finally:
             self.cleanup_stage()
@@ -4245,7 +4481,13 @@ class Installer:
                 expected_size=int(package["size"]), expected_sha256=digest,
             )
             if local is not None:
-                shutil.copy2(local, artifact)
+                self.publish_cache_artifact(
+                    local,
+                    artifact,
+                    expected_size=int(package["size"]),
+                    expected_sha256=digest,
+                    label=f"o pacote {identifier}",
+                )
                 if self.update_ui:
                     console.download_result(
                         f"{identifier} {package['version']}", size=artifact.stat().st_size, status="Loaded",
@@ -4263,7 +4505,13 @@ class Installer:
         )
         if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
             raise InstallerError(f"Um mirror entregou um pacote inválido: {identifier}")
-        temporary.replace(artifact)
+        self.publish_cache_artifact(
+            temporary,
+            artifact,
+            expected_size=int(package["size"]),
+            expected_sha256=digest,
+            label=f"o pacote {identifier}",
+        )
         if self.update_ui:
             console.download_result(
                 f"{identifier} {package['version']}", size=artifact.stat().st_size,
@@ -4329,8 +4577,7 @@ class Installer:
             destination = root.joinpath(*relative.parts)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(payload)
-            if os.name != "nt":
-                destination.chmod(0o644)
+            host_adapter.apply_mode(destination, 0o644)
             expected.add(member_name)
         managed = root / "payload"
         if not managed.is_dir():
@@ -4714,12 +4961,9 @@ class Installer:
                 and identity == token.identity
                 and file_hash(destination) == token.digest
             ):
-                if os.name == "nt":
-                    private_fs.unlink_private_file(
-                        destination, expected_identity=token.identity,
-                    )
-                else:
-                    destination.unlink()
+                host_adapter.unlink_identity_bound_file(
+                    destination, token.identity,
+                )
                 removed = True
             else:
                 console.warning(
@@ -4776,8 +5020,7 @@ class Installer:
                     output.write(block)
                     copied.update(block)
                 output.flush()
-                if os.name != "nt":
-                    os.fchmod(descriptor, 0o644)
+                host_adapter.apply_descriptor_mode(descriptor, 0o644)
                 os.fsync(descriptor)
             if copied.hexdigest() != digest:
                 raise InstallerError(f"Configuração inicial copiada divergiu: {destination}")
@@ -4790,12 +5033,9 @@ class Installer:
                 os.close(descriptor)
                 descriptor = -1
                 try:
-                    if os.name == "nt":
-                        private_fs.unlink_private_file(
-                            destination, expected_identity=identity,
-                        )
-                    else:
-                        destination.unlink()
+                    host_adapter.unlink_identity_bound_file(
+                        destination, identity,
+                    )
                 except OSError:
                     pass
             for directory, identity in reversed(created):
@@ -4986,7 +5226,7 @@ class Installer:
         ] + [
             (
                 "config", destination, payload,
-                stat.S_IMODE(destination.lstat().st_mode),
+                host_adapter.path_mode(destination),
             )
             for destination, payload in replacements
         ]
@@ -4996,8 +5236,7 @@ class Installer:
             index = counters[kind]
             prepared = workspace / f"{kind}-{index}"
             prepared.write_bytes(payload)
-            if os.name != "nt":
-                prepared.chmod(source_mode)
+            host_adapter.apply_mode(prepared, source_mode)
             steps.append(MutationStep(
                 key=f"{kind}:{index}",
                 description=f"Publicar {kind} pessoal {destination.name}",
@@ -5085,19 +5324,6 @@ class Installer:
                     aliases.add(match.group(1).casefold())
         return aliases
 
-    def write_personal_config(self, path: Path, payload: bytes) -> None:
-        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-        temporary = Path(temporary_name)
-        try:
-            with os.fdopen(descriptor, "wb") as output:
-                output.write(payload)
-            if os.name != "nt":
-                temporary.chmod(0o644)
-            temporary.replace(path)
-        finally:
-            if lexists(temporary):
-                remove_path(temporary)
-
     def migrate_saved_configs(
         self, mutation_results: list[MutationResult] | None = None,
     ) -> None:
@@ -5120,7 +5346,7 @@ class Installer:
                 backup = prox.with_name("config.pre-x86qw.cfg")
                 if not lexists(backup):
                     backups.append((
-                        backup, contents, stat.S_IMODE(prox.lstat().st_mode),
+                        backup, contents, host_adapter.path_mode(prox),
                     ))
                 if not base.is_file() or base.is_symlink():
                     raise InstallerError("A migração do Pro-X exige ezquake/configs/config.cfg válido.")
@@ -5150,7 +5376,7 @@ class Installer:
                 backup = config.with_name("config.aliases-pre-x86qw.cfg")
                 if not lexists(backup):
                     backups.append((
-                        backup, original, stat.S_IMODE(config.lstat().st_mode),
+                        backup, original, host_adapter.path_mode(config),
                     ))
                 working[config] = updated
                 changed += 1
@@ -5210,7 +5436,9 @@ class Installer:
             console.warning("Dependentes também serão removidos: " + ", ".join(added))
         return [identifier for identifier in reversed(installed) if identifier in expanded]
 
-    def manage_components(self) -> None:
+    def manage_components(
+        self, *, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         answer = navigation.select_one(
             "O que deseja fazer com os componentes?",
             (
@@ -5225,40 +5453,36 @@ class Installer:
         self.check_paks()
         if answer == "remove":
             selected = self.choose_components_to_remove()
-            with self.component_state_transaction() as mutation_results:
+            with self.component_state_transaction(mutation_results) as results:
                 if selected and self.stage is None:
                     self._create_stage(".x86qw-components-remove.")
                 for identifier in selected:
                     removed, result = self.remove_component_transaction(identifier)
-                    mutation_results.append(result)
+                    results.append(result)
                     console.success(
                         f"{self.components[identifier]['label']} removido "
                         f"({file_count(removed)})."
                     )
-                self.refresh_qw_package_order(mutation_results=mutation_results)
+                self.refresh_qw_package_order(mutation_results=results)
                 self.reconcile_play_support_transaction(
-                    mutation_results=mutation_results,
+                    mutation_results=results,
                 )
-                self._prune_component_directories()
                 self.write_install_state(
                     "custom" if self.installed_components() else "none",
                     self.installed_components(),
-                    mutation_results=mutation_results,
+                    mutation_results=results,
                 )
             return
         selected = self.choose_components()
-        self._create_stage(".quake-install.")
-        results = list(self.install_components(selected))
-        try:
+        with self.component_state_transaction(mutation_results) as results:
+            if self.stage is None:
+                self._create_stage(".quake-install.")
+            results.extend(self.install_components(selected))
             self.write_install_state(
                 self.selected_component_profile,
                 self.requested_components,
                 mutation_results=results,
             )
-        except BaseException as error:
-            if not isinstance(error, PersistenceError) or not error.committed:
-                self.rollback_component_transactions(results, error)
-            raise
 
     def install_component_phase(self) -> tuple[MutationResult, ...]:
         assert self.stage is not None
@@ -5316,6 +5540,7 @@ class Installer:
         if platform_key is None:
             raise InstallerError(f"A abertura automática não é suportada neste sistema: {host_platform.system()}.")
         choices: list[tuple[str, Path]] = []
+        self._runtime_launch_hashes.clear()
         spec = PLATFORMS[platform_key]
         for channel in ("stable", "nightly"):
             receipt_path = self.ezquake_receipt_path(spec, channel)
@@ -5334,6 +5559,7 @@ class Installer:
                 raise InstallerError(
                     f"O runtime macOS requer reparo antes da execução: {runtime}. Execute update."
                 )
+            self._runtime_launch_hashes[runtime] = receipt["binary_sha256"]
             choices.append((f"ezQuake {channel} {receipt['selection']}", runtime))
         return choices
 
@@ -5360,8 +5586,7 @@ class Installer:
 
     def launch_runtime(
         self, runtime: Path, quake_arguments: list[str],
-    ) -> subprocess.Popen[bytes]:
-        system = host_platform.system()
+    ) -> Any:
         # A distribuição é autocontida: ~/.ezquake não pode sobrepor configs ou assets.
         base_arguments = ["-nohome", "-basedir", str(self.target)]
         if os.environ.get("X86QW_TEST_WINDOWED") == "1":
@@ -5388,26 +5613,16 @@ class Installer:
                 "+sb_findroutes", "0",
                 "+sb_autoupdate", "0",
             ])
-        if system == "Darwin":
-            executable = runtime / "Contents/MacOS/ezQuake"
-            if not executable.is_file() or executable.is_symlink():
-                raise InstallerError(f"Executável do bundle macOS não encontrado: {executable}")
-            # LaunchServices can drop command-line arguments from an already known
-            # app bundle, which makes ezQuake reopen its game-directory picker.
-            command = [str(executable), *base_arguments, *quake_arguments]
-        else:
-            command = [str(runtime), *base_arguments, *quake_arguments]
+        target = host_adapter.client_launch_target(
+            runtime,
+            expected_sha256=self._runtime_launch_hashes.get(runtime),
+        )
+        command = [str(target.executable), *base_arguments, *quake_arguments]
         console.detail("$ " + " ".join(command))
         try:
-            options: dict[str, object] = {
-                "cwd": self.target,
-                "stdin": subprocess.DEVNULL,
-                "stdout": subprocess.DEVNULL,
-                "stderr": subprocess.DEVNULL,
-            }
-            if system != "Windows":
-                options["start_new_session"] = True
-            return subprocess.Popen(command, **options)
+            return supervisor_core.spawn_detached_client(
+                tuple(command), self.target, launch_target=target,
+            )
         except OSError as error:
             raise InstallerError(f"Não foi possível abrir {runtime}: {error}") from error
 
@@ -5583,7 +5798,7 @@ class Installer:
             )
         installed = self.installed_components()
         if lexists(self.target / INSTALL_STATE):
-            state = self.load_install_state(persist_migration=False)
+            state = self.load_install_state()
             recorded = set(state["recorded_components"])
             if recorded != set(installed):
                 raise InstallerError(
@@ -5664,11 +5879,10 @@ class Installer:
                     continue
                 if (
                     spec.key == "linux"
-                    and os.name != "nt"
                     and runtime.is_file()
                     and not runtime.is_symlink()
                     and file_hash(runtime) == receipt["binary_sha256"]
-                    and not os.access(runtime, os.X_OK)
+                    and host_adapter.executable_permission_missing(runtime)
                 ):
                     issues.append(ClientRepairIssue(
                         spec, channel, receipt_path, receipt,
@@ -5714,7 +5928,7 @@ class Installer:
         return issues, diagnostics
 
     def runtime_permission_repairs(self, installed: set[str] | None = None) -> list[Path]:
-        if os.name == "nt":
+        if not host_adapter.supports_posix_permissions():
             return []
         repairs: list[Path] = []
         seen: set[Path] = set()
@@ -5734,7 +5948,7 @@ class Installer:
                     binary not in seen
                     and binary.is_file()
                     and not binary.is_symlink()
-                    and not os.access(binary, os.X_OK)
+                    and host_adapter.executable_permission_missing(binary)
                 ):
                     seen.add(binary)
                     repairs.append(binary)
@@ -5745,14 +5959,14 @@ class Installer:
             raise InstallerError(
                 f"Runtime mudou durante o rollback da permissão: {token.path}"
             )
-        token.path.chmod(token.mode)
+        host_adapter.apply_mode(token.path, token.mode)
 
     def _apply_runtime_permission(self, path: Path) -> RuntimePermissionRollback:
         identity = self._regular_identity(path)
-        mode = stat.S_IMODE(path.lstat().st_mode)
+        mode = host_adapter.path_mode(path)
         token = RuntimePermissionRollback(path, identity, mode)
         try:
-            path.chmod(mode | stat.S_IXUSR)
+            host_adapter.add_owner_execute(path)
             if self._regular_identity(path) != identity:
                 raise InstallerError(
                     f"Runtime mudou durante o reparo da permissão: {path}"
@@ -5983,7 +6197,7 @@ class Installer:
                 )
             if assessment.package_order_invalid:
                 self.refresh_qw_package_order(mutation_results=mutation_results)
-            state = assessment.recovered_state or self.load_install_state(persist_migration=False)
+            state = assessment.recovered_state or self.load_install_state()
             self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]),
                 known=list(state["known_components"]), capabilities=list(state["capabilities"]),
@@ -6065,14 +6279,30 @@ class Installer:
         validate: Callable[[Path], object],
     ) -> MutationResult:
         assert self.stage is not None
-        canonical.parent.mkdir(parents=True, exist_ok=True)
         prepared = self.stage / f".{key}.next"
         shutil.copy2(legacy, prepared)
         validate(prepared)
+        metadata = self.target / METADATA_DIR
         plan = MutationPlan(
             identifier=f"metadata-layout:{key}",
             summary=f"Migrar metadado {key} para o layout contextual",
             steps=(
+                MutationStep(
+                    key="topology",
+                    description="Preparar o diretório contextual do metadado",
+                    observe=lambda: (
+                        self._mutation_path_observation(metadata),
+                        self._mutation_path_observation(canonical.parent),
+                    ),
+                    apply=lambda: self._create_private_directory_chain(
+                        canonical.parent,
+                        root=metadata,
+                        label=f"metadado {key}",
+                    ),
+                    rollback=lambda created: self._rollback_created_directory_chain(
+                        created, label=f"metadado {key}",
+                    ),
+                ),
                 MutationStep(
                     key="canonical",
                     description="Publicar o metadado no caminho contextual",
@@ -6188,13 +6418,10 @@ class Installer:
             ) from error
         finally:
             if cleanup:
-                remove_empty_directories(metadata / "clients")
-                remove_empty_directories(metadata / "components")
                 if created_stage and mutation_results is None:
                     self.cleanup_stage()
         if mutation_results is not None:
             mutation_results.extend(completed)
-        remove_empty_directories(metadata / "clients/ezquake")
         console.success("Metadados da instalação reorganizados por contexto.")
         return True
 
@@ -6209,6 +6436,154 @@ class Installer:
     def preflight_component_receipts(self) -> None:
         for component in self.metadata_component_ids():
             self.validate_component_pair(component)
+
+    def _empty_metadata_topology(
+        self, *, include_target: bool = False,
+    ) -> tuple[tuple[Path, tuple[int, int], int], ...] | None:
+        root = self.target / METADATA_DIR
+        if not lexists(root):
+            if not include_target or not lexists(self.target):
+                return ()
+            target_metadata = self.target.lstat()
+            if (
+                stat.S_ISLNK(target_metadata.st_mode)
+                or not stat.S_ISDIR(target_metadata.st_mode)
+                or any(self.target.iterdir())
+            ):
+                return None
+            return ((
+                self.target,
+                (int(target_metadata.st_dev), int(target_metadata.st_ino)),
+                host_adapter.path_mode(self.target),
+            ),)
+        metadata = root.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Metadados da instalação inválidos: {root}")
+        directories: list[tuple[Path, tuple[int, int], int]] = []
+        for current, names, files in os.walk(root, topdown=False, followlinks=False):
+            if files:
+                return None
+            directory = Path(current)
+            for name in names:
+                child = directory / name
+                child_metadata = child.lstat()
+                if stat.S_ISLNK(child_metadata.st_mode) or not stat.S_ISDIR(
+                    child_metadata.st_mode
+                ):
+                    return None
+            current_metadata = directory.lstat()
+            if stat.S_ISLNK(current_metadata.st_mode) or not stat.S_ISDIR(
+                current_metadata.st_mode
+            ):
+                return None
+            directories.append((
+                directory,
+                (int(current_metadata.st_dev), int(current_metadata.st_ino)),
+                host_adapter.path_mode(directory),
+            ))
+        if include_target:
+            target_metadata = self.target.lstat()
+            if (
+                stat.S_ISLNK(target_metadata.st_mode)
+                or not stat.S_ISDIR(target_metadata.st_mode)
+                or tuple(self.target.iterdir()) != (root,)
+            ):
+                return None
+            directories.append((
+                self.target,
+                (int(target_metadata.st_dev), int(target_metadata.st_ino)),
+                host_adapter.path_mode(self.target),
+            ))
+        return tuple(directories)
+
+    def _restore_metadata_topology(self, token: MetadataTopologyRollback) -> None:
+        errors: list[str] = []
+        for directory, _identity, mode in reversed(token.directories):
+            if lexists(directory):
+                if not directory.is_dir() or directory.is_symlink():
+                    errors.append(f"caminho concorrente preservado em {directory}")
+                continue
+            try:
+                directory.mkdir(mode=mode)
+                host_adapter.apply_mode(directory, mode)
+            except OSError as error:
+                errors.append(f"{directory}: {error}")
+        if errors:
+            raise InstallerError(
+                "Rollback da topologia de metadados ficou incompleto: "
+                + "; ".join(errors)
+            )
+
+    def _apply_empty_metadata_topology(
+        self, expected: tuple[tuple[Path, tuple[int, int], int], ...],
+    ) -> MetadataTopologyRollback:
+        removed: list[tuple[Path, tuple[int, int], int]] = []
+        try:
+            for directory, identity, mode in expected:
+                metadata = directory.lstat()
+                if (
+                    stat.S_ISLNK(metadata.st_mode)
+                    or not stat.S_ISDIR(metadata.st_mode)
+                    or (int(metadata.st_dev), int(metadata.st_ino)) != identity
+                ):
+                    raise InstallerError(
+                        f"Diretório de metadados mudou durante a remoção: {directory}"
+                    )
+                directory.rmdir()
+                removed.append((directory, identity, mode))
+            return MetadataTopologyRollback(tuple(removed))
+        except BaseException as error:
+            try:
+                self._restore_metadata_topology(
+                    MetadataTopologyRollback(tuple(removed)),
+                )
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    "A limpeza vazia dos metadados falhou e o rollback ficou "
+                    f"incompleto: {rollback_error}"
+                ) from error
+            raise
+
+    def remove_empty_metadata_transaction(
+        self, *, include_target: bool = False,
+    ) -> MutationResult | None:
+        expected = self._empty_metadata_topology(include_target=include_target)
+        if not expected:
+            return None
+        identifier = (
+            "purge-empty-installation"
+            if include_target else "uninstall-empty-metadata"
+        )
+        plan = MutationPlan(
+            identifier=identifier,
+            summary=(
+                "Remover somente a topologia vazia da instalação"
+                if include_target else "Remover somente diretórios vazios de metadados"
+            ),
+            steps=(MutationStep(
+                key="metadata-topology",
+                description=(
+                    f"Remover {self.target} quando vazio"
+                    if include_target
+                    else f"Remover {self.target / METADATA_DIR} quando vazio"
+                ),
+                observe=lambda: self._empty_metadata_topology(
+                    include_target=include_target,
+                ),
+                apply=lambda: self._apply_empty_metadata_topology(expected),
+                rollback=self._restore_metadata_topology,
+            ),),
+        )
+        try:
+            return execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                "Os metadados vazios mudaram durante a desinstalação e foram preservados."
+            ) from error
 
     def uninstall(self) -> None:
         self.require_managed_installation_identity("uninstall")
@@ -6290,8 +6665,9 @@ class Installer:
             for relative, expected in preserved.items():
                 if file_hash(self.target / relative) != expected:
                     raise InstallerError(f"{relative} changed during uninstall")
-        self._prune_component_directories()
-        remove_empty_directories(self.target / METADATA_DIR)
+            metadata_result = self.remove_empty_metadata_transaction()
+            if metadata_result is not None:
+                mutation_results.append(metadata_result)
         if cli_present:
             console.success("CLI permanente x86QW removida.")
         console.success(f"Componentes gerenciados removidos de {self.target}.")
@@ -6301,11 +6677,11 @@ class Installer:
         paths = [
             self.target / METADATA_DIR / "cli",
             self.target / LEGACY_CLI_RECEIPT,
-            self.target / "x86qw.sh",
+            *(
+                self.target / name
+                for name in host_adapter.cli_launcher_names_for_removal()
+            ),
         ]
-        windows_launcher = self.target / "x86qw.cmd"
-        if os.name != "nt":
-            paths.append(windows_launcher)
         return tuple(paths)
 
     def remove_installed_cli(
@@ -6335,10 +6711,19 @@ class Installer:
             console.success("CLI permanente x86QW removida.")
 
     def purge(self, *, preserve_operation_lock: bool = False) -> None:
-        caches = self.owned_cache_roots(include_legacy=True)
+        cache_targets = self._owned_cache_targets(include_legacy=True)
+        caches = [root for root, _ in cache_targets]
         candidates: list[Path] = []
+        observations = dict(cache_targets)
         if lexists(self.target):
+            before = quarantine.observe_quarantine_target(self.target)
             self.require_managed_installation_identity("uninstall --purge")
+            after = quarantine.observe_quarantine_target(self.target)
+            if before != after:
+                raise InstallerError(
+                    f"A instalação mudou durante a validação de ownership: {self.target}"
+                )
+            observations[self.target] = after
             current = Path.cwd().resolve()
             if current == self.target or self.target in current.parents:
                 os.chdir(self.target.parent)
@@ -6373,8 +6758,10 @@ class Installer:
                         observe=lambda path=path: (
                             quarantine.observe_quarantine_target(path)
                         ),
-                        apply=lambda path=path: (
-                            quarantine.apply_quarantine_removal(path)
+                        apply=lambda path=path, expected=observations.get(path): (
+                            quarantine.apply_quarantine_removal(
+                                path, expected_observation=expected,
+                            )
                         ),
                         rollback=quarantine.rollback_quarantine,
                         finalize=quarantine.finalize_quarantine,
@@ -6412,6 +6799,7 @@ class Installer:
         *,
         platform: str | None = None,
         before_mutation: Callable[[], None] | None = None,
+        mutation_results: list[MutationResult] | None = None,
     ) -> None:
         console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
@@ -6422,11 +6810,13 @@ class Installer:
         reset_macos_game_directory = self.macos_game_directory_reset_required()
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
-        self.prepare_install_target()
-        self.reject_target_symlinks()
-        self._create_stage(".quake-install.")
-        installation_results: list[MutationResult] = []
+        installation_results = mutation_results if mutation_results is not None else []
         try:
+            topology_result = self.prepare_install_target()
+            if topology_result is not None:
+                installation_results.append(topology_result)
+            self.reject_target_symlinks()
+            self._create_stage(".quake-install.")
             pak_result = self.provision_install_target()
             if pak_result is not None:
                 installation_results.append(pak_result)
@@ -6472,7 +6862,10 @@ class Installer:
             console.section("Verificação final")
             self.verify_installation()
         except BaseException as error:
-            if not isinstance(error, PersistenceError) or not error.committed:
+            if (
+                mutation_results is None
+                and (not isinstance(error, PersistenceError) or not error.committed)
+            ):
                 self.rollback_component_transactions(installation_results, error)
             raise
         console.section("Resumo")
@@ -6630,7 +7023,7 @@ class Installer:
         if state_path.is_file() and not state_path.is_symlink():
             persisted_state = self.read_install_state_document(state_path)
         state = self.current_install_state(
-            self.load_install_state(persist_migration=False)
+            self.load_install_state()
         )
         state_change = persisted_state != state
         if dry_run and state_change and plan_rows is not None:
@@ -6797,7 +7190,7 @@ class Installer:
                 mutation_results=component_results,
             )
             state = self.current_install_state(
-                self.load_install_state(persist_migration=False)
+                self.load_install_state()
             )
             desired = self.desired_components(state)
             installed = self.installed_components()
@@ -7068,8 +7461,7 @@ class Installer:
             prepared_cli.mkdir()
             prepared_application = prepared_cli / CLI_ARCHIVE_NAME
             shutil.copyfile(application, prepared_application)
-            if os.name != "nt":
-                prepared_application.chmod(0o644)
+            host_adapter.apply_mode(prepared_application, 0o644)
             if file_hash(prepared_application) != application_digest:
                 raise InstallerError("A cópia preparada da CLI diverge do bundle validado.")
             self.write_cli_receipt_record(prepared_cli / "receipt", identity)
@@ -7080,8 +7472,7 @@ class Installer:
             for name, (rendered, mode) in rendered_launchers.items():
                 prepared = launcher_stage / name
                 prepared.write_text(rendered, encoding="utf-8", newline="\n")
-                if os.name != "nt":
-                    prepared.chmod(mode)
+                host_adapter.apply_mode(prepared, mode)
                 prepared_launchers[name] = prepared
 
             legacy_receipt = self.target / LEGACY_CLI_RECEIPT
@@ -7318,7 +7709,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         except navigation.MenuCancelled:
             if sys.stdin.isatty():
                 raise
-            launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
+            launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
             print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, repair, cleanup, uninstall e version.")
@@ -7425,10 +7816,11 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             if action == "content":
                 print("\nA CLI instalada não baixa componentes novos durante o gameplay.")
                 print("Reexecute o bootstrap e informe este mesmo destino:")
-                if os.name == "nt":
-                    print(f"\n  {PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND}")
-                else:
-                    print(f"\n  {PUBLIC_UNIX_BOOTSTRAP_COMMAND}")
+                bootstrap = public_bootstrap_command(
+                    PUBLIC_UNIX_BOOTSTRAP_COMMAND,
+                    PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND,
+                )
+                print(f"\n  {bootstrap}")
                 print(f"\nDestino atual: {target}")
                 try:
                     input("\nPressione Enter para voltar ao menu...")
@@ -7522,7 +7914,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
             print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, repair, cleanup, uninstall e version.")
-            launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
+            launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
             try:
@@ -7546,6 +7938,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
     operation_lock: session_control.InstallationLock | None = None
     recovery_confirmed = False
     purge_completed = False
+    uninstall_completed = False
 
     def acquire_operation_lock() -> None:
         nonlocal operation_lock, recovery_confirmed
@@ -7632,6 +8025,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                 acquire_operation_lock()
                 console.section("Desinstalação")
                 installer.uninstall()
+                uninstall_completed = True
         elif options.action == "hub":
             console.section("QuakeWorld Hub")
             installer.browse_hub()
@@ -7679,17 +8073,22 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                 if options.skip_cli_update:
                     installer.install_online_cli(mutation_results=operation_results)
         else:
-            if options.action in {"components", "presets"}:
-                acquire_operation_lock()
-            if options.action == "components":
-                installer.manage_components()
-            elif options.action == "presets":
-                installer.manage_presets()
+            if options.action == "install":
+                with installer.component_state_transaction() as operation_results:
+                    installer.install(
+                        platform=options.platform,
+                        before_mutation=acquire_operation_lock,
+                        mutation_results=operation_results,
+                    )
+                    installer.install_online_cli(mutation_results=operation_results)
             else:
-                installer.install(
-                    platform=options.platform, before_mutation=acquire_operation_lock,
-                )
-            installer.install_online_cli()
+                acquire_operation_lock()
+                with installer.component_state_transaction() as operation_results:
+                    if options.action == "components":
+                        installer.manage_components(mutation_results=operation_results)
+                    else:
+                        installer.manage_presets(mutation_results=operation_results)
+                    installer.install_online_cli(mutation_results=operation_results)
         return 0
     finally:
         original_error = sys.exc_info()[0] is not None
@@ -7705,12 +8104,27 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                 lock_released = True
             except Exception as error:
                 cleanup_errors.append(f"lock da instalação: {error}")
+        if uninstall_completed and lock_released:
+            try:
+                metadata_result = installer.remove_empty_metadata_transaction()
+                if metadata_result is not None:
+                    finalize_mutation(metadata_result)
+            except Exception as error:
+                cleanup_errors.append(f"metadados finais da instalação: {error}")
         if purge_completed and lock_released and lexists(installer.target):
             try:
-                remove_empty_directories(installer.target / METADATA_DIR)
-                installer.target.rmdir()
-                console.success(f"Diretório da instalação removido: {installer.target}")
-            except OSError as error:
+                topology_result = installer.remove_empty_metadata_transaction(
+                    include_target=True,
+                )
+                if topology_result is None or lexists(installer.target):
+                    raise InstallerError(
+                        "A topologia final da instalação não está vazia e foi preservada."
+                    )
+                finalize_mutation(topology_result)
+                console.success(
+                    f"Diretório da instalação removido: {installer.target}"
+                )
+            except Exception as error:
                 cleanup_errors.append(f"diretório final da instalação: {error}")
         for error in cleanup_errors:
             console.warning(f"Falha durante a finalização de {error}")

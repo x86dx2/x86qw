@@ -291,6 +291,10 @@ class ModernComponentTests(unittest.TestCase):
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "duel")
             (target / game.gamedir).mkdir()
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
             selection = services_qw.HostedGame(
                 game, mode, "dm6", frozenset({"bots/maps/dm6.bot"}),
                 play_qw.KtxLaunchOptions(bots=1),
@@ -304,7 +308,7 @@ class ModernComponentTests(unittest.TestCase):
                     ], ROOT)
                     sessions: list[Path] = []
                     with mock.patch.object(
-                        services_qw, "runtime_binary", return_value=target / "mvdsv",
+                        services_qw, "runtime_launch_target", return_value=launch_target,
                     ), mock.patch.object(
                         services_qw, "materialize_hosted_game", return_value=None,
                     ):
@@ -336,7 +340,12 @@ class ModernComponentTests(unittest.TestCase):
             sessions = []
             materialized = []
             binary = target / "mvdsv"
-            with mock.patch.object(services_qw, "runtime_binary", return_value=binary):
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
+            with mock.patch.object(
+                services_qw, "runtime_launch_target", return_value=launch_target,
+            ):
                 spec = services_qw.host_spec(
                     player, options, selection, sessions, materialized,
                 )
@@ -366,8 +375,12 @@ class ModernComponentTests(unittest.TestCase):
                 game, mode, "e2m2", frozenset({"id1/maps/ctf/e2m2.ent"}), options.ktx_options,
             )
             sessions = []
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
             with mock.patch.object(
-                services_qw, "runtime_binary", return_value=target / "mvdsv",
+                services_qw, "runtime_launch_target", return_value=launch_target,
             ), mock.patch.object(services_qw, "materialize_hosted_game", return_value=None):
                 spec = services_qw.host_spec(player, options, selection, sessions, [])
             startup = sessions[0].read_text(encoding="utf-8")
@@ -1572,16 +1585,18 @@ class ModernComponentTests(unittest.TestCase):
             config = target / "ezquake/configs/config.cfg"
             config.parent.mkdir(parents=True)
             config.write_bytes(b'vid_fullscreen "1"\nvid_usedesktopres "1"\n')
-            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
-                    "spdisplays_main": "spdisplays_yes",
-                    "spdisplays_connection_type": "spdisplays_internal",
-                    "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
-                    "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
-                }]}]}))
-            with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        player.configure_macos_fullscreen()
+            display = {
+                "spdisplays_main": "spdisplays_yes",
+                "spdisplays_connection_type": "spdisplays_internal",
+                "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
+                "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
+            }
+            with mock.patch.object(
+                play_qw, "is_macos_host", return_value=True,
+            ), mock.patch.object(
+                play_qw, "macos_main_display", return_value=display,
+            ), contextlib.redirect_stdout(io.StringIO()):
+                player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
             self.assertEqual({
                 "vid_fullscreen": "1",
@@ -1601,16 +1616,18 @@ class ModernComponentTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             original = b'vid_fullscreen "1"\nvid_usedesktopres "0"\nvid_width "1920"\nvid_height "1200"\n'
             config.write_bytes(original)
-            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
-                    "spdisplays_main": "spdisplays_yes",
-                    "spdisplays_connection_type": "spdisplays_internal",
-                    "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
-                    "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
-                }]}]}))
-            with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        player.configure_macos_fullscreen()
+            display = {
+                "spdisplays_main": "spdisplays_yes",
+                "spdisplays_connection_type": "spdisplays_internal",
+                "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
+                "_spdisplays_resolution": "1800 x 1169 @ 120.00Hz",
+            }
+            with mock.patch.object(
+                play_qw, "is_macos_host", return_value=True,
+            ), mock.patch.object(
+                play_qw, "macos_main_display", return_value=display,
+            ), contextlib.redirect_stdout(io.StringIO()):
+                player.configure_macos_fullscreen()
             self.assertEqual(original, config.read_bytes())
             marker = json.loads((target / play_qw.MACOS_FULLSCREEN_LAYOUT).read_text(encoding="utf-8"))
             self.assertFalse(marker["managed"])
@@ -1639,14 +1656,17 @@ class ModernComponentTests(unittest.TestCase):
                 "managed": True,
                 "settings": previous,
             }), encoding="utf-8")
-            response = mock.Mock(stdout=json.dumps({"SPDisplaysDataType": [{"spdisplays_ndrvs": [{
-                    "spdisplays_main": "spdisplays_yes",
-                    "spdisplays_connection_type": "spdisplays_internal",
-                    "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
-                }]}]}))
-            with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(play_qw.subprocess, "run", return_value=response):
-                    player.configure_macos_fullscreen()
+            display = {
+                "spdisplays_main": "spdisplays_yes",
+                "spdisplays_connection_type": "spdisplays_internal",
+                "spdisplays_pixelresolution": "spdisplays_3024x1964Retina",
+            }
+            with mock.patch.object(
+                play_qw, "is_macos_host", return_value=True,
+            ), mock.patch.object(
+                play_qw, "macos_main_display", return_value=display,
+            ):
+                player.configure_macos_fullscreen()
             values = player.config_cvars(config.read_bytes(), play_qw.MACOS_FULLSCREEN_CVARS)
             self.assertEqual("0", values["vid_usedesktopres"])
             self.assertEqual("1890", values["vid_height"])
@@ -1662,18 +1682,17 @@ class ModernComponentTests(unittest.TestCase):
             config.parent.mkdir(parents=True)
             original = b'vid_fullscreen "1"\nvid_usedesktopres "1"\n'
             config.write_bytes(original)
-            with mock.patch.object(play_qw.sys, "platform", "darwin"):
-                with mock.patch.object(
-                    play_qw.subprocess, "run",
-                    return_value=mock.Mock(stdout=json.dumps({
-                        "SPDisplaysDataType": [{"spdisplays_ndrvs": [{
-                            "spdisplays_main": "spdisplays_yes",
-                            "spdisplays_connection_type": "spdisplays_internal",
-                            "spdisplays_pixelresolution": "spdisplays_1920x1200Retina",
-                        }]}],
-                    })),
-                ):
-                    player.configure_macos_fullscreen()
+            display = {
+                "spdisplays_main": "spdisplays_yes",
+                "spdisplays_connection_type": "spdisplays_internal",
+                "spdisplays_pixelresolution": "spdisplays_1920x1200Retina",
+            }
+            with mock.patch.object(
+                play_qw, "is_macos_host", return_value=True,
+            ), mock.patch.object(
+                play_qw, "macos_main_display", return_value=display,
+            ):
+                player.configure_macos_fullscreen()
             self.assertEqual(original, config.read_bytes())
             self.assertFalse((target / play_qw.MACOS_FULLSCREEN_LAYOUT).exists())
 
@@ -2184,7 +2203,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(2, len(completed))
             self.assertEqual(
                 "none",
-                installer.load_install_state(persist_migration=False)["profile"],
+                installer.load_install_state()["profile"],
             )
 
     def test_component_default_created_before_state_is_rolled_back(self):
@@ -2943,11 +2962,10 @@ class ModernComponentTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    install_qw, "bounded_download_mirrors", side_effect=download,
-                ) as request:
+                    installer.remote, "download_many", side_effect=download,
+                ):
                     artifact = installer.download_component_package(package)
             self.assertEqual(payload, artifact.read_bytes())
-            request.assert_called_once()
 
     def test_component_is_materialized_from_canonical_sources_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2957,7 +2975,7 @@ class ModernComponentTests(unittest.TestCase):
             package = installer.component_package_record("nquake-bootstrap")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer, "http_get_mirrors", side_effect=AssertionError("network used"),
+                    installer.remote, "get_mirrors", side_effect=AssertionError("network used"),
                 ):
                     prepared = installer.prepare_component_sources(package)
             self.assertIsNotNone(prepared)
@@ -3214,7 +3232,9 @@ class ModernComponentTests(unittest.TestCase):
                 {"address": "+exec bad.cfg", "players": []},
             ]
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(installer, "http_get", return_value=json.dumps(payload).encode()):
+                with mock.patch.object(
+                    installer.remote, "get", return_value=json.dumps(payload).encode(),
+                ):
                     servers = installer.hub_servers()
             self.assertEqual(["server.example:27500"], [item["address"] for item in servers])
             runtime = target / "ezQuake Stable.app"
@@ -3223,15 +3243,20 @@ class ModernComponentTests(unittest.TestCase):
             executable.write_bytes(b"mach-o")
             with mock.patch.dict(install_qw.os.environ, {"X86QW_TEST_WINDOWED": ""}):
                 with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                    with mock.patch.object(
+                        install_qw.supervisor_core, "spawn_detached_client",
+                    ) as spawn:
                         installer.launch_runtime(runtime, ["+connect", "server.example:27500"])
-            command = popen.call_args.args[0]
-            self.assertEqual([
+            command = spawn.call_args.args[0]
+            self.assertEqual((
                 str(executable), "-nohome", "-basedir", str(target),
                 "+connect", "server.example:27500",
-            ], command)
-            self.assertIs(popen.call_args.kwargs["stdin"], install_qw.subprocess.DEVNULL)
-            self.assertTrue(popen.call_args.kwargs["start_new_session"])
+            ), command)
+            self.assertEqual(target, spawn.call_args.args[1])
+            self.assertEqual(
+                executable,
+                spawn.call_args.kwargs["launch_target"].executable,
+            )
 
     def test_runtime_smoke_uses_a_window_unless_fullscreen_is_explicit(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3242,16 +3267,18 @@ class ModernComponentTests(unittest.TestCase):
             executable.write_bytes(b"mach-o")
             with mock.patch.dict(install_qw.os.environ, {"X86QW_TEST_WINDOWED": "1"}):
                 with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                    with mock.patch.object(
+                        install_qw.supervisor_core, "spawn_detached_client",
+                    ) as spawn:
                         installer.launch_runtime(runtime, ["+map", "dm6"])
-            self.assertEqual([
+            self.assertEqual((
                 str(executable), "-nohome", "-basedir", str(target),
                 "-window", "-width", "1280", "-height", "720",
                 "-clientport", "0",
                 "+cfg_save_onquit", "0",
                 "+sb_findroutes", "0", "+sb_autoupdate", "0",
                 "+map", "dm6",
-            ], popen.call_args.args[0])
+            ), spawn.call_args.args[0])
 
     def test_native_runtime_smoke_can_capture_a_disposable_console_log(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3265,16 +3292,18 @@ class ModernComponentTests(unittest.TestCase):
                 "X86QW_TEST_CONSOLE_LOG": "1",
             }):
                 with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                    with mock.patch.object(install_qw.subprocess, "Popen") as popen:
+                    with mock.patch.object(
+                        install_qw.supervisor_core, "spawn_detached_client",
+                    ) as spawn:
                         installer.launch_runtime(runtime, ["+map", "dm6"])
-            self.assertEqual([
+            self.assertEqual((
                 str(executable), "-nohome", "-basedir", str(target),
                 "-window", "-width", "1280", "-height", "720",
                 "-clientport", "0", "-condebug",
                 "+cfg_save_onquit", "0",
                 "+sb_findroutes", "0", "+sb_autoupdate", "0",
                 "+map", "dm6",
-            ], popen.call_args.args[0])
+            ), spawn.call_args.args[0])
 
     def test_play_uses_client_and_server_gamedirs_before_map(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -4935,6 +4964,43 @@ class ModernComponentTests(unittest.TestCase):
                 installer.uninstall()
             self.assertFalse((target / ".x86qw").exists())
             self.assertNotIn("Os componentes x86QW não estão instalados", output.getvalue())
+
+    def test_uninstall_preserves_metadata_content_raced_into_empty_cleanup(self):
+        """An entry appearing before metadata rmdir must survive a full rollback."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            (managed / "qw").mkdir(parents=True)
+            (managed / "qw/ktx.pk3").write_bytes(b"pk3")
+            installer.install_component_overlay(
+                "ktx", managed, "a" * 40, "https://example.invalid",
+            )
+            metadata = target / ".x86qw"
+            personal = metadata / "personal.note"
+            real_rmdir = Path.rmdir
+            injected = False
+
+            def race(path):
+                nonlocal injected
+                if path == metadata and not injected:
+                    injected = True
+                    personal.write_text("personal\n", encoding="utf-8")
+                return real_rmdir(path)
+
+            with mock.patch.object(
+                Path, "rmdir", autospec=True, side_effect=race,
+            ), contextlib.redirect_stdout(io.StringIO()), self.assertRaises(
+                install_qw.InstallerError,
+            ):
+                installer.uninstall()
+
+            self.assertTrue(injected)
+            self.assertEqual("personal\n", personal.read_text(encoding="utf-8"))
+            self.assertTrue((target / "qw/ktx.pk3").is_file())
+            self.assertTrue((metadata / "components/ktx/receipt").is_file())
 
 
 if __name__ == "__main__":
