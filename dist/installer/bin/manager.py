@@ -5933,60 +5933,144 @@ class Installer:
             for path in self.component_pair_paths(component, metadata, legacy=True)
         )
 
-    def migrate_metadata_layout(self) -> bool:
+    def _migrate_metadata_file_transaction(
+        self,
+        legacy: Path,
+        canonical: Path,
+        *,
+        key: str,
+        validate: Callable[[Path], object],
+    ) -> MutationResult:
+        assert self.stage is not None
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+        prepared = self.stage / f".{key}.next"
+        shutil.copy2(legacy, prepared)
+        validate(prepared)
+        plan = MutationPlan(
+            identifier=f"metadata-layout:{key}",
+            summary=f"Migrar metadado {key} para o layout contextual",
+            steps=(
+                MutationStep(
+                    key="canonical",
+                    description="Publicar o metadado no caminho contextual",
+                    observe=lambda: (
+                        self._mutation_path_observation(prepared),
+                        self._mutation_path_observation(canonical),
+                    ),
+                    apply=lambda: self._apply_runtime_payload(prepared, canonical),
+                    rollback=self._rollback_runtime_payload,
+                ),
+                MutationStep(
+                    key="legacy",
+                    description="Recolher o metadado legado",
+                    observe=lambda: self._mutation_path_observation(legacy),
+                    apply=lambda: self._apply_managed_path_removal(
+                        legacy, label=f"metadado legado {key}",
+                    ),
+                    rollback=self._rollback_runtime_payload,
+                ),
+            ),
+        )
+        try:
+            result = execute_mutation(prepare_mutation(plan))
+            validate(canonical)
+            return result
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(f"Não foi possível migrar o metadado {key}.") from error
+        except BaseException as error:
+            if "result" in locals():
+                try:
+                    rollback_mutation(result)
+                except BaseException as rollback_error:
+                    raise InstallerError(
+                        f"A validação de {key} falhou e o rollback ficou incompleto: "
+                        f"{rollback_error}"
+                    ) from error
+            raise
+
+    def migrate_metadata_layout(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> bool:
         if not self.legacy_metadata_present():
             return False
         metadata = self.target / METADATA_DIR
         self.ensure_metadata_directory()
-
-        legacy_cli = self.target / LEGACY_CLI_RECEIPT
-        if lexists(legacy_cli):
-            self.cli_receipt_path()
-            canonical_cli = self.target / CLI_RECEIPT
-            canonical_cli.parent.mkdir(parents=True, exist_ok=True)
-            if not lexists(canonical_cli):
-                temporary = canonical_cli.with_name(".receipt.new")
-                shutil.copy2(legacy_cli, temporary)
-                self.validate_cli_receipt(temporary)
-                temporary.replace(canonical_cli)
-            remove_path(legacy_cli)
-
-        for spec in PLATFORMS.values():
-            for channel in ("stable", "nightly"):
-                legacy = self.target / spec.legacy_receipt(channel)
-                if not lexists(legacy):
-                    continue
-                self.ezquake_receipt_path(spec, channel)
-                canonical = self.target / spec.receipt(channel)
-                canonical.parent.mkdir(parents=True, exist_ok=True)
-                if not lexists(canonical):
-                    temporary = canonical.with_name(f".{channel}.receipt.new")
-                    shutil.copy2(legacy, temporary)
-                    self.validate_ezquake_receipt(temporary, spec, channel)
-                    temporary.replace(canonical)
-                remove_path(legacy)
-
-        previous_stage = self.stage
-        previous_stage_identity = self._stage_identity
-        previous_stage_created_roots = self._stage_created_roots
-        migration_stage = self._create_stage(".x86qw-metadata.")
+        created_stage = self.stage is None
+        if created_stage:
+            self._create_stage(".x86qw-metadata.")
+        assert self.stage is not None
+        completed: list[MutationResult] = []
+        cleanup = True
         try:
+            legacy_cli = self.target / LEGACY_CLI_RECEIPT
+            if lexists(legacy_cli):
+                self.cli_receipt_path()
+                completed.append(self._migrate_metadata_file_transaction(
+                    legacy_cli,
+                    self.target / CLI_RECEIPT,
+                    key="cli-receipt",
+                    validate=self.validate_cli_receipt,
+                ))
+
+            for spec in PLATFORMS.values():
+                for channel in ("stable", "nightly"):
+                    legacy = self.target / spec.legacy_receipt(channel)
+                    if not lexists(legacy):
+                        continue
+                    self.ezquake_receipt_path(spec, channel)
+                    completed.append(self._migrate_metadata_file_transaction(
+                        legacy,
+                        self.target / spec.receipt(channel),
+                        key=f"ezquake-{spec.key}-{channel}",
+                        validate=lambda path, spec=spec, channel=channel: (
+                            self.validate_ezquake_receipt(path, spec, channel)
+                        ),
+                    ))
+
             for component in self.metadata_component_ids():
-                canonical = self.component_pair_paths(component, metadata)
                 legacy = self.component_pair_paths(component, metadata, legacy=True)
                 if not any(lexists(path) for path in legacy):
                     continue
                 self.validate_component_pair(component)
-                if not all(lexists(path) for path in canonical):
-                    self.commit_component_metadata(component, legacy[1], legacy[0])
-                else:
-                    for path in legacy:
-                        remove_path(path)
+                plan = MutationPlan(
+                    identifier=f"metadata-layout:component:{component}",
+                    summary=f"Migrar metadados do componente {component}",
+                    steps=(MutationStep(
+                        key="metadata",
+                        description="Publicar recibo e inventário no layout contextual",
+                        observe=lambda component=component: (
+                            self._component_metadata_observation(component)
+                        ),
+                        apply=lambda component=component, legacy=legacy: (
+                            self.commit_component_metadata(
+                                component, legacy[1], legacy[0],
+                            )
+                        ),
+                        rollback=self._rollback_component_metadata,
+                    ),),
+                )
+                completed.append(execute_mutation(prepare_mutation(plan)))
+        except BaseException as error:
+            try:
+                self.rollback_component_transactions(completed, error)
+            except BaseException:
+                cleanup = False
+                raise
+            if isinstance(error, InstallerError):
+                raise
+            raise InstallerError(
+                "A reorganização dos metadados falhou e foi revertida."
+            ) from error
         finally:
-            self.cleanup_stage()
-            self.stage = previous_stage
-            self._stage_identity = previous_stage_identity
-            self._stage_created_roots = previous_stage_created_roots
+            if cleanup:
+                remove_empty_directories(metadata / "clients")
+                remove_empty_directories(metadata / "components")
+                if created_stage and mutation_results is None:
+                    self.cleanup_stage()
+        if mutation_results is not None:
+            mutation_results.extend(completed)
         remove_empty_directories(metadata / "clients/ezquake")
         console.success("Metadados da instalação reorganizados por contexto.")
         return True
@@ -6323,8 +6407,6 @@ class Installer:
             plan_rows.append(UpdatePlanRow(
                 "Sistema", "Metadados da instalação", "formato plano", "por contexto", "Reorganizar",
             ))
-        if not dry_run and layout_change:
-            self.migrate_metadata_layout()
         self.check_paks()
         state_path = self.target / INSTALL_STATE
         persisted_state: dict[str, object] | None = None
@@ -6365,6 +6447,8 @@ class Installer:
         }
         changed = layout_change or state_change
         with self.component_state_transaction() as mutation_results:
+            if not dry_run and layout_change:
+                self.migrate_metadata_layout(mutation_results)
             if not dry_run:
                 console.section("Clientes ezQuake instalados")
             for spec, channel, receipt in runtimes:

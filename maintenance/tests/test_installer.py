@@ -1920,6 +1920,78 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(legacy_inventory.exists())
             self.assertFalse(installer.migrate_metadata_layout())
 
+    def test_metadata_layout_migration_rolls_back_every_context_on_late_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / ".x86qw"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
+            self.write_cli_receipt(target, "1.0.5", legacy=True)
+
+            spec = install_qw.PLATFORMS["macos"]
+            legacy_client = target / spec.legacy_receipt("stable")
+            installer.write_ezquake_receipt_record(legacy_client, {
+                "format": "1", "platform": "macos", "architecture": "universal",
+                "channel": "stable", "selection": "3.6.9",
+                "install_name": spec.runtime("stable"), "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": f"https://example.invalid/{spec.stable_archive}",
+                "artifact_sha256": "a" * 64, "binary_sha256": "b" * 64,
+            })
+            legacy_receipt, legacy_inventory = (
+                target / relative
+                for relative in installer.legacy_component_metadata("nquake-bootstrap")
+            )
+            legacy_inventory.write_text(
+                f"qw/test.cfg\t{'c' * 64}\n", encoding="utf-8",
+            )
+            installer.write_component_receipt(
+                "nquake-bootstrap", "test", "https://example.invalid/component.zip",
+                legacy_inventory, legacy_receipt,
+            )
+            legacy_snapshot = {
+                path: path.read_bytes()
+                for path in (target / ".x86qw").glob("*.receipt")
+            }
+            legacy_snapshot.update({
+                legacy_inventory: legacy_inventory.read_bytes(),
+            })
+
+            with mock.patch.object(
+                installer, "commit_component_metadata",
+                side_effect=OSError("simulated late metadata migration failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.migrate_metadata_layout()
+
+            for path, payload in legacy_snapshot.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((metadata / "cli/receipt").exists())
+            self.assertFalse((metadata / "clients").exists())
+            self.assertFalse((metadata / "components").exists())
+
+    def test_metadata_layout_keeps_inverses_for_parent_update_transaction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / ".x86qw"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
+            legacy = self.write_cli_receipt(target, "1.0.5", legacy=True)
+            original = legacy.read_bytes()
+            results = []
+
+            self.assertTrue(installer.migrate_metadata_layout(results))
+            self.assertTrue((metadata / "cli/receipt").is_file())
+            self.assertFalse(legacy.exists())
+            self.assertTrue(results)
+
+            installer.rollback_component_transactions(
+                results, install_qw.InstallerError("simulated parent failure"),
+            )
+            self.assertEqual(original, legacy.read_bytes())
+            self.assertFalse((metadata / "cli/receipt").exists())
+            installer.cleanup_stage()
+
     def test_installed_cli_rejects_installation_actions(self):
         for action in ("install", "components", "presets"):
             with self.subTest(action=action):
