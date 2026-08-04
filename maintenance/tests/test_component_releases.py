@@ -240,13 +240,13 @@ class ComponentReleaseTests(unittest.TestCase):
         )
         self.assertEqual(set(components_by_id(components)), set(releases["components"]))
         ktx = releases["components"]["ktx"]
-        self.assertEqual("1.47+x86qw.18", ktx["version"])
+        self.assertEqual("1.47+x86qw.19", ktx["version"])
         self.assertEqual("upstream-composed", ktx["strategy"])
         self.assertEqual("upstream-current", ktx["freshness"])
         path = ktx["artifacts"][0]["distribution_path"]
         self.assertEqual("ktx", component_for_artifact_path(releases, path))
         td2 = releases["components"]["total-destruction-2"]
-        self.assertEqual("2.22+x86qw.4", td2["version"])
+        self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("upstream-package", td2["strategy"])
         td2_path = td2["artifacts"][0]["distribution_path"]
         self.assertEqual("total-destruction-2", component_for_artifact_path(releases, td2_path))
@@ -339,11 +339,11 @@ class ComponentReleaseTests(unittest.TestCase):
             names = set(package.namelist())
             self.assertEqual(710, len(names))
             self.assertEqual(
-                "6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655",
+                "32cfd1e70d1b88abb591872cd92f3eeeee03ea3d4d0097d6b82f30cf2fb6ed91",
                 hashlib.sha256(package.read("qwprogs.qvm")).hexdigest(),
             )
             self.assertEqual(
-                "9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea",
+                "91414e05db60aace163ccae7e7ba27bdd6b89b9f347fe7619018ae6f1390c356",
                 hashlib.sha256(package.read("qwprogs.map")).hexdigest(),
             )
             self.assertIn("bots/maps/anarena.bot", names)

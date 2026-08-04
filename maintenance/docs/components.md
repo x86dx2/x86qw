@@ -69,9 +69,9 @@ intencional e auditável, não um segundo padrão de organização.
 
 | Componente | Versão oferecida | Estratégia | Estado |
 | --- | --- | --- | --- |
-| Configuração base | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com bootstrap x86QW | aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
+| Configuração base | `e4cb23d40aa2+x86qw.3` | snapshot nQuake com bootstrap x86QW | x86QW Ruleset assistido, aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
 | Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.18` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, mapas filtrados pelos recursos reais, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, roster gerenciável e nomes únicos por função/equipe; QVM e símbolos reproduzíveis |
+| KTX | `1.47+x86qw.19` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, mapas filtrados pelos recursos reais, Coach de Quad casual opt-in, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, roster gerenciável e QVM reproduzível |
 | Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
 | Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
@@ -83,10 +83,10 @@ intencional e auditável, não um segundo padrão de organização.
 | Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
 | Documentação | `e4cb23d40aa2+x86qw.1` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
 | QRP alta resolução | `e4cb23d40aa2+x86qw.1` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
-| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.3` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; originais 1.20 e fonte-base preservados; plano de teclas impresso ao entrar |
-| Pro-X | `1.1+x86qw.4` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; configuração pessoal antiga migrada com backup; plano de teclas impresso ao entrar |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.5` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; LOCs, mapas e mídia nQuake preservados; controles remotos forçados removidos; plano de teclas impresso ao entrar |
-| Total Destruction 2 | `2.22+x86qw.4` | pacote independente recompilado do upstream | runtime com magia, especial, runas, votação e áudio completo; efeitos preservados e plano de teclas impresso ao entrar |
+| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.4` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; x86QW Ruleset opcional antes da camada pessoal; originais 1.20 e fonte-base preservados |
+| Pro-X | `1.1+x86qw.5` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; x86QW Ruleset opcional e configuração pessoal carregada por último |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.6` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; mídia nQuake preservada; x86QW Ruleset opcional antes da camada pessoal |
+| Total Destruction 2 | `2.22+x86qw.5` | pacote independente recompilado do upstream | runtime completo com x86QW Ruleset opcional, magia, especial, runas, votação, áudio e configuração pessoal carregada por último |
 | MVDSV | `1.11+x86qw.3` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
 | QTV | `0+025ca949aca0+x86qw.2` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
 | QWFWD | `1.30+x86qw.3` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |

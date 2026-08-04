@@ -382,8 +382,9 @@ def _private_snapshot(source: Path | bytes) -> Iterator[BinaryIO]:
     identity: tuple[int, int] | None = None
     snapshot: BinaryIO | None = None
     try:
-        metadata = os.fstat(descriptor)
-        identity = int(metadata.st_dev), int(metadata.st_ino)
+        identity = boundary.persistent_descriptor_identity(
+            descriptor, directory=False,
+        )
         if os.name != "nt":
             # POSIX keeps the open inode usable after unlink, eliminating a
             # pathname cleanup race for the archive snapshot.

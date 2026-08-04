@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from maintenance.tools import build_installer_bundle
+from x86qw_runtime.io import atomic as atomic_io
 from maintenance.tools.build_installer_bundle import (
     ARCHIVE_BASE64_ASSIGNMENTS,
     ARCHIVE_SOURCE,
@@ -29,12 +30,18 @@ from maintenance.tools.build_installer_bundle import (
     zipapp_bytes,
 )
 ROOT = Path(__file__).resolve().parents[2]
-PUBLISHED_VERSION = "0.7.1"
-PUBLISHED_BUNDLE = (
-    ROOT / "dist/installer/packages" / PUBLISHED_VERSION
-    / f"x86qw-installer-{PUBLISHED_VERSION}.zip"
+CURRENT_VERSION = (ROOT / "dist/installer/VERSION").read_text(encoding="utf-8").strip()
+CURRENT_BUNDLE = (
+    ROOT / "dist/installer/packages" / CURRENT_VERSION
+    / f"x86qw-installer-{CURRENT_VERSION}.zip"
 )
-PUBLISHED_SHA256 = "a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80"
+CURRENT_SHA256 = hashlib.sha256(CURRENT_BUNDLE.read_bytes()).hexdigest()
+HISTORICAL_071_VERSION = "0.7.1"
+HISTORICAL_071_BUNDLE = (
+    ROOT / "dist/installer/packages" / HISTORICAL_071_VERSION
+    / f"x86qw-installer-{HISTORICAL_071_VERSION}.zip"
+)
+HISTORICAL_071_SHA256 = "a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb2064b38c0d80"
 
 
 class ArchiveBootstrapTests(unittest.TestCase):
@@ -139,6 +146,43 @@ class ArchiveBootstrapTests(unittest.TestCase):
             self.assertEqual(original, source.read_bytes())
             self.assertEqual([], list(source.parent.glob(f".{source.name}.*")))
 
+    def test_bootstrap_publication_uses_the_runtime_directory_barrier(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.sh"
+            source.write_bytes(b'VALUE="old"\n')
+            calls: list[Path] = []
+            real_barrier = atomic_io.sync_directory
+
+            def record(path: Path) -> None:
+                calls.append(Path(path))
+                real_barrier(path)
+
+            with mock.patch.object(
+                atomic_io,
+                "sync_directory",
+                side_effect=record,
+            ):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
+            self.assertEqual([source.parent, source.parent], calls)
+            self.assertEqual(b'VALUE="new"\n', source.read_bytes())
+
+    def test_bootstrap_runtime_barrier_failure_preserves_previous_destination(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.sh"
+            original = b'VALUE="old"\n'
+            source.write_bytes(original)
+
+            with mock.patch.object(
+                atomic_io,
+                "sync_directory",
+                side_effect=OSError("simulated directory fsync failure"),
+            ), self.assertRaisesRegex(OSError, "simulated directory fsync failure"):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
+            self.assertEqual(original, source.read_bytes())
+            self.assertEqual([], list(source.parent.glob(f".{source.name}.*")))
+
     def test_archive_helper_and_bootstraps_are_pinned_to_lf(self):
         paths = (
             "x86qw_runtime/io/archive.py",
@@ -203,16 +247,19 @@ class ArchiveBootstrapTests(unittest.TestCase):
             self.assertIn("x86qw_runtime/io/__init__.py", archive.namelist())
 
     def test_real_published_071_bundle_remains_extractable_without_mutation(self):
-        self.assertEqual(PUBLISHED_SHA256, hashlib.sha256(PUBLISHED_BUNDLE.read_bytes()).hexdigest())
-        prefix = f"x86qw-installer-{PUBLISHED_VERSION}"
-        required = f"x86qw-installer-{PUBLISHED_VERSION}/x86qw.pyz"
+        self.assertEqual(
+            HISTORICAL_071_SHA256,
+            hashlib.sha256(HISTORICAL_071_BUNDLE.read_bytes()).hexdigest(),
+        )
+        prefix = f"x86qw-installer-{HISTORICAL_071_VERSION}"
+        required = f"x86qw-installer-{HISTORICAL_071_VERSION}/x86qw.pyz"
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "extracted"
             completed = subprocess.run(
                 [
                     sys.executable, "-m", "x86qw_runtime.io.archive",
-                    str(PUBLISHED_BUNDLE), str(destination),
-                    "--bundle-version", PUBLISHED_VERSION,
+                    str(HISTORICAL_071_BUNDLE), str(destination),
+                    "--bundle-version", HISTORICAL_071_VERSION,
                     "--required", required,
                     "--executable", f"{prefix}/x86qw.sh",
                     "--executable", f"{prefix}/dist/installer/bin/manager.py",
@@ -234,7 +281,10 @@ class ArchiveBootstrapTests(unittest.TestCase):
                         destination / prefix / "dist/installer/bin/manager.py"
                     ).stat().st_mode),
                 )
-        self.assertEqual(PUBLISHED_SHA256, hashlib.sha256(PUBLISHED_BUNDLE.read_bytes()).hexdigest())
+        self.assertEqual(
+            HISTORICAL_071_SHA256,
+            hashlib.sha256(HISTORICAL_071_BUNDLE.read_bytes()).hexdigest(),
+        )
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_unix_bootstrap_preserves_unicode_arguments_and_installer_exit(self):
@@ -489,15 +539,15 @@ class ArchiveBootstrapTests(unittest.TestCase):
     ) -> tuple[Path, Path]:
         source = SHELL_BOOTSTRAP.read_text(encoding="utf-8")
         source = source.replace(
-            f'INSTALLER_VERSION="{PUBLISHED_VERSION}"',
+            f'INSTALLER_VERSION="{CURRENT_VERSION}"',
             f'INSTALLER_VERSION="{version}"',
             1,
         ).replace(
-            f'INSTALLER_SHA256="{PUBLISHED_SHA256}"',
+            f'INSTALLER_SHA256="{CURRENT_SHA256}"',
             f'INSTALLER_SHA256="{hashlib.sha256(bundle.read_bytes()).hexdigest()}"',
             1,
         ).replace(
-            'INSTALLER_SIZE="157113"',
+            f'INSTALLER_SIZE="{CURRENT_BUNDLE.stat().st_size}"',
             f'INSTALLER_SIZE="{bundle.stat().st_size}"',
             1,
         )
@@ -532,15 +582,15 @@ class ArchiveBootstrapTests(unittest.TestCase):
         escaped_python = sys.executable.replace("'", "''")
         source = POWERSHELL_BOOTSTRAP.read_text(encoding="utf-8")
         source = source.replace(
-            f'$InstallerVersion = "{PUBLISHED_VERSION}"',
+            f'$InstallerVersion = "{CURRENT_VERSION}"',
             f'$InstallerVersion = "{version}"',
             1,
         ).replace(
-            f'$InstallerSha256 = "{PUBLISHED_SHA256}"',
+            f'$InstallerSha256 = "{CURRENT_SHA256}"',
             f'$InstallerSha256 = "{hashlib.sha256(bundle.read_bytes()).hexdigest()}"',
             1,
         ).replace(
-            '$InstallerSize = "157113"',
+            f'$InstallerSize = "{CURRENT_BUNDLE.stat().st_size}"',
             f'$InstallerSize = "{bundle.stat().st_size}"',
             1,
         ).replace(

@@ -4,9 +4,9 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
-pela própria tag imutável no commit
-`78dc30b58f9ba2a2ec8aeb31879d9b8072ab576b`, publicada em 3 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.7.2`. O estado funcional é descrito
+pela própria tag imutável, publicada em 4 de agosto de 2026. A `0.7.1`
+permanece inalterada no histórico.
 
 Baseline inicial da issue #45: merge
 `afb4f666095e37fe262b87b49339e18d25738522`.
@@ -22,6 +22,14 @@ candidato da PR 5 parte desse commit, preserva o stable macOS upstream e
 permanece não publicado; smokes de runtime e de conta padrão continuam
 separados.
 
+Baseline inicial da PR 6: merge
+`00098330e5833ba2c83c7121272d644c2a204a7b`. O HEAD documental atual é
+`29d76a48721190aad1203d0986a31d839d62070e`: ownership de I/O, catálogos,
+estado, transações, UI, gameplay, plataforma, sessão e supervisor foi movido
+incrementalmente para `x86qw_runtime`. O zipapp possui 56 membros e sua projeção
+é derivada do manifesto declarativo. Essa implementação foi integrada pela PR
+64 e publicada na `0.7.2`; a PR 6 permanece pausada como trilha auditável.
+
 ## Escala de estado
 
 **Entrega funcional:** não iniciada · parcial · MVP entregue · completa
@@ -34,8 +42,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.7.1`; as linhas anteriores permanecem imutáveis;
-- 61 pacotes e 21 componentes no catálogo;
+- instalador público `0.7.2`; as linhas anteriores permanecem imutáveis;
+- 62 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;
@@ -106,6 +114,36 @@ chegar à validação nativa completa dos runtimes:
 - registrar skips explícitos com motivo;
 - executar smokes nativos dos runtimes suportados;
 - guardar a evidência de release sem expor segredos.
+
+### ARCH-05 — Fronteiras incrementais do runtime
+
+**Entrega funcional:** implementada no código da PR 6; revisão pendente
+**Validação:** 1.190 testes de manutenção e 5 do site aprovados localmente; matriz da PR pendente
+
+O runtime é a fonte canônica para downloader, archive, persistência atômica,
+filesystem privado e arquivos gerenciados, catálogos, estado, recibos,
+migrações, transações, navegação, gameplay, adapters de plataforma, lock da
+instalação e supervisor de processos/sessões. Navegação, console e argumentos
+são compartilhados pelos três entrypoints; o manager permanece como raiz de
+composição do grafo de comandos. Manutenção e entrypoints consomem as demais
+fronteiras; `x86qw_runtime` não pode importar `maintenance`, `dist` nem as
+fachadas instaladas.
+
+O zipapp observado tem exatamente 56 membros: 44 módulos de
+`x86qw_runtime`, quatro entrypoints/fachadas no topo, duas projeções KTX e seis
+membros gerados. `maintenance/inventory/installer-runtime-members.json`
+declara origem, consumidor e contrato de cada membro e gera a projeção do
+builder; testes exigem igualdade com o ZIP produzido e proíbem módulos de
+manutenção no artefato.
+
+No HEAD documentado, a regressão integral executou 1.190 testes de manutenção,
+com 37 skips explícitos de plataforma/rede, e os 5 testes do site. Console,
+parser e navegação são canônicos no runtime; o manager permanece como raiz de
+composição do grafo de comandos. Cleanup, uninstall e purge usam quarantine
+reversível até o commit e tiveram rollback adversarial validado. A finalização
+remove arquivos regulares e diretórios vazios por identidade; links e tipos
+especiais são preservados no quarantine com erro explícito. A matriz da PR e os
+smokes nativos do PR 11 ainda não foram executados para este snapshot.
 
 ## Gameplay atual
 

@@ -19,6 +19,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CAPABILITIES = ROOT / "maintenance/inventory/capabilities.json"
 PRODUCT = ROOT / "site/public/api/v1/product.json"
+CURRENT_VERSION = (ROOT / "dist/installer/VERSION").read_text(encoding="utf-8").strip()
+CURRENT_BUNDLE = (
+    ROOT / "dist/installer/packages" / CURRENT_VERSION
+    / f"x86qw-installer-{CURRENT_VERSION}.zip"
+)
+CURRENT_BUNDLE_SIZE = CURRENT_BUNDLE.stat().st_size
 WINDOWS_POWERSHELL = shutil.which("powershell.exe") if os.name == "nt" else None
 POWERSHELL_RUNTIMES = tuple(dict.fromkeys(
     runtime
@@ -756,7 +762,7 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
     def test_unix_bootstrap_has_bounded_https_download_contract(self):
         source = (ROOT / "dist/installer/bin/install.sh").read_text(encoding="utf-8")
         for fragment in (
-            "INSTALLER_SIZE=\"157113\"",
+            f'INSTALLER_SIZE="{CURRENT_BUNDLE_SIZE}"',
             "DOWNLOAD_BUDGET_SECONDS=\"180\"",
             "DOWNLOAD_TRANSFER_SECONDS=\"120\"",
             "DOWNLOAD_ATTEMPTS=\"3\"",
@@ -787,8 +793,8 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_falls_back_after_http_200_with_invalid_content(self):
         bootstrap = ROOT / "dist/installer/bin/install.sh"
-        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
-        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        bundle = CURRENT_BUNDLE
+        self.assertEqual(CURRENT_BUNDLE_SIZE, bundle.stat().st_size, "execute git lfs pull antes dos testes")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binaries = root / "bin"
@@ -845,8 +851,8 @@ fi
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_rejects_divergent_content_length_before_accepting_mirror(self):
         bootstrap = ROOT / "dist/installer/bin/install.sh"
-        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
-        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        bundle = CURRENT_BUNDLE
+        self.assertEqual(CURRENT_BUNDLE_SIZE, bundle.stat().st_size, "execute git lfs pull antes dos testes")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binaries = root / "bin"
@@ -904,8 +910,8 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$declared" > "$headers"
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_retries_partial_transfer_with_a_fresh_receiver(self):
         bootstrap = ROOT / "dist/installer/bin/install.sh"
-        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
-        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        bundle = CURRENT_BUNDLE
+        self.assertEqual(CURRENT_BUNDLE_SIZE, bundle.stat().st_size, "execute git lfs pull antes dos testes")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binaries = root / "bin"
@@ -961,8 +967,8 @@ fi
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_shares_one_budget_across_mirrors(self):
         canonical = ROOT / "dist/installer/bin/install.sh"
-        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
-        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        bundle = CURRENT_BUNDLE
+        self.assertEqual(CURRENT_BUNDLE_SIZE, bundle.stat().st_size, "execute git lfs pull antes dos testes")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             bootstrap = root / "install-budget.sh"
@@ -1028,8 +1034,8 @@ fi
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_skips_unaffordable_retry_after_for_next_mirror(self):
         bootstrap = ROOT / "dist/installer/bin/install.sh"
-        bundle = ROOT / "dist/installer/packages/0.7.1/x86qw-installer-0.7.1.zip"
-        self.assertEqual(157113, bundle.stat().st_size, "execute git lfs pull antes dos testes")
+        bundle = CURRENT_BUNDLE
+        self.assertEqual(CURRENT_BUNDLE_SIZE, bundle.stat().st_size, "execute git lfs pull antes dos testes")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binaries = root / "bin"

@@ -18,7 +18,7 @@ documentação e pacotes imutáveis:
 
 O link `latest` seleciona a versão corrente dentro do Git sem duplicar o bundle.
 O catálogo oficial começa em `0.1.0`, primeira versão da linha pública pré-1.0,
-e o bundle público corrente é `0.7.1`, com 61 pacotes e 21 componentes. A
+e o bundle público corrente é `0.7.2`, com 62 pacotes e 21 componentes. A
 versão `0.7.0` permanece no histórico como bundle imutável. A versão de
 desenvolvimento é sempre lida de `VERSION`; bundles já publicados permanecem
 imutáveis.

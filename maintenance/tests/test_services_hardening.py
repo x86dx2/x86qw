@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -19,18 +20,30 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
+import gameplay  # noqa: E402
+import manager  # noqa: E402
 import services  # noqa: E402
+from x86qw_runtime.io import atomic as atomic_io  # noqa: E402
+from x86qw_runtime.io import managed_files  # noqa: E402
+from x86qw_runtime.io import private_fs  # noqa: E402
+from x86qw_runtime.platform import host as host_platform  # noqa: E402
+from x86qw_runtime.supervisor import sessions as runtime_sessions  # noqa: E402
+from x86qw_runtime.supervisor import core as supervisor_core  # noqa: E402
+
+services.configure_context(
+    manager.service_composition_context(services, gameplay),
+)
 
 
 class FakeWindowsFileApi:
     """Portable filesystem-backed stand-in for the narrow Win32 handle API."""
 
-    GENERIC_READ = services._WindowsFileApi.GENERIC_READ
-    GENERIC_WRITE = services._WindowsFileApi.GENERIC_WRITE
-    DELETE = services._WindowsFileApi.DELETE
-    FILE_READ_ATTRIBUTES = services._WindowsFileApi.FILE_READ_ATTRIBUTES
-    CREATE_NEW = services._WindowsFileApi.CREATE_NEW
-    OPEN_EXISTING = services._WindowsFileApi.OPEN_EXISTING
+    GENERIC_READ = managed_files._WindowsFileApi.GENERIC_READ
+    GENERIC_WRITE = managed_files._WindowsFileApi.GENERIC_WRITE
+    DELETE = managed_files._WindowsFileApi.DELETE
+    FILE_READ_ATTRIBUTES = managed_files._WindowsFileApi.FILE_READ_ATTRIBUTES
+    CREATE_NEW = managed_files._WindowsFileApi.CREATE_NEW
+    OPEN_EXISTING = managed_files._WindowsFileApi.OPEN_EXISTING
 
     def __init__(self):
         self.paths = {}
@@ -98,9 +111,9 @@ class FakeWindowsFileApi:
 
     def hash(self, handle, *, expected_size):
         stream = self.paths[handle]["stream"]
-        limit = services._assert_hashable_size(self.size(handle), expected_size)
+        limit = managed_files._assert_hashable_size(self.size(handle), expected_size)
         stream.seek(0)
-        digest = services.hashlib.sha256()
+        digest = hashlib.sha256()
         total = 0
         while True:
             block = stream.read(min(1024 * 1024, limit - total + 1))
@@ -132,6 +145,629 @@ class FakeWindowsFileApi:
 
 
 class ServiceHardeningTests(unittest.TestCase):
+    @staticmethod
+    def _service_installer(target, component, binary, payload):
+        return SimpleNamespace(
+            target=target,
+            validate_component_pair=lambda selected: (
+                True,
+                [(binary.relative_to(target).as_posix(), hashlib.sha256(payload).hexdigest())],
+                {"component": component},
+            ) if selected == component else (False, [], None),
+        )
+
+    def test_host_spec_carries_the_inventory_bound_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / "td2").mkdir()
+            binary = target / "mvdsv"
+            payload = b"managed mvdsv\n"
+            binary.write_bytes(payload)
+            binary.chmod(0o755)
+            installer = self._service_installer(target, "mvdsv", binary, payload)
+            options = services.parse_arguments([
+                "host", "td2", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            game = next(game for game in services.gameplay.LOCAL_GAMES if game.key == "td2")
+            selection = services.HostedGame(
+                game, None, "dm6", frozenset(), options.ktx_options,
+            )
+            with mock.patch.object(
+                services, "runtime_binary", return_value=binary,
+            ), mock.patch.object(services, "materialize_hosted_game", return_value=None):
+                spec = services.host_spec(installer, options, selection, [], [])
+            self.assertIsNotNone(spec.launch_target)
+            self.assertEqual(binary, spec.launch_target.executable)
+
+    def test_proxy_spec_carries_the_inventory_bound_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            directory = target / "qwfwd"
+            directory.mkdir()
+            (directory / "qwfwd.cfg").write_text("// fixture\n", encoding="utf-8")
+            binary = directory / "qwfwd"
+            payload = b"managed qwfwd\n"
+            binary.write_bytes(payload)
+            binary.chmod(0o755)
+            installer = self._service_installer(target, "qwfwd", binary, payload)
+            options = services.parse_arguments([
+                "proxy", "--target", str(target),
+            ], ROOT)
+            with mock.patch.object(services, "runtime_binary", return_value=binary):
+                spec = services.proxy_spec(installer, options)
+            self.assertIsNotNone(spec.launch_target)
+            self.assertEqual(binary, spec.launch_target.executable)
+
+    def test_qtv_spec_carries_the_inventory_bound_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            directory = target / "qtv"
+            directory.mkdir()
+            (directory / "qtv.cfg").write_text("// fixture\n", encoding="utf-8")
+            binary = directory / "qtv"
+            payload = b"managed qtv\n"
+            binary.write_bytes(payload)
+            binary.chmod(0o755)
+            installer = self._service_installer(target, "qtv", binary, payload)
+            with mock.patch.object(services, "runtime_binary", return_value=binary):
+                spec = services.qtv_spec(
+                    installer,
+                    bind="127.0.0.1",
+                    port=28000,
+                    hostname="x86QW",
+                    upstream=None,
+                    password="",
+                    session_paths=[],
+                )
+            self.assertIsNotNone(spec.launch_target)
+            self.assertEqual(binary, spec.launch_target.executable)
+
+    def test_supervisor_revalidates_executable_identity_before_spawn(self):
+        """A replacement after preflight must never reach Popen."""
+
+        self.assertIsNotNone(
+            getattr(host_platform, "executable_launch_target", None),
+            "the canonical executable launch contract is missing",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / "mvdsv"
+            payload = b"verified service\n"
+            executable.write_bytes(payload)
+            executable.chmod(0o755)
+            target = host_platform.executable_launch_target(
+                executable,
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+            )
+            replacement = executable.with_name("replacement")
+            replacement.write_bytes(b"hostile service!\n")
+            replacement.chmod(0o755)
+            replacement.replace(executable)
+
+            spawned = []
+            spec = services.ProcessSpec(
+                "MVDSV", (str(executable),), Path(temporary),
+                launch_target=target,
+            )
+            with self.assertRaisesRegex(manager.InstallerError, "mudou"):
+                services.run_processes(
+                    [spec],
+                    process_factory=lambda *args, **options: spawned.append(
+                        (args, options),
+                    ),
+                    signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+                    os_name="posix",
+                )
+            self.assertEqual([], spawned)
+
+    def test_detached_client_revalidates_executable_identity_before_spawn(self):
+        self.assertIsNotNone(
+            getattr(host_platform, "executable_launch_target", None),
+            "the canonical executable launch contract is missing",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / "ezquake"
+            payload = b"verified client\n"
+            executable.write_bytes(payload)
+            executable.chmod(0o755)
+            target = host_platform.executable_launch_target(
+                executable,
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+            )
+            executable.write_bytes(b"modified client\n")
+            spawned = []
+            with self.assertRaisesRegex(manager.InstallerError, "mudou"):
+                supervisor_core.spawn_detached_client(
+                    (str(executable),), Path(temporary),
+                    launch_target=target,
+                    process_factory=lambda *args, **options: spawned.append(
+                        (args, options),
+                    ),
+                    os_name="posix",
+                )
+            self.assertEqual([], spawned)
+
+    def test_detached_client_spawn_owns_platform_creation_flags(self):
+        calls = []
+
+        def spawn(arguments, **options):
+            calls.append((arguments, options))
+            return SimpleNamespace(pid=42)
+
+        for os_name, expected_session in (("posix", True), ("nt", False)):
+            with self.subTest(os_name=os_name):
+                calls.clear()
+                process = supervisor_core.spawn_detached_client(
+                    ("ezquake", "+connect", "127.0.0.1:28501"),
+                    Path("/Games/x86qw"),
+                    process_factory=spawn,
+                    os_name=os_name,
+                )
+                self.assertEqual(42, process.pid)
+                arguments, options = calls[0]
+                self.assertEqual(
+                    ("ezquake", "+connect", "127.0.0.1:28501"), arguments,
+                )
+                self.assertEqual(Path("/Games/x86qw"), options["cwd"])
+                self.assertIs(subprocess.DEVNULL, options["stdin"])
+                self.assertIs(subprocess.DEVNULL, options["stdout"])
+                self.assertIs(subprocess.DEVNULL, options["stderr"])
+                self.assertEqual(
+                    expected_session, options.get("start_new_session", False),
+                )
+
+    def test_background_controller_spawn_forwards_private_request_off_argv(self):
+        class Pipe:
+            def __init__(self):
+                self.payload = b""
+                self.closed = False
+
+            def write(self, payload):
+                self.payload += payload
+
+            def close(self):
+                self.closed = True
+
+        calls = []
+        pipe = Pipe()
+
+        def spawn(arguments, **options):
+            calls.append((arguments, options))
+            return SimpleNamespace(pid=42, stdin=pipe)
+
+        request = b'{"format":1,"secrets":{"rcon":"hidden"}}\n'
+        process = supervisor_core.spawn_background_controller(
+            ("python", "services.py", "host", "--background-child"),
+            Path("/project"),
+            request,
+            process_factory=spawn,
+            os_name="nt",
+        )
+
+        self.assertEqual(42, process.pid)
+        self.assertEqual(request, pipe.payload)
+        self.assertTrue(pipe.closed)
+        arguments, options = calls[0]
+        self.assertNotIn("hidden", " ".join(arguments))
+        self.assertIs(subprocess.PIPE, options["stdin"])
+        self.assertEqual(
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008),
+            options["creationflags"],
+        )
+
+    def test_background_controller_pipe_failure_stops_the_spawned_process(self):
+        """A failed private handoff must not leave its detached controller alive."""
+
+        class BrokenPipe:
+            closed = False
+
+            def write(self, _payload):
+                raise BrokenPipeError("simulated private handoff failure")
+
+            def close(self):
+                self.closed = True
+
+        class Process:
+            pid = 42
+            returncode = None
+
+            def __init__(self):
+                self.stdin = BrokenPipe()
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+            def wait(self, _timeout=None):
+                return self.returncode
+
+        process = Process()
+
+        with self.assertRaisesRegex(BrokenPipeError, "private handoff"):
+            supervisor_core.spawn_background_controller(
+                ("python", "services.py", "host", "--background-child"),
+                Path("/project"),
+                b'{"format":1}\n',
+                process_factory=lambda *_args, **_options: process,
+                os_name="nt",
+            )
+
+        self.assertEqual(-15, process.returncode)
+        self.assertTrue(process.stdin.closed)
+
+    def test_background_controller_reports_handoff_and_cleanup_failures(self):
+        """Cleanup diagnostics must not replace the error that triggered cleanup."""
+
+        class BrokenPipe:
+            def write(self, _payload):
+                raise BrokenPipeError("private handoff failed")
+
+            def close(self):
+                pass
+
+        process = SimpleNamespace(pid=42, stdin=BrokenPipe())
+        with mock.patch.object(
+            supervisor_core,
+            "stop_processes",
+            side_effect=OSError("process cleanup failed"),
+        ), self.assertRaises(supervisor_core.InstallerError) as raised:
+            supervisor_core.spawn_background_controller(
+                ("python", "services.py", "host", "--background-child"),
+                Path("/project"),
+                b'{"format":1}\n',
+                process_factory=lambda *_args, **_options: process,
+                os_name="nt",
+            )
+
+        message = str(raised.exception)
+        self.assertIn("private handoff failed", message)
+        self.assertIn("process cleanup failed", message)
+
+    def test_supervisor_models_are_canonical_service_types(self):
+        from x86qw_runtime.supervisor import models
+
+        self.assertIs(services.ProcessSpec, models.ProcessSpec)
+        self.assertIs(services.StartupRcon, models.StartupRcon)
+        self.assertIs(services.ServiceReadiness, models.ServiceReadiness)
+
+    def test_supervisor_reexports_canonical_platform_process_types(self):
+        from x86qw_runtime import supervisor
+        from x86qw_runtime.platform import processes
+
+        self.assertIs(
+            getattr(supervisor, "ProcessIdentity", None), processes.ProcessIdentity,
+        )
+        self.assertIs(getattr(supervisor, "ProcessProbe", None), processes.ProcessProbe)
+
+    def test_supervisor_readiness_functions_are_canonical_service_api(self):
+        from x86qw_runtime.supervisor import readiness
+
+        self.assertIs(services.preflight_ports, readiness.preflight_ports)
+        self.assertIs(services.qtv_http_response_ready, readiness.qtv_http_response_ready)
+        self.assertIs(services.wait_http_readiness, readiness.wait_http_readiness)
+        self.assertIs(services.wait_udp_readiness, readiness.wait_udp_readiness)
+        self.assertIs(services.apply_startup_rcon, readiness.apply_startup_rcon)
+
+    def test_supervisor_core_owns_process_tree_backends(self):
+        from x86qw_runtime.supervisor import core
+
+        self.assertIs(services.stop_processes, core.stop_processes)
+        self.assertIs(services.posix_process_group_status, core.posix_process_group_status)
+        self.assertIs(services.WindowsJobObject, core.WindowsJobObject)
+        self.assertIs(services.ServiceSignal, core.ServiceSignal)
+        self.assertIs(services.run_processes, core.run_processes)
+
+    def test_supervisor_runner_preserves_coordinated_stop_order(self):
+        events = []
+
+        class Reporter:
+            def detail(self, message):
+                events.append(("detail", message))
+
+            def info(self, message):
+                events.append(("info", message))
+
+            def warning(self, message):
+                events.append(("warning", message))
+
+        class Journal:
+            def record_process(self, spec, process, process_group):
+                events.append(("record", spec.label, process.pid, process_group))
+
+            def set_status(self, status):
+                events.append(("status", status))
+
+            def consume_stop_request(self):
+                events.append(("stop-request",))
+                return True
+
+        process = SimpleNamespace(pid=4242, poll=lambda: None)
+
+        def spawn(arguments, **options):
+            events.append((
+                "spawn", arguments, options["cwd"], options["start_new_session"],
+            ))
+            return process
+
+        def set_signal(signum, handler):
+            phase = "install" if callable(handler) else f"restore:{handler}"
+            events.append(("signal", int(signum), phase))
+            return f"old-{int(signum)}"
+
+        result = services.run_processes(
+            [services.ProcessSpec("fixture", ("fixture", "--flag"), Path("/tmp"))],
+            Journal(),
+            reporter=Reporter(),
+            process_factory=spawn,
+            signal_setter=set_signal,
+            stopper=lambda processes: events.append(
+                ("stop", tuple(process.pid for process in processes)),
+            ),
+            os_name="posix",
+            sleep=lambda _delay: self.fail("stop coordenado não deve aguardar"),
+        )
+
+        self.assertEqual(0, result)
+        self.assertEqual([
+            ("signal", 2, "install"),
+            ("signal", 15, "install"),
+            ("detail", "Iniciando fixture: fixture"),
+            ("spawn", ("fixture", "--flag"), Path("/tmp"), True),
+            ("record", "fixture", 4242, 4242),
+            ("status", "running"),
+            ("stop-request",),
+            ("info", "Encerramento solicitado pelo gerenciador x86QW…"),
+            ("stop", (4242,)),
+            ("signal", 2, "restore:old-2"),
+            ("signal", 15, "restore:old-15"),
+        ], events)
+
+    def test_supervisor_runner_preserves_signal_exit_codes(self):
+        for signum, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+            with self.subTest(signum=signum):
+                events = []
+
+                class Reporter:
+                    detail = lambda _self, _message: None
+                    warning = lambda _self, _message: None
+
+                    def info(self, message):
+                        events.append(("info", message))
+
+                class Journal:
+                    record_process = lambda _self, _spec, _process, _group: None
+
+                    def set_status(self, status):
+                        events.append(("status", status))
+
+                    def consume_stop_request(self):
+                        return False
+
+                process = SimpleNamespace(pid=5151, poll=lambda: None)
+
+                def interrupt(_delay):
+                    raise services.ServiceSignal(signum)
+
+                result = services.run_processes(
+                    [services.ProcessSpec("fixture", ("fixture",), Path("/tmp"))],
+                    Journal(),
+                    reporter=Reporter(),
+                    process_factory=lambda *_args, **_options: process,
+                    signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+                    stopper=lambda processes: events.append(
+                        ("stop", tuple(item.pid for item in processes)),
+                    ),
+                    os_name="posix",
+                    sleep=interrupt,
+                )
+
+                self.assertEqual(expected, result)
+                self.assertEqual([
+                    ("status", "running"),
+                    ("info", "Encerrando serviços x86QW…"),
+                    ("status", "interrupted"),
+                    ("stop", (5151,)),
+                ], events)
+
+    def test_supervisor_runner_uses_windows_job_backend(self):
+        events = []
+        process = SimpleNamespace(pid=6262, poll=lambda: None)
+
+        class Job:
+            def start_process(self, arguments, cwd):
+                events.append(("job-start", arguments, cwd))
+                return process
+
+            def close(self):
+                events.append(("job-close",))
+
+        class Journal:
+            def record_process(self, spec, candidate, process_group):
+                events.append(("record", spec.label, candidate.pid, process_group))
+
+            def set_status(self, status):
+                events.append(("status", status))
+
+            def consume_stop_request(self):
+                return True
+
+        result = services.run_processes(
+            [services.ProcessSpec("fixture", ("fixture",), Path("C:/x86qw"))],
+            Journal(),
+            reporter=mock.Mock(),
+            process_factory=lambda *_args, **_options: self.fail(
+                "Windows deve iniciar pelo Job Object"
+            ),
+            windows_job_factory=lambda _reporter: Job(),
+            signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+            stopper=lambda processes: events.append(
+                ("stop", tuple(item.pid for item in processes)),
+            ),
+            os_name="nt",
+        )
+
+        self.assertEqual(0, result)
+        self.assertEqual([
+            ("job-start", ("fixture",), Path("C:/x86qw")),
+            ("record", "fixture", 6262, 6262),
+            ("status", "running"),
+            ("stop", (6262,)),
+            ("job-close",),
+        ], events)
+
+    def test_supervisor_runner_attempts_every_finalizer_after_cleanup_failure(self):
+        events = []
+        process = SimpleNamespace(pid=7373, poll=lambda: 0)
+
+        class Reporter:
+            detail = lambda _self, _message: None
+            info = lambda _self, _message: None
+
+            def warning(self, message):
+                events.append(("warning", message))
+
+        class Job:
+            def start_process(self, _arguments, _cwd):
+                return process
+
+            def close(self):
+                events.append(("job-close",))
+                raise RuntimeError("job")
+
+        def set_signal(signum, handler):
+            events.append((
+                "signal", int(signum), "install" if callable(handler) else "restore",
+            ))
+            return f"old-{int(signum)}"
+
+        def fail_stop(_processes):
+            events.append(("stop",))
+            raise RuntimeError("stop")
+
+        with self.assertRaisesRegex(
+            services.InstallerError, "Falha ao finalizar a árvore de processos",
+        ):
+            services.run_processes(
+                [services.ProcessSpec("fixture", ("fixture",), Path("C:/x86qw"))],
+                reporter=Reporter(),
+                windows_job_factory=lambda _reporter: Job(),
+                signal_setter=set_signal,
+                stopper=fail_stop,
+                os_name="nt",
+            )
+
+        self.assertEqual([
+            ("signal", 2, "install"),
+            ("signal", 15, "install"),
+            ("stop",),
+            ("job-close",),
+            ("signal", 2, "restore"),
+            ("signal", 15, "restore"),
+            ("warning", "Falha ao finalizar árvore de processos: stop"),
+            ("warning", "Falha ao finalizar árvore de processos: job"),
+        ], events)
+
+    def test_preflight_accepts_an_injected_socket_factory(self):
+        class OccupiedSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def bind(self, _address):
+                raise OSError("segredo-do-backend")
+
+        with self.assertRaises(services.InstallerError) as raised:
+            services.preflight_ports(
+                [("QTV", "127.0.0.1", 28000, "tcp")],
+                socket_factory=lambda *_args: OccupiedSocket(),
+                os_name="posix",
+            )
+        self.assertEqual(
+            "A porta 127.0.0.1:28000 de QTV não está disponível.",
+            str(raised.exception),
+        )
+        self.assertNotIn("segredo-do-backend", str(raised.exception))
+
+    def test_http_readiness_accepts_injected_transport_and_clock(self):
+        class HttpConnection:
+            def __init__(self):
+                self.sent = []
+                self.responses = [
+                    b"HTTP/1.0 200 OK\r\n\r\n127.0.0.1:28501",
+                    b"",
+                ]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def sendall(self, payload):
+                self.sent.append(payload)
+
+            def recv(self, _maximum):
+                return self.responses.pop(0)
+
+        connection = HttpConnection()
+        opened = []
+
+        def connect(address, *, timeout):
+            opened.append((address, timeout))
+            return connection
+
+        ticks = iter((10.0, 10.0))
+        services.wait_http_readiness(
+            SimpleNamespace(poll=lambda: None),
+            services.ServiceReadiness(
+                "http", "127.0.0.1", 28000, "127.0.0.1:28501",
+            ),
+            timeout=0.5,
+            connection_factory=connect,
+            monotonic=lambda: next(ticks),
+            sleep=lambda _delay: self.fail("probe pronto não deve aguardar"),
+        )
+
+        self.assertEqual([(("127.0.0.1", 28000), 0.4)], opened)
+        self.assertEqual(
+            [b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n"],
+            connection.sent,
+        )
+
+    def test_udp_readiness_accepts_injected_socket_and_clock(self):
+        class OccupiedUdpSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def bind(self, _address):
+                raise OSError("porta ocupada pelo serviço")
+
+        opened = []
+
+        def open_socket(family, socket_type):
+            opened.append((family, socket_type))
+            return OccupiedUdpSocket()
+
+        ticks = iter((20.0, 21.0))
+        services.wait_udp_readiness(
+            SimpleNamespace(poll=lambda: None),
+            services.ServiceReadiness("udp", "127.0.0.1", 30000),
+            timeout=0.5,
+            socket_factory=open_socket,
+            os_name="posix",
+            monotonic=lambda: next(ticks),
+            sleep=lambda _delay: self.fail("prazo já encerrado não deve aguardar"),
+        )
+
+        self.assertEqual([(socket.AF_INET, socket.SOCK_DGRAM)], opened)
+
     def package(self, root: Path, members: list[tuple[str, bytes]]) -> tuple[Path, Path]:
         destination = root / "qw"
         destination.mkdir()
@@ -234,6 +870,35 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual(len(b"managed"), recorded_file["expected_size"])
             services.cleanup_dedicated_ktx(materialized)
 
+    def test_pk3_persists_recovery_intent_before_completing_promoted_member(self):
+        class ControllerKilledDuringCompletion(services.SessionJournal):
+            def record_materialized(self, entry):
+                raise SystemExit("controlador encerrado")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, destination_root = self.package(
+                root, [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            journal = ControllerKilledDuringCompletion(root)
+
+            with self.assertRaisesRegex(SystemExit, "controlador encerrado"):
+                services.materialize_dedicated_pk3(
+                    package, destination_root, "teste", journal,
+                )
+
+            self.assertEqual(b"managed", destination.read_bytes())
+            persisted = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertEqual(1, len(persisted["materialized_files"]))
+            self.assertEqual("pending", persisted["materialized_files"][0]["state"])
+
+            services.recover_sessions(root)
+
+            self.assertFalse(destination.exists())
+            recovered = json.loads(journal.path.read_text(encoding="utf-8"))
+            self.assertEqual("clean", recovered["status"])
+
     def test_managed_hashing_rejects_oversize_before_reading_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "oversize.cfg"
@@ -243,7 +908,7 @@ class ServiceHardeningTests(unittest.TestCase):
             try:
                 with mock.patch.object(services.os, "read", wraps=os.read) as read:
                     with self.assertRaises(OSError):
-                        services._hash_open_file(descriptor, expected_size=7)
+                        managed_files._hash_open_file(descriptor, expected_size=7)
                 read.assert_not_called()
             finally:
                 os.close(descriptor)
@@ -259,7 +924,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 services.file_sha256(path)
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported() or os.name == "nt",
+        managed_files._secure_archive_dir_fd_supported() or os.name == "nt",
         "recuperação ancorada requer handles POSIX ou Win32",
     )
     def test_pk3_recovery_uses_recorded_file_and_directory_identities(self):
@@ -283,7 +948,7 @@ class ServiceHardeningTests(unittest.TestCase):
             )["status"])
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "corrida requer operações POSIX relativas a descritor",
     )
     def test_pk3_never_overwrites_personal_file_created_before_promotion(self):
@@ -317,7 +982,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual([], list(destination.parent.glob(".x86qw_ktx_*")))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "corrida requer operações POSIX relativas a descritor",
     )
     def test_pk3_parent_swapped_to_symlink_causes_zero_external_writes(self):
@@ -333,7 +998,7 @@ class ServiceHardeningTests(unittest.TestCase):
             external.mkdir()
             marker = external / "personal.txt"
             marker.write_text("personal", encoding="utf-8")
-            real_open_parent = services._secure_archive_parent
+            real_open_parent = managed_files._secure_archive_parent
             calls = 0
 
             def swap_before_second_pass(*args, **kwargs):
@@ -345,7 +1010,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 return real_open_parent(*args, **kwargs)
 
             with mock.patch.object(
-                services, "_secure_archive_parent", side_effect=swap_before_second_pass,
+                managed_files, "_secure_archive_parent", side_effect=swap_before_second_pass,
             ):
                 with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
                     services.materialize_dedicated_pk3(
@@ -357,7 +1022,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual([], list(original_parent.iterdir()))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "corrida requer operações POSIX relativas a descritor",
     )
     def test_pk3_detects_destination_replaced_after_atomic_link(self):
@@ -392,12 +1057,15 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual(b"personal", destination.read_bytes())
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "rollback requer operações POSIX relativas a descritor",
     )
     def test_pk3_posix_journal_failure_preserves_modified_promoted_inode(self):
         class FailingJournal:
             def record_directory(self, entry):
+                return None
+
+            def record_materialized_intent(self, entry):
                 return None
 
             def record_materialized(self, entry):
@@ -432,7 +1100,7 @@ class ServiceHardeningTests(unittest.TestCase):
             member = SimpleNamespace(
                 path=services.PurePosixPath("server.cfg"),
                 size=len(b"managed"),
-                sha256=services.hashlib.sha256(b"managed").hexdigest(),
+                sha256=hashlib.sha256(b"managed").hexdigest(),
             )
             real_link = os.link
 
@@ -446,7 +1114,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     services.InstallerError, "substituído durante a preparação",
                 ):
-                    services._fallback_materialize_member(
+                    managed_files._fallback_materialize_member(
                         source, destination, member, "teste", destination_root,
                     )
 
@@ -454,7 +1122,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual([], list(destination_root.glob(".x86qw_ktx_*")))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "corrida requer operações POSIX relativas a descritor",
     )
     def test_pk3_cleanup_preserves_file_replaced_after_hash(self):
@@ -466,7 +1134,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 package, destination_root, "teste",
             )
             destination = destination_root / "configs/server.cfg"
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             replaced = False
 
             def replace_after_hash(descriptor, **kwargs):
@@ -480,7 +1148,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), mock.patch.object(
-                services, "_hash_open_file", side_effect=replace_after_hash,
+                managed_files, "_hash_open_file", side_effect=replace_after_hash,
             ):
                 services.cleanup_dedicated_ktx(materialized)
 
@@ -489,7 +1157,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertIn("foi preservado", output.getvalue())
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "quarentena requer operações POSIX relativas a descritor",
     )
     def test_pk3_cleanup_preserves_same_inode_modified_after_hash(self):
@@ -502,7 +1170,7 @@ class ServiceHardeningTests(unittest.TestCase):
             )
             destination = destination_root / "configs/server.cfg"
             original_identity = destination.stat().st_ino
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             calls = 0
 
             def modify_same_inode_after_hash(descriptor, **kwargs):
@@ -516,7 +1184,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output), mock.patch.object(
-                services, "_hash_open_file", side_effect=modify_same_inode_after_hash,
+                managed_files, "_hash_open_file", side_effect=modify_same_inode_after_hash,
             ):
                 services.cleanup_dedicated_ktx(materialized)
 
@@ -525,8 +1193,8 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertIn("foi preservado", output.getvalue())
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported()
-        and services._get_posix_rename_api() is not None,
+        managed_files._secure_archive_dir_fd_supported()
+        and managed_files._get_posix_rename_api() is not None,
         "rename exclusivo requer Linux ou macOS compatível",
     )
     def test_posix_exclusive_rename_never_replaces_destination(self):
@@ -536,8 +1204,8 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = root / "destination"
             source.write_text("managed", encoding="utf-8")
             destination.write_text("personal", encoding="utf-8")
-            descriptor = os.open(root, services._directory_open_flags())
-            api = services._get_posix_rename_api()
+            descriptor = os.open(root, managed_files._directory_open_flags())
+            api = managed_files._get_posix_rename_api()
             self.assertIsNotNone(api)
             try:
                 with self.assertRaises(FileExistsError):
@@ -552,8 +1220,8 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual("managed", destination.read_text(encoding="utf-8"))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported()
-        and services._get_posix_rename_api() is not None,
+        managed_files._secure_archive_dir_fd_supported()
+        and managed_files._get_posix_rename_api() is not None,
         "rename exclusivo requer Linux ou macOS compatível",
     )
     def test_pk3_cleanup_preserves_public_replacement_at_atomic_move(self):
@@ -566,7 +1234,7 @@ class ServiceHardeningTests(unittest.TestCase):
                     package, destination_root, "teste",
                 )
                 destination = destination_root / "configs/server.cfg"
-                api = services._get_posix_rename_api()
+                api = managed_files._get_posix_rename_api()
                 self.assertIsNotNone(api)
                 real_move = api.move_no_replace
                 triggered = False
@@ -621,7 +1289,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 self.assertEqual([], list(destination.parent.glob(".x86qw_cleanup_*")))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "fail-closed requer operações POSIX relativas a descritor",
     )
     def test_pk3_cleanup_preserves_when_exclusive_rename_is_unavailable(self):
@@ -635,7 +1303,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             output = io.StringIO()
             with contextlib.redirect_stdout(output), mock.patch.object(
-                services, "_get_posix_rename_api", return_value=None,
+                managed_files, "_get_posix_rename_api", return_value=None,
             ):
                 services.cleanup_dedicated_ktx(materialized)
             self.assertEqual(b"managed", destination.read_bytes())
@@ -649,7 +1317,7 @@ class ServiceHardeningTests(unittest.TestCase):
             metadata = destination.lstat()
             entry = services.MaterializedFile(
                 destination,
-                services.hashlib.sha256(b"managed").hexdigest(),
+                hashlib.sha256(b"managed").hexdigest(),
                 "fixture.pk3",
                 True,
                 False,
@@ -661,7 +1329,7 @@ class ServiceHardeningTests(unittest.TestCase):
             output = io.StringIO()
 
             with contextlib.redirect_stdout(output), mock.patch.object(
-                services, "_secure_archive_dir_fd_supported", return_value=False,
+                managed_files, "_secure_archive_dir_fd_supported", return_value=False,
             ), mock.patch.object(
                 Path, "unlink", side_effect=AssertionError("unlink por caminho proibido"),
             ):
@@ -680,8 +1348,8 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = FakeWindowsFileApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api), mock.patch.object(
-                services,
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api), mock.patch.object(
+                managed_files,
                 "_fallback_materialize_member",
                 side_effect=AssertionError("fallback hardlink não deve ser usado"),
             ):
@@ -707,7 +1375,7 @@ class ServiceHardeningTests(unittest.TestCase):
             journal = mock.Mock()
             journal.record_materialized.side_effect = RuntimeError("journal indisponível")
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste", journal,
@@ -717,6 +1385,29 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertFalse(destination.parent.exists())
             self.assertEqual([], list(destination_root.rglob(".x86qw_ktx_*")))
             journal.record_materialized.assert_called_once()
+
+    def test_pk3_windows_backend_intent_failure_removes_private_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package, destination_root = self.package(
+                Path(temporary), [("configs/server.cfg", b"managed")],
+            )
+            destination = destination_root / "configs/server.cfg"
+            api = FakeWindowsFileApi()
+            journal = mock.Mock()
+            journal.record_materialized_intent.side_effect = RuntimeError(
+                "journal indisponível"
+            )
+
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
+                with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
+                    services.materialize_dedicated_pk3(
+                        package, destination_root, "teste", journal,
+                    )
+
+            self.assertFalse(destination.exists())
+            self.assertEqual([], api.moves)
+            self.assertEqual([], list(destination_root.rglob(".x86qw_ktx_*")))
+            journal.record_materialized.assert_not_called()
 
     def test_pk3_windows_backend_journal_failure_preserves_modified_same_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -733,7 +1424,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             journal.record_materialized.side_effect = modify_then_fail
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste", journal,
@@ -755,7 +1446,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = AppearingDestinationApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "surgiu durante"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste",
@@ -789,7 +1480,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = ModifiedBeforeConfirmationApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(
                     services.InstallerError, "alterado foi preservado",
                 ):
@@ -808,7 +1499,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = FakeWindowsFileApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 materialized = services.materialize_dedicated_pk3(
                     package, destination_root, "teste",
                 )
@@ -834,7 +1525,7 @@ class ServiceHardeningTests(unittest.TestCase):
             except OSError as error:
                 self.skipTest(f"symlink de diretório indisponível: {error}")
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", FakeWindowsFileApi()):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", FakeWindowsFileApi()):
                 with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste",
@@ -849,7 +1540,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 Path(temporary), [("configs/server.cfg", b"managed")],
             )
             destination = destination_root / "configs/server.cfg"
-            api = services._get_windows_file_api()
+            api = managed_files._get_windows_file_api()
             self.assertIsNotNone(api)
 
             materialized = services.materialize_dedicated_pk3(
@@ -917,7 +1608,7 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertEqual([marker], list(external.iterdir()))
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported() or os.name == "nt",
+        managed_files._secure_archive_dir_fd_supported() or os.name == "nt",
         "identidade de diretório requer handles POSIX ou Win32",
     )
     def test_pk3_cleanup_preserves_replacement_directory_with_new_identity(self):
@@ -929,13 +1620,13 @@ class ServiceHardeningTests(unittest.TestCase):
                 package, destination_root, "teste",
             )
             directory_entry = materialized.directories[0]
-            self.assertTrue(services._cleanup_materialized_file(materialized.files[0]))
+            self.assertTrue(managed_files.cleanup_materialized_file(materialized.files[0]))
             directory_entry.path.rmdir()
             directory_entry.path.mkdir()
-            replacement_identity = services._file_identity(directory_entry.path.lstat())
+            replacement_identity = managed_files._file_identity(directory_entry.path.lstat())
             self.assertNotEqual(directory_entry.identity, replacement_identity)
 
-            self.assertFalse(services._cleanup_materialized_directory(directory_entry))
+            self.assertFalse(managed_files.cleanup_materialized_directory(directory_entry))
             self.assertTrue(directory_entry.path.is_dir())
 
     def test_endpoint_parser_accepts_ipv4_ipv6_and_hostname(self):
@@ -967,10 +1658,55 @@ class ServiceHardeningTests(unittest.TestCase):
                 password_file.chmod(0o600)
             self.assertEqual("arquivo-secreto", services.read_password_file(password_file, "senha"))
 
+    def test_private_password_permission_guidance_is_actionable_on_each_host(self):
+        self.assertEqual(
+            "use chmod 600",
+            services.private_fs.private_file_permission_guidance(os_name="posix"),
+        )
+        self.assertEqual(
+            "proteja a DACL para o usuário atual e LOCAL SYSTEM",
+            services.private_fs.private_file_permission_guidance(os_name="nt"),
+        )
+
+    def test_password_error_uses_runtime_guidance_without_disclosing_the_secret(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            password_file = Path(temporary) / "secret"
+            password_file.write_text("segredo-nao-vazar", encoding="utf-8")
+            with mock.patch.object(
+                services.private_fs,
+                "read_private_user_file",
+                side_effect=OSError("segredo-nao-vazar"),
+            ), mock.patch.object(
+                services.private_fs,
+                "private_file_permission_guidance",
+                return_value="orientação fornecida pelo runtime",
+                create=True,
+            ), self.assertRaises(services.InstallerError) as raised:
+                services.read_password_file(password_file, "senha")
+
+        message = str(raised.exception)
+        self.assertIn("orientação fornecida pelo runtime", message)
+        self.assertNotIn("segredo-nao-vazar", message)
+
+    def test_help_fallback_uses_the_canonical_host_adapter(self):
+        original = services._service_context
+        try:
+            services._service_context = None
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+                services.main(["--help"])
+            self.assertIs(services.host_adapter, services._context().host_platform)
+        finally:
+            assert original is not None
+            services.configure_context(original)
+
     def test_passwords_are_kept_out_of_child_arguments(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             (target / "td2").mkdir()
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = host_platform.executable_launch_target(binary)
             options = services.parse_arguments([
                 "host", "td2", "--map", "dm6", "--password", "jogador-secreto",
                 "--spectator-password", "espectador-secreto",
@@ -978,7 +1714,9 @@ class ServiceHardeningTests(unittest.TestCase):
             ], ROOT)
             game = next(game for game in services.gameplay.LOCAL_GAMES if game.key == "td2")
             selection = services.HostedGame(game, None, "dm6", frozenset(), options.ktx_options)
-            with mock.patch.object(services, "runtime_binary", return_value=target / "mvdsv"), mock.patch.object(
+            with mock.patch.object(
+                services, "runtime_launch_target", return_value=launch_target,
+            ), mock.patch.object(
                 services, "materialize_hosted_game", return_value=None,
             ):
                 spec = services.host_spec(SimpleNamespace(target=target), options, selection, [], [])
@@ -997,12 +1735,12 @@ class ServiceHardeningTests(unittest.TestCase):
             b'<td class="adr">127.0.0.1:28501</td>',
             b"",
         ]
-        with mock.patch.object(services.socket, "create_connection", return_value=connection):
-            services.wait_http_readiness(
-                process,
-                services.ServiceReadiness("http", "127.0.0.1", 28000, "127.0.0.1:28501"),
-                timeout=0.1,
-            )
+        services.wait_http_readiness(
+            process,
+            services.ServiceReadiness("http", "127.0.0.1", 28000, "127.0.0.1:28501"),
+            timeout=0.1,
+            connection_factory=lambda *_args, **_kwargs: connection,
+        )
         connection.sendall.assert_called_once_with(
             b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n",
         )
@@ -1062,6 +1800,110 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertFalse(created.exists())
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
             self.assertEqual("clean", recovered["status"])
+
+    def test_session_journal_initial_write_failure_removes_empty_session_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+
+            with mock.patch.object(
+                runtime_sessions,
+                "atomic_write_json",
+                side_effect=atomic_io.AtomicWriteError("disco indisponível"),
+            ), self.assertRaisesRegex(
+                services.InstallerError, "journal privado.*não pôde ser gravado",
+            ):
+                services.SessionJournal(target, session_id="first-write-failure")
+
+            sessions = target / ".x86qw/sessions"
+            self.assertTrue(sessions.is_dir())
+            self.assertEqual([], list(sessions.iterdir()))
+
+    def test_recovery_removes_empty_session_left_by_hard_controller_exit(self):
+        script = """
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from x86qw_runtime.supervisor import sessions
+
+sessions.SessionJournal._write = lambda self: os._exit(91)
+sessions.SessionJournal(Path(sys.argv[2]), session_id=sys.argv[3])
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            session_id = runtime_sessions.session_control.new_session_id()
+            completed = subprocess.run(
+                [sys.executable, "-c", script, str(ROOT), str(target), session_id],
+                check=False,
+                timeout=10,
+            )
+            orphan = target / ".x86qw/sessions" / session_id
+
+            self.assertEqual(91, completed.returncode)
+            self.assertTrue(orphan.is_dir())
+            self.assertEqual([], list(orphan.iterdir()))
+
+            services.recover_sessions(target)
+
+            self.assertFalse(orphan.exists())
+
+    def test_recovery_removes_empty_atomic_staging_left_by_hard_exit(self):
+        script = """
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from x86qw_runtime.supervisor import sessions
+
+real_mkstemp = sessions.private_fs.private_mkstemp
+def exit_after_staging(**kwargs):
+    real_mkstemp(**kwargs)
+    os._exit(92)
+
+sessions.private_fs.private_mkstemp = exit_after_staging
+sessions.SessionJournal(Path(sys.argv[2]), session_id=sys.argv[3])
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            session_id = runtime_sessions.session_control.new_session_id()
+            completed = subprocess.run(
+                [sys.executable, "-c", script, str(ROOT), str(target), session_id],
+                check=False,
+                timeout=10,
+            )
+            orphan = target / ".x86qw/sessions" / session_id
+
+            self.assertEqual(92, completed.returncode)
+            staging = list(orphan.glob(".session.json.*.tmp"))
+            self.assertEqual(1, len(staging))
+            self.assertEqual(0, staging[0].stat().st_size)
+
+            services.recover_sessions(target)
+
+            self.assertFalse(orphan.exists())
+
+    def test_recovery_preserves_unknown_content_without_initial_journal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            metadata = target / ".x86qw"
+            sessions = metadata / "sessions"
+            session = sessions / runtime_sessions.session_control.new_session_id()
+            services.private_fs.ensure_private_directory(metadata)
+            services.private_fs.ensure_private_directory(sessions)
+            services.private_fs.create_private_directory(session)
+            personal = session / "personal.txt"
+            descriptor = services.private_fs.create_private_file(personal)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(b"personal")
+
+            with self.assertRaisesRegex(
+                services.InstallerError, "Journal de sessão inválido",
+            ):
+                services.recover_sessions(target)
+
+            self.assertEqual(b"personal", personal.read_bytes())
 
     @unittest.skipIf(os.name == "nt", "journals pre-DACL are quarantined on Windows")
     def test_recovery_accepts_clean_legacy_journal_without_new_metadata(self):
@@ -1161,14 +2003,16 @@ class ServiceHardeningTests(unittest.TestCase):
             services.private_fs.protect_private_file(path)
 
             output = io.StringIO()
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(
+                output,
+            ), self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
                 services.recover_sessions(target)
 
-            self.assertFalse(config.exists())
+            self.assertEqual(secret, config.read_text(encoding="utf-8"))
             recovered = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual("clean", recovered["status"])
-            self.assertTrue(recovered["temporary_files"][0]["sensitive"])
-            self.assertNotIn("expected_hash", recovered["temporary_files"][0])
+            self.assertEqual("interrupted", recovered["status"])
             self.assertNotIn(secret, output.getvalue())
 
     def test_session_recovery_preserves_modified_materialized_file(self):
@@ -1229,6 +2073,24 @@ class ServiceHardeningTests(unittest.TestCase):
                 ):
                     services.load_session_journal(journal.path)
 
+    def test_session_journal_rejects_unknown_file_intent_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            created = target / "qw/created.cfg"
+            created.parent.mkdir(parents=True)
+            created.write_text("managed", encoding="utf-8")
+            journal = services.SessionJournal(target)
+            journal.record_materialized(services.MaterializedFile(
+                created, services.file_sha256(created), "fixture.pk3", True, False,
+            ))
+            journal.data["materialized_files"][0]["state"] = "unknown"
+            journal._write()
+
+            with self.assertRaisesRegex(
+                services.InstallerError, "Journal de sessão inválido",
+            ):
+                services.load_session_journal(journal.path)
+
     def test_session_recovery_removes_modified_sensitive_temporary_file(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -1250,6 +2112,127 @@ class ServiceHardeningTests(unittest.TestCase):
             self.assertNotIn("expected_hash", entry)
             self.assertNotIn("expected_size", entry)
 
+    def test_sensitive_temporary_ready_record_retains_creation_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+
+            config = services.temporary_config(
+                config_dir, "session-", ["password secret"], journal,
+            )
+
+            identity = managed_files.persistent_path_identity(
+                config, directory=False,
+            )
+            entry = json.loads(journal.path.read_text(encoding="utf-8"))[
+                "temporary_files"
+            ][0]
+            self.assertEqual(identity[0], entry["device"])
+            self.assertEqual(identity[1], entry["inode"])
+            self.assertEqual("ready", entry["state"])
+            journal.release_all_sensitive_temporaries()
+            config.unlink()
+
+    def test_sensitive_temporary_regular_replacement_is_preserved(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            config = services.temporary_config(
+                config_dir, "session-", ["password secret"], journal,
+            )
+            journal.release_all_sensitive_temporaries()
+            config.unlink()
+            config.write_text("personal", encoding="utf-8")
+            output = io.StringIO()
+
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(
+                output,
+            ), self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
+                services.recover_sessions(target)
+
+            self.assertEqual("personal", config.read_text(encoding="utf-8"))
+            self.assertIn("substituído", output.getvalue())
+
+    def test_current_session_cleanup_rejects_sensitive_replacement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = services.SessionJournal(target)
+            config = services.temporary_config(
+                config_dir, "session-", ["password secret"], journal,
+            )
+            journal.release_all_sensitive_temporaries()
+            config.unlink()
+            config.write_text("personal", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
+                services.cleanup_current_session(journal, [config], [])
+
+            self.assertEqual("personal", config.read_text(encoding="utf-8"))
+
+    def test_sensitive_temporary_intent_is_durable_before_completion(self):
+        class CompletionFailureJournal(services.SessionJournal):
+            def record_temporary(self, path, origin, *, sensitive, tracked=None):
+                self.persisted_before_completion = json.loads(
+                    self.path.read_text(encoding="utf-8")
+                )
+                raise RuntimeError("journal indisponível")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = CompletionFailureJournal(target)
+            secret = "segredo-antes-da-conclusão"
+
+            with self.assertRaisesRegex(RuntimeError, "journal indisponível"):
+                services.temporary_config(
+                    config_dir,
+                    "session-",
+                    [f'password "{secret}"'],
+                    journal,
+                )
+
+            persisted = journal.persisted_before_completion
+            self.assertEqual(1, len(persisted["temporary_files"]))
+            entry = persisted["temporary_files"][0]
+            self.assertEqual("pending", entry["state"])
+            self.assertTrue(entry["sensitive"])
+            self.assertNotIn("expected_hash", entry)
+            self.assertNotIn("expected_size", entry)
+            self.assertNotIn(secret, journal.path.read_text(encoding="utf-8"))
+
+    def test_non_sensitive_temporary_intent_failure_removes_empty_reservation(self):
+        class IntentFailureJournal(services.SessionJournal):
+            def record_temporary_intent(self, *args, **kwargs):
+                raise RuntimeError("journal indisponível")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            config_dir = target / "qw"
+            config_dir.mkdir()
+            journal = IntentFailureJournal(target)
+
+            with self.assertRaisesRegex(RuntimeError, "journal indisponível"):
+                services.temporary_config(
+                    config_dir,
+                    "session-",
+                    ["hostname local"],
+                    journal,
+                    sensitive=False,
+                )
+
+            self.assertEqual([], list(config_dir.iterdir()))
+
     def test_sensitive_temporary_replaced_by_directory_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -1263,11 +2246,13 @@ class ServiceHardeningTests(unittest.TestCase):
             config.mkdir()
             personal = config / "personal.cfg"
             personal.write_text("preservar", encoding="utf-8")
-            with self.assertRaisesRegex(services.InstallerError, "substituído por diretório"):
+            with self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
                 services.recover_sessions(target)
             self.assertEqual("preservar", personal.read_text(encoding="utf-8"))
 
-    def test_sensitive_temporary_symlink_is_unlinked_without_touching_target(self):
+    def test_sensitive_temporary_symlink_replacement_is_preserved_without_touching_target(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             (target / ".x86qw").mkdir()
@@ -1280,9 +2265,16 @@ class ServiceHardeningTests(unittest.TestCase):
             journal.release_all_sensitive_temporaries()
             config.unlink()
             config.symlink_to(personal)
-            services.recover_sessions(target)
-            self.assertFalse(os.path.lexists(config))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(
+                output,
+            ), self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
+                services.recover_sessions(target)
+            self.assertTrue(config.is_symlink())
             self.assertEqual("preservar", personal.read_text(encoding="utf-8"))
+            self.assertIn("substituído", output.getvalue())
 
     @unittest.skipIf(os.name == "nt", "FIFO é uma fixture POSIX")
     def test_sensitive_temporary_special_file_is_preserved(self):
@@ -1296,7 +2288,9 @@ class ServiceHardeningTests(unittest.TestCase):
             journal.release_all_sensitive_temporaries()
             config.unlink()
             os.mkfifo(config)
-            with self.assertRaisesRegex(services.InstallerError, "arquivo especial"):
+            with self.assertRaisesRegex(
+                services.InstallerError, "identidade.*preservado",
+            ):
                 services.recover_sessions(target)
             self.assertTrue(stat.S_ISFIFO(config.lstat().st_mode))
 
@@ -1338,7 +2332,7 @@ class ServiceHardeningTests(unittest.TestCase):
             )["status"])
 
     @unittest.skipUnless(
-        services._secure_archive_dir_fd_supported(),
+        managed_files._secure_archive_dir_fd_supported(),
         "corrida requer operações POSIX relativas a descritor",
     )
     def test_non_sensitive_temporary_recovery_preserves_replacement_after_hash(self):
@@ -1351,7 +2345,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config = services.temporary_config(
                 config_dir, "session-", ["hostname local"], journal, sensitive=False,
             )
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             replaced = False
 
             def replace_after_hash(descriptor, **kwargs):
@@ -1364,7 +2358,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 return digest
 
             with mock.patch.object(
-                services, "_hash_open_file", side_effect=replace_after_hash,
+                managed_files, "_hash_open_file", side_effect=replace_after_hash,
             ):
                 services.recover_sessions(target)
 
@@ -2137,22 +3131,217 @@ with session_control._installation_acquisition_mutex(target, sessions):
             services.unlink_stop_request(request)
             self.assertFalse(request.exists())
 
-    def test_private_staging_cleanup_never_masks_the_operational_error(self):
+    def test_runtime_stop_request_fsync_failure_leaves_no_transaction_residue(self):
+        publisher = getattr(runtime_sessions, "publish_stop_request", None)
+        self.assertIsNotNone(publisher, "stop request publication must be runtime-owned")
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            request = directory / "stop.request"
+
+            with mock.patch.object(
+                runtime_sessions.os,
+                "fsync",
+                side_effect=OSError("injected stop request fsync failure"),
+            ), self.assertRaises(OSError):
+                publisher(request, b"transactional stop\n")
+
+            self.assertFalse(request.exists())
+            self.assertEqual([], list(directory.iterdir()))
+
+    def test_runtime_stop_request_preserves_a_concurrent_request(self):
+        publisher = getattr(runtime_sessions, "publish_stop_request", None)
+        self.assertIsNotNone(publisher, "stop request publication must be runtime-owned")
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            request = directory / "stop.request"
+            descriptor = private_fs.create_private_file(request)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(b"concurrent winner\n")
+
+            with self.assertRaisesRegex(services.InstallerError, "Já existe"):
+                publisher(request, b"losing request\n")
+
+            self.assertEqual(b"concurrent winner\n", request.read_bytes())
+            self.assertEqual([request], list(directory.iterdir()))
+
+    def test_runtime_background_log_is_private_and_append_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "target"
+            target.mkdir()
+            log_directory = target / ".x86qw" / "logs"
+            private_fs.ensure_private_directories(log_directory, stop=target)
+            log = log_directory / "service-fixture.log"
+            descriptor = private_fs.create_private_file(log)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(b"existing diagnostics\n")
+            script = (
+                "import sys\n"
+                "from pathlib import Path\n"
+                "from x86qw_runtime.supervisor import sessions\n"
+                "sessions.activate_background_log("
+                "Path(sys.argv[1]), '.x86qw/logs/service-fixture.log')\n"
+                "print('new diagnostics', flush=True)\n"
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-c", script, str(target)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            private_fs.validate_private_file(log)
+            self.assertEqual(
+                b"existing diagnostics\nnew diagnostics" + os.linesep.encode(),
+                log.read_bytes(),
+            )
+
+    def _assert_background_log_failure(
+        self, target: Path, *, fail_at: int, replace_log: bool = False,
+    ) -> None:
+        script = """
+import os
+import sys
+from pathlib import Path
+from x86qw_runtime.io import private_fs
+from x86qw_runtime.supervisor import sessions
+
+target = Path(sys.argv[1])
+fail_at = int(sys.argv[2])
+replace_log = sys.argv[3] == 'replace'
+log = target / '.x86qw/logs/service-fixture.log'
+real_dup2 = os.dup2
+calls = 0
+def fail_redirection(source, destination, inheritable=True):
+    global calls
+    calls += 1
+    if calls == fail_at:
+        if replace_log:
+            log.unlink()
+            descriptor = private_fs.create_private_file(log)
+            with os.fdopen(descriptor, 'wb') as output:
+                output.write(b'concurrent replacement\\n')
+        raise OSError(f'injected dup2 failure {fail_at}')
+    return real_dup2(source, destination, inheritable=inheritable)
+
+os.set_inheritable(1, False)
+os.set_inheritable(2, True)
+before = tuple(
+    (os.fstat(fd).st_dev, os.fstat(fd).st_ino, os.get_inheritable(fd))
+    for fd in (1, 2)
+)
+sessions.os.dup2 = fail_redirection
+try:
+    sessions.activate_background_log(
+        target, '.x86qw/logs/service-fixture.log',
+    )
+except OSError:
+    pass
+else:
+    raise AssertionError('dup2 failure was not propagated')
+after = tuple(
+    (os.fstat(fd).st_dev, os.fstat(fd).st_ino, os.get_inheritable(fd))
+    for fd in (1, 2)
+)
+assert after == before, (before, after)
+os.write(1, b'stdout-restored\\n')
+os.write(2, b'stderr-restored\\n')
+"""
+        result = subprocess.run(
+            [
+                sys.executable, "-c", script, str(target), str(fail_at),
+                "replace" if replace_log else "preserve",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            timeout=30,
+            env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(b"stdout-restored\n", result.stdout)
+        self.assertEqual(b"stderr-restored\n", result.stderr)
+
+    def test_background_log_first_dup2_failure_restores_fds_and_created_artifacts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "target"
+            target.mkdir()
+            metadata = target / ".x86qw"
+            private_fs.ensure_private_directories(metadata, stop=target)
+
+            self._assert_background_log_failure(target, fail_at=1)
+
+            self.assertEqual([], list(metadata.iterdir()))
+
+    def test_background_log_second_dup2_failure_restores_fds_and_preserves_existing_log(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "target"
+            target.mkdir()
+            log = target / ".x86qw/logs/service-fixture.log"
+            private_fs.ensure_private_directories(log.parent, stop=target)
+            descriptor = private_fs.create_private_file(log)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(b"existing diagnostics\n")
+
+            self._assert_background_log_failure(target, fail_at=2)
+
+            self.assertEqual(b"existing diagnostics\n", log.read_bytes())
+
+    def test_background_log_failure_preserves_a_replacement_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "target"
+            target.mkdir()
+            private_fs.ensure_private_directories(target / ".x86qw", stop=target)
+            log = target / ".x86qw/logs/service-fixture.log"
+
+            self._assert_background_log_failure(
+                target, fail_at=2, replace_log=True,
+            )
+
+            if os.name == "nt":
+                # The append handle intentionally denies DELETE sharing.  The
+                # attempted replacement is rejected and the unchanged log
+                # created by this activation is then removed during rollback.
+                self.assertFalse(log.exists())
+                return
+            self.assertEqual(b"concurrent replacement\n", log.read_bytes())
+
+    def test_session_journal_fsync_failure_preserves_previous_bytes(self):
+        """A journal update must use the same durable atomic boundary as state."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            journal = services.SessionJournal(target)
+            previous = journal.path.read_bytes()
+            journal.data["status"] = "running"
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected journal fsync failure"),
+            ):
+                with self.assertRaises(services.InstallerError):
+                    journal._write()
+
+            self.assertEqual(journal.path.read_bytes(), previous)
+            self.assertEqual(list(journal.directory.glob(".session.json.*.tmp")), [])
+
+    def test_invalid_journal_json_fails_before_private_staging(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             (target / ".x86qw").mkdir()
             journal = services.SessionJournal(target)
             journal.data["not_json"] = object()
-            output = io.StringIO()
             with mock.patch.object(
                 services.private_fs,
-                "unlink_private_file",
-                side_effect=OSError("cleanup-failed"),
-            ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                "private_mkstemp",
+                side_effect=AssertionError("staging must not begin"),
+            ):
                 with self.assertRaises(TypeError) as raised:
                     journal._write()
             self.assertIn("not JSON serializable", str(raised.exception))
-            self.assertIn("cleanup-failed", output.getvalue())
+            self.assertEqual(list(journal.directory.glob("*.tmp")), [])
 
     def test_sensitive_config_cleanup_never_masks_the_operational_error(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2162,7 +3351,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             output = io.StringIO()
             with mock.patch.object(
                 services,
-                "unlink_sensitive_temporary",
+                "cleanup_sensitive_temporary",
                 side_effect=services.InstallerError("cleanup-failed"),
             ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
                 with self.assertRaisesRegex(services.InstallerError, "journal-failed"):
@@ -2221,8 +3410,12 @@ with session_control._installation_acquisition_mutex(target, sessions):
             mismatch = services.ProcessProbe(
                 "identity_mismatch", services.ProcessIdentity(12345, "new-token", "/other/process"),
             )
-            with mock.patch.object(services, "probe_expected_process", return_value=mismatch):
-                with mock.patch.object(services, "signal_recorded_process") as terminate:
+            with mock.patch.object(
+                runtime_sessions.session_control,
+                "probe_expected_process",
+                return_value=mismatch,
+            ):
+                with mock.patch.object(runtime_sessions, "signal_recorded_process") as terminate:
                     services.recover_sessions(target)
             terminate.assert_not_called()
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
@@ -2244,7 +3437,9 @@ with session_control._installation_acquisition_mutex(target, sessions):
             processes.append({"label": "QTV", "pid": 12345})
             journal._write()
             with mock.patch.object(
-                services, "process_identity", return_value=services.ProcessProbe("inconclusive"),
+                runtime_sessions.session_control,
+                "process_identity",
+                return_value=services.ProcessProbe("inconclusive"),
             ):
                 with self.assertRaisesRegex(services.InstallerError, "Não foi possível confirmar"):
                     services.recover_sessions(target)
@@ -2307,7 +3502,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             self.assertEqual(0x00000200, flags & 0x00000200)
             return process
 
-        with mock.patch.object(services.subprocess, "Popen", side_effect=spawn):
+        with mock.patch.object(supervisor_core.subprocess, "Popen", side_effect=spawn):
             started = job.start_process(("fixture", "--flag"), Path("C:/x86qw"))
 
         self.assertIs(process, started)
@@ -2335,8 +3530,8 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=5, create=True,
-        ), mock.patch.object(services.subprocess, "Popen", return_value=process):
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
+        ), mock.patch.object(supervisor_core.subprocess, "Popen", return_value=process):
             with self.assertRaisesRegex(services.InstallerError, "associar PID 4313"):
                 job.start_process(("fixture",), Path("C:/x86qw"))
 
@@ -2366,13 +3561,42 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
         job.resume = mock.Mock(side_effect=services.InstallerError("resume recusado"))
 
-        with mock.patch.object(services.subprocess, "Popen", return_value=process):
+        with mock.patch.object(supervisor_core.subprocess, "Popen", return_value=process):
             with self.assertRaisesRegex(services.InstallerError, "resume recusado"):
                 job.start_process(("fixture",), Path("C:/x86qw"))
 
         self.assertEqual(("assign", 99, 8767), events[0])
         self.assertIn(("terminate-job", 99, 1), events)
         self.assertIn(("wait-process", 8767, 4000), events)
+
+    def test_windows_job_reports_failed_rollback(self):
+        warnings = []
+
+        class Kernel:
+            def AssignProcessToJobObject(self, _job_handle, _process_handle):
+                return False
+
+            def TerminateProcess(self, _process_handle, _exit_code):
+                return False
+
+        process = SimpleNamespace(pid=4315, _handle=8768)
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+        job.reporter = SimpleNamespace(warning=warnings.append)
+
+        with mock.patch.object(
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
+        ), mock.patch.object(supervisor_core.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(
+                services.InstallerError, "reversão segura também falhou",
+            ):
+                job.start_process(("fixture",), Path("C:/x86qw"))
+
+        self.assertEqual([
+            "Falha ao reverter PID 4315 após startup recusado: "
+            "Não foi possível reverter o PID suspenso 4315 (5).",
+        ], warnings)
 
     def test_windows_job_close_terminates_tree_and_retains_failed_handle_for_retry(self):
         events: list[tuple[str, int, int] | tuple[str, int]] = []
@@ -2393,7 +3617,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=6, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=6, create=True,
         ):
             with self.assertRaisesRegex(services.InstallerError, "fechar o Job Object"):
                 job.close()
@@ -2423,7 +3647,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=5, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
         ), self.assertRaisesRegex(
             services.InstallerError, "encerramento explícito da árvore falhou",
         ):
@@ -2485,7 +3709,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             marker = Path(temporary) / "executed.txt"
             job = services.WindowsJobObject()
             spawned: list[subprocess.Popen[bytes]] = []
-            original_popen = services.subprocess.Popen
+            original_popen = supervisor_core.subprocess.Popen
 
             def capture(*arguments, **options):
                 process = original_popen(*arguments, **options)
@@ -2497,7 +3721,9 @@ with session_control._installation_acquisition_mutex(target, sessions):
 
             job.assign = reject
             try:
-                with mock.patch.object(services.subprocess, "Popen", side_effect=capture):
+                with mock.patch.object(
+                    supervisor_core.subprocess, "Popen", side_effect=capture,
+                ):
                     with self.assertRaisesRegex(
                         services.InstallerError, "associação recusada",
                     ):
@@ -2527,18 +3753,18 @@ with session_control._installation_acquisition_mutex(target, sessions):
                 "OpenProcess", "GetProcessTimes", "QueryFullProcessImageNameW",
                 "TerminateProcess", "CloseHandle",
             )),
-            (services._windows_job_kernel32(), (
-                "CreateJobObjectW", "SetInformationJobObject",
-                "AssignProcessToJobObject", "CreateToolhelp32Snapshot",
-                "Thread32First", "Thread32Next", "OpenThread",
-                "ResumeThread", "TerminateProcess", "TerminateJobObject",
-                "WaitForSingleObject", "CloseHandle",
-            )),
-            (services._get_windows_file_api().kernel32, (
+            (managed_files._get_windows_file_api().kernel32, (
                 "CreateFileW", "GetFileInformationByHandleEx",
                 "SetFileInformationByHandle", "MoveFileExW", "ReadFile",
                 "WriteFile", "SetFilePointerEx", "GetFileSizeEx",
                 "FlushFileBuffers", "CloseHandle",
+            )),
+            (supervisor_core._windows_job_kernel32(), (
+                "CreateJobObjectW", "SetInformationJobObject",
+                "AssignProcessToJobObject", "CreateToolhelp32Snapshot",
+                "Thread32First", "Thread32Next", "OpenThread", "ResumeThread",
+                "TerminateProcess", "TerminateJobObject", "WaitForSingleObject",
+                "CloseHandle",
             )),
         )
         for kernel32, names in groups:
@@ -2638,28 +3864,28 @@ with session_control._installation_acquisition_mutex(target, sessions):
         processes = [mock.Mock(pid=101), mock.Mock(pid=102)]
         for process in processes:
             process.poll.return_value = None
-        windows_job = mock.Mock()
-        windows_job.start_process.side_effect = processes
-        with mock.patch.object(
-            services.subprocess, "Popen", side_effect=processes,
-        ) as popen, mock.patch.object(
-            services, "apply_startup_rcon",
-        ), mock.patch.object(
-            services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou"),
-        ), mock.patch.object(
-            services, "WindowsJobObject", return_value=windows_job,
-        ):
-            specs = [
-                services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
-                services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),
-            ]
-            with self.assertRaisesRegex(services.InstallerError, "QTV falhou"):
-                services.run_processes(specs)
+        spawn = mock.Mock(side_effect=processes)
+        specs = [
+            services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
+            services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),
+        ]
+
+        def fail_http(_process, _readiness):
+            raise services.InstallerError("QTV falhou")
+
+        with self.assertRaisesRegex(services.InstallerError, "QTV falhou"):
+            services.run_processes(
+                specs,
+                reporter=mock.Mock(),
+                process_factory=spawn,
+                signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+                os_name="posix",
+                apply_rcon=lambda _startup: None,
+                http_readiness=fail_http,
+            )
         for process in processes:
             process.terminate.assert_called_once()
-        if os.name == "nt":
-            windows_job.close.assert_called_once_with()
-        for call in popen.call_args_list:
+        for call in spawn.call_args_list:
             self.assertIs(call.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_mvdsv_readiness_checks_map_gamecode_and_applies_post_map(self):
@@ -2671,12 +3897,16 @@ with session_control._installation_acquisition_mutex(target, sessions):
         connection = mock.MagicMock()
         connection.__enter__.return_value = connection
         connection.recvfrom.side_effect = [(response, ("127.0.0.1", 28501)) for response in responses]
-        with mock.patch.object(
-            services.socket, "socket", return_value=connection,
-        ), mock.patch.object(services.time, "sleep") as sleep:
-            services.apply_startup_rcon(services.StartupRcon(
+        sleep = mock.Mock()
+        ticks = iter((1.0, 1.0))
+        services.apply_startup_rcon(
+            services.StartupRcon(
                 "127.0.0.1", 28501, "bootstrap", "post.cfg", "dm6", "qw",
-            ))
+            ),
+            socket_factory=lambda *_args: connection,
+            monotonic=lambda: next(ticks),
+            sleep=sleep,
+        )
         sent = b"\n".join(call.args[0] for call in connection.sendto.call_args_list)
         self.assertIn(b"status", sent)
         self.assertIn(b"serverinfo", sent)
@@ -2686,7 +3916,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
     @unittest.skipIf(os.name == "nt", "SIGTERM POSIX validado nos runners Unix; Windows usa terminate")
     def test_sigterm_stops_child_without_orphan(self):
         child_pid: list[int] = []
-        original_popen = services.subprocess.Popen
+        original_popen = supervisor_core.subprocess.Popen
 
         def capture(*args, **kwargs):
             process = original_popen(*args, **kwargs)
@@ -2696,7 +3926,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         timer = threading.Timer(0.2, lambda: os.kill(os.getpid(), signal.SIGTERM))
         timer.start()
         try:
-            with mock.patch.object(services.subprocess, "Popen", side_effect=capture):
+            with mock.patch.object(supervisor_core.subprocess, "Popen", side_effect=capture):
                 result = services.run_processes([
                     services.ProcessSpec("fixture", (sys.executable, "-c", "import time; time.sleep(30)"), Path.cwd()),
                 ])

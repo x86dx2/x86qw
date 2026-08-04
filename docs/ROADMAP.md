@@ -6,9 +6,9 @@ detalhado do ecossistema está em
 
 ## Baseline atual
 
-Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
-pela própria tag imutável no commit
-`78dc30b58f9ba2a2ec8aeb31879d9b8072ab576b`, publicada em 3 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.7.2`. O estado funcional é descrito
+pela própria tag imutável, publicada em 4 de agosto de 2026. A `0.7.1`
+permanece inalterada no histórico.
 
 Baseline inicial da issue #45: merge
 `afb4f666095e37fe262b87b49339e18d25738522`.
@@ -21,8 +21,18 @@ Baseline corretiva consolidada após a PR 4: merge
 publicados nem promovidos no catálogo. O candidato da PR 5 parte desse commit,
 preserva o stable macOS upstream e também permanece não publicado.
 
-- instalador público `0.7.1`; as linhas anteriores permanecem imutáveis no histórico;
-- 61 pacotes e 21 componentes;
+Baseline inicial da PR 6: merge
+`00098330e5833ba2c83c7121272d644c2a204a7b`. O HEAD documental atual da PR 6 é
+`29d76a48721190aad1203d0986a31d839d62070e`. Downloader, archive, filesystem
+privado, catálogos, estado/recibos/migração, transações compostas, UI,
+gameplay, plataforma e supervisor possuem ownership canônico no runtime. O
+zipapp tem 56 membros e sua projeção é derivada de um manifesto declarativo,
+também conferido contra o arquivo produzido. A regressão local integral passou;
+a issue #52 permanece como trilha auditável pausada. Esse código foi integrado
+à linha `0.7.2` pela PR 64.
+
+- instalador público `0.7.2`; as linhas anteriores permanecem imutáveis no histórico;
+- 62 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
 - ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
 - MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
@@ -46,31 +56,34 @@ preserva o stable macOS upstream e também permanece não publicado.
 | QWFWD | MVP entregue | unitária; forwarding de rede separado |
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.1` |
+| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.2` |
 | Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; contrato nativo Windows validado no CI; bootstrap completo sob conta padrão e runtimes reais pendentes no PR 11 |
-| Downloads remotos | completa no código corretivo da PR 2, mesclado no baseline da issue #49; ainda não publicado em release | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
-| Arquivos ZIP/PK3/PYZ | completa no código corretivo da issue #49; ainda não publicada | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
-| DACL privada Windows | implementada no código corretivo da PR 4; ainda não publicada | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
-| Confiança do stable macOS | preservação upstream implementada no candidato da PR 5; ainda não publicada | matriz 7/7 no [run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055); assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
+| Downloads remotos | completa e publicada na `0.7.2` | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
+| Arquivos ZIP/PK3/PYZ | completa e publicada na `0.7.2` | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
+| DACL privada Windows | implementada e publicada na `0.7.2` | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
+| Confiança do stable macOS | preservação upstream publicada na `0.7.2` | matriz 7/7 no [run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055); assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
+| Fronteiras `x86qw_runtime` | integradas e publicadas na `0.7.2`: ownership canônico de I/O, filesystem privado, catálogos, estado/recibos/migração, transações, UI, gameplay, plataforma, sessão e supervisor | 1.197 testes de manutenção aprovados localmente, com 37 skips explícitos, e 5 testes do site; matriz integrada da PR 64 em 7/7 jobs; smokes nativos reservados ao PR 11 |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.
 
 ## Próximos marcos do núcleo
 
-1. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
+1. Manter a PR 6 pausada como trilha auditável; as fronteiras validadas foram
+   integradas pela PR 64 e publicadas na `0.7.2`.
+2. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
    candidato exato; a disponibilidade segue condicional até o PR 11.
-2. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
+3. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
    Windows x64, além do cliente em macOS Intel.
-3. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
+4. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
    QWFWD em suíte de rede isolada.
-4. Transformar a validação de release em evidência publicada somente após
+5. Transformar a validação de release em evidência publicada somente após
    aprovação humana dos checks das três plataformas.
-5. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
+6. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
    ou gameplay.
-6. Manter bundles publicados imutáveis e preparar uma versão nova somente em
+7. Manter bundles publicados imutáveis e preparar uma versão nova somente em
    etapa de release separada.
-7. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
+8. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
    confundir esse contrato com os limites de transporte já implementados.
 
 ## Decisões históricas superadas

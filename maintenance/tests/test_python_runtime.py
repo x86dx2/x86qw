@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
+import io
 import os
 import shlex
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from maintenance.tools.build_installer_bundle import zipapp_bytes
@@ -21,6 +24,22 @@ SPEC.loader.exec_module(python_runtime)
 
 
 class PythonRuntimeContractTests(unittest.TestCase):
+    def test_legacy_module_reexports_canonical_runtime_contract(self):
+        canonical = importlib.import_module("x86qw_runtime.platform.python_runtime")
+
+        for name in (
+            "UnsupportedPythonError", "version_is_supported",
+            "require_supported_runtime", "validated_executable", "render_launcher",
+        ):
+            with self.subTest(name=name):
+                self.assertIs(getattr(python_runtime, name), getattr(canonical, name))
+
+    def test_zipapp_contains_canonical_python_runtime_and_facade(self):
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+        self.assertIn("x86qw_runtime/platform/python_runtime.py", names)
+        self.assertIn("python_runtime.py", names)
+
     def test_minimum_runtime_contract_accepts_310_and_313_but_rejects_39(self):
         self.assertFalse(python_runtime.version_is_supported((3, 9, 19)))
         self.assertTrue(python_runtime.version_is_supported((3, 10, 0)))
@@ -95,7 +114,7 @@ class PythonRuntimeContractTests(unittest.TestCase):
         source = manager.read_text(encoding="utf-8")
         self.assertLess(
             source.index("python_runtime.require_supported_runtime()"),
-            source.index('importlib.import_module("session_control")'),
+            source.index('importlib.import_module("x86qw_runtime.session_control")'),
         )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

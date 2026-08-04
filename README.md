@@ -84,7 +84,7 @@ concluiu a instalação e repete a resolução segura se esse runtime desaparece
 O contrato passou nos sete jobs obrigatórios de Ubuntu, macOS e Windows, com
 Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
 
-O bootstrap público `0.7.1` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.7.2` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
@@ -100,7 +100,7 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A versão pública indicada acima continua sendo a `0.7.1`.
+posterior. A versão pública indicada acima é a `0.7.2`.
 
 ## O que vem no x86QW
 
@@ -228,7 +228,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 
 Serviços usam loopback por padrão e só são expostos com `--bind` explícito. Senhas podem vir de prompt oculto ou arquivo privado; a CLI evita colocá-las no comando filho e na saída. Locks e journals impedem manutenção concorrente, coordenam o encerramento e permitem recuperação conservadora após crash. Veja o [guia de hosting](docs/HOSTING.md).
 
-O candidato corretivo da PR 3 centraliza a inspeção de ZIP, PK3 e PYZ antes de
+O runtime publicado na `0.7.2` centraliza a inspeção de ZIP, PK3 e PYZ antes de
 qualquer write de extração ou payload visível, com snapshot privado limitado,
 modos canônicos e promoção atômica. A regressão local em Python 3.14 e Python
 3.10 reporta `Ran 695 tests` e `OK (skipped=15)` na manutenção, além de
@@ -237,8 +237,7 @@ smoke de rede opt-in. A
 [matriz da PR 3](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
 passou em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo
 os casos nativos Windows de identidade e reparse point. Isso não substitui os
-smokes nativos dos runtimes. O candidato não foi publicado e não pertence à
-release pública imutável `0.7.1`; o contrato está no
+smokes nativos dos runtimes. O contrato publicado está no
 [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
 
 O código corretivo da PR 4 também faz objetos privados gerenciados nascerem no
@@ -246,7 +245,7 @@ Windows com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`.
 Arquivos de senha externos são somente validados e nunca reescritos. A
 matriz nativa Windows com Python 3.10 e 3.13 validou esse contrato. Isso não
 equivale ao smoke de runtime sob uma conta padrão sem elevação, reservado à
-evidência de release. A mudança não faz parte da release pública `0.7.1`.
+evidência de release. A mudança faz parte da release pública `0.7.2`.
 Consulte o
 [ADR 0003](docs/adr/0003-dacl-privada-windows.md).
 
@@ -261,6 +260,23 @@ Consulte o
 </a>
 
 O repositório é a fonte canônica. `dist/` preserva os inputs; inventários declaram consumidores e dependências; o catálogo projeta pacotes públicos; o instalador materializa apenas o perfil e a plataforma escolhidos. GitHub Releases é o canal principal de artefatos e GitLab Generic Packages mantém o mirror de contingência.
+
+Na release `0.7.2`, contratos reutilizáveis foram
+movidos incrementalmente para `x86qw_runtime`: downloader, archive,
+persistência e filesystem privado, catálogos, estado e recibos, migrações,
+transações, UI, gameplay, adapters de plataforma, lock da instalação e
+supervisor de processos/sessões. A direção de dependências impede o runtime de
+importar manutenção ou entrypoints. Um manifesto declarativo é a fonte da
+projeção mínima do zipapp, que não incorpora `maintenance/`.
+
+Mutações duráveis de instalação, atualização, repair, cleanup e uninstall
+retêm inversos até o resultado lógico final. Logs produzidos durante execução
+continuam append-only e não são apresentados como transacionais. Os entrypoints
+ainda concentram a composição da CLI, mas console, parser e navegação já são
+canônicos no runtime. A validação local integral foi concluída; a matriz da PR
+e os smokes reais do candidato permanecem separados. Consulte o
+[ADR 0005](docs/adr/0005-fronteiras-incrementais-x86qw-runtime.md) e a
+[evidência da implementação](docs/implementation/runtime-boundaries-pr6.md).
 
 ```text
 dist/           produto canônico, upstreams preservados e customizações x86QW
@@ -284,7 +300,7 @@ docs/           arquitetura, hosting, decisões e roadmaps
 > [!NOTE]
 > A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
 
-No código corretivo ainda não publicado, o stable macOS preserva o bundle
+Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso
 remove a re-assinatura ad hoc feita pelo x86QW, mas não torna o artefato
 Developer ID ou notarizado. Stable e nightly macOS permanecem condicionais até

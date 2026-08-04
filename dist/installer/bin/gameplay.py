@@ -5,40 +5,230 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import os
 import random
 import re
-import shlex
 import stat
-import struct
-import subprocess
 import sys
 import tempfile
-import time
 import traceback
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 
-core = importlib.import_module("manager")
-navigation = importlib.import_module("menu")
-from maintenance.tools.runtime_catalog import load_games, games_by_id
+from x86qw_runtime.ui import menu as navigation
+from x86qw_runtime.ui.arguments import FriendlyArgumentParser, render_public_command
+from x86qw_runtime.ui.console import Console as RuntimeConsole
+from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
     ArchiveError,
     read_archive_member,
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.atomic import AtomicWriteError, atomic_create_bytes
+from x86qw_runtime.io.managed_files import (
+    MaterializedDirectory,
+    MaterializedFile,
+    cleanup_materialized_directory,
+    cleanup_materialized_file,
+    file_sha256,
+    persistent_path_identity,
+)
+from x86qw_runtime.io.paths import lexists, remove_path
+from x86qw_runtime.io.personal_files import (
+    observe_personal_file,
+    personal_file_step,
+)
+from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.platform.display import (
+    DisplayAdapterError,
+    is_macos_host,
+    macos_main_display,
+)
+from x86qw_runtime.transaction import (
+    finalize_mutation,
+    MutationPlan,
+    MutationResult,
+    MutationRollbackError,
+    MutationStep,
+    execute_mutation,
+    prepare_mutation,
+)
+from x86qw_runtime.gameplay import (
+    FROGBOT_ADD_WAIT_FRAMES,
+    FrogbotIdentity,
+    KTX_CONTEXT_KEYS,
+    KtxLaunchOptions,
+    KtxMapRequirement,
+    KtxMenuGroupSpec,
+    KtxModeSpec,
+    LocalGameSpec,
+    active_ktx_map_requirements,
+    frogbot_identity,
+    ktx_bot_management_alias_commands,
+    ktx_bot_name_cleanup_commands,
+    ktx_bot_name_binary_settings,
+    ktx_bot_name_settings,
+    ktx_bot_options_requested,
+    ktx_bot_team_sequence,
+    ktx_chunked_setup_alias_commands,
+    ktx_chunked_setup_alias_plan,
+    ktx_key_alias_commands,
+    ktx_launch_commands,
+    ktx_mode_bot_limit,
+    ktx_mode_help_alias,
+    ktx_mode_roster_description,
+    parse_ktx_menu_groups,
+    parse_ktx_modes,
+    parse_local_games,
+    quake_colored_frogbot_bytes,
+    quake_colored_frogbot_name,
+    quote_console_command,
+    requested_frogbot_names,
+    required_ktx_map_assets,
+    validate_frogbot_name,
+    validate_ktx_bot_count,
+    without_frogbots,
+)
+from x86qw_runtime.gameplay.runtime_configs import (
+    RuntimeConfigOwnership,
+    create_runtime_config,
+    release_runtime_config,
+)
+from x86qw_runtime.supervisor.core import process_remains_alive
+from x86qw_runtime.gameplay.pak import (
+    PakError,
+    list_bsp_names,
+    read_member as read_pak_member,
+)
 
-InstallerError = core.InstallerError
-console = core.console
-file_count = core.file_count
-file_hash = core.file_hash
-lexists = core.lexists
-remove_path = core.remove_path
+_player_adapters: dict[type, type] = {}
+
+
+@dataclass(frozen=True)
+class GameplayContext:
+    """Manager-owned dependencies required by the installed gameplay adapter."""
+
+    project_root: Path
+    installer_root: Path
+    zipapp_path: Path | None
+    installer_base: type
+    console: object
+    read_zipapp_json: Callable[[Path, str, str], dict[str, object]]
+    public_cli: bool
+
+
+_gameplay_context: GameplayContext | None = None
+console: object = RuntimeConsole()
+
+
+def _retain_or_finalize_personal_mutation(
+    result: MutationResult,
+    mutation_results: list[MutationResult] | None,
+) -> MutationResult | None:
+    if mutation_results is not None:
+        mutation_results.append(result)
+        return result
+    finalize_mutation(result)
+    return None
+
+
+def configure_context(context: GameplayContext) -> None:
+    """Bind an explicit composition root before executing installed gameplay."""
+
+    global _gameplay_context, console
+    if not isinstance(context, GameplayContext):
+        raise TypeError("contexto gameplay inválido")
+    _gameplay_context = context
+    console = context.console
+
+
+def _context() -> GameplayContext:
+    if _gameplay_context is None:
+        raise RuntimeError(
+            "O adapter gameplay requer um GameplayContext explícito antes da execução."
+        )
+    return _gameplay_context
+
+
+def file_count(count: int) -> str:
+    return f"{count} {'arquivo' if count == 1 else 'arquivos'}"
+
+
+@dataclass(frozen=True)
+class _PersonalProfileToken:
+    root: Path
+    path: Path
+    identity: tuple[int, int]
+    digest: str
+    size: int
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+
+
+def _entry_identity(path: Path) -> tuple[int, int]:
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode):
+        raise OSError(f"identidade insegura: {path}")
+    return persistent_path_identity(
+        path, directory=stat.S_ISDIR(metadata.st_mode),
+    )
+
+
+def _profile_parent_paths(target: Path, destination: Path) -> tuple[Path, ...]:
+    try:
+        relative = destination.relative_to(target)
+    except ValueError as error:
+        raise InstallerError(f"Configuração pessoal fora da instalação: {destination}") from error
+    if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        raise InstallerError(f"Configuração pessoal fora da instalação: {destination}")
+    current = target
+    parents: list[Path] = []
+    for part in relative.parts[:-1]:
+        current /= part
+        parents.append(current)
+    return tuple(parents)
+
+
+def _profile_topology(
+    target: Path, destination: Path,
+) -> tuple[tuple[Path, tuple[int, int] | None], ...]:
+    topology: list[tuple[Path, tuple[int, int] | None]] = []
+    for parent in _profile_parent_paths(target, destination):
+        if not lexists(parent):
+            topology.append((parent, None))
+            continue
+        metadata = parent.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Diretório da configuração pessoal inválido: {parent}")
+        topology.append((parent, (int(metadata.st_dev), int(metadata.st_ino))))
+    if lexists(destination):
+        raise InstallerError(f"Configuração pessoal mudou durante a criação: {destination}")
+    return tuple(topology)
+
+
+def _remove_created_profile(token: _PersonalProfileToken) -> None:
+    if not cleanup_materialized_file(MaterializedFile(
+        path=token.path,
+        expected_hash=token.digest,
+        origin="x86qw:personal-profile-default",
+        created_by_session=True,
+        existed=False,
+        root=token.root,
+        identity=token.identity,
+        expected_size=token.size,
+    )):
+        return
+    for directory, identity in reversed(token.created_directories):
+        cleanup_materialized_directory(MaterializedDirectory(
+            path=directory,
+            root=token.root,
+            identity=identity,
+        ))
 
 PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
@@ -47,7 +237,6 @@ DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
     "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json"
 )
 RUNTIME_KTX_BOT_NAME_CATALOG = "_x86qw/ktx-frogbot-names.json"
-KTX_CONTEXT_KEYS = ("F5", "F6", "H", "I", "M", "X", "Z", "F11")
 KTX_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_KTX_RUNTIME_CONFIG__"
 # ezQuake accepts large alias bodies, but a single startup argument close to
 # its command buffer limit can leave initialization incomplete. Larger mode
@@ -55,7 +244,6 @@ KTX_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_KTX_RUNTIME_CONFIG__"
 # already used by Frogbot sessions.
 KTX_INLINE_SETUP_LIMIT = 1400
 FROGBOT_RUNTIME_CONFIG_PLACEHOLDER = KTX_RUNTIME_CONFIG_PLACEHOLDER
-FROGBOT_ADD_WAIT_FRAMES = 8
 DEVELOPMENT_GAME_CATALOG = "maintenance/inventory/games.json"
 RUNTIME_GAME_CATALOG = "_x86qw/games.json"
 LEGACY_MACOS_VIDEO_LAYOUT = Path(".x86qw/launcher/macos-video-layout.json")
@@ -70,6 +258,7 @@ LEGACY_MACOS_VIDEO_CVARS = (
     "vid_ypos",
 )
 MACOS_FULLSCREEN_LAYOUT = Path(".x86qw/launcher/macos-fullscreen-layout.json")
+CLIENT_RULESET_PREFERENCE = Path(".x86qw/launcher/client-ruleset.json")
 MACOS_FULLSCREEN_CVARS = (
     "vid_fullscreen",
     "vid_usedesktopres",
@@ -77,101 +266,26 @@ MACOS_FULLSCREEN_CVARS = (
     "vid_height",
     "vid_displayfrequency",
 )
-@dataclass(frozen=True)
-class LocalGameSpec:
-    key: str
-    label: str
-    gamedir: str
-    profile: str
-    component: str
-    marker: str
-    program: str
-    default_map: str
-    suggested_maps: tuple[str, ...]
-    version: str
-    description: str
-    protocol: str
-    gamecode_type: str
-    client_runtimes: tuple[str, ...]
-    server_runtimes: tuple[str, ...]
-    pre_map_arguments: tuple[str, ...]
-    post_map_arguments: tuple[str, ...]
-    managed_config: str
-    personal_config: str
-    bot_names_personal_config: str | None
-    required_capabilities: tuple[str, ...]
-    smoke_test: str
-    local_server_settings: tuple[tuple[str, str], ...]
-    legacy_remote_capabilities: tuple[str, ...]
-    legacy_components: tuple[str, ...]
-    legacy_marker: str | None
-    mode_catalog: str | None
-    play_support_gamecode: str | None
-    dedicated_arguments: tuple[str, ...]
-    client_game_arguments: tuple[str, ...]
-    pre_connect_arguments: tuple[str, ...]
-    client_compatibility_arguments: tuple[str, ...]
-    dedicated_settings: tuple[tuple[str, str], ...]
-
-
-@dataclass(frozen=True)
-class KtxModeSpec:
-    key: str
-    aliases: tuple[str, ...]
-    label: str
-    description: str
-    recommended_players: str
-    usermode: str
-    default_map: str
-    suggested_maps: tuple[str, ...]
-    help_commands: tuple[tuple[str, str], ...]
-    key_bindings: tuple[tuple[str, str, str], ...]
-    launch_settings: tuple[tuple[str, str], ...]
-    entry_config: str | None
-    map_requirements: tuple[KtxMapRequirement, ...]
-    bots: bool
-    bot_teams: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class KtxMapRequirement:
-    key: str
-    asset: str
-    when: str
-    label: str
-
-
-@dataclass(frozen=True)
-class KtxMenuGroupSpec:
-    key: str
-    label: str
-    description: str
-    modes: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class FrogbotIdentity:
-    name: str
-
-
-@dataclass(frozen=True)
-class KtxLaunchOptions:
-    bots: int = 0
-    fill_bots: bool = False
-    bot_skill: int | str = 5
-    bot_team: str | None = None
-    bot_weapon: str | None = None
-    bot_health: int | None = None
-    bot_break_on_death: bool | None = None
-    bot_names_profile: str = "default"
-    bot_name_pool: tuple[FrogbotIdentity, ...] = ()
-    ctf_hook: str | None = None
-    ctf_runes: str | None = None
-    ctf_based_spawn: bool = False
-    race_style: str | None = None
-    race_scoring: str | None = None
-    race_pacemaker: int | None = None
-    race_hide_players: bool = False
+DEFAULT_PRODUCT_RULESET = "x86qw"
+PRODUCT_RULESET_ENGINES = {
+    "x86qw": "default",
+    "qcon": "qcon",
+    "smackdown": "smackdown",
+    "thunderdome": "thunderdome",
+    "mtfl": "mtfl",
+    "smackdrive": "smackdrive",
+}
+PRODUCT_RULESET_CONFIGS = {
+    "x86qw": "x86qw-ruleset.cfg",
+}
+PRODUCT_RULESET_LABELS = {
+    "x86qw": "x86QW Ruleset",
+    "qcon": "QuakeCon",
+    "smackdown": "Smackdown",
+    "thunderdome": "Thunderdome",
+    "mtfl": "MTFL",
+    "smackdrive": "Smackdrive",
+}
 
 
 @dataclass(frozen=True)
@@ -180,89 +294,71 @@ class KtxRuntimeConfig:
     device: int
     inode: int
     lease: object
+    ownership: RuntimeConfigOwnership
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
-    if core.ZIPAPP_PATH is not None:
-        document = core.read_zipapp_json(
-            core.ZIPAPP_PATH, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
+    context = _gameplay_context
+    zipapp_path = context.zipapp_path if context is not None else None
+    if zipapp_path is not None:
+        document = context.read_zipapp_json(
+            zipapp_path, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
         )
     else:
         document = load_games(project_root / DEVELOPMENT_GAME_CATALOG)
-    entries = games_by_id(document)
-    result: list[LocalGameSpec] = []
-    for raw in entries.values():
-        result.append(LocalGameSpec(
-            key=str(raw["id"]),
-            label=str(raw["label"]),
-            gamedir=str(raw["gamedir"]),
-            profile=str(raw["profile"]),
-            component=str(raw["component"]),
-            marker=str(raw["marker"]),
-            program=str(raw["gamecode"]),
-            default_map=str(raw["default_map"]),
-            suggested_maps=tuple(str(value) for value in raw["suggested_maps"]),
-            version=str(raw["version"]),
-            description=str(raw["description"]),
-            protocol=str(raw["protocol"]),
-            gamecode_type=str(raw["gamecode_type"]),
-            client_runtimes=tuple(str(value) for value in raw["client_runtimes"]),
-            server_runtimes=tuple(str(value) for value in raw["server_runtimes"]),
-            pre_map_arguments=tuple(str(value) for value in raw["pre_map_arguments"]),
-            post_map_arguments=tuple(str(value) for value in raw["post_map_arguments"]),
-            managed_config=str(raw["managed_config"]),
-            personal_config=str(raw["personal_config"]),
-            bot_names_personal_config=(
-                str(raw["bot_names_personal_config"])
-                if raw.get("bot_names_personal_config") else None
-            ),
-            required_capabilities=tuple(str(value) for value in raw["required_capabilities"]),
-            smoke_test=str(raw["smoke_test"]),
-            local_server_settings=tuple(
-                (str(item[0]), str(item[1])) for item in raw.get("local_server_settings", [])
-            ),
-            legacy_remote_capabilities=tuple(
-                str(value) for value in raw.get("legacy_remote_capabilities", [])
-            ),
-            legacy_components=tuple(str(value) for value in raw.get("legacy_components", [])),
-            legacy_marker=str(raw["legacy_marker"]) if raw.get("legacy_marker") else None,
-            mode_catalog=str(raw["mode_catalog"]) if raw.get("mode_catalog") else None,
-            play_support_gamecode=(
-                str(raw["play_support_gamecode"])
-                if raw.get("play_support_gamecode") else None
-            ),
-            dedicated_arguments=tuple(str(value) for value in raw.get("dedicated_arguments", [])),
-            client_game_arguments=tuple(
-                str(value) for value in raw.get("client_game_arguments", [])
-            ),
-            pre_connect_arguments=tuple(
-                str(value) for value in raw.get("pre_connect_arguments", [])
-            ),
-            client_compatibility_arguments=tuple(
-                str(value) for value in raw.get("client_compatibility_arguments", [])
-            ),
-            dedicated_settings=tuple(
-                (str(item[0]), str(item[1])) for item in raw.get("dedicated_settings", [])
-            ),
-        ))
-    return tuple(result)
+    return parse_local_games(document)
 
 
-LOCAL_GAMES = load_local_games(core.PROJECT_ROOT)
+@lru_cache(maxsize=1)
+def local_games() -> tuple[LocalGameSpec, ...]:
+    context = _gameplay_context
+    project_root = context.project_root if context is not None else Path(__file__).resolve().parents[3]
+    return load_local_games(project_root)
+
+
+class LazyTuple(Sequence[object]):
+    """Tuple-compatible projection that leaves its catalog unopened at import."""
+
+    def __init__(self, loader: Callable[[], tuple[object, ...]]) -> None:
+        self._loader = loader
+
+    def _values(self) -> tuple[object, ...]:
+        return self._loader()
+
+    def __getitem__(self, index):  # type: ignore[no-untyped-def]
+        return self._values()[index]
+
+    def __iter__(self) -> Iterator[object]:
+        return iter(self._values())
+
+    def __len__(self) -> int:
+        return len(self._values())
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Sequence):
+            return tuple(self._values()) == tuple(other)
+        return False
+
+    def __repr__(self) -> str:
+        return repr(self._values())
+
+
+LOCAL_GAMES = LazyTuple(local_games)
 # Compatibility projections for integrations that imported the former constants.
-# The canonical values now live in games.json.
-KTX_LOCAL_SERVER_SETTINGS = next(
-    game.local_server_settings for game in LOCAL_GAMES if game.key == "ktx"
-)
-NQUAKE_LOCAL_SERVER_SETTINGS = next(
-    game.local_server_settings for game in LOCAL_GAMES if game.key != "ktx"
-)
+# The canonical values remain in games.json and are read only on first use.
+KTX_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
+    game.local_server_settings for game in local_games() if game.key == "ktx"
+))
+NQUAKE_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
+    game.local_server_settings for game in local_games() if game.key != "ktx"
+))
 
 
 def read_ktx_mode_catalog(project_root: Path) -> dict[str, object]:
-    if core.ZIPAPP_PATH is not None:
-        catalog = core.read_zipapp_json(
-            core.ZIPAPP_PATH, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
+    context = _gameplay_context
+    if context is not None and context.zipapp_path is not None:
+        catalog = context.read_zipapp_json(
+            context.zipapp_path, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
         )
     else:
         path = project_root / DEVELOPMENT_KTX_MODE_CATALOG
@@ -276,237 +372,12 @@ def read_ktx_mode_catalog(project_root: Path) -> dict[str, object]:
 
 
 def load_ktx_modes(project_root: Path) -> tuple[KtxModeSpec, ...]:
-    catalog = read_ktx_mode_catalog(project_root)
-    if catalog.get("format") != 1 or catalog.get("game") != "ktx":
-        raise InstallerError("Catálogo de modos KTX possui identidade inválida.")
-    raw_policies = catalog.get("map_asset_policies")
-    defaults = catalog.get("defaults")
-    if not isinstance(raw_policies, dict) or not raw_policies:
-        raise InstallerError("Catálogo de modos KTX não declara políticas de mapas.")
-    if not isinstance(defaults, dict):
-        raise InstallerError("Catálogo de modos KTX não declara padrões de mapas.")
-    policies: dict[str, KtxMapRequirement] = {}
-    for policy_key, raw_policy in raw_policies.items():
-        asset_path = (
-            PurePosixPath(raw_policy["asset"].replace("{map}", "map"))
-            if isinstance(raw_policy, dict) and isinstance(raw_policy.get("asset"), str)
-            else None
-        )
-        if (
-            not isinstance(policy_key, str)
-            or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", policy_key) is None
-            or not isinstance(raw_policy, dict)
-            or set(raw_policy) != {"asset", "when", "label"}
-            or not isinstance(raw_policy.get("asset"), str)
-            or re.fullmatch(
-                r"[a-z0-9_./-]*\{map\}[a-z0-9_./-]*", raw_policy["asset"],
-            ) is None
-            or asset_path is None
-            or asset_path.is_absolute()
-            or any(part in {"", ".", ".."} for part in asset_path.parts)
-            or "//" in raw_policy["asset"]
-            or raw_policy.get("when") not in {"always", "frogbots"}
-            or not isinstance(raw_policy.get("label"), str)
-            or not raw_policy["label"]
-        ):
-            raise InstallerError(f"Política de mapa KTX inválida: {policy_key!r}.")
-        policies[policy_key] = KtxMapRequirement(
-            policy_key,
-            str(raw_policy["asset"]),
-            str(raw_policy["when"]),
-            str(raw_policy["label"]),
-        )
-    default_bot_policies = defaults.get("frogbot_map_policies")
-    if (
-        not isinstance(default_bot_policies, list)
-        or not default_bot_policies
-        or not all(isinstance(value, str) and value in policies for value in default_bot_policies)
-        or len(default_bot_policies) != len(set(default_bot_policies))
-        or any(policies[value].when != "frogbots" for value in default_bot_policies)
-    ):
-        raise InstallerError("Políticas padrão de mapas Frogbot inválidas.")
-    raw_modes = catalog.get("modes")
-    if not isinstance(raw_modes, list) or not raw_modes:
-        raise InstallerError("Catálogo de modos KTX não declara nenhum modo.")
-    modes: list[KtxModeSpec] = []
-    identities: set[str] = set()
-    for raw in raw_modes:
-        if not isinstance(raw, dict):
-            raise InstallerError("Entrada inválida no catálogo de modos KTX.")
-        key = raw.get("id")
-        aliases = raw.get("aliases")
-        suggested_maps = raw.get("suggested_maps")
-        help_commands = raw.get("help_commands")
-        key_bindings = raw.get("key_bindings")
-        launch_settings = raw.get("launch_settings", [])
-        entry_config = raw.get("entry_config")
-        raw_mode_policies = raw.get("map_policies", [])
-        bots = raw.get("bots", True)
-        bot_teams = raw.get("bot_teams", [])
-        text_fields = (
-            "label", "description", "recommended_players", "usermode",
-            "default_map",
-        )
-        if (
-            not isinstance(key, str)
-            or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", key) is None
-            or not isinstance(aliases, list)
-            or not all(
-                isinstance(alias, str)
-                and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", alias)
-                for alias in aliases
-            )
-            or not isinstance(suggested_maps, list)
-            or not suggested_maps
-            or not all(
-                isinstance(name, str)
-                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", name)
-                for name in suggested_maps
-            )
-            or len({name.casefold() for name in suggested_maps}) != len(suggested_maps)
-            or not isinstance(help_commands, list)
-            or not help_commands
-            or not all(
-                isinstance(entry, list)
-                and len(entry) == 2
-                and all(isinstance(value, str) and value for value in entry)
-                and re.fullmatch(r"[A-Za-z0-9_+./ -]{1,48}", entry[0]) is not None
-                and re.fullmatch(r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}", entry[1]) is not None
-                for entry in help_commands
-            )
-            or not isinstance(key_bindings, list)
-            or not 3 <= len(key_bindings) <= len(KTX_CONTEXT_KEYS)
-            or not all(
-                isinstance(entry, list)
-                and len(entry) == 3
-                and entry[0] in KTX_CONTEXT_KEYS
-                and isinstance(entry[1], str)
-                and re.fullmatch(r"[A-Za-z0-9_+./ -]{1,48}", entry[1]) is not None
-                and isinstance(entry[2], str)
-                and re.fullmatch(
-                    r"[A-Za-z0-9 ,.áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ-]{1,72}",
-                    entry[2],
-                ) is not None
-                for entry in key_bindings
-            )
-            or len({entry[0] for entry in key_bindings}) != len(key_bindings)
-            or not {"F5", "F6", "F11"}.issubset(
-                {entry[0] for entry in key_bindings}
-            )
-            or not isinstance(launch_settings, list)
-            or not all(
-                isinstance(entry, list)
-                and len(entry) == 2
-                and isinstance(entry[0], str)
-                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,47}", entry[0]) is not None
-                and isinstance(entry[1], str)
-                and re.fullmatch(r"[A-Za-z0-9_.+-]{1,64}", entry[1]) is not None
-                for entry in launch_settings
-            )
-            or entry_config not in {None, f"x86qw-ktx-mode-{key}.cfg"}
-            or not isinstance(raw_mode_policies, list)
-            or not all(
-                isinstance(value, str) and value in policies
-                for value in raw_mode_policies
-            )
-            or len(raw_mode_policies) != len(set(raw_mode_policies))
-            or any(
-                policies[value].when == "frogbots" for value in raw_mode_policies
-            )
-            or not isinstance(bots, bool)
-            or not isinstance(bot_teams, list)
-            or len(bot_teams) > 4
-            or not all(
-                isinstance(team, str)
-                and re.fullmatch(r"[A-Za-z0-9_-]{1,9}", team) is not None
-                for team in bot_teams
-            )
-            or len({team.casefold() for team in bot_teams}) != len(bot_teams)
-            or any(not isinstance(raw.get(field), str) or not raw[field] for field in text_fields)
-        ):
-            raise InstallerError(f"Definição inválida do modo KTX: {key!r}.")
-        if raw["default_map"].casefold() not in {name.casefold() for name in suggested_maps}:
-            raise InstallerError(f"Mapa padrão ausente nas sugestões do modo KTX {key}.")
-        if (
-            bot_teams
-            and re.fullmatch(r"[1-9][0-9]*", str(raw["recommended_players"]))
-            and int(raw["recommended_players"]) % len(bot_teams) != 0
-        ):
-            raise InstallerError(
-                f"Formação de equipes incompatível com o modo KTX {key}."
-            )
-        mode_identities = {key.casefold(), *(alias.casefold() for alias in aliases)}
-        if identities & mode_identities:
-            raise InstallerError(f"Identidade duplicada no catálogo de modos KTX: {key}.")
-        identities.update(mode_identities)
-        modes.append(KtxModeSpec(
-            key=key,
-            aliases=tuple(aliases),
-            label=str(raw["label"]),
-            description=str(raw["description"]),
-            recommended_players=str(raw["recommended_players"]),
-            usermode=str(raw["usermode"]),
-            default_map=str(raw["default_map"]),
-            suggested_maps=tuple(suggested_maps),
-            help_commands=tuple((str(entry[0]), str(entry[1])) for entry in help_commands),
-            key_bindings=tuple(
-                (str(entry[0]), str(entry[1]), str(entry[2]))
-                for entry in key_bindings
-            ),
-            launch_settings=tuple(
-                (str(entry[0]), str(entry[1])) for entry in launch_settings
-            ),
-            entry_config=entry_config,
-            map_requirements=tuple(
-                policies[value]
-                for value in (
-                    [*default_bot_policies, *raw_mode_policies]
-                    if bots else raw_mode_policies
-                )
-            ),
-            bots=bots,
-            bot_teams=tuple(str(team) for team in bot_teams),
-        ))
-    return tuple(modes)
+    return parse_ktx_modes(read_ktx_mode_catalog(project_root))
 
 
 def load_ktx_menu_groups(project_root: Path) -> tuple[KtxMenuGroupSpec, ...]:
     catalog = read_ktx_mode_catalog(project_root)
-    raw_groups = catalog.get("menu_groups")
-    if not isinstance(raw_groups, list) or not raw_groups:
-        raise InstallerError("Catálogo de modos KTX não declara grupos de navegação.")
-    mode_ids = {mode.key for mode in load_ktx_modes(project_root)}
-    groups: list[KtxMenuGroupSpec] = []
-    identities: set[str] = set()
-    covered: set[str] = set()
-    for raw in raw_groups:
-        if not isinstance(raw, dict):
-            raise InstallerError("Grupo de navegação KTX inválido.")
-        key = raw.get("id")
-        label = raw.get("label")
-        description = raw.get("description")
-        members = raw.get("modes")
-        if (
-            not isinstance(key, str)
-            or re.fullmatch(r"[a-z][a-z0-9-]{0,31}", key) is None
-            or key in identities
-            or not isinstance(label, str)
-            or not label
-            or not isinstance(description, str)
-            or not description
-            or not isinstance(members, list)
-            or not members
-            or not all(isinstance(member, str) and member in mode_ids for member in members)
-            or len(set(members)) != len(members)
-        ):
-            raise InstallerError(f"Grupo de navegação KTX inválido: {key!r}.")
-        identities.add(key)
-        covered.update(members)
-        groups.append(KtxMenuGroupSpec(key, label, description, tuple(members)))
-    if covered != mode_ids:
-        missing = ", ".join(sorted(mode_ids - covered))
-        raise InstallerError(f"Modos KTX sem grupo de navegação: {missing}.")
-    return tuple(groups)
+    return parse_ktx_menu_groups(catalog, parse_ktx_modes(catalog))
 
 
 def player_count_label(value: str) -> str:
@@ -553,9 +424,7 @@ def ktx_options_cli_arguments(options: KtxLaunchOptions) -> list[str]:
 
 
 def public_command(arguments: list[str]) -> str:
-    launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
-    command = [launcher, *arguments]
-    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+    return render_public_command(arguments)
 
 
 def ktx_summary_lines(options: KtxLaunchOptions) -> list[str]:
@@ -608,14 +477,20 @@ def play_summary_text(
     map_name: str,
     runtime_label: str,
     options: KtxLaunchOptions,
+    ruleset: str = DEFAULT_PRODUCT_RULESET,
 ) -> str:
     lines = ["Resumo da partida", f"  Jogo    | {game.label}"]
     if mode is not None:
         lines.append(f"  Modo    | {mode.label}")
-    lines.extend((f"  Mapa    | {map_name}", f"  Cliente | {runtime_label}"))
+    lines.extend((
+        f"  Mapa    | {map_name}",
+        f"  Experiência | {PRODUCT_RULESET_LABELS[ruleset]}",
+        f"  Cliente | {runtime_label}",
+    ))
     if mode is not None:
         lines.extend(ktx_summary_lines(options))
     cli = ["play", game.key]
+    cli.extend(["--ruleset", ruleset])
     if mode is not None:
         cli.extend(["--mode", mode.key])
         cli.extend(ktx_options_cli_arguments(options))
@@ -634,16 +509,6 @@ def print_play_summary(
     print("\n" + play_summary_text(game, mode, map_name, runtime_label, options))
 
 
-def validate_frogbot_name(value: object, label: str) -> str:
-    if (
-        not isinstance(value, str)
-        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .'-]{0,12}", value) is None
-        or len(value) > 13
-    ):
-        raise InstallerError(
-            f"Nome Frogbot inválido em {label}: use de 1 a 13 caracteres ASCII."
-        )
-    return value
 
 
 def validate_frogbot_name_document(
@@ -708,9 +573,10 @@ def validate_frogbot_name_document(
 
 
 def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
-    if core.ZIPAPP_PATH is not None:
-        document = core.read_zipapp_json(
-            core.ZIPAPP_PATH,
+    context = _gameplay_context
+    if context is not None and context.zipapp_path is not None:
+        document = context.read_zipapp_json(
+            context.zipapp_path,
             RUNTIME_KTX_BOT_NAME_CATALOG,
             "Catálogo de nomes Frogbot",
         )
@@ -739,14 +605,6 @@ def load_personal_frogbot_names(target: Path, relative: str) -> tuple[FrogbotIde
     return validate_frogbot_name_document(document, profile="personal", label=str(path))
 
 
-def requested_frogbot_names(
-    options: KtxLaunchOptions,
-    mode: KtxModeSpec | None = None,
-) -> int:
-    if not options.fill_bots:
-        return options.bots
-    limit = ktx_mode_bot_limit(mode) if mode is not None else None
-    return limit if limit is not None else 8
 
 
 def resolve_frogbot_name_profile(
@@ -779,72 +637,8 @@ def resolve_frogbot_name_profile(
     return replace(options, bot_name_pool=pool)
 
 
-def quake_colored_frogbot_name(name: str) -> str:
-    # RGB sequences are forbidden in QuakeWorld player names. Encode the
-    # legacy high-bit glyphs explicitly so the QVM receives at most 15 bytes.
-    colored = "".join(
-        "$xa0" if character == " " else f"$x{ord(character) | 0x80:02x}"
-        for character in name
-    )
-    return f"/$xa0{colored}"
 
 
-def frogbot_identity(value: FrogbotIdentity | str) -> FrogbotIdentity:
-    if isinstance(value, FrogbotIdentity):
-        return value
-    return FrogbotIdentity(validate_frogbot_name(value, "opções de lançamento"))
-
-
-def ktx_bot_name_settings(
-    options: KtxLaunchOptions,
-    mode: KtxModeSpec | None = None,
-) -> tuple[tuple[str, str], ...]:
-    count = requested_frogbot_names(options, mode)
-    if not options.bot_name_pool or count == 0:
-        return ()
-    pool = options.bot_name_pool
-    if len(pool) < count:
-        raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
-    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
-    settings: list[tuple[str, str]] = []
-    for prefix in prefixes:
-        for index in range(count):
-            # A bot keeps the same identity if KTX classifies it as generic,
-            # allied or enemy. Together with the QVM's global bot index, this
-            # prevents cross-role duplicates even in large rosters.
-            identity = frogbot_identity(pool[index])
-            settings.append((
-                f"{prefix}_{index}", quake_colored_frogbot_name(identity.name),
-            ))
-    return tuple(settings)
-
-
-def quake_colored_frogbot_bytes(name: str) -> bytes:
-    return b"/\xa0" + bytes(
-        ord(character) | 0x80
-        for character in name
-    )
-
-
-def ktx_bot_name_binary_settings(
-    options: KtxLaunchOptions,
-    mode: KtxModeSpec | None = None,
-) -> tuple[tuple[str, bytes], ...]:
-    count = requested_frogbot_names(options, mode)
-    if not options.bot_name_pool or count == 0:
-        return ()
-    pool = options.bot_name_pool
-    if len(pool) < count:
-        raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
-    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
-    settings: list[tuple[str, bytes]] = []
-    for prefix in prefixes:
-        for index in range(count):
-            identity = frogbot_identity(pool[index])
-            settings.append((
-                f"{prefix}_{index}", quake_colored_frogbot_bytes(identity.name),
-            ))
-    return tuple(settings)
 
 
 def write_ktx_runtime_config(
@@ -863,42 +657,17 @@ def write_ktx_runtime_config(
     payload = "".join((
         "// x86QW: ephemeral KTX launch configuration\n",
         # Older launchers allowed these user cvars to reach config.cfg. Clear
-        # them before the QVM registers the KTX defaults or this launch sets a
-        # temporary custom pool.
-        "unset_re ^k_fb_name_\n",
+        # the finite KTX namespace explicitly: unset_re can delay native
+        # startup in current ezQuake nightlies.
+        *(
+            f"{command}\n"
+            for command in (ktx_bot_name_cleanup_commands() if settings else ())
+        ),
         *(f"set_ex {name} $qt{value}$qt\n" for name, value in settings),
         *(f"{command}\n" for command in startup_commands),
     )).encode("ascii")
-    descriptor = -1
-    temporary_name = ""
-    try:
-        descriptor, temporary = private_fs.private_mkstemp(
-            prefix="x86qw-ktx-session-", suffix=".cfg", directory=directory,
-        )
-        temporary_name = str(temporary)
-        pending = memoryview(payload)
-        while pending:
-            written = os.write(descriptor, pending)
-            if written == 0:
-                raise OSError("gravação incompleta da configuração efêmera")
-            pending = pending[written:]
-        os.fsync(descriptor)
-    except OSError as error:
-        if descriptor >= 0:
-            os.close(descriptor)
-            descriptor = -1
-        if temporary_name:
-            try:
-                Path(temporary_name).unlink()
-            except OSError:
-                pass
-        raise InstallerError(
-            f"Não foi possível preparar a sessão KTX: {error}"
-        ) from error
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    path = Path(temporary_name)
+    ownership = create_runtime_config(target, payload)
+    path = ownership.config
     lease: object | None = None
     try:
         private_fs.validate_private_file(path)
@@ -910,14 +679,11 @@ def write_ktx_runtime_config(
                 lease.close()
             except OSError:
                 pass
-        try:
-            private_fs.unlink_private_file(path)
-        except OSError:
-            pass
+        release_runtime_config(target, ownership)
         raise InstallerError(
             f"Não foi possível validar a sessão KTX temporária: {error}"
         ) from error
-    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino, lease)
+    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino, lease, ownership)
 
 
 def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
@@ -941,16 +707,7 @@ def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
         return False
     if not valid:
         return False
-    if not lexists(config.path):
-        return True
-    try:
-        private_fs.unlink_private_file(
-            config.path,
-            expected_identity=(config.device, config.inode),
-        )
-    except OSError:
-        return False
-    return True
+    return release_runtime_config(config.path.parents[1], config.ownership)
 
 
 def ktx_external_assets(target: Path) -> frozenset[str]:
@@ -1040,413 +797,118 @@ write_frogbot_runtime_config = write_ktx_runtime_config
 remove_frogbot_runtime_config = remove_ktx_runtime_config
 
 
-def ktx_mode_help_alias(mode: KtxModeSpec) -> str:
-    del mode
-    return "x86qw_ktx_mode_help"
 
 
-def ktx_key_alias_commands(
-    mode: KtxModeSpec,
-    options: KtxLaunchOptions,
-) -> tuple[str, ...]:
-    commands: list[str] = []
-    for key in KTX_CONTEXT_KEYS:
-        alias_key = key.casefold()
-        commands.extend((
-            f"tempalias x86qw_ktx_key_{alias_key} $qt$qt",
-            f"tempalias x86qw_ktx_key_help_{alias_key} $qt$qt",
-        ))
-    for key, command, description in mode.key_bindings:
-        alias_key = key.casefold()
-        colored_key = "".join(f"^{character}" for character in key)
-        commands.extend((
-            f"tempalias x86qw_ktx_key_{alias_key} {command}",
-            "tempalias x86qw_ktx_key_help_"
-            f"{alias_key} echo {colored_key}$x20$x7c$x20{description}",
-        ))
-    if ktx_bot_options_requested(options):
-        commands.extend(ktx_bot_management_alias_commands(mode, options))
-    return tuple(commands)
 
 
-def ktx_bot_management_alias_commands(
-    mode: KtxModeSpec,
-    options: KtxLaunchOptions,
-) -> tuple[str, ...]:
-    """Create a bounded, reversible runtime roster and skill state machine."""
-    initial_count = requested_frogbot_names(options, mode)
-    fixed_limit = ktx_mode_bot_limit(mode)
-    maximum = fixed_limit if fixed_limit is not None else 31
-    commands: list[str] = []
-    explicit_team = f" {options.bot_team}" if options.bot_team is not None else ""
-    for count in range(maximum + 1):
-        if count < maximum:
-            action = (
-                "x86qw_ktx_bot_add_command;"
-                f"x86qw_ktx_bot_roster_{count + 1}"
-            )
-        else:
-            action = "echo Limite de Frogbots deste modo atingido"
-        commands.append(
-            f"tempalias x86qw_ktx_bot_add_{count} {quote_console_command(action)}"
+
+
+
+
+class GameplayPlayerMixin:
+    def saved_client_ruleset(self) -> str | None:
+        marker = self.target / CLIENT_RULESET_PREFERENCE
+        snapshot = observe_personal_file(self.target, marker)
+        if not snapshot.exists:
+            return None
+        try:
+            payload = snapshot.payload
+            assert payload is not None
+            if len(payload) > 4096:
+                raise ValueError("arquivo excede 4096 bytes")
+            state = json.loads(payload.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            raise InstallerError(f"Preferência de ruleset inválida: {marker}") from error
+        valid = (
+            isinstance(state, dict)
+            and set(state) == {"format", "project", "ruleset"}
+            and state.get("format") == 1
+            and state.get("project") == "x86qw"
+            and state.get("ruleset") in PRODUCT_RULESET_ENGINES
         )
-        if count > 0:
-            action = (
-                "cmd botcmd removebot;"
-                f"x86qw_ktx_bot_roster_{count - 1}"
-            )
-        else:
-            action = "echo Nenhum Frogbot para remover"
-        commands.append(
-            f"tempalias x86qw_ktx_bot_remove_{count} {quote_console_command(action)}"
+        if not valid:
+            raise InstallerError(f"Preferência de ruleset inválida: {marker}")
+        return str(state["ruleset"])
+
+    def save_client_ruleset(self, ruleset: str) -> None:
+        if ruleset not in PRODUCT_RULESET_ENGINES:
+            raise InstallerError(f"Ruleset de cliente desconhecido: {ruleset}.")
+        marker = self.target / CLIENT_RULESET_PREFERENCE
+        payload = json.dumps({
+            "format": 1,
+            "project": "x86qw",
+            "ruleset": ruleset,
+        }, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+        result = execute_mutation(prepare_mutation(MutationPlan(
+            identifier="client-ruleset-preference",
+            summary="Salvar preferência pessoal de experiência",
+            steps=(personal_file_step(
+                self.target,
+                marker,
+                payload,
+                key="ruleset",
+                description="Salvar experiência padrão do cliente",
+            ),),
+        )))
+        finalize_mutation(result)
+
+    def choose_client_ruleset(self, current: str | None = None) -> str:
+        keys = tuple(PRODUCT_RULESET_ENGINES)
+        selected = navigation.select_one(
+            "Como você quer jogar?",
+            (
+                navigation.MenuOption(
+                    "x86qw", "x86QW Ruleset · recomendado",
+                    "diversão assistida, nostalgia e controles modernos",
+                    "Experiência original x86QW, pronta para jogar e personalizar.",
+                ),
+                navigation.MenuOption(
+                    "qcon", "QuakeCon", "competição moderna",
+                    "Restrições oficiais do ruleset qcon do ezQuake.",
+                ),
+                navigation.MenuOption(
+                    "smackdown", "Smackdown", "competição clássica",
+                    "Ruleset tradicional da liga Smackdown.",
+                ),
+                navigation.MenuOption(
+                    "thunderdome", "Thunderdome", "duelos de liga",
+                    "Ruleset usado pela comunidade Thunderdome.",
+                ),
+                navigation.MenuOption(
+                    "mtfl", "MTFL", "legado competitivo",
+                    "Compatibilidade com regras históricas MTFL.",
+                ),
+                navigation.MenuOption(
+                    "smackdrive", "Smackdrive", "legado avançado",
+                    "Compatibilidade com o ruleset Smackdrive.",
+                ),
+            ),
+            breadcrumb="x86QW › Experiência",
+            default=keys.index(current) if current in keys else 0,
+            searchable=True,
+            allow_back=True,
         )
-        roster = (
-            f"tempalias x86qw_ktx_bot_add x86qw_ktx_bot_add_{count};"
-            f"tempalias x86qw_ktx_bot_remove x86qw_ktx_bot_remove_{count}"
-        )
-        commands.append(
-            f"tempalias x86qw_ktx_bot_roster_{count} {quote_console_command(roster)}"
-        )
-    if options.bot_skill == "random":
-        random_message = "echo Habilidade aleatoria ativa para cada novo Frogbot"
-        commands.extend((
-            "tempalias x86qw_ktx_bot_add_command "
-            f"{quote_console_command(f'cmd botcmd addbot random{explicit_team}')}",
-            f"tempalias x86qw_ktx_bot_skill_down {quote_console_command(random_message)}",
-            f"tempalias x86qw_ktx_bot_skill_up {quote_console_command(random_message)}",
-        ))
-    else:
-        for skill in range(1, 21):
-            lower = max(1, skill - 1)
-            higher = min(20, skill + 1)
-            down_action = (
-                "echo Habilidade dos proximos Frogbots: "
-                f"{lower};cmd botcmd skill {lower};x86qw_ktx_bot_skill_{lower}"
-            )
-            up_action = (
-                "echo Habilidade dos proximos Frogbots: "
-                f"{higher};cmd botcmd skill {higher};x86qw_ktx_bot_skill_{higher}"
-            )
-            skill_setup = ";".join((
-                f"tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_{skill}",
-                f"tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_{skill}",
-                "tempalias x86qw_ktx_bot_add_command "
-                f"cmd botcmd addbot {skill}{explicit_team}",
-            ))
-            commands.extend((
-                f"tempalias x86qw_ktx_bot_skill_down_{skill} "
-                f"{quote_console_command(down_action)}",
-                f"tempalias x86qw_ktx_bot_skill_up_{skill} "
-                f"{quote_console_command(up_action)}",
-                f"tempalias x86qw_ktx_bot_skill_{skill} "
-                f"{quote_console_command(skill_setup)}",
-            ))
-        commands.append(f"x86qw_ktx_bot_skill_{int(options.bot_skill)}")
-    commands.extend((
-        f"x86qw_ktx_bot_roster_{initial_count}",
-        "tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg",
-    ))
-    return tuple(commands)
+        if selected is None:
+            raise navigation.MenuCancelled("Experiência")
+        return selected
 
+    def resolve_client_ruleset(
+        self, requested: str | None, *, choose_interactively: bool,
+    ) -> str:
+        if requested is not None:
+            if requested not in PRODUCT_RULESET_ENGINES:
+                raise InstallerError(f"Ruleset de cliente desconhecido: {requested}.")
+            return requested
+        saved = self.saved_client_ruleset()
+        if saved is not None:
+            return saved
+        if not choose_interactively:
+            return DEFAULT_PRODUCT_RULESET
+        selected = self.choose_client_ruleset()
+        self.save_client_ruleset(selected)
+        console.success(f"Experiência salva: {PRODUCT_RULESET_LABELS[selected]}.")
+        return selected
 
-def quote_console_command(command: str) -> str:
-    """Keep an ezQuake command body inside one command-line argument."""
-    if '"' in command or any(ord(character) < 32 for character in command):
-        raise InstallerError("Comando interno do ezQuake contém caracteres inválidos.")
-    return f'"{command}"'
-
-
-def ktx_chunked_setup_alias_commands(
-    commands: tuple[str, ...], *, maximum_body: int = 700,
-) -> tuple[str, ...]:
-    """Store a long post-map setup in bounded temporary aliases."""
-    chunks: list[list[str]] = []
-    current: list[str] = []
-    current_length = 0
-    for command in commands:
-        if len(command) > maximum_body:
-            raise InstallerError("Comando de inicialização KTX excede o limite seguro.")
-        added = len(command) + (1 if current else 0)
-        if current and current_length + added > maximum_body:
-            chunks.append(current)
-            current = []
-            current_length = 0
-            added = len(command)
-        current.append(command)
-        current_length += added
-    if current:
-        chunks.append(current)
-    aliases = tuple(
-        f"x86qw_ktx_launch_setup_{index}"
-        for index in range(1, len(chunks) + 1)
-    )
-    definitions = list(
-        f"tempalias {alias} {quote_console_command(';'.join(chunk))}"
-        for alias, chunk in zip(aliases, chunks)
-    )
-    current_aliases = aliases
-    level = 1
-    while len(";".join(current_aliases)) > maximum_body:
-        parent_aliases: list[str] = []
-        group: list[str] = []
-        group_length = 0
-        for alias in current_aliases:
-            added = len(alias) + (1 if group else 0)
-            if group and group_length + added > maximum_body:
-                parent = f"x86qw_ktx_launch_group_{level}_{len(parent_aliases) + 1}"
-                definitions.append(
-                    f"tempalias {parent} {quote_console_command(';'.join(group))}"
-                )
-                parent_aliases.append(parent)
-                group = []
-                group_length = 0
-                added = len(alias)
-            group.append(alias)
-            group_length += added
-        if group:
-            parent = f"x86qw_ktx_launch_group_{level}_{len(parent_aliases) + 1}"
-            definitions.append(
-                f"tempalias {parent} {quote_console_command(';'.join(group))}"
-            )
-            parent_aliases.append(parent)
-        current_aliases = tuple(parent_aliases)
-        level += 1
-    definitions.append(
-        "tempalias x86qw_ktx_launch_setup "
-        f"{quote_console_command(';'.join(current_aliases))}"
-    )
-    return tuple(definitions)
-
-
-def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
-    return any((
-        options.bots,
-        options.fill_bots,
-        options.bot_skill != 5,
-        options.bot_team is not None,
-        options.bot_weapon is not None,
-        options.bot_health is not None,
-        options.bot_break_on_death is not None,
-    ))
-
-
-def active_ktx_map_requirements(
-    mode: KtxModeSpec,
-    options: KtxLaunchOptions,
-) -> tuple[KtxMapRequirement, ...]:
-    """Return the map assets required by the actual launch context."""
-    frogbots = ktx_bot_options_requested(options)
-    return tuple(
-        requirement
-        for requirement in mode.map_requirements
-        if requirement.when == "always"
-        or (requirement.when == "frogbots" and frogbots)
-    )
-
-
-def required_ktx_map_assets(
-    mode: KtxModeSpec,
-    options: KtxLaunchOptions,
-) -> tuple[str, ...]:
-    return tuple(
-        requirement.asset for requirement in active_ktx_map_requirements(mode, options)
-    )
-
-
-def without_frogbots(options: KtxLaunchOptions) -> KtxLaunchOptions:
-    """Clear every transient Frogbot choice when the menu says Sem bots."""
-    return replace(
-        options,
-        bots=0,
-        fill_bots=False,
-        bot_skill=5,
-        bot_team=None,
-        bot_weapon=None,
-        bot_health=None,
-        bot_break_on_death=None,
-        bot_names_profile="default",
-        bot_name_pool=(),
-    )
-
-
-def ktx_mode_bot_limit(mode: KtxModeSpec) -> int | None:
-    """Return the remaining fixed slots after the local human player."""
-    if re.fullmatch(r"[1-9][0-9]*", mode.recommended_players) is None:
-        return None
-    return max(0, min(31, int(mode.recommended_players) - 1))
-
-
-def ktx_mode_roster_description(mode: KtxModeSpec) -> str:
-    if mode.bot_teams and re.fullmatch(r"[1-9][0-9]*", mode.recommended_players):
-        players_per_team = int(mode.recommended_players) // len(mode.bot_teams)
-        return f"{len(mode.bot_teams)} equipes de {players_per_team} jogadores"
-    return f"completar {mode.recommended_players} jogadores"
-
-
-def validate_ktx_bot_count(mode: KtxModeSpec, options: KtxLaunchOptions) -> None:
-    limit = ktx_mode_bot_limit(mode)
-    requested = requested_frogbot_names(options, mode)
-    if limit is not None and requested > limit:
-        noun = "Frogbot" if limit == 1 else "Frogbots"
-        raise InstallerError(
-            f"{mode.label} aceita no máximo {limit} {noun} com um jogador humano."
-        )
-
-
-def ktx_bot_team_sequence(
-    mode: KtxModeSpec,
-    options: KtxLaunchOptions,
-) -> tuple[str | None, ...]:
-    """Balance selected bots against the local player in the declared teams."""
-    count = requested_frogbot_names(options, mode)
-    if options.bot_team is not None:
-        return (options.bot_team,) * count
-    if not mode.bot_teams:
-        return (None,) * count
-    populations = [1, *(0 for _team in mode.bot_teams[1:])]
-    result: list[str] = []
-    for _index in range(count):
-        selected = min(range(len(mode.bot_teams)), key=lambda index: populations[index])
-        result.append(mode.bot_teams[selected])
-        populations[selected] += 1
-    return tuple(result)
-
-
-def ktx_launch_commands(
-    mode: KtxModeSpec,
-    map_name: str,
-    assets: frozenset[str],
-    options: KtxLaunchOptions,
-) -> tuple[str, ...]:
-    commands: list[str] = []
-    for requirement in active_ktx_map_requirements(mode, options):
-        asset = requirement.asset.replace("{map}", map_name.casefold()).casefold()
-        if asset not in assets:
-            raise InstallerError(
-                f"O mapa {map_name} não possui o recurso {requirement.label} "
-                f"exigido pelo modo {mode.label} ({asset})."
-            )
-    bot_options = ktx_bot_options_requested(options)
-    if bot_options:
-        if not mode.bots:
-            raise InstallerError(f"Bots Frogbot não são compatíveis com o modo {mode.label}.")
-        validate_ktx_bot_count(mode, options)
-        if options.bot_team is not None and not options.bots:
-            raise InstallerError("--bot-team exige --bots; o comando fill distribui as equipes.")
-        if (
-            options.bot_team is not None
-            and mode.bot_teams
-            and options.bot_team.casefold() not in {
-                team.casefold() for team in mode.bot_teams
-            }
-        ):
-            expected = ", ".join(mode.bot_teams)
-            raise InstallerError(
-                f"A equipe {options.bot_team} não pertence ao modo {mode.label}; "
-                f"use uma destas: {expected}."
-            )
-        if mode.key != "tot" and any((
-            options.bot_weapon is not None,
-            options.bot_health is not None,
-            options.bot_break_on_death is not None,
-        )):
-            raise InstallerError(
-                "--bot-weapon, --bot-health e --[no-]bot-break-on-death "
-                "só podem ser usados com o modo KTX tot."
-            )
-        bot_count = requested_frogbot_names(options, mode)
-        if not options.fill_bots or mode.bot_teams:
-            required_clients = bot_count + 1
-            commands.extend((
-                f"if ($k_maxclients < {required_clients}) then k_maxclients {required_clients}",
-                f"if ($maxclients < {required_clients}) then maxclients {required_clients}",
-            ))
-        if mode.bot_teams and options.bot_team is None:
-            commands.append(f"team {mode.bot_teams[0]}")
-        commands.append(f"cmd botcmd skill {options.bot_skill}")
-        if options.bot_health is not None:
-            commands.append(f"cmd botcmd health {options.bot_health}")
-        if options.bot_weapon is not None:
-            commands.append(f"cmd botcmd weapon {options.bot_weapon}")
-        if options.fill_bots and not mode.bot_teams:
-            commands.append(f"cmd botcmd fill {options.bot_skill}")
-        else:
-            team_sequence = ktx_bot_team_sequence(mode, options)
-            for index, selected_team in enumerate(team_sequence):
-                # Without an explicit override, let KTX apply its native team
-                # colors and role-aware names while the patched gamecode uses
-                # the declared usermode's team count for balancing.
-                team = (
-                    f" {selected_team}"
-                    if options.bot_team is not None and selected_team is not None
-                    else ""
-                )
-                commands.append(f"cmd botcmd addbot {options.bot_skill}{team}")
-                if index + 1 < len(team_sequence):
-                    commands.extend(("wait",) * FROGBOT_ADD_WAIT_FRAMES)
-        if options.bot_name_pool:
-            # set_ex creates user cvars in ezQuake. Remove them after KTX has
-            # copied the names so they never leak into the player's config.
-            # The final client command still needs a server frame to reach the
-            # local QVM, just like the commands between successive bots.
-            commands.extend(("wait",) * FROGBOT_ADD_WAIT_FRAMES)
-            setting_names = [
-                name for name, _value in ktx_bot_name_settings(options, mode)
-            ]
-            for offset in range(0, len(setting_names), 12):
-                commands.append("unset " + " ".join(
-                    setting_names[offset:offset + 12]
-                ))
-
-    ctf_options = any((
-        options.ctf_hook is not None,
-        options.ctf_runes is not None,
-        options.ctf_based_spawn,
-    ))
-    if ctf_options and mode.key != "ctf":
-        raise InstallerError("Opções --ctf-* só podem ser usadas com o modo KTX ctf.")
-    if mode.key == "ctf":
-        hook_commands = {
-            "off": "nohook",
-            "smooth": "hook_smooth",
-            "fast": "hook_fast",
-            "classic": "hook_classic",
-            "crhook": "hook_crhook",
-        }
-        if options.ctf_hook is not None:
-            commands.append(f"cmd {hook_commands[options.ctf_hook]}")
-        if options.ctf_runes == "off":
-            commands.append("cmd norunes")
-        if options.ctf_based_spawn:
-            commands.append("cmd ctfbasedspawn")
-
-    race_options = any((
-        options.race_style is not None,
-        options.race_scoring is not None,
-        options.race_pacemaker is not None,
-        options.race_hide_players,
-    ))
-    if race_options and mode.key != "race":
-        raise InstallerError("Opções --race-* só podem ser usadas com o modo KTX race.")
-    if mode.key == "race":
-        if options.race_scoring is not None and options.race_style in {"solo", "simultaneous"}:
-            raise InstallerError("--race-scoring exige --race-style match (ou omitir o estilo).")
-        if options.race_style == "solo":
-            commands.append("cmd race_simultaneous")
-        if options.race_style == "match" or (
-            options.race_style is None and options.race_scoring is not None
-        ):
-            commands.append("cmd race_match")
-        scoring_steps = {None: 0, "win": 0, "scaled": 1, "formula1": 2}
-        commands.extend("cmd race_scoring" for _ in range(scoring_steps[options.race_scoring]))
-        if options.race_pacemaker is not None:
-            commands.append(f"cmd race_pacemaker {options.race_pacemaker}")
-        if options.race_hide_players:
-            commands.append("cmd race_hide_players")
-    return tuple(commands)
-
-
-class Player(core.Installer):
     @staticmethod
     def config_cvars(payload: bytes, names: tuple[str, ...]) -> dict[str, str]:
         values: dict[str, str] = {}
@@ -1477,13 +939,15 @@ class Player(core.Installer):
                 updated += name.encode("ascii") + b' "' + value.encode("ascii") + b'"' + newline
         return updated
 
-    def remove_legacy_macos_video_layout(self) -> None:
+    def remove_legacy_macos_video_layout(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> MutationResult | None:
         """Remove the short-lived 0.1.7 borderless workaround without touching personal video settings."""
-        if sys.platform != "darwin":
-            return
+        if not is_macos_host():
+            return None
         marker = self.target / LEGACY_MACOS_VIDEO_LAYOUT
         if not lexists(marker):
-            return
+            return None
         if not marker.is_file() or marker.is_symlink():
             raise InstallerError(f"Estado legado de vídeo do launcher inválido: {marker}")
         try:
@@ -1499,36 +963,50 @@ class Player(core.Installer):
             and set(settings) == set(LEGACY_MACOS_VIDEO_CVARS)
             and all(isinstance(value, str) for value in settings.values())
         )
+        steps: list[MutationStep] = []
+        restored = False
         if managed and valid_settings and config.is_file() and backup.is_file():
             values = self.config_cvars(config.read_bytes(), LEGACY_MACOS_VIDEO_CVARS)
             if values == settings:
-                self.write_personal_config(config, backup.read_bytes())
-                remove_path(backup)
-                console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
-        remove_path(marker)
+                backup_payload = observe_personal_file(self.target, backup).payload
+                assert backup_payload is not None
+                steps.extend((
+                    personal_file_step(
+                        self.target,
+                        config,
+                        backup_payload,
+                        key="config",
+                        description="Restaurar configuração pessoal de vídeo",
+                    ),
+                    personal_file_step(
+                        self.target,
+                        backup,
+                        None,
+                        key="backup",
+                        description="Remover backup legado restaurado",
+                    ),
+                ))
+                restored = True
+        steps.append(personal_file_step(
+            self.target,
+            marker,
+            None,
+            key="marker",
+            description="Remover marcador legado de vídeo",
+        ))
+        result = execute_mutation(prepare_mutation(MutationPlan(
+            identifier="macos-legacy-video-layout",
+            summary="Remover ajuste legado de vídeo reversivelmente",
+            steps=tuple(steps),
+        )))
+        if restored:
+            console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
         console.info("Ajuste legado de janela sem bordas removido; o ezQuake continuará em fullscreen.")
+        return _retain_or_finalize_personal_mutation(result, mutation_results)
 
     def macos_notched_fullscreen_settings(self) -> dict[str, str] | None:
         try:
-            profile = subprocess.run(
-                ["system_profiler", "SPDisplaysDataType", "-json"],
-                check=True, capture_output=True, text=True, timeout=8,
-            )
-            displays = json.loads(profile.stdout).get("SPDisplaysDataType")
-            if not isinstance(displays, list):
-                raise ValueError("lista de monitores ausente")
-            main: dict[str, object] | None = None
-            for gpu in displays:
-                if not isinstance(gpu, dict) or not isinstance(gpu.get("spdisplays_ndrvs"), list):
-                    continue
-                for display in gpu["spdisplays_ndrvs"]:
-                    if isinstance(display, dict) and display.get("spdisplays_main") == "spdisplays_yes":
-                        main = display
-                        break
-                if main is not None:
-                    break
-            if main is None:
-                raise ValueError("monitor principal ausente")
+            main = macos_main_display()
             if main.get("spdisplays_connection_type") != "spdisplays_internal":
                 return None
             native = str(main.get("spdisplays_pixelresolution", ""))
@@ -1538,8 +1016,7 @@ class Player(core.Installer):
             width, panel_height = (int(value) for value in resolution.groups())
             safe_height = round(width * 10 / 16)
         except (
-            OSError, subprocess.SubprocessError, json.JSONDecodeError,
-            KeyError, TypeError, ValueError,
+            DisplayAdapterError, KeyError, TypeError, ValueError,
         ) as error:
             raise InstallerError(f"Não foi possível detectar o modo fullscreen seguro do macOS: {error}") from error
         if width < 1280 or panel_height < 800:
@@ -1568,25 +1045,26 @@ class Player(core.Installer):
             "vid_displayfrequency": "0",
         }
 
-    def write_macos_fullscreen_marker(
-        self, marker: Path, *, managed: bool, settings: dict[str, str],
-    ) -> None:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps({
+    @staticmethod
+    def macos_fullscreen_marker_payload(
+        *, managed: bool, settings: dict[str, str],
+    ) -> bytes:
+        return json.dumps({
             "format": 1,
             "project": "x86qw",
             "mode": "notched-fullscreen",
             "managed": managed,
             "settings": settings,
         }, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
-        self.write_personal_config(marker, payload)
 
-    def configure_macos_fullscreen(self) -> None:
-        if sys.platform != "darwin":
-            return
+    def configure_macos_fullscreen(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> MutationResult | None:
+        if not is_macos_host():
+            return None
         config = self.target / "ezquake/configs/config.cfg"
         if not lexists(config):
-            return
+            return None
         if not config.is_file() or config.is_symlink():
             raise InstallerError(f"Configuração global do ezQuake inválida: {config}")
         marker = self.target / MACOS_FULLSCREEN_LAYOUT
@@ -1620,11 +1098,21 @@ class Player(core.Installer):
             managed = state["managed"]
             previous = dict(settings)
         if managed and current != previous:
-            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            result = execute_mutation(prepare_mutation(MutationPlan(
+                identifier="macos-fullscreen-personal",
+                summary="Preservar configuração pessoal de fullscreen",
+                steps=(personal_file_step(
+                    self.target,
+                    marker,
+                    self.macos_fullscreen_marker_payload(managed=False, settings={}),
+                    key="marker",
+                    description="Desativar fullscreen automático",
+                ),),
+            )))
             console.info("Configuração de vídeo pessoal detectada; o fullscreen automático foi desativado.")
-            return
+            return _retain_or_finalize_personal_mutation(result, mutation_results)
         if lexists(marker) and not managed:
-            return
+            return None
 
         desired = self.macos_notched_fullscreen_settings()
         if desired is None:
@@ -1632,10 +1120,30 @@ class Player(core.Installer):
                 updated = self.set_config_cvars(current_payload, {
                     "vid_fullscreen": "1", "vid_usedesktopres": "1",
                 })
-                self.write_personal_config(config, updated)
-                remove_path(marker)
+                steps: list[MutationStep] = []
+                if updated != current_payload:
+                    steps.append(personal_file_step(
+                        self.target,
+                        config,
+                        updated,
+                        key="config",
+                        description="Restaurar fullscreen desktop",
+                    ))
+                steps.append(personal_file_step(
+                    self.target,
+                    marker,
+                    None,
+                    key="marker",
+                    description="Remover marcador de fullscreen automático",
+                ))
+                result = execute_mutation(prepare_mutation(MutationPlan(
+                    identifier="macos-fullscreen-desktop",
+                    summary="Restaurar fullscreen desktop reversivelmente",
+                    steps=tuple(steps),
+                )))
                 console.success("Fullscreen desktop restaurado para o monitor sem notch.")
-            return
+                return _retain_or_finalize_personal_mutation(result, mutation_results)
+            return None
         default_fullscreen = (
             not current
             or (
@@ -1644,18 +1152,47 @@ class Player(core.Installer):
             )
         )
         if not managed and not default_fullscreen:
-            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            result = execute_mutation(prepare_mutation(MutationPlan(
+                identifier="macos-fullscreen-custom",
+                summary="Registrar preservação do fullscreen pessoal",
+                steps=(personal_file_step(
+                    self.target,
+                    marker,
+                    self.macos_fullscreen_marker_payload(managed=False, settings={}),
+                    key="marker",
+                    description="Registrar configuração pessoal preservada",
+                ),),
+            )))
             console.info("Configuração de vídeo pessoal preservada; nenhum modo fullscreen foi alterado.")
-            return
+            return _retain_or_finalize_personal_mutation(result, mutation_results)
         updated = self.set_config_cvars(current_payload, desired)
+        steps = []
         if updated != current_payload:
-            self.write_personal_config(config, updated)
-        self.write_macos_fullscreen_marker(marker, managed=True, settings=desired)
+            steps.append(personal_file_step(
+                self.target,
+                config,
+                updated,
+                key="config",
+                description="Aplicar fullscreen seguro do macOS",
+            ))
+        steps.append(personal_file_step(
+            self.target,
+            marker,
+            self.macos_fullscreen_marker_payload(managed=True, settings=desired),
+            key="marker",
+            description="Registrar fullscreen automático",
+        ))
+        result = execute_mutation(prepare_mutation(MutationPlan(
+            identifier="macos-fullscreen-safe-area",
+            summary="Aplicar fullscreen seguro reversivelmente",
+            steps=tuple(steps),
+        )))
         if not managed:
             console.success(
                 f"Fullscreen macOS definido antes da abertura em "
                 f"{desired['vid_width']}x{desired['vid_height']}, com frequência automática."
             )
+        return _retain_or_finalize_personal_mutation(result, mutation_results)
 
     @staticmethod
     def map_name_from_member(member: str) -> str | None:
@@ -1668,8 +1205,8 @@ class Player(core.Installer):
         return name
 
     def maps_from_package(self, package: Path) -> set[str]:
-        maps: set[str] = set()
         if package.suffix.lower() == ".pk3":
+            maps: set[str] = set()
             try:
                 plan = scan_archive(package)
             except (ArchiveError, OSError) as error:
@@ -1681,30 +1218,14 @@ class Player(core.Installer):
                     maps.add(name)
             return maps
         try:
-            size = package.stat().st_size
-            with package.open("rb") as archive:
-                header = archive.read(12)
-                if len(header) != 12 or header[:4] != b"PACK":
-                    raise InstallerError(f"PAK de mapas inválido: {package}")
-                directory_offset, directory_size = struct.unpack("<II", header[4:])
-                if (
-                    directory_offset < 12 or directory_size % 64
-                    or directory_offset + directory_size > size
-                ):
-                    raise InstallerError(f"Diretório PAK inválido: {package}")
-                archive.seek(directory_offset)
-                directory = archive.read(directory_size)
+            return list_bsp_names(package)
         except OSError as error:
             raise InstallerError(f"Não foi possível ler o PAK de mapas: {package}") from error
-        for offset in range(0, len(directory), 64):
-            raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
-            try:
-                member = raw_name.decode("ascii")
-            except UnicodeDecodeError:
-                continue
-            if name := self.map_name_from_member(member):
-                maps.add(name)
-        return maps
+        except PakError as error:
+            message = str(error)
+            if message.startswith("PAK inválido:"):
+                message = message.replace("PAK inválido:", "PAK de mapas inválido:", 1)
+            raise InstallerError(message) from error
 
     def local_map_names(self, gamedir: str) -> list[str]:
         maps: set[str] = set()
@@ -2271,7 +1792,12 @@ class Player(core.Installer):
         ktx_options: KtxLaunchOptions | None = None,
         *,
         configure_interactively: bool = False,
+        ruleset: str | None = None,
+        choose_ruleset_interactively: bool = False,
     ) -> None:
+        selected_ruleset = self.resolve_client_ruleset(
+            ruleset, choose_interactively=choose_ruleset_interactively,
+        )
         self.check_paks()
         games = self.available_local_games()
         if not games:
@@ -2383,7 +1909,7 @@ class Player(core.Installer):
             if configure_interactively:
                 label, _runtime = runtime_choice
                 summary = play_summary_text(
-                    game, ktx_mode, map_name, label, launch_options,
+                    game, ktx_mode, map_name, label, launch_options, selected_ruleset,
                 )
                 confirmed = navigation.confirm(
                     "Iniciar esta partida?",
@@ -2409,12 +1935,31 @@ class Player(core.Installer):
         assert map_name is not None
         self.verify_local_play_support(games)
         label, runtime = runtime_choice
-        arguments = [
+        arguments: list[str] = []
+        # "default" already is ezQuake's startup ruleset. Keep x86QW as the
+        # product name without forcing a redundant engine ruleset reset.
+        if selected_ruleset != DEFAULT_PRODUCT_RULESET:
+            arguments.extend([
+                "-ruleset", PRODUCT_RULESET_ENGINES[selected_ruleset],
+            ])
+        arguments.extend([
+            "+set", "x86qw_ruleset",
+            "1" if selected_ruleset == DEFAULT_PRODUCT_RULESET else "0",
+        ])
+        profile = PRODUCT_RULESET_CONFIGS.get(selected_ruleset)
+        if profile is not None:
+            arguments.extend(["+exec", profile])
+        arguments.extend([
             "+sb_listcache", "0", "+spectator", "0",
             "+bind", "F12", "quit",
-        ]
+        ])
         for name, value in game.local_server_settings:
             arguments.extend([f"+{name}", value])
+        if uses_mode_catalog:
+            arguments.extend([
+                "+set", "k_x86qw_quadcoach",
+                "1" if selected_ruleset == DEFAULT_PRODUCT_RULESET else "0",
+            ])
         arguments.extend(game.client_game_arguments)
         arguments.extend(game.pre_connect_arguments)
         if game.legacy_remote_capabilities:
@@ -2466,23 +2011,27 @@ class Player(core.Installer):
             else:
                 event_body = f"exec {ktx_mode.entry_config}"
             if (
-                ktx_bot_options_requested(launch_options)
+                profile is not None
+                or ktx_bot_options_requested(launch_options)
                 or len(setup_body) > KTX_INLINE_SETUP_LIMIT
             ):
                 # Keep the long, frame-separated addbot sequence outside the
                 # engine's bounded startup command line. The ephemeral file is
                 # read before the map and removed immediately after startup.
+                setup_definitions, setup_invocation = (
+                    ktx_chunked_setup_alias_plan(setup_commands)
+                )
+                if ktx_mode.entry_config is None:
+                    event_body = f"exec x86qw-ktx.cfg;{setup_invocation}"
+                    compatibility_entry = ()
+                else:
+                    compatibility_entry = (
+                        "tempalias x86qw_ktx_launch_setup "
+                        f"{quote_console_command(setup_invocation)}",
+                    )
                 ktx_startup_commands = (
-                    *(
-                        key_alias_commands
-                        if ktx_bot_options_requested(launch_options)
-                        else ()
-                    ),
-                    *ktx_chunked_setup_alias_commands(
-                        post_map_commands
-                        if ktx_bot_options_requested(launch_options)
-                        else setup_commands
-                    ),
+                    *setup_definitions,
+                    *compatibility_entry,
                     f"tempalias {event} {quote_console_command(event_body)}",
                 )
                 arguments.extend([
@@ -2532,14 +2081,13 @@ class Player(core.Installer):
             ]
         try:
             process = self.launch_runtime(runtime, arguments)
-            if runtime_config is not None and isinstance(process, subprocess.Popen):
-                deadline = time.monotonic() + 3.0
-                while time.monotonic() < deadline:
-                    if process.poll() is not None:
-                        raise InstallerError(
-                            "O ezQuake encerrou antes de carregar a configuração KTX."
-                        )
-                    time.sleep(0.05)
+            if (
+                runtime_config is not None
+                and not process_remains_alive(process, duration=3.0)
+            ):
+                raise InstallerError(
+                    "O ezQuake encerrou antes de carregar a configuração KTX."
+                )
         finally:
             if (
                 runtime_config is not None
@@ -2574,7 +2122,7 @@ class Player(core.Installer):
             if (
                 not destination.is_file()
                 or destination.is_symlink()
-                or file_hash(destination) != digest
+                or file_sha256(destination) != digest
             ):
                 issues.append(f"gamecode derivado ausente ou divergente: {relative}")
         for game in games:
@@ -2591,17 +2139,32 @@ class Player(core.Installer):
                 "Execute update, upgrade ou repair antes de jogar ou hospedar."
             )
 
-    def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
+    def ensure_local_play_support(
+        self,
+        games: list[LocalGameSpec],
+        *,
+        mutation_results: list[MutationResult] | None = None,
+    ) -> tuple[MutationResult, ...]:
         present, old_entries, _ = self.validate_component_pair("play-support")
-        if not games:
-            if present:
-                removed = self.remove_component("play-support")
-                console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
-            return
+        created: list[MutationResult] = []
         old = dict(old_entries) if present else {}
         previous_stage = self.stage
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-play.", dir=self.target))
+        previous_stage_identity = self._stage_identity
+        previous_stage_created_roots = self._stage_created_roots
+        owned_stage = previous_stage is None
+        if owned_stage:
+            self._create_stage(".quake-play.")
+        cleanup = mutation_results is None
         try:
+            if not games:
+                if present:
+                    removed, result = self.remove_component_transaction("play-support")
+                    created.append(result)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
+                    console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
+                return tuple(created) if mutation_results is not None else ()
+            assert self.stage is not None
             managed = self.stage / "managed"
             prepared = 0
             for relative, payload in self.expected_local_play_support(games).items():
@@ -2610,7 +2173,7 @@ class Player(core.Installer):
                 if lexists(destination):
                     if not destination.is_file() or destination.is_symlink():
                         raise InstallerError(f"Suporte local inválido: {destination}")
-                    current_digest = file_hash(destination)
+                    current_digest = file_sha256(destination)
                     if current_digest != expected_digest and old.get(relative) != current_digest:
                         console.warning(f"Arquivo pessoal preservado: {destination}")
                         continue
@@ -2619,33 +2182,111 @@ class Player(core.Installer):
                 candidate.write_bytes(payload)
                 prepared += 1
             if prepared:
-                count = self.install_component_overlay(
+                count, result = self.install_component_overlay_transaction(
                     "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",
                 )
+                created.append(result)
+                if mutation_results is not None:
+                    mutation_results.append(result)
                 console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
             elif present:
-                removed = self.remove_component("play-support")
+                removed, result = self.remove_component_transaction("play-support")
+                created.append(result)
+                if mutation_results is not None:
+                    mutation_results.append(result)
                 console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
             for game in games:
-                self.ensure_game_user_profile(game)
+                result = self.ensure_game_user_profile(game)
+                if result is not None:
+                    created.append(result)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
+            return tuple(created) if mutation_results is not None else ()
+        except BaseException as error:
+            if isinstance(error, MutationRollbackError):
+                cleanup = False
+            if mutation_results is None:
+                try:
+                    self.rollback_component_transactions(created, error)
+                except BaseException:
+                    cleanup = False
+                    raise
+            raise
         finally:
-            self.cleanup_stage()
-            self.stage = previous_stage
+            if owned_stage and cleanup:
+                self.cleanup_stage()
+                self.stage = previous_stage
+                self._stage_identity = previous_stage_identity
+                self._stage_created_roots = previous_stage_created_roots
 
-    def ensure_game_user_profile(self, game: LocalGameSpec) -> None:
+    def ensure_game_user_profile(self, game: LocalGameSpec) -> MutationResult | None:
         destination = self.target.joinpath(*PurePosixPath(game.personal_config).parts)
+        _profile_parent_paths(self.target, destination)
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
                 raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")
-            return
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(
-            f"// x86QW: personalizações locais de {game.label}\n",
-            encoding="utf-8",
+            return None
+        payload = f"// x86QW: personalizações locais de {game.label}\n".encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        expected_topology = _profile_topology(self.target, destination)
+
+        def apply() -> _PersonalProfileToken:
+            created_directories: list[tuple[Path, tuple[int, int]]] = []
+            try:
+                if _profile_topology(self.target, destination) != expected_topology:
+                    raise InstallerError(
+                        f"Diretórios da configuração pessoal mudaram: {destination.parent}"
+                    )
+                for parent, identity in expected_topology:
+                    if identity is not None:
+                        continue
+                    parent.mkdir(mode=0o755)
+                    created_directories.append((parent, _entry_identity(parent)))
+                try:
+                    atomic_create_bytes(destination, payload, mode=0o644)
+                except AtomicWriteError as error:
+                    if error.committed_identity is not None:
+                        _remove_created_profile(_PersonalProfileToken(
+                            self.target,
+                            destination,
+                            error.committed_identity,
+                            digest,
+                            len(payload),
+                            tuple(created_directories),
+                        ))
+                    raise
+                identity = _entry_identity(destination)
+                return _PersonalProfileToken(
+                    self.target,
+                    destination,
+                    identity,
+                    digest,
+                    len(payload),
+                    tuple(created_directories),
+                )
+            except BaseException:
+                for parent, identity in reversed(created_directories):
+                    if lexists(parent) and _entry_identity(parent) == identity:
+                        try:
+                            parent.rmdir()
+                        except OSError:
+                            pass
+                raise
+
+        plan = MutationPlan(
+            identifier=f"personal-config:{game.key}",
+            summary=f"Criar configuração pessoal de {game.label}",
+            steps=(MutationStep(
+                key="profile",
+                description=f"Criar {game.personal_config}",
+                observe=lambda: _profile_topology(self.target, destination),
+                apply=apply,
+                rollback=_remove_created_profile,
+            ),),
         )
-        if os.name != "nt":
-            destination.chmod(0o644)
+        result = execute_mutation(prepare_mutation(plan))
         console.info(f"Configuração pessoal de {game.label} criada: {destination}")
+        return result
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
         package = self.game_program_path(game)
@@ -2664,35 +2305,45 @@ class Player(core.Installer):
 
     def pak_member(self, package: Path, member_name: str) -> bytes:
         try:
-            size = package.stat().st_size
-            with package.open("rb") as archive:
-                header = archive.read(12)
-                if len(header) != 12 or header[:4] != b"PACK":
-                    raise InstallerError(f"PAK inválido: {package}")
-                directory_offset, directory_size = struct.unpack("<II", header[4:])
-                if directory_offset < 12 or directory_size % 64 or directory_offset + directory_size > size:
-                    raise InstallerError(f"Diretório PAK inválido: {package}")
-                archive.seek(directory_offset)
-                directory = archive.read(directory_size)
-                for offset in range(0, len(directory), 64):
-                    raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
-                    try:
-                        name = raw_name.decode("ascii")
-                    except UnicodeDecodeError:
-                        continue
-                    if name.casefold() != member_name.casefold():
-                        continue
-                    data_offset, data_size = struct.unpack_from("<II", directory, offset + 56)
-                    if data_offset < 12 or data_offset + data_size > size:
-                        raise InstallerError(f"Membro PAK inválido em {package}: {name}")
-                    archive.seek(data_offset)
-                    payload = archive.read(data_size)
-                    if len(payload) != data_size:
-                        raise InstallerError(f"Membro PAK truncado em {package}: {name}")
-                    return payload
+            return read_pak_member(package, member_name)
         except OSError as error:
             raise InstallerError(f"Não foi possível ler o PAK: {package}") from error
-        raise InstallerError(f"Gamecode {member_name} não encontrado em {package}.")
+        except PakError as error:
+            raise InstallerError(str(error)) from error
+
+
+def create_player_adapter(installer_base: type) -> type:
+    """Compose gameplay behavior with an explicitly supplied installer base."""
+    if not isinstance(installer_base, type):
+        raise TypeError("installer_base deve ser uma classe")
+    adapter = _player_adapters.get(installer_base)
+    if adapter is None:
+        adapter = type(
+            "Player",
+            (GameplayPlayerMixin, installer_base),
+            {
+                "__module__": __name__,
+                "__qualname__": "Player",
+                "__doc__": "Gameplay adapter composed with the manager installer base.",
+            },
+        )
+        _player_adapters[installer_base] = adapter
+    return adapter
+
+
+def player_class(installer_base: type | None = None) -> type:
+    """Return the public Player class from the explicit composition context."""
+    if installer_base is None:
+        installer_base = _context().installer_base
+    return create_player_adapter(installer_base)
+
+
+def __getattr__(name: str) -> object:
+    if name == "Player":
+        adapter = player_class()
+        globals()[name] = adapter
+        return adapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def bounded_integer(minimum: int, maximum: int):
@@ -2863,8 +2514,9 @@ def resolve_ktx_launch_options(
 
 
 def parse_arguments(arguments: list[str], project_root: Path):
-    public_cli = core.ZIPAPP_PATH is not None
-    parser = core.FriendlyArgumentParser(
+    context = _gameplay_context
+    public_cli = bool(context and context.public_cli)
+    parser = FriendlyArgumentParser(
         prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
         description="Abre os mods locais da distribuição x86QW no ezQuake.",
         epilog=(
@@ -2886,6 +2538,14 @@ def parse_arguments(arguments: list[str], project_root: Path):
         help="desativa cores mesmo em um terminal interativo",
     )
     parser.add_argument("--menu", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--configure-ruleset", action="store_true", help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--ruleset",
+        choices=tuple(PRODUCT_RULESET_ENGINES),
+        help="experiência do cliente: x86qw ou um ruleset competitivo do ezQuake",
+    )
     add_game_launch_arguments(parser)
     parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -2918,47 +2578,74 @@ def show_banner(target: Path) -> None:
 def main(
     arguments: list[str] | None = None, *, propagate_menu_exit: bool = False,
 ) -> int:
-    project_root = core.INSTALLER_ROOT
+    raw_arguments = sys.argv[1:] if arguments is None else arguments
+    if _gameplay_context is None and any(value in {"-h", "--help"} for value in raw_arguments):
+        root = Path(__file__).resolve().parents[3]
+
+        def unavailable_catalog(*_arguments) -> dict[str, object]:
+            raise RuntimeError("catálogo zipapp indisponível no adapter de ajuda")
+
+        configure_context(GameplayContext(
+            project_root=root,
+            installer_root=root,
+            zipapp_path=None,
+            installer_base=object,
+            console=console,
+            read_zipapp_json=unavailable_catalog,
+            public_cli=False,
+        ))
+    project_root = _context().installer_root
     options = None
     player = None
     try:
-        options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
+        options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         navigation.configure(no_color=options.no_color)
         show_banner(options.target)
-        player = Player(project_root, options.target)
+        player_type = globals().get("Player") or player_class()
+        player = player_type(project_root, options.target)
         player.validate_target("play")
         console.detail(f"Destino normalizado: {player.target}")
         player.reject_target_symlinks()
+        if options.configure_ruleset:
+            selected = player.choose_client_ruleset(player.saved_client_ruleset())
+            player.save_client_ruleset(selected)
+            console.success(
+                "Experiência padrão alterada para "
+                f"{PRODUCT_RULESET_LABELS[selected]}."
+            )
+            return 0
         console.section("Jogo local")
         player.play_local(
             options.game, options.mode, options.map, options.ktx_options,
             configure_interactively=options.menu or options.mode is None,
+            ruleset=options.ruleset,
+            choose_ruleset_interactively=options.ruleset is None,
         )
-        return 0
+        return int(ExitCode.SUCCESS)
     except KeyboardInterrupt:
         console.error("Operação cancelada. O jogo não foi iniciado.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except navigation.MenuExit:
         if propagate_menu_exit:
             raise
         console.info("Menu encerrado; o jogo não foi iniciado.")
-        return 0
+        return int(ExitCode.SUCCESS)
     except navigation.MenuCancelled:
         console.info("Operação cancelada; o jogo não foi iniciado.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except InstallerError as error:
         console.error(str(error))
         if options is not None and not options.verbose:
             print("       Execute novamente com --verbose para obter detalhes técnicos.", file=sys.stderr)
-        return 1
+        return int(error.exit_code)
     except Exception as error:  # pragma: no cover - proteção final da CLI
         console.error(f"Falha inesperada: {error}")
         if options is not None and options.verbose:
             traceback.print_exc()
         else:
             print("       Execute novamente com --verbose para exibir o diagnóstico completo.", file=sys.stderr)
-        return 1
+        return int(ExitCode.FAILURE)
     finally:
         if player is not None:
             player.cleanup_stage()

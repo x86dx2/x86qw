@@ -69,10 +69,27 @@ def validate_private_file(path: Path) -> None:
         os.close(descriptor)
 
 
-def protect_private_file(path: Path) -> None:
+def protect_private_file(
+    path: Path,
+    *,
+    expected_identity: tuple[int, int] | None = None,
+) -> None:
     if os.name == "nt":
-        _regular_file(path)
+        metadata = _regular_file(path)
+        if expected_identity is not None and (
+            int(metadata.st_dev), int(metadata.st_ino),
+        ) != expected_identity:
+            raise PrivateFilesystemError(
+                f"private file changed identity: {path}"
+            )
         _windows_acl().protect_private_path(path, directory=False)
+        current = _regular_file(path)
+        if expected_identity is not None and (
+            int(current.st_dev), int(current.st_ino),
+        ) != expected_identity:
+            raise PrivateFilesystemError(
+                f"private file changed identity: {path}"
+            )
         return
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
@@ -80,6 +97,12 @@ def protect_private_file(path: Path) -> None:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
             raise PrivateFilesystemError(f"private path is not a regular file: {path}")
+        if expected_identity is not None and (
+            int(metadata.st_dev), int(metadata.st_ino),
+        ) != expected_identity:
+            raise PrivateFilesystemError(
+                f"private file changed identity: {path}"
+            )
         os.fchmod(descriptor, 0o600)
         if os.fstat(descriptor).st_mode & 0o077:
             raise PrivateFilesystemError(f"private file has unsafe permissions: {path}")
@@ -212,6 +235,29 @@ def private_mkstemp(
     raise PrivateFilesystemError(f"could not allocate a unique private file in {directory}")
 
 
+def persistent_descriptor_identity(
+    descriptor: int, *, directory: bool,
+) -> tuple[int, int]:
+    """Return one platform-native persistent identity for an open descriptor."""
+
+    metadata = os.fstat(descriptor)
+    valid_type = (
+        stat.S_ISDIR(metadata.st_mode)
+        if directory
+        else stat.S_ISREG(metadata.st_mode)
+    )
+    if not valid_type:
+        raise PrivateFilesystemError("private descriptor has an unsafe type")
+    if os.name != "nt":
+        return int(metadata.st_dev), int(metadata.st_ino)
+
+    import msvcrt
+
+    return _windows_acl().persistent_file_identity(
+        msvcrt.get_osfhandle(descriptor)
+    )
+
+
 def create_private_file(path: Path) -> int:
     """Atomically create exactly ``path`` as a private regular file."""
     _directory(path.parent)
@@ -329,6 +375,17 @@ def read_private_user_file(path: Path, *, maximum_size: int) -> bytes:
             path, maximum_size=maximum_size, exact=False,
         )
     return read_private_file(path, maximum_size=maximum_size)
+
+
+def private_file_permission_guidance(*, os_name: str | None = None) -> str:
+    """Return actionable guidance for a rejected user-supplied secret file."""
+
+    active_os_name = os.name if os_name is None else os_name
+    return (
+        "proteja a DACL para o usuário atual e LOCAL SYSTEM"
+        if active_os_name == "nt"
+        else "use chmod 600"
+    )
 
 
 def hold_private_path(path: Path, *, directory: bool):

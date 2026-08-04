@@ -601,3 +601,15 @@ def validate_tree_partition(
     if empty:
         raise ValueError(f"component selects no files: {empty[0]}")
     return partition
+
+
+# Runtime-facing component contracts live in x86qw_runtime. Keep historical
+# maintenance imports as exact aliases while build-only validation remains here.
+from x86qw_runtime.catalogs import (  # noqa: E402
+    components_by_id as components_by_id,
+    load_component_catalog as load_runtime_catalog,
+    profile_fingerprint as profile_fingerprint,
+    resolve_dependencies as resolve_dependencies,
+    validate_component_catalog as validate_runtime_catalog,
+    validate_portable_relative_path as validate_portable_relative_path,
+)

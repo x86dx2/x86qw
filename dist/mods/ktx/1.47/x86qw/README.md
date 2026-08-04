@@ -8,8 +8,9 @@ copiada integralmente para a instalação. Cada contexto possui uma função ún
 - `config/`: configuração do cliente, ajuda por teclas e presets projetados
   pelo inventário para `qw/`;
 - `runtime/`: QVM e mapa de símbolos efetivamente empacotados;
-- `source/`: quatro patches numerados usados para reproduzir o runtime (data
-  determinística, identidades/habilidade, balanceamento e nomes por função);
+- `source/`: cinco patches numerados usados para reproduzir o runtime (data
+  determinística, identidades/habilidade, balanceamento, nomes por função e
+  Coach de Quad opcional);
 - `policy/`: regras verificáveis de composição da camada `ktx.pk3`;
 - `CHANGELOG.md`: histórico da integração x86QW.
 

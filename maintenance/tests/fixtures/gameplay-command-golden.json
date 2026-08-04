@@ -1,0 +1,102 @@
+{
+  "mode_ids": [
+    "duel",
+    "2on2",
+    "4on4",
+    "3on3",
+    "10on10",
+    "ffa",
+    "clan-arena",
+    "wipeout",
+    "tot",
+    "blitz-2v2",
+    "blitz-4v4",
+    "2on2on2",
+    "3on3on3",
+    "4on4on4",
+    "xonx",
+    "hoony",
+    "ctf",
+    "midair",
+    "dmm4",
+    "instagib",
+    "lgc",
+    "rocket-arena",
+    "race",
+    "practice"
+  ],
+  "default_commands": {
+    "duel": [],
+    "2on2": [],
+    "4on4": [],
+    "3on3": [],
+    "10on10": [],
+    "ffa": [],
+    "clan-arena": [],
+    "wipeout": [],
+    "tot": [],
+    "blitz-2v2": [],
+    "blitz-4v4": [],
+    "2on2on2": [],
+    "3on3on3": [],
+    "4on4on4": [],
+    "xonx": [],
+    "hoony": [],
+    "ctf": [],
+    "midair": [],
+    "dmm4": [],
+    "instagib": [],
+    "lgc": [],
+    "rocket-arena": [],
+    "race": [],
+    "practice": []
+  },
+  "scenarios": {
+    "duel_bot": [
+      "if ($k_maxclients < 2) then k_maxclients 2",
+      "if ($maxclients < 2) then maxclients 2",
+      "cmd botcmd skill 12",
+      "cmd botcmd addbot 12"
+    ],
+    "two_on_two_team_bots": [
+      "if ($k_maxclients < 3) then k_maxclients 3",
+      "if ($maxclients < 3) then maxclients 3",
+      "cmd botcmd skill 12",
+      "cmd botcmd addbot 12 red",
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "cmd botcmd addbot 12 red"
+    ],
+    "tot_bot_controls": [
+      "if ($k_maxclients < 2) then k_maxclients 2",
+      "if ($maxclients < 2) then maxclients 2",
+      "cmd botcmd skill 12",
+      "cmd botcmd health 200",
+      "cmd botcmd weapon 8",
+      "cmd botcmd addbot 12"
+    ],
+    "ctf_rules": [
+      "cmd hook_smooth",
+      "cmd norunes",
+      "cmd ctfbasedspawn"
+    ],
+    "race_rules": [
+      "cmd race_match",
+      "cmd race_scoring",
+      "cmd race_scoring",
+      "cmd race_pacemaker 3",
+      "cmd race_hide_players"
+    ]
+  },
+  "errors": {
+    "missing_frogbot_route": "O mapa dm2 não possui o recurso rota Frogbot exigido pelo modo Duel (bots/maps/dm2.bot).",
+    "ctf_option_on_duel": "Opções --ctf-* só podem ser usadas com o modo KTX ctf.",
+    "bots_on_race": "Bots Frogbot não são compatíveis com o modo Race."
+  }
+}

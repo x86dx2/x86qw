@@ -192,8 +192,12 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             ):
                 installer_builder.build(output, version)
             expected = {
-                *(ROOT / source for source, _member in installer_builder.ZIPAPP_FILES),
+                *(
+                    ROOT / source
+                    for source, _member in installer_builder.runtime_member_files()
+                ),
                 *(ROOT / source for source, _member, _mode in installer_builder.BUNDLE_FILES),
+                installer_builder.RUNTIME_MEMBER_MANIFEST,
                 installer_builder.ARCHIVE_SOURCE,
                 installer_builder.SHELL_BOOTSTRAP,
                 installer_builder.POWERSHELL_BOOTSTRAP,
@@ -450,7 +454,7 @@ class BuilderArchiveBindingTests(unittest.TestCase):
     def test_installer_history_accepts_every_immutable_repository_bundle(self) -> None:
         packages = installer_builder.package_results(ROOT / "dist/installer/packages")
         self.assertGreaterEqual(len(packages), 1)
-        self.assertEqual("0.7.1", packages[-1]["version"])
+        self.assertEqual(installer_builder.VERSION, packages[-1]["version"])
         self.assertEqual(
             {path.name for path in (ROOT / "dist/installer/packages").iterdir()}
             - {"latest"},
