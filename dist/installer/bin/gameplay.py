@@ -25,6 +25,8 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 
 from x86qw_runtime.ui import menu as navigation
+from x86qw_runtime.ui.arguments import FriendlyArgumentParser
+from x86qw_runtime.ui.console import Console as RuntimeConsole
 from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
     ArchiveError,
@@ -32,6 +34,7 @@ from x86qw_runtime.io.archive import (
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError
 from x86qw_runtime.transaction import MutationResult, MutationRollbackError
 from x86qw_runtime.gameplay import (
@@ -72,37 +75,51 @@ from x86qw_runtime.gameplay import (
 _player_adapters: dict[type, type] = {}
 
 
-def _manager_api() -> object:
-    manager_api = sys.modules.get("manager")
-    if manager_api is None:
+@dataclass(frozen=True)
+class GameplayContext:
+    """Manager-owned dependencies required by the installed gameplay adapter."""
+
+    project_root: Path
+    installer_root: Path
+    zipapp_path: Path | None
+    installer_base: type
+    console: object
+    read_zipapp_json: Callable[[Path, str, str], dict[str, object]]
+    public_cli: bool
+
+
+_gameplay_context: GameplayContext | None = None
+console: object = RuntimeConsole()
+
+
+def configure_context(context: GameplayContext) -> None:
+    """Bind an explicit composition root before executing installed gameplay."""
+
+    global _gameplay_context, console
+    if not isinstance(context, GameplayContext):
+        raise TypeError("contexto gameplay inválido")
+    _gameplay_context = context
+    console = context.console
+
+
+def _context() -> GameplayContext:
+    if _gameplay_context is None:
         raise RuntimeError(
-            "O adapter gameplay requer a API do manager injetada antes da execução."
+            "O adapter gameplay requer um GameplayContext explícito antes da execução."
         )
-    return manager_api
+    return _gameplay_context
 
 
-class _ConsoleProxy:
-    def __getattr__(self, name: str) -> object:
-        return getattr(_manager_api().console, name)
+def file_count(count: int) -> str:
+    return f"{count} {'arquivo' if count == 1 else 'arquivos'}"
 
 
-console = _ConsoleProxy()
-
-
-def file_count(*arguments, **keywords):  # type: ignore[no-untyped-def]
-    return _manager_api().file_count(*arguments, **keywords)
-
-
-def file_hash(*arguments, **keywords):  # type: ignore[no-untyped-def]
-    return _manager_api().file_hash(*arguments, **keywords)
-
-
-def lexists(*arguments, **keywords):  # type: ignore[no-untyped-def]
-    return _manager_api().lexists(*arguments, **keywords)
-
-
-def remove_path(*arguments, **keywords):  # type: ignore[no-untyped-def]
-    return _manager_api().remove_path(*arguments, **keywords)
+def file_hash(path: Path, algorithm: str = "sha256") -> str:
+    digest = hashlib.new(algorithm)
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
@@ -148,10 +165,10 @@ class KtxRuntimeConfig:
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
-    manager_api = sys.modules.get("manager")
-    zipapp_path = getattr(manager_api, "ZIPAPP_PATH", None)
+    context = _gameplay_context
+    zipapp_path = context.zipapp_path if context is not None else None
     if zipapp_path is not None:
-        document = manager_api.read_zipapp_json(
+        document = context.read_zipapp_json(
             zipapp_path, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
         )
     else:
@@ -161,12 +178,8 @@ def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
 
 @lru_cache(maxsize=1)
 def local_games() -> tuple[LocalGameSpec, ...]:
-    manager_api = sys.modules.get("manager")
-    project_root = (
-        manager_api.PROJECT_ROOT
-        if manager_api is not None
-        else Path(__file__).resolve().parents[3]
-    )
+    context = _gameplay_context
+    project_root = context.project_root if context is not None else Path(__file__).resolve().parents[3]
     return load_local_games(project_root)
 
 
@@ -209,10 +222,10 @@ NQUAKE_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
 
 
 def read_ktx_mode_catalog(project_root: Path) -> dict[str, object]:
-    manager_api = _manager_api()
-    if manager_api.ZIPAPP_PATH is not None:
-        catalog = manager_api.read_zipapp_json(
-            manager_api.ZIPAPP_PATH, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
+    context = _gameplay_context
+    if context is not None and context.zipapp_path is not None:
+        catalog = context.read_zipapp_json(
+            context.zipapp_path, RUNTIME_KTX_MODE_CATALOG, "Catálogo de modos KTX",
         )
     else:
         path = project_root / DEVELOPMENT_KTX_MODE_CATALOG
@@ -423,10 +436,10 @@ def validate_frogbot_name_document(
 
 
 def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
-    manager_api = _manager_api()
-    if manager_api.ZIPAPP_PATH is not None:
-        document = manager_api.read_zipapp_json(
-            manager_api.ZIPAPP_PATH,
+    context = _gameplay_context
+    if context is not None and context.zipapp_path is not None:
+        document = context.read_zipapp_json(
+            context.zipapp_path,
             RUNTIME_KTX_BOT_NAME_CATALOG,
             "Catálogo de nomes Frogbot",
         )
@@ -2024,9 +2037,9 @@ def create_player_adapter(installer_base: type) -> type:
 
 
 def player_class(installer_base: type | None = None) -> type:
-    """Return the public Player class, resolving the manager only on demand."""
+    """Return the public Player class from the explicit composition context."""
     if installer_base is None:
-        installer_base = _manager_api().Installer
+        installer_base = _context().installer_base
     return create_player_adapter(installer_base)
 
 
@@ -2206,9 +2219,9 @@ def resolve_ktx_launch_options(
 
 
 def parse_arguments(arguments: list[str], project_root: Path):
-    manager_api = _manager_api()
-    public_cli = manager_api.ZIPAPP_PATH is not None
-    parser = manager_api.FriendlyArgumentParser(
+    context = _gameplay_context
+    public_cli = bool(context and context.public_cli)
+    parser = FriendlyArgumentParser(
         prog="x86qw play" if public_cli else "dist/installer/bin/gameplay.py",
         description="Abre os mods locais da distribuição x86QW no ezQuake.",
         epilog=(
@@ -2262,11 +2275,27 @@ def show_banner(target: Path) -> None:
 def main(
     arguments: list[str] | None = None, *, propagate_menu_exit: bool = False,
 ) -> int:
-    project_root = _manager_api().INSTALLER_ROOT
+    raw_arguments = sys.argv[1:] if arguments is None else arguments
+    if _gameplay_context is None and any(value in {"-h", "--help"} for value in raw_arguments):
+        root = Path(__file__).resolve().parents[3]
+
+        def unavailable_catalog(*_arguments) -> dict[str, object]:
+            raise RuntimeError("catálogo zipapp indisponível no adapter de ajuda")
+
+        configure_context(GameplayContext(
+            project_root=root,
+            installer_root=root,
+            zipapp_path=None,
+            installer_base=object,
+            console=console,
+            read_zipapp_json=unavailable_catalog,
+            public_cli=False,
+        ))
+    project_root = _context().installer_root
     options = None
     player = None
     try:
-        options = parse_arguments(sys.argv[1:] if arguments is None else arguments, project_root)
+        options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         navigation.configure(no_color=options.no_color)
         show_banner(options.target)

@@ -21,17 +21,17 @@ class ArchiveGameplayIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "gamecode.pk3"
             game = SimpleNamespace(label="Fixture")
-            player = object.__new__(gameplay.Player)
+            player = object.__new__(gameplay.GameplayPlayerMixin)
 
             with zipfile.ZipFile(package, "w") as archive:
                 archive.writestr("qwprogs.dat", b"verified-gamecode")
-            with mock.patch.object(gameplay.Player, "game_program_path", return_value=package):
+            with mock.patch.object(gameplay.GameplayPlayerMixin, "game_program_path", return_value=package):
                 self.assertEqual(b"verified-gamecode", player.local_game_program(game))
 
             with zipfile.ZipFile(package, "w") as archive:
                 archive.writestr("qwprogs.dat", b"must-not-be-returned")
                 archive.writestr("../late-escape.cfg", b"hostile")
-            with mock.patch.object(gameplay.Player, "game_program_path", return_value=package):
+            with mock.patch.object(gameplay.GameplayPlayerMixin, "game_program_path", return_value=package):
                 with self.assertRaisesRegex(
                     gameplay.InstallerError,
                     "Gamecode qwprogs.dat não encontrado",

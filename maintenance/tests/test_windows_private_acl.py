@@ -14,9 +14,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
 
 import services  # noqa: E402
+import manager  # noqa: E402
 from maintenance.tools import downloader  # noqa: E402
 from x86qw_runtime.io import private_fs  # noqa: E402
 from x86qw_runtime.platform import windows_acl  # noqa: E402
+
+services.configure_context(
+    manager.service_composition_context(services, services.gameplay),
+)
 
 
 class PrivateFilesystemContractTests(unittest.TestCase):

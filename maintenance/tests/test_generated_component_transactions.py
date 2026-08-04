@@ -29,6 +29,8 @@ if play_qw is None:
     sys.modules[PLAY_SPEC.name] = play_qw
     PLAY_SPEC.loader.exec_module(play_qw)
 
+play_qw.configure_context(install_qw.gameplay_composition_context(play_qw))
+
 
 class GeneratedComponentTransactionTests(unittest.TestCase):
     """Generated payload must remain reversible until state.json commits."""

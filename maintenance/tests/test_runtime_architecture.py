@@ -47,6 +47,34 @@ def literal_imports(path: Path) -> set[str]:
     return names
 
 
+def hidden_service_locator_targets(path: Path) -> set[str]:
+    """Find entrypoint modules recovered indirectly from ``sys.modules``.
+
+    Looking a sibling up in the interpreter registry is still an import edge;
+    omitting it from the graph merely hides a cycle from the architecture gate.
+    """
+
+    tree = ast.parse(path.read_text("utf-8"), filename=str(path))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        function = node.func
+        if not (
+            isinstance(function, ast.Attribute)
+            and function.attr in {"get", "__getitem__"}
+            and isinstance(function.value, ast.Attribute)
+            and isinstance(function.value.value, ast.Name)
+            and function.value.value.id == "sys"
+            and function.value.attr == "modules"
+        ):
+            continue
+        target = static_string(node.args[0])
+        if target is not None:
+            names.add(target)
+    return names
+
+
 def static_string(node: ast.AST) -> str | None:
     """Resolve simple constant concatenation used to conceal an import edge."""
 
@@ -133,6 +161,16 @@ class RuntimeArchitectureTests(unittest.TestCase):
 
         cycle = find_cycle(import_graph())
         self.assertIsNone(cycle, " -> ".join(cycle or ()))
+
+    def test_entrypoints_do_not_recover_siblings_from_sys_modules(self) -> None:
+        """Composition is explicit instead of depending on import order."""
+
+        violations = {
+            path.name: sorted(hidden_service_locator_targets(path))
+            for path in ENTRYPOINTS.values()
+            if hidden_service_locator_targets(path)
+        }
+        self.assertEqual({}, violations)
 
 
 if __name__ == "__main__":

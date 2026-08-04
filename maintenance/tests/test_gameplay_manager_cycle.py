@@ -2,6 +2,7 @@ import subprocess
 import sys
 import textwrap
 import unittest
+import os
 from pathlib import Path
 
 
@@ -56,6 +57,31 @@ class GameplayManagerCycleTests(unittest.TestCase):
         )
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_internal_adapters_render_help_without_manager_composition(self):
+        """Direct diagnostic help cannot depend on a particular import order."""
+
+        for script, arguments in (
+            ("gameplay.py", ["--help"]),
+            ("services.py", ["host", "--help"]),
+            ("services.py", ["proxy", "--help"]),
+            ("services.py", ["qtv", "--help"]),
+        ):
+            with self.subTest(script=script, arguments=arguments):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "dist/installer/bin" / script), *arguments],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    env={
+                        **os.environ,
+                        "PYTHONDONTWRITEBYTECODE": "1",
+                        "PYTHONPATH": str(ROOT),
+                    },
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertRegex(result.stdout, r"(?i)opções|options")
 
 
 if __name__ == "__main__":

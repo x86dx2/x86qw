@@ -31,7 +31,6 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
-sys.modules.setdefault("manager", sys.modules[__name__])
 
 _argv0 = Path(sys.argv[0]).expanduser().resolve()
 ZIPAPP_PATH = _argv0 if _argv0.suffix.casefold() == ".pyz" and _argv0.is_file() else None
@@ -274,6 +273,49 @@ def application_version() -> str:
     if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
         raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}")
     return version
+
+
+def gameplay_composition_context(gameplay):
+    return gameplay.GameplayContext(
+        project_root=PROJECT_ROOT,
+        installer_root=INSTALLER_ROOT,
+        zipapp_path=ZIPAPP_PATH,
+        installer_base=Installer,
+        console=console,
+        read_zipapp_json=read_zipapp_json,
+        public_cli=ZIPAPP_PATH is not None,
+    )
+
+
+def load_gameplay_module():
+    """Compose the gameplay facade with manager-owned dependencies explicitly."""
+
+    gameplay = importlib.import_module("gameplay")
+    gameplay.configure_context(gameplay_composition_context(gameplay))
+    return gameplay
+
+
+def load_services_module():
+    """Compose service lifecycle dependencies without a manager service locator."""
+
+    gameplay = load_gameplay_module()
+    services = importlib.import_module("services")
+    services.configure_context(service_composition_context(services, gameplay))
+    return services
+
+
+def service_composition_context(services, gameplay):
+    return services.ServiceContext(
+        project_root=PROJECT_ROOT,
+        zipapp_path=ZIPAPP_PATH,
+        installer_base=Installer,
+        runtimes=RUNTIMES,
+        capability_catalog=CAPABILITY_CATALOG,
+        host_platforms=HOST_PLATFORMS,
+        host_platform=host_platform,
+        console=console,
+        gameplay_context=gameplay_composition_context(gameplay),
+    )
 
 
 
@@ -4577,7 +4619,7 @@ class Installer:
             raise
 
     def play_support_player(self):
-        gameplay = importlib.import_module("gameplay")
+        gameplay = load_gameplay_module()
         return gameplay.Player(
             self.project_root, self.target, online_only=self.online_only,
         )
@@ -6580,7 +6622,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             print("\nAté a próxima partida.")
             return 0
         if selected == "play":
-            gameplay = importlib.import_module("gameplay")
+            gameplay = load_gameplay_module()
             result = gameplay.main([
                 "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
@@ -6592,7 +6634,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 return result
             continue
         if selected == "host":
-            services = importlib.import_module("services")
+            services = load_services_module()
             result = services.main([
                 "host", "--target", str(target), "--menu",
                 *(("--verbose",) if verbose else ()),
@@ -6644,7 +6686,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 )
                 if service is None:
                     break
-                services = importlib.import_module("services")
+                services = load_services_module()
                 service_action = "status" if service == "stop" else service
                 result = services.main([
                     service_action, "--target", str(target), "--menu",
@@ -6807,7 +6849,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             installer.target, options.action, "maintenance",
         )
         try:
-            services = importlib.import_module("services")
+            services = load_services_module()
             services.recover_sessions(installer.target)
             operation_lock.confirm_recovery()
             recovery_confirmed = True
@@ -6964,10 +7006,10 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         raw_arguments = sys.argv[1:] if arguments is None else arguments
         if raw_arguments[:1] == ["play"]:
-            gameplay = importlib.import_module("gameplay")
+            gameplay = load_gameplay_module()
             return gameplay.main(raw_arguments[1:])
         if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv", "status"}:
-            services = importlib.import_module("services")
+            services = load_services_module()
             return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
@@ -6984,7 +7026,7 @@ def main(arguments: list[str] | None = None) -> int:
                 no_color=options.no_color,
             )
         if options.action == "play":
-            gameplay = importlib.import_module("gameplay")
+            gameplay = load_gameplay_module()
             play_arguments = [str(options.target)]
             if options.verbose:
                 play_arguments.insert(0, "--verbose")

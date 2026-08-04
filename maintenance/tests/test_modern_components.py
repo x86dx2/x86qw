@@ -34,6 +34,7 @@ assert PLAY_SPEC.loader is not None
 sys.modules[PLAY_SPEC.name] = play_qw
 PLAY_SPEC.loader.exec_module(play_qw)
 sys.modules["gameplay"] = play_qw
+play_qw.configure_context(install_qw.gameplay_composition_context(play_qw))
 
 SERVICES_SPEC = importlib.util.spec_from_file_location(
     "services_qw_modern", ROOT / "dist/installer/bin/services.py",
@@ -43,6 +44,9 @@ assert SERVICES_SPEC.loader is not None
 sys.modules[SERVICES_SPEC.name] = services_qw
 SERVICES_SPEC.loader.exec_module(services_qw)
 sys.modules["services"] = services_qw
+services_qw.configure_context(
+    install_qw.service_composition_context(services_qw, play_qw),
+)
 
 
 def local_server_baseline(game: str) -> list[str]:

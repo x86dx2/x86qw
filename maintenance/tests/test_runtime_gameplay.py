@@ -28,6 +28,7 @@ gameplay = importlib.util.module_from_spec(GAMEPLAY_SPEC)
 assert GAMEPLAY_SPEC.loader is not None
 sys.modules[GAMEPLAY_SPEC.name] = gameplay
 GAMEPLAY_SPEC.loader.exec_module(gameplay)
+gameplay.configure_context(manager.gameplay_composition_context(gameplay))
 
 
 def canonical_gameplay():

@@ -12,6 +12,7 @@ import importlib
 import ipaddress
 import json
 import os
+import platform as system_platform
 import secrets
 import signal
 import stat
@@ -60,32 +61,59 @@ from x86qw_runtime.supervisor.core import (
     stop_processes,
 )
 
-def _manager_api() -> object:
-    manager_api = sys.modules.get("manager")
-    if manager_api is None:
+
+@dataclass(frozen=True)
+class ServiceContext:
+    """Dependencies supplied by the manager composition root."""
+
+    project_root: Path
+    zipapp_path: Path | None
+    installer_base: type
+    runtimes: dict[str, object]
+    capability_catalog: dict[str, object]
+    host_platforms: dict[str, str]
+    host_platform: object
+    console: object
+    gameplay_context: gameplay.GameplayContext
+
+
+_service_context: ServiceContext | None = None
+
+
+def configure_context(context: ServiceContext) -> None:
+    """Bind one explicit service composition before parsing or execution."""
+
+    global _service_context, console
+    if not isinstance(context, ServiceContext):
+        raise TypeError("contexto de serviços inválido")
+    _service_context = context
+    console = context.console
+    gameplay.configure_context(context.gameplay_context)
+
+
+def _context() -> ServiceContext:
+    if _service_context is None:
         raise RuntimeError(
-            "O adapter de serviços requer a API do manager injetada antes da execução."
+            "O adapter de serviços requer um ServiceContext explícito antes da execução."
         )
-    return manager_api
+    return _service_context
 
 
-class _ManagerProxy:
+class _ContextProxy:
     def __getattr__(self, name: str) -> object:
-        return getattr(_manager_api(), name)
+        aliases = {
+            "PROJECT_ROOT": "project_root",
+            "ZIPAPP_PATH": "zipapp_path",
+            "Installer": "installer_base",
+            "RUNTIMES": "runtimes",
+            "CAPABILITY_CATALOG": "capability_catalog",
+            "HOST_PLATFORMS": "host_platforms",
+        }
+        return getattr(_context(), aliases.get(name, name))
 
 
-class _ConsoleProxy:
-    def __init__(self) -> None:
-        self._fallback = RuntimeConsole()
-
-    def __getattr__(self, name: str) -> object:
-        manager_api = sys.modules.get("manager")
-        reporter = manager_api.console if manager_api is not None else self._fallback
-        return getattr(reporter, name)
-
-
-core = _ManagerProxy()
-console = _ConsoleProxy()
+core = _ContextProxy()
+console: object = RuntimeConsole()
 ProcessIdentity = session_control.ProcessIdentity
 ProcessProbe = session_control.ProcessProbe
 new_session_id = session_control.new_session_id
@@ -4688,12 +4716,39 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
 def main(
     arguments: list[str] | None = None, *, propagate_menu_exit: bool = False,
 ) -> int:
+    raw_arguments = sys.argv[1:] if arguments is None else arguments
+    if _service_context is None and any(value in {"-h", "--help"} for value in raw_arguments):
+        root = Path(__file__).resolve().parents[3]
+
+        def unavailable_catalog(*_arguments) -> dict[str, object]:
+            raise RuntimeError("catálogo zipapp indisponível no adapter de ajuda")
+
+        gameplay_context = gameplay.GameplayContext(
+            project_root=root,
+            installer_root=root,
+            zipapp_path=None,
+            installer_base=object,
+            console=console,
+            read_zipapp_json=unavailable_catalog,
+            public_cli=False,
+        )
+        configure_context(ServiceContext(
+            project_root=root,
+            zipapp_path=None,
+            installer_base=object,
+            runtimes={},
+            capability_catalog={},
+            host_platforms={},
+            host_platform=system_platform,
+            console=console,
+            gameplay_context=gameplay_context,
+        ))
     temporary_paths: list[Path] = []
     materialized_ktx: list[MaterializedKtx] = []
     resources = ServiceResources(temporary_paths, materialized_ktx)
     try:
         with finalize_service_operation(resources):
-            options = parse_arguments(sys.argv[1:] if arguments is None else arguments, core.PROJECT_ROOT)
+            options = parse_arguments(raw_arguments, core.PROJECT_ROOT)
             console.configure(verbose=options.verbose, no_color=options.no_color)
             navigation.configure(no_color=options.no_color)
             target = options.target.expanduser().resolve()
