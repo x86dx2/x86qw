@@ -179,6 +179,7 @@ class KtxRuntimeConfig:
     path: Path
     device: int
     inode: int
+    lease: object
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
@@ -898,36 +899,55 @@ def write_ktx_runtime_config(
         if descriptor >= 0:
             os.close(descriptor)
     path = Path(temporary_name)
+    lease: object | None = None
     try:
         private_fs.validate_private_file(path)
+        lease = private_fs.hold_private_path(path, directory=False)
         metadata = path.stat(follow_symlinks=False)
     except OSError as error:
+        if lease is not None:
+            try:
+                lease.close()
+            except OSError:
+                pass
         try:
-            path.unlink()
+            private_fs.unlink_private_file(path)
         except OSError:
             pass
         raise InstallerError(
             f"Não foi possível validar a sessão KTX temporária: {error}"
         ) from error
-    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino)
+    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino, lease)
 
 
 def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
+    valid = False
     try:
         metadata = config.path.stat(follow_symlinks=False)
     except FileNotFoundError:
-        return True
+        valid = True
+    except OSError:
+        valid = False
+    else:
+        valid = (
+            metadata.st_dev == config.device
+            and metadata.st_ino == config.inode
+            and stat.S_ISREG(metadata.st_mode)
+            and not config.path.is_symlink()
+        )
+    try:
+        config.lease.close()
     except OSError:
         return False
-    if (
-        metadata.st_dev != config.device
-        or metadata.st_ino != config.inode
-        or not stat.S_ISREG(metadata.st_mode)
-        or config.path.is_symlink()
-    ):
+    if not valid:
         return False
+    if not lexists(config.path):
+        return True
     try:
-        config.path.unlink()
+        private_fs.unlink_private_file(
+            config.path,
+            expected_identity=(config.device, config.inode),
+        )
     except OSError:
         return False
     return True

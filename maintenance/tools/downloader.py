@@ -1265,10 +1265,18 @@ def _attempt(
             try:
                 output.flush()
                 os.fsync(output.fileno())
-                output.close()
-                _remaining(deadline, clock)
-                os.replace(temporary, contract.destination)
-                temporary = None
+                if os.name == "nt":
+                    _remaining(deadline, clock)
+                    private_fs.replace_open_private_file(
+                        output.fileno(), temporary, contract.destination,
+                    )
+                    temporary = None
+                    output.close()
+                else:
+                    output.close()
+                    _remaining(deadline, clock)
+                    os.replace(temporary, contract.destination)
+                    temporary = None
             except OSError as error:
                 raise DownloadStorageError(
                     f"Não foi possível promover {contract.label} atomicamente."

@@ -1948,29 +1948,50 @@ class DownloaderTests(unittest.TestCase):
                 self.PAYLOAD,
                 headers={"Content-Length": str(len(self.PAYLOAD))},
             )
-            original_replace = os.replace
             observed: dict[str, object] = {}
 
-            def replace(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
-                observed["destination_before_replace"] = destination.read_bytes()
-                observed["temporary_payload"] = Path(source).read_bytes()
-                observed["source"] = Path(source)
-                original_replace(source, target)
+            if os.name == "nt":
+                original_private_replace = downloader.private_fs.replace_open_private_file
 
-            with mock.patch.object(downloader.os, "replace", side_effect=replace) as replace_mock:
+                def observe_private_replace(
+                    descriptor: int,
+                    source: str | os.PathLike[str],
+                    target: str | os.PathLike[str],
+                ) -> None:
+                    observed["destination_before_replace"] = destination.read_bytes()
+                    observed["source"] = Path(source)
+                    original_private_replace(descriptor, Path(source), Path(target))
+
+                replacement = mock.patch.object(
+                    downloader.private_fs,
+                    "replace_open_private_file",
+                    side_effect=observe_private_replace,
+                )
+            else:
+                original_replace = os.replace
+
+                def observe_replace(
+                    source: str | os.PathLike[str], target: str | os.PathLike[str],
+                ) -> None:
+                    observed["destination_before_replace"] = destination.read_bytes()
+                    observed["source"] = Path(source)
+                    original_replace(source, target)
+
+                replacement = mock.patch.object(
+                    downloader.os, "replace", side_effect=observe_replace,
+                )
+            with replacement:
                 result = self.download(
                     self.pinned(destination),
                     testing_open_url=self.response_opener(response),
                 )
 
             self.assertEqual(b"installed version", observed["destination_before_replace"])
-            self.assertEqual(self.PAYLOAD, observed["temporary_payload"])
             self.assertEqual(self.PAYLOAD, destination.read_bytes())
             self.assertEqual(destination, result.path)
             self.assertEqual(len(self.PAYLOAD), result.size)
             self.assertEqual(hashlib.sha256(self.PAYLOAD).hexdigest(), result.sha256)
             self.assertEqual(1, result.attempts)
-            replace_mock.assert_called_once()
             self.assertFalse(Path(observed["source"]).exists())
             self.assert_no_download_temporaries(self, root)
 
@@ -3740,8 +3761,10 @@ class DownloaderTests(unittest.TestCase):
             root = Path(temporary)
             destination = root / "artifact.zip"
             destination.write_bytes(b"preserve")
-            temporary_path = root / ".controlled.download"
-            handle = temporary_path.open("wb")
+            descriptor, temporary_path = downloader.private_fs.private_mkstemp(
+                directory=root, prefix=".controlled-", suffix=".download",
+            )
+            handle = os.fdopen(descriptor, "wb")
             output = OutputProxy(
                 handle,
                 write_error=write_error,
@@ -3761,25 +3784,39 @@ class DownloaderTests(unittest.TestCase):
                         downloader.os, "fsync", side_effect=fsync_error,
                     ))
                 if replace_error is not None:
-                    stack.enter_context(mock.patch.object(
-                        downloader.os, "replace", side_effect=replace_error,
-                    ))
+                    if os.name == "nt":
+                        stack.enter_context(mock.patch.object(
+                            downloader.private_fs,
+                            "replace_open_private_file",
+                            side_effect=replace_error,
+                        ))
+                    else:
+                        stack.enter_context(mock.patch.object(
+                            downloader.os, "replace", side_effect=replace_error,
+                        ))
                 with self.assertRaises(downloader.DownloadStorageError):
                     self.download(
                         self.pinned(destination),
                         testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
                     )
 
-            self.assertEqual(b"preserve", destination.read_bytes())
+            expected = (
+                self.PAYLOAD
+                if os.name == "nt" and close_error is not None
+                else b"preserve"
+            )
+            self.assertEqual(expected, destination.read_bytes())
             self.assertFalse(temporary_path.exists())
 
-    def test_successful_promotion_orders_flush_fsync_close_and_replace(self) -> None:
+    def test_successful_promotion_orders_durability_before_atomic_replace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             destination = root / "artifact.zip"
             destination.write_bytes(b"preserve")
-            temporary_path = root / ".controlled.download"
-            handle = temporary_path.open("wb")
+            descriptor, temporary_path = downloader.private_fs.private_mkstemp(
+                directory=root, prefix=".controlled-", suffix=".download",
+            )
+            handle = os.fdopen(descriptor, "wb")
             events: list[str] = []
 
             class OrderedOutput(OutputProxy):
@@ -3801,6 +3838,12 @@ class DownloaderTests(unittest.TestCase):
                 events.append("replace")
                 original_replace(source, target)
 
+            original_private_replace = downloader.private_fs.replace_open_private_file
+
+            def private_replace(descriptor: int, source: Path, target: Path) -> None:
+                events.append("replace")
+                original_private_replace(descriptor, source, target)
+
             with mock.patch.object(
                 downloader,
                 "_open_temporary",
@@ -3809,17 +3852,30 @@ class DownloaderTests(unittest.TestCase):
                 downloader.os,
                 "fsync",
                 side_effect=fsync,
-            ), mock.patch.object(
-                downloader.os,
-                "replace",
-                side_effect=replace,
             ):
-                self.download(
-                    self.pinned(destination),
-                    testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
+                replacement = (
+                    mock.patch.object(
+                        downloader.private_fs,
+                        "replace_open_private_file",
+                        side_effect=private_replace,
+                    )
+                    if os.name == "nt"
+                    else mock.patch.object(
+                        downloader.os, "replace", side_effect=replace,
+                    )
                 )
+                with replacement:
+                    self.download(
+                        self.pinned(destination),
+                        testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
+                    )
 
-            self.assertEqual(["flush", "fsync", "close", "replace"], events)
+            self.assertEqual(
+                ["flush", "fsync", "replace", "close"]
+                if os.name == "nt"
+                else ["flush", "fsync", "close", "replace"],
+                events,
+            )
             self.assertEqual(self.PAYLOAD, destination.read_bytes())
             self.assertFalse(temporary_path.exists())
 
@@ -3853,7 +3909,7 @@ class DownloaderTests(unittest.TestCase):
     def test_short_write_preserves_destination(self) -> None:
         self._assert_output_failure_preserves_destination(short_write=True)
 
-    def test_close_failure_is_typed_and_preserves_destination(self) -> None:
+    def test_close_failure_is_typed_without_removing_a_promoted_identity(self) -> None:
         self._assert_output_failure_preserves_destination(
             close_error=OSError(errno.EIO, "close failed"),
         )

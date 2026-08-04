@@ -3026,6 +3026,7 @@ class ModernComponentTests(unittest.TestCase):
                 "unset_re ^k_fb_name_",
                 config.path.read_text(encoding="ascii"),
             )
+            config.lease.close()
             config.path.unlink()
             config.path.mkdir()
             personal = config.path / "personal.txt"

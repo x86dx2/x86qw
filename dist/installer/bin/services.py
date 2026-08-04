@@ -950,6 +950,24 @@ def journal_process_probe(entry: object) -> ProcessProbe:
     return probe_expected_process(pid, token, executable)
 
 
+def legacy_clean_journal_is_inert(data: dict[str, object]) -> bool:
+    """Allow a pre-DACL clean journal only when it can authorize no mutation."""
+    if data.get(_LEGACY_ACL_MIGRATED) is not True or data.get("status") != "clean":
+        return False
+    controller_probe = journal_controller_probe(data)
+    if controller_probe is not None and controller_probe.status not in {
+        "dead", "identity_mismatch",
+    }:
+        return False
+    processes = data.get("processes")
+    if not isinstance(processes, list):
+        return False
+    return all(
+        journal_process_probe(entry).status in {"dead", "identity_mismatch"}
+        for entry in processes
+    )
+
+
 def session_journal_paths(target: Path, session_id: str | None = None) -> list[Path]:
     sessions = target / ".x86qw" / "sessions"
     if not lexists(sessions):
@@ -980,7 +998,10 @@ def session_journal_paths(target: Path, session_id: str | None = None) -> list[P
 def assert_recovery_processes_confirmable(target: Path, session_id: str | None = None) -> None:
     for path in session_journal_paths(target, session_id):
         data = load_session_journal(path)
-        if data.get(_LEGACY_ACL_MIGRATED) is True:
+        if (
+            data.get(_LEGACY_ACL_MIGRATED) is True
+            and not legacy_clean_journal_is_inert(data)
+        ):
             raise InstallerError(
                 "Journal legado do Windows foi protegido, mas seu conteúdo histórico "
                 "não pode autorizar encerramento ou remoção automática. "
@@ -1138,7 +1159,10 @@ def reconcile_journal(target: Path, path: Path) -> None:
     except InstallerError:
         console.warning(f"Journal de sessão inválido preservado para inspeção: {path.parent}")
         return
-    if data.get(_LEGACY_ACL_MIGRATED) is True:
+    if (
+        data.get(_LEGACY_ACL_MIGRATED) is True
+        and not legacy_clean_journal_is_inert(data)
+    ):
         raise InstallerError(
             "Journal legado do Windows não possui autoridade para autorizar recuperação; "
             f"estado preservado em {path.parent}."

@@ -263,6 +263,13 @@ def _windows_acquisition_mutex(target: Path) -> Iterator[None]:
         raise SessionControlError(
             f"Não foi possível abrir o mutex da instalação ({ctypes.get_last_error()})."
         )
+    try:
+        windows_acl.validate_private_kernel_object(int(handle))
+    except OSError as error:
+        kernel32.CloseHandle(handle)
+        raise SessionControlError(
+            "O mutex global da instalação não possui uma DACL privada comprovável."
+        ) from error
     acquired = False
     try:
         wait_object_0 = 0

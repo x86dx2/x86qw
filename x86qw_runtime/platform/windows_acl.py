@@ -93,6 +93,15 @@ class _FileDispositionInfo(ctypes.Structure):
     _fields_ = (("delete_file", ctypes.c_ubyte),)
 
 
+class _FileRenameInfo(ctypes.Structure):
+    _fields_ = (
+        ("replace_if_exists", ctypes.c_ulong),
+        ("root_directory", ctypes.c_void_p),
+        ("file_name_length", ctypes.c_ulong),
+        ("file_name", ctypes.c_wchar * 1),
+    )
+
+
 class _AclSizeInformation(ctypes.Structure):
     _fields_ = (
         ("ace_count", ctypes.c_ulong),
@@ -149,9 +158,11 @@ class _WindowsApi:
     FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
     FILE_ATTRIBUTE_TAG_INFO = 9
     FILE_DISPOSITION_INFO = 4
+    FILE_RENAME_INFO = 3
     FILE_TYPE_DISK = 1
 
     SE_FILE_OBJECT = 1
+    SE_KERNEL_OBJECT = 6
     OWNER_SECURITY_INFORMATION = 0x00000001
     DACL_SECURITY_INFORMATION = 0x00000004
     PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
@@ -194,6 +205,10 @@ class _WindowsApi:
             wintypes.HANDLE, ctypes.POINTER(ctypes.c_longlong),
         ]
         self.kernel32.GetFileSizeEx.restype = wintypes.BOOL
+        self.kernel32.GetFinalPathNameByHandleW.argtypes = [
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
+        ]
+        self.kernel32.GetFinalPathNameByHandleW.restype = wintypes.DWORD
         self.kernel32.SetFileInformationByHandle.argtypes = [
             wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
         ]
@@ -454,13 +469,19 @@ def validate_plain_directory(path: Path) -> None:
         return
 
 
-def _acl_from_handle(handle: int, *, directory: bool, canonical: bool = True) -> PrivateAcl:
+def _acl_from_handle(
+    handle: int,
+    *,
+    directory: bool,
+    canonical: bool = True,
+    object_type: int | None = None,
+) -> PrivateAcl:
     api = _api()
     owner = ctypes.c_void_p()
     dacl = ctypes.c_void_p()
     descriptor = ctypes.c_void_p()
     result = api.advapi32.GetSecurityInfo(
-        handle, api.SE_FILE_OBJECT,
+        handle, api.SE_FILE_OBJECT if object_type is None else object_type,
         api.OWNER_SECURITY_INFORMATION | api.DACL_SECURITY_INFORMATION,
         ctypes.byref(owner), None, ctypes.byref(dacl), None, ctypes.byref(descriptor),
     )
@@ -539,6 +560,74 @@ def _assert_acl(acl: PrivateAcl, *, exact: bool = True) -> None:
         or not acl.readable_by_current_user
     ):
         raise WindowsAclError("private external file grants unsafe or insufficient access")
+
+
+def validate_private_kernel_object(handle: int) -> None:
+    """Reject a precreated named kernel object with a broad or inherited DACL."""
+    acl = _acl_from_handle(
+        handle,
+        directory=False,
+        canonical=False,
+        object_type=_WindowsApi.SE_KERNEL_OBJECT,
+    )
+    _assert_acl(acl)
+
+
+def _normalized_handle_path(handle: int) -> str:
+    api = _api()
+    required = int(api.kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0))
+    if required <= 0:
+        raise api.error("GetFinalPathNameByHandleW size query failed")
+    buffer = ctypes.create_unicode_buffer(required + 1)
+    written = int(
+        api.kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+    )
+    if written <= 0 or written >= len(buffer):
+        raise api.error("GetFinalPathNameByHandleW failed")
+    value = buffer.value
+    if value.startswith("\\\\?\\UNC\\"):
+        value = "\\\\" + value[8:]
+    elif value.startswith("\\\\?\\"):
+        value = value[4:]
+    return os.path.normcase(os.path.abspath(value))
+
+
+def replace_open_private_file(descriptor: int, source: Path, destination: Path) -> None:
+    """Atomically promote the exact private file represented by ``descriptor``."""
+    import msvcrt
+
+    source = Path(os.path.abspath(os.fspath(source)))
+    destination = Path(os.path.abspath(os.fspath(destination)))
+    if os.path.normcase(str(source.parent)) != os.path.normcase(str(destination.parent)):
+        raise WindowsAclError("private promotion must remain in one directory")
+    native_handle = int(msvcrt.get_osfhandle(descriptor))
+    if native_handle == -1:
+        raise WindowsAclError("private promotion received an invalid descriptor")
+    with _hold_plain_directory_chain(destination.parent):
+        _assert_persistent_acls(destination.parent)
+        _assert_handle_type(native_handle, directory=False)
+        _assert_acl(_acl_from_handle(native_handle, directory=False))
+        if _normalized_handle_path(native_handle) != os.path.normcase(str(source)):
+            raise WindowsAclError("private promotion source changed identity")
+        encoded = str(destination).encode("utf-16-le")
+        name_offset = _FileRenameInfo.file_name.offset
+        buffer = ctypes.create_string_buffer(name_offset + len(encoded))
+        information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
+        information.replace_if_exists = 1
+        information.root_directory = None
+        information.file_name_length = len(encoded)
+        ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
+        api = _api()
+        if not api.kernel32.SetFileInformationByHandle(
+            native_handle,
+            api.FILE_RENAME_INFO,
+            buffer,
+            len(buffer),
+        ):
+            raise api.error(f"could not promote private file {source}")
+        if _normalized_handle_path(native_handle) != os.path.normcase(str(destination)):
+            raise WindowsAclError("private promotion did not retain the destination identity")
+        _assert_acl(_acl_from_handle(native_handle, directory=False))
 
 
 def _owner_from_handle(handle: int) -> str:
@@ -650,7 +739,8 @@ def create_private_file(path: Path) -> int:
         with _security_descriptor(directory=False) as (descriptor, _):
             attributes = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), descriptor, False)
             handle = api.kernel32.CreateFileW(
-                str(path), api.GENERIC_READ | api.GENERIC_WRITE | api.READ_CONTROL | api.WRITE_DAC,
+                str(path),
+                api.GENERIC_READ | api.GENERIC_WRITE | api.READ_CONTROL | api.WRITE_DAC | api.DELETE,
                 0, ctypes.byref(attributes), api.CREATE_NEW,
                 api.FILE_ATTRIBUTE_NORMAL | api.FILE_FLAG_OPEN_REPARSE_POINT, None,
             )
@@ -892,6 +982,7 @@ def api_functions() -> tuple[object, ...]:
         api.kernel32.GetFileInformationByHandleEx,
         api.kernel32.GetFileType,
         api.kernel32.GetFileSizeEx,
+        api.kernel32.GetFinalPathNameByHandleW,
         api.kernel32.SetFileInformationByHandle,
         api.kernel32.GetVolumePathNameW,
         api.kernel32.GetVolumeInformationW,

@@ -342,6 +342,26 @@ def hold_private_path(path: Path, *, directory: bool):
     return _NullPrivatePathLease()
 
 
+def replace_open_private_file(descriptor: int, source: Path, destination: Path) -> None:
+    """Promote a validated private file without releasing its open identity."""
+    if os.name == "nt":
+        _windows_acl().replace_open_private_file(descriptor, source, destination)
+        return
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+        raise PrivateFilesystemError(f"private promotion descriptor is unsafe: {source}")
+    source_metadata = source.lstat()
+    if (
+        stat.S_ISLNK(source_metadata.st_mode)
+        or not stat.S_ISREG(source_metadata.st_mode)
+        or (int(source_metadata.st_dev), int(source_metadata.st_ino))
+        != (int(metadata.st_dev), int(metadata.st_ino))
+    ):
+        raise PrivateFilesystemError(f"private promotion source changed identity: {source}")
+    _directory(destination.parent)
+    os.replace(source, destination)
+
+
 def unlink_private_file(
     path: Path, *, expected_identity: tuple[int, int] | None = None,
 ) -> None:
