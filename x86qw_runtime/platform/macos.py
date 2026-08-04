@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
 import plistlib
+import stat
+import struct
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping
+from collections.abc import Callable
 
 from ..errors import InstallerError
+from ..io.atomic import AtomicWriteError, atomic_write_bytes
+from ..io.metadata import MetadataFileError, read_bounded_regular_file
 
 
 MAX_PREFERENCE_DOMAIN_BYTES = 1024 * 1024
+MAX_BUNDLE_PLIST_BYTES = 1024 * 1024
+_MACOS_SAFE_AREA_KEY = "NSPrefersDisplaySafeAreaCompatibilityMode"
 
 
 class MacOSAdapterError(InstallerError):
@@ -23,6 +33,303 @@ class PreferenceSnapshot:
     domain: str
     keys: tuple[str, ...]
     encoded_values: bytes
+
+
+def _require_regular_directory(path: Path, label: str) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as error:
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}") from error
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}")
+
+
+def _require_regular_file(path: Path, label: str) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as error:
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}") from error
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}")
+
+
+def _bundle_directory(app: Path, *parts: str) -> Path:
+    """Resolve a fixed bundle directory only through ordinary directories."""
+
+    directory = Path(app)
+    _require_regular_directory(directory, "Aplicativo")
+    for part in parts:
+        directory /= part
+        _require_regular_directory(directory, "Diretório")
+    return directory
+
+
+def _require_optional_regular_directory(path: Path, label: str) -> None:
+    """Reject a present bundle boundary without requiring a staged member."""
+
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}") from error
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise MacOSAdapterError(f"{label} inválido no bundle macOS: {path}")
+
+
+def app_executable(app: Path) -> Path:
+    return app_launch_paths(app)[-1]
+
+
+def app_launch_paths(app: Path) -> tuple[Path, Path, Path, Path]:
+    """Return the fixed bundle chain after rejecting redirected directories."""
+
+    app = Path(app)
+    contents = _bundle_directory(app, "Contents")
+    macos = _bundle_directory(app, "Contents", "MacOS")
+    executable = macos / "ezQuake"
+    _require_regular_file(executable, "Executável")
+    return app, contents, macos, executable
+
+
+def _read_bundle_plist(app: Path) -> tuple[dict[str, object], bytes]:
+    plist = _bundle_directory(app, "Contents") / "Info.plist"
+    _require_regular_file(plist, "Info.plist")
+    try:
+        payload = read_bounded_regular_file(
+            plist, maximum_size=MAX_BUNDLE_PLIST_BYTES,
+        )
+        document = plistlib.loads(payload)
+    except (MetadataFileError, ValueError, plistlib.InvalidFileException) as error:
+        raise MacOSAdapterError(f"Info.plist inválido no bundle macOS: {app}") from error
+    if not isinstance(document, dict):
+        raise MacOSAdapterError(f"Info.plist inválido no bundle macOS: {app}")
+    return document, payload
+
+
+def _hash_regular_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as source:
+            metadata = os.fstat(source.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise OSError("not a regular file")
+            while block := source.read(1024 * 1024):
+                digest.update(block)
+    except OSError as error:
+        raise MacOSAdapterError(f"Executável inválido no bundle macOS: {path}") from error
+    return digest.hexdigest()
+
+
+def verify_app_signature(app: Path) -> None:
+    _require_macos()
+    _bundle_directory(app, "Contents", "MacOS")
+    _bundle_directory(app, "Contents", "_CodeSignature")
+    _run_codesign(["codesign", "--verify", "--deep", "--strict", str(app)])
+
+
+def _run_codesign(arguments: list[str]) -> None:
+    try:
+        result = subprocess.run(
+            arguments,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+    except FileNotFoundError as error:
+        raise MacOSAdapterError(
+            "O utilitário nativo codesign não foi encontrado no macOS."
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        raise MacOSAdapterError(
+            "A verificação da assinatura do ezQuake excedeu o tempo limite."
+        ) from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or b"").decode(
+            "utf-8", errors="replace",
+        ).strip()
+        suffix = f": {detail}" if detail else ""
+        raise MacOSAdapterError(
+            f"O comando codesign falhou{suffix}"
+        )
+
+
+def _inspect_universal_macho(binary: Path) -> None:
+    try:
+        with binary.open("rb") as source:
+            metadata = os.fstat(source.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                raise OSError("not a regular file")
+            file_size = int(metadata.st_size)
+            data = source.read(4096)
+            if len(data) < 8:
+                raise MacOSAdapterError(f"Executável Mach-O inválido: {binary}")
+            magic, count = struct.unpack_from(">II", data)
+            if magic not in (0xCAFEBABE, 0xCAFEBABF) or not 2 <= count <= 32:
+                raise MacOSAdapterError(
+                    f"Executável Mach-O universal esperado: {binary}"
+                )
+            entry_size = 20 if magic == 0xCAFEBABE else 32
+            header_size = 8 + count * entry_size
+            if len(data) < header_size:
+                raise MacOSAdapterError(f"Cabeçalho Mach-O universal inválido: {binary}")
+            entries: list[tuple[int, int, int]] = []
+            for index in range(count):
+                offset = 8 + index * entry_size
+                if entry_size == 20:
+                    cpu_type, _subtype, slice_offset, slice_size, _align = struct.unpack_from(
+                        ">IIIII", data, offset,
+                    )
+                else:
+                    cpu_type, _subtype, slice_offset, slice_size, _align, _reserved = (
+                        struct.unpack_from(">IIQQII", data, offset)
+                    )
+                if (
+                    slice_offset < header_size
+                    or slice_size < 8
+                    or slice_offset + slice_size > file_size
+                ):
+                    raise MacOSAdapterError(f"Fatias Mach-O inválidas: {binary}")
+                entries.append((cpu_type, slice_offset, slice_size))
+            previous_end = header_size
+            for _cpu_type, slice_offset, slice_size in sorted(
+                entries, key=lambda entry: entry[1],
+            ):
+                if slice_offset < previous_end:
+                    raise MacOSAdapterError(f"Fatias Mach-O sobrepostas: {binary}")
+                previous_end = slice_offset + slice_size
+            architectures = {cpu_type for cpu_type, _offset, _size in entries}
+            if not {0x01000007, 0x0100000C}.issubset(architectures):
+                raise MacOSAdapterError(f"Bundle macOS não contém arm64 e x86_64: {binary}")
+            for cpu_type, slice_offset, _slice_size in entries:
+                source.seek(slice_offset)
+                slice_header = source.read(8)
+                if slice_header[:4] == b"\xcf\xfa\xed\xfe":
+                    byte_order = "<"
+                elif slice_header[:4] == b"\xfe\xed\xfa\xcf":
+                    byte_order = ">"
+                else:
+                    raise MacOSAdapterError(f"Fatias Mach-O inválidas: {binary}")
+                if struct.unpack(f"{byte_order}I", slice_header[4:])[0] != cpu_type:
+                    raise MacOSAdapterError(f"Fatias Mach-O inválidas: {binary}")
+    except MacOSAdapterError:
+        raise
+    except (OSError, struct.error) as error:
+        raise MacOSAdapterError(f"Executável Mach-O inválido: {binary}") from error
+
+
+def inspect_ezquake_bundle(
+    app: Path,
+    *,
+    verify_signature: bool | Callable[[Path], None],
+) -> tuple[str, str]:
+    """Validate one ezQuake app without following its security boundaries."""
+
+    app = Path(app)
+    binary = _bundle_directory(app, "Contents", "MacOS") / "ezQuake"
+    resources = _bundle_directory(app, "Contents", "_CodeSignature") / "CodeResources"
+    _require_regular_file(binary, "Executável")
+    _require_regular_file(resources, "Assinatura")
+    metadata, _ = _read_bundle_plist(app)
+    version = metadata.get("CFBundleShortVersionString")
+    if not isinstance(version, str) or version != metadata.get("CFBundleVersion"):
+        raise MacOSAdapterError(f"Versões divergentes no bundle macOS: {app}")
+    _inspect_universal_macho(binary)
+    if callable(verify_signature):
+        verify_signature(app)
+    elif verify_signature:
+        verify_app_signature(app)
+    return version, _hash_regular_file(binary)
+
+
+def _entitlements_payload(output: bytes) -> bytes:
+    binary = output.find(b"bplist00")
+    if binary >= 0:
+        return output[binary:]
+    start = output.find(b"<?xml")
+    end = output.rfind(b"</plist>")
+    if start >= 0 and end >= start:
+        return output[start:end + len(b"</plist>")]
+    raise MacOSAdapterError("Os entitlements do ezQuake não contêm um plist válido.")
+
+
+def app_is_sandboxed(app: Path) -> bool:
+    _require_macos()
+    _bundle_directory(Path(app), "Contents", "MacOS")
+    _bundle_directory(Path(app), "Contents", "_CodeSignature")
+    try:
+        result = subprocess.run(
+            ["codesign", "-d", "--entitlements", ":-", str(app)],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=15,
+        )
+    except FileNotFoundError as error:
+        raise MacOSAdapterError(
+            "O utilitário nativo codesign não foi encontrado no macOS."
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        raise MacOSAdapterError(
+            "A leitura dos entitlements do ezQuake excedeu o tempo limite."
+        ) from error
+    if result.returncode != 0:
+        raise MacOSAdapterError("Não foi possível ler os entitlements do ezQuake.")
+    try:
+        document = plistlib.loads(_entitlements_payload(result.stdout + result.stderr))
+    except (ValueError, plistlib.InvalidFileException) as error:
+        raise MacOSAdapterError("Os entitlements do ezQuake são inválidos.") from error
+    if not isinstance(document, dict):
+        raise MacOSAdapterError("Os entitlements do ezQuake são inválidos.")
+    return document.get("com.apple.security.app-sandbox") is True
+
+
+def app_uses_full_display(app: Path) -> bool:
+    document, _ = _read_bundle_plist(Path(app))
+    return document.get(_MACOS_SAFE_AREA_KEY) is False
+
+
+def enable_full_display(app: Path) -> None:
+    app = Path(app)
+    _bundle_directory(app, "Contents")
+    document, original = _read_bundle_plist(app)
+    document[_MACOS_SAFE_AREA_KEY] = False
+    format_value = plistlib.FMT_BINARY if original.startswith(b"bplist00") else plistlib.FMT_XML
+    try:
+        payload = plistlib.dumps(document, fmt=format_value, sort_keys=False)
+        atomic_write_bytes(app / "Contents/Info.plist", payload, mode=0o644)
+    except (TypeError, ValueError, AtomicWriteError) as error:
+        raise MacOSAdapterError(f"Info.plist não pôde ser atualizado: {app}") from error
+
+
+def prepare_nightly_bundle(
+    app: Path,
+    *,
+    sandbox_probe: Callable[[Path], bool] | None = None,
+    display_probe: Callable[[Path], bool] | None = None,
+    command_runner: Callable[[list[str]], object] | None = None,
+) -> tuple[bool, bool]:
+    """Remove nightly-only sandboxing and enable the full macOS display."""
+
+    app = Path(app)
+    contents = _bundle_directory(app, "Contents")
+    _require_optional_regular_directory(contents / "MacOS", "Diretório")
+    _require_optional_regular_directory(contents / "_CodeSignature", "Diretório")
+    sandbox_probe = sandbox_probe or app_is_sandboxed
+    display_probe = display_probe or app_uses_full_display
+    command_runner = command_runner or _run_codesign
+    sandboxed = sandbox_probe(app)
+    full_display = display_probe(app)
+    if not full_display:
+        enable_full_display(app)
+    command_runner(["codesign", "--force", "--deep", "--sign", "-", str(app)])
+    command_runner(["codesign", "--verify", "--deep", "--strict", str(app)])
+    if sandbox_probe(app):
+        raise MacOSAdapterError(f"Não foi possível remover o sandbox incompatível de {app}.")
+    if not display_probe(app):
+        raise MacOSAdapterError(f"Não foi possível habilitar o fullscreen integral em {app}.")
+    return sandboxed, not full_display
 
 
 def ensure_process_absent(exact_name: str) -> None:

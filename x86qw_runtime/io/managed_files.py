@@ -9,13 +9,20 @@ import os
 import secrets
 import stat
 import sys
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from x86qw_runtime.errors import InstallerError
-from x86qw_runtime.io.archive import DEFAULT_ARCHIVE_LIMITS
+from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.archive import (
+    DEFAULT_ARCHIVE_LIMITS,
+    ArchiveError,
+    extract_archive,
+    scan_archive,
+)
 from x86qw_runtime.io.paths import lexists
 
 
@@ -40,6 +47,13 @@ class MaterializedDirectory:
     path: Path
     root: Path
     identity: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class MaterializedArchive:
+    files: tuple[MaterializedFile, ...]
+    directories: tuple[MaterializedDirectory, ...]
+    root: Path
 
 
 def _bounded_hash_limit(expected_size: int | None) -> int:
@@ -863,6 +877,94 @@ def _relative_managed_path(path: Path, root: Path) -> Path:
     return (canonical_parent / path.name).relative_to(canonical_root)
 
 
+def unlink_identity_bound_regular(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> bool:
+    """Atomically quarantine and unlink only the expected POSIX regular file."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) != 2
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+    ):
+        raise ValueError("expected_identity must be a device/inode pair")
+    rename_api = _get_posix_rename_api()
+    if rename_api is None:
+        return False
+    path = Path(path)
+    parent_descriptor = -1
+    descriptor = -1
+    quarantine_name: str | None = None
+    quarantined_identity = (-1, -1)
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        flags = os.O_RDONLY | os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or _file_identity(metadata) != expected_identity
+        ):
+            return False
+        for _ in range(128):
+            candidate = f".x86qw-unlink-{secrets.token_hex(12)}"
+            try:
+                rename_api.move_no_replace(
+                    parent_descriptor,
+                    path.name,
+                    parent_descriptor,
+                    candidate,
+                )
+            except FileExistsError:
+                continue
+            quarantine_name = candidate
+            break
+        if quarantine_name is None:
+            return False
+        quarantined = os.stat(
+            quarantine_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        quarantined_identity = _file_identity(quarantined)
+        if (
+            not stat.S_ISREG(quarantined.st_mode)
+            or quarantined_identity != expected_identity
+            or _file_identity(os.fstat(descriptor)) != expected_identity
+        ):
+            if _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            ):
+                quarantine_name = None
+            return False
+        os.unlink(quarantine_name, dir_fd=parent_descriptor)
+        quarantine_name = None
+        os.fsync(parent_descriptor)
+        return True
+    except FileNotFoundError:
+        return False
+    finally:
+        if quarantine_name is not None and parent_descriptor >= 0:
+            _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            )
+        if descriptor >= 0:
+            os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+
 def cleanup_materialized_file(entry: MaterializedFile) -> bool:
     if entry.expected_size is None:
         return not lexists(entry.path)
@@ -1056,6 +1158,749 @@ def cleanup_materialized_directory(entry: MaterializedDirectory) -> bool:
         return False
 
 
+
+def _open_verified_archive_member(
+    parent_descriptor: int,
+    name: str,
+    expected_hash: str,
+    expected_size: int,
+    path: Path,
+) -> tuple[int, int]:
+    flags = os.O_RDONLY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    except OSError as error:
+        raise InstallerError(f"Arquivo local conflita com a carga dedicada: {path}") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or _hash_open_file(descriptor, expected_size=expected_size) != expected_hash
+        ):
+            raise InstallerError(f"Arquivo local conflita com a carga dedicada: {path}")
+        return _file_identity(metadata)
+    finally:
+        os.close(descriptor)
+
+
+def _fallback_safe_chain(root: Path, parent: Path) -> None:
+    """Best-effort path check for platforms without POSIX *at operations."""
+    try:
+        relative = parent.relative_to(root)
+    except ValueError as error:
+        raise InstallerError(f"Diretório fora da instalação: {parent}") from error
+    cursor = root
+    for part in relative.parts:
+        cursor /= part
+        try:
+            metadata = cursor.lstat()
+        except FileNotFoundError:
+            return
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Diretório inseguro ao preparar o pacote: {cursor}")
+
+
+def _windows_remove_confirmed_file(
+    api: object,
+    path: Path,
+    expected_identity: tuple[int, int],
+    expected_hash: str,
+    expected_size: int,
+) -> bool:
+    """Delete only the exact, unchanged file object named by ``path``."""
+    try:
+        handle = api.open_handle(
+            path,
+            access=api.GENERIC_READ | api.DELETE,
+            creation=api.OPEN_EXISTING,
+            directory=False,
+        )
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    try:
+        if (
+            api.checked_identity(handle, directory=False) != expected_identity
+            or api.hash(handle, expected_size=expected_size) != expected_hash
+        ):
+            return False
+        api.mark_delete(handle)
+        return True
+    except OSError:
+        return False
+    finally:
+        _close_windows_handle(api, handle)
+
+
+def _windows_existing_member(
+    api: object,
+    destination_root: Path,
+    member: object,
+    destination: Path,
+    label: str,
+    *,
+    package: Path | None = None,
+    journal: Any | None = None,
+) -> MaterializedFile | None | bool:
+    parent_parts = tuple(member.path.parts[:-1])
+    try:
+        with _windows_archive_parent(
+            api, destination_root, parent_parts, create=False,
+        ):
+            try:
+                handle = api.open_handle(
+                    destination,
+                    access=api.GENERIC_READ,
+                    creation=api.OPEN_EXISTING,
+                    directory=False,
+                )
+            except FileNotFoundError:
+                return False
+            try:
+                identity = api.checked_identity(handle, directory=False)
+                digest = api.hash(handle, expected_size=member.size)
+                if digest != member.sha256:
+                    raise InstallerError(
+                        f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
+                    )
+                if package is None:
+                    return True
+                entry = MaterializedFile(
+                    destination,
+                    member.sha256,
+                    package.as_posix(),
+                    False,
+                    True,
+                    destination_root,
+                    identity,
+                    member.size,
+                )
+                if journal is not None:
+                    journal.record_materialized(entry)
+                return entry
+            except InstallerError:
+                raise
+            except OSError as error:
+                raise InstallerError(
+                    f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
+                ) from error
+            finally:
+                _close_windows_handle(api, handle)
+    except FileNotFoundError:
+        return False
+
+
+def _windows_materialize_member(
+    api: object,
+    source_path: Path,
+    destination: Path,
+    member: object,
+    label: str,
+    destination_root: Path,
+    package: Path,
+    journal: Any | None,
+    created_directories: list[MaterializedDirectory],
+    materialized_files: list[MaterializedFile],
+) -> MaterializedFile:
+    """Stage, verify and atomically rename one member without replacing a name."""
+    parent_parts = tuple(member.path.parts[:-1])
+    with _windows_archive_parent(
+        api,
+        destination_root,
+        parent_parts,
+        create=True,
+        created_directories=created_directories,
+        journal=journal,
+    ):
+        temporary: Path | None = None
+        temporary_handle: int | None = None
+        for _ in range(128):
+            candidate = destination.parent / f".x86qw_ktx_{secrets.token_hex(12)}"
+            try:
+                temporary_handle = api.open_handle(
+                    candidate,
+                    access=api.GENERIC_READ | api.GENERIC_WRITE | api.DELETE,
+                    creation=api.CREATE_NEW,
+                    directory=False,
+                )
+            except FileExistsError:
+                continue
+            temporary = candidate
+            break
+        if temporary is None or temporary_handle is None:
+            raise InstallerError(
+                f"Não foi possível reservar staging para a carga dedicada de {label}: {destination}"
+            )
+
+        temporary_identity: tuple[int, int] | None = None
+        copied_size = 0
+        digest_builder = hashlib.sha256()
+        try:
+            temporary_identity = api.checked_identity(temporary_handle, directory=False)
+            with source_path.open("rb") as source:
+                for block in iter(lambda: source.read(1024 * 1024), b""):
+                    copied_size += len(block)
+                    if copied_size > member.size:
+                        raise InstallerError(
+                            f"Tamanho divergente no pacote {label}: {member.path.as_posix()}"
+                        )
+                    digest_builder.update(block)
+                    api.write(temporary_handle, block)
+            api.flush(temporary_handle)
+            digest = digest_builder.hexdigest()
+            if (
+                copied_size != member.size
+                or digest != member.sha256
+                or api.hash(temporary_handle, expected_size=member.size) != member.sha256
+            ):
+                raise InstallerError(
+                    f"Conteúdo divergente no pacote {label}: {member.path.as_posix()}"
+                )
+        except Exception:
+            if temporary_identity is not None:
+                try:
+                    if api.checked_identity(
+                        temporary_handle, directory=False,
+                    ) == temporary_identity:
+                        api.mark_delete(temporary_handle)
+                except OSError:
+                    pass
+            raise
+        finally:
+            _close_windows_handle(api, temporary_handle)
+
+        assert temporary_identity is not None
+        entry = MaterializedFile(
+            destination,
+            member.sha256,
+            package.as_posix(),
+            True,
+            False,
+            destination_root,
+            temporary_identity,
+            member.size,
+        )
+        try:
+            if journal is not None:
+                journal.record_materialized_intent(entry)
+        except BaseException:
+            _windows_remove_confirmed_file(
+                api, temporary, temporary_identity, member.sha256, member.size,
+            )
+            raise
+        try:
+            api.move_no_replace(temporary, destination)
+        except FileExistsError as error:
+            _windows_remove_confirmed_file(
+                api, temporary, temporary_identity, member.sha256, member.size,
+            )
+            raise InstallerError(
+                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
+            ) from error
+        except OSError as error:
+            _windows_remove_confirmed_file(
+                api, temporary, temporary_identity, member.sha256, member.size,
+            )
+            raise InstallerError(
+                f"Não foi possível promover a carga dedicada de {label}: {destination}"
+            ) from error
+        materialized_files.append(entry)
+        try:
+            destination_handle = api.open_handle(
+                destination,
+                access=api.GENERIC_READ | api.DELETE,
+                creation=api.OPEN_EXISTING,
+                directory=False,
+            )
+        except OSError as error:
+            removed = _windows_remove_confirmed_file(
+                api, destination, temporary_identity, member.sha256, member.size,
+            )
+            detail = (
+                "a carga promovida inalterada foi revertida"
+                if removed else "o arquivo inconclusivo ou alterado foi preservado"
+            )
+            raise InstallerError(
+                f"Não foi possível confirmar a carga dedicada em {destination}; {detail}."
+            ) from error
+        rollback = True
+        try:
+            promoted_identity = api.checked_identity(destination_handle, directory=False)
+            if (
+                promoted_identity != temporary_identity
+                or api.hash(
+                    destination_handle, expected_size=member.size,
+                ) != member.sha256
+            ):
+                rollback = False
+                raise InstallerError(
+                    f"Arquivo foi substituído durante a preparação e foi preservado: {destination}"
+                )
+            if journal is not None:
+                journal.record_materialized(entry)
+            rollback = False
+            return entry
+        except Exception:
+            if rollback:
+                try:
+                    if (
+                        api.checked_identity(
+                            destination_handle, directory=False,
+                        ) == temporary_identity
+                        and api.hash(
+                            destination_handle, expected_size=member.size,
+                        ) == member.sha256
+                    ):
+                        api.mark_delete(destination_handle)
+                except OSError:
+                    pass
+            raise
+        finally:
+            _close_windows_handle(api, destination_handle)
+
+
+def _fallback_materialize_member(
+    source_path: Path,
+    destination: Path,
+    member: object,
+    label: str,
+    destination_root: Path,
+    before_promote: Callable[[tuple[int, int]], None] | None = None,
+) -> tuple[str, tuple[int, int]]:
+    """Use atomic no-replace promotion and abort on every observable path race."""
+    _fallback_safe_chain(destination_root, destination.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".x86qw_ktx_", dir=destination.parent)
+    temporary = Path(temporary_name)
+    temporary_identity: tuple[int, int] | None = None
+    try:
+        digest_builder = hashlib.sha256()
+        copied_size = 0
+        with os.fdopen(descriptor, "wb") as output, source_path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                copied_size += len(block)
+                if copied_size > member.size:
+                    raise InstallerError(
+                        f"Tamanho divergente no pacote {label}: {member.path.as_posix()}"
+                    )
+                digest_builder.update(block)
+                output.write(block)
+            output.flush()
+            os.fsync(output.fileno())
+            temporary_identity = _file_identity(os.fstat(output.fileno()))
+        digest = digest_builder.hexdigest()
+        if copied_size != member.size or digest != member.sha256:
+            raise InstallerError(
+                f"Conteúdo divergente no pacote {label}: {member.path.as_posix()}"
+            )
+        if os.name != "nt":
+            temporary.chmod(0o644)
+        _fallback_safe_chain(destination_root, destination.parent)
+        assert temporary_identity is not None
+        if before_promote is not None:
+            before_promote(temporary_identity)
+        try:
+            os.link(temporary, destination, follow_symlinks=False)
+        except FileExistsError as error:
+            raise InstallerError(
+                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
+            ) from error
+        _fallback_safe_chain(destination_root, destination.parent)
+        metadata = destination.lstat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or temporary_identity is None
+            or _file_identity(metadata) != temporary_identity
+        ):
+            raise InstallerError(
+                f"Arquivo foi substituído durante a preparação e foi preservado: {destination}"
+            )
+        temporary.unlink()
+        return digest, temporary_identity
+    finally:
+        try:
+            _fallback_safe_chain(destination_root, temporary.parent)
+            metadata = temporary.lstat()
+            if (
+                stat.S_ISREG(metadata.st_mode)
+                and (
+                    temporary_identity is None
+                    or _file_identity(metadata) == temporary_identity
+                )
+            ):
+                temporary.unlink()
+        except (FileNotFoundError, InstallerError, OSError):
+            pass
+
+
+def materialize_archive(
+    package: Path,
+    destination_root: Path,
+    label: str,
+    journal: Any | None = None,
+    *,
+    warning: Callable[[str], None] | None = None,
+) -> MaterializedArchive:
+    """Expose verified PK3 members to MVDSV, which does not implement PK3 loading."""
+    if not package.is_file() or package.is_symlink():
+        raise InstallerError(f"Pacote {label} ausente ou inseguro: {package}")
+    if not destination_root.is_dir() or destination_root.is_symlink():
+        raise InstallerError(f"Diretório de {label} ausente ou inseguro: {destination_root}")
+    materialized_files: list[MaterializedFile] = []
+    created_directories: list[MaterializedDirectory] = []
+    windows_api = _get_windows_file_api()
+    secure_dir_fd = _secure_archive_dir_fd_supported()
+    try:
+        plan = scan_archive(package)
+        with tempfile.TemporaryDirectory(prefix="x86qw-pk3-") as temporary_root:
+            extracted = Path(temporary_root) / "payload"
+            extract_archive(plan, extracted)
+            prepared: list[tuple[object, Path, bool]] = []
+            for member in plan.members:
+                if member.kind != "file":
+                    continue
+                destination = destination_root.joinpath(*member.path.parts)
+                parent_parts = tuple(member.path.parts[:-1])
+                if windows_api is not None:
+                    existed = bool(_windows_existing_member(
+                        windows_api,
+                        destination_root,
+                        member,
+                        destination,
+                        label,
+                    ))
+                elif secure_dir_fd:
+                    try:
+                        with _secure_archive_parent(
+                            destination_root, parent_parts, create=False,
+                        ) as (root_descriptor, parent_descriptor):
+                            _assert_archive_parent_stable(
+                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
+                            )
+                            try:
+                                metadata = os.stat(
+                                    member.path.name,
+                                    dir_fd=parent_descriptor,
+                                    follow_symlinks=False,
+                                )
+                            except FileNotFoundError:
+                                existed = False
+                            else:
+                                if not stat.S_ISREG(metadata.st_mode):
+                                    raise InstallerError(
+                                        f"Arquivo local conflita com a carga dedicada de {label}: "
+                                        f"{destination}"
+                                    )
+                                _open_verified_archive_member(
+                                    parent_descriptor,
+                                    member.path.name,
+                                    member.sha256,
+                                    member.size,
+                                    destination,
+                                )
+                                existed = True
+                    except FileNotFoundError:
+                        existed = False
+                else:
+                    _fallback_safe_chain(destination_root, destination.parent)
+                    existed = lexists(destination)
+                    if existed:
+                        metadata = destination.lstat()
+                        if (
+                            not stat.S_ISREG(metadata.st_mode)
+                            or not file_matches_sha256(
+                                destination, member.sha256, member.size,
+                            )
+                        ):
+                            raise InstallerError(
+                                f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
+                            )
+                prepared.append((member, destination, existed))
+
+            for member, destination, existed in prepared:
+                relative = member.path
+                parent_parts = tuple(relative.parts[:-1])
+                source_path = extracted.joinpath(*relative.parts)
+                if windows_api is not None:
+                    if existed:
+                        entry = _windows_existing_member(
+                            windows_api,
+                            destination_root,
+                            member,
+                            destination,
+                            label,
+                            package=package,
+                            journal=journal,
+                        )
+                        if not isinstance(entry, MaterializedFile):
+                            raise InstallerError(
+                                f"Arquivo desapareceu durante a preparação: {destination}"
+                            )
+                    else:
+                        entry = _windows_materialize_member(
+                            windows_api,
+                            source_path,
+                            destination,
+                            member,
+                            label,
+                            destination_root,
+                            package,
+                            journal,
+                            created_directories,
+                            materialized_files,
+                        )
+                    if existed:
+                        materialized_files.append(entry)
+                    continue
+                if secure_dir_fd:
+                    with _secure_archive_parent(
+                        destination_root,
+                        parent_parts,
+                        create=True,
+                        created_directories=created_directories,
+                        journal=journal,
+                    ) as (root_descriptor, parent_descriptor):
+                        _assert_archive_parent_stable(
+                            root_descriptor, parent_parts, parent_descriptor, destination.parent,
+                        )
+                        if existed:
+                            identity = _open_verified_archive_member(
+                                parent_descriptor,
+                                relative.name,
+                                member.sha256,
+                                member.size,
+                                destination,
+                            )
+                            _assert_archive_parent_stable(
+                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
+                            )
+                            entry = MaterializedFile(
+                                destination, member.sha256, package.as_posix(), False, True,
+                                destination_root, identity, member.size,
+                            )
+                            if journal is not None:
+                                journal.record_materialized(entry)
+                            materialized_files.append(entry)
+                            continue
+                        try:
+                            os.stat(
+                                relative.name,
+                                dir_fd=parent_descriptor,
+                                follow_symlinks=False,
+                            )
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            raise InstallerError(
+                                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
+                            )
+                        temporary_name = f".x86qw_ktx_{secrets.token_hex(12)}"
+                        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                        if hasattr(os, "O_CLOEXEC"):
+                            flags |= os.O_CLOEXEC
+                        descriptor = os.open(
+                            temporary_name, flags, 0o600, dir_fd=parent_descriptor,
+                        )
+                        promoted_identity: tuple[int, int] | None = None
+                        try:
+                            digest_builder = hashlib.sha256()
+                            copied_size = 0
+                            temporary_identity: tuple[int, int] | None = None
+                            with os.fdopen(descriptor, "wb") as output, source_path.open("rb") as source:
+                                for block in iter(lambda: source.read(1024 * 1024), b""):
+                                    copied_size += len(block)
+                                    if copied_size > member.size:
+                                        raise InstallerError(
+                                            f"Tamanho divergente no pacote {label}: {relative.as_posix()}"
+                                        )
+                                    digest_builder.update(block)
+                                    output.write(block)
+                                output.flush()
+                                os.fsync(output.fileno())
+                                os.fchmod(output.fileno(), 0o644)
+                                temporary_identity = _file_identity(os.fstat(output.fileno()))
+                            digest = digest_builder.hexdigest()
+                            if copied_size != member.size or digest != member.sha256:
+                                raise InstallerError(
+                                    f"Conteúdo divergente no pacote {label}: {relative.as_posix()}"
+                                )
+                            _assert_archive_parent_stable(
+                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
+                            )
+                            assert temporary_identity is not None
+                            entry = MaterializedFile(
+                                destination, digest, package.as_posix(), True, False,
+                                destination_root, temporary_identity, member.size,
+                            )
+                            if journal is not None:
+                                journal.record_materialized_intent(entry)
+                            try:
+                                os.link(
+                                    temporary_name,
+                                    relative.name,
+                                    src_dir_fd=parent_descriptor,
+                                    dst_dir_fd=parent_descriptor,
+                                    follow_symlinks=False,
+                                )
+                            except FileExistsError as error:
+                                raise InstallerError(
+                                    f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
+                                ) from error
+                            promoted_identity = temporary_identity
+                            # Once the hardlink is public, every subsequent
+                            # failure must flow through the identity+hash cleanup
+                            # policy.  Recording it before journal I/O prevents
+                            # an exception from falling back to inode-only unlink.
+                            materialized_files.append(entry)
+                            metadata = os.stat(
+                                relative.name,
+                                dir_fd=parent_descriptor,
+                                follow_symlinks=False,
+                            )
+                            if _file_identity(metadata) != promoted_identity:
+                                raise InstallerError(
+                                    f"Arquivo foi substituído durante a preparação e foi preservado: "
+                                    f"{destination}"
+                                )
+                            _assert_archive_parent_stable(
+                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
+                            )
+                            os.unlink(temporary_name, dir_fd=parent_descriptor)
+                            os.fsync(parent_descriptor)
+                            if journal is not None:
+                                journal.record_materialized(entry)
+                        finally:
+                            try:
+                                os.unlink(temporary_name, dir_fd=parent_descriptor)
+                            except FileNotFoundError:
+                                pass
+                    continue
+
+                missing_parents: list[Path] = []
+                cursor = destination.parent
+                while cursor != destination_root and not lexists(cursor):
+                    missing_parents.append(cursor)
+                    cursor = cursor.parent
+                _fallback_safe_chain(destination_root, cursor)
+                for directory in reversed(missing_parents):
+                    try:
+                        directory.mkdir()
+                        created = True
+                    except FileExistsError:
+                        created = False
+                    _fallback_safe_chain(destination_root, directory)
+                    if created:
+                        metadata = directory.lstat()
+                        entry = MaterializedDirectory(
+                            directory, destination_root, _file_identity(metadata),
+                        )
+                        created_directories.append(entry)
+                        if journal is not None:
+                            journal.record_directory(entry)
+                if existed:
+                    _fallback_safe_chain(destination_root, destination.parent)
+                    metadata = destination.lstat()
+                    if (
+                        not stat.S_ISREG(metadata.st_mode)
+                        or not file_matches_sha256(
+                            destination, member.sha256, member.size,
+                        )
+                    ):
+                        raise InstallerError(
+                            f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
+                        )
+                    entry = MaterializedFile(
+                        destination, member.sha256, package.as_posix(), False, True,
+                        destination_root, _file_identity(metadata), member.size,
+                    )
+                else:
+                    def record_fallback_intent(identity: tuple[int, int]) -> None:
+                        if journal is not None:
+                            journal.record_materialized_intent(MaterializedFile(
+                                destination,
+                                member.sha256,
+                                package.as_posix(),
+                                True,
+                                False,
+                                destination_root,
+                                identity,
+                                member.size,
+                            ))
+
+                    digest, identity = _fallback_materialize_member(
+                        source_path,
+                        destination,
+                        member,
+                        label,
+                        destination_root,
+                        before_promote=record_fallback_intent,
+                    )
+                    entry = MaterializedFile(
+                        destination, digest, package.as_posix(), True, False,
+                        destination_root, identity, member.size,
+                    )
+                tracked_before_journal = entry.created_by_session
+                if tracked_before_journal:
+                    materialized_files.append(entry)
+                try:
+                    if journal is not None:
+                        journal.record_materialized(entry)
+                except Exception:
+                    if entry.created_by_session:
+                        cleanup_materialized_file(entry)
+                    raise
+                if not tracked_before_journal:
+                    materialized_files.append(entry)
+    except InstallerError:
+        cleanup_materialized_archive(MaterializedArchive(
+            tuple(materialized_files), tuple(created_directories), destination_root,
+        ), warning=warning)
+        raise
+    except (ArchiveError, OSError, RuntimeError) as error:
+        cleanup_materialized_archive(MaterializedArchive(
+            tuple(materialized_files), tuple(created_directories), destination_root,
+        ), warning=warning)
+        raise InstallerError(
+            f"Não foi possível preparar a carga de {label} para o MVDSV: {error}"
+        ) from error
+    return MaterializedArchive(
+        tuple(materialized_files), tuple(created_directories), destination_root,
+    )
+
+
+def cleanup_materialized_archive(
+    materialized: MaterializedArchive,
+    *,
+    warning: Callable[[str], None] | None = None,
+) -> None:
+    """Remove only unchanged files and directories created for one session."""
+
+    for entry in reversed(materialized.files):
+        if not entry.created_by_session:
+            continue
+        try:
+            removed = cleanup_materialized_file(entry)
+        except (InstallerError, OSError):
+            removed = False
+        if not removed and warning is not None:
+            warning(
+                "Arquivo materializado alterado durante a sessão foi preservado: "
+                f"{entry.path}"
+            )
+    for directory in reversed(materialized.directories):
+        try:
+            removed = cleanup_materialized_directory(directory)
+        except (InstallerError, OSError, ValueError):
+            removed = False
+        if not removed and warning is not None:
+            warning(
+                "Diretório materializado alterado ou não removível com segurança foi "
+                f"preservado: {directory.path}"
+            )
+
+
 def unlink_sensitive_temporary(path: Path) -> None:
     """Unlink one sensitive temporary without traversing a replacement path."""
 
@@ -1072,6 +1917,27 @@ def unlink_sensitive_temporary(path: Path) -> None:
     )
 
 
+def cleanup_sensitive_temporary(
+    path: Path,
+    expected_identity: tuple[int, int] | None,
+) -> bool:
+    """Remove only the original sensitive regular file by recorded identity."""
+
+    if not lexists(path):
+        return True
+    if expected_identity is None:
+        return False
+    try:
+        metadata = path.lstat()
+        identity = int(metadata.st_dev), int(metadata.st_ino)
+        if identity != expected_identity or not stat.S_ISREG(metadata.st_mode):
+            return False
+        private_fs.unlink_private_file(path, expected_identity=expected_identity)
+        return not lexists(path)
+    except OSError:
+        return False
+
+
 # Temporary aliases let existing service consumers switch ownership mechanically.
 _MAX_MANAGED_FILE_SIZE = MAX_MANAGED_FILE_SIZE
 _describe_non_sensitive_temporary = describe_non_sensitive_temporary
@@ -1082,13 +1948,17 @@ _cleanup_materialized_directory = cleanup_materialized_directory
 
 __all__ = (
     "MAX_MANAGED_FILE_SIZE",
+    "MaterializedArchive",
     "MaterializedDirectory",
     "MaterializedFile",
+    "cleanup_materialized_archive",
     "cleanup_materialized_directory",
     "cleanup_materialized_file",
+    "cleanup_sensitive_temporary",
     "describe_non_sensitive_temporary",
     "file_matches_sha256",
     "file_sha256",
+    "materialize_archive",
     "persistent_path_identity",
     "unlink_sensitive_temporary",
 )

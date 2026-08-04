@@ -21,10 +21,12 @@ class AtomicWriteError(OSError):
         *,
         committed: bool = False,
         cleanup_error: OSError | None = None,
+        committed_identity: tuple[int, int] | None = None,
     ) -> None:
         super().__init__(message)
         self.committed = committed
         self.cleanup_error = cleanup_error
+        self.committed_identity = committed_identity
 
 
 @dataclass(frozen=True)
@@ -197,7 +199,10 @@ def atomic_copy_file(
     return result
 
 
-def _fsync_directory(path: Path) -> None:
+def sync_directory(path: Path) -> None:
+    """Flush one directory entry set on POSIX and no-op on Windows."""
+
+    path = Path(path)
     if os.name == "nt":
         return
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
@@ -209,6 +214,10 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+# Compatibility name for callers and tests that predate the public boundary.
+_fsync_directory = sync_directory
 
 
 def atomic_write_bytes(
@@ -313,6 +322,107 @@ def atomic_write_bytes(
             f"managed file staging cleanup failed: {path}",
             committed=committed,
             cleanup_error=cleanup_error,
+        ) from cleanup_error
+    assert result is not None
+    return result
+
+
+def atomic_create_bytes(
+    path: Path,
+    payload: bytes,
+    *,
+    mode: int = 0o644,
+) -> AtomicWriteResult:
+    """Publish a new regular file atomically without replacing an existing entry."""
+
+    if not isinstance(payload, bytes):
+        raise TypeError("payload must be bytes")
+    if mode not in {0o600, 0o644}:
+        raise ValueError("managed file mode must be 0600 or 0644")
+    path = Path(path)
+    if os.path.lexists(path):
+        raise AtomicWriteError(
+            f"managed destination already exists: {path}", committed=False,
+        )
+    parent = path.parent
+    descriptor, temporary = private_fs.private_mkstemp(
+        directory=parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    metadata = os.fstat(descriptor)
+    temporary_identity = int(metadata.st_dev), int(metadata.st_ino)
+    committed = False
+    result: AtomicWriteResult | None = None
+    primary_error: BaseException | None = None
+    try:
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(descriptor)
+            if os.name != "nt":
+                os.fchmod(descriptor, mode)
+                os.fsync(descriptor)
+            try:
+                os.link(temporary, path, follow_symlinks=False)
+            except OSError as error:
+                raise AtomicWriteError(
+                    f"managed file creation failed: {path}", committed=False,
+                ) from error
+            committed = True
+            try:
+                _fsync_directory(parent)
+            except OSError as error:
+                raise AtomicWriteError(
+                    f"managed file directory sync failed: {path}", committed=True,
+                ) from error
+            result = AtomicWriteResult(
+                path=path,
+                bytes_written=len(payload),
+                replaced=False,
+            )
+        except BaseException as error:
+            primary_error = error
+    finally:
+        os.close(descriptor)
+        try:
+            temporary_metadata = temporary.lstat()
+            if (
+                stat.S_ISLNK(temporary_metadata.st_mode)
+                or not stat.S_ISREG(temporary_metadata.st_mode)
+                or (int(temporary_metadata.st_dev), int(temporary_metadata.st_ino))
+                != temporary_identity
+            ):
+                raise OSError(f"managed staging path changed identity: {temporary}")
+            temporary.unlink()
+        except FileNotFoundError:
+            cleanup_error: OSError | None = None
+        except OSError as error:
+            cleanup_error = error
+        else:
+            cleanup_error = None
+
+    if primary_error is not None:
+        if isinstance(primary_error, AtomicWriteError):
+            primary_error.cleanup_error = cleanup_error
+            if primary_error.committed:
+                primary_error.committed_identity = temporary_identity
+            raise primary_error
+        if isinstance(primary_error, OSError):
+            raise AtomicWriteError(
+                f"managed file creation failed: {path}",
+                committed=committed,
+                cleanup_error=cleanup_error,
+                committed_identity=temporary_identity if committed else None,
+            ) from primary_error
+        raise primary_error
+    if cleanup_error is not None:
+        raise AtomicWriteError(
+            f"managed file staging cleanup failed: {path}",
+            committed=committed,
+            cleanup_error=cleanup_error,
+            committed_identity=temporary_identity if committed else None,
         ) from cleanup_error
     assert result is not None
     return result

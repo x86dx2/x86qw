@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,36 @@ def _identity(path: Path) -> tuple[int, int, int]:
         int(metadata.st_ino),
         int(stat.S_IFMT(metadata.st_mode)),
     )
+
+
+def _move_no_replace(source: Path, destination: Path) -> None:
+    """Move one node atomically while preserving an existing destination."""
+
+    from . import managed_files
+
+    if os.name == "nt":
+        api = managed_files._get_windows_file_api()
+        if api is None:
+            raise QuarantineError("Rename exclusivo indisponível no Windows")
+        api.move_no_replace(source, destination)
+        return
+    api = managed_files._get_posix_rename_api()
+    if api is None:
+        raise QuarantineError("Rename exclusivo indisponível neste sistema")
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    source_parent = os.open(source.parent, flags)
+    try:
+        destination_parent = os.open(destination.parent, flags)
+        try:
+            api.move_no_replace(
+                source_parent, source.name,
+                destination_parent, destination.name,
+            )
+        finally:
+            os.close(destination_parent)
+    finally:
+        os.close(source_parent)
 
 
 def observe_quarantine_target(path: Path) -> tuple[object, ...]:
@@ -78,24 +109,99 @@ def _validate_tree(path: Path, device: int) -> None:
         _validate_tree(child, device)
 
 
-def _remove_tree(path: Path, device: int) -> None:
+def _unlink_leaf(path: Path, expected_identity: tuple[int, int, int]) -> None:
+    """Remove only the leaf identity observed by the recursive plan."""
+
+    from . import managed_files
+
+    if os.name != "nt" and stat.S_ISREG(expected_identity[2]):
+        if managed_files.unlink_identity_bound_regular(
+            path, expected_identity[:2],
+        ):
+            return
+        raise QuarantineError(f"Nó de quarantine mudou: {path}")
+    candidate = path.with_name(f".x86qw-delete-{secrets.token_hex(12)}")
+    _move_no_replace(path, candidate)
+    try:
+        if _identity(candidate) != expected_identity:
+            try:
+                _move_no_replace(candidate, path)
+            except BaseException as restore_error:
+                raise QuarantineError(
+                    f"Nó divergente preservado em {candidate}"
+                ) from restore_error
+            raise QuarantineError(f"Nó de quarantine mudou: {path}")
+        candidate.unlink()
+    except BaseException:
+        if lexists(candidate) and not lexists(path):
+            try:
+                _move_no_replace(candidate, path)
+            except BaseException:
+                pass
+        raise
+
+
+def _remove_tree(
+    path: Path,
+    device: int,
+    *,
+    expected_identity: tuple[int, int, int] | None = None,
+) -> None:
     metadata = path.lstat()
     if int(metadata.st_dev) != device:
         raise QuarantineError(f"Finalização recusou atravessar filesystem: {path}")
+    current_identity = (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(stat.S_IFMT(metadata.st_mode)),
+    )
+    if expected_identity is not None and current_identity != expected_identity:
+        raise QuarantineError(f"Backup de quarantine mudou: {path}")
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-        path.unlink()
+        if _identity(path) != current_identity:
+            raise QuarantineError(f"Nó de quarantine mudou: {path}")
+        _unlink_leaf(path, current_identity)
         return
     with os.scandir(path) as entries:
-        children = tuple(Path(entry.path) for entry in entries)
-    for child in children:
-        _remove_tree(child, device)
+        children = tuple(
+            (
+                Path(entry.path),
+                (
+                    int(child.st_dev),
+                    int(child.st_ino),
+                    int(stat.S_IFMT(child.st_mode)),
+                ),
+            )
+            for entry in entries
+            for child in (entry.stat(follow_symlinks=False),)
+        )
+    for child, child_identity in children:
+        _remove_tree(
+            child,
+            device,
+            expected_identity=child_identity,
+        )
+    if _identity(path) != current_identity:
+        raise QuarantineError(f"Diretório de quarantine mudou: {path}")
     path.rmdir()
 
 
-def apply_quarantine_removal(destination: Path) -> QuarantineToken:
+def apply_quarantine_removal(
+    destination: Path,
+    *,
+    expected_observation: tuple[object, ...] | None = None,
+) -> QuarantineToken:
     """Atomically move one existing node into a private sibling quarantine."""
 
     destination = Path(destination)
+    current_observation = observe_quarantine_target(destination)
+    if (
+        expected_observation is not None
+        and current_observation != expected_observation
+    ):
+        raise QuarantineError(
+            f"Caminho mudou após o plano de quarantine: {destination}"
+        )
     if not lexists(destination):
         raise QuarantineError(f"Caminho de purge não existe: {destination}")
     parent = destination.parent
@@ -128,7 +234,7 @@ def apply_quarantine_removal(destination: Path) -> QuarantineToken:
     except BaseException as error:
         try:
             if lexists(previous) and not lexists(destination):
-                previous.replace(destination)
+                _move_no_replace(previous, destination)
             if root.is_dir() and not any(root.iterdir()):
                 root.rmdir()
         except BaseException as rollback_error:
@@ -151,7 +257,16 @@ def rollback_quarantine(token: QuarantineToken) -> None:
         )
     if not lexists(token.previous) or _identity(token.previous) != token.identity:
         raise QuarantineError(f"Backup de quarantine mudou: {token.previous}")
-    token.previous.replace(token.destination)
+    try:
+        _move_no_replace(token.previous, token.destination)
+    except FileExistsError as error:
+        raise QuarantineError(
+            f"Destino ocupado foi preservado durante rollback: {token.destination}"
+        ) from error
+    except OSError as error:
+        raise QuarantineError(
+            f"Rollback de quarantine falhou sem substituir o destino: {token.destination}"
+        ) from error
     try:
         token.quarantine.rmdir()
     except OSError as error:
@@ -173,7 +288,11 @@ def finalize_quarantine(token: QuarantineToken) -> None:
         raise QuarantineError(f"Backup de quarantine mudou: {token.previous}")
     _validate_tree(token.previous, token.device)
     try:
-        _remove_tree(token.previous, token.device)
+        _remove_tree(
+            token.previous,
+            token.device,
+            expected_identity=token.identity,
+        )
         token.quarantine.rmdir()
     except OSError as error:
         raise QuarantineError(

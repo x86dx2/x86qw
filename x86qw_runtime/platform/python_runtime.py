@@ -5,6 +5,7 @@ from __future__ import annotations
 import ntpath
 import os
 import shlex
+import subprocess
 import sys
 from typing import Optional, Sequence, Union
 
@@ -44,6 +45,22 @@ def validated_executable(
     if not os.path.isabs(expanded) and not ntpath.isabs(expanded):
         expanded = os.path.abspath(expanded)
     return expanded
+
+
+def run_handoff(
+    application: Union[str, os.PathLike[str]],
+    arguments: Sequence[str],
+    *,
+    executable: Optional[Union[str, os.PathLike[str]]] = None,
+) -> int:
+    """Run a validated Python application directly and return its exit code."""
+
+    command = [
+        validated_executable(executable),
+        os.fspath(application),
+        *arguments,
+    ]
+    return int(subprocess.run(command, check=False).returncode)
 
 
 def _cmd_literal(value: str) -> str:

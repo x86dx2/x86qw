@@ -9,13 +9,9 @@ import json
 import os
 import random
 import re
-import shlex
 import stat
-import struct
-import subprocess
 import sys
 import tempfile
-import time
 import traceback
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
@@ -25,7 +21,7 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 
 from x86qw_runtime.ui import menu as navigation
-from x86qw_runtime.ui.arguments import FriendlyArgumentParser
+from x86qw_runtime.ui.arguments import FriendlyArgumentParser, render_public_command
 from x86qw_runtime.ui.console import Console as RuntimeConsole
 from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
@@ -34,9 +30,34 @@ from x86qw_runtime.io.archive import (
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.atomic import AtomicWriteError, atomic_create_bytes
+from x86qw_runtime.io.managed_files import (
+    MaterializedDirectory,
+    MaterializedFile,
+    cleanup_materialized_directory,
+    cleanup_materialized_file,
+    file_sha256,
+)
 from x86qw_runtime.io.paths import lexists, remove_path
+from x86qw_runtime.io.personal_files import (
+    observe_personal_file,
+    personal_file_step,
+)
 from x86qw_runtime.errors import ExitCode, InstallerError
-from x86qw_runtime.transaction import MutationResult, MutationRollbackError
+from x86qw_runtime.platform.display import (
+    DisplayAdapterError,
+    is_macos_host,
+    macos_main_display,
+)
+from x86qw_runtime.transaction import (
+    finalize_mutation,
+    MutationPlan,
+    MutationResult,
+    MutationRollbackError,
+    MutationStep,
+    execute_mutation,
+    prepare_mutation,
+)
 from x86qw_runtime.gameplay import (
     FROGBOT_ADD_WAIT_FRAMES,
     FrogbotIdentity,
@@ -71,6 +92,17 @@ from x86qw_runtime.gameplay import (
     validate_ktx_bot_count,
     without_frogbots,
 )
+from x86qw_runtime.gameplay.runtime_configs import (
+    RuntimeConfigOwnership,
+    create_runtime_config,
+    release_runtime_config,
+)
+from x86qw_runtime.supervisor.core import process_remains_alive
+from x86qw_runtime.gameplay.pak import (
+    PakError,
+    list_bsp_names,
+    read_member as read_pak_member,
+)
 
 _player_adapters: dict[type, type] = {}
 
@@ -90,6 +122,17 @@ class GameplayContext:
 
 _gameplay_context: GameplayContext | None = None
 console: object = RuntimeConsole()
+
+
+def _retain_or_finalize_personal_mutation(
+    result: MutationResult,
+    mutation_results: list[MutationResult] | None,
+) -> MutationResult | None:
+    if mutation_results is not None:
+        mutation_results.append(result)
+        return result
+    finalize_mutation(result)
+    return None
 
 
 def configure_context(context: GameplayContext) -> None:
@@ -114,12 +157,71 @@ def file_count(count: int) -> str:
     return f"{count} {'arquivo' if count == 1 else 'arquivos'}"
 
 
-def file_hash(path: Path, algorithm: str = "sha256") -> str:
-    digest = hashlib.new(algorithm)
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+@dataclass(frozen=True)
+class _PersonalProfileToken:
+    root: Path
+    path: Path
+    identity: tuple[int, int]
+    digest: str
+    size: int
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+
+
+def _entry_identity(path: Path) -> tuple[int, int]:
+    metadata = path.lstat()
+    return int(metadata.st_dev), int(metadata.st_ino)
+
+
+def _profile_parent_paths(target: Path, destination: Path) -> tuple[Path, ...]:
+    try:
+        relative = destination.relative_to(target)
+    except ValueError as error:
+        raise InstallerError(f"Configuração pessoal fora da instalação: {destination}") from error
+    if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        raise InstallerError(f"Configuração pessoal fora da instalação: {destination}")
+    current = target
+    parents: list[Path] = []
+    for part in relative.parts[:-1]:
+        current /= part
+        parents.append(current)
+    return tuple(parents)
+
+
+def _profile_topology(
+    target: Path, destination: Path,
+) -> tuple[tuple[Path, tuple[int, int] | None], ...]:
+    topology: list[tuple[Path, tuple[int, int] | None]] = []
+    for parent in _profile_parent_paths(target, destination):
+        if not lexists(parent):
+            topology.append((parent, None))
+            continue
+        metadata = parent.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise InstallerError(f"Diretório da configuração pessoal inválido: {parent}")
+        topology.append((parent, (int(metadata.st_dev), int(metadata.st_ino))))
+    if lexists(destination):
+        raise InstallerError(f"Configuração pessoal mudou durante a criação: {destination}")
+    return tuple(topology)
+
+
+def _remove_created_profile(token: _PersonalProfileToken) -> None:
+    if not cleanup_materialized_file(MaterializedFile(
+        path=token.path,
+        expected_hash=token.digest,
+        origin="x86qw:personal-profile-default",
+        created_by_session=True,
+        existed=False,
+        root=token.root,
+        identity=token.identity,
+        expected_size=token.size,
+    )):
+        return
+    for directory, identity in reversed(token.created_directories):
+        cleanup_materialized_directory(MaterializedDirectory(
+            path=directory,
+            root=token.root,
+            identity=identity,
+        ))
 
 PLAY_SUPPORT_VERSION = "8"
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
@@ -162,6 +264,7 @@ class KtxRuntimeConfig:
     device: int
     inode: int
     lease: object
+    ownership: RuntimeConfigOwnership
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
@@ -291,9 +394,7 @@ def ktx_options_cli_arguments(options: KtxLaunchOptions) -> list[str]:
 
 
 def public_command(arguments: list[str]) -> str:
-    launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
-    command = [launcher, *arguments]
-    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+    return render_public_command(arguments)
 
 
 def ktx_summary_lines(options: KtxLaunchOptions) -> list[str]:
@@ -532,36 +633,8 @@ def write_ktx_runtime_config(
         *(f"set_ex {name} $qt{value}$qt\n" for name, value in settings),
         *(f"{command}\n" for command in startup_commands),
     )).encode("ascii")
-    descriptor = -1
-    temporary_name = ""
-    try:
-        descriptor, temporary = private_fs.private_mkstemp(
-            prefix="x86qw-ktx-session-", suffix=".cfg", directory=directory,
-        )
-        temporary_name = str(temporary)
-        pending = memoryview(payload)
-        while pending:
-            written = os.write(descriptor, pending)
-            if written == 0:
-                raise OSError("gravação incompleta da configuração efêmera")
-            pending = pending[written:]
-        os.fsync(descriptor)
-    except OSError as error:
-        if descriptor >= 0:
-            os.close(descriptor)
-            descriptor = -1
-        if temporary_name:
-            try:
-                Path(temporary_name).unlink()
-            except OSError:
-                pass
-        raise InstallerError(
-            f"Não foi possível preparar a sessão KTX: {error}"
-        ) from error
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-    path = Path(temporary_name)
+    ownership = create_runtime_config(target, payload)
+    path = ownership.config
     lease: object | None = None
     try:
         private_fs.validate_private_file(path)
@@ -573,14 +646,11 @@ def write_ktx_runtime_config(
                 lease.close()
             except OSError:
                 pass
-        try:
-            private_fs.unlink_private_file(path)
-        except OSError:
-            pass
+        release_runtime_config(target, ownership)
         raise InstallerError(
             f"Não foi possível validar a sessão KTX temporária: {error}"
         ) from error
-    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino, lease)
+    return KtxRuntimeConfig(path, metadata.st_dev, metadata.st_ino, lease, ownership)
 
 
 def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
@@ -604,16 +674,7 @@ def remove_ktx_runtime_config(config: KtxRuntimeConfig) -> bool:
         return False
     if not valid:
         return False
-    if not lexists(config.path):
-        return True
-    try:
-        private_fs.unlink_private_file(
-            config.path,
-            expected_identity=(config.device, config.inode),
-        )
-    except OSError:
-        return False
-    return True
+    return release_runtime_config(config.path.parents[1], config.ownership)
 
 
 def ktx_external_assets(target: Path) -> frozenset[str]:
@@ -764,13 +825,15 @@ class GameplayPlayerMixin:
                 updated += name.encode("ascii") + b' "' + value.encode("ascii") + b'"' + newline
         return updated
 
-    def remove_legacy_macos_video_layout(self) -> None:
+    def remove_legacy_macos_video_layout(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> MutationResult | None:
         """Remove the short-lived 0.1.7 borderless workaround without touching personal video settings."""
-        if sys.platform != "darwin":
-            return
+        if not is_macos_host():
+            return None
         marker = self.target / LEGACY_MACOS_VIDEO_LAYOUT
         if not lexists(marker):
-            return
+            return None
         if not marker.is_file() or marker.is_symlink():
             raise InstallerError(f"Estado legado de vídeo do launcher inválido: {marker}")
         try:
@@ -786,36 +849,50 @@ class GameplayPlayerMixin:
             and set(settings) == set(LEGACY_MACOS_VIDEO_CVARS)
             and all(isinstance(value, str) for value in settings.values())
         )
+        steps: list[MutationStep] = []
+        restored = False
         if managed and valid_settings and config.is_file() and backup.is_file():
             values = self.config_cvars(config.read_bytes(), LEGACY_MACOS_VIDEO_CVARS)
             if values == settings:
-                self.write_personal_config(config, backup.read_bytes())
-                remove_path(backup)
-                console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
-        remove_path(marker)
+                backup_payload = observe_personal_file(self.target, backup).payload
+                assert backup_payload is not None
+                steps.extend((
+                    personal_file_step(
+                        self.target,
+                        config,
+                        backup_payload,
+                        key="config",
+                        description="Restaurar configuração pessoal de vídeo",
+                    ),
+                    personal_file_step(
+                        self.target,
+                        backup,
+                        None,
+                        key="backup",
+                        description="Remover backup legado restaurado",
+                    ),
+                ))
+                restored = True
+        steps.append(personal_file_step(
+            self.target,
+            marker,
+            None,
+            key="marker",
+            description="Remover marcador legado de vídeo",
+        ))
+        result = execute_mutation(prepare_mutation(MutationPlan(
+            identifier="macos-legacy-video-layout",
+            summary="Remover ajuste legado de vídeo reversivelmente",
+            steps=tuple(steps),
+        )))
+        if restored:
+            console.success("Fullscreen pessoal anterior restaurado após a remoção do ajuste 0.1.7.")
         console.info("Ajuste legado de janela sem bordas removido; o ezQuake continuará em fullscreen.")
+        return _retain_or_finalize_personal_mutation(result, mutation_results)
 
     def macos_notched_fullscreen_settings(self) -> dict[str, str] | None:
         try:
-            profile = subprocess.run(
-                ["system_profiler", "SPDisplaysDataType", "-json"],
-                check=True, capture_output=True, text=True, timeout=8,
-            )
-            displays = json.loads(profile.stdout).get("SPDisplaysDataType")
-            if not isinstance(displays, list):
-                raise ValueError("lista de monitores ausente")
-            main: dict[str, object] | None = None
-            for gpu in displays:
-                if not isinstance(gpu, dict) or not isinstance(gpu.get("spdisplays_ndrvs"), list):
-                    continue
-                for display in gpu["spdisplays_ndrvs"]:
-                    if isinstance(display, dict) and display.get("spdisplays_main") == "spdisplays_yes":
-                        main = display
-                        break
-                if main is not None:
-                    break
-            if main is None:
-                raise ValueError("monitor principal ausente")
+            main = macos_main_display()
             if main.get("spdisplays_connection_type") != "spdisplays_internal":
                 return None
             native = str(main.get("spdisplays_pixelresolution", ""))
@@ -825,8 +902,7 @@ class GameplayPlayerMixin:
             width, panel_height = (int(value) for value in resolution.groups())
             safe_height = round(width * 10 / 16)
         except (
-            OSError, subprocess.SubprocessError, json.JSONDecodeError,
-            KeyError, TypeError, ValueError,
+            DisplayAdapterError, KeyError, TypeError, ValueError,
         ) as error:
             raise InstallerError(f"Não foi possível detectar o modo fullscreen seguro do macOS: {error}") from error
         if width < 1280 or panel_height < 800:
@@ -855,25 +931,26 @@ class GameplayPlayerMixin:
             "vid_displayfrequency": "0",
         }
 
-    def write_macos_fullscreen_marker(
-        self, marker: Path, *, managed: bool, settings: dict[str, str],
-    ) -> None:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps({
+    @staticmethod
+    def macos_fullscreen_marker_payload(
+        *, managed: bool, settings: dict[str, str],
+    ) -> bytes:
+        return json.dumps({
             "format": 1,
             "project": "x86qw",
             "mode": "notched-fullscreen",
             "managed": managed,
             "settings": settings,
         }, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
-        self.write_personal_config(marker, payload)
 
-    def configure_macos_fullscreen(self) -> None:
-        if sys.platform != "darwin":
-            return
+    def configure_macos_fullscreen(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> MutationResult | None:
+        if not is_macos_host():
+            return None
         config = self.target / "ezquake/configs/config.cfg"
         if not lexists(config):
-            return
+            return None
         if not config.is_file() or config.is_symlink():
             raise InstallerError(f"Configuração global do ezQuake inválida: {config}")
         marker = self.target / MACOS_FULLSCREEN_LAYOUT
@@ -907,11 +984,21 @@ class GameplayPlayerMixin:
             managed = state["managed"]
             previous = dict(settings)
         if managed and current != previous:
-            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            result = execute_mutation(prepare_mutation(MutationPlan(
+                identifier="macos-fullscreen-personal",
+                summary="Preservar configuração pessoal de fullscreen",
+                steps=(personal_file_step(
+                    self.target,
+                    marker,
+                    self.macos_fullscreen_marker_payload(managed=False, settings={}),
+                    key="marker",
+                    description="Desativar fullscreen automático",
+                ),),
+            )))
             console.info("Configuração de vídeo pessoal detectada; o fullscreen automático foi desativado.")
-            return
+            return _retain_or_finalize_personal_mutation(result, mutation_results)
         if lexists(marker) and not managed:
-            return
+            return None
 
         desired = self.macos_notched_fullscreen_settings()
         if desired is None:
@@ -919,10 +1006,30 @@ class GameplayPlayerMixin:
                 updated = self.set_config_cvars(current_payload, {
                     "vid_fullscreen": "1", "vid_usedesktopres": "1",
                 })
-                self.write_personal_config(config, updated)
-                remove_path(marker)
+                steps: list[MutationStep] = []
+                if updated != current_payload:
+                    steps.append(personal_file_step(
+                        self.target,
+                        config,
+                        updated,
+                        key="config",
+                        description="Restaurar fullscreen desktop",
+                    ))
+                steps.append(personal_file_step(
+                    self.target,
+                    marker,
+                    None,
+                    key="marker",
+                    description="Remover marcador de fullscreen automático",
+                ))
+                result = execute_mutation(prepare_mutation(MutationPlan(
+                    identifier="macos-fullscreen-desktop",
+                    summary="Restaurar fullscreen desktop reversivelmente",
+                    steps=tuple(steps),
+                )))
                 console.success("Fullscreen desktop restaurado para o monitor sem notch.")
-            return
+                return _retain_or_finalize_personal_mutation(result, mutation_results)
+            return None
         default_fullscreen = (
             not current
             or (
@@ -931,18 +1038,47 @@ class GameplayPlayerMixin:
             )
         )
         if not managed and not default_fullscreen:
-            self.write_macos_fullscreen_marker(marker, managed=False, settings={})
+            result = execute_mutation(prepare_mutation(MutationPlan(
+                identifier="macos-fullscreen-custom",
+                summary="Registrar preservação do fullscreen pessoal",
+                steps=(personal_file_step(
+                    self.target,
+                    marker,
+                    self.macos_fullscreen_marker_payload(managed=False, settings={}),
+                    key="marker",
+                    description="Registrar configuração pessoal preservada",
+                ),),
+            )))
             console.info("Configuração de vídeo pessoal preservada; nenhum modo fullscreen foi alterado.")
-            return
+            return _retain_or_finalize_personal_mutation(result, mutation_results)
         updated = self.set_config_cvars(current_payload, desired)
+        steps = []
         if updated != current_payload:
-            self.write_personal_config(config, updated)
-        self.write_macos_fullscreen_marker(marker, managed=True, settings=desired)
+            steps.append(personal_file_step(
+                self.target,
+                config,
+                updated,
+                key="config",
+                description="Aplicar fullscreen seguro do macOS",
+            ))
+        steps.append(personal_file_step(
+            self.target,
+            marker,
+            self.macos_fullscreen_marker_payload(managed=True, settings=desired),
+            key="marker",
+            description="Registrar fullscreen automático",
+        ))
+        result = execute_mutation(prepare_mutation(MutationPlan(
+            identifier="macos-fullscreen-safe-area",
+            summary="Aplicar fullscreen seguro reversivelmente",
+            steps=tuple(steps),
+        )))
         if not managed:
             console.success(
                 f"Fullscreen macOS definido antes da abertura em "
                 f"{desired['vid_width']}x{desired['vid_height']}, com frequência automática."
             )
+        return _retain_or_finalize_personal_mutation(result, mutation_results)
 
     @staticmethod
     def map_name_from_member(member: str) -> str | None:
@@ -955,8 +1091,8 @@ class GameplayPlayerMixin:
         return name
 
     def maps_from_package(self, package: Path) -> set[str]:
-        maps: set[str] = set()
         if package.suffix.lower() == ".pk3":
+            maps: set[str] = set()
             try:
                 plan = scan_archive(package)
             except (ArchiveError, OSError) as error:
@@ -968,30 +1104,14 @@ class GameplayPlayerMixin:
                     maps.add(name)
             return maps
         try:
-            size = package.stat().st_size
-            with package.open("rb") as archive:
-                header = archive.read(12)
-                if len(header) != 12 or header[:4] != b"PACK":
-                    raise InstallerError(f"PAK de mapas inválido: {package}")
-                directory_offset, directory_size = struct.unpack("<II", header[4:])
-                if (
-                    directory_offset < 12 or directory_size % 64
-                    or directory_offset + directory_size > size
-                ):
-                    raise InstallerError(f"Diretório PAK inválido: {package}")
-                archive.seek(directory_offset)
-                directory = archive.read(directory_size)
+            return list_bsp_names(package)
         except OSError as error:
             raise InstallerError(f"Não foi possível ler o PAK de mapas: {package}") from error
-        for offset in range(0, len(directory), 64):
-            raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
-            try:
-                member = raw_name.decode("ascii")
-            except UnicodeDecodeError:
-                continue
-            if name := self.map_name_from_member(member):
-                maps.add(name)
-        return maps
+        except PakError as error:
+            message = str(error)
+            if message.startswith("PAK inválido:"):
+                message = message.replace("PAK inválido:", "PAK de mapas inválido:", 1)
+            raise InstallerError(message) from error
 
     def local_map_names(self, gamedir: str) -> list[str]:
         maps: set[str] = set()
@@ -1819,14 +1939,13 @@ class GameplayPlayerMixin:
             ]
         try:
             process = self.launch_runtime(runtime, arguments)
-            if runtime_config is not None and isinstance(process, subprocess.Popen):
-                deadline = time.monotonic() + 3.0
-                while time.monotonic() < deadline:
-                    if process.poll() is not None:
-                        raise InstallerError(
-                            "O ezQuake encerrou antes de carregar a configuração KTX."
-                        )
-                    time.sleep(0.05)
+            if (
+                runtime_config is not None
+                and not process_remains_alive(process, duration=3.0)
+            ):
+                raise InstallerError(
+                    "O ezQuake encerrou antes de carregar a configuração KTX."
+                )
         finally:
             if (
                 runtime_config is not None
@@ -1861,7 +1980,7 @@ class GameplayPlayerMixin:
             if (
                 not destination.is_file()
                 or destination.is_symlink()
-                or file_hash(destination) != digest
+                or file_sha256(destination) != digest
             ):
                 issues.append(f"gamecode derivado ausente ou divergente: {relative}")
         for game in games:
@@ -1912,7 +2031,7 @@ class GameplayPlayerMixin:
                 if lexists(destination):
                     if not destination.is_file() or destination.is_symlink():
                         raise InstallerError(f"Suporte local inválido: {destination}")
-                    current_digest = file_hash(destination)
+                    current_digest = file_sha256(destination)
                     if current_digest != expected_digest and old.get(relative) != current_digest:
                         console.warning(f"Arquivo pessoal preservado: {destination}")
                         continue
@@ -1935,7 +2054,11 @@ class GameplayPlayerMixin:
                     mutation_results.append(result)
                 console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
             for game in games:
-                self.ensure_game_user_profile(game)
+                result = self.ensure_game_user_profile(game)
+                if result is not None:
+                    created.append(result)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
             return tuple(created) if mutation_results is not None else ()
         except BaseException as error:
             if isinstance(error, MutationRollbackError):
@@ -1954,20 +2077,74 @@ class GameplayPlayerMixin:
                 self._stage_identity = previous_stage_identity
                 self._stage_created_roots = previous_stage_created_roots
 
-    def ensure_game_user_profile(self, game: LocalGameSpec) -> None:
+    def ensure_game_user_profile(self, game: LocalGameSpec) -> MutationResult | None:
         destination = self.target.joinpath(*PurePosixPath(game.personal_config).parts)
+        _profile_parent_paths(self.target, destination)
         if lexists(destination):
             if not destination.is_file() or destination.is_symlink():
                 raise InstallerError(f"Configuração pessoal de {game.label} inválida: {destination}")
-            return
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(
-            f"// x86QW: personalizações locais de {game.label}\n",
-            encoding="utf-8",
+            return None
+        payload = f"// x86QW: personalizações locais de {game.label}\n".encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        expected_topology = _profile_topology(self.target, destination)
+
+        def apply() -> _PersonalProfileToken:
+            created_directories: list[tuple[Path, tuple[int, int]]] = []
+            try:
+                if _profile_topology(self.target, destination) != expected_topology:
+                    raise InstallerError(
+                        f"Diretórios da configuração pessoal mudaram: {destination.parent}"
+                    )
+                for parent, identity in expected_topology:
+                    if identity is not None:
+                        continue
+                    parent.mkdir(mode=0o755)
+                    created_directories.append((parent, _entry_identity(parent)))
+                try:
+                    atomic_create_bytes(destination, payload, mode=0o644)
+                except AtomicWriteError as error:
+                    if error.committed_identity is not None:
+                        _remove_created_profile(_PersonalProfileToken(
+                            self.target,
+                            destination,
+                            error.committed_identity,
+                            digest,
+                            len(payload),
+                            tuple(created_directories),
+                        ))
+                    raise
+                identity = _entry_identity(destination)
+                return _PersonalProfileToken(
+                    self.target,
+                    destination,
+                    identity,
+                    digest,
+                    len(payload),
+                    tuple(created_directories),
+                )
+            except BaseException:
+                for parent, identity in reversed(created_directories):
+                    if lexists(parent) and _entry_identity(parent) == identity:
+                        try:
+                            parent.rmdir()
+                        except OSError:
+                            pass
+                raise
+
+        plan = MutationPlan(
+            identifier=f"personal-config:{game.key}",
+            summary=f"Criar configuração pessoal de {game.label}",
+            steps=(MutationStep(
+                key="profile",
+                description=f"Criar {game.personal_config}",
+                observe=lambda: _profile_topology(self.target, destination),
+                apply=apply,
+                rollback=_remove_created_profile,
+            ),),
         )
-        if os.name != "nt":
-            destination.chmod(0o644)
+        result = execute_mutation(prepare_mutation(plan))
         console.info(f"Configuração pessoal de {game.label} criada: {destination}")
+        return result
 
     def local_game_program(self, game: LocalGameSpec) -> bytes:
         package = self.game_program_path(game)
@@ -1986,35 +2163,11 @@ class GameplayPlayerMixin:
 
     def pak_member(self, package: Path, member_name: str) -> bytes:
         try:
-            size = package.stat().st_size
-            with package.open("rb") as archive:
-                header = archive.read(12)
-                if len(header) != 12 or header[:4] != b"PACK":
-                    raise InstallerError(f"PAK inválido: {package}")
-                directory_offset, directory_size = struct.unpack("<II", header[4:])
-                if directory_offset < 12 or directory_size % 64 or directory_offset + directory_size > size:
-                    raise InstallerError(f"Diretório PAK inválido: {package}")
-                archive.seek(directory_offset)
-                directory = archive.read(directory_size)
-                for offset in range(0, len(directory), 64):
-                    raw_name = directory[offset:offset + 56].split(b"\0", 1)[0]
-                    try:
-                        name = raw_name.decode("ascii")
-                    except UnicodeDecodeError:
-                        continue
-                    if name.casefold() != member_name.casefold():
-                        continue
-                    data_offset, data_size = struct.unpack_from("<II", directory, offset + 56)
-                    if data_offset < 12 or data_offset + data_size > size:
-                        raise InstallerError(f"Membro PAK inválido em {package}: {name}")
-                    archive.seek(data_offset)
-                    payload = archive.read(data_size)
-                    if len(payload) != data_size:
-                        raise InstallerError(f"Membro PAK truncado em {package}: {name}")
-                    return payload
+            return read_pak_member(package, member_name)
         except OSError as error:
             raise InstallerError(f"Não foi possível ler o PAK: {package}") from error
-        raise InstallerError(f"Gamecode {member_name} não encontrado em {package}.")
+        except PakError as error:
+            raise InstallerError(str(error)) from error
 
 
 def create_player_adapter(installer_base: type) -> type:

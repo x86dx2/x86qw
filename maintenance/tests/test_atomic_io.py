@@ -14,6 +14,47 @@ from unittest import mock
 
 
 class AtomicWriteTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "fsync de diretório é uma barreira POSIX")
+    def test_public_directory_barrier_opens_fsyncs_and_closes_directory(self) -> None:
+        atomic = importlib.import_module("x86qw_runtime.io.atomic")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            descriptors: list[int] = []
+            real_open = os.open
+            real_fsync = os.fsync
+
+            def record_open(path: Path, flags: int) -> int:
+                descriptor = real_open(path, flags)
+                descriptors.append(descriptor)
+                return descriptor
+
+            with mock.patch.object(atomic.os, "open", side_effect=record_open), mock.patch.object(
+                atomic.os,
+                "fsync",
+                wraps=real_fsync,
+            ) as fsync:
+                atomic.sync_directory(root)
+
+            self.assertEqual(1, len(descriptors))
+            fsync.assert_called_once_with(descriptors[0])
+            with self.assertRaises(OSError):
+                os.fstat(descriptors[0])
+
+    def test_public_directory_barrier_does_not_open_directories_on_windows(self) -> None:
+        atomic = importlib.import_module("x86qw_runtime.io.atomic")
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            atomic.os,
+            "name",
+            "nt",
+        ), mock.patch.object(
+            atomic.os,
+            "open",
+            side_effect=AssertionError("Windows must not open a directory for fsync"),
+        ) as opened:
+            atomic.sync_directory(Path(directory))
+
+        opened.assert_not_called()
+
     def test_stream_copy_promotes_only_the_expected_complete_payload(self) -> None:
         """Managed component payloads need bounded-memory atomic promotion."""
 
