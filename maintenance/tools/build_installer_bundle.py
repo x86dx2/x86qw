@@ -40,6 +40,7 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
     validate_installer_history_bundle,
 )
+from x86qw_runtime.versioning import STABLE_VERSION as VERSION_PATTERN, version_key
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
 MAX_BUILD_INPUT_BYTES = 128 * 1024 * 1024
@@ -59,13 +60,11 @@ ZIPAPP_FILES = (
     ("dist/installer/bin/session_control.py", "session_control.py"),
     ("dist/mods/ktx/1.47/x86qw/catalog/modes.json", "_x86qw/ktx-modes.json"),
     ("dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "_x86qw/ktx-frogbot-names.json"),
-    ("maintenance/__init__.py", "maintenance/__init__.py"),
-    ("maintenance/tools/__init__.py", "maintenance/tools/__init__.py"),
-    ("maintenance/tools/components.py", "maintenance/tools/components.py"),
     ("x86qw_runtime/io/downloader.py", "x86qw_runtime/io/downloader.py"),
-    ("maintenance/tools/runtime_catalog.py", "maintenance/tools/runtime_catalog.py"),
     ("x86qw_runtime/__init__.py", "x86qw_runtime/__init__.py"),
+    ("x86qw_runtime/catalogs.py", "x86qw_runtime/catalogs.py"),
     ("x86qw_runtime/errors.py", "x86qw_runtime/errors.py"),
+    ("x86qw_runtime/versioning.py", "x86qw_runtime/versioning.py"),
     ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
     ("x86qw_runtime/io/archive.py", "x86qw_runtime/io/archive.py"),
     ("x86qw_runtime/io/private_fs.py", "x86qw_runtime/io/private_fs.py"),
@@ -79,7 +78,6 @@ RUNTIME_CONTRACT_FILES = (
     ("compatibility", "maintenance/inventory/compatibility.json", "_x86qw/compatibility.json"),
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
-VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 GITLAB_PROJECT_ID = "84813414"
 ARCHIVE_SOURCE = ROOT / "x86qw_runtime/io/archive.py"
@@ -180,12 +178,6 @@ def zipapp_bytes(version: str) -> bytes:
     if set(plan.member_names) != set(required):
         raise ValueError("installer zipapp contains an unexpected member")
     return payload
-
-
-def version_key(version: str) -> tuple[int, int, int]:
-    if not VERSION_PATTERN.fullmatch(version):
-        raise ValueError(f"invalid installer version: {version}")
-    return tuple(int(part) for part in version.split("."))  # type: ignore[return-value]
 
 
 def package_results(package_root: Path) -> list[dict[str, object]]:

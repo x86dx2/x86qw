@@ -3,7 +3,10 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import io
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -71,6 +74,125 @@ class RuntimeErrorBoundaryTests(unittest.TestCase):
         self.assertEqual(
             int(runtime_errors.InstallerError("falha").exit_code),
             1,
+        )
+
+
+class RuntimeVersionBoundaryTests(unittest.TestCase):
+    def test_manager_and_builder_use_the_runtime_version_contract(self) -> None:
+        """Version syntax must not be reimplemented by each entrypoint."""
+
+        runtime_spec = importlib.util.find_spec("x86qw_runtime.versioning")
+        self.assertIsNotNone(
+            runtime_spec,
+            "the current version rules must be owned by x86qw_runtime",
+        )
+        versioning = importlib.import_module("x86qw_runtime.versioning")
+        manager = importlib.import_module("manager")
+        builder = importlib.import_module(
+            "maintenance.tools.build_installer_bundle",
+        )
+
+        self.assertIs(manager.STABLE_VERSION, versioning.STABLE_VERSION)
+        self.assertIs(manager.NIGHTLY_VERSION, versioning.NIGHTLY_VERSION)
+        self.assertIs(manager.COMPONENT_VERSION, versioning.COMPONENT_VERSION)
+        self.assertIs(builder.version_key, versioning.version_key)
+        self.assertEqual(versioning.version_key("0.7.1"), (0, 7, 1))
+        for invalid in ("0.7", "0.7.1-rc.1", "v0.7.1", "1.2.3.4"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    versioning.version_key(invalid)
+
+
+class LazyCatalogBoundaryTests(unittest.TestCase):
+    def test_help_and_version_do_not_read_runtime_catalogs(self) -> None:
+        """A malformed catalog must not break a command that does not need it."""
+
+        payload = zipapp_bytes("9.9.9")
+        corrupted = io.BytesIO()
+        catalog_members = {
+            "_x86qw/capabilities.json",
+            "_x86qw/runtimes.json",
+            "_x86qw/games.json",
+            "_x86qw/compatibility.json",
+            "_x86qw/components.json",
+        }
+        with zipfile.ZipFile(io.BytesIO(payload)) as source:
+            with zipfile.ZipFile(corrupted, "w") as destination:
+                for info in source.infolist():
+                    data = source.read(info.filename)
+                    if info.filename in catalog_members:
+                        data = b"{catalogo-indisponivel"
+                    destination.writestr(info, data)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            application = Path(temporary_directory) / "x86qw.pyz"
+            application.write_bytes(corrupted.getvalue())
+            environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+            for arguments in (
+                ("--help",),
+                ("--version",),
+                ("version",),
+                ("play", "--help"),
+                ("host", "--help"),
+            ):
+                with self.subTest(arguments=arguments):
+                    result = subprocess.run(
+                        [sys.executable, os.fspath(application), *arguments],
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=False,
+                        timeout=10,
+                        env=environment,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        result.stdout + result.stderr,
+                    )
+
+
+class RuntimeCatalogOwnershipTests(unittest.TestCase):
+    def test_installed_catalog_loaders_are_owned_by_the_runtime(self) -> None:
+        """Installed catalog consumers must not execute maintenance modules."""
+
+        runtime_spec = importlib.util.find_spec("x86qw_runtime.catalogs")
+        self.assertIsNotNone(
+            runtime_spec,
+            "runtime catalog models must be owned by x86qw_runtime",
+        )
+        catalogs = importlib.import_module("x86qw_runtime.catalogs")
+        manager = importlib.import_module("manager")
+        gameplay = importlib.import_module("gameplay")
+        maintenance_components = importlib.import_module(
+            "maintenance.tools.components",
+        )
+        maintenance_runtime = importlib.import_module(
+            "maintenance.tools.runtime_catalog",
+        )
+
+        self.assertIs(manager.load_runtime_catalog, catalogs.load_component_catalog)
+        self.assertIs(manager.components_by_id, catalogs.components_by_id)
+        self.assertIs(manager.resolve_dependencies, catalogs.resolve_dependencies)
+        self.assertIs(gameplay.load_games, catalogs.load_games)
+        self.assertIs(gameplay.games_by_id, catalogs.games_by_id)
+        self.assertIs(
+            maintenance_components.load_runtime_catalog,
+            catalogs.load_component_catalog,
+        )
+        self.assertIs(maintenance_runtime.load_games, catalogs.load_games)
+        self.assertIs(maintenance_runtime.runtimes_by_id, catalogs.runtimes_by_id)
+
+    def test_installed_zipapp_contains_no_maintenance_modules(self) -> None:
+        """The public runtime artifact must not embed repository tooling."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/catalogs.py", names)
+        self.assertFalse(
+            any(name == "maintenance" or name.startswith("maintenance/") for name in names),
+            sorted(name for name in names if name.startswith("maintenance")),
         )
 
 

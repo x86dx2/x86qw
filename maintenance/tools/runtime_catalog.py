@@ -700,3 +700,15 @@ def runtimes_by_id(document: dict[str, object]) -> dict[str, dict[str, object]]:
 
 def games_by_id(document: dict[str, object]) -> dict[str, dict[str, object]]:
     return _id_entries(document, "games", "game")
+
+
+# Runtime-facing JSON loading and identity indexes are canonical in the public
+# runtime package. Repository-only cross-validation remains in this module.
+from x86qw_runtime.catalogs import (  # noqa: E402
+    games_by_id as games_by_id,
+    load_capabilities as load_capabilities,
+    load_compatibility as load_compatibility,
+    load_games as load_games,
+    load_runtimes as load_runtimes,
+    runtimes_by_id as runtimes_by_id,
+)

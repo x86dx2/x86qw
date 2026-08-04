@@ -18,14 +18,16 @@ import sys
 import tempfile
 import time
 import traceback
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 
 core = importlib.import_module("manager")
 navigation = importlib.import_module("menu")
-from maintenance.tools.runtime_catalog import load_games, games_by_id
+from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
     ArchiveError,
     read_archive_member,
@@ -248,15 +250,47 @@ def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
     return tuple(result)
 
 
-LOCAL_GAMES = load_local_games(core.PROJECT_ROOT)
+@lru_cache(maxsize=1)
+def local_games() -> tuple[LocalGameSpec, ...]:
+    return load_local_games(core.PROJECT_ROOT)
+
+
+class LazyTuple(Sequence[object]):
+    """Tuple-compatible projection that leaves its catalog unopened at import."""
+
+    def __init__(self, loader: Callable[[], tuple[object, ...]]) -> None:
+        self._loader = loader
+
+    def _values(self) -> tuple[object, ...]:
+        return self._loader()
+
+    def __getitem__(self, index):  # type: ignore[no-untyped-def]
+        return self._values()[index]
+
+    def __iter__(self) -> Iterator[object]:
+        return iter(self._values())
+
+    def __len__(self) -> int:
+        return len(self._values())
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Sequence):
+            return tuple(self._values()) == tuple(other)
+        return False
+
+    def __repr__(self) -> str:
+        return repr(self._values())
+
+
+LOCAL_GAMES = LazyTuple(local_games)
 # Compatibility projections for integrations that imported the former constants.
-# The canonical values now live in games.json.
-KTX_LOCAL_SERVER_SETTINGS = next(
-    game.local_server_settings for game in LOCAL_GAMES if game.key == "ktx"
-)
-NQUAKE_LOCAL_SERVER_SETTINGS = next(
-    game.local_server_settings for game in LOCAL_GAMES if game.key != "ktx"
-)
+# The canonical values remain in games.json and are read only on first use.
+KTX_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
+    game.local_server_settings for game in local_games() if game.key == "ktx"
+))
+NQUAKE_LOCAL_SERVER_SETTINGS = LazyTuple(lambda: next(
+    game.local_server_settings for game in local_games() if game.key != "ktx"
+))
 
 
 def read_ktx_mode_catalog(project_root: Path) -> dict[str, object]:

@@ -23,8 +23,9 @@ import textwrap
 import time
 import traceback
 import urllib.parse
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
@@ -59,14 +60,19 @@ from x86qw_runtime.io.archive import (
 )
 from x86qw_runtime.io import private_fs
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.versioning import (
+    COMPONENT_VERSION,
+    NIGHTLY_VERSION,
+    STABLE_VERSION,
+)
 
-from maintenance.tools.components import (
+from x86qw_runtime.catalogs import (
     components_by_id,
-    load_catalog as load_component_catalog,
-    load_runtime_catalog,
+    load_development_component_catalog as load_component_catalog,
+    load_component_catalog as load_runtime_catalog,
     profile_fingerprint,
     resolve_dependencies,
-    validate_runtime_catalog,
+    validate_component_catalog as validate_runtime_catalog,
 )
 from x86qw_runtime.io.downloader import (
     BoundedMetadata,
@@ -81,7 +87,7 @@ from x86qw_runtime.io.downloader import (
     safe_url_for_log,
     validate_https_url as validate_download_url,
 )
-from maintenance.tools.runtime_catalog import (
+from x86qw_runtime.catalogs import (
     load_capabilities,
     load_runtimes,
     runtimes_by_id,
@@ -150,9 +156,6 @@ DEFAULT_PRESET = 's_raw_volume "0.2"\n'
 NQUAKE_TEXTURE_LIMIT = re.compile(
     rb'^([ \t]*gl_max_size[ \t]+)"?32768"?([ \t]*)(\r?)$', re.MULTILINE,
 )
-STABLE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
-COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 MACOS_STABLE_BINARY_IDENTITIES = {
@@ -257,6 +260,7 @@ class PlatformSpec:
         return f".x86qw/ezquake-{self.key}-{channel}.receipt"
 
 
+@lru_cache(maxsize=1)
 def load_launcher_contracts() -> tuple[dict[str, object], dict[str, object]]:
     if ZIPAPP_PATH is not None:
         capabilities = read_zipapp_json(
@@ -271,10 +275,41 @@ def load_launcher_contracts() -> tuple[dict[str, object], dict[str, object]]:
     return capabilities, runtimes
 
 
-CAPABILITY_CATALOG, RUNTIME_CATALOG = load_launcher_contracts()
-RUNTIMES = runtimes_by_id(RUNTIME_CATALOG)
+class LazyMapping(Mapping[str, object]):
+    """Compatibility mapping that defers its catalog read until first use."""
+
+    def __init__(self, loader: Callable[[], Mapping[str, object]]) -> None:
+        self._loader = loader
+
+    def _mapping(self) -> Mapping[str, object]:
+        return self._loader()
+
+    def __getitem__(self, key: str) -> object:
+        return self._mapping()[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._mapping())
+
+    def __len__(self) -> int:
+        return len(self._mapping())
+
+    def __repr__(self) -> str:
+        return repr(self._mapping())
 
 
+CAPABILITY_CATALOG = LazyMapping(lambda: load_launcher_contracts()[0])
+RUNTIME_CATALOG = LazyMapping(lambda: load_launcher_contracts()[1])
+
+
+@lru_cache(maxsize=1)
+def launcher_runtimes() -> dict[str, dict[str, object]]:
+    return runtimes_by_id(load_launcher_contracts()[1])
+
+
+RUNTIMES = LazyMapping(launcher_runtimes)
+
+
+@lru_cache(maxsize=1)
 def client_platform_specs() -> dict[str, PlatformSpec]:
     stable = RUNTIMES["ezquake-stable"]
     nightly = RUNTIMES["ezquake-nightly"]
@@ -317,11 +352,18 @@ def client_platform_specs() -> dict[str, PlatformSpec]:
     return result
 
 
-PLATFORMS = client_platform_specs()
-raw_host_platforms = CAPABILITY_CATALOG.get("host_systems")
-if not isinstance(raw_host_platforms, dict):
-    raise ValueError("catálogo declarativo não informa sistemas hospedeiros")
-HOST_PLATFORMS = {str(host): str(system) for host, system in raw_host_platforms.items()}
+PLATFORMS = LazyMapping(client_platform_specs)
+
+
+@lru_cache(maxsize=1)
+def host_platforms() -> dict[str, str]:
+    raw_host_platforms = CAPABILITY_CATALOG.get("host_systems")
+    if not isinstance(raw_host_platforms, dict):
+        raise ValueError("catálogo declarativo não informa sistemas hospedeiros")
+    return {str(host): str(system) for host, system in raw_host_platforms.items()}
+
+
+HOST_PLATFORMS = LazyMapping(host_platforms)
 
 
 PRESETS = {
@@ -5289,6 +5331,15 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
         self.exit(2, f"{self.prog}: erro: {message}\n")
 
 
+def platform_argument(value: str) -> str:
+    if value not in PLATFORMS:
+        available = ", ".join(PLATFORMS)
+        raise argparse.ArgumentTypeError(
+            f"plataforma desconhecida: {value}; disponíveis: {available}"
+        )
+    return value
+
+
 def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namespace:
     public_cli = ZIPAPP_PATH is not None
     version = application_version()
@@ -5316,7 +5367,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument("-v", "--verbose", action="store_true", help="mostra URLs, comandos, hashes e caminhos técnicos")
     parser.add_argument("--no-color", action="store_true", help="desativa cores mesmo em um terminal interativo")
     parser.add_argument(
-        "--platform", choices=tuple(PLATFORMS), metavar="SO",
+        "--platform", type=platform_argument, metavar="SO",
         help="instala um cliente para macos, linux ou windows em vez do SO detectado",
     )
     parser.add_argument(
