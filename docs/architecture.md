@@ -175,9 +175,15 @@ de árvore truncada ou schema divergente.
 O deadline monotônico cobre tentativas, leituras e backoff. Retry é restrito a
 falhas transitórias. Temporários recebem modo `0600` no POSIX, `flush` e `fsync`
 antes de uma substituição atômica, preservando o destino final anterior até a
-promoção. A criação exclusiva no Windows ainda não impõe DACL privada quando o
-diretório herda uma ACL ampla; esse contrato permanece no PR 4 e na
-[issue #47](https://github.com/x86dx2/x86qw/issues/47). Os
+promoção. No código corretivo da PR 4, arquivos e diretórios privados
+gerenciados no Windows nascem com DACL protegida e somente o usuário atual e
+`LOCAL SYSTEM`; o bootstrap PowerShell cria seu diretório de trabalho com a
+mesma política antes da primeira escrita. Arquivos de senha externos são
+validados pelo mesmo limite, sem terem owner, DACL ou conteúdo modificados. A
+matriz nativa Windows comprovou essa mudança com Python 3.10 e 3.13; o smoke de
+runtime sob conta padrão permanece pendente e a release pública `0.7.1` não a
+contém. Consulte o
+[`ADR 0003`](adr/0003-dacl-privada-windows.md). Os
 endereços são resolvidos em subprocesso limitado e cancelável; candidatos TCP
 usam conexão não bloqueante e o cancelamento de TLS/headers executa `shutdown`
 antes do fechamento. A janela de coleta pertence ao deadline, mas um reap
@@ -218,6 +224,9 @@ contra rollback/freeze permanecem na
   canais adicionais de entrega. R2 não faz parte da arquitetura atual.
 - senhas de serviço podem vir de prompt sem eco ou arquivo privado e nunca
   entram na linha de comando dos filhos;
+- no código corretivo da PR 4, objetos privados Windows usam DACL protegida
+  com acesso somente ao usuário atual e a `LOCAL SYSTEM`; falha de validação é
+  terminal, e a evidência nativa dos runners Windows foi concluída;
 - preflight de portas ocorre antes do primeiro processo; readiness e rollback
   encerram startups parciais;
 - `.x86qw/sessions/` registra journals privados e remove após crash somente

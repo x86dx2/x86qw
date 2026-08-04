@@ -112,11 +112,18 @@ pacote ezQuake usa obrigatoriamente
 `clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`; essas
 coordenadas precisam coincidir com os metadados do pacote.
 
-No POSIX, os temporários recebem modo `0600`. No Windows, `mkstemp` garante
-criação exclusiva, mas não neutraliza por si só uma DACL ampla herdada do
-diretório. A DACL privada do temporário do bootstrap continua pendente no PR 4 e
-na [issue #47](https://github.com/x86dx2/x86qw/issues/47); ela não é apresentada
-como proteção concluída nesta correção.
+No POSIX, arquivos e diretórios privados usam `0600` e `0700`. No código
+corretivo da PR 4, objetos privados gerenciados no Windows nascem com DACL
+protegida e exatamente duas ACEs: usuário atual e `LOCAL SYSTEM`. O diretório
+de trabalho do bootstrap PowerShell recebe essa política antes de helper,
+bundle ou extração serem escritos. Arquivos de senha externos são apenas
+validados por handle e nunca têm owner, DACL ou conteúdo reescritos. Se a ACL
+persistente não puder ser comprovada, a operação falha de forma conservadora e
+sem solicitar elevação. A matriz nativa Windows com Python 3.10 e 3.13 validou
+DACL, herança hostil, arquivos de senha e bootstrap. O smoke de runtime sob uma
+conta padrão sem elevação continua pendente na evidência de release; a release
+pública `0.7.1` ainda não contém a mudança. Consulte o
+[`ADR 0003`](../../../docs/adr/0003-dacl-privada-windows.md).
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,

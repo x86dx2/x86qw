@@ -15,10 +15,11 @@ Baseline inicial da issue #45: merge
 A correção `0.7.1` passou em 7/7 jobs, 393 testes de manutenção e quatro testes
 do site. A `0.7.0` permanece imutável no histórico.
 
-Baseline inicial da issue #49: merge
-`b833ba45e08a9de644dc7368f82c905522a0a558`. A fronteira única ZIP/PK3/PYZ é
-um candidato corretivo em validação; não foi publicada nem promovida no
-catálogo.
+Baseline corretiva consolidada após a issue #49: merge
+`b746d577fab5ffd95f170feb28b8a4bd4d4ce76c`. A fronteira única ZIP/PK3/PYZ
+foi integrada, mas não publicada nem promovida no catálogo. O candidato da
+PR 4 parte desse commit e acrescenta a DACL privada Windows; ele também não foi
+publicado.
 
 - instalador público `0.7.1`; as linhas anteriores permanecem imutáveis no histórico;
 - 61 pacotes e 21 componentes;
@@ -46,17 +47,18 @@ catálogo.
 | Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
 | Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
 | Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.1` |
-| Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; Linux e Windows dependem da matriz |
+| Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; contrato nativo Windows validado no CI; bootstrap completo sob conta padrão e runtimes reais pendentes no PR 11 |
 | Downloads remotos | completa no código corretivo da PR 2, mesclado no baseline da issue #49; ainda não publicado em release | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
 | Arquivos ZIP/PK3/PYZ | completa no código corretivo da issue #49; ainda não publicada | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
+| DACL privada Windows | implementada no código corretivo da PR 4; ainda não publicada | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.
 
 ## Próximos marcos do núcleo
 
-1. Aplicar DACL privada aos temporários e estados sensíveis do Windows na PR 4,
-   preservando a `0.7.1` enquanto o código corretivo não for publicado.
+1. Remover a assinatura ad hoc do cliente stable macOS na PR 5, preservando o
+   bundle upstream ou adotando um artefato x86QW com identidade verificável.
 2. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
    Windows x64, além do cliente em macOS Intel.
 3. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do

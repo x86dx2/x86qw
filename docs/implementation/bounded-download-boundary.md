@@ -86,8 +86,10 @@ contra o catálogo proposto. Fontes locais só podem ocupar um `project_*` exato
 do BOM proposto. Sua cópia usa um temporário exclusivo, calcula o hash no
 streaming contra o plano já aprovado, executa `flush`/`fsync` e promove com
 `replace`, quebrando o hardlink de staging sem escrever no `dist/` vivo. O modo
-`0600` protege esse temporário no POSIX; DACL privada no Windows permanece fora
-desta correção.
+`0600` protege esse temporário no POSIX. No candidato corretivo da PR 4,
+temporários Windows passam pela fronteira privada do
+[ADR 0003](../adr/0003-dacl-privada-windows.md), validada nos jobs Windows com
+Python 3.10 e 3.13.
 
 Uma revisão nova do snapshot nQuake só pode ser autorizada pelo próprio intake.
 A definição declara `reference` com `repository`, `previous_revision` e
@@ -269,11 +271,12 @@ Ele deliberadamente não interpreta fluxo de dados arbitrário, reflexão por
 ainda não inventariadas. Mudanças desse tipo continuam exigindo revisão humana e
 novo caso adversarial no gate; o teste não deve ser descrito como prova formal de
 ausência de qualquer comunicação possível. Operações externas de publicação
-também não se tornam consumidoras da API HTTP por causa do scanner. DACL privada
-no Windows — inclusive para o temporário criado pelo bootstrap PowerShell em um
-diretório com herança ampla — pertence ao PR 4 e à
-[issue #47](https://github.com/x86dx2/x86qw/issues/47). `mkstemp` é exclusivo,
-mas não substitui esse controle de acesso. Testes portáveis não substituem
+também não se tornam consumidoras da API HTTP por causa do scanner. O código
+[ADR 0003](../adr/0003-dacl-privada-windows.md). A matriz nativa da
+[issue #47](https://github.com/x86dx2/x86qw/issues/47) comprovou o controle em
+Windows com Python 3.10 e 3.13; isso ainda não substitui os smokes nativos dos
+clientes, serviços, conta padrão ou transporte público.
+`mkstemp` exclusivo e testes portáveis não substituem esse controle nem os
 smokes nativos dos clientes, serviços ou transporte público.
 
 ## Validação

@@ -14,10 +14,12 @@ A implementação `0.7.1` passou nos sete jobs obrigatórios e em 393 testes de
 manutenção mais quatro testes do site. A `0.7.0` permanece imutável no
 histórico.
 
-Baseline inicial da issue #49: merge
-`b833ba45e08a9de644dc7368f82c905522a0a558`. O candidato corretivo da
-fronteira ZIP/PK3/PYZ está em validação e não altera a release pública, o
-catálogo `current` nem os bootstraps já implantados da `0.7.1`.
+Baseline corretiva consolidada após a issue #49: merge
+`b746d577fab5ffd95f170feb28b8a4bd4d4ce76c`. A fronteira ZIP/PK3/PYZ foi
+integrada sem alterar a release pública, o catálogo `current` nem os
+bootstraps implantados da `0.7.1`. O candidato da PR 4 parte desse commit,
+permanece não publicado e concluiu a validação nativa do contrato de DACL no
+Windows; os smokes de runtime e de conta padrão continuam separados.
 
 ## Escala de estado
 
@@ -183,9 +185,9 @@ separada.
 
 **Entrega funcional:** completa para exclusão entre uma stack e manutenção por instalação
 **Validação:** unitária em lock concorrente, lock ausente com controlador vivo,
-journal legado, PID reutilizado, árvore órfã POSIX, Job Object Windows,
-configuração sensível, SIGINT, SIGTERM e crash; smokes nativos dos runtimes
-ainda pendentes
+journal legado, PID reutilizado, árvore órfã POSIX, configuração sensível,
+SIGINT, SIGTERM e crash; casos Win32 nativos de DACL, mutex e Job Object
+aprovados; smokes nativos dos runtimes ainda pendentes
 
 O lock atômico compartilhado é adquirido antes da recuperação e impede tanto
 uma segunda stack quanto manutenção concorrente. O controlador do próprio
@@ -256,10 +258,28 @@ matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13
 Artefatos persistentes exigem HTTPS, tamanho, SHA-256, limite e deadline.
 Metadados dinâmicos são efêmeros e limitados. Retries são restritos a falhas
 transitórias; temporários recebem `0600` no POSIX e só são promovidos
-atomicamente depois da validação. A DACL privada dos temporários Windows
-permanece na [issue #47](https://github.com/x86dx2/x86qw/issues/47).
+atomicamente depois da validação. A DACL privada dos temporários Windows passa
+pela fronteira definida no [ADR 0003](adr/0003-dacl-privada-windows.md), validada
+nos jobs Windows da PR 4 com Python 3.10 e 3.13.
 Autenticação, expiração e proteção contra rollback ou freeze permanecem na
 [issue #48](https://github.com/x86dx2/x86qw/issues/48).
+
+### SEC-04 — DACL privada no Windows
+
+**Entrega funcional:** implementada no código corretivo da PR 4; ainda não publicada
+
+**Validação:** unitária e nativa Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente
+
+Objetos privados gerenciados nascem com DACL protegida e somente duas ACEs de
+controle total: usuário atual e `LOCAL SYSTEM`. A política abrange o plano de
+controle `.x86qw/`, sessões, locks, journals, logs, pedidos de parada,
+configurações sensíveis, staging, downloads e o diretório temporário do
+bootstrap PowerShell. Arquivos externos de senha são somente validados e nunca
+reescritos. A operação falha fechada quando a ACL persistente não pode ser
+comprovada. A matriz da PR 4 comprovou criação sob herança hostil, os dois
+principals permitidos, rejeição de arquivos externos inseguros, proteção do
+bootstrap e leases contra substituição. O código não solicita elevação;
+executá-lo como conta padrão em um smoke nativo ainda pertence ao PR 11.
 
 ## Instalador e perfis
 
@@ -360,4 +380,6 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] asset imutável `0.7.1` publicado, verificado e promovido a `current`;
 - [x] matriz da PR 2 verde nos três sistemas;
 - [x] matriz da PR 3 verde nos três sistemas, inclusive os casos nativos Windows;
+- [x] matriz da PR 4 comprova DACL privada em Windows com Python 3.10 e 3.13;
+- [ ] smoke Windows sob usuário padrão e sem elevação no PR 11;
 - [ ] publicação de qualquer versão posterior exige nova aprovação explícita.

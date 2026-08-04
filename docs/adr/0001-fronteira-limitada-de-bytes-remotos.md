@@ -181,10 +181,12 @@ bootstraps mantêm projeções mínimas e isoladas:
   parte faltante dessa margem é reservada antes do limitante;
 - as cópias canônica e pública são obrigadas a permanecer idênticas por teste.
 
-No Windows, o temporário criado pelo bootstrap é exclusivo, mas ainda pode
-herdar uma DACL ampla do diretório. O modo POSIX `0600` não resolve esse risco;
-a DACL privada permanece no PR 4 e na
-[issue #47](https://github.com/x86dx2/x86qw/issues/47).
+No código corretivo da PR 4, o bootstrap Windows cria seu diretório de trabalho
+com DACL protegida para usuário atual e `LOCAL SYSTEM` antes da primeira
+escrita. A decisão e o comportamento de falha conservadora estão no
+[ADR 0003](0003-dacl-privada-windows.md). O contrato foi validado nos jobs
+Windows com Python 3.10 e 3.13; o smoke de runtime sob conta padrão permanece
+separado, e essa mudança ainda não foi publicada.
 
 Essas projeções existem somente para obter o zipapp fixado; não autorizam um
 novo downloader para clientes, componentes ou metadados do produto.
@@ -203,9 +205,10 @@ novo downloader para clientes, componentes ou metadados do produto.
   `--disable` como primeiro argumento, além de HTTPS obrigatório e redirects
   desativados, mas a promoção imutável ainda precisa ser redesenhada no PR 10;
 - o `curl` do bootstrap é a projeção limitada descrita acima;
-- privacidade por DACL no Windows não é resolvida pelo modo POSIX `0600` e
-  permanece no PR 4 e na
-  [issue #47](https://github.com/x86dx2/x86qw/issues/47).
+- a privacidade por DACL no Windows foi incorporada ao código corretivo da PR 4
+  pelo [ADR 0003](0003-dacl-privada-windows.md) e validada pelos checks nativos
+  Windows da [issue #47](https://github.com/x86dx2/x86qw/issues/47); a execução
+  dos runtimes sob conta padrão permanece no PR 11;
 - testes portáveis da fronteira não substituem smokes nativos de rede ou dos
   runtimes.
 
