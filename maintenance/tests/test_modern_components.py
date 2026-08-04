@@ -2150,6 +2150,79 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw/components/nquake-maps").exists())
             self.assertFalse((target / install_qw.INSTALL_STATE).exists())
 
+    def test_component_default_created_before_state_is_rolled_back(self):
+        """A newly created personal default cannot survive a failed parent state."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            managed.mkdir()
+            staged_default = installer.stage / "default.cfg"
+            staged_default.write_text("managed default\n", encoding="utf-8")
+            destination = target / "fortress/x86qw-user.cfg"
+            component_result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                install_qw.MutationPlan(
+                    identifier="fixture-component",
+                    summary="fixture",
+                    steps=(install_qw.MutationStep(
+                        key="noop", description="noop", observe=lambda: None,
+                        apply=lambda: None, rollback=lambda _token: None,
+                    ),),
+                ),
+            ))
+
+            with (
+                mock.patch.object(installer, "migrate_legacy_nquake"),
+                mock.patch.object(installer, "migrate_legacy_clan_arena"),
+                mock.patch.object(installer, "migrate_legacy_component_replacements"),
+                mock.patch.object(installer, "release_play_support_profiles"),
+                mock.patch.object(installer, "component_package_record", return_value={
+                    "package": "team-fortress", "version": "fixture",
+                    "origin_url": "https://example.invalid/team-fortress.zip",
+                }),
+                mock.patch.object(
+                    installer, "prepare_component_sources",
+                    return_value=(managed, [(staged_default, destination)], "fixture"),
+                ),
+                mock.patch.object(installer, "normalize_component_platform_payload"),
+                mock.patch.object(
+                    installer, "install_component_overlay_transaction",
+                    return_value=(1, component_result),
+                ),
+                mock.patch.object(installer, "migrate_saved_configs"),
+                mock.patch.object(installer, "refresh_qw_package_order"),
+                mock.patch.object(installer, "reconcile_play_support_transaction"),
+            ):
+                results = installer.install_components(["team-fortress"])
+
+            self.assertTrue(destination.is_file())
+            with self.assertRaises(install_qw.PersistenceError):
+                try:
+                    raise install_qw.PersistenceError("falha de state.json", committed=False)
+                except BaseException as error:
+                    installer.rollback_component_transactions(list(results), error)
+                    raise
+            self.assertFalse(destination.exists())
+
+    def test_component_default_modified_before_rollback_is_preserved(self):
+        """Rollback never infers ownership after the user changes a default."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            source = target / ".default-source.cfg"
+            source.write_text("default\n", encoding="utf-8")
+            destination = target / "fortress/x86qw-user.cfg"
+            result = installer.install_component_default_transaction(source, destination)
+            self.assertIsNotNone(result)
+            destination.write_text("personal\n", encoding="utf-8")
+
+            assert result is not None
+            install_qw.rollback_mutation(result)
+
+            self.assertEqual("personal\n", destination.read_text(encoding="utf-8"))
+
     def test_committed_state_durability_error_keeps_matching_component_payload(self):
         """A post-rename fsync failure must not roll payload back behind state.json."""
 

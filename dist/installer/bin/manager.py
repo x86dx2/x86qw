@@ -841,6 +841,14 @@ class RuntimeReceiptRollback:
     previous: list[tuple[Path, Path, tuple[int, int]]]
 
 
+@dataclass(frozen=True)
+class CreatedDefaultRollback:
+    destination: Path
+    digest: str
+    identity: tuple[int, int]
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+
+
 class RuntimeCommitPersistenceError(PersistenceError):
     """The runtime pair committed, but its final durability sync failed."""
 
@@ -4597,6 +4605,137 @@ class Installer:
             self._create_stage(stage_prefix)
         results.extend(self.install_components(selected))
 
+    def _rollback_created_default(self, token: CreatedDefaultRollback) -> None:
+        destination = token.destination
+        removed = False
+        if lexists(destination):
+            metadata = destination.lstat()
+            identity = (int(metadata.st_dev), int(metadata.st_ino))
+            if (
+                destination.is_file()
+                and not destination.is_symlink()
+                and identity == token.identity
+                and file_hash(destination) == token.digest
+            ):
+                if os.name == "nt":
+                    private_fs.unlink_private_file(
+                        destination, expected_identity=token.identity,
+                    )
+                else:
+                    destination.unlink()
+                removed = True
+            else:
+                console.warning(
+                    f"Configuração inicial alterada foi preservada: {destination}"
+                )
+        else:
+            removed = True
+        if removed:
+            for directory, identity in reversed(token.created_directories):
+                if not lexists(directory):
+                    continue
+                metadata = directory.lstat()
+                if (
+                    directory.is_symlink()
+                    or not directory.is_dir()
+                    or (int(metadata.st_dev), int(metadata.st_ino)) != identity
+                ):
+                    continue
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+
+    def _apply_created_default(
+        self, source: Path, destination: Path, digest: str,
+    ) -> CreatedDefaultRollback:
+        if not source.is_file() or source.is_symlink() or file_hash(source) != digest:
+            raise InstallerError(f"Configuração inicial mudou antes da cópia: {source}")
+        if lexists(destination):
+            raise InstallerError(
+                f"Configuração pessoal apareceu durante a instalação: {destination}"
+            )
+        missing: list[Path] = []
+        parent = destination.parent
+        while parent != self.target and not lexists(parent):
+            missing.append(parent)
+            parent = parent.parent
+        created: list[tuple[Path, tuple[int, int]]] = []
+        descriptor = -1
+        token: CreatedDefaultRollback | None = None
+        try:
+            for directory in reversed(missing):
+                directory.mkdir(mode=0o700)
+                metadata = directory.lstat()
+                created.append((directory, (int(metadata.st_dev), int(metadata.st_ino))))
+            descriptor = private_fs.create_private_file(destination)
+            identity_metadata = os.fstat(descriptor)
+            identity = (int(identity_metadata.st_dev), int(identity_metadata.st_ino))
+            copied = hashlib.sha256()
+            with source.open("rb") as input_file, os.fdopen(
+                descriptor, "wb", closefd=False,
+            ) as output:
+                for block in iter(lambda: input_file.read(1024 * 1024), b""):
+                    output.write(block)
+                    copied.update(block)
+                output.flush()
+                if os.name != "nt":
+                    os.fchmod(descriptor, 0o644)
+                os.fsync(descriptor)
+            if copied.hexdigest() != digest:
+                raise InstallerError(f"Configuração inicial copiada divergiu: {destination}")
+            token = CreatedDefaultRollback(destination, digest, identity, tuple(created))
+            return token
+        except BaseException:
+            if token is None and descriptor >= 0:
+                metadata = os.fstat(descriptor)
+                identity = (int(metadata.st_dev), int(metadata.st_ino))
+                os.close(descriptor)
+                descriptor = -1
+                try:
+                    if os.name == "nt":
+                        private_fs.unlink_private_file(
+                            destination, expected_identity=identity,
+                        )
+                    else:
+                        destination.unlink()
+                except OSError:
+                    pass
+            for directory, identity in reversed(created):
+                try:
+                    metadata = directory.lstat()
+                    if (int(metadata.st_dev), int(metadata.st_ino)) == identity:
+                        directory.rmdir()
+                except OSError:
+                    pass
+            raise
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
+    def install_component_default_transaction(
+        self, source: Path, destination: Path,
+    ) -> MutationResult | None:
+        if lexists(destination):
+            return None
+        digest = file_hash(source)
+        plan = MutationPlan(
+            identifier=f"component-default:{destination.relative_to(self.target).as_posix()}",
+            summary=f"Criar configuração inicial {destination}",
+            steps=(MutationStep(
+                key="default",
+                description=f"Criar configuração inicial {destination.name}",
+                observe=lambda: (
+                    self._mutation_path_observation(source),
+                    file_hash(source),
+                    self._mutation_path_observation(destination),
+                ),
+                apply=lambda: self._apply_created_default(source, destination, digest),
+                rollback=self._rollback_created_default,
+            ),),
+        )
+        return execute_mutation(prepare_mutation(plan))
+
     def install_components(self, selected: list[str]) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         results: list[MutationResult] = []
@@ -4622,9 +4761,11 @@ class Installer:
                 )
                 results.append(result)
                 for staged, destination in defaults:
-                    if not lexists(destination):
-                        destination.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(staged, destination)
+                    default_result = self.install_component_default_transaction(
+                        staged, destination,
+                    )
+                    if default_result is not None:
+                        results.append(default_result)
                         console.info(f"Configuração inicial criada: {destination}")
                 if identifier == "nquake-bootstrap":
                     self.migrate_nquake_texture_limit()
@@ -4632,8 +4773,14 @@ class Installer:
             if "nquake-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
                 if not preset.is_file():
-                    preset.parent.mkdir(parents=True, exist_ok=True)
-                    preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+                    assert self.stage is not None
+                    staged_preset = self.stage / "nquake-default-preset.cfg"
+                    staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+                    preset_result = self.install_component_default_transaction(
+                        staged_preset, preset,
+                    )
+                    if preset_result is not None:
+                        results.append(preset_result)
             self.migrate_saved_configs()
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
