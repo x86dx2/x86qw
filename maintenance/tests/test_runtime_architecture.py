@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,21 +20,54 @@ ENTRYPOINTS = {
         "session_control.py",
     }
 }
+def module_name(path: Path) -> str:
+    parts = list(path.relative_to(ROOT).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
 RUNTIME_MODULES = {
-    ".".join(path.relative_to(ROOT).with_suffix("").parts): path
-    for path in (ROOT / "x86qw_runtime").rglob("*.py")
+    module_name(path): path for path in (ROOT / "x86qw_runtime").rglob("*.py")
 }
 PRODUCTION_MODULES = {**ENTRYPOINTS, **RUNTIME_MODULES}
 
 
-def literal_imports(path: Path) -> set[str]:
+def literal_imports(
+    path: Path,
+    current_module: str | None = None,
+    modules: dict[str, Path] | None = None,
+) -> set[str]:
     tree = ast.parse(path.read_text("utf-8"), filename=str(path))
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            names.add(node.module)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module:
+                names.add(node.module)
+            elif node.level and current_module is not None:
+                package = (
+                    current_module
+                    if path.name == "__init__.py"
+                    else current_module.rpartition(".")[0]
+                )
+                parts = package.split(".") if package else []
+                ascend = node.level - 1
+                if ascend > len(parts):
+                    continue
+                base_parts = parts[:len(parts) - ascend]
+                if node.module:
+                    base_parts.extend(node.module.split("."))
+                base = ".".join(base_parts)
+                if base:
+                    names.add(base)
+                if node.module is None and base:
+                    available = modules or PRODUCTION_MODULES
+                    for alias in node.names:
+                        candidate = f"{base}.{alias.name}"
+                        if candidate in available:
+                            names.add(candidate)
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -88,19 +123,25 @@ def static_string(node: ast.AST) -> str | None:
     return None
 
 
-def production_target(imported: str) -> str | None:
-    candidates = sorted(PRODUCTION_MODULES, key=len, reverse=True)
+def production_target(
+    imported: str, modules: dict[str, Path] | None = None,
+) -> str | None:
+    available = modules or PRODUCTION_MODULES
+    candidates = sorted(available, key=len, reverse=True)
     for candidate in candidates:
         if imported == candidate or imported.startswith(candidate + "."):
             return candidate
     return None
 
 
-def import_graph() -> dict[str, set[str]]:
-    graph = {name: set() for name in PRODUCTION_MODULES}
-    for name, path in PRODUCTION_MODULES.items():
-        for imported in literal_imports(path):
-            target = production_target(imported)
+def import_graph(
+    modules: dict[str, Path] | None = None,
+) -> dict[str, set[str]]:
+    available = modules or PRODUCTION_MODULES
+    graph = {name: set() for name in available}
+    for name, path in available.items():
+        for imported in literal_imports(path, name, available):
+            target = production_target(imported, available)
             if target is not None and target != name:
                 graph[name].add(target)
     return graph
@@ -136,6 +177,22 @@ def find_cycle(graph: dict[str, set[str]]) -> tuple[str, ...] | None:
 
 
 class RuntimeArchitectureTests(unittest.TestCase):
+    def test_relative_import_cycle_is_detected(self) -> None:
+        """Package-relative imports must not be invisible to the cycle gate."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary) / "probe"
+            package.mkdir()
+            initializer = package / "__init__.py"
+            child = package / "child.py"
+            initializer.write_text("from . import child\n", encoding="utf-8")
+            child.write_text("import probe\n", encoding="utf-8")
+            modules = {"probe": initializer, "probe.child": child}
+            with mock.patch.dict(PRODUCTION_MODULES, modules, clear=True):
+                cycle = find_cycle(import_graph())
+
+        self.assertEqual(("probe", "probe.child", "probe"), cycle)
+
     def test_runtime_never_imports_repository_or_entrypoint_layers(self) -> None:
         """Runtime modules must remain usable without maintenance or CLI facades."""
 
@@ -151,7 +208,7 @@ class RuntimeArchitectureTests(unittest.TestCase):
         }
         violations: list[str] = []
         for name, path in sorted(RUNTIME_MODULES.items()):
-            for imported in sorted(literal_imports(path)):
+            for imported in sorted(literal_imports(path, name, PRODUCTION_MODULES)):
                 if imported.split(".", 1)[0] in forbidden:
                     violations.append(f"{name} -> {imported}")
         self.assertEqual([], violations)
