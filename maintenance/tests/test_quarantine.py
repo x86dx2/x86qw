@@ -230,8 +230,8 @@ class QuarantineTests(unittest.TestCase):
             )
             self.assertTrue(token.previous.is_dir())
 
-    def test_symlink_is_removed_as_a_leaf_without_following_its_target(self) -> None:
-        """Explicit purge may remove a link name but never traverse its destination."""
+    def test_symlink_is_preserved_in_quarantine_instead_of_path_unlink(self) -> None:
+        """Finalization must not unlink a non-regular node by pathname."""
 
         quarantine = self.runtime()
         with tempfile.TemporaryDirectory() as temporary:
@@ -247,10 +247,68 @@ class QuarantineTests(unittest.TestCase):
                 self.skipTest(f"symlink indisponível: {error}")
 
             token = quarantine.apply_quarantine_removal(link)
-            quarantine.finalize_quarantine(token)
+            with self.assertRaises(quarantine.QuarantineError):
+                quarantine.finalize_quarantine(token)
 
             self.assertEqual(secret.read_bytes(), b"keep")
             self.assertFalse(link.exists())
+            self.assertTrue(token.previous.is_symlink())
+
+    def test_finalization_preserves_directory_swapped_at_private_move(self) -> None:
+        """An empty replacement must not be removed after directory validation."""
+
+        quarantine = self.runtime()
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "cache"
+            target.mkdir()
+            token = quarantine.apply_quarantine_removal(target)
+            parked = token.quarantine / "original-directory"
+            managed_files = importlib.import_module(
+                "x86qw_runtime.io.managed_files"
+            )
+            rename_api = managed_files._get_posix_rename_api()
+            if rename_api is None:
+                self.skipTest("rename POSIX exclusivo indisponível")
+            real_move = rename_api.move_no_replace
+            replacement_identity: tuple[int, int] | None = None
+            injected = False
+
+            def replace_before_private_move(
+                source_directory: int,
+                source_name: str,
+                destination_directory: int,
+                destination_name: str,
+            ) -> None:
+                nonlocal injected, replacement_identity
+                if source_name == token.previous.name and not injected:
+                    injected = True
+                    token.previous.rename(parked)
+                    token.previous.mkdir()
+                    metadata = token.previous.lstat()
+                    replacement_identity = (
+                        int(metadata.st_dev), int(metadata.st_ino),
+                    )
+                real_move(
+                    source_directory,
+                    source_name,
+                    destination_directory,
+                    destination_name,
+                )
+
+            with mock.patch.object(
+                rename_api, "move_no_replace",
+                side_effect=replace_before_private_move,
+            ), self.assertRaises(quarantine.QuarantineError):
+                quarantine.finalize_quarantine(token)
+
+            self.assertTrue(injected)
+            self.assertTrue(token.previous.is_dir())
+            metadata = token.previous.lstat()
+            self.assertEqual(
+                replacement_identity,
+                (int(metadata.st_dev), int(metadata.st_ino)),
+            )
+            self.assertTrue(parked.is_dir())
 
 
 if __name__ == "__main__":

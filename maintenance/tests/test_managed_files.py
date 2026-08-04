@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import os
 import socket
+import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from x86qw_runtime.errors import InstallerError
 from x86qw_runtime.io.managed_files import (
@@ -19,6 +21,7 @@ from x86qw_runtime.io.managed_files import (
     file_matches_sha256,
     file_sha256,
     persistent_path_identity,
+    remove_identity_bound_path,
     unlink_sensitive_temporary,
 )
 
@@ -92,6 +95,104 @@ class ManagedFileIdentityTests(unittest.TestCase):
 
             with self.assertRaises(OSError):
                 persistent_path_identity(alias, directory=False)
+
+    def test_windows_removal_marks_the_validated_handle_for_deletion(self) -> None:
+        """Windows cleanup must delete through its guarded object handle."""
+
+        class FakeWindowsApi:
+            FILE_READ_ATTRIBUTES = 0x80
+            DELETE = 0x10000
+            OPEN_EXISTING = 3
+
+            def __init__(self) -> None:
+                self.deleted: list[int] = []
+                self.closed: list[int] = []
+
+            def open_handle(self, path, *, access, creation, directory):
+                return 17
+
+            def checked_identity(self, handle, *, directory):
+                return (1, 2)
+
+            def mark_delete(self, handle):
+                self.deleted.append(handle)
+
+            def close(self, handle):
+                self.closed.append(handle)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "managed.bin"
+            path.write_bytes(b"managed")
+            metadata = path.lstat()
+            expected = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+                1,
+                2,
+            )
+            api = FakeWindowsApi()
+
+            with mock.patch(
+                "x86qw_runtime.io.managed_files._get_windows_file_api",
+                return_value=api,
+            ):
+                self.assertTrue(
+                    remove_identity_bound_path(
+                        path, expected, directory=False,
+                    )
+                )
+
+            self.assertEqual([17], api.deleted)
+            self.assertEqual([17], api.closed)
+
+    def test_windows_removal_rejects_a_divergent_handle_identity(self) -> None:
+        """A path match cannot authorize deletion of a different handle object."""
+
+        class DivergentWindowsApi:
+            FILE_READ_ATTRIBUTES = 0x80
+            DELETE = 0x10000
+            OPEN_EXISTING = 3
+
+            def __init__(self) -> None:
+                self.deleted: list[int] = []
+
+            def open_handle(self, path, *, access, creation, directory):
+                return 29
+
+            def checked_identity(self, handle, *, directory):
+                return (9, 9)
+
+            def mark_delete(self, handle):
+                self.deleted.append(handle)
+
+            def close(self, handle):
+                pass
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "managed.bin"
+            path.write_bytes(b"managed")
+            metadata = path.lstat()
+            expected = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+                1,
+                2,
+            )
+            api = DivergentWindowsApi()
+
+            with mock.patch(
+                "x86qw_runtime.io.managed_files._get_windows_file_api",
+                return_value=api,
+            ):
+                self.assertFalse(
+                    remove_identity_bound_path(
+                        path, expected, directory=False,
+                    )
+                )
+
+            self.assertEqual([], api.deleted)
 
 
 class ManagedCleanupTests(unittest.TestCase):

@@ -965,6 +965,146 @@ def unlink_identity_bound_regular(
             os.close(parent_descriptor)
 
 
+def _rmdir_identity_bound_directory(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> bool:
+    """Move an expected POSIX directory to a private name before rmdir."""
+
+    rename_api = _get_posix_rename_api()
+    if rename_api is None:
+        return False
+    path = Path(path)
+    parent_descriptor = -1
+    descriptor = -1
+    quarantine_name: str | None = None
+    quarantined_identity = (-1, -1)
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        descriptor = os.open(
+            path.name, _directory_open_flags(), dir_fd=parent_descriptor,
+        )
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or _file_identity(metadata) != expected_identity
+        ):
+            return False
+        for _ in range(128):
+            candidate = f".x86qw-rmdir-{secrets.token_hex(12)}"
+            try:
+                rename_api.move_no_replace(
+                    parent_descriptor,
+                    path.name,
+                    parent_descriptor,
+                    candidate,
+                )
+            except FileExistsError:
+                continue
+            quarantine_name = candidate
+            break
+        if quarantine_name is None:
+            return False
+        quarantined = os.stat(
+            quarantine_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        quarantined_identity = _file_identity(quarantined)
+        if (
+            not stat.S_ISDIR(quarantined.st_mode)
+            or quarantined_identity != expected_identity
+            or _file_identity(os.fstat(descriptor)) != expected_identity
+        ):
+            if _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            ):
+                quarantine_name = None
+            return False
+        os.rmdir(quarantine_name, dir_fd=parent_descriptor)
+        quarantine_name = None
+        os.fsync(parent_descriptor)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+    finally:
+        if quarantine_name is not None and parent_descriptor >= 0:
+            _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            )
+        if descriptor >= 0:
+            os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+
+def remove_identity_bound_path(
+    path: Path,
+    expected_identity: tuple[int, ...],
+    *,
+    directory: bool,
+) -> bool:
+    """Remove only the expected regular file or empty directory object."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) not in {3, 5}
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+    ):
+        raise ValueError("expected_identity must include device, inode and type")
+    expected_type = stat.S_IFDIR if directory else stat.S_IFREG
+    if expected_identity[2] != expected_type:
+        return False
+    path = Path(path)
+    windows_api = _get_windows_file_api()
+    if windows_api is not None:
+        if len(expected_identity) != 5:
+            return False
+        try:
+            handle = windows_api.open_handle(
+                path,
+                access=windows_api.FILE_READ_ATTRIBUTES | windows_api.DELETE,
+                creation=windows_api.OPEN_EXISTING,
+                directory=directory,
+            )
+        except (FileNotFoundError, OSError):
+            return False
+        try:
+            native_identity = windows_api.checked_identity(
+                handle, directory=directory,
+            )
+            metadata = path.lstat()
+            actual = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+            )
+            if (
+                actual != expected_identity[:3]
+                or native_identity != expected_identity[3:]
+            ):
+                return False
+            windows_api.mark_delete(handle)
+            return True
+        except OSError:
+            return False
+        finally:
+            _close_windows_handle(windows_api, handle)
+    if len(expected_identity) != 3:
+        return False
+    if directory:
+        return _rmdir_identity_bound_directory(path, expected_identity[:2])
+    return unlink_identity_bound_regular(path, expected_identity[:2])
+
+
 def cleanup_materialized_file(entry: MaterializedFile) -> bool:
     if entry.expected_size is None:
         return not lexists(entry.path)
@@ -1960,5 +2100,6 @@ __all__ = (
     "file_sha256",
     "materialize_archive",
     "persistent_path_identity",
+    "remove_identity_bound_path",
     "unlink_sensitive_temporary",
 )

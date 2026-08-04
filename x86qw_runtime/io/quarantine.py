@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import secrets
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +21,7 @@ class QuarantineToken:
     destination: Path
     quarantine: Path
     previous: Path
-    identity: tuple[int, int, int]
+    identity: tuple[int, ...]
     device: int
 
 
@@ -30,11 +29,31 @@ def lexists(path: Path) -> bool:
     return os.path.lexists(path)
 
 
-def _identity(path: Path) -> tuple[int, int, int]:
+def _identity(path: Path) -> tuple[int, ...]:
     try:
         metadata = path.lstat()
     except OSError as error:
         raise QuarantineError(f"Caminho de quarantine indisponível: {path}") from error
+    identity = (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(stat.S_IFMT(metadata.st_mode)),
+    )
+    if os.name != "nt" or not (
+        stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)
+    ):
+        return identity
+    from . import managed_files
+
+    native_identity = managed_files.persistent_path_identity(
+        path, directory=stat.S_ISDIR(metadata.st_mode),
+    )
+    if _identity_from_metadata(path.lstat()) != identity:
+        raise QuarantineError(f"Caminho de quarantine mudou: {path}")
+    return identity + native_identity
+
+
+def _identity_from_metadata(metadata: os.stat_result) -> tuple[int, int, int]:
     return (
         int(metadata.st_dev),
         int(metadata.st_ino),
@@ -109,52 +128,32 @@ def _validate_tree(path: Path, device: int) -> None:
         _validate_tree(child, device)
 
 
-def _unlink_leaf(path: Path, expected_identity: tuple[int, int, int]) -> None:
+def _unlink_leaf(path: Path, expected_identity: tuple[int, ...]) -> None:
     """Remove only the leaf identity observed by the recursive plan."""
 
     from . import managed_files
 
-    if os.name != "nt" and stat.S_ISREG(expected_identity[2]):
-        if managed_files.unlink_identity_bound_regular(
-            path, expected_identity[:2],
-        ):
-            return
-        raise QuarantineError(f"Nó de quarantine mudou: {path}")
-    candidate = path.with_name(f".x86qw-delete-{secrets.token_hex(12)}")
-    _move_no_replace(path, candidate)
-    try:
-        if _identity(candidate) != expected_identity:
-            try:
-                _move_no_replace(candidate, path)
-            except BaseException as restore_error:
-                raise QuarantineError(
-                    f"Nó divergente preservado em {candidate}"
-                ) from restore_error
-            raise QuarantineError(f"Nó de quarantine mudou: {path}")
-        candidate.unlink()
-    except BaseException:
-        if lexists(candidate) and not lexists(path):
-            try:
-                _move_no_replace(candidate, path)
-            except BaseException:
-                pass
-        raise
+    if not stat.S_ISREG(expected_identity[2]):
+        raise QuarantineError(
+            f"Nó não regular preservado no quarantine: {path}"
+        )
+    if managed_files.remove_identity_bound_path(
+        path, expected_identity, directory=False,
+    ):
+        return
+    raise QuarantineError(f"Nó de quarantine mudou: {path}")
 
 
 def _remove_tree(
     path: Path,
     device: int,
     *,
-    expected_identity: tuple[int, int, int] | None = None,
+    expected_identity: tuple[int, ...] | None = None,
 ) -> None:
     metadata = path.lstat()
     if int(metadata.st_dev) != device:
         raise QuarantineError(f"Finalização recusou atravessar filesystem: {path}")
-    current_identity = (
-        int(metadata.st_dev),
-        int(metadata.st_ino),
-        int(stat.S_IFMT(metadata.st_mode)),
-    )
+    current_identity = _identity(path)
     if expected_identity is not None and current_identity != expected_identity:
         raise QuarantineError(f"Backup de quarantine mudou: {path}")
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
@@ -166,14 +165,9 @@ def _remove_tree(
         children = tuple(
             (
                 Path(entry.path),
-                (
-                    int(child.st_dev),
-                    int(child.st_ino),
-                    int(stat.S_IFMT(child.st_mode)),
-                ),
+                _identity(Path(entry.path)),
             )
             for entry in entries
-            for child in (entry.stat(follow_symlinks=False),)
         )
     for child, child_identity in children:
         _remove_tree(
@@ -181,9 +175,12 @@ def _remove_tree(
             device,
             expected_identity=child_identity,
         )
-    if _identity(path) != current_identity:
+    from . import managed_files
+
+    if not managed_files.remove_identity_bound_path(
+        path, current_identity, directory=True,
+    ):
         raise QuarantineError(f"Diretório de quarantine mudou: {path}")
-    path.rmdir()
 
 
 def apply_quarantine_removal(
