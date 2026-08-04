@@ -1690,6 +1690,306 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("mine", personal.read_text(encoding="utf-8"))
             self.assertFalse((target / "qw/maps/new.loc").exists())
 
+    def test_component_metadata_failure_rolls_back_payload_and_stale_files(self):
+        """A receipt failure must not leave a new payload under old metadata."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            first = installer.stage / "first"
+            (first / "qw/maps").mkdir(parents=True)
+            (first / "qw/maps/current.loc").write_text("old", encoding="utf-8")
+            (first / "qw/maps/stale.loc").write_text("stale", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "nquake-maps", first, "v1", "https://example.invalid/v1.zip",
+                )
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("nquake-maps")
+            )
+            previous_metadata = (receipt.read_bytes(), inventory.read_bytes())
+            personal_empty = target / "qw/personal-empty"
+            personal_empty.mkdir()
+
+            second = installer.stage / "second"
+            (second / "qw/maps").mkdir(parents=True)
+            (second / "qw/maps/current.loc").write_text("new", encoding="utf-8")
+            (second / "qw/maps/new.loc").write_text("new", encoding="utf-8")
+
+            with mock.patch.object(
+                installer,
+                "commit_component_metadata",
+                side_effect=install_qw.InstallerError("injected metadata failure"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "injected metadata failure",
+                ):
+                    installer.install_component_overlay(
+                        "nquake-maps", second, "v2", "https://example.invalid/v2.zip",
+                    )
+
+            self.assertEqual(
+                "old", (target / "qw/maps/current.loc").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "stale", (target / "qw/maps/stale.loc").read_text(encoding="utf-8"),
+            )
+            self.assertFalse((target / "qw/maps/new.loc").exists())
+            self.assertEqual(previous_metadata, (receipt.read_bytes(), inventory.read_bytes()))
+            self.assertTrue(personal_empty.is_dir())
+
+    def test_component_copy_failure_rolls_back_files_written_by_the_failed_step(self):
+        """A copy error inside the payload step must restore its earlier writes."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            first = installer.stage / "first"
+            (first / "qw/maps").mkdir(parents=True)
+            (first / "qw/maps/a.loc").write_text("old-a", encoding="utf-8")
+            (first / "qw/maps/b.loc").write_text("old-b", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "nquake-maps", first, "v1", "https://example.invalid/v1.zip",
+                )
+
+            second = installer.stage / "second"
+            (second / "qw/maps").mkdir(parents=True)
+            (second / "qw/maps/a.loc").write_text("new-a", encoding="utf-8")
+            (second / "qw/maps/b.loc").write_text("new-b", encoding="utf-8")
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("nquake-maps")
+            )
+            previous_metadata = (receipt.read_bytes(), inventory.read_bytes())
+            real_copy = install_qw.shutil.copy2
+
+            def fail_second_payload_copy(source: Path, destination: Path, *args, **kwargs):
+                if source == second / "qw/maps/b.loc":
+                    raise OSError("injected payload copy failure")
+                return real_copy(source, destination, *args, **kwargs)
+
+            with mock.patch.object(
+                install_qw.shutil, "copy2", side_effect=fail_second_payload_copy,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_component_overlay(
+                        "nquake-maps", second, "v2", "https://example.invalid/v2.zip",
+                    )
+
+            self.assertEqual(
+                ("old-a", "old-b"),
+                tuple(
+                    (target / f"qw/maps/{name}.loc").read_text(encoding="utf-8")
+                    for name in ("a", "b")
+                ),
+            )
+            self.assertEqual(previous_metadata, (receipt.read_bytes(), inventory.read_bytes()))
+
+    def test_component_phase_state_failure_rolls_back_payload_and_metadata(self):
+        """state.json failure must reverse every component committed by the phase."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            (managed / "qw/maps").mkdir(parents=True)
+            (managed / "qw/maps/new.loc").write_text("new", encoding="utf-8")
+            installer.selected_component_profile = "custom"
+            installer.requested_components = ["nquake-maps"]
+
+            def install_selected(selected: list[str]):
+                self.assertEqual(["nquake-maps"], selected)
+                _, result = installer.install_component_overlay_transaction(
+                    "nquake-maps",
+                    managed,
+                    "v1",
+                    "https://example.invalid/v1.zip",
+                )
+                return (result,)
+
+            with mock.patch.object(
+                installer, "choose_components", return_value=["nquake-maps"],
+            ), mock.patch.object(
+                installer, "install_components", side_effect=install_selected,
+            ), mock.patch.object(
+                installer,
+                "write_install_state",
+                side_effect=install_qw.InstallerError("injected state failure"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "injected state failure",
+                ):
+                    installer.install_component_phase()
+
+            self.assertFalse((target / "qw/maps/new.loc").exists())
+            self.assertFalse((target / ".x86qw/components/nquake-maps").exists())
+            self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
+    def test_committed_state_durability_error_keeps_matching_component_payload(self):
+        """A post-rename fsync failure must not roll payload back behind state.json."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            (managed / "qw/maps").mkdir(parents=True)
+            (managed / "qw/maps/new.loc").write_text("new", encoding="utf-8")
+            installer.selected_component_profile = "custom"
+            installer.requested_components = ["nquake-maps"]
+
+            def install_selected(selected: list[str]):
+                self.assertEqual(["nquake-maps"], selected)
+                _, result = installer.install_component_overlay_transaction(
+                    "nquake-maps",
+                    managed,
+                    "v1",
+                    "https://example.invalid/v1.zip",
+                )
+                return (result,)
+
+            write_state = installer.write_install_state
+            atomic_write = install_qw.atomic_write_bytes
+
+            def write_then_report_lost_directory_fsync(path: Path, payload: bytes, **kwargs):
+                atomic_write(path, payload, **kwargs)
+                raise install_qw.AtomicWriteError(
+                    "injected directory fsync failure", committed=True,
+                )
+
+            def committed_state_error(*args, **kwargs):
+                with mock.patch.object(
+                    install_qw,
+                    "atomic_write_bytes",
+                    side_effect=write_then_report_lost_directory_fsync,
+                ):
+                    return write_state(*args, **kwargs)
+
+            with mock.patch.object(
+                installer, "choose_components", return_value=["nquake-maps"],
+            ), mock.patch.object(
+                installer, "install_components", side_effect=install_selected,
+            ), mock.patch.object(
+                installer, "write_install_state", side_effect=committed_state_error,
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError,
+                    "Estado da instalação não pôde ser gravado",
+                ):
+                    installer.install_component_phase()
+
+            self.assertEqual(
+                "new", (target / "qw/maps/new.loc").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((target / ".x86qw/components/nquake-maps").is_dir())
+            state = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
+            self.assertEqual(["nquake-maps"], state["recorded_components"])
+
+    def test_component_metadata_uses_unique_legacy_backups_within_one_stage(self):
+        """Two commits in one parent transaction must retain both inverses."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            inventory = installer.stage / "nquake-maps.inventory"
+            installer.write_inventory_record(
+                inventory,
+                (("qw/maps/dm6.loc", "a" * 64),),
+            )
+            receipt = installer.stage / "nquake-maps.receipt"
+            installer.write_component_receipt(
+                "nquake-maps",
+                "v1",
+                "https://example.invalid/v1.zip",
+                inventory,
+                receipt,
+            )
+            legacy_receipt, legacy_inventory = (
+                target / relative
+                for relative in installer.legacy_component_metadata("nquake-maps")
+            )
+            legacy_receipt.parent.mkdir(parents=True)
+            install_qw.shutil.copy2(receipt, legacy_receipt)
+            install_qw.shutil.copy2(inventory, legacy_inventory)
+
+            first = installer.commit_component_metadata(
+                "nquake-maps", inventory, receipt,
+            )
+            install_qw.shutil.copy2(receipt, legacy_receipt)
+            install_qw.shutil.copy2(inventory, legacy_inventory)
+            second = installer.commit_component_metadata(
+                "nquake-maps", inventory, receipt,
+            )
+
+            first_backups = tuple(item[1] for item in first.legacy_backups)
+            second_backups = tuple(item[1] for item in second.legacy_backups)
+            self.assertEqual(2, len(first_backups))
+            self.assertEqual(2, len(second_backups))
+            self.assertTrue(all(path.exists() for path in first_backups))
+            self.assertTrue(all(path.exists() for path in second_backups))
+            self.assertTrue(set(first_backups).isdisjoint(second_backups))
+
+    def test_component_metadata_restores_legacy_file_if_post_move_check_fails(self):
+        """A moved legacy receipt must be tracked before any later check can fail."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            inventory = installer.stage / "nquake-maps.inventory"
+            installer.write_inventory_record(
+                inventory,
+                (("qw/maps/dm6.loc", "a" * 64),),
+            )
+            receipt = installer.stage / "nquake-maps.receipt"
+            installer.write_component_receipt(
+                "nquake-maps",
+                "v1",
+                "https://example.invalid/v1.zip",
+                inventory,
+                receipt,
+            )
+            legacy_receipt, legacy_inventory = (
+                target / relative
+                for relative in installer.legacy_component_metadata("nquake-maps")
+            )
+            legacy_receipt.parent.mkdir(parents=True)
+            install_qw.shutil.copy2(receipt, legacy_receipt)
+            install_qw.shutil.copy2(inventory, legacy_inventory)
+            expected = (legacy_receipt.read_bytes(), legacy_inventory.read_bytes())
+            regular_identity = installer._regular_identity
+            failed = False
+
+            def fail_first_backup_check(path: Path):
+                nonlocal failed
+                if installer.stage in path.parents and path.name == "metadata" and not failed:
+                    failed = True
+                    raise OSError("injected post-move identity failure")
+                return regular_identity(path)
+
+            with mock.patch.object(
+                installer,
+                "_regular_identity",
+                side_effect=fail_first_backup_check,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.commit_component_metadata(
+                        "nquake-maps", inventory, receipt,
+                    )
+
+            self.assertTrue(legacy_receipt.is_file())
+            self.assertTrue(legacy_inventory.is_file())
+            self.assertEqual(
+                expected,
+                (legacy_receipt.read_bytes(), legacy_inventory.read_bytes()),
+            )
+
     def test_presets_do_not_modify_personal_config(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

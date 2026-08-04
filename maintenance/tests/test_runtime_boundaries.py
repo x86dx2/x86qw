@@ -241,5 +241,15 @@ class RuntimeReceiptOwnershipTests(unittest.TestCase):
         self.assertIn("x86qw_runtime/io/metadata.py", names)
 
 
+class RuntimeTransactionOwnershipTests(unittest.TestCase):
+    def test_installed_zipapp_contains_the_transaction_contract(self) -> None:
+        """Installed mutations must not fall back to manager-only orchestration."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/transaction.py", names)
+
+
 if __name__ == "__main__":
     unittest.main()

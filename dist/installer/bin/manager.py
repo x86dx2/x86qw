@@ -61,13 +61,23 @@ from x86qw_runtime.io.archive import (
 from x86qw_runtime.io import private_fs
 from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_bytes
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
-from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
 from x86qw_runtime.migrations import migrate_install_state
 from x86qw_runtime.state import (
     StateError,
     parse_install_state,
     read_install_state,
     serialize_install_state,
+)
+from x86qw_runtime.transaction import (
+    MutationApplyError,
+    MutationPlan,
+    MutationResult,
+    MutationRollbackError,
+    MutationStep,
+    execute_mutation,
+    prepare_mutation,
+    rollback_mutation,
 )
 from x86qw_runtime.receipts import (
     ComponentReceipt,
@@ -736,16 +746,22 @@ def safe_extract_zip(
         raise InstallerError(f"Pacote ZIP inválido: {error}") from error
 
 
-def copy_overlay(source: Path, destination: Path) -> None:
-    if not lexists(source):
-        raise InstallerError(f"missing distribution component: {source}")
-    if source.is_symlink():
-        raise InstallerError(f"distribution component must not be a symlink: {source}")
-    if source.is_dir():
-        shutil.copytree(source, destination, dirs_exist_ok=True, copy_function=shutil.copy2)
-    else:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+@dataclass
+class ComponentPayloadRollback:
+    backup_root: Path
+    original_hashes: dict[str, str | None]
+    new_hashes: dict[str, str]
+    stale_hashes: dict[str, str]
+    created_directories: dict[Path, tuple[int, int]]
+
+
+@dataclass
+class ComponentMetadataRollback:
+    destination: Path
+    installed_identity: tuple[int, int] | None
+    previous: Path
+    previous_identity: tuple[int, int] | None
+    legacy_backups: list[tuple[Path, Path, tuple[int, int]]]
 
 
 class Installer:
@@ -2363,12 +2379,326 @@ class Installer:
                 f"Recibo do componente {component} não pôde ser gravado."
             ) from error
 
-    def remove_stale_component_files(self, component: str, new_entries: list[tuple[str, str]]) -> None:
+    @staticmethod
+    def _directory_identity(path: Path) -> tuple[int, int]:
+        metadata = path.lstat()
+        if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+            raise InstallerError(f"Diretório gerenciado inválido: {path}")
+        return int(metadata.st_dev), int(metadata.st_ino)
+
+    @staticmethod
+    def _regular_identity(path: Path) -> tuple[int, int]:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+            raise InstallerError(f"Arquivo gerenciado inválido: {path}")
+        return int(metadata.st_dev), int(metadata.st_ino)
+
+    def _rollback_component_metadata(self, token: ComponentMetadataRollback) -> None:
+        errors: list[str] = []
+        if token.installed_identity is not None and lexists(token.destination):
+            try:
+                if self._directory_identity(token.destination) != token.installed_identity:
+                    raise InstallerError(
+                        f"Metadados alterados foram preservados: {token.destination}"
+                    )
+                remove_path(token.destination)
+            except BaseException as error:
+                errors.append(str(error))
+        if token.previous_identity is not None:
+            try:
+                if lexists(token.destination):
+                    raise InstallerError(
+                        f"Destino de metadados ocupado foi preservado: {token.destination}"
+                    )
+                if self._directory_identity(token.previous) != token.previous_identity:
+                    raise InstallerError(
+                        f"Backup de metadados alterado foi preservado: {token.previous}"
+                    )
+                token.previous.replace(token.destination)
+            except BaseException as error:
+                errors.append(str(error))
+        for original, backup, identity in reversed(token.legacy_backups):
+            try:
+                if lexists(original):
+                    raise InstallerError(
+                        f"Metadado legado reapareceu e foi preservado: {original}"
+                    )
+                if self._regular_identity(backup) != identity:
+                    raise InstallerError(
+                        f"Backup legado alterado foi preservado: {backup}"
+                    )
+                original.parent.mkdir(parents=True, exist_ok=True)
+                backup.replace(original)
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                "Rollback dos metadados ficou incompleto: " + "; ".join(errors)
+            )
+
+    def commit_component_metadata(
+        self, component: str, inventory: Path, receipt: Path,
+    ) -> ComponentMetadataRollback:
+        assert self.stage is not None
+        self.ensure_metadata_directory()
+        metadata = self.target / METADATA_DIR
+        destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
+            raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
+        prepared = Path(tempfile.mkdtemp(
+            prefix=f".{component}-metadata-next.", dir=self.stage,
+        ))
+        previous = Path(tempfile.mkdtemp(
+            prefix=f".{component}-metadata-old.", dir=self.stage,
+        ))
+        previous.rmdir()
+        shutil.copy2(receipt, prepared / "receipt")
+        shutil.copy2(inventory, prepared / "inventory")
+        self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
+        token = ComponentMetadataRollback(
+            destination=destination,
+            installed_identity=None,
+            previous=previous,
+            previous_identity=None,
+            legacy_backups=[],
+        )
+        try:
+            if lexists(destination):
+                destination.replace(previous)
+                token.previous_identity = self._directory_identity(previous)
+            prepared.replace(destination)
+            token.installed_identity = self._directory_identity(destination)
+            for index, legacy in enumerate(
+                self.component_pair_paths(component, metadata, legacy=True), 1,
+            ):
+                if lexists(legacy):
+                    backup_root = Path(tempfile.mkdtemp(
+                        prefix=f".{component}-legacy-{index}.", dir=self.stage,
+                    ))
+                    backup = backup_root / "metadata"
+                    identity = self._regular_identity(legacy)
+                    legacy.replace(backup)
+                    token.legacy_backups.append((legacy, backup, identity))
+                    if self._regular_identity(backup) != identity:
+                        raise InstallerError(
+                            f"Metadado legado mudou durante a migração: {legacy}"
+                        )
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_component_metadata(token)
+            except BaseException as rollback_error:
+                raise InstallerError(f"Rollback dos metadados falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
+            raise InstallerError(f"Não foi possível registrar o componente {component}.") from error
+
+    @staticmethod
+    def _mutation_path_observation(path: Path) -> tuple[object, ...]:
+        if not lexists(path):
+            return ("absent",)
+        try:
+            metadata = path.lstat()
+        except OSError as error:
+            raise InstallerError(f"Caminho mudou durante o planejamento: {path}") from error
+        identity = (
+            int(metadata.st_dev),
+            int(metadata.st_ino),
+            stat.S_IFMT(metadata.st_mode),
+            int(metadata.st_size),
+            int(getattr(metadata, "st_mtime_ns", metadata.st_mtime * 1_000_000_000)),
+        )
+        if stat.S_ISREG(metadata.st_mode) and not stat.S_ISLNK(metadata.st_mode):
+            return ("file", *identity, file_hash(path))
+        return ("node", *identity)
+
+    def _component_payload_observation(
+        self,
+        managed: Path,
+        names: Iterable[str],
+    ) -> tuple[tuple[str, tuple[object, ...], tuple[object, ...]], ...]:
+        result = []
+        for name in sorted(set(names)):
+            relative = PurePosixPath(name)
+            result.append((
+                name,
+                self._mutation_path_observation(managed.joinpath(*relative.parts)),
+                self._mutation_path_observation(self.target.joinpath(*relative.parts)),
+            ))
+        return tuple(result)
+
+    def _component_metadata_observation(self, component: str) -> tuple[tuple[str, tuple[object, ...]], ...]:
+        metadata = self.target / METADATA_DIR
+        paths = [
+            self.metadata_path(metadata, relative)
+            for relative in (
+                *self.component_metadata(component),
+                *self.legacy_component_metadata(component),
+            )
+        ]
+        return tuple(
+            (str(path), self._mutation_path_observation(path)) for path in paths
+        )
+
+    def _rollback_component_payload(self, token: ComponentPayloadRollback) -> None:
+        errors: list[str] = []
+        for name, new_digest in reversed(tuple(token.new_hashes.items())):
+            relative = PurePosixPath(name)
+            destination = self.target.joinpath(*relative.parts)
+            previous_digest = token.original_hashes[name]
+            if not lexists(destination):
+                current_digest = None
+            elif destination.is_file() and not destination.is_symlink():
+                current_digest = file_hash(destination)
+            else:
+                errors.append(f"tipo inesperado em {destination}")
+                continue
+            if previous_digest is None:
+                if current_digest is None:
+                    continue
+                if current_digest != new_digest:
+                    errors.append(f"arquivo alterado preservado em {destination}")
+                    continue
+                remove_path(destination)
+                continue
+            if current_digest == previous_digest:
+                continue
+            if current_digest not in {None, new_digest}:
+                errors.append(f"arquivo alterado preservado em {destination}")
+                continue
+            backup = token.backup_root.joinpath(*relative.parts)
+            if not backup.is_file() or backup.is_symlink() or file_hash(backup) != previous_digest:
+                errors.append(f"backup inválido de {destination}")
+                continue
+            if current_digest is not None:
+                remove_path(destination)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, destination)
+
+        for name, previous_digest in reversed(tuple(token.stale_hashes.items())):
+            relative = PurePosixPath(name)
+            destination = self.target.joinpath(*relative.parts)
+            if lexists(destination):
+                if (
+                    destination.is_file()
+                    and not destination.is_symlink()
+                    and file_hash(destination) == previous_digest
+                ):
+                    continue
+                errors.append(f"caminho ocupado preservado em {destination}")
+                continue
+            backup = token.backup_root.joinpath(*relative.parts)
+            if not backup.is_file() or backup.is_symlink() or file_hash(backup) != previous_digest:
+                errors.append(f"backup inválido de {destination}")
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, destination)
+
+        for directory, identity in reversed(tuple(token.created_directories.items())):
+            try:
+                metadata = directory.lstat()
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                errors.append(f"diretório não pôde ser inspecionado: {directory}: {error}")
+                continue
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or stat.S_ISLNK(metadata.st_mode)
+                or (int(metadata.st_dev), int(metadata.st_ino)) != identity
+            ):
+                errors.append(f"diretório alterado preservado em {directory}")
+                continue
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        if errors:
+            raise InstallerError("Rollback do payload ficou incompleto: " + "; ".join(errors))
+
+    def _apply_component_payload(
+        self,
+        component: str,
+        managed: Path,
+        new_entries: list[tuple[str, str]],
+        original_hashes: dict[str, str | None],
+        stale_hashes: dict[str, str],
+    ) -> ComponentPayloadRollback:
+        assert self.stage is not None
+        backup_root = Path(tempfile.mkdtemp(
+            prefix=f".{component}-payload-old.", dir=self.stage,
+        ))
+        token = ComponentPayloadRollback(
+            backup_root=backup_root,
+            original_hashes=dict(original_hashes),
+            new_hashes=dict(new_entries),
+            stale_hashes=dict(stale_hashes),
+            created_directories={},
+        )
+        try:
+            for name, digest in {**{
+                name: value for name, value in original_hashes.items() if value is not None
+            }, **stale_hashes}.items():
+                relative = PurePosixPath(name)
+                source = self.target.joinpath(*relative.parts)
+                backup = backup_root.joinpath(*relative.parts)
+                if not source.is_file() or source.is_symlink() or file_hash(source) != digest:
+                    raise InstallerError(f"Arquivo gerenciado mudou antes do backup: {source}")
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, backup)
+            for name, digest in new_entries:
+                relative = PurePosixPath(name)
+                source = managed.joinpath(*relative.parts)
+                destination = self.target.joinpath(*relative.parts)
+                missing_parents: list[Path] = []
+                parent = destination.parent
+                while parent != self.target and not lexists(parent):
+                    missing_parents.append(parent)
+                    parent = parent.parent
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                for created in reversed(missing_parents):
+                    metadata = created.lstat()
+                    token.created_directories.setdefault(
+                        created, (int(metadata.st_dev), int(metadata.st_ino)),
+                    )
+                shutil.copy2(source, destination)
+                if file_hash(destination) != digest:
+                    raise InstallerError(f"Arquivo copiado diverge do plano: {destination}")
+            for name in stale_hashes:
+                relative = PurePosixPath(name)
+                stale = self.target.joinpath(*relative.parts)
+                if not stale.is_file() or stale.is_symlink():
+                    raise InstallerError(f"Caminho gerenciado inválido: {stale}")
+                remove_path(stale)
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_component_payload(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"Falha ao instalar {component}; rollback incompleto: {rollback_error}"
+                ) from error
+            raise
+
+    def install_component_overlay_transaction(
+        self, component: str, managed: Path, selection: str, source: str,
+    ) -> tuple[int, MutationResult]:
+        assert self.stage is not None
         present, old_entries, _ = self.validate_component_pair(component)
-        if not present:
-            return
-        new_names = {name for name, _ in new_entries}
-        for name, digest in old_entries:
+        self.filter_component_conflicts(component, managed)
+        inventory = self.stage / f"{component}.inventory"
+        entries = self.create_inventory(managed, inventory)
+        if not entries:
+            raise InstallerError(f"Nenhum arquivo novo do componente {component} pôde ser instalado.")
+        receipt = self.stage / f"{component}.receipt"
+        self.write_component_receipt(component, selection, source, inventory, receipt)
+        old = dict(old_entries) if present else {}
+        original_hashes: dict[str, str | None] = {}
+        for name, _ in entries:
+            destination = self.target.joinpath(*PurePosixPath(name).parts)
+            original_hashes[name] = file_hash(destination) if lexists(destination) else None
+        new_names = {name for name, _ in entries}
+        stale_hashes: dict[str, str] = {}
+        for name, digest in old.items():
             if name in new_names:
                 continue
             stale = self.target.joinpath(*PurePosixPath(name).parts)
@@ -2377,59 +2707,53 @@ class Installer:
             if not stale.is_file() or stale.is_symlink():
                 raise InstallerError(f"Caminho gerenciado inválido: {stale}")
             if file_hash(stale) == digest:
-                remove_path(stale)
+                stale_hashes[name] = digest
             else:
                 console.warning(f"Arquivo modificado preservado: {stale}")
-
-    def commit_component_metadata(self, component: str, inventory: Path, receipt: Path) -> None:
-        assert self.stage is not None
-        self.ensure_metadata_directory()
-        metadata = self.target / METADATA_DIR
-        destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
-            raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
-        prepared = self.stage / f"{component}-metadata.next"
-        previous = self.stage / f"{component}-metadata.previous"
-        prepared.mkdir()
-        shutil.copy2(receipt, prepared / "receipt")
-        shutil.copy2(inventory, prepared / "inventory")
-        self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
-        moved_previous = installed = False
+        observed_names = (*new_names, *stale_hashes)
+        plan = MutationPlan(
+            identifier=f"component:{component}",
+            summary=f"Instalar componente {component}",
+            steps=(
+                MutationStep(
+                    key="payload",
+                    description=f"Publicar payload de {component}",
+                    observe=lambda: self._component_payload_observation(
+                        managed, observed_names,
+                    ),
+                    apply=lambda: self._apply_component_payload(
+                        component, managed, entries, original_hashes, stale_hashes,
+                    ),
+                    rollback=self._rollback_component_payload,
+                ),
+                MutationStep(
+                    key="metadata",
+                    description=f"Publicar recibo e inventário de {component}",
+                    observe=lambda: self._component_metadata_observation(component),
+                    apply=lambda: self.commit_component_metadata(
+                        component, inventory, receipt,
+                    ),
+                    rollback=self._rollback_component_metadata,
+                ),
+            ),
+        )
         try:
-            if lexists(destination):
-                destination.replace(previous)
-                moved_previous = True
-            prepared.replace(destination)
-            installed = True
-            for legacy in self.component_pair_paths(component, metadata, legacy=True):
-                if lexists(legacy):
-                    remove_path(legacy)
-            if lexists(previous):
-                remove_path(previous)
-        except Exception as error:
-            try:
-                if installed and lexists(destination):
-                    remove_path(destination)
-                if moved_previous:
-                    previous.replace(destination)
-            except Exception as rollback_error:
-                raise InstallerError(f"Rollback dos metadados falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
-            raise InstallerError(f"Não foi possível registrar o componente {component}.") from error
+            result = execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise
+        return len(entries), result
 
-    def install_component_overlay(self, component: str, managed: Path, selection: str, source: str) -> int:
-        assert self.stage is not None
-        self.filter_component_conflicts(component, managed)
-        inventory = self.stage / f"{component}.inventory"
-        entries = self.create_inventory(managed, inventory)
-        if not entries:
-            raise InstallerError(f"Nenhum arquivo novo do componente {component} pôde ser instalado.")
-        receipt = self.stage / f"{component}.receipt"
-        self.write_component_receipt(component, selection, source, inventory, receipt)
-        copy_overlay(managed, self.target)
-        self.remove_stale_component_files(component, entries)
-        self.commit_component_metadata(component, inventory, receipt)
-        return len(entries)
+    def install_component_overlay(
+        self, component: str, managed: Path, selection: str, source: str,
+    ) -> int:
+        count, _ = self.install_component_overlay_transaction(
+            component, managed, selection, source,
+        )
+        return count
 
     def expected_qw_package_order(self) -> list[str]:
         directory = self.target / "qw"
@@ -2723,8 +3047,9 @@ class Installer:
                 serialize_install_state(self._parse_install_state(state)),
             )
         except AtomicWriteError as error:
-            raise InstallerError(
-                f"Estado da instalação não pôde ser gravado de forma atômica: {destination}"
+            raise PersistenceError(
+                f"Estado da instalação não pôde ser gravado de forma atômica: {destination}",
+                committed=error.committed,
             ) from error
         return state
 
@@ -3623,43 +3948,66 @@ class Installer:
         )
         self.commit_component_metadata("play-support", inventory, staged_receipt)
 
-    def install_components(self, selected: list[str]) -> None:
+    @staticmethod
+    def rollback_component_transactions(
+        results: Iterable[MutationResult], operation_error: BaseException,
+    ) -> None:
+        rollback_errors: list[str] = []
+        for result in reversed(tuple(results)):
+            try:
+                rollback_mutation(result)
+            except BaseException as error:
+                rollback_errors.append(str(error))
+        if rollback_errors:
+            raise InstallerError(
+                "A operação falhou e o rollback dos componentes ficou incompleto: "
+                + "; ".join(rollback_errors)
+            ) from operation_error
+
+    def install_components(self, selected: list[str]) -> tuple[MutationResult, ...]:
         assert self.stage is not None
-        self.migrate_legacy_nquake()
-        self.migrate_legacy_clan_arena(selected)
-        self.migrate_legacy_component_replacements(selected)
-        self.release_play_support_profiles(selected)
-        for index, identifier in enumerate(selected, 1):
-            component = self.components[identifier]
-            console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
-            package = self.component_package_record(identifier)
-            prepared = self.prepare_component_sources(package)
-            if prepared is None:
-                artifact = self.download_component_package(package)
-                managed, defaults = self.prepare_component_package(package, artifact)
-                source = str(package["origin_url"])
-            else:
-                managed, defaults, source = prepared
-            self.normalize_component_platform_payload(identifier, managed)
-            count = self.install_component_overlay(
-                identifier, managed, str(package["version"]), source,
-            )
-            for staged, destination in defaults:
-                if not lexists(destination):
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(staged, destination)
-                    console.info(f"Configuração inicial criada: {destination}")
-            if identifier == "nquake-bootstrap":
-                self.migrate_nquake_texture_limit()
-            console.success(f"{component['label']} atualizado ({file_count(count)}).")
-        if "nquake-bootstrap" in selected:
-            preset = self.target / "ezquake/configs/preset.cfg"
-            if not preset.is_file():
-                preset.parent.mkdir(parents=True, exist_ok=True)
-                preset.write_text(DEFAULT_PRESET, encoding="utf-8")
-        self.migrate_saved_configs()
-        self.refresh_qw_package_order()
-        self.reconcile_play_support()
+        results: list[MutationResult] = []
+        try:
+            self.migrate_legacy_nquake()
+            self.migrate_legacy_clan_arena(selected)
+            self.migrate_legacy_component_replacements(selected)
+            self.release_play_support_profiles(selected)
+            for index, identifier in enumerate(selected, 1):
+                component = self.components[identifier]
+                console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
+                package = self.component_package_record(identifier)
+                prepared = self.prepare_component_sources(package)
+                if prepared is None:
+                    artifact = self.download_component_package(package)
+                    managed, defaults = self.prepare_component_package(package, artifact)
+                    source = str(package["origin_url"])
+                else:
+                    managed, defaults, source = prepared
+                self.normalize_component_platform_payload(identifier, managed)
+                count, result = self.install_component_overlay_transaction(
+                    identifier, managed, str(package["version"]), source,
+                )
+                results.append(result)
+                for staged, destination in defaults:
+                    if not lexists(destination):
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(staged, destination)
+                        console.info(f"Configuração inicial criada: {destination}")
+                if identifier == "nquake-bootstrap":
+                    self.migrate_nquake_texture_limit()
+                console.success(f"{component['label']} atualizado ({file_count(count)}).")
+            if "nquake-bootstrap" in selected:
+                preset = self.target / "ezquake/configs/preset.cfg"
+                if not preset.is_file():
+                    preset.parent.mkdir(parents=True, exist_ok=True)
+                    preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+            self.migrate_saved_configs()
+            self.refresh_qw_package_order()
+            self.reconcile_play_support()
+            return tuple(results)
+        except BaseException as error:
+            self.rollback_component_transactions(results, error)
+            raise
 
     def play_support_player(self):
         gameplay = importlib.import_module("gameplay")
@@ -3873,15 +4221,25 @@ class Installer:
             return
         selected = self.choose_components()
         self._create_stage(".quake-install.")
-        self.install_components(selected)
-        self.write_install_state(self.selected_component_profile, self.requested_components)
+        results = self.install_components(selected)
+        try:
+            self.write_install_state(self.selected_component_profile, self.requested_components)
+        except BaseException as error:
+            if not isinstance(error, PersistenceError) or not error.committed:
+                self.rollback_component_transactions(results, error)
+            raise
 
     def install_component_phase(self) -> None:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
         selected = self.choose_components()
-        self.install_components(selected)
-        self.write_install_state(self.selected_component_profile, self.requested_components)
+        results = self.install_components(selected)
+        try:
+            self.write_install_state(self.selected_component_profile, self.requested_components)
+        except BaseException as error:
+            if not isinstance(error, PersistenceError) or not error.committed:
+                self.rollback_component_transactions(results, error)
+            raise
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")

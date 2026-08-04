@@ -67,6 +67,7 @@ ZIPAPP_FILES = (
     ("x86qw_runtime/migrations.py", "x86qw_runtime/migrations.py"),
     ("x86qw_runtime/receipts.py", "x86qw_runtime/receipts.py"),
     ("x86qw_runtime/state.py", "x86qw_runtime/state.py"),
+    ("x86qw_runtime/transaction.py", "x86qw_runtime/transaction.py"),
     ("x86qw_runtime/versioning.py", "x86qw_runtime/versioning.py"),
     ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
     ("x86qw_runtime/io/atomic.py", "x86qw_runtime/io/atomic.py"),

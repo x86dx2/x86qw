@@ -29,3 +29,11 @@ class X86QWError(RuntimeError):
 
 class InstallerError(X86QWError):
     """An expected failure while inspecting or changing an installation."""
+
+
+class PersistenceError(InstallerError):
+    """A durable write failed, with an explicit atomic-commit outcome."""
+
+    def __init__(self, message: str, *, committed: bool) -> None:
+        super().__init__(message)
+        self.committed = committed
