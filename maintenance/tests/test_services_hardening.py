@@ -133,6 +133,130 @@ class FakeWindowsFileApi:
 
 
 class ServiceHardeningTests(unittest.TestCase):
+    def test_supervisor_models_are_canonical_service_types(self):
+        from x86qw_runtime.supervisor import models
+
+        self.assertIs(services.ProcessSpec, models.ProcessSpec)
+        self.assertIs(services.StartupRcon, models.StartupRcon)
+        self.assertIs(services.ServiceReadiness, models.ServiceReadiness)
+
+    def test_supervisor_reexports_canonical_platform_process_types(self):
+        from x86qw_runtime import supervisor
+        from x86qw_runtime.platform import processes
+
+        self.assertIs(
+            getattr(supervisor, "ProcessIdentity", None), processes.ProcessIdentity,
+        )
+        self.assertIs(getattr(supervisor, "ProcessProbe", None), processes.ProcessProbe)
+
+    def test_supervisor_readiness_functions_are_canonical_service_api(self):
+        from x86qw_runtime.supervisor import readiness
+
+        self.assertIs(services.preflight_ports, readiness.preflight_ports)
+        self.assertIs(services.qtv_http_response_ready, readiness.qtv_http_response_ready)
+        self.assertIs(services.wait_http_readiness, readiness.wait_http_readiness)
+        self.assertIs(services.wait_udp_readiness, readiness.wait_udp_readiness)
+        self.assertIs(services.apply_startup_rcon, readiness.apply_startup_rcon)
+
+    def test_preflight_accepts_an_injected_socket_factory(self):
+        class OccupiedSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def bind(self, _address):
+                raise OSError("segredo-do-backend")
+
+        with self.assertRaises(services.InstallerError) as raised:
+            services.preflight_ports(
+                [("QTV", "127.0.0.1", 28000, "tcp")],
+                socket_factory=lambda *_args: OccupiedSocket(),
+                os_name="posix",
+            )
+        self.assertEqual(
+            "A porta 127.0.0.1:28000 de QTV não está disponível.",
+            str(raised.exception),
+        )
+        self.assertNotIn("segredo-do-backend", str(raised.exception))
+
+    def test_http_readiness_accepts_injected_transport_and_clock(self):
+        class HttpConnection:
+            def __init__(self):
+                self.sent = []
+                self.responses = [
+                    b"HTTP/1.0 200 OK\r\n\r\n127.0.0.1:28501",
+                    b"",
+                ]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def sendall(self, payload):
+                self.sent.append(payload)
+
+            def recv(self, _maximum):
+                return self.responses.pop(0)
+
+        connection = HttpConnection()
+        opened = []
+
+        def connect(address, *, timeout):
+            opened.append((address, timeout))
+            return connection
+
+        ticks = iter((10.0, 10.0))
+        services.wait_http_readiness(
+            SimpleNamespace(poll=lambda: None),
+            services.ServiceReadiness(
+                "http", "127.0.0.1", 28000, "127.0.0.1:28501",
+            ),
+            timeout=0.5,
+            connection_factory=connect,
+            monotonic=lambda: next(ticks),
+            sleep=lambda _delay: self.fail("probe pronto não deve aguardar"),
+        )
+
+        self.assertEqual([(("127.0.0.1", 28000), 0.4)], opened)
+        self.assertEqual(
+            [b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n"],
+            connection.sent,
+        )
+
+    def test_udp_readiness_accepts_injected_socket_and_clock(self):
+        class OccupiedUdpSocket:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def bind(self, _address):
+                raise OSError("porta ocupada pelo serviço")
+
+        opened = []
+
+        def open_socket(family, socket_type):
+            opened.append((family, socket_type))
+            return OccupiedUdpSocket()
+
+        ticks = iter((20.0, 21.0))
+        services.wait_udp_readiness(
+            SimpleNamespace(poll=lambda: None),
+            services.ServiceReadiness("udp", "127.0.0.1", 30000),
+            timeout=0.5,
+            socket_factory=open_socket,
+            os_name="posix",
+            monotonic=lambda: next(ticks),
+            sleep=lambda _delay: self.fail("prazo já encerrado não deve aguardar"),
+        )
+
+        self.assertEqual([(socket.AF_INET, socket.SOCK_DGRAM)], opened)
+
     def package(self, root: Path, members: list[tuple[str, bytes]]) -> tuple[Path, Path]:
         destination = root / "qw"
         destination.mkdir()
@@ -998,12 +1122,12 @@ class ServiceHardeningTests(unittest.TestCase):
             b'<td class="adr">127.0.0.1:28501</td>',
             b"",
         ]
-        with mock.patch.object(services.socket, "create_connection", return_value=connection):
-            services.wait_http_readiness(
-                process,
-                services.ServiceReadiness("http", "127.0.0.1", 28000, "127.0.0.1:28501"),
-                timeout=0.1,
-            )
+        services.wait_http_readiness(
+            process,
+            services.ServiceReadiness("http", "127.0.0.1", 28000, "127.0.0.1:28501"),
+            timeout=0.1,
+            connection_factory=lambda *_args, **_kwargs: connection,
+        )
         connection.sendall.assert_called_once_with(
             b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n",
         )
@@ -2691,12 +2815,16 @@ with session_control._installation_acquisition_mutex(target, sessions):
         connection = mock.MagicMock()
         connection.__enter__.return_value = connection
         connection.recvfrom.side_effect = [(response, ("127.0.0.1", 28501)) for response in responses]
-        with mock.patch.object(
-            services.socket, "socket", return_value=connection,
-        ), mock.patch.object(services.time, "sleep") as sleep:
-            services.apply_startup_rcon(services.StartupRcon(
+        sleep = mock.Mock()
+        ticks = iter((1.0, 1.0))
+        services.apply_startup_rcon(
+            services.StartupRcon(
                 "127.0.0.1", 28501, "bootstrap", "post.cfg", "dm6", "qw",
-            ))
+            ),
+            socket_factory=lambda *_args: connection,
+            monotonic=lambda: next(ticks),
+            sleep=sleep,
+        )
         sent = b"\n".join(call.args[0] for call in connection.sendto.call_args_list)
         self.assertIn(b"status", sent)
         self.assertIn(b"serverinfo", sent)

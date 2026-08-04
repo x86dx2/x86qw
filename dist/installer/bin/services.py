@@ -14,7 +14,6 @@ import json
 import os
 import secrets
 import signal
-import socket
 import stat
 import subprocess
 import sys
@@ -42,6 +41,14 @@ from x86qw_runtime.io.archive import (
 from x86qw_runtime.io import private_fs
 from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_json
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.supervisor.models import ProcessSpec, ServiceReadiness, StartupRcon
+from x86qw_runtime.supervisor.readiness import (
+    apply_startup_rcon,
+    preflight_ports,
+    qtv_http_response_ready,
+    wait_http_readiness,
+    wait_udp_readiness,
+)
 
 console = core.console
 lexists = core.lexists
@@ -80,34 +87,6 @@ DEDICATED_MODE_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "practice": (("srv_practice_mode", "1"),),
 }
-
-
-@dataclass(frozen=True)
-class ProcessSpec:
-    label: str
-    arguments: tuple[str, ...]
-    cwd: Path
-    startup_rcon: StartupRcon | None = None
-    readiness: ServiceReadiness | None = None
-    parameters: tuple[tuple[str, str], ...] = ()
-
-
-@dataclass(frozen=True)
-class StartupRcon:
-    address: str
-    port: int
-    password: str
-    config_name: str
-    expected_map: str
-    expected_gamedir: str
-
-
-@dataclass(frozen=True)
-class ServiceReadiness:
-    kind: str
-    address: str
-    port: int
-    upstream: str | None = None
 
 
 @dataclass(frozen=True)
@@ -3853,27 +3832,6 @@ def qtv_spec(
     )
 
 
-def preflight_ports(requests: list[tuple[str, str, int, str]]) -> None:
-    seen: dict[int, str] = {}
-    for label, address, port, kind in requests:
-        if port in seen:
-            raise InstallerError(
-                f"Porta local duplicada: {port} foi solicitada por {seen[port]} e {label}."
-            )
-        seen[port] = label
-        family = socket.AF_INET6 if ":" in address else socket.AF_INET
-        socket_type = socket.SOCK_STREAM if kind == "tcp" else socket.SOCK_DGRAM
-        try:
-            with socket.socket(family, socket_type) as listener:
-                if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-                    listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-                listener.bind((address, port))
-        except OSError as error:
-            raise InstallerError(
-                f"A porta {endpoint(address, port)} de {label} não está disponível."
-            ) from error
-
-
 def requested_ports(options: argparse.Namespace) -> list[tuple[str, str, int, str]]:
     if options.action == "proxy":
         return [("QWFWD", options.proxy_bind, options.proxy_port, "udp")]
@@ -3885,75 +3843,6 @@ def requested_ports(options: argparse.Namespace) -> list[tuple[str, str, int, st
     if options.with_proxy:
         requests.append(("QWFWD", options.proxy_bind, options.proxy_port, "udp"))
     return requests
-
-
-def qtv_http_response_ready(response: bytes, upstream: str | None) -> bool:
-    status_line, _, _ = response.partition(b"\r\n")
-    fields = status_line.split()
-    if (
-        len(fields) < 2
-        or not fields[0].startswith(b"HTTP/")
-        or not fields[1].isdigit()
-        or not 200 <= int(fields[1]) < 300
-    ):
-        return False
-    if upstream is None:
-        return True
-    _, separator, body = response.partition(b"\r\n\r\n")
-    if not separator:
-        return False
-    return upstream.casefold().encode("utf-8") in body.lower()
-
-
-def wait_http_readiness(
-    process: subprocess.Popen[bytes],
-    readiness: ServiceReadiness,
-    timeout: float = 8.0,
-) -> None:
-    deadline = time.monotonic() + timeout
-    last_response = b""
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise InstallerError("QTV encerrou antes de ficar pronto.")
-        try:
-            with socket.create_connection((readiness.address, readiness.port), timeout=0.4) as connection:
-                connection.sendall(b"GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n")
-                chunks: list[bytes] = []
-                while sum(map(len, chunks)) < 1024 * 1024:
-                    block = connection.recv(65535)
-                    if not block:
-                        break
-                    chunks.append(block)
-                last_response = b"".join(chunks)
-                if qtv_http_response_ready(last_response, readiness.upstream):
-                    return
-        except OSError:
-            pass
-        time.sleep(0.1)
-    if readiness.upstream is not None and qtv_http_response_ready(last_response, None):
-        raise InstallerError("QTV respondeu por HTTP, mas não registrou o upstream solicitado.")
-    raise InstallerError(f"QTV não respondeu em http://{endpoint(readiness.address, readiness.port)}/.")
-
-
-def wait_udp_readiness(
-    process: subprocess.Popen[bytes],
-    readiness: ServiceReadiness,
-    timeout: float = 1.0,
-) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise InstallerError("QWFWD encerrou durante a inicialização.")
-        time.sleep(0.05)
-    family = socket.AF_INET6 if ":" in readiness.address else socket.AF_INET
-    try:
-        with socket.socket(family, socket.SOCK_DGRAM) as probe:
-            if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-                probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            probe.bind((readiness.address, readiness.port))
-    except OSError:
-        return
-    raise InstallerError("QWFWD permaneceu vivo, mas não ocupou a porta UDP solicitada.")
 
 
 def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
@@ -4328,62 +4217,6 @@ class WindowsJobObject:
                 "O Job Object foi fechado, mas o encerramento explícito da árvore "
                 f"falhou ({termination_error})."
             )
-
-
-def apply_startup_rcon(startup: StartupRcon, timeout: float = 8.0) -> None:
-    family = socket.AF_INET6 if ":" in startup.address else socket.AF_INET
-    destination = (startup.address, startup.port)
-    deadline = time.monotonic() + timeout
-    with socket.socket(family, socket.SOCK_DGRAM) as connection:
-        connection.settimeout(0.25)
-        while time.monotonic() < deadline:
-            connection.sendto(b"\xff\xff\xff\xffstatus\n", destination)
-            try:
-                response, _ = connection.recvfrom(65535)
-            except TimeoutError:
-                continue
-            if response.startswith(b"\xff\xff\xff\xff"):
-                break
-        else:
-            raise InstallerError(
-                f"MVDSV não respondeu em {endpoint(startup.address, startup.port)}."
-            )
-
-        decoded_status = response.decode("latin-1", errors="replace").casefold()
-        if startup.expected_map.casefold() not in decoded_status:
-            raise InstallerError(
-                f"MVDSV respondeu, mas não confirmou o mapa {startup.expected_map}."
-            )
-        serverinfo_command = f"rcon {startup.password} serverinfo\n".encode("ascii")
-        connection.sendto(b"\xff\xff\xff\xff" + serverinfo_command, destination)
-        try:
-            serverinfo, _ = connection.recvfrom(65535)
-        except TimeoutError as error:
-            raise InstallerError("MVDSV não confirmou o gamecode carregado.") from error
-        if b"Bad rcon_password" in serverinfo:
-            raise InstallerError("MVDSV rejeitou o preflight RCON local.")
-        combined = (response + b"\n" + serverinfo).decode("latin-1", errors="replace").casefold()
-        if startup.expected_gamedir.casefold() not in combined:
-            raise InstallerError(
-                f"MVDSV não confirmou o gamecode {startup.expected_gamedir}."
-            )
-
-        # MVDSV validates an ordinary RCON packet against both the empty master
-        # password and the administrative password.  With KTX's sv_rconlim=3,
-        # two immediate RCON packets therefore exhaust the one-second window
-        # and the second valid command is rejected as "Bad rcon_password".
-        time.sleep(1.05)
-
-        # Apply typed post-map settings and restore the final RCON password.
-        command = f"rcon {startup.password} exec {startup.config_name}\n".encode("ascii")
-        connection.settimeout(2.0)
-        connection.sendto(b"\xff\xff\xff\xff" + command, destination)
-        try:
-            response, _ = connection.recvfrom(65535)
-        except TimeoutError as error:
-            raise InstallerError("MVDSV não confirmou a configuração dedicada.") from error
-        if b"Bad rcon_password" in response:
-            raise InstallerError("MVDSV rejeitou a configuração dedicada por RCON local.")
 
 
 class ServiceSignal(Exception):

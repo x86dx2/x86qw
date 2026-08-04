@@ -35,6 +35,7 @@ import downloader  # noqa: E402
 DOWNLOADER_PATH = ROOT / "x86qw_runtime/io/downloader.py"
 MANAGER_PATH = ROOT / "dist/installer/bin/manager.py"
 SERVICES_PATH = ROOT / "dist/installer/bin/services.py"
+SUPERVISOR_READINESS_PATH = ROOT / "x86qw_runtime/supervisor/readiness.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
     ROOT / "dist/installer/bin/install.ps1",
     ROOT / "site/public/install.ps1",
@@ -53,7 +54,7 @@ NETWORK_EXECUTABLES = frozenset({
 })
 ALLOWED_NETWORK_MODULES = {
     DOWNLOADER_PATH: frozenset({"http.client", "socket", "ssl", "urllib.request"}),
-    SERVICES_PATH: frozenset({"socket"}),
+    SUPERVISOR_READINESS_PATH: frozenset({"socket"}),
     **{
         path: frozenset({"http.client", "socket", "ssl", "urllib.request"})
         for path in POWERSHELL_BOOTSTRAP_PATHS
@@ -125,7 +126,7 @@ ALLOWED_NETWORK_MODULE_USAGES = {
         ("urllib.request", "_open_with_deadline", "urllib.request.Request"): 1,
         ("urllib.request", "_select_transport.selected_open", "urllib.request.Request"): 1,
     },
-    SERVICES_PATH: {
+    SUPERVISOR_READINESS_PATH: {
         ("socket", "apply_startup_rcon", "socket.AF_INET"): 1,
         ("socket", "apply_startup_rcon", "socket.AF_INET6"): 1,
         ("socket", "apply_startup_rcon", "socket.SOCK_DGRAM"): 1,
