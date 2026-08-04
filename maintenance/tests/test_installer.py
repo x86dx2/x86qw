@@ -2986,6 +2986,63 @@ class InstallerTests(unittest.TestCase):
                             ))
             self.assertTrue(os.access(runtime, os.X_OK))
 
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_does_not_apply_local_changes_when_required_payload_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=b"runtime\n",
+            )
+            runtime.chmod(0o600)
+            permission = install_qw.ClientRepairIssue(
+                spec, "stable", receipt_path, receipt,
+                "sem permissão de execução", "permission", None, "local-repair",
+            )
+            payload = install_qw.ClientRepairIssue(
+                spec, "stable", receipt_path, receipt,
+                "payload ausente", "payload", None, "payload-required",
+            )
+            assessment = install_qw.RepairAssessment(
+                (), False, (), False, (permission, payload), (),
+            )
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "reexecute o bootstrap",
+                ):
+                    installer.repair(
+                        dry_run=False, plan_rows=[], allow_download=False,
+                    )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_rolls_back_local_permission_when_state_commit_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "mvdsv"
+            runtime.write_bytes(b"runtime\n")
+            runtime.chmod(0o600)
+            assessment = install_qw.RepairAssessment(
+                (), False, (runtime,), False, (), (),
+            )
+            state = {
+                "profile": "none", "requested_components": [],
+                "known_components": [], "capabilities": [],
+            }
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(installer, "load_install_state", return_value=state):
+                    with mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=install_qw.PersistenceError(
+                            "simulated state failure", committed=False,
+                        ),
+                    ):
+                        with self.assertRaises(install_qw.PersistenceError):
+                            installer.repair(
+                                dry_run=False, plan_rows=[], allow_download=False,
+                            )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+
     def test_offline_macos_nightly_preparation_repair_completes_without_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

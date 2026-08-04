@@ -847,6 +847,13 @@ class CorePakRollback:
 
 
 @dataclass(frozen=True)
+class RuntimePermissionRollback:
+    path: Path
+    identity: tuple[int, int]
+    mode: int
+
+
+@dataclass(frozen=True)
 class CreatedDefaultRollback:
     destination: Path
     digest: str
@@ -5638,6 +5645,58 @@ class Installer:
                     repairs.append(binary)
         return repairs
 
+    def _rollback_runtime_permission(self, token: RuntimePermissionRollback) -> None:
+        if self._regular_identity(token.path) != token.identity:
+            raise InstallerError(
+                f"Runtime mudou durante o rollback da permissão: {token.path}"
+            )
+        token.path.chmod(token.mode)
+
+    def _apply_runtime_permission(self, path: Path) -> RuntimePermissionRollback:
+        identity = self._regular_identity(path)
+        mode = stat.S_IMODE(path.lstat().st_mode)
+        token = RuntimePermissionRollback(path, identity, mode)
+        try:
+            path.chmod(mode | stat.S_IXUSR)
+            if self._regular_identity(path) != identity:
+                raise InstallerError(
+                    f"Runtime mudou durante o reparo da permissão: {path}"
+                )
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_runtime_permission(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"O reparo da permissão falhou e o rollback ficou incompleto: {rollback_error}"
+                ) from error
+            raise
+
+    def repair_runtime_permission(
+        self, path: Path, mutation_results: list[MutationResult],
+    ) -> None:
+        plan = MutationPlan(
+            identifier=f"runtime-permission:{path.name}",
+            summary=f"Restaurar a permissão de execução de {path.name}",
+            steps=(MutationStep(
+                key="permission",
+                description="Adicionar execução somente ao proprietário",
+                observe=lambda: self._mutation_path_observation(path),
+                apply=lambda: self._apply_runtime_permission(path),
+                rollback=self._rollback_runtime_permission,
+            ),),
+        )
+        try:
+            result = execute_mutation(prepare_mutation(plan))
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                f"A permissão de execução não pôde ser restaurada: {path}"
+            ) from error
+        mutation_results.append(result)
+        console.success(f"Permissão de execução restaurada em {path}.")
+
     def repair_plan(self) -> RepairAssessment:
         self.check_paks()
         valid_metadata, metadata_diagnostics = self.component_metadata_assessment()
@@ -5790,18 +5849,6 @@ class Installer:
                 "Preserve os arquivos e reexecute o bootstrap install.sh para reconciliar o estado."
             )
         payload_clients = [issue for issue in assessment.client_issues if issue.mode == "payload"]
-        for issue in assessment.client_issues:
-            runtime = self.target / issue.spec.runtime(issue.channel)
-            if issue.mode == "permission":
-                runtime.chmod(runtime.stat().st_mode | 0o100)
-                console.success(f"Permissão de execução restaurada em {runtime}.")
-            elif issue.mode == "macos-preparation":
-                self.repair_installed_macos_runtime(
-                    issue.spec, issue.channel, issue.receipt_path, issue.receipt,
-                )
-        for binary in assessment.permission_repairs:
-            binary.chmod(binary.stat().st_mode | 0o100)
-            console.success(f"Permissão de execução restaurada em {binary}.")
         unavailable_clients = [issue for issue in payload_clients if issue.release is None]
         if unavailable_clients or (
             not allow_download and (payload_clients or assessment.invalid_components)
@@ -5811,6 +5858,16 @@ class Installer:
                 "reexecute o bootstrap install.sh no mesmo destino."
             )
         with self.component_state_transaction() as mutation_results:
+            for issue in assessment.client_issues:
+                runtime = self.target / issue.spec.runtime(issue.channel)
+                if issue.mode == "permission":
+                    self.repair_runtime_permission(runtime, mutation_results)
+                elif issue.mode == "macos-preparation":
+                    self.repair_installed_macos_runtime(
+                        issue.spec, issue.channel, issue.receipt_path, issue.receipt,
+                    )
+            for binary in assessment.permission_repairs:
+                self.repair_runtime_permission(binary, mutation_results)
             for issue in payload_clients:
                 self.repair_client_runtime(
                     issue, mutation_results=mutation_results,
