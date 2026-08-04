@@ -92,6 +92,7 @@ ZIPAPP_FILES = (
     ("x86qw_runtime/io/quarantine.py", "x86qw_runtime/io/quarantine.py"),
     ("x86qw_runtime/platform/__init__.py", "x86qw_runtime/platform/__init__.py"),
     ("x86qw_runtime/platform/locking.py", "x86qw_runtime/platform/locking.py"),
+    ("x86qw_runtime/platform/macos.py", "x86qw_runtime/platform/macos.py"),
     ("x86qw_runtime/platform/processes.py", "x86qw_runtime/platform/processes.py"),
     ("x86qw_runtime/platform/windows_acl.py", "x86qw_runtime/platform/windows_acl.py"),
 )

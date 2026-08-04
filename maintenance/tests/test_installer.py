@@ -755,21 +755,34 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
-            closed = mock.Mock(returncode=1, stdout="", stderr="")
-            deleted = mock.Mock(returncode=0, stdout="", stderr="")
-            missing = mock.Mock(returncode=1, stdout="", stderr="Domain not found.")
-            responses = [closed, deleted, missing, deleted]
+            state = {
+                "basedir": "/Games/old",
+                "version": 7,
+                "NSOSPLastRootDirectory": b"bookmark",
+                "volume": 0.5,
+            }
+
+            def export(_domain):
+                return dict(state)
+
+            def publish(_domain, values):
+                state.clear()
+                state.update(values)
+
             output = io.StringIO()
-            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.subprocess, "run", side_effect=responses) as run:
-                    with contextlib.redirect_stdout(output):
-                        installer.reset_macos_game_directory()
-            self.assertEqual(4, run.call_count)
-            for key, call in zip(install_qw.MACOS_DIRECTORY_KEYS, run.call_args_list[1:]):
-                self.assertEqual(
-                    ["defaults", "delete", install_qw.MACOS_PREFERENCES_DOMAIN, key],
-                    call.args[0],
-                )
+            with mock.patch.object(
+                install_qw.host_platform, "system", return_value="Darwin",
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                install_qw.macos, "_export_preference_domain", side_effect=export,
+            ), mock.patch.object(
+                install_qw.macos, "_publish_preference_domain", side_effect=publish,
+            ), contextlib.redirect_stdout(output):
+                result = installer.reset_macos_game_directory()
+
+            self.assertIsInstance(result, install_qw.MutationResult)
+            self.assertEqual({"volume": 0.5}, state)
             self.assertIn("Seleção antiga", output.getvalue())
 
     def test_macos_preferences_are_untouched_for_cross_platform_packages(self):
@@ -798,6 +811,114 @@ class InstallerTests(unittest.TestCase):
 
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
                 self.assertTrue(installer.macos_game_directory_reset_required())
+
+    def test_macos_preference_reset_rolls_back_when_install_verification_fails(self):
+        """A failed installation must restore the user's previous bookmark."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / "id1").mkdir()
+            (target / "id1/pak0.pak").write_bytes(b"pak0")
+            (target / "id1/pak1.pak").write_bytes(b"pak1")
+            preference = {"basedir": "/Games/previous"}
+
+            runtime_result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                install_qw.MutationPlan(
+                    identifier="test:runtime-before-preferences",
+                    summary="publish the runtime",
+                    steps=(install_qw.MutationStep(
+                        key="runtime",
+                        description="publish a runtime fixture",
+                        observe=lambda: None,
+                        apply=lambda: None,
+                        rollback=lambda _token: None,
+                    ),),
+                )
+            ))
+
+            def reset_preferences():
+                old_value = preference["basedir"]
+                return install_qw.execute_mutation(install_qw.prepare_mutation(
+                    install_qw.MutationPlan(
+                        identifier="test:macos-preferences",
+                        summary="clear the previous bookmark",
+                        steps=(install_qw.MutationStep(
+                            key="bookmark",
+                            description="clear the previous bookmark",
+                            observe=lambda: preference.get("basedir"),
+                            apply=lambda: preference.pop("basedir", None),
+                            rollback=lambda _token: preference.update(basedir=old_value),
+                        ),),
+                    )
+                ))
+
+            def select_platform(_platform=None):
+                installer.spec = install_qw.PLATFORMS["macos"]
+
+            def choose_channel():
+                installer.channel = "stable"
+
+            def choose_release():
+                installer.selected_version = "3.6.9"
+
+            def create_stage(_prefix):
+                installer.stage = target / ".stage"
+                installer.stage.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(
+                    installer, "select_platform", side_effect=select_platform,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_channel", side_effect=choose_channel,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_release", side_effect=choose_release,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "macos_game_directory_reset_required", return_value=True,
+                ))
+                stack.enter_context(mock.patch.object(installer, "ensure_macos_ezquake_closed"))
+                stack.enter_context(mock.patch.object(installer, "check_runtime_destination_ownership"))
+                stack.enter_context(mock.patch.object(installer, "prepare_install_target"))
+                stack.enter_context(mock.patch.object(installer, "reject_target_symlinks"))
+                stack.enter_context(mock.patch.object(
+                    installer, "_create_stage", side_effect=create_stage,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "provision_install_target", return_value=None,
+                ))
+                stack.enter_context(mock.patch.object(installer, "check_paks"))
+                stack.enter_context(mock.patch.object(installer, "prepare_cache"))
+                stack.enter_context(mock.patch.object(
+                    installer, "ensure_archive", return_value=target / "archive",
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "prepare_runtime", return_value=target / "prepared",
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_ezquake_receipt"))
+                stack.enter_context(mock.patch.object(installer, "ensure_metadata_directory"))
+                stack.enter_context(mock.patch.object(
+                    installer, "commit_runtime", return_value=runtime_result,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "reset_macos_game_directory", side_effect=reset_preferences,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "confirm_components", return_value=False,
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_install_state"))
+                stack.enter_context(mock.patch.object(
+                    installer, "verify_installation",
+                    side_effect=install_qw.InstallerError("final verification failed"),
+                ))
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "final verification failed",
+                ):
+                    installer.install()
+
+            self.assertEqual({"basedir": "/Games/previous"}, preference)
 
     def test_install_decides_bookmark_reset_only_after_acquiring_the_operation_lock(self):
         with tempfile.TemporaryDirectory() as temporary:

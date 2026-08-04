@@ -49,6 +49,7 @@ except python_runtime.UnsupportedPythonError as error:
     raise SystemExit(2)
 
 session_control = importlib.import_module("x86qw_runtime.session_control")
+macos = importlib.import_module("x86qw_runtime.platform.macos")
 from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (
@@ -972,27 +973,12 @@ class Installer:
     def ensure_macos_ezquake_closed(self) -> None:
         if not self.is_native_macos_install():
             return
-        try:
-            result = subprocess.run(
-                ["pgrep", "-x", "ezQuake"], check=False, text=True,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            )
-        except FileNotFoundError as error:
-            raise InstallerError("O utilitário nativo pgrep não foi encontrado no macOS.") from error
-        if result.returncode == 0:
-            raise InstallerError(
-                "Feche o ezQuake antes de continuar. O macOS mantém a autorização do diretório "
-                "do jogo enquanto o aplicativo está aberto."
-            )
-        if result.returncode != 1:
-            detail = (result.stderr or result.stdout or "").strip()
-            suffix = f": {detail}" if detail else ""
-            raise InstallerError(f"Não foi possível verificar se o ezQuake está aberto{suffix}")
+        macos.ensure_process_absent("ezQuake")
 
-    def reset_macos_game_directory(self) -> None:
+    def reset_macos_game_directory(self) -> MutationResult | None:
         if not self.is_native_macos_install():
-            return
-        self.clear_macos_game_directory()
+            return None
+        return self.clear_macos_game_directory()
 
     def macos_game_directory_reset_required(self) -> bool:
         if not self.is_native_macos_install():
@@ -1008,22 +994,27 @@ class Installer:
             )
         )
 
-    def clear_macos_game_directory(self) -> None:
+    def clear_macos_game_directory(self) -> MutationResult:
         self.ensure_macos_ezquake_closed()
-        for key in MACOS_DIRECTORY_KEYS:
-            try:
-                result = subprocess.run(
-                    ["defaults", "delete", MACOS_PREFERENCES_DOMAIN, key],
-                    check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                )
-            except FileNotFoundError as error:
-                raise InstallerError("O utilitário nativo defaults não foi encontrado no macOS.") from error
-            detail = (result.stderr or result.stdout or "").strip()
-            missing = "not found" in detail.casefold() or "does not exist" in detail.casefold()
-            if result.returncode != 0 and not missing:
-                suffix = f": {detail}" if detail else ""
-                raise InstallerError(f"Não foi possível limpar a seleção antiga do ezQuake{suffix}")
+        snapshot = macos.snapshot_preference_keys(
+            MACOS_PREFERENCES_DOMAIN, MACOS_DIRECTORY_KEYS,
+        )
+        plan = MutationPlan(
+            identifier="macos-directory-preferences",
+            summary="Limpar seleção antiga do diretório do ezQuake",
+            steps=(MutationStep(
+                key="directory-preferences",
+                description="Remover preferências antigas do diretório do jogo",
+                observe=lambda: macos.snapshot_preference_keys(
+                    MACOS_PREFERENCES_DOMAIN, MACOS_DIRECTORY_KEYS,
+                ),
+                apply=lambda: macos.clear_preference_keys(snapshot),
+                rollback=macos.restore_preference_keys,
+            ),),
+        )
+        result = execute_mutation(prepare_mutation(plan))
         console.success("Seleção antiga do diretório do ezQuake removida do macOS.")
+        return result
 
     def macos_app_is_sandboxed(self, app: Path) -> bool:
         if host_platform.system() != "Darwin":
@@ -6756,7 +6747,9 @@ class Installer:
                 self.commit_runtime(prepared, staged_receipt)
             )
             if reset_macos_game_directory:
-                self.reset_macos_game_directory()
+                preference_result = self.reset_macos_game_directory()
+                if preference_result is not None:
+                    installation_results.append(preference_result)
             console.success("ezQuake instalado e recibo registrado.")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")

@@ -28,6 +28,7 @@
     {"member": "x86qw_runtime/platform/__init__.py", "source": "x86qw_runtime/platform/__init__.py", "consumer": "importador Python", "contract": "pacote de adapters de plataforma"},
     {"member": "x86qw_runtime/platform/python_runtime.py", "source": "x86qw_runtime/platform/python_runtime.py", "consumer": "python_runtime.py", "contract": "resolvedor canônico de Python"},
     {"member": "x86qw_runtime/platform/locking.py", "source": "x86qw_runtime/platform/locking.py", "consumer": "session_control", "contract": "mutex POSIX e Windows"},
+    {"member": "x86qw_runtime/platform/macos.py", "source": "x86qw_runtime/platform/macos.py", "consumer": "manager.py", "contract": "preferências e fatos nativos do macOS"},
     {"member": "x86qw_runtime/platform/processes.py", "source": "x86qw_runtime/platform/processes.py", "consumer": "session_control e supervisor", "contract": "identidade e término de processos"},
     {"member": "x86qw_runtime/platform/windows_acl.py", "source": "x86qw_runtime/platform/windows_acl.py", "consumer": "private_fs e locking", "contract": "DACL privada nativa"},
     {"member": "x86qw_runtime/ui/__init__.py", "source": "x86qw_runtime/ui/__init__.py", "consumer": "importador Python", "contract": "pacote de UI canônico"},
