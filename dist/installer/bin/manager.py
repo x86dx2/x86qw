@@ -5429,6 +5429,11 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 "QuakeWorld moderno",
                 (
                     navigation.MenuOption("play", "Jogar", "mods locais e modos KTX", "Escolha jogo, modo, mapa e regras."),
+                    navigation.MenuOption(
+                        "experience", "Experiência de jogo",
+                        "x86QW Ruleset ou regras competitivas",
+                        "Altere a preferência usada ao abrir o cliente.",
+                    ),
                     navigation.MenuOption("hub", "Encontrar servidor", "jogar, observar ou assistir QTV", "Servidores públicos com busca."),
                     navigation.MenuOption("host", "Hospedar partida", "MVDSV com QTV e QWFWD opcionais", "Servidor dedicado em primeiro plano."),
                     navigation.MenuOption("services", "Serviços", "visualizar, transmitir ou usar proxy", "Estado da stack, QTV e QWFWD isolados."),
@@ -5455,6 +5460,18 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             gameplay = importlib.import_module("gameplay")
             result = gameplay.main([
                 "--target", str(target), "--menu",
+                *(("--verbose",) if verbose else ()),
+                *(("--no-color",) if no_color else ()),
+            ], propagate_menu_exit=True)
+            if result == 130:
+                return result
+            if not pause_menu_result("\nPressione Enter para retornar ao menu principal..."):
+                return result
+            continue
+        if selected == "experience":
+            gameplay = importlib.import_module("gameplay")
+            result = gameplay.main([
+                "--target", str(target), "--configure-ruleset",
                 *(("--verbose",) if verbose else ()),
                 *(("--no-color",) if no_color else ()),
             ], propagate_menu_exit=True)

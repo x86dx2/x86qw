@@ -125,6 +125,7 @@
         {"path": "dist/mods/x86qw/core/bootstrap/autoexec.cfg", "target": "non-gpl/qw/autoexec.cfg"}
       ],
       "project_sources": [
+        {"path": "dist/mods/x86qw/core/bootstrap/ruleset.cfg", "destination": "qw/x86qw-ruleset.cfg", "mode": "overlay"},
         {"path": "dist/mods/x86qw/core/bootstrap/user.cfg.example", "destination": "qw/x86qw-user.cfg", "mode": "default"}
       ]
     },
@@ -141,9 +142,9 @@
     },
     {
       "id": "ktx",
-      "label": "KTX competitivo",
+      "label": "KTX x86QW",
       "kind": "gameplay",
-      "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com perfil competitivo x86QW.",
+      "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com diversão assistida por padrão e regras competitivas opcionais.",
       "requires": ["nquake-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "archive-base"},
@@ -184,7 +185,8 @@
         {"path": "dist/mods/ktx/1.47/x86qw/source/0001-reproducible-build-date.patch", "purpose": "reproducible-ktx-qvm-build-metadata"},
         {"path": "dist/mods/ktx/1.47/x86qw/source/0002-frogbot-identities.patch", "purpose": "reproducible-ktx-qvm-identity-extension"},
         {"path": "dist/mods/ktx/1.47/x86qw/source/0003-frogbot-team-balance.patch", "purpose": "reproducible-ktx-qvm-team-balance-extension"},
-        {"path": "dist/mods/ktx/1.47/x86qw/source/0004-frogbot-role-names.patch", "purpose": "reproducible-ktx-qvm-role-name-fix"}
+        {"path": "dist/mods/ktx/1.47/x86qw/source/0004-frogbot-role-names.patch", "purpose": "reproducible-ktx-qvm-role-name-fix"},
+        {"path": "dist/mods/ktx/1.47/x86qw/source/0005-quad-coach.patch", "purpose": "optional-casual-quad-respawn-coach"}
       ]
     },
     {

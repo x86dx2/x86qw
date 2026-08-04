@@ -201,6 +201,7 @@ class DistributionTests(unittest.TestCase):
                 "0002-frogbot-identities.patch",
                 "0003-frogbot-team-balance.patch",
                 "0004-frogbot-role-names.patch",
+                "0005-quad-coach.patch",
             },
             {path.name for path in (ktx_x86qw / "source").iterdir()},
         )

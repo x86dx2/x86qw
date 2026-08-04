@@ -47,6 +47,8 @@ sys.modules["services"] = services_qw
 
 def local_server_baseline(game: str) -> list[str]:
     arguments = [
+        "+set", "x86qw_ruleset", "1",
+        "+exec", "x86qw-ruleset.cfg",
         "+sb_listcache", "0", "+spectator", "0",
         "+bind", "F12", "quit",
     ]
@@ -56,6 +58,8 @@ def local_server_baseline(game: str) -> list[str]:
     )
     for name, value in settings:
         arguments.extend([f"+{name}", value])
+    if game == "ktx":
+        arguments.extend(["+set", "k_x86qw_quadcoach", "1"])
     return arguments
 
 
@@ -174,6 +178,14 @@ class ModernComponentTests(unittest.TestCase):
             "--target", str(target),
         ], ROOT)
         self.assertEqual("x86qw", named.ktx_options.bot_names_profile)
+        try:
+            competitive = play_qw.parse_arguments([
+                "ktx", "--mode", "duel", "--ruleset", "qcon",
+                "--target", str(target),
+            ], ROOT)
+        except SystemExit as error:
+            self.fail(f"--ruleset deveria ser aceito, mas encerrou com {error.code}")
+        self.assertEqual("qcon", competitive.ruleset)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             play_qw.parse_arguments([
                 "ktx", "--mode", "duel", "--bot-names", "personal",
@@ -596,6 +608,18 @@ class ModernComponentTests(unittest.TestCase):
             "--target", str(target), "--menu", "--no-color",
         ], propagate_menu_exit=True)
 
+    def test_main_menu_can_change_the_saved_client_ruleset(self):
+        target = ROOT / "custom-quake"
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=("experience", "exit"),
+        ), mock.patch.object(play_qw, "main", return_value=0) as play_main, mock.patch(
+            "builtins.input", return_value="",
+        ):
+            self.assertEqual(0, install_qw.run_main_menu(target))
+        play_main.assert_called_once_with([
+            "--target", str(target), "--configure-ruleset",
+        ], propagate_menu_exit=True)
+
     def test_escape_from_child_navigators_exits_the_root_menu(self):
         target = ROOT / "custom-quake"
         cases = (
@@ -791,6 +815,161 @@ class ModernComponentTests(unittest.TestCase):
                 with self.assertRaisesRegex(play_qw.InstallerError, "caracteres inválidos"):
                     play_qw.quote_console_command(invalid)
 
+    def test_x86qw_product_ruleset_uses_ezquake_default_with_assisted_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            runtime = target / "ezQuake Stable.app"
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                stack.enter_context(mock.patch.object(player, "check_paks"))
+                stack.enter_context(mock.patch.object(
+                    player, "available_local_games", return_value=[game],
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "installed_component_for_game", return_value=game.component,
+                ))
+                stack.enter_context(mock.patch.object(player, "verify_component"))
+                stack.enter_context(mock.patch.object(
+                    player, "verify_local_play_support",
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "choose_local_map", return_value="dm6",
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "choose_host_runtime", return_value=("stable", runtime),
+                ))
+                launch = stack.enter_context(mock.patch.object(
+                    player, "launch_runtime",
+                ))
+                player.play_local("td2", map_key="dm6")
+
+            arguments = launch.call_args.args[1]
+            self.assertEqual([
+                "+set", "x86qw_ruleset", "1",
+            ], arguments[:3])
+            self.assertNotIn("-ruleset", arguments)
+            self.assertIn(
+                ["+exec", "x86qw-ruleset.cfg"],
+                [arguments[index:index + 2] for index in range(len(arguments) - 1)],
+            )
+            self.assertLess(
+                arguments.index("x86qw-ruleset.cfg"), arguments.index("+map"),
+            )
+
+    def test_competitive_ruleset_goes_directly_to_ezquake_without_assisted_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            runtime = target / "ezQuake Stable.app"
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                stack.enter_context(mock.patch.object(player, "check_paks"))
+                stack.enter_context(mock.patch.object(
+                    player, "available_local_games", return_value=[game],
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "installed_component_for_game", return_value=game.component,
+                ))
+                stack.enter_context(mock.patch.object(player, "verify_component"))
+                stack.enter_context(mock.patch.object(
+                    player, "verify_local_play_support",
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "choose_local_map", return_value="dm6",
+                ))
+                stack.enter_context(mock.patch.object(
+                    player, "choose_host_runtime", return_value=("stable", runtime),
+                ))
+                launch = stack.enter_context(mock.patch.object(
+                    player, "launch_runtime",
+                ))
+                try:
+                    player.play_local("td2", map_key="dm6", ruleset="qcon")
+                except TypeError as error:
+                    self.fail(f"play_local deveria aceitar ruleset: {error}")
+
+            arguments = launch.call_args.args[1]
+            self.assertEqual([
+                "-ruleset", "qcon", "+set", "x86qw_ruleset", "0",
+            ], arguments[:5])
+            self.assertNotIn("x86qw-ruleset.cfg", arguments)
+
+    def test_first_interactive_ruleset_choice_is_persisted_and_reused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            with mock.patch.object(
+                play_qw.navigation, "select_one", return_value="qcon",
+            ) as choose:
+                try:
+                    selected = player.resolve_client_ruleset(
+                        None, choose_interactively=True,
+                    )
+                except AttributeError as error:
+                    self.fail(f"Player deveria resolver a experiência inicial: {error}")
+            self.assertEqual("qcon", selected)
+            choose.assert_called_once()
+            marker = target / ".x86qw/launcher/client-ruleset.json"
+            self.assertEqual({
+                "format": 1,
+                "project": "x86qw",
+                "ruleset": "qcon",
+            }, json.loads(marker.read_text(encoding="utf-8")))
+
+            with mock.patch.object(
+                play_qw.navigation, "select_one",
+                side_effect=AssertionError("o onboarding apareceu novamente"),
+            ):
+                self.assertEqual(
+                    "qcon",
+                    player.resolve_client_ruleset(None, choose_interactively=True),
+                )
+
+    def test_assisted_ruleset_profile_is_packaged_and_runs_before_personal_configs(self):
+        inventory = json.loads(
+            (ROOT / "maintenance/inventory/components.json").read_text(encoding="utf-8")
+        )
+        bootstrap = next(
+            component for component in inventory["components"]
+            if component["id"] == "nquake-bootstrap"
+        )
+        self.assertIn({
+            "path": "dist/mods/x86qw/core/bootstrap/ruleset.cfg",
+            "destination": "qw/x86qw-ruleset.cfg",
+            "mode": "overlay",
+        }, bootstrap["project_sources"])
+        profile_path = ROOT / "dist/mods/x86qw/core/bootstrap/ruleset.cfg"
+        self.assertTrue(profile_path.is_file())
+        profile = profile_path.read_text(encoding="utf-8")
+        for setting in (
+            'allow_scripts "2"', 'cl_iDrive "1"', 'cl_smartjump "1"',
+            'cl_safestrafe "0"', 'm_filter "0"',
+            'm_accel "0"', 'hud_speed_show "1"',
+            'hud_healthdamage_show "1"', 'hud_armordamage_show "1"',
+            'bind MWHEELUP "+jump"', 'bind MWHEELDOWN "+jump"',
+            'bind MOUSE3 "x86qw_rocketjump"',
+        ):
+            with self.subTest(setting=setting):
+                self.assertIn(setting, profile)
+        self.assertNotRegex(profile, r"(?m)^sensitivity\s")
+        self.assertNotRegex(profile, r"(?m)^in_raw\s")
+
+        managed_profiles = {
+            "dist/mods/ktx/1.47/x86qw/config/client.cfg": "exec x86qw-ktx-user.cfg",
+            "dist/mods/final-arena/1.20/x86qw/client.cfg": "exec x86qw-arena-user.cfg",
+            "dist/mods/pro-x/1.1/x86qw/client.cfg": "exec x86qw-prox-user.cfg",
+            "dist/mods/team-fortress/2.9/x86qw/client.cfg": "exec x86qw-fortress-user.cfg",
+            "dist/mods/td2/2.22/x86qw/client.cfg": "exec x86qw-td2-user.cfg",
+        }
+        for relative, personal_command in managed_profiles.items():
+            with self.subTest(profile=relative):
+                payload = (ROOT / relative).read_text(encoding="utf-8")
+                assisted = payload.index(
+                    'if $x86qw_ruleset == 1 "exec x86qw-ruleset.cfg"'
+                )
+                personal = payload.index(personal_command)
+                self.assertLess(assisted, personal)
+
     def test_every_ktx_mode_builds_a_complete_quoted_launch_command(self):
         modes = play_qw.load_ktx_modes(ROOT)
         maps = sorted({mode.default_map for mode in modes})
@@ -916,10 +1095,10 @@ class ModernComponentTests(unittest.TestCase):
             )
             self.assertNotIn("+tempalias", arguments)
             config = str(captured["config"])
-            self.assertIn(
-                'tempalias on_enter_ffa "exec x86qw-ktx.cfg;'
-                'x86qw_ktx_launch_setup"',
+            self.assertRegex(
                 config,
+                r'tempalias on_enter_ffa "exec x86qw-ktx\.cfg;'
+                r'x86qw_ktx_launch_(?:setup|group)_\d',
             )
             self.assertIn("cmd botcmd addbot 5", config)
 
@@ -1493,10 +1672,10 @@ class ModernComponentTests(unittest.TestCase):
     def test_play_menu_uses_receipt_version_with_canonical_fallback(self):
         cases = {
             "ktx": ("1.48+x86qw.1", "1.48"),
-            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.3", "1.20"),
-            "pro-x": ("1.1+x86qw.4", "1.1"),
-            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.5", "2.9"),
-            "td2": ("2.22+x86qw.4", "2.22"),
+            "final-arena": ("1.20+nquake.e4cb23d40aa2+x86qw.4", "1.20"),
+            "pro-x": ("1.1+x86qw.5", "1.1"),
+            "team-fortress": ("2.9+nquake.e4cb23d40aa2+x86qw.6", "2.9"),
+            "td2": ("2.22+x86qw.5", "2.22"),
         }
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
@@ -2487,9 +2666,12 @@ class ModernComponentTests(unittest.TestCase):
             launch.assert_not_called()
             rendered = confirm.call_args.kwargs["subtitle"]
             self.assertIn("Resumo da partida", rendered)
+            self.assertIn("Experiência | x86QW Ruleset", rendered)
             self.assertIn("Cliente | ezQuake stable 1.0", rendered)
             launcher = "x86qw.cmd" if os.name == "nt" else "./x86qw.sh"
-            self.assertIn(f"{launcher} play td2 --map dm6", rendered)
+            self.assertIn(
+                f"{launcher} play td2 --ruleset x86qw --map dm6", rendered,
+            )
 
     def test_host_menu_selects_the_game_before_quick_profile_and_confirmation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2689,6 +2871,7 @@ class ModernComponentTests(unittest.TestCase):
     def test_ktx_uses_the_native_qw_gamedir_only_once(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             with contextlib.redirect_stdout(io.StringIO()):
@@ -2702,19 +2885,33 @@ class ModernComponentTests(unittest.TestCase):
                                             with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "duel", "dm6")
-            launch.assert_called_once_with(runtime, [
-                *local_server_baseline("ktx"),
-                *ktx_launch_setup_alias(),
-                *ktx_entry_aliases(),
-                "+set", "k_defmap", "dm6",
-                "+set", "k_defmode", "1on1",
-                "+map", "dm6",
-                "+bind", "F12", "quit",
-            ])
+            arguments = launch.call_args.args[1]
+            self.assertEqual(runtime, launch.call_args.args[0])
+            self.assertNotIn("+tempalias", arguments)
+            self.assertTrue(any(
+                argument.startswith("x86qw-ktx-session-")
+                for argument in arguments
+            ), arguments)
+
+    def test_ktx_chunk_plan_exposes_direct_root_invocation(self):
+        commands = tuple(f"echo command-{index}" for index in range(80))
+        try:
+            definitions, invocation = play_qw.ktx_chunked_setup_alias_plan(
+                commands, maximum_body=120,
+            )
+        except AttributeError as error:
+            self.fail(f"launcher deveria expor um plano de aliases: {error}")
+        self.assertGreater(len(definitions), 1)
+        self.assertNotIn("x86qw_ktx_launch_setup", invocation)
+        self.assertTrue(all(
+            name.startswith("x86qw_ktx_launch_")
+            for name in invocation.split(";")
+        ))
 
     def test_ktx_direct_midair_mode_installs_a_one_shot_entry_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             with contextlib.redirect_stdout(io.StringIO()):
@@ -2728,15 +2925,12 @@ class ModernComponentTests(unittest.TestCase):
                                             with mock.patch.object(installer, "verify_local_play_support"):
                                                 with mock.patch("builtins.input", return_value=""):
                                                     installer.play_local("ktx", "midair")
-            launch.assert_called_once_with(runtime, [
-                *local_server_baseline("ktx"),
-                *ktx_launch_setup_alias(mode_key="midair"),
-                "+tempalias", "on_enter",
-                "exec x86qw-ktx-mode-midair.cfg",
-                "+set", "k_defmap", "povdmm4",
-                "+set", "k_defmode", "1on1",
-                "+map", "povdmm4",
-                "+bind", "F12", "quit",
+            arguments = launch.call_args.args[1]
+            self.assertEqual(runtime, launch.call_args.args[0])
+            self.assertNotIn("+tempalias", arguments)
+            self.assertIn(["+map", "povdmm4"], [
+                arguments[index:index + 2]
+                for index in range(len(arguments) - 1)
             ])
 
     def test_ktx_bot_options_enable_frogbot_before_map_and_add_after_entry(self):
@@ -2788,7 +2982,8 @@ class ModernComponentTests(unittest.TestCase):
             self.assertNotIn("+tempalias", arguments)
             self.assertLess(arguments.index("+exec"), arguments.index("+map"))
             config = str(captured["config"])
-            self.assertIn("unset_re ^k_fb_name_", config)
+            self.assertNotIn("unset k_fb_name_0", config)
+            self.assertNotIn("unset_re", config)
             self.assertIn("if ($k_maxclients < 3) then k_maxclients 3", config)
             self.assertIn("if ($maxclients < 3) then maxclients 3", config)
             # The runtime state machine also carries this command in the
@@ -2852,8 +3047,8 @@ class ModernComponentTests(unittest.TestCase):
 
     def test_x86qw_ktx_qvm_is_reproducible_and_extends_frogbots_declaratively(self):
         expected = {
-            "qwprogs.qvm": "6b28a08def85cf13f4d5d909ca0902390fd6c2cbf77cb10a89647384f4c40655",
-            "qwprogs.map": "9e1a45c173deff48baf211bf079e7acc41af5cd353eaa878f792431fe51124ea",
+            "qwprogs.qvm": "32cfd1e70d1b88abb591872cd92f3eeeee03ea3d4d0097d6b82f30cf2fb6ed91",
+            "qwprogs.map": "91414e05db60aace163ccae7e7ba27bdd6b89b9f347fe7619018ae6f1390c356",
         }
         root = ROOT / "dist/mods/ktx/1.47/x86qw/runtime"
         for filename, digest in expected.items():
@@ -2879,6 +3074,27 @@ class ModernComponentTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertIn('MOD_BUILD_DATE\t\t\t("May 16 2026, 20:38:52")', build_patch)
+
+    def test_x86qw_ktx_quad_coach_is_a_declared_opt_in_server_extension(self):
+        inventory = json.loads(
+            (ROOT / "maintenance/inventory/components.json").read_text(encoding="utf-8")
+        )
+        ktx = next(
+            component for component in inventory["components"]
+            if component["id"] == "ktx"
+        )
+        source_entry = {
+            "path": "dist/mods/ktx/1.47/x86qw/source/0005-quad-coach.patch",
+            "purpose": "optional-casual-quad-respawn-coach",
+        }
+        self.assertIn(source_entry, ktx["project_inputs"])
+        patch = (ROOT / source_entry["path"]).read_text(encoding="utf-8")
+        self.assertIn('RegisterCvarEx("k_x86qw_quadcoach", "0")', patch)
+        self.assertIn("X86QW_QuadCoach_Pickup", patch)
+        self.assertIn("X86QW_QuadCoach_Frame", patch)
+        self.assertIn("QUAD DISPONIVEL", patch)
+        self.assertIn("QUAD em 15 segundos", patch)
+        self.assertIn("QUAD em 5 segundos", patch)
 
     def test_x86qw_frogbot_profile_randomizes_once_per_launch(self):
         game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
@@ -3022,10 +3238,10 @@ class ModernComponentTests(unittest.TestCase):
                 "set_ex k_fb_name_0 $qt/$xa0$xcc$xf5$xe6$xe6$xf9$qt",
                 config.path.read_text(encoding="ascii"),
             )
-            self.assertIn(
-                "unset_re ^k_fb_name_",
-                config.path.read_text(encoding="ascii"),
-            )
+            payload = config.path.read_text(encoding="ascii")
+            self.assertIn("unset k_fb_name_0 k_fb_name_1", payload)
+            self.assertIn("k_fb_name_enemy_31", payload)
+            self.assertNotIn("unset_re", payload)
             config.lease.close()
             config.path.unlink()
             config.path.mkdir()
@@ -3107,8 +3323,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertIn("cmd botcmd addbot 8", config)
             self.assertIn("x86qw_ktx_mode_help", config)
             self.assertIn(
-                ";" + ";".join(("wait",) * play_qw.FROGBOT_ADD_WAIT_FRAMES)
-                + ";unset k_fb_name_0 k_fb_name_team_0 k_fb_name_enemy_0",
+                "unset k_fb_name_0 k_fb_name_team_0 k_fb_name_enemy_0",
                 config,
             )
 
@@ -3159,9 +3374,10 @@ class ModernComponentTests(unittest.TestCase):
                 "+bind", "F12", "quit",
             ])
             self.assertIn("tempalias x86qw_ktx_launch_setup_1", captured["config"])
-            self.assertIn(
-                'tempalias on_enter_ctf "exec x86qw-ktx.cfg;x86qw_ktx_launch_setup"',
+            self.assertRegex(
                 captured["config"],
+                r'tempalias on_enter_ctf "exec x86qw-ktx\.cfg;'
+                r'x86qw_ktx_launch_(?:setup|group)_\d',
             )
             self.assertFalse((target / "qw" / captured["config_name"]).exists())
 

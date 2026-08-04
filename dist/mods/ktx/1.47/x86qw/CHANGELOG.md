@@ -8,6 +8,8 @@
 
 ## Alterações x86QW
 
+- adiciona o Coach de Quad opcional `k_x86qw_quadcoach`, ativado apenas pelo
+  x86QW Ruleset local, com avisos globais aos 15 e 5 segundos e no respawn;
 - recompila o QVM 1.47 com patches isolados que cacheiam identidades Frogbot
   e distribuem inclusões automáticas pelo número de equipes do usermode;
 - corrige a tabela upstream de nomes Frogbot e usa o índice global do bot nas

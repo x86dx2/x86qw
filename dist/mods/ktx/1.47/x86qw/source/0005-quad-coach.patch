@@ -1,0 +1,97 @@
+diff --git a/src/items.c b/src/items.c
+index e785073..3ee0eb1 100644
+--- a/src/items.c
++++ b/src/items.c
+@@ -35,5 +35,51 @@ void BotsPowerupTouchedNonPlayer(gedict_t *powerup, gedict_t *touch_ent);
+ void BotsPowerupDropped(gedict_t *player, gedict_t *powerup);
+ 
++static float x86qw_quad_available_at;
++static int x86qw_quad_coach_stage;
++
++void X86QW_QuadCoach_Pickup(float available_at)
++{
++	if (!cvar("k_x86qw_quadcoach"))
++	{
++		x86qw_quad_available_at = 0;
++		x86qw_quad_coach_stage = 0;
++		return;
++	}
++
++	x86qw_quad_available_at = available_at;
++	x86qw_quad_coach_stage = 0;
++}
++
++void X86QW_QuadCoach_Frame(void)
++{
++	float remaining;
++
++	if (!cvar("k_x86qw_quadcoach") || x86qw_quad_available_at <= 0)
++	{
++		return;
++	}
++
++	remaining = x86qw_quad_available_at - g_globalvars.time;
++	if (remaining <= 0 && x86qw_quad_coach_stage < 3)
++	{
++		G_bprint(PRINT_HIGH, "%s\n", redtext("QUAD DISPONIVEL"));
++		G_cp2all("QUAD DISPONIVEL");
++		x86qw_quad_coach_stage = 3;
++		x86qw_quad_available_at = 0;
++	}
++	else if (remaining <= 5 && x86qw_quad_coach_stage < 2)
++	{
++		G_bprint(PRINT_HIGH, "%s\n", redtext("QUAD em 5 segundos"));
++		G_cp2all("QUAD em 5 segundos");
++		x86qw_quad_coach_stage = 2;
++	}
++	else if (remaining <= 15 && x86qw_quad_coach_stage < 1)
++	{
++		G_bprint(PRINT_HIGH, "%s\n", redtext("QUAD em 15 segundos"));
++		x86qw_quad_coach_stage = 1;
++	}
++}
++
+ static qbool ItemTouched(gedict_t *item, gedict_t *player)
+ {
+ #ifdef BOT_SUPPORT
+@@ -2117,6 +2163,11 @@ void powerup_touch(void)
+ 
+ 	self->s.v.nextthink -= AUTOTRACK_POWERUPS_PREDICT_TIME;
+ 
++	if (streq(self->classname, "item_artifact_super_damage"))
++	{
++		X86QW_QuadCoach_Pickup(self->s.v.nextthink + AUTOTRACK_POWERUPS_PREDICT_TIME);
++	}
++
+ 	self->think = (func_t) SUB_regen_powerups;
+ 
+ // like ktpro
+diff --git a/src/world.c b/src/world.c
+index ef791e8..73aa0fb 100644
+--- a/src/world.c
++++ b/src/world.c
+@@ -818,6 +818,7 @@ void FirstFrame(void)
+ 	RegisterCvar("k_pow_min_players");
+ 	RegisterCvar("k_pow_check_time");
+ 	RegisterCvarEx("k_pow_pickup", "0");// allow multiple pickup of same powerup - off by default
++	RegisterCvarEx("k_x86qw_quadcoach", "0");
+ 
+ 	RegisterCvar("allow_spec_wizard");
+ 	RegisterCvar("k_no_wizard_animation"); // disallow wizard animation
+@@ -1829,6 +1830,7 @@ void check_fcheck(void);
+ void CheckTeamStatus(void);
+ void SendSpecInfo(void);
+ void DoMVDAutoTrack(void);
++void X86QW_QuadCoach_Frame(void);
+ 
+ void FixNoSpecs(void);
+ 
+@@ -1861,6 +1863,8 @@ void StartFrame(int time)
+ 
+ 	FixPowerups();
+ 
++	X86QW_QuadCoach_Frame();
++
+ 	FixSpecWizards();
+ 
+ 	framechecks = bound(0, !cvar("k_noframechecks"), 1);

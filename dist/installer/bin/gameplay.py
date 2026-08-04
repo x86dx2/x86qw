@@ -48,6 +48,8 @@ DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
 )
 RUNTIME_KTX_BOT_NAME_CATALOG = "_x86qw/ktx-frogbot-names.json"
 KTX_CONTEXT_KEYS = ("F5", "F6", "H", "I", "M", "X", "Z", "F11")
+KTX_BOT_NAME_PREFIXES = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
+KTX_BOT_NAME_SLOTS = 32
 KTX_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_KTX_RUNTIME_CONFIG__"
 # ezQuake accepts large alias bodies, but a single startup argument close to
 # its command buffer limit can leave initialization incomplete. Larger mode
@@ -70,6 +72,7 @@ LEGACY_MACOS_VIDEO_CVARS = (
     "vid_ypos",
 )
 MACOS_FULLSCREEN_LAYOUT = Path(".x86qw/launcher/macos-fullscreen-layout.json")
+CLIENT_RULESET_PREFERENCE = Path(".x86qw/launcher/client-ruleset.json")
 MACOS_FULLSCREEN_CVARS = (
     "vid_fullscreen",
     "vid_usedesktopres",
@@ -77,6 +80,28 @@ MACOS_FULLSCREEN_CVARS = (
     "vid_height",
     "vid_displayfrequency",
 )
+DEFAULT_PRODUCT_RULESET = "x86qw"
+PRODUCT_RULESET_ENGINES = {
+    "x86qw": "default",
+    "qcon": "qcon",
+    "smackdown": "smackdown",
+    "thunderdome": "thunderdome",
+    "mtfl": "mtfl",
+    "smackdrive": "smackdrive",
+}
+PRODUCT_RULESET_CONFIGS = {
+    "x86qw": "x86qw-ruleset.cfg",
+}
+PRODUCT_RULESET_LABELS = {
+    "x86qw": "x86QW Ruleset",
+    "qcon": "QuakeCon",
+    "smackdown": "Smackdown",
+    "thunderdome": "Thunderdome",
+    "mtfl": "MTFL",
+    "smackdrive": "Smackdrive",
+}
+
+
 @dataclass(frozen=True)
 class LocalGameSpec:
     key: str
@@ -608,14 +633,20 @@ def play_summary_text(
     map_name: str,
     runtime_label: str,
     options: KtxLaunchOptions,
+    ruleset: str = DEFAULT_PRODUCT_RULESET,
 ) -> str:
     lines = ["Resumo da partida", f"  Jogo    | {game.label}"]
     if mode is not None:
         lines.append(f"  Modo    | {mode.label}")
-    lines.extend((f"  Mapa    | {map_name}", f"  Cliente | {runtime_label}"))
+    lines.extend((
+        f"  Mapa    | {map_name}",
+        f"  Experiência | {PRODUCT_RULESET_LABELS[ruleset]}",
+        f"  Cliente | {runtime_label}",
+    ))
     if mode is not None:
         lines.extend(ktx_summary_lines(options))
     cli = ["play", game.key]
+    cli.extend(["--ruleset", ruleset])
     if mode is not None:
         cli.extend(["--mode", mode.key])
         cli.extend(ktx_options_cli_arguments(options))
@@ -805,9 +836,8 @@ def ktx_bot_name_settings(
     pool = options.bot_name_pool
     if len(pool) < count:
         raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
-    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
     settings: list[tuple[str, str]] = []
-    for prefix in prefixes:
+    for prefix in KTX_BOT_NAME_PREFIXES:
         for index in range(count):
             # A bot keeps the same identity if KTX classifies it as generic,
             # allied or enemy. Together with the QVM's global bot index, this
@@ -836,15 +866,26 @@ def ktx_bot_name_binary_settings(
     pool = options.bot_name_pool
     if len(pool) < count:
         raise InstallerError("O perfil de nomes não cobre todos os Frogbots solicitados.")
-    prefixes = ("k_fb_name", "k_fb_name_team", "k_fb_name_enemy")
     settings: list[tuple[str, bytes]] = []
-    for prefix in prefixes:
+    for prefix in KTX_BOT_NAME_PREFIXES:
         for index in range(count):
             identity = frogbot_identity(pool[index])
             settings.append((
                 f"{prefix}_{index}", quake_colored_frogbot_bytes(identity.name),
             ))
     return tuple(settings)
+
+
+def ktx_bot_name_cleanup_commands() -> tuple[str, ...]:
+    names = tuple(
+        f"{prefix}_{index}"
+        for prefix in KTX_BOT_NAME_PREFIXES
+        for index in range(KTX_BOT_NAME_SLOTS)
+    )
+    return tuple(
+        "unset " + " ".join(names[offset:offset + 12])
+        for offset in range(0, len(names), 12)
+    )
 
 
 def write_ktx_runtime_config(
@@ -863,9 +904,12 @@ def write_ktx_runtime_config(
     payload = "".join((
         "// x86QW: ephemeral KTX launch configuration\n",
         # Older launchers allowed these user cvars to reach config.cfg. Clear
-        # them before the QVM registers the KTX defaults or this launch sets a
-        # temporary custom pool.
-        "unset_re ^k_fb_name_\n",
+        # the finite KTX namespace explicitly: unset_re can delay native
+        # startup in current ezQuake nightlies.
+        *(
+            f"{command}\n"
+            for command in (ktx_bot_name_cleanup_commands() if settings else ())
+        ),
         *(f"set_ex {name} $qt{value}$qt\n" for name, value in settings),
         *(f"{command}\n" for command in startup_commands),
     )).encode("ascii")
@@ -1156,10 +1200,10 @@ def quote_console_command(command: str) -> str:
     return f'"{command}"'
 
 
-def ktx_chunked_setup_alias_commands(
+def ktx_chunked_setup_alias_plan(
     commands: tuple[str, ...], *, maximum_body: int = 700,
-) -> tuple[str, ...]:
-    """Store a long post-map setup in bounded temporary aliases."""
+) -> tuple[tuple[str, ...], str]:
+    """Store a long setup in bounded aliases and expose its direct entry."""
     chunks: list[list[str]] = []
     current: list[str] = []
     current_length = 0
@@ -1180,10 +1224,10 @@ def ktx_chunked_setup_alias_commands(
         f"x86qw_ktx_launch_setup_{index}"
         for index in range(1, len(chunks) + 1)
     )
-    definitions = list(
-        f"tempalias {alias} {quote_console_command(';'.join(chunk))}"
-        for alias, chunk in zip(aliases, chunks)
-    )
+    definitions = []
+    for alias, chunk in zip(aliases, chunks):
+        body = ";".join(chunk).replace('"', "$qt")
+        definitions.append(f"tempalias {alias} {quote_console_command(body)}")
     current_aliases = aliases
     level = 1
     while len(";".join(current_aliases)) > maximum_body:
@@ -1211,11 +1255,20 @@ def ktx_chunked_setup_alias_commands(
             parent_aliases.append(parent)
         current_aliases = tuple(parent_aliases)
         level += 1
-    definitions.append(
-        "tempalias x86qw_ktx_launch_setup "
-        f"{quote_console_command(';'.join(current_aliases))}"
+    return tuple(definitions), ";".join(current_aliases)
+
+
+def ktx_chunked_setup_alias_commands(
+    commands: tuple[str, ...], *, maximum_body: int = 700,
+) -> tuple[str, ...]:
+    """Store a long post-map setup behind its compatibility entry alias."""
+    definitions, invocation = ktx_chunked_setup_alias_plan(
+        commands, maximum_body=maximum_body,
     )
-    return tuple(definitions)
+    return (*definitions,
+        "tempalias x86qw_ktx_launch_setup "
+        f"{quote_console_command(invocation)}"
+    )
 
 
 def ktx_bot_options_requested(options: KtxLaunchOptions) -> bool:
@@ -1447,6 +1500,102 @@ def ktx_launch_commands(
 
 
 class Player(core.Installer):
+    def saved_client_ruleset(self) -> str | None:
+        marker = self.target / CLIENT_RULESET_PREFERENCE
+        if not lexists(marker):
+            return None
+        if not marker.is_file() or marker.is_symlink():
+            raise InstallerError(f"Preferência de ruleset inválida: {marker}")
+        try:
+            payload = marker.read_bytes()
+            if len(payload) > 4096:
+                raise ValueError("arquivo excede 4096 bytes")
+            state = json.loads(payload.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            raise InstallerError(f"Preferência de ruleset inválida: {marker}") from error
+        valid = (
+            isinstance(state, dict)
+            and set(state) == {"format", "project", "ruleset"}
+            and state.get("format") == 1
+            and state.get("project") == "x86qw"
+            and state.get("ruleset") in PRODUCT_RULESET_ENGINES
+        )
+        if not valid:
+            raise InstallerError(f"Preferência de ruleset inválida: {marker}")
+        return str(state["ruleset"])
+
+    def save_client_ruleset(self, ruleset: str) -> None:
+        if ruleset not in PRODUCT_RULESET_ENGINES:
+            raise InstallerError(f"Ruleset de cliente desconhecido: {ruleset}.")
+        marker = self.target / CLIENT_RULESET_PREFERENCE
+        directory = marker.parent
+        if lexists(directory) and (not directory.is_dir() or directory.is_symlink()):
+            raise InstallerError(f"Diretório de preferências inválido: {directory}")
+        directory.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({
+            "format": 1,
+            "project": "x86qw",
+            "ruleset": ruleset,
+        }, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+        self.write_personal_config(marker, payload)
+
+    def choose_client_ruleset(self, current: str | None = None) -> str:
+        keys = tuple(PRODUCT_RULESET_ENGINES)
+        selected = navigation.select_one(
+            "Como você quer jogar?",
+            (
+                navigation.MenuOption(
+                    "x86qw", "x86QW Ruleset · recomendado",
+                    "diversão assistida, nostalgia e controles modernos",
+                    "Experiência original x86QW, pronta para jogar e personalizar.",
+                ),
+                navigation.MenuOption(
+                    "qcon", "QuakeCon", "competição moderna",
+                    "Restrições oficiais do ruleset qcon do ezQuake.",
+                ),
+                navigation.MenuOption(
+                    "smackdown", "Smackdown", "competição clássica",
+                    "Ruleset tradicional da liga Smackdown.",
+                ),
+                navigation.MenuOption(
+                    "thunderdome", "Thunderdome", "duelos de liga",
+                    "Ruleset usado pela comunidade Thunderdome.",
+                ),
+                navigation.MenuOption(
+                    "mtfl", "MTFL", "legado competitivo",
+                    "Compatibilidade com regras históricas MTFL.",
+                ),
+                navigation.MenuOption(
+                    "smackdrive", "Smackdrive", "legado avançado",
+                    "Compatibilidade com o ruleset Smackdrive.",
+                ),
+            ),
+            breadcrumb="x86QW › Experiência",
+            default=keys.index(current) if current in keys else 0,
+            searchable=True,
+            allow_back=True,
+        )
+        if selected is None:
+            raise navigation.MenuCancelled("Experiência")
+        return selected
+
+    def resolve_client_ruleset(
+        self, requested: str | None, *, choose_interactively: bool,
+    ) -> str:
+        if requested is not None:
+            if requested not in PRODUCT_RULESET_ENGINES:
+                raise InstallerError(f"Ruleset de cliente desconhecido: {requested}.")
+            return requested
+        saved = self.saved_client_ruleset()
+        if saved is not None:
+            return saved
+        if not choose_interactively:
+            return DEFAULT_PRODUCT_RULESET
+        selected = self.choose_client_ruleset()
+        self.save_client_ruleset(selected)
+        console.success(f"Experiência salva: {PRODUCT_RULESET_LABELS[selected]}.")
+        return selected
+
     @staticmethod
     def config_cvars(payload: bytes, names: tuple[str, ...]) -> dict[str, str]:
         values: dict[str, str] = {}
@@ -2271,7 +2420,12 @@ class Player(core.Installer):
         ktx_options: KtxLaunchOptions | None = None,
         *,
         configure_interactively: bool = False,
+        ruleset: str | None = None,
+        choose_ruleset_interactively: bool = False,
     ) -> None:
+        selected_ruleset = self.resolve_client_ruleset(
+            ruleset, choose_interactively=choose_ruleset_interactively,
+        )
         self.check_paks()
         games = self.available_local_games()
         if not games:
@@ -2383,7 +2537,7 @@ class Player(core.Installer):
             if configure_interactively:
                 label, _runtime = runtime_choice
                 summary = play_summary_text(
-                    game, ktx_mode, map_name, label, launch_options,
+                    game, ktx_mode, map_name, label, launch_options, selected_ruleset,
                 )
                 confirmed = navigation.confirm(
                     "Iniciar esta partida?",
@@ -2409,12 +2563,31 @@ class Player(core.Installer):
         assert map_name is not None
         self.verify_local_play_support(games)
         label, runtime = runtime_choice
-        arguments = [
+        arguments: list[str] = []
+        # "default" already is ezQuake's startup ruleset. Keep x86QW as the
+        # product name without forcing a redundant engine ruleset reset.
+        if selected_ruleset != DEFAULT_PRODUCT_RULESET:
+            arguments.extend([
+                "-ruleset", PRODUCT_RULESET_ENGINES[selected_ruleset],
+            ])
+        arguments.extend([
+            "+set", "x86qw_ruleset",
+            "1" if selected_ruleset == DEFAULT_PRODUCT_RULESET else "0",
+        ])
+        profile = PRODUCT_RULESET_CONFIGS.get(selected_ruleset)
+        if profile is not None:
+            arguments.extend(["+exec", profile])
+        arguments.extend([
             "+sb_listcache", "0", "+spectator", "0",
             "+bind", "F12", "quit",
-        ]
+        ])
         for name, value in game.local_server_settings:
             arguments.extend([f"+{name}", value])
+        if uses_mode_catalog:
+            arguments.extend([
+                "+set", "k_x86qw_quadcoach",
+                "1" if selected_ruleset == DEFAULT_PRODUCT_RULESET else "0",
+            ])
         arguments.extend(game.client_game_arguments)
         arguments.extend(game.pre_connect_arguments)
         if game.legacy_remote_capabilities:
@@ -2466,23 +2639,27 @@ class Player(core.Installer):
             else:
                 event_body = f"exec {ktx_mode.entry_config}"
             if (
-                ktx_bot_options_requested(launch_options)
+                profile is not None
+                or ktx_bot_options_requested(launch_options)
                 or len(setup_body) > KTX_INLINE_SETUP_LIMIT
             ):
                 # Keep the long, frame-separated addbot sequence outside the
                 # engine's bounded startup command line. The ephemeral file is
                 # read before the map and removed immediately after startup.
+                setup_definitions, setup_invocation = (
+                    ktx_chunked_setup_alias_plan(setup_commands)
+                )
+                if ktx_mode.entry_config is None:
+                    event_body = f"exec x86qw-ktx.cfg;{setup_invocation}"
+                    compatibility_entry = ()
+                else:
+                    compatibility_entry = (
+                        "tempalias x86qw_ktx_launch_setup "
+                        f"{quote_console_command(setup_invocation)}",
+                    )
                 ktx_startup_commands = (
-                    *(
-                        key_alias_commands
-                        if ktx_bot_options_requested(launch_options)
-                        else ()
-                    ),
-                    *ktx_chunked_setup_alias_commands(
-                        post_map_commands
-                        if ktx_bot_options_requested(launch_options)
-                        else setup_commands
-                    ),
+                    *setup_definitions,
+                    *compatibility_entry,
                     f"tempalias {event} {quote_console_command(event_body)}",
                 )
                 arguments.extend([
@@ -2886,6 +3063,14 @@ def parse_arguments(arguments: list[str], project_root: Path):
         help="desativa cores mesmo em um terminal interativo",
     )
     parser.add_argument("--menu", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--configure-ruleset", action="store_true", help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--ruleset",
+        choices=tuple(PRODUCT_RULESET_ENGINES),
+        help="experiência do cliente: x86qw ou um ruleset competitivo do ezQuake",
+    )
     add_game_launch_arguments(parser)
     parser.add_argument("--target", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
@@ -2930,10 +3115,20 @@ def main(
         player.validate_target("play")
         console.detail(f"Destino normalizado: {player.target}")
         player.reject_target_symlinks()
+        if options.configure_ruleset:
+            selected = player.choose_client_ruleset(player.saved_client_ruleset())
+            player.save_client_ruleset(selected)
+            console.success(
+                "Experiência padrão alterada para "
+                f"{PRODUCT_RULESET_LABELS[selected]}."
+            )
+            return 0
         console.section("Jogo local")
         player.play_local(
             options.game, options.mode, options.map, options.ktx_options,
             configure_interactively=options.menu or options.mode is None,
+            ruleset=options.ruleset,
+            choose_ruleset_interactively=options.ruleset is None,
         )
         return 0
     except KeyboardInterrupt:
