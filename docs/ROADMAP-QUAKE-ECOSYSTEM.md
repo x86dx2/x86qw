@@ -14,12 +14,13 @@ A implementação `0.7.1` passou nos sete jobs obrigatórios e em 393 testes de
 manutenção mais quatro testes do site. A `0.7.0` permanece imutável no
 histórico.
 
-Baseline corretiva consolidada após a issue #49: merge
-`b746d577fab5ffd95f170feb28b8a4bd4d4ce76c`. A fronteira ZIP/PK3/PYZ foi
-integrada sem alterar a release pública, o catálogo `current` nem os
-bootstraps implantados da `0.7.1`. O candidato da PR 4 parte desse commit,
-permanece não publicado e concluiu a validação nativa do contrato de DACL no
-Windows; os smokes de runtime e de conta padrão continuam separados.
+Baseline corretiva consolidada após a PR 4: merge
+`206adc46df6aced49eee7ac1fcae3cf331f07a63`. Downloader, fronteira
+ZIP/PK3/PYZ e DACL privada Windows foram integrados sem alterar a release
+pública, o catálogo `current` nem os bootstraps implantados da `0.7.1`. O
+candidato da PR 5 parte desse commit, preserva o stable macOS upstream e
+permanece não publicado; smokes de runtime e de conta padrão continuam
+separados.
 
 ## Escala de estado
 
@@ -43,6 +44,8 @@ plataforma.
 - cliente macOS universal, Linux x86-64 e Windows x64;
 - serviços macOS arm64, Linux amd64 e Windows x64; macOS Intel não é anunciado
   para os serviços;
+- clientes macOS catalogados com suporte condicional até Gatekeeper, primeira e
+  segunda abertura, arm64 e Intel serem provados com o candidato imutável;
 - CLI com `play`, `host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`,
   `repair`, `cleanup`, `uninstall` e `version`;
 - navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
@@ -281,6 +284,27 @@ principals permitidos, rejeição de arquivos externos inseguros, proteção do
 bootstrap e leases contra substituição. O código não solicita elevação;
 executá-lo como conta padrão em um smoke nativo ainda pertence ao PR 11.
 
+### SEC-05 — Confiança do ezQuake stable no macOS
+
+**Entrega funcional:** preservação upstream implementada no candidato da PR 5;
+ainda não publicada
+
+**Validação:** unitária e auditoria de assinatura/hashes no macOS; smokes de
+primeira e segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11
+
+O stable 3.6.9 é extraído e promovido sem alteração de `Info.plist`, sandbox,
+entitlements ou assinatura. A transformação local foi limitada ao nightly e
+falha fechada se receber o canal stable. Instalações stable transformadas pela
+0.7.1 são reconhecidas somente pelo artefato, identidade binária e marcador
+conhecidos; a restauração usa o mesmo payload upstream validado e troca
+transacional de runtime e recibo. Artifact desconhecido, executável upstream,
+runtime sem recibo e identidade inconclusiva são preservados.
+
+O upstream continua ad hoc, sem Team ID ou ticket stapled e rejeitado por
+`spctl`; `codesign --verify` não autentica o publicador. Stable e nightly macOS
+são projetados como `conditional`. Consulte o
+[ADR 0004](adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
+
 ## Instalador e perfis
 
 ### INST-01 — Ciclo de vida instalado
@@ -324,7 +348,7 @@ evidência da correção.
 **Entrega funcional:** completa
 **Validação:** unitária e dry-run do Worker
 
-Versão, pacotes, componentes, comandos, jogos, runtimes e plataformas são
+Versão, pacotes, componentes, comandos, jogos, runtimes, plataformas e estado de suporte são
 projetados no catálogo público do produto. README, manual e site são testados
 contra essa fonte; divergência bloqueia `verify` e CI.
 
@@ -351,6 +375,8 @@ deve ser incorporado como efeito colateral de `play`, `host`, `update` ou
 - [x] checks reais do GitHub Actions verdes nos três sistemas;
 - [ ] smokes nativos de serviços em Linux e Windows;
 - [ ] smoke do cliente em macOS Intel;
+- [ ] primeira e segunda abertura do stable macOS preservado em arm64;
+- [ ] Gatekeeper e bookmark sandbox do stable macOS documentados com o candidato exato;
 - [ ] MVD produzido e validado formalmente;
 - [ ] forwarding QWFWD validado em suíte de rede;
 - [x] revisão humana do diff e das migrações;
