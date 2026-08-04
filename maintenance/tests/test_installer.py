@@ -4216,10 +4216,93 @@ class InstallerTests(unittest.TestCase):
                 installer.prepare_cache()
             self.assertEqual("keep", (cache / "foreign").read_text(encoding="utf-8"))
 
+    def test_cleanup_entrypoint_refuses_an_unowned_target(self):
+        """A fixed cache-looking path is not evidence that x86QW owns a directory."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            victim = target / "ezquake/temp/personal.bin"
+            victim.parent.mkdir(parents=True)
+            victim.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "cleanup", str(target)], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", victim.read_bytes())
+
+    def test_uninstall_entrypoint_refuses_a_launcher_without_receipt(self):
+        """A personal script named x86qw.sh must never become managed by inference."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            target.mkdir()
+            launcher = target / "x86qw.sh"
+            launcher.write_bytes(b"personal launcher")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target)], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"personal launcher", launcher.read_bytes())
+
+    def test_purge_entrypoint_refuses_metadata_created_only_by_its_lock(self):
+        """The operation lock cannot manufacture authority to erase its target."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            target.mkdir()
+            sentinel = target / "only-copy-of-personal-data.txt"
+            sentinel.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target), "--purge"], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", sentinel.read_bytes())
+            self.assertTrue(target.is_dir())
+
+    def test_purge_entrypoint_refuses_malformed_identity_metadata(self):
+        """Malformed state is uncertainty, never authority for destructive cleanup."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            state = target / install_qw.INSTALL_STATE
+            state.parent.mkdir(parents=True)
+            state.write_text("not-json\n", encoding="utf-8")
+            sentinel = target / "personal.txt"
+            sentinel.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target), "--purge"], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(install_qw.InstallerError):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", sentinel.read_bytes())
+            self.assertEqual("not-json\n", state.read_text(encoding="utf-8"))
+
     def test_purge_removes_the_entire_installation_and_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
             (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"remove")
             (target / "qw").mkdir()
@@ -4239,6 +4322,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
             (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
             personal = target / "personal.txt"
             personal.write_bytes(b"personal")
             installer.prepare_cache()
@@ -4272,6 +4356,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
             (target / "personal.txt").write_text("remove", encoding="utf-8")
             operation_lock = install_qw.session_control.InstallationLock.acquire(
                 target, "uninstall", "maintenance",
@@ -4369,7 +4454,9 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             (target / "unrelated.txt").write_text("preserve", encoding="utf-8")
-            with self.assertRaisesRegex(install_qw.InstallerError, "sem identidade x86QW"):
+            with self.assertRaisesRegex(
+                install_qw.InstallerError, "sem identidade gerenciada x86QW",
+            ):
                 installer.purge()
             self.assertTrue((target / "unrelated.txt").is_file())
 

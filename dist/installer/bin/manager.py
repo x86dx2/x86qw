@@ -1158,6 +1158,49 @@ class Installer:
             for relative in self.component_metadata(component):
                 ensure_no_symlink(self.target / relative, "managed path")
 
+    def managed_installation_identity(self) -> tuple[str, ...]:
+        """Validate persisted evidence before a destructive target operation."""
+
+        if not lexists(self.target):
+            return ()
+        metadata = self.target / METADATA_DIR
+        if lexists(metadata):
+            ensure_no_symlink(metadata, "metadados da instalação")
+            if not metadata.is_dir():
+                raise InstallerError(
+                    f"Metadados da instalação inválidos: {metadata}"
+                )
+
+        evidence: list[str] = []
+        state = self.target / INSTALL_STATE
+        if lexists(state):
+            if not state.is_file() or state.is_symlink():
+                raise InstallerError(f"Estado da instalação inválido: {state}")
+            self.read_install_state_document(state)
+            evidence.append("state")
+
+        if self.cli_receipt_path() is not None:
+            evidence.append("cli")
+        if self.validate_nquake_pair()[0]:
+            evidence.append("nquake")
+        for component in self.metadata_component_ids():
+            if self.validate_component_pair(component)[0]:
+                evidence.append(f"component:{component}")
+        for spec in PLATFORMS.values():
+            for channel in ("stable", "nightly"):
+                if self.ezquake_receipt_path(spec, channel) is not None:
+                    evidence.append(f"client:{spec.key}:{channel}")
+        return tuple(evidence)
+
+    def require_managed_installation_identity(self, action: str) -> tuple[str, ...]:
+        evidence = self.managed_installation_identity()
+        if not evidence:
+            raise InstallerError(
+                f"A operação {action} recusou um destino sem identidade gerenciada "
+                f"x86QW validada: {self.target}"
+            )
+        return evidence
+
     def resolve_cache_root(self) -> Path:
         if self._cache_root is not None:
             root = self._cache_root.absolute()
@@ -1440,6 +1483,7 @@ class Installer:
     def cleanup_data(
         self, *, downloads: bool, personal_data: bool,
     ) -> tuple[int, int]:
+        self.require_managed_installation_identity("cleanup")
         cache_paths, personal_paths = self._runtime_cleanup_selection(
             downloads=downloads, personal_data=personal_data,
         )
@@ -1458,6 +1502,7 @@ class Installer:
         return len(cache_paths), len(personal_paths)
 
     def cleanup_runtime_data(self, *, downloads: bool, personal_data: bool) -> tuple[int, int]:
+        self.require_managed_installation_identity("cleanup")
         if not self.target.is_dir() or self.target.is_symlink():
             console.info(f"Nenhuma instalação local foi encontrada em {self.target}.")
             return 0, 0
@@ -6469,6 +6514,7 @@ class Installer:
             self.validate_component_pair(component)
 
     def uninstall(self) -> None:
+        self.require_managed_installation_identity("uninstall")
         metadata_names = [
             NQUAKE_INVENTORY, NQUAKE_RECEIPT,
             CLI_RECEIPT, LEGACY_CLI_RECEIPT, INSTALL_STATE,
@@ -6595,15 +6641,7 @@ class Installer:
         caches = self.owned_cache_roots(include_legacy=True)
         candidates: list[Path] = []
         if lexists(self.target):
-            identity = (
-                self.target / METADATA_DIR,
-                self.target / "x86qw.sh",
-                self.target / "x86qw.cmd",
-            )
-            if not any(lexists(path) for path in identity):
-                raise InstallerError(
-                    f"A remoção total recusou um diretório sem identidade x86QW: {self.target}"
-                )
+            self.require_managed_installation_identity("uninstall --purge")
             current = Path.cwd().resolve()
             if current == self.target or self.target in current.parents:
                 os.chdir(self.target.parent)
@@ -7793,6 +7831,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
     installer = Installer(project_root, options.target, online_only=options.online_only)
     operation_lock: session_control.InstallationLock | None = None
     recovery_confirmed = False
+    purge_completed = False
 
     def acquire_operation_lock() -> None:
         nonlocal operation_lock, recovery_confirmed
@@ -7820,6 +7859,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
     try:
         if options.action == "cleanup":
             installer.validate_target(options.action, purge=False)
+            installer.require_managed_installation_identity("cleanup")
             acquire_operation_lock()
             console.section("Limpeza segura")
             cache_count, personal_count = installer.cleanup_data(
@@ -7862,11 +7902,20 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                     )
                     console.success("Reparo concluído e validado.")
         elif options.action == "uninstall":
-            acquire_operation_lock()
             if options.purge:
                 console.section("Desinstalação completa")
-                installer.purge(preserve_operation_lock=True)
+                if lexists(installer.target):
+                    installer.require_managed_installation_identity(
+                        "uninstall --purge"
+                    )
+                    acquire_operation_lock()
+                    installer.purge(preserve_operation_lock=True)
+                else:
+                    installer.purge()
+                purge_completed = True
             else:
+                installer.require_managed_installation_identity("uninstall")
+                acquire_operation_lock()
                 console.section("Desinstalação")
                 installer.uninstall()
         elif options.action == "hub":
@@ -7941,7 +7990,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
                 lock_released = True
             except Exception as error:
                 cleanup_errors.append(f"lock da instalação: {error}")
-        if options.purge and lock_released and lexists(installer.target):
+        if purge_completed and lock_released and lexists(installer.target):
             try:
                 remove_empty_directories(installer.target / METADATA_DIR)
                 installer.target.rmdir()
