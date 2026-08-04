@@ -13,7 +13,9 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location("x86qw_menu_test", ROOT / "dist/installer/bin/menu.py")
+SPEC = importlib.util.spec_from_file_location(
+    "x86qw_menu_test", ROOT / "x86qw_runtime/ui/menu.py",
+)
 menu = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = menu
@@ -32,6 +34,40 @@ class MenuTests(unittest.TestCase):
             menu.MenuOption("duel", "Duel", "2 jogadores", "competitivo", aliases=("1on1",)),
             menu.MenuOption("race", "Race", "1+ jogadores", "rotas cronometradas"),
             menu.MenuOption("ctf", "Capture The Flag", "4+ jogadores", "duas bandeiras"),
+        )
+
+    def test_canonical_no_color_fallback_matches_the_golden_output(self):
+        canonical_spec = importlib.util.find_spec("x86qw_runtime.ui")
+        self.assertIsNotNone(
+            canonical_spec,
+            "the portable menu engine must be owned by x86qw_runtime.ui",
+        )
+        canonical = importlib.import_module("x86qw_runtime.ui.menu")
+        canonical.configure(no_color=True)
+        options = (
+            canonical.MenuOption(
+                "duel", "Duel", "2 jogadores", "competitivo", aliases=("1on1",),
+            ),
+            canonical.MenuOption("race", "Race", "1+ jogadores", "rotas cronometradas"),
+            canonical.MenuOption(
+                "ctf", "Capture The Flag", "4+ jogadores", "duas bandeiras",
+            ),
+        )
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            selected = canonical.select_one(
+                "Modo", options, interactive=False, input_fn=lambda _prompt: "1on1",
+                searchable=True,
+            )
+
+        self.assertEqual("duel", selected)
+        self.assertEqual(
+            "\nModo\n"
+            "  1) Duel (padrão)    | 2 jogadores  < competitivo\n"
+            "  2) Race             | 1+ jogadores < rotas cronometradas\n"
+            "  3) Capture The Flag | 4+ jogadores < duas bandeiras\n",
+            output.getvalue(),
         )
 
     def test_fallback_accepts_alias_and_aligns_details(self):

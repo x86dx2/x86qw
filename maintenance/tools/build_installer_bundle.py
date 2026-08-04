@@ -62,6 +62,8 @@ ZIPAPP_FILES = (
     ("dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "_x86qw/ktx-frogbot-names.json"),
     ("x86qw_runtime/io/downloader.py", "x86qw_runtime/io/downloader.py"),
     ("x86qw_runtime/__init__.py", "x86qw_runtime/__init__.py"),
+    ("x86qw_runtime/ui/__init__.py", "x86qw_runtime/ui/__init__.py"),
+    ("x86qw_runtime/ui/menu.py", "x86qw_runtime/ui/menu.py"),
     ("x86qw_runtime/catalogs.py", "x86qw_runtime/catalogs.py"),
     ("x86qw_runtime/errors.py", "x86qw_runtime/errors.py"),
     ("x86qw_runtime/migrations.py", "x86qw_runtime/migrations.py"),

@@ -31,7 +31,7 @@ POPEN_TYPE = subprocess.Popen
 core = importlib.import_module("manager")
 gameplay = importlib.import_module("gameplay")
 session_control = importlib.import_module("session_control")
-navigation = importlib.import_module("menu")
+from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (
     DEFAULT_ARCHIVE_LIMITS,

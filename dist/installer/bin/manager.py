@@ -49,7 +49,7 @@ except python_runtime.UnsupportedPythonError as error:
     raise SystemExit(2)
 
 session_control = importlib.import_module("session_control")
-navigation = importlib.import_module("menu")
+from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (
     ArchiveError,

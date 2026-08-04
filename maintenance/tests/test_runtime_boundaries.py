@@ -20,6 +20,53 @@ if str(INSTALLER_BIN) not in sys.path:
     sys.path.insert(0, str(INSTALLER_BIN))
 
 
+class RuntimeMenuBoundaryTests(unittest.TestCase):
+    def test_entrypoints_share_the_canonical_menu_module(self) -> None:
+        """Every interactive entrypoint must use one menu state and exception set."""
+
+        canonical = importlib.import_module("x86qw_runtime.ui.menu")
+
+        for module_name in ("manager", "gameplay", "services"):
+            with self.subTest(module=module_name):
+                entrypoint = importlib.import_module(module_name)
+                self.assertIs(entrypoint.navigation, canonical)
+
+    def test_legacy_menu_facade_preserves_public_symbol_identities(self) -> None:
+        """Legacy imports must catch the same exceptions raised by the runtime UI."""
+
+        legacy_spec = importlib.util.find_spec("menu")
+        self.assertIsNotNone(
+            legacy_spec,
+            "dist/installer/bin/menu.py must remain as a compatibility facade",
+        )
+        canonical = importlib.import_module("x86qw_runtime.ui.menu")
+        legacy = importlib.import_module("menu")
+
+        for name in (
+            "MenuCancelled",
+            "MenuExit",
+            "MenuOption",
+            "configure",
+            "confirm",
+            "read_key",
+            "select_many",
+            "select_one",
+            "supports_navigation",
+        ):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(legacy, name), getattr(canonical, name))
+
+    def test_installed_zipapp_contains_canonical_ui_and_the_legacy_facade(self) -> None:
+        """The installed CLI must ship both its canonical import and compatibility path."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/ui/__init__.py", names)
+        self.assertIn("x86qw_runtime/ui/menu.py", names)
+        self.assertIn("menu.py", names)
+
+
 class RuntimeDownloaderBoundaryTests(unittest.TestCase):
     def test_maintenance_downloader_is_the_runtime_compatibility_module(self) -> None:
         """A second downloader implementation must not survive under maintenance."""

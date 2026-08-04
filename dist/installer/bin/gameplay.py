@@ -26,7 +26,7 @@ from pathlib import Path, PurePosixPath
 sys.dont_write_bytecode = True
 
 core = importlib.import_module("manager")
-navigation = importlib.import_module("menu")
+from x86qw_runtime.ui import menu as navigation
 from x86qw_runtime.catalogs import games_by_id, load_games
 from x86qw_runtime.io.archive import (
     ArchiveError,
