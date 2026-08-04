@@ -13,7 +13,7 @@
   [![Release](https://img.shields.io/github/v/release/x86dx2/x86qw?display_name=tag&sort=semver&style=for-the-badge&label=release&color=ef6a57)](https://github.com/x86dx2/x86qw/releases/latest)
   [![Quality gate](https://img.shields.io/github/actions/workflow/status/x86dx2/x86qw/validate.yml?branch=main&style=for-the-badge&label=quality%20gate&color=4767ff)](https://github.com/x86dx2/x86qw/actions/workflows/validate.yml)
   [![Portal](https://img.shields.io/website?url=https%3A%2F%2Fx86qw.x86.com.br%2F&style=for-the-badge&label=portal&up_message=online&down_message=offline&color=28a890)](https://x86qw.x86.com.br/)
-  [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-ready-181b2a?style=for-the-badge)](#compatibilidade)
+  [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-catalogued-181b2a?style=for-the-badge)](#compatibilidade)
 
   [**Instalar**](#instalação) · [Explorar](#o-que-vem-no-x86qw) · [Operar](#uma-cli-toda-a-arena) · [Arquitetura](#arquitetura) · [Contribuir](#contribuindo)
 </div>
@@ -275,7 +275,7 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 | Componente | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
-| ezQuake stable + nightly | Universal | x86-64 | x64 |
+| ezQuake stable + nightly | Universal · condicional | x86-64 | x64 |
 | MVDSV | Apple Silicon | amd64 | x64 |
 | QTV | Apple Silicon | amd64 | x64 |
 | QWFWD | Apple Silicon | amd64 | x64 |
@@ -283,6 +283,13 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 > [!NOTE]
 > A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+
+No código corretivo ainda não publicado, o stable macOS preserva o bundle
+upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso
+remove a re-assinatura ad hoc feita pelo x86QW, mas não torna o artefato
+Developer ID ou notarizado. Stable e nightly macOS permanecem condicionais até
+os smokes nativos do candidato exato. A release pública `0.7.1` continua
+imutável; consulte o [ADR 0004](docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
 
 ## Desenvolvendo
 

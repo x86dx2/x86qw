@@ -162,6 +162,23 @@ class RuntimeCatalogTests(unittest.TestCase):
         runtime["runtime_path"]["linux-riscv64"] = platform["runtime_path"]
         self.validate(documents)
 
+    def test_runtime_support_contract_accepts_conditional_but_rejects_unknown_claims(self):
+        documents = copy.deepcopy(self.inventory)
+        stable = runtimes_by_id(documents["runtimes"])["ezquake-stable"]
+        macos = next(
+            platform for platform in stable["platforms"]
+            if platform["system"] == "macos"
+        )
+        macos["support"] = "conditional"
+        try:
+            self.validate(documents)
+        except ValueError as error:
+            self.fail(str(error))
+
+        macos["support"] = "complete"
+        with self.assertRaisesRegex(ValueError, "support"):
+            self.validate(documents)
+
     def test_installer_zipapp_contains_only_runtime_projections(self):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("0.1.25"))) as archive:
             names = set(archive.namelist())

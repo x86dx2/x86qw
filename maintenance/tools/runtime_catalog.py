@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VARIANT = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
+PLATFORM_SUPPORT_STATES = frozenset({"supported", "conditional"})
 REQUIRED_RUNTIME_FIELDS = frozenset({
     "id", "label", "kind", "protocols", "capabilities", "component", "channels",
     "platforms", "architectures", "executable", "runtime_path", "configuration",
@@ -487,7 +488,10 @@ def validate_inventory(
             if system not in systems or architecture not in architectures or platform.get("format") not in executable_formats:
                 raise ValueError(f"runtime platform uses an unknown value: {identifier}/{variant}")
             declared_architectures.add(str(architecture))
-            if platform.get("support") != "supported" or not isinstance(platform.get("test_required"), bool):
+            if (
+                platform.get("support") not in PLATFORM_SUPPORT_STATES
+                or not isinstance(platform.get("test_required"), bool)
+            ):
                 raise ValueError(f"runtime platform support is not explicit: {identifier}/{variant}")
             for field in ("executable", "runtime_path"):
                 _safe_path(platform.get(field), f"runtime {field}")
