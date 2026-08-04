@@ -3204,6 +3204,36 @@ class InstallerTests(unittest.TestCase):
                             )
             self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
 
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_keeps_permission_and_state_inverses_through_final_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "mvdsv"
+            runtime.write_bytes(b"runtime\n")
+            runtime.chmod(0o600)
+            with mock.patch.object(installer, "installed_components", return_value=[]):
+                installer.write_install_state("none", [], known=[])
+            state_path = target / install_qw.INSTALL_STATE
+            original_state = state_path.read_bytes()
+            assessment = install_qw.RepairAssessment(
+                (), False, (runtime,), False, (), (),
+            )
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(
+                    installer, "verify_installation",
+                    side_effect=install_qw.InstallerError(
+                        "simulated final verification failure"
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        install_qw.InstallerError, "verification failure",
+                    ):
+                        installer.repair(
+                            dry_run=False, plan_rows=[], allow_download=False,
+                        )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+            self.assertEqual(original_state, state_path.read_bytes())
+
     def test_offline_macos_nightly_preparation_repair_completes_without_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

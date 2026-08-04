@@ -6043,7 +6043,7 @@ class Installer:
                 known=list(state["known_components"]), capabilities=list(state["capabilities"]),
                 mutation_results=mutation_results,
             )
-        self.verify_installation()
+            self.verify_installation()
         return True
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
@@ -6729,9 +6729,9 @@ class Installer:
                     capabilities=list(state["capabilities"]),
                     mutation_results=mutation_results,
                 )
-        if not dry_run and changed and not profile_upgrade:
-            console.section("Verificação final")
-            self.verify_installation()
+            if not dry_run and changed and not profile_upgrade:
+                console.section("Verificação final")
+                self.verify_installation()
         if not dry_run and changed and not profile_upgrade:
             console.success("Conteúdo instalado atualizado e validado.")
         return changed
@@ -6786,9 +6786,9 @@ class Installer:
                     capabilities=list(state["capabilities"]),
                     mutation_results=component_results,
                 )
-        if not dry_run and changed:
-            console.section("Verificação final do perfil")
-            self.verify_installation()
+            if not dry_run and changed:
+                console.section("Verificação final do perfil")
+                self.verify_installation()
         if not dry_run and changed:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
         return changed
