@@ -325,6 +325,65 @@ class RuntimeSupervisorOwnershipTests(unittest.TestCase):
             with self.subTest(symbol=name):
                 self.assertIs(getattr(services, name), getattr(supervisor, name))
 
+    def test_services_reexports_the_runtime_session_contract(self) -> None:
+        """Journal schema and managed cleanup must have one canonical owner."""
+
+        services = importlib.import_module("services")
+        sessions = importlib.import_module("x86qw_runtime.supervisor.sessions")
+        managed = importlib.import_module("x86qw_runtime.io.managed_files")
+
+        for name in (
+            "SessionJournal",
+            "load_session_journal",
+            "journal_controller_probe",
+            "journal_process_probe",
+            "session_journal_paths",
+            "assert_recovery_processes_confirmable",
+        ):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(services, name), getattr(sessions, name))
+        for name in ("MaterializedFile", "MaterializedDirectory"):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(services, name), getattr(managed, name))
+
+    def test_runtime_session_recovery_does_not_import_service_entrypoint(self) -> None:
+        """A maintenance recovery must remain usable without services.py."""
+
+        script = """
+import builtins
+import tempfile
+from pathlib import Path
+
+real_import = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name == 'services' or name.startswith('services.'):
+        raise AssertionError('runtime imported services')
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+
+from x86qw_runtime.supervisor.sessions import (
+    SessionJournal, load_session_journal, recover_sessions,
+)
+from x86qw_runtime.ui.console import Console
+with tempfile.TemporaryDirectory() as temporary:
+    target = Path(temporary) / 'quake-world'
+    target.mkdir()
+    journal = SessionJournal(target)
+    recover_sessions(target, reporter=Console())
+    assert load_session_journal(journal.path)['status'] == 'clean'
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=10,
+            env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_installed_zipapp_contains_and_executes_the_runtime_supervisor(self) -> None:
         """Service commands must use the canonical supervisor in the public artifact."""
 
@@ -332,6 +391,8 @@ class RuntimeSupervisorOwnershipTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(payload)) as application:
             names = set(application.namelist())
         self.assertIn("x86qw_runtime/supervisor/core.py", names)
+        self.assertIn("x86qw_runtime/supervisor/sessions.py", names)
+        self.assertIn("x86qw_runtime/io/managed_files.py", names)
         self.assertIn("x86qw_runtime/io/paths.py", names)
         self.assertIn("x86qw_runtime/platform/locking.py", names)
         self.assertIn("x86qw_runtime/ui/arguments.py", names)

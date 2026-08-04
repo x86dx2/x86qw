@@ -184,6 +184,25 @@ class RuntimeArchitectureTests(unittest.TestCase):
         }
         self.assertEqual({}, {name: values for name, values in violations.items() if values})
 
+    def test_maintenance_recovery_does_not_load_service_entrypoint(self) -> None:
+        """Mutating manager actions use the runtime journal boundary directly."""
+
+        manager = ast.parse(
+            ENTRYPOINTS["manager"].read_text("utf-8"),
+            filename=str(ENTRYPOINTS["manager"]),
+        )
+        execute = next(
+            node for node in manager.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "execute_manager_action"
+        )
+        calls = {
+            node.func.id
+            for node in ast.walk(execute)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        self.assertNotIn("load_services_module", calls)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1927,6 +1927,33 @@ class InstallerTests(unittest.TestCase):
         final_cli.handoff_cli_update.assert_not_called()
         operation_lock.release.assert_called_once()
 
+    def test_maintenance_recovery_does_not_load_service_or_gameplay_entrypoints(self):
+        """Maintenance must recover journals through the canonical runtime boundary."""
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            installer = mock.Mock()
+            installer.target = target
+            installer.cleanup_cache.return_value = None
+            installer.cleanup_runtime_data.return_value = (0, 0)
+            operation_lock = mock.Mock()
+            with mock.patch.object(install_qw, "Installer", return_value=installer):
+                with mock.patch.object(
+                    install_qw.session_control.InstallationLock,
+                    "acquire", return_value=operation_lock,
+                ):
+                    with mock.patch.object(
+                        install_qw,
+                        "load_services_module",
+                        side_effect=AssertionError(
+                            "manutenção carregou o entrypoint de serviços"
+                        ),
+                    ):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            self.assertEqual(0, install_qw.main(["cleanup", str(target)]))
+            operation_lock.confirm_recovery.assert_called_once_with()
+            operation_lock.release.assert_called_once_with(restore_reclaimed=False)
+
     def test_update_shows_homebrew_style_plan_and_requires_confirmation(self):
         target = Path("/tmp/x86qw-confirmation-test")
         confirm = install_qw.Installer.confirm_update_plan

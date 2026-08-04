@@ -19,8 +19,17 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
+import gameplay  # noqa: E402
+import manager  # noqa: E402
 import services  # noqa: E402
 from x86qw_runtime.io import atomic as atomic_io  # noqa: E402
+from x86qw_runtime.io import managed_files  # noqa: E402
+from x86qw_runtime.supervisor import sessions as runtime_sessions  # noqa: E402
+from x86qw_runtime.supervisor import core as supervisor_core  # noqa: E402
+
+services.configure_context(
+    manager.service_composition_context(services, gameplay),
+)
 
 
 class FakeWindowsFileApi:
@@ -811,7 +820,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 package, destination_root, "teste",
             )
             destination = destination_root / "configs/server.cfg"
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             replaced = False
 
             def replace_after_hash(descriptor, **kwargs):
@@ -825,7 +834,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), mock.patch.object(
-                services, "_hash_open_file", side_effect=replace_after_hash,
+                managed_files, "_hash_open_file", side_effect=replace_after_hash,
             ):
                 services.cleanup_dedicated_ktx(materialized)
 
@@ -847,7 +856,7 @@ class ServiceHardeningTests(unittest.TestCase):
             )
             destination = destination_root / "configs/server.cfg"
             original_identity = destination.stat().st_ino
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             calls = 0
 
             def modify_same_inode_after_hash(descriptor, **kwargs):
@@ -861,7 +870,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output), mock.patch.object(
-                services, "_hash_open_file", side_effect=modify_same_inode_after_hash,
+                managed_files, "_hash_open_file", side_effect=modify_same_inode_after_hash,
             ):
                 services.cleanup_dedicated_ktx(materialized)
 
@@ -980,7 +989,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             output = io.StringIO()
             with contextlib.redirect_stdout(output), mock.patch.object(
-                services, "_get_posix_rename_api", return_value=None,
+                managed_files, "_get_posix_rename_api", return_value=None,
             ):
                 services.cleanup_dedicated_ktx(materialized)
             self.assertEqual(b"managed", destination.read_bytes())
@@ -1025,7 +1034,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = FakeWindowsFileApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api), mock.patch.object(
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api), mock.patch.object(
                 services,
                 "_fallback_materialize_member",
                 side_effect=AssertionError("fallback hardlink não deve ser usado"),
@@ -1052,7 +1061,7 @@ class ServiceHardeningTests(unittest.TestCase):
             journal = mock.Mock()
             journal.record_materialized.side_effect = RuntimeError("journal indisponível")
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste", journal,
@@ -1078,7 +1087,7 @@ class ServiceHardeningTests(unittest.TestCase):
 
             journal.record_materialized.side_effect = modify_then_fail
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "journal indisponível"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste", journal,
@@ -1100,7 +1109,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = AppearingDestinationApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(services.InstallerError, "surgiu durante"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste",
@@ -1134,7 +1143,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = ModifiedBeforeConfirmationApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 with self.assertRaisesRegex(
                     services.InstallerError, "alterado foi preservado",
                 ):
@@ -1153,7 +1162,7 @@ class ServiceHardeningTests(unittest.TestCase):
             destination = destination_root / "configs/server.cfg"
             api = FakeWindowsFileApi()
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", api):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", api):
                 materialized = services.materialize_dedicated_pk3(
                     package, destination_root, "teste",
                 )
@@ -1179,7 +1188,7 @@ class ServiceHardeningTests(unittest.TestCase):
             except OSError as error:
                 self.skipTest(f"symlink de diretório indisponível: {error}")
 
-            with mock.patch.object(services, "_WINDOWS_FILE_API", FakeWindowsFileApi()):
+            with mock.patch.object(managed_files, "_WINDOWS_FILE_API", FakeWindowsFileApi()):
                 with self.assertRaisesRegex(services.InstallerError, "Diretório inseguro"):
                     services.materialize_dedicated_pk3(
                         package, destination_root, "teste",
@@ -1696,7 +1705,7 @@ class ServiceHardeningTests(unittest.TestCase):
             config = services.temporary_config(
                 config_dir, "session-", ["hostname local"], journal, sensitive=False,
             )
-            real_hash = services._hash_open_file
+            real_hash = managed_files._hash_open_file
             replaced = False
 
             def replace_after_hash(descriptor, **kwargs):
@@ -1709,7 +1718,7 @@ class ServiceHardeningTests(unittest.TestCase):
                 return digest
 
             with mock.patch.object(
-                services, "_hash_open_file", side_effect=replace_after_hash,
+                managed_files, "_hash_open_file", side_effect=replace_after_hash,
             ):
                 services.recover_sessions(target)
 
@@ -2585,8 +2594,12 @@ with session_control._installation_acquisition_mutex(target, sessions):
             mismatch = services.ProcessProbe(
                 "identity_mismatch", services.ProcessIdentity(12345, "new-token", "/other/process"),
             )
-            with mock.patch.object(services, "probe_expected_process", return_value=mismatch):
-                with mock.patch.object(services, "signal_recorded_process") as terminate:
+            with mock.patch.object(
+                runtime_sessions.session_control,
+                "probe_expected_process",
+                return_value=mismatch,
+            ):
+                with mock.patch.object(runtime_sessions, "signal_recorded_process") as terminate:
                     services.recover_sessions(target)
             terminate.assert_not_called()
             recovered = json.loads(journal.path.read_text(encoding="utf-8"))
@@ -2608,7 +2621,9 @@ with session_control._installation_acquisition_mutex(target, sessions):
             processes.append({"label": "QTV", "pid": 12345})
             journal._write()
             with mock.patch.object(
-                services, "process_identity", return_value=services.ProcessProbe("inconclusive"),
+                runtime_sessions.session_control,
+                "process_identity",
+                return_value=services.ProcessProbe("inconclusive"),
             ):
                 with self.assertRaisesRegex(services.InstallerError, "Não foi possível confirmar"):
                     services.recover_sessions(target)
@@ -2699,7 +2714,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=5, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
         ), mock.patch.object(services.subprocess, "Popen", return_value=process):
             with self.assertRaisesRegex(services.InstallerError, "associar PID 4313"):
                 job.start_process(("fixture",), Path("C:/x86qw"))
@@ -2755,7 +2770,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.reporter = SimpleNamespace(warning=warnings.append)
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=5, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
         ), mock.patch.object(services.subprocess, "Popen", return_value=process):
             with self.assertRaisesRegex(
                 services.InstallerError, "reversão segura também falhou",
@@ -2786,7 +2801,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=6, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=6, create=True,
         ):
             with self.assertRaisesRegex(services.InstallerError, "fechar o Job Object"):
                 job.close()
@@ -2816,7 +2831,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
         job.kernel32 = Kernel()
 
         with mock.patch.object(
-            services.ctypes, "get_last_error", return_value=5, create=True,
+            supervisor_core.ctypes, "get_last_error", return_value=5, create=True,
         ), self.assertRaisesRegex(
             services.InstallerError, "encerramento explícito da árvore falhou",
         ):

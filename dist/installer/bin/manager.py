@@ -7027,8 +7027,10 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             installer.target, options.action, "maintenance",
         )
         try:
-            services = load_services_module()
-            services.recover_sessions(installer.target)
+            session_recovery = importlib.import_module(
+                "x86qw_runtime.supervisor.sessions"
+            )
+            session_recovery.recover_sessions(installer.target, reporter=console)
             operation_lock.confirm_recovery()
             recovery_confirmed = True
         except Exception:
