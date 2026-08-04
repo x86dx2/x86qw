@@ -4343,6 +4343,44 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(current.exists())
             self.assertFalse(legacy.exists())
 
+    def test_cleanup_restores_owned_cache_when_runtime_cleanup_domain_fails(self):
+        """Native cache and installed data must share one cleanup transaction."""
+
+        self.assertTrue(
+            hasattr(install_qw.Installer, "cleanup_data"),
+            "cleanup needs one cross-filesystem transaction entrypoint",
+        )
+        quarantine = importlib.import_module("x86qw_runtime.io.quarantine")
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            installer.prepare_cache()
+            cached = cache / "artifact"
+            cached.write_bytes(b"cache")
+            runtime_cache = target / "ezquake/temp/download"
+            runtime_cache.parent.mkdir(parents=True)
+            runtime_cache.write_bytes(b"runtime")
+
+            apply_quarantine = quarantine.apply_quarantine_removal
+            attempts = 0
+
+            def fail_second(path):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated runtime cleanup failure")
+                return apply_quarantine(path)
+
+            with mock.patch.object(
+                quarantine,
+                "apply_quarantine_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.cleanup_data(downloads=False, personal_data=False)
+
+            self.assertEqual(cached.read_bytes(), b"cache")
+            self.assertEqual(runtime_cache.read_bytes(), b"runtime")
+
     def test_zip_traversal_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

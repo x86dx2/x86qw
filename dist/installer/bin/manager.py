@@ -1267,8 +1267,14 @@ class Installer:
         if not roots:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
             return
+        result = self._quarantine_paths_transaction(
+            roots,
+            identifier="cleanup-native-cache",
+            summary="Recolher caches nativos gerenciados",
+        )
+        if result is not None:
+            finalize_mutation(result)
         for root in roots:
-            remove_path(root)
             console.success(f"Cache removido: {root}")
 
     def managed_runtime_paths(self) -> set[str]:
@@ -1331,10 +1337,51 @@ class Installer:
                 f"{summary} falhou; a instalação anterior foi restaurada."
             ) from error
 
-    def cleanup_runtime_data(self, *, downloads: bool, personal_data: bool) -> tuple[int, int]:
+    def _quarantine_paths_transaction(
+        self,
+        paths: Iterable[Path],
+        *,
+        identifier: str,
+        summary: str,
+    ) -> MutationResult | None:
+        selected = self._minimal_removal_paths(paths)
+        if not selected:
+            return None
+        plan = MutationPlan(
+            identifier=identifier,
+            summary=summary,
+            steps=tuple(
+                MutationStep(
+                    key=f"domain-{index}",
+                    description=f"Recolher {path}",
+                    observe=lambda path=path: (
+                        quarantine.observe_quarantine_target(path)
+                    ),
+                    apply=lambda path=path: (
+                        quarantine.apply_quarantine_removal(path)
+                    ),
+                    rollback=quarantine.rollback_quarantine,
+                    finalize=quarantine.finalize_quarantine,
+                )
+                for index, path in enumerate(selected, 1)
+            ),
+        )
+        try:
+            return execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                f"{summary} falhou; os domínios anteriores foram restaurados."
+            ) from error
+
+    def _runtime_cleanup_selection(
+        self, *, downloads: bool, personal_data: bool,
+    ) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
         if not self.target.is_dir() or self.target.is_symlink():
-            console.info(f"Nenhuma instalação local foi encontrada em {self.target}.")
-            return 0, 0
+            return (), ()
         cache_paths: list[Path] = []
         personal_paths: list[Path] = []
 
@@ -1369,13 +1416,12 @@ class Installer:
                         cache_paths.append(artifact)
 
         if personal_data:
-            personal = (
+            for relative in (
                 "ezquake/.ezquake_history",
                 "qw/qconsole.log",
                 "logs",
                 "td2/demos",
-            )
-            for relative in personal:
+            ):
                 path = self.target / relative
                 if lexists(path):
                     personal_paths.append(path)
@@ -1384,7 +1430,39 @@ class Installer:
         selected_cache = tuple(
             path
             for path in self._minimal_removal_paths(cache_paths)
-            if not any(parent == path or parent in path.parents for parent in selected_personal)
+            if not any(
+                parent == path or parent in path.parents
+                for parent in selected_personal
+            )
+        )
+        return selected_cache, selected_personal
+
+    def cleanup_data(
+        self, *, downloads: bool, personal_data: bool,
+    ) -> tuple[int, int]:
+        cache_paths, personal_paths = self._runtime_cleanup_selection(
+            downloads=downloads, personal_data=personal_data,
+        )
+        native_caches = self.owned_cache_roots(include_legacy=True)
+        result = self._quarantine_paths_transaction(
+            (*native_caches, *cache_paths, *personal_paths),
+            identifier="cleanup-all-data",
+            summary="Recolher caches e dados locais selecionados",
+        )
+        if result is not None:
+            finalize_mutation(result)
+        for root in native_caches:
+            console.success(f"Cache removido: {root}")
+        if not native_caches:
+            console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
+        return len(cache_paths), len(personal_paths)
+
+    def cleanup_runtime_data(self, *, downloads: bool, personal_data: bool) -> tuple[int, int]:
+        if not self.target.is_dir() or self.target.is_symlink():
+            console.info(f"Nenhuma instalação local foi encontrada em {self.target}.")
+            return 0, 0
+        selected_cache, selected_personal = self._runtime_cleanup_selection(
+            downloads=downloads, personal_data=personal_data,
         )
         selected = (*selected_cache, *selected_personal)
         if selected:
@@ -7656,8 +7734,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             installer.validate_target(options.action, purge=False)
             acquire_operation_lock()
             console.section("Limpeza segura")
-            installer.cleanup_cache()
-            cache_count, personal_count = installer.cleanup_runtime_data(
+            cache_count, personal_count = installer.cleanup_data(
                 downloads=options.downloads,
                 personal_data=options.personal_data,
             )
