@@ -378,7 +378,10 @@ while not Path(sys.argv[4]).exists():
                 cwd=directory,
             )
             handle.release(timeout=5)
-            self.wait_for(child_pid_path.exists)
+            self.wait_for(
+                lambda: child_pid_path.is_file()
+                and bool(child_pid_path.read_text(encoding="ascii").strip())
+            )
             child_pid = int(child_pid_path.read_text(encoding="ascii"))
             self.assertEqual(0, handle.wait(timeout=5))
             self.assertTrue(self.process_exists(child_pid))
