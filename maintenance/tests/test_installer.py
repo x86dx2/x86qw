@@ -849,7 +849,9 @@ class InstallerTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(
                     installer, "_create_stage", side_effect=create_stage,
                 ))
-                stack.enter_context(mock.patch.object(installer, "provision_install_target"))
+                stack.enter_context(mock.patch.object(
+                    installer, "provision_install_target", return_value=None,
+                ))
                 stack.enter_context(mock.patch.object(installer, "check_paks"))
                 stack.enter_context(mock.patch.object(installer, "prepare_cache"))
                 stack.enter_context(mock.patch.object(
@@ -1369,7 +1371,9 @@ class InstallerTests(unittest.TestCase):
                     mock.patch.object(installer, "check_runtime_destination_ownership"),
                     mock.patch.object(installer, "prepare_install_target"),
                     mock.patch.object(installer, "reject_target_symlinks"),
-                    mock.patch.object(installer, "provision_install_target"),
+                    mock.patch.object(
+                        installer, "provision_install_target", return_value=None,
+                    ),
                     mock.patch.object(installer, "check_paks"),
                     mock.patch.object(installer, "prepare_cache"),
                     mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
@@ -1407,6 +1411,64 @@ class InstallerTests(unittest.TestCase):
                     self.assertFalse((target / install_qw.INSTALL_STATE).exists())
                 installer.cleanup_stage()
                 installer.stage = None
+
+    def test_install_rolls_back_new_core_paks_when_later_preparation_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "id1/pak-transaction-marker"
+            marker.parent.mkdir(parents=True)
+            for name in ("pak0.pak", "pak1.pak"):
+                (marker.parent / name).write_bytes(name.encode("ascii"))
+
+            def provision():
+                def apply():
+                    marker.write_bytes(b"installed")
+                    return marker
+
+                def rollback(path):
+                    path.unlink()
+
+                plan = install_qw.MutationPlan(
+                    identifier="test:core-pak-parent",
+                    summary="retain core PAK inverse",
+                    steps=(install_qw.MutationStep(
+                        key="paks", description="publish PAK marker",
+                        observe=lambda: marker.exists(),
+                        apply=apply, rollback=rollback,
+                    ),),
+                )
+                return install_qw.execute_mutation(
+                    install_qw.prepare_mutation(plan)
+                )
+
+            patches = (
+                mock.patch.object(installer, "select_platform"),
+                mock.patch.object(installer, "choose_channel"),
+                mock.patch.object(installer, "choose_release"),
+                mock.patch.object(
+                    installer, "macos_game_directory_reset_required", return_value=False,
+                ),
+                mock.patch.object(installer, "ensure_macos_ezquake_closed"),
+                mock.patch.object(installer, "check_runtime_destination_ownership"),
+                mock.patch.object(installer, "prepare_install_target"),
+                mock.patch.object(installer, "reject_target_symlinks"),
+                mock.patch.object(
+                    installer, "provision_install_target", side_effect=provision,
+                ),
+                mock.patch.object(installer, "check_paks"),
+                mock.patch.object(
+                    installer, "prepare_cache",
+                    side_effect=install_qw.InstallerError("simulated cache failure"),
+                ),
+            )
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                for patcher in patches:
+                    stack.enter_context(patcher)
+                with self.assertRaisesRegex(install_qw.InstallerError, "cache failure"):
+                    installer.install()
+            self.assertFalse(marker.exists())
+            installer.cleanup_stage()
 
     def test_legacy_stable_update_commits_the_unmodified_upstream_bundle(self):
         with tempfile.TemporaryDirectory() as temporary:

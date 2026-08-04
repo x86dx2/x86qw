@@ -5259,7 +5259,7 @@ class Installer:
                 self.rollback_component_transactions(results, error)
             raise
 
-    def install_component_phase(self) -> None:
+    def install_component_phase(self) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
         selected = self.choose_components()
@@ -5270,6 +5270,7 @@ class Installer:
             if not isinstance(error, PersistenceError) or not error.committed:
                 self.rollback_component_transactions(results, error)
             raise
+        return results
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
@@ -6322,38 +6323,52 @@ class Installer:
         self.prepare_install_target()
         self.reject_target_symlinks()
         self._create_stage(".quake-install.")
-        self.provision_install_target()
-        self.check_paks()
-        pak0_before = file_hash(self.target / "id1/pak0.pak")
-        pak1_before = file_hash(self.target / "id1/pak1.pak")
-        self.prepare_cache()
-        archive = self.ensure_archive()
-        assert self.spec is not None
-        console.info(f"Preparando ezQuake {self.spec.label} {self.channel} {self.selected_version}...")
-        prepared = self.prepare_runtime(archive)
-        staged_receipt = self.stage / "ezquake-receipt"
-        self.write_ezquake_receipt(staged_receipt)
-        self.ensure_metadata_directory()
-        runtime_result = self.commit_runtime(prepared, staged_receipt)
+        installation_results: list[MutationResult] = []
         try:
+            pak_result = self.provision_install_target()
+            if pak_result is not None:
+                installation_results.append(pak_result)
+            self.check_paks()
+            pak0_before = file_hash(self.target / "id1/pak0.pak")
+            pak1_before = file_hash(self.target / "id1/pak1.pak")
+            self.prepare_cache()
+            archive = self.ensure_archive()
+            assert self.spec is not None and self.stage is not None
+            console.info(
+                f"Preparando ezQuake {self.spec.label} {self.channel} "
+                f"{self.selected_version}..."
+            )
+            prepared = self.prepare_runtime(archive)
+            staged_receipt = self.stage / "ezquake-receipt"
+            self.write_ezquake_receipt(staged_receipt)
+            self.ensure_metadata_directory()
+            installation_results.append(
+                self.commit_runtime(prepared, staged_receipt)
+            )
             if reset_macos_game_directory:
                 self.reset_macos_game_directory()
             console.success("ezQuake instalado e recibo registrado.")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
             if self.confirm_components():
-                self.install_component_phase()
+                installation_results.extend(self.install_component_phase())
             else:
                 console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
                 self.write_install_state("none", [])
+            if (
+                file_hash(self.target / "id1/pak0.pak") != pak0_before
+                or file_hash(self.target / "id1/pak1.pak") != pak1_before
+            ):
+                raise InstallerError(
+                    "Um PAK registrado foi alterado durante a instalação; "
+                    "a operação foi interrompida."
+                )
+            console.section("Verificação final")
+            self.verify_installation()
         except BaseException as error:
             if not isinstance(error, PersistenceError) or not error.committed:
-                rollback_mutation(runtime_result)
+                self.rollback_component_transactions(installation_results, error)
             raise
-        if file_hash(self.target / "id1/pak0.pak") != pak0_before or file_hash(self.target / "id1/pak1.pak") != pak1_before:
-            raise InstallerError("Um PAK registrado foi alterado durante a instalação; a operação foi interrompida.")
-        console.section("Verificação final")
-        self.verify_installation()
         console.section("Resumo")
         print(f"  Sistema: {self.spec.label}")
         print(f"  Canal:   {self.channel}")
