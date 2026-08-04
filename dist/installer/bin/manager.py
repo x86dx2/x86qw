@@ -2962,13 +2962,48 @@ class Installer:
         custom = sorted(available - set(QW_PACKAGE_PRIORITY), key=str.casefold)
         return [*known, *custom]
 
-    def refresh_qw_package_order(self) -> None:
+    def _qw_package_order_is_current(self, packages: list[str]) -> bool:
+        present, entries, receipt = self.validate_component_pair("package-order")
+        if not present or receipt is None:
+            return False
+        payload = "".join(f"{name}\n" for name in packages).encode("utf-8")
+        order = self.target / "qw/pak.lst"
+        return (
+            dict(entries) == {"qw/pak.lst": hashlib.sha256(payload).hexdigest()}
+            and order.is_file()
+            and not order.is_symlink()
+            and order.read_bytes() == payload
+            and receipt["selection"] == "1"
+            and receipt["source"] == "x86QW deterministic PK3 order"
+        )
+
+    def refresh_qw_package_order(
+        self, *, mutation_results: list[MutationResult] | None = None,
+    ) -> tuple[MutationResult, ...]:
         packages = self.expected_qw_package_order()
+        created: list[MutationResult] = []
         if not packages:
             present, _, _ = self.validate_component_pair("package-order")
             if present:
-                self.remove_component("package-order")
-            return
+                owned_stage = self.stage is None
+                if owned_stage:
+                    self._create_stage(".quake-order-remove.")
+                cleanup = True
+                try:
+                    _, result = self.remove_component_transaction("package-order")
+                    created.append(result)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
+                except MutationRollbackError:
+                    cleanup = False
+                    raise
+                finally:
+                    if owned_stage and mutation_results is None and cleanup:
+                        self.cleanup_stage()
+                        self.stage = None
+            return tuple(created) if mutation_results is not None else ()
+        if self._qw_package_order_is_current(packages):
+            return ()
         previous_stage = self.stage
         previous_stage_identity = self._stage_identity
         previous_stage_created_roots = self._stage_created_roots
@@ -2976,6 +3011,7 @@ class Installer:
         if owned_stage:
             self._create_stage(".quake-order.")
         assert self.stage is not None
+        cleanup = True
         try:
             managed = self.stage / "package-order-managed"
             if lexists(managed):
@@ -2983,19 +3019,26 @@ class Installer:
             target = managed / "qw/pak.lst"
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("".join(f"{name}\n" for name in packages), encoding="utf-8")
-            count = self.install_component_overlay(
+            count, result = self.install_component_overlay_transaction(
                 "package-order", managed, "1", "x86QW deterministic PK3 order",
             )
+            created.append(result)
+            if mutation_results is not None:
+                mutation_results.append(result)
             console.detail(
                 f"Ordem determinística registrada para {len(packages)} PK3 em qw/pak.lst "
                 f"({file_count(count)})."
             )
+        except MutationRollbackError:
+            cleanup = False
+            raise
         finally:
-            if owned_stage:
+            if owned_stage and mutation_results is None and cleanup:
                 self.cleanup_stage()
                 self.stage = previous_stage
                 self._stage_identity = previous_stage_identity
                 self._stage_created_roots = previous_stage_created_roots
+        return tuple(created) if mutation_results is not None else ()
 
     def verify_qw_package_order(self) -> None:
         packages = self.expected_qw_package_order()
@@ -4526,8 +4569,8 @@ class Installer:
                     preset.parent.mkdir(parents=True, exist_ok=True)
                     preset.write_text(DEFAULT_PRESET, encoding="utf-8")
             self.migrate_saved_configs()
-            self.refresh_qw_package_order()
-            self.reconcile_play_support()
+            self.refresh_qw_package_order(mutation_results=results)
+            self.reconcile_play_support_transaction(mutation_results=results)
             return tuple(results)
         except BaseException as error:
             self.rollback_component_transactions(results, error)
@@ -4539,28 +4582,75 @@ class Installer:
             self.project_root, self.target, online_only=self.online_only,
         )
 
-    def reconcile_play_support(
+    def reconcile_play_support_transaction(
         self,
         *,
         dry_run: bool = False,
         plan_rows: list[UpdatePlanRow] | None = None,
-    ) -> bool:
+        mutation_results: list[MutationResult] | None = None,
+    ) -> tuple[bool, tuple[MutationResult, ...]]:
         player = self.play_support_player()
         games = player.available_local_games()
         issues = player.local_play_support_issues(games)
         if not issues:
-            return False
+            return False, ()
         if dry_run:
             if plan_rows is not None:
                 plan_rows.append(UpdatePlanRow(
                     "Gerado", "Suporte de execução dos mods",
                     "ausente ou divergente", "derivado dos componentes instalados", "Reparar",
                 ))
-            return True
-        player.ensure_local_play_support(games)
-        player.verify_local_play_support(games)
+            return True, ()
+        owned_stage = self.stage is None
+        if owned_stage:
+            self._create_stage(".quake-play-reconcile.")
+        assert self.stage is not None
+        player.stage = self.stage
+        player._stage_identity = self._stage_identity
+        player._stage_created_roots = self._stage_created_roots
+        player._stage_lease = self._stage_lease
+        local_results: list[MutationResult] = []
+        destination = mutation_results if mutation_results is not None else local_results
+        initial_result_count = len(destination)
+        cleanup = owned_stage and mutation_results is None
+        try:
+            player.ensure_local_play_support(
+                games, mutation_results=destination,
+            )
+            player.verify_local_play_support(games)
+        except BaseException as error:
+            if isinstance(error, MutationRollbackError):
+                cleanup = False
+            if mutation_results is None:
+                try:
+                    self.rollback_component_transactions(local_results, error)
+                except BaseException:
+                    cleanup = False
+                    raise
+            raise
+        finally:
+            if cleanup:
+                self.cleanup_stage()
+                self.stage = None
         console.success("Suporte de execução derivado foi reconciliado.")
-        return True
+        created = tuple(destination[initial_result_count:])
+        return True, created if mutation_results is not None else ()
+
+    def reconcile_play_support(
+        self,
+        *,
+        dry_run: bool = False,
+        plan_rows: list[UpdatePlanRow] | None = None,
+        mutation_results: list[MutationResult] | None = None,
+    ) -> bool:
+        """Compatibility wrapper for callers that only consume changed/no-op."""
+
+        changed, _ = self.reconcile_play_support_transaction(
+            dry_run=dry_run,
+            plan_rows=plan_rows,
+            mutation_results=mutation_results,
+        )
+        return changed
 
     def migrate_nquake_texture_limit(self) -> None:
         migrated = 0
@@ -4739,9 +4829,15 @@ class Installer:
             for identifier in selected:
                 removed = self.remove_component(identifier)
                 console.success(f"{self.components[identifier]['label']} removido ({file_count(removed)}).")
-            self.refresh_qw_package_order()
-            self.reconcile_play_support()
-            self.write_install_state("custom" if self.installed_components() else "none", self.installed_components())
+            with self.component_state_transaction() as mutation_results:
+                self.refresh_qw_package_order(mutation_results=mutation_results)
+                self.reconcile_play_support_transaction(
+                    mutation_results=mutation_results,
+                )
+                self.write_install_state(
+                    "custom" if self.installed_components() else "none",
+                    self.installed_components(),
+                )
             return
         selected = self.choose_components()
         self._create_stage(".quake-install.")
@@ -5412,9 +5508,11 @@ class Installer:
                     stage_prefix=".x86qw-repair.",
                 )
             elif assessment.support_invalid:
-                self.reconcile_play_support()
+                self.reconcile_play_support_transaction(
+                    mutation_results=mutation_results,
+                )
             if assessment.package_order_invalid:
-                self.refresh_qw_package_order()
+                self.refresh_qw_package_order(mutation_results=mutation_results)
             state = assessment.recovered_state or self.load_install_state(persist_migration=True)
             self.write_install_state(
                 str(state["profile"]), list(state["requested_components"]),
@@ -5975,9 +6073,11 @@ class Installer:
             elif not dry_run and not self.installed_components():
                 console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
 
-            changed = self.reconcile_play_support(
+            support_changed, _ = self.reconcile_play_support_transaction(
                 dry_run=dry_run, plan_rows=plan_rows,
-            ) or changed
+                mutation_results=mutation_results,
+            )
+            changed = support_changed or changed
 
             desired = self.desired_components(state)
             installed_or_planned = {

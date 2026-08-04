@@ -33,6 +33,7 @@ from x86qw_runtime.io.archive import (
 )
 from x86qw_runtime.io import private_fs
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.transaction import MutationResult, MutationRollbackError
 from x86qw_runtime.gameplay import (
     FROGBOT_ADD_WAIT_FRAMES,
     FrogbotIdentity,
@@ -1864,17 +1865,32 @@ class GameplayPlayerMixin:
                 "Execute update, upgrade ou repair antes de jogar ou hospedar."
             )
 
-    def ensure_local_play_support(self, games: list[LocalGameSpec]) -> None:
+    def ensure_local_play_support(
+        self,
+        games: list[LocalGameSpec],
+        *,
+        mutation_results: list[MutationResult] | None = None,
+    ) -> tuple[MutationResult, ...]:
         present, old_entries, _ = self.validate_component_pair("play-support")
-        if not games:
-            if present:
-                removed = self.remove_component("play-support")
-                console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
-            return
+        created: list[MutationResult] = []
         old = dict(old_entries) if present else {}
         previous_stage = self.stage
-        self.stage = Path(tempfile.mkdtemp(prefix=".quake-play.", dir=self.target))
+        previous_stage_identity = self._stage_identity
+        previous_stage_created_roots = self._stage_created_roots
+        owned_stage = previous_stage is None
+        if owned_stage:
+            self._create_stage(".quake-play.")
+        cleanup = mutation_results is None
         try:
+            if not games:
+                if present:
+                    removed, result = self.remove_component_transaction("play-support")
+                    created.append(result)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
+                    console.detail(f"Suporte a mods locais removido ({file_count(removed)}).")
+                return tuple(created) if mutation_results is not None else ()
+            assert self.stage is not None
             managed = self.stage / "managed"
             prepared = 0
             for relative, payload in self.expected_local_play_support(games).items():
@@ -1892,18 +1908,38 @@ class GameplayPlayerMixin:
                 candidate.write_bytes(payload)
                 prepared += 1
             if prepared:
-                count = self.install_component_overlay(
+                count, result = self.install_component_overlay_transaction(
                     "play-support", managed, PLAY_SUPPORT_VERSION, "x86QW local-play layer",
                 )
+                created.append(result)
+                if mutation_results is not None:
+                    mutation_results.append(result)
                 console.detail(f"Suporte a mods locais preparado ({file_count(count)}).")
             elif present:
-                removed = self.remove_component("play-support")
+                removed, result = self.remove_component_transaction("play-support")
+                created.append(result)
+                if mutation_results is not None:
+                    mutation_results.append(result)
                 console.detail(f"Suporte local antigo removido ({file_count(removed)}).")
             for game in games:
                 self.ensure_game_user_profile(game)
+            return tuple(created) if mutation_results is not None else ()
+        except BaseException as error:
+            if isinstance(error, MutationRollbackError):
+                cleanup = False
+            if mutation_results is None:
+                try:
+                    self.rollback_component_transactions(created, error)
+                except BaseException:
+                    cleanup = False
+                    raise
+            raise
         finally:
-            self.cleanup_stage()
-            self.stage = previous_stage
+            if owned_stage and cleanup:
+                self.cleanup_stage()
+                self.stage = previous_stage
+                self._stage_identity = previous_stage_identity
+                self._stage_created_roots = previous_stage_created_roots
 
     def ensure_game_user_profile(self, game: LocalGameSpec) -> None:
         destination = self.target.joinpath(*PurePosixPath(game.personal_config).parts)
