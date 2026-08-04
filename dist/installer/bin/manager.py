@@ -154,6 +154,12 @@ NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
 COMPONENT_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+MACOS_STABLE_BINARY_IDENTITIES = {
+    "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed": {
+        "upstream": "14633b5d4201e9460250ad236fde2e4ad579a6ddbaf81301830099d8cf004f33",
+        "x86qw-legacy": "e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+    },
+}
 HUB_SERVERS_API = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
 MAPS_RECEIPT = ".x86qw/components/maps/receipt"
 MAPS_INVENTORY = ".x86qw/components/maps/inventory"
@@ -796,6 +802,20 @@ class Installer:
             return
         self.clear_macos_game_directory()
 
+    def macos_game_directory_reset_required(self) -> bool:
+        if not self.is_native_macos_install():
+            return False
+        assert self.spec is not None
+        return not any(
+            lexists(self.target / relative)
+            for channel in ("stable", "nightly")
+            for relative in (
+                self.spec.runtime(channel),
+                self.spec.receipt(channel),
+                self.spec.legacy_receipt(channel),
+            )
+        )
+
     def clear_macos_game_directory(self) -> None:
         self.ensure_macos_ezquake_closed()
         for key in MACOS_DIRECTORY_KEYS:
@@ -839,7 +859,11 @@ class Installer:
             raise InstallerError(f"Info.plist inválido no bundle macOS: {app}") from error
         return metadata.get(MACOS_SAFE_AREA_KEY) is False
 
-    def prepare_macos_app(self, app: Path) -> bool:
+    def prepare_macos_nightly_app(self, app: Path) -> bool:
+        if self.channel != "nightly":
+            raise InstallerError(
+                "A preparação local do bundle macOS é permitida somente no canal nightly."
+            )
         if host_platform.system() != "Darwin":
             return False
         sandboxed = self.macos_app_is_sandboxed(app)
@@ -879,6 +903,33 @@ class Installer:
             host_platform.system() == "Darwin"
             and (self.macos_app_is_sandboxed(app) or not self.macos_app_uses_full_display(app))
         )
+
+    def macos_stable_has_legacy_x86qw_rewrite(
+        self, app: Path, artifact_sha256: str, binary_sha256: str,
+    ) -> bool:
+        identities = MACOS_STABLE_BINARY_IDENTITIES.get(artifact_sha256)
+        if (
+            identities is None
+            or binary_sha256 != identities["x86qw-legacy"]
+            or not self.macos_app_uses_full_display(app)
+        ):
+            return False
+        if host_platform.system() != "Darwin":
+            return True
+        return not self.macos_app_is_sandboxed(app)
+
+    def macos_runtime_action(
+        self, app: Path, channel: str, artifact_sha256: str, binary_sha256: str,
+    ) -> str | None:
+        if channel == "stable":
+            return (
+                "restore-upstream"
+                if self.macos_stable_has_legacy_x86qw_rewrite(
+                    app, artifact_sha256, binary_sha256,
+                )
+                else None
+            )
+        return "prepare-nightly" if self.macos_app_needs_preparation(app) else None
 
     def validate_target(self, action: str, *, purge: bool = False) -> None:
         target_exists = lexists(self.target)
@@ -1872,7 +1923,7 @@ class Installer:
                 raise InstallerError(f"stable bundle version is {version}, expected {self.selected_version}")
             if self.channel == "nightly" and f"-g{self.selected_version.rsplit('_', 1)[-1]}" not in version:
                 raise InstallerError(f"nightly bundle {version} does not match {self.selected_version}")
-            if self.prepare_macos_app(source):
+            if self.channel == "nightly" and self.prepare_macos_nightly_app(source):
                 version, binary_hash = self.inspect_macos_app(source)
             source.replace(prepared)
             self.app_bundle_version = version
@@ -1958,10 +2009,16 @@ class Installer:
         receipt: dict[str, str],
     ) -> dict[str, str]:
         runtime = self.target / spec.runtime(channel)
+        if channel == "stable":
+            raise InstallerError(
+                "O ezQuake stable deve ser restaurado do artefato upstream integral pelo bootstrap."
+            )
         if spec.key != "macos" or not self.macos_app_needs_preparation(runtime):
             return receipt
+        self.spec = spec
+        self.channel = channel
         self.ensure_macos_ezquake_closed()
-        self.prepare_macos_app(runtime)
+        self.prepare_macos_nightly_app(runtime)
         _, binary_hash = self.inspect_macos_app(runtime)
         updated = dict(receipt)
         updated["binary_sha256"] = binary_hash
@@ -1975,7 +2032,6 @@ class Installer:
         finally:
             if lexists(temporary):
                 remove_path(temporary)
-        self.clear_macos_game_directory()
         console.success(f"ezQuake {channel} reparado para o macOS atual.")
         return updated
 
@@ -3762,7 +3818,13 @@ class Installer:
             receipt = self.validate_ezquake_receipt(receipt_path, spec, channel)
             self.check_runtime(spec, channel, receipt)
             runtime = self.target / spec.runtime(channel)
-            if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
+            macos_action = (
+                self.macos_runtime_action(
+                    runtime, channel, receipt["artifact_sha256"], receipt["binary_sha256"],
+                )
+                if spec.key == "macos" else None
+            )
+            if macos_action is not None:
                 raise InstallerError(
                     f"O runtime macOS requer reparo antes da execução: {runtime}. Execute update."
                 )
@@ -3982,7 +4044,19 @@ class Installer:
                 if not lexists(runtime):
                     raise InstallerError(f"missing ezQuake runtime: {runtime}")
                 self.check_runtime(spec, channel, receipt)
-                if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
+                macos_action = (
+                    self.macos_runtime_action(
+                        runtime, channel, receipt["artifact_sha256"], receipt["binary_sha256"],
+                    )
+                    if spec.key == "macos" else None
+                )
+                if macos_action is not None:
+                    if channel == "stable":
+                        raise InstallerError(
+                            "O ezQuake stable foi re-assinado localmente por uma versão anterior. "
+                            "Restaure o bundle upstream integral reexecutando o bootstrap no mesmo "
+                            f"destino: {runtime}"
+                        )
                     raise InstallerError(
                         f"O fullscreen integral ainda não foi aplicado em {runtime}. Execute update."
                     )
@@ -4107,11 +4181,30 @@ class Installer:
                         "runtime ausente, incompleto ou divergente", "payload", release,
                     ))
                     continue
-                if spec.key == "macos" and self.macos_app_needs_preparation(runtime):
-                    issues.append(ClientRepairIssue(
-                        spec, channel, receipt_path, receipt,
-                        "preparação macOS ausente", "macos-preparation", None, "local-repair",
-                    ))
+                macos_action = (
+                    self.macos_runtime_action(
+                        runtime, channel, receipt["artifact_sha256"], receipt["binary_sha256"],
+                    )
+                    if spec.key == "macos" else None
+                )
+                if macos_action is not None:
+                    if macos_action == "restore-upstream":
+                        try:
+                            release = self.client_catalog_release(
+                                spec, channel, receipt["selection"],
+                            )
+                        except InstallerError:
+                            release = None
+                        issues.append(ClientRepairIssue(
+                            spec, channel, receipt_path, receipt,
+                            "bundle x86QW re-assinado; restaurar o bundle upstream integral",
+                            "payload", release,
+                        ))
+                    else:
+                        issues.append(ClientRepairIssue(
+                            spec, channel, receipt_path, receipt,
+                            "preparação macOS ausente", "macos-preparation", None, "local-repair",
+                        ))
         return issues, diagnostics
 
     def runtime_permission_repairs(self, installed: set[str] | None = None) -> list[Path]:
@@ -4216,7 +4309,6 @@ class Installer:
             staged_receipt = self.stage / "ezquake-receipt"
             self.write_ezquake_receipt(staged_receipt)
             self.commit_runtime(prepared, staged_receipt)
-            self.reset_macos_game_directory()
         finally:
             self.cleanup_stage()
             self.stage = None
@@ -4573,6 +4665,7 @@ class Installer:
         self.choose_release()
         if before_mutation is not None:
             before_mutation()
+        reset_macos_game_directory = self.macos_game_directory_reset_required()
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
         self.prepare_install_target()
@@ -4591,9 +4684,10 @@ class Installer:
         self.write_ezquake_receipt(staged_receipt)
         self.ensure_metadata_directory()
         self.commit_runtime(prepared, staged_receipt)
-        self.reset_macos_game_directory()
+        if reset_macos_game_directory:
+            self.reset_macos_game_directory()
         console.success("ezQuake instalado e recibo registrado.")
-        if self.is_native_macos_install():
+        if reset_macos_game_directory:
             console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
         if self.confirm_components():
             self.install_component_phase()
@@ -4636,10 +4730,17 @@ class Installer:
         available = selected[0]
         installed = receipt["selection"]
         runtime = self.target / spec.runtime(channel)
-        needs_macos_repair = spec.key == "macos" and self.macos_app_needs_preparation(runtime)
-        if available == installed and not needs_macos_repair:
+        macos_action = (
+            self.macos_runtime_action(
+                runtime, channel, receipt["artifact_sha256"], receipt["binary_sha256"],
+            )
+            if spec.key == "macos" else None
+        )
+        restore_stable_bundle = macos_action == "restore-upstream"
+        prepare_nightly_bundle = macos_action == "prepare-nightly"
+        if available == installed and not restore_stable_bundle and not prepare_nightly_bundle:
             return False
-        if available == installed:
+        if available == installed and prepare_nightly_bundle:
             if dry_run:
                 if plan_rows is not None:
                     plan_rows.append(UpdatePlanRow(
@@ -4651,7 +4752,7 @@ class Installer:
             assert receipt_path is not None
             self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
             return True
-        if not self.release_is_newer(available, installed, channel):
+        if available != installed and not self.release_is_newer(available, installed, channel):
             console.warning(
                 f"ezQuake {spec.label} {channel} instalado ({installed}) é mais novo que o catálogo ({available}); preservado."
             )
@@ -4662,7 +4763,10 @@ class Installer:
         if dry_run:
             if plan_rows is not None:
                 plan_rows.append(UpdatePlanRow(
-                    "Cliente", f"ezQuake {spec.label} {channel}", installed, available, "Atualizar",
+                    "Cliente", f"ezQuake {spec.label} {channel}",
+                    "bundle re-assinado localmente" if restore_stable_bundle else installed,
+                    "bundle upstream integral" if restore_stable_bundle else available,
+                    "Restaurar" if restore_stable_bundle else "Atualizar",
                     self.app_expected_size or None,
                 ))
             return True
@@ -4673,16 +4777,23 @@ class Installer:
         try:
             self.prepare_cache()
             archive = self.ensure_archive()
-            console.info(f"Atualizando ezQuake {spec.label} {channel}: {installed} → {available}...")
+            if restore_stable_bundle:
+                console.info(
+                    "Restaurando o ezQuake stable a partir do bundle upstream integral..."
+                )
+            else:
+                console.info(f"Atualizando ezQuake {spec.label} {channel}: {installed} → {available}...")
             prepared = self.prepare_runtime(archive)
             staged_receipt = self.stage / "ezquake-receipt"
             self.write_ezquake_receipt(staged_receipt)
             self.commit_runtime(prepared, staged_receipt)
-            self.reset_macos_game_directory()
         finally:
             self.cleanup_stage()
             self.stage = None
-        console.success(f"ezQuake {spec.label} {channel} atualizado para {available}.")
+        if restore_stable_bundle:
+            console.success("Bundle upstream integral do ezQuake stable restaurado.")
+        else:
+            console.success(f"ezQuake {spec.label} {channel} atualizado para {available}.")
         return True
 
     def outdated_installed_components(self) -> list[str]:

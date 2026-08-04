@@ -123,6 +123,7 @@
           "architecture": "universal",
           "format": "macho-universal",
           "origin": "official",
+          "support": "conditional",
           "system": "macos",
           "test_required": true,
           "variant": "macos-universal"
@@ -131,6 +132,7 @@
           "architecture": "x86_64",
           "format": "elf-amd64",
           "origin": "official",
+          "support": "supported",
           "system": "linux",
           "test_required": true,
           "variant": "linux-x86_64"
@@ -139,6 +141,7 @@
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
+          "support": "supported",
           "system": "windows",
           "test_required": true,
           "variant": "windows-x64"
@@ -165,6 +168,7 @@
           "architecture": "universal",
           "format": "macho-universal",
           "origin": "official",
+          "support": "conditional",
           "system": "macos",
           "test_required": true,
           "variant": "macos-universal"
@@ -173,6 +177,7 @@
           "architecture": "x86_64",
           "format": "elf-amd64",
           "origin": "official",
+          "support": "supported",
           "system": "linux",
           "test_required": true,
           "variant": "linux-x86_64"
@@ -181,6 +186,7 @@
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
+          "support": "supported",
           "system": "windows",
           "test_required": true,
           "variant": "windows-x64"
@@ -205,6 +211,7 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
+          "support": "supported",
           "system": "macos",
           "test_required": true,
           "variant": "macos-arm64"
@@ -213,6 +220,7 @@
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "official",
+          "support": "supported",
           "system": "linux",
           "test_required": true,
           "variant": "linux-amd64"
@@ -221,6 +229,7 @@
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
+          "support": "supported",
           "system": "windows",
           "test_required": true,
           "variant": "windows-x64"
@@ -244,6 +253,7 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
+          "support": "supported",
           "system": "macos",
           "test_required": true,
           "variant": "macos-arm64"
@@ -252,6 +262,7 @@
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "x86qw-build",
+          "support": "supported",
           "system": "linux",
           "test_required": true,
           "variant": "linux-amd64"
@@ -260,6 +271,7 @@
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "x86qw-build",
+          "support": "supported",
           "system": "windows",
           "test_required": true,
           "variant": "windows-x64"
@@ -283,6 +295,7 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
+          "support": "supported",
           "system": "macos",
           "test_required": true,
           "variant": "macos-arm64"
@@ -291,6 +304,7 @@
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "official",
+          "support": "supported",
           "system": "linux",
           "test_required": true,
           "variant": "linux-amd64"
@@ -299,6 +313,7 @@
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
+          "support": "supported",
           "system": "windows",
           "test_required": true,
           "variant": "windows-x64"

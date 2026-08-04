@@ -55,6 +55,7 @@ def build_product_catalog(project_root: Path) -> dict[str, object]:
                     "variant": platform["variant"],
                     "format": platform["format"],
                     "origin": platform["origin"],
+                    "support": platform["support"],
                     "test_required": platform["test_required"],
                 }
                 for platform in runtime["platforms"]

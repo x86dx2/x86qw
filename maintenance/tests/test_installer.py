@@ -286,27 +286,69 @@ class InstallerTests(unittest.TestCase):
     @staticmethod
     def write_ezquake_fixture(
         installer, target: Path, spec, channel: str, *, payload: bytes | None = None,
+        artifact_sha256: str = "a" * 64,
+        binary_sha256: str | None = None,
     ):
         selection = "3.6.9" if channel == "stable" else "20260616-101233_a86996a"
         runtime = target / spec.runtime(channel)
         if payload is not None:
             runtime.parent.mkdir(parents=True, exist_ok=True)
             runtime.write_bytes(payload)
-        binary_hash = install_qw.file_hash(runtime) if runtime.is_file() else "b" * 64
+        binary_hash = (
+            binary_sha256
+            or (install_qw.file_hash(runtime) if runtime.is_file() else "b" * 64)
+        )
         receipt_path = target / spec.receipt(channel)
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        bundle_version = selection
+        if spec.key == "macos" and channel == "nightly":
+            bundle_version = f"3.6.9-g{selection.rsplit('_', 1)[-1]}"
         receipt = {
             "format": "1", "platform": spec.key, "architecture": spec.architecture,
             "channel": channel, "selection": selection,
-            "install_name": spec.runtime(channel), "bundle_version": selection,
+            "install_name": spec.runtime(channel), "bundle_version": bundle_version,
             "artifact_name": spec.stable_archive if channel == "stable" else selection + spec.nightly_suffix,
             "artifact_url": "https://example.invalid/" + (
                 spec.stable_archive if channel == "stable" else selection + spec.nightly_suffix
             ),
-            "artifact_sha256": "a" * 64, "binary_sha256": binary_hash,
+            "artifact_sha256": artifact_sha256, "binary_sha256": binary_hash,
         }
         installer.write_ezquake_receipt_record(receipt_path, receipt)
         return receipt_path, receipt, runtime
+
+    @staticmethod
+    def macos_bundle_members(version: str = "3.6.9") -> dict[str, bytes]:
+        binary = b"".join((
+            struct.pack(">II", 0xCAFEBABE, 2),
+            struct.pack(">IIIII", 0x01000007, 0, 0, 0, 0),
+            struct.pack(">IIIII", 0x0100000C, 0, 0, 0, 0),
+        ))
+        return {
+            "Contents/Info.plist": plistlib.dumps({
+                "CFBundleIdentifier": "com.ezquake.ezQuake",
+                "CFBundleShortVersionString": version,
+                "CFBundleVersion": version,
+            }),
+            "Contents/MacOS/ezQuake": binary,
+            "Contents/_CodeSignature/CodeResources": b"upstream-code-resources",
+        }
+
+    @classmethod
+    def write_macos_bundle(cls, app: Path, version: str = "3.6.9") -> dict[str, bytes]:
+        members = cls.macos_bundle_members(version)
+        for relative, contents in members.items():
+            destination = app / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(contents)
+        return members
+
+    @classmethod
+    def write_macos_archive(cls, archive: Path, version: str = "3.6.9") -> dict[str, bytes]:
+        members = cls.macos_bundle_members(version)
+        with zipfile.ZipFile(archive, "w") as package:
+            for relative, contents in members.items():
+                package.writestr(f"ezQuake.app/{relative}", contents)
+        return members
 
     def test_repository_preserves_the_registered_paks_as_core_sources(self):
         expected = {
@@ -569,9 +611,106 @@ class InstallerTests(unittest.TestCase):
                     installer.reset_macos_game_directory()
             run.assert_not_called()
 
-    def test_macos_bundle_removes_sandbox_and_uses_the_full_display(self):
+    def test_existing_macos_channel_preserves_shared_bookmark_during_install(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            installer.spec = spec
+            self.write_ezquake_fixture(installer, target, spec, "stable")
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                self.assertFalse(installer.macos_game_directory_reset_required())
+
+    def test_first_native_macos_install_resets_stale_bookmark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                self.assertTrue(installer.macos_game_directory_reset_required())
+
+    def test_install_decides_bookmark_reset_only_after_acquiring_the_operation_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / "id1").mkdir()
+            (target / "id1/pak0.pak").write_bytes(b"pak0")
+            (target / "id1/pak1.pak").write_bytes(b"pak1")
+            lock_acquired = False
+
+            def acquire_lock():
+                nonlocal lock_acquired
+                lock_acquired = True
+
+            def reset_required():
+                self.assertTrue(lock_acquired)
+                return False
+
+            def select_platform(_platform=None):
+                installer.spec = install_qw.PLATFORMS["macos"]
+
+            def choose_channel():
+                installer.channel = "stable"
+
+            def choose_release():
+                installer.selected_version = "3.6.9"
+
+            def create_stage(_prefix):
+                installer.stage = target / ".stage"
+                installer.stage.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(
+                    installer, "select_platform", side_effect=select_platform,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_channel", side_effect=choose_channel,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_release", side_effect=choose_release,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "macos_game_directory_reset_required",
+                    side_effect=reset_required,
+                ))
+                stack.enter_context(mock.patch.object(installer, "ensure_macos_ezquake_closed"))
+                stack.enter_context(mock.patch.object(installer, "check_runtime_destination_ownership"))
+                stack.enter_context(mock.patch.object(installer, "prepare_install_target"))
+                stack.enter_context(mock.patch.object(installer, "reject_target_symlinks"))
+                stack.enter_context(mock.patch.object(
+                    installer, "_create_stage", side_effect=create_stage,
+                ))
+                stack.enter_context(mock.patch.object(installer, "provision_install_target"))
+                stack.enter_context(mock.patch.object(installer, "check_paks"))
+                stack.enter_context(mock.patch.object(installer, "prepare_cache"))
+                stack.enter_context(mock.patch.object(
+                    installer, "ensure_archive", return_value=target / "archive",
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "prepare_runtime", return_value=target / "prepared",
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_ezquake_receipt"))
+                stack.enter_context(mock.patch.object(installer, "ensure_metadata_directory"))
+                stack.enter_context(mock.patch.object(installer, "commit_runtime"))
+                stack.enter_context(mock.patch.object(
+                    installer, "confirm_components", return_value=False,
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_install_state"))
+                stack.enter_context(mock.patch.object(installer, "verify_installation"))
+                stack.enter_context(mock.patch.object(
+                    installer, "installed_components", return_value=[],
+                ))
+                reset = stack.enter_context(mock.patch.object(
+                    installer, "reset_macos_game_directory",
+                ))
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                installer.install(before_mutation=acquire_lock)
+
+            reset.assert_not_called()
+
+    def test_macos_nightly_bundle_removes_sandbox_and_uses_the_full_display(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.channel = "nightly"
             app = target / "ezQuake.app"
             plist = app / "Contents/Info.plist"
             plist.parent.mkdir(parents=True)
@@ -580,7 +719,7 @@ class InstallerTests(unittest.TestCase):
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
                 with mock.patch.object(installer, "macos_app_is_sandboxed", side_effect=[True, False]):
                     with mock.patch.object(installer, "run_command") as command:
-                        self.assertTrue(installer.prepare_macos_app(app))
+                        self.assertTrue(installer.prepare_macos_nightly_app(app))
             self.assertEqual(
                 ["codesign", "--force", "--deep", "--sign", "-", str(app)],
                 command.call_args_list[0].args[0],
@@ -593,22 +732,486 @@ class InstallerTests(unittest.TestCase):
                 metadata = plistlib.load(source)
             self.assertIs(False, metadata[install_qw.MACOS_SAFE_AREA_KEY])
 
-    def test_macos_fullscreen_repair_is_visible_in_the_update_plan(self):
+    def test_macos_local_preparation_refuses_the_stable_channel(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.channel = "stable"
+            app = target / "ezQuake.app"
+            plist = app / "Contents/Info.plist"
+            plist.parent.mkdir(parents=True)
+            original = plistlib.dumps({"CFBundleName": "ezQuake"})
+            plist.write_bytes(original)
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "run_command") as command:
+                    with self.assertRaisesRegex(
+                        install_qw.InstallerError, "somente.*nightly",
+                    ):
+                        installer.prepare_macos_nightly_app(app)
+
+            command.assert_not_called()
+            self.assertEqual(original, plist.read_bytes())
+
+    def test_stable_macos_runtime_preserves_upstream_signed_contents(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            installer.channel = "stable"
+            installer.selected_version = "3.6.9"
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            archive = installer.stage / installer.spec.stable_archive
+            expected = self.write_macos_archive(archive)
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(
+                    installer, "macos_app_is_sandboxed", side_effect=[True, False],
+                ):
+                    with mock.patch.object(installer, "run_command") as command:
+                        prepared = installer.prepare_runtime(archive)
+
+            actual = {
+                path.relative_to(prepared).as_posix(): path.read_bytes()
+                for path in prepared.rglob("*") if path.is_file()
+            }
+            self.assertEqual(expected, actual)
+            self.assertFalse(any(
+                "--sign" in call.args[0] for call in command.call_args_list
+            ))
+
+    def test_stable_macos_identity_table_matches_the_registered_upstream_archive(self):
+        archive = (
+            ROOT
+            / "dist/clients/ezquake/stable/3.6.9/macos-universal"
+            / "ezQuake-macOS-universal.zip"
+        )
+        artifact_sha256 = install_qw.file_hash(archive)
+        identities = install_qw.MACOS_STABLE_BINARY_IDENTITIES[artifact_sha256]
+        with zipfile.ZipFile(archive) as package:
+            binary = package.read("ezQuake.app/Contents/MacOS/ezQuake")
+
+        self.assertEqual(
+            identities["upstream"], install_qw.hashlib.sha256(binary).hexdigest(),
+        )
+
+    def test_stable_macos_runtime_rejects_invalid_upstream_signature_before_promotion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            installer.channel = "stable"
+            installer.selected_version = "3.6.9"
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            archive = installer.stage / installer.spec.stable_archive
+            self.write_macos_archive(archive)
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(
+                    installer, "run_command",
+                    side_effect=install_qw.InstallerError("assinatura upstream inválida"),
+                ):
+                    with self.assertRaisesRegex(
+                        install_qw.InstallerError, "assinatura upstream inválida",
+                    ):
+                        installer.prepare_runtime(archive)
+
+            self.assertTrue(archive.is_file())
+            self.assertFalse((installer.stage / "prepared-runtime").exists())
+
+    def test_upstream_stable_macos_runtime_is_accepted_without_local_preparation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            _, _, runtime = self.write_ezquake_fixture(installer, target, spec, "stable")
+            self.write_macos_bundle(runtime)
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=True):
+                        try:
+                            choices = installer.host_runtimes()
+                        except install_qw.InstallerError as error:
+                            self.fail(str(error))
+
+            self.assertEqual([("ezQuake stable 3.6.9", runtime)], choices)
+
+    def test_legacy_resigned_stable_macos_runtime_requires_upstream_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256="2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed",
+                binary_sha256="e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+            )
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+            release = (
+                receipt["selection"],
+                (f"https://example.invalid/{receipt['artifact_name']}",),
+                "a" * 64,
+            )
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Linux"):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(
+                        installer, "client_catalog_release", return_value=release,
+                    ):
+                        issues, diagnostics = installer.client_repair_assessment()
+
+            self.assertEqual([], diagnostics)
+            self.assertEqual(1, len(issues))
+            self.assertEqual(receipt_path, issues[0].receipt_path)
+            self.assertEqual("payload", issues[0].mode)
+            self.assertEqual("payload-required", issues[0].category)
+            self.assertIn("bundle upstream integral", issues[0].reason)
+
+    def test_verify_explains_how_to_restore_a_legacy_resigned_stable_bundle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256="2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed",
+                binary_sha256="e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+            )
+            runtime = target / spec.stable_runtime
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=False):
+                        with self.assertRaisesRegex(
+                            install_qw.InstallerError,
+                            "bundle upstream integral.*bootstrap",
+                        ):
+                            installer.verify_ezquake_variants()
+
+    def test_stable_bundle_from_another_artifact_is_not_rewritten_by_inference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            self.write_ezquake_fixture(installer, target, spec, "stable")
+            runtime = target / spec.stable_runtime
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=False):
+                        try:
+                            choices = installer.host_runtimes()
+                        except install_qw.InstallerError as error:
+                            self.fail(str(error))
+
+            self.assertEqual([("ezQuake stable 3.6.9", runtime)], choices)
+
+    def test_upstream_stable_binary_is_not_mistaken_for_a_legacy_local_rewrite(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            artifact_sha256 = (
+                "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed"
+            )
+            upstream_binary_sha256 = (
+                "14633b5d4201e9460250ad236fde2e4ad579a6ddbaf81301830099d8cf004f33"
+            )
+            self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256=artifact_sha256,
+                binary_sha256=upstream_binary_sha256,
+            )
+            runtime = target / spec.stable_runtime
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Linux"):
+                with mock.patch.object(installer, "check_runtime"):
+                    with mock.patch.object(
+                        installer, "client_catalog_release",
+                        side_effect=AssertionError("payload consultado"),
+                    ):
+                        issues, diagnostics = installer.client_repair_assessment()
+
+            self.assertEqual([], diagnostics)
+            self.assertEqual([], issues)
+
+    def test_unrecognized_stable_binary_is_not_rewritten_by_inference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "ezQuake Stable.app"
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Linux"):
+                action = installer.macos_runtime_action(
+                    runtime,
+                    "stable",
+                    "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed",
+                    "c" * 64,
+                )
+
+            self.assertIsNone(action)
+
+    def test_macos_nightly_fullscreen_repair_is_visible_in_the_update_plan(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             spec = install_qw.PLATFORMS["macos"]
             rows = []
             with mock.patch.object(installer, "latest_release", return_value=(
-                "3.6.9", ("https://example.invalid/ezQuake-macOS-universal.zip",), "a" * 64,
+                "20260616-101233_a86996a",
+                ("https://example.invalid/20260616-101233_a86996a_ezQuake-macOS-universal.zip",),
+                "a" * 64,
             )):
                 with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
                     self.assertTrue(installer.update_runtime(
-                        spec, "stable", {"selection": "3.6.9"}, dry_run=True, plan_rows=rows,
+                        spec, "nightly", {
+                            "selection": "20260616-101233_a86996a",
+                            "artifact_sha256": "a" * 64,
+                            "binary_sha256": "b" * 64,
+                        },
+                        dry_run=True, plan_rows=rows,
                     ))
             self.assertEqual(1, len(rows))
             self.assertEqual("Reparar", rows[0].action)
             self.assertEqual("área segura", rows[0].installed)
             self.assertEqual("tela inteira", rows[0].available)
+
+    def test_legacy_resigned_stable_macos_runtime_is_restored_by_update(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            runtime = target / spec.stable_runtime
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+            rows = []
+            selected = (
+                "3.6.9",
+                ("https://example.invalid/ezQuake-macOS-universal.zip",),
+                "a" * 64,
+            )
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "latest_release", return_value=selected):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=False):
+                        changed = installer.update_runtime(
+                            spec, "stable", {
+                                "selection": "3.6.9",
+                                "artifact_sha256": "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed",
+                                "binary_sha256": "e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+                            },
+                            dry_run=True, plan_rows=rows,
+                        )
+
+            self.assertTrue(changed)
+            self.assertEqual(1, len(rows))
+            self.assertEqual("Restaurar", rows[0].action)
+            self.assertEqual("bundle re-assinado localmente", rows[0].installed)
+            self.assertEqual("bundle upstream integral", rows[0].available)
+
+    def test_stable_macos_update_preserves_the_security_scoped_bookmark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256=(
+                    "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed"
+                ),
+                binary_sha256="e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+            )
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+            selected = (
+                receipt["selection"],
+                (f"https://example.invalid/{receipt['artifact_name']}",),
+                receipt["artifact_sha256"],
+            )
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "latest_release", return_value=selected):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=False):
+                        with mock.patch.object(installer, "ensure_macos_ezquake_closed"):
+                            with mock.patch.object(installer, "check_runtime_destination_ownership"):
+                                with mock.patch.object(installer, "prepare_cache"):
+                                    with mock.patch.object(installer, "ensure_archive", return_value=target / "archive.zip"):
+                                        with mock.patch.object(installer, "prepare_runtime", return_value=target / "prepared"):
+                                            with mock.patch.object(installer, "write_ezquake_receipt"):
+                                                with mock.patch.object(installer, "commit_runtime"):
+                                                    with mock.patch.object(
+                                                        installer,
+                                                        "reset_macos_game_directory",
+                                                        side_effect=AssertionError("bookmark removido"),
+                                                    ):
+                                                        self.assertTrue(installer.update_runtime(
+                                                            spec, "stable", receipt, dry_run=False,
+                                                        ))
+
+            self.assertTrue(receipt_path.is_file())
+
+    def test_stable_macos_runtime_commit_failure_restores_runtime_and_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, _, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256=(
+                    "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed"
+                ),
+                binary_sha256="e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+            )
+            runtime.mkdir(parents=True)
+            legacy_marker = runtime / "legacy-marker"
+            legacy_marker.write_bytes(b"legacy")
+            original_receipt = receipt_path.read_bytes()
+            installer.spec = spec
+            installer.channel = "stable"
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            prepared = installer.stage / "prepared-runtime"
+            prepared.mkdir()
+            (prepared / "upstream-marker").write_bytes(b"upstream")
+            staged_receipt = installer.stage / "staged-receipt"
+            staged_receipt.write_bytes(original_receipt)
+
+            with mock.patch.object(
+                install_qw.shutil, "copy2", side_effect=OSError("disco indisponível"),
+            ):
+                with self.assertRaisesRegex(install_qw.InstallerError, "could not commit"):
+                    installer.commit_runtime(prepared, staged_receipt)
+
+            self.assertEqual(b"legacy", legacy_marker.read_bytes())
+            self.assertEqual(original_receipt, receipt_path.read_bytes())
+            self.assertFalse((runtime / "upstream-marker").exists())
+
+    def test_legacy_stable_update_commits_the_unmodified_upstream_bundle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            artifact_sha256 = (
+                "2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed"
+            )
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+                artifact_sha256=artifact_sha256,
+                binary_sha256="e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
+            )
+            self.write_macos_bundle(runtime)
+            plist = runtime / "Contents/Info.plist"
+            metadata = plistlib.loads(plist.read_bytes())
+            metadata[install_qw.MACOS_SAFE_AREA_KEY] = False
+            plist.write_bytes(plistlib.dumps(metadata))
+            archive = target / spec.stable_archive
+            expected = self.write_macos_archive(archive)
+            selected = (
+                receipt["selection"],
+                (f"https://example.invalid/{receipt['artifact_name']}",),
+                artifact_sha256,
+            )
+
+            def provide_archive():
+                installer.app_archive_sha256 = artifact_sha256
+                return archive
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
+                with mock.patch.object(installer, "latest_release", return_value=selected):
+                    with mock.patch.object(installer, "macos_app_is_sandboxed", return_value=False):
+                        with mock.patch.object(installer, "ensure_macos_ezquake_closed"):
+                            with mock.patch.object(installer, "check_runtime_destination_ownership"):
+                                with mock.patch.object(installer, "prepare_cache"):
+                                    with mock.patch.object(
+                                        installer, "ensure_archive", side_effect=provide_archive,
+                                    ):
+                                        with mock.patch.object(installer, "run_command") as command:
+                                            self.assertTrue(installer.update_runtime(
+                                                spec, "stable", receipt, dry_run=False,
+                                            ))
+
+            actual = {
+                path.relative_to(runtime).as_posix(): path.read_bytes()
+                for path in runtime.rglob("*") if path.is_file()
+            }
+            self.assertEqual(expected, actual)
+            restored = installer.validate_ezquake_receipt(receipt_path, spec, "stable")
+            self.assertEqual(
+                install_qw.file_hash(runtime / "Contents/MacOS/ezQuake"),
+                restored["binary_sha256"],
+            )
+            self.assertFalse(any(
+                "--sign" in call.args[0] for call in command.call_args_list
+            ))
+
+    def test_macos_nightly_local_repair_preserves_the_shared_bookmark(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+
+            with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
+                with mock.patch.object(installer, "ensure_macos_ezquake_closed"):
+                    with mock.patch.object(installer, "prepare_macos_nightly_app", return_value=True):
+                        with mock.patch.object(
+                            installer, "inspect_macos_app",
+                            return_value=(receipt["bundle_version"], "c" * 64),
+                        ):
+                            with mock.patch.object(
+                                installer, "clear_macos_game_directory",
+                                side_effect=AssertionError("bookmark removido"),
+                            ):
+                                updated = installer.repair_installed_macos_runtime(
+                                    spec, "nightly", receipt_path, receipt,
+                                )
+
+            self.assertEqual("c" * 64, updated["binary_sha256"])
+
+    def test_macos_nightly_local_repair_configures_runtime_context(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+
+            with mock.patch.object(install_qw.host_platform, "system", return_value="Linux"):
+                with mock.patch.object(installer, "macos_app_needs_preparation", return_value=True):
+                    with mock.patch.object(installer, "ensure_macos_ezquake_closed"):
+                        with mock.patch.object(
+                            installer, "inspect_macos_app",
+                            return_value=(receipt["bundle_version"], "c" * 64),
+                        ):
+                            updated = installer.repair_installed_macos_runtime(
+                                spec, "nightly", receipt_path, receipt,
+                            )
+
+            self.assertIs(spec, installer.spec)
+            self.assertEqual("nightly", installer.channel)
+            self.assertEqual("c" * 64, updated["binary_sha256"])
 
     def test_update_output_wraps_without_cutting_names_or_versions(self):
         row = install_qw.UpdatePlanRow(
@@ -1460,11 +2063,11 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(receipt_path, issues[0].receipt_path)
                 self.assertEqual("payload", issues[0].mode)
 
-    def test_repair_detects_missing_macos_preparation_without_replacing_payload(self):
+    def test_repair_detects_missing_macos_nightly_preparation_without_replacing_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             spec = install_qw.PLATFORMS["macos"]
-            _, receipt, runtime = self.write_ezquake_fixture(installer, target, spec, "stable")
+            _, receipt, runtime = self.write_ezquake_fixture(installer, target, spec, "nightly")
             runtime.mkdir(parents=True)
             with mock.patch.object(
                 installer, "client_catalog_release", side_effect=AssertionError("catálogo consultado"),
@@ -1503,12 +2106,12 @@ class InstallerTests(unittest.TestCase):
                             ))
             self.assertTrue(os.access(runtime, os.X_OK))
 
-    def test_offline_macos_preparation_repair_completes_without_catalog(self):
+    def test_offline_macos_nightly_preparation_repair_completes_without_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             spec = install_qw.PLATFORMS["macos"]
             receipt_path, receipt, runtime = self.write_ezquake_fixture(
-                installer, target, spec, "stable",
+                installer, target, spec, "nightly",
             )
             runtime.mkdir(parents=True)
             with mock.patch.object(installer, "check_runtime"):
@@ -1527,7 +2130,7 @@ class InstallerTests(unittest.TestCase):
                                 self.assertTrue(installer.repair(
                                     dry_run=False, plan_rows=[], allow_download=False,
                                 ))
-            prepare.assert_called_once_with(spec, "stable", receipt_path, receipt)
+            prepare.assert_called_once_with(spec, "nightly", receipt_path, receipt)
 
     def test_repair_diagnoses_partial_component_metadata_in_both_directions(self):
         for missing in ("receipt", "inventory"):

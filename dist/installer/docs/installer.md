@@ -518,12 +518,14 @@ processo.
 
 No macOS com notch, o modo de compatibilidade de área segura pode reduzir a
 janela do ezQuake sem reduzir o framebuffer SDL, recortando o topo de telas como
-**Options**. Durante a instalação ou o primeiro reparo, o x86QW registra
-`NSPrefersDisplaySafeAreaCompatibilityMode=false` no `Info.plist` e assina
-novamente o bundle com `codesign`. A fase de instalação ou reparo identifica o
-monitor interno pela resolução física e deriva sua área 16:10 segura. Ela grava
-fullscreen explícito (`vid_fullscreen 1` e `vid_usedesktopres 0`) com a
-resolução 16:10 segura detectada para o painel. Em
+**Options**. O canal stable preserva integralmente `Info.plist`, sandbox,
+entitlements e assinatura do bundle upstream: o x86QW não o re-assina nem
+promete alterar a política de área segura. O nightly mantém provisoriamente a
+preparação local preexistente, isolada do stable e declarada condicional.
+
+A configuração pessoal de vídeo ainda pode usar fullscreen explícito
+(`vid_fullscreen 1` e `vid_usedesktopres 0`) com a resolução 16:10 segura
+detectada para o painel. Em
 um MacBook com painel físico 3024×1964, por exemplo, o jogo abre diretamente em
 3024×1890; o modo desktop automático não pode ignorar essas dimensões e ocupar a
 área recortada pelo notch. A frequência permanece automática. Alterações
@@ -812,7 +814,7 @@ Cada combinação SO/canal recebe um recibo próprio. A verificação funciona o
 - hashes dos PAKs registrados;
 - recibos e inventário da instalação;
 - integridade dos arquivos gerenciados e dos PK3;
-- estrutura, versão, assinatura e arquiteturas `arm64` e `x86_64` dos apps macOS; a assinatura é validada com `codesign` quando a verificação roda no macOS;
+- estrutura, versão, integridade interna da assinatura e arquiteturas `arm64` e `x86_64` dos apps macOS; `codesign --verify` não comprova Developer ID, notarização ou autoria;
 - formato ELF x86-64 e permissão dos AppImages Linux;
 - formato PE32+ x86-64 dos executáveis Windows;
 - identificador oficial selecionado, origem imutável e SHA-256 de cada binário; no macOS, também a versão gravada no bundle.
@@ -908,8 +910,10 @@ use no checkout de desenvolvimento:
 ```
 
 `repair` também valida os recibos stable e nightly do ezQuake, runtime, formato,
-hash, permissão AppImage e preparação do bundle macOS. Ele repara localmente
-permissões, preparação e estado reconstruível; versão e canal registrados são
+hash, permissão AppImage e política do bundle macOS. Ele repara localmente
+permissões, preparação nightly e estado reconstruível; um stable transformado
+por uma versão anterior exige restaurar o payload upstream integral pela
+reexecução do bootstrap no mesmo destino. Versão e canal registrados são
 preservados sem downgrade. Recibo sem inventário, inventário sem recibo, runtime
 sem metadata e estados ambíguos são diagnosticados sem exclusão ou inferência
 destrutiva. Quando o plano exige payload, a CLI instalada orienta a reexecução
@@ -955,13 +959,25 @@ Não há uso silencioso do alias `latest`: uma nightly é sempre baixada pelo no
 
 ## Primeira execução no macOS
 
-Feche qualquer ezQuake aberto antes de instalar ou atualizar. O aplicativo oficial usa uma autorização sandbox compartilhada entre as instalações stable e nightly. O instalador remove uma seleção antiga para impedir que uma cópia nova continue lendo outro diretório de jogo.
+Feche qualquer ezQuake aberto antes de instalar ou atualizar. O stable oficial
+preservado usa App Sandbox e uma autorização de diretório. A instalação inicial
+remove uma seleção antiga para impedir que uma cópia nova continue lendo outro
+diretório de jogo; update e repair preservam o bookmark já escolhido. O nightly
+mantém sua preparação local preexistente e não é usado como modelo de confiança
+do stable.
 
 Abra `quake-world/ezQuake Stable.app` ou `quake-world/ezQuake Nightly.app`. Na janela que pede o diretório contendo `id1/pak0.pak`, escolha exatamente a própria pasta `quake-world` mostrada no resumo do instalador. Essa seleção é obrigatória para que o ezQuake encontre `qw/autoexec.cfg` e carregue a configuração inicial nQuake.
 
 O menu principal pode manter a aparência clássica do Quake. Para verificar o estado real, execute `./dist/installer/bin/manager.py verify`: o resultado informa se as configurações nQuake estão aguardando a primeira abertura ou se já foram carregadas.
 
-Os builds oficiais atuais usam assinatura ad-hoc e podem não estar notarizados. Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem contorna as proteções do macOS.
+O stable upstream 3.6.9 usa assinatura ad hoc, hardened runtime e App Sandbox,
+mas não apresenta Team ID nem ticket stapled e é rejeitado por `spctl`. Preservar
+o bundle evita degradá-lo, mas não prova Developer ID, notarização ou autoria.
+Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e
+Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem
+contorna as proteções do macOS. O suporte dos dois canais macOS é condicional
+até os smokes nativos descritos no
+[ADR 0004](../../../docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
 
 ## O que permanece no projeto
 
