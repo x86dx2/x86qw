@@ -64,6 +64,15 @@ class RuntimeMemberContractTests(unittest.TestCase):
             if not entry["source"].startswith("generated:")
         }
         self.assertEqual(static_projection, set(installer_builder.ZIPAPP_FILES))
+        declared_runtime_sources = {
+            source for source, _member in static_projection
+            if source.startswith("x86qw_runtime/")
+        }
+        repository_runtime_sources = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "x86qw_runtime").rglob("*.py")
+        }
+        self.assertEqual(declared_runtime_sources, repository_runtime_sources)
         for source, member in static_projection:
             with self.subTest(member=member):
                 source_path = ROOT / source

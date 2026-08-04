@@ -285,6 +285,88 @@ class RuntimeTransactionTests(unittest.TestCase):
             ],
         )
 
+    def test_finalizers_run_only_after_explicit_logical_commit(self) -> None:
+        """Rollback material must survive apply until its parent commits."""
+
+        transaction = importlib.import_module("x86qw_runtime.transaction")
+        self.assertTrue(
+            hasattr(transaction, "finalize_mutation"),
+            "the runtime transaction boundary must expose logical finalization",
+        )
+        events: list[str] = []
+        plan = transaction.MutationPlan(
+            identifier="purge:domains",
+            summary="recolher instalação e caches",
+            steps=(
+                transaction.MutationStep(
+                    key="target",
+                    description="recolher instalação",
+                    observe=lambda: "target-v1",
+                    apply=lambda: events.append("apply:target") or "target-token",
+                    rollback=lambda token: events.append(f"rollback:{token}"),
+                    finalize=lambda token: events.append(f"finalize:{token}"),
+                ),
+                transaction.MutationStep(
+                    key="cache",
+                    description="recolher cache",
+                    observe=lambda: "cache-v1",
+                    apply=lambda: events.append("apply:cache") or "cache-token",
+                    rollback=lambda token: events.append(f"rollback:{token}"),
+                    finalize=lambda token: events.append(f"finalize:{token}"),
+                ),
+            ),
+        )
+
+        result = transaction.execute_mutation(transaction.prepare_mutation(plan))
+        self.assertEqual(events, ["apply:target", "apply:cache"])
+
+        transaction.finalize_mutation(result)
+
+        self.assertEqual(
+            events,
+            [
+                "apply:target",
+                "apply:cache",
+                "finalize:target-token",
+                "finalize:cache-token",
+            ],
+        )
+
+    def test_finalizer_failure_is_reported_as_committed_without_rollback(self) -> None:
+        """Discard failure cannot safely resurrect already discarded siblings."""
+
+        transaction = importlib.import_module("x86qw_runtime.transaction")
+        self.assertTrue(
+            hasattr(transaction, "finalize_mutation"),
+            "the runtime transaction boundary must expose logical finalization",
+        )
+        events: list[str] = []
+
+        def fail_finalize(token: object) -> None:
+            events.append(f"finalize:{token}")
+            raise OSError("quarantine unavailable")
+
+        plan = transaction.MutationPlan(
+            identifier="purge:domains",
+            summary="recolher instalação e caches",
+            steps=(transaction.MutationStep(
+                key="target",
+                description="recolher instalação",
+                observe=lambda: "target-v1",
+                apply=lambda: events.append("apply") or "target-token",
+                rollback=lambda token: events.append(f"rollback:{token}"),
+                finalize=fail_finalize,
+            ),),
+        )
+        result = transaction.execute_mutation(transaction.prepare_mutation(plan))
+
+        with self.assertRaises(transaction.MutationCommittedError) as raised:
+            transaction.finalize_mutation(result)
+
+        self.assertEqual(raised.exception.step_key, "target")
+        self.assertEqual(raised.exception.committed_steps, ("target",))
+        self.assertEqual(events, ["apply", "finalize:target-token"])
+
 
 if __name__ == "__main__":
     unittest.main()

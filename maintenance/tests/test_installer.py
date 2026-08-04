@@ -4181,6 +4181,42 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(target.exists())
             self.assertFalse(cache.exists())
 
+    def test_purge_rolls_back_installation_when_a_later_domain_fails(self):
+        """Target and external cache must form one reversible purge transaction."""
+
+        quarantine = importlib.import_module("x86qw_runtime.io.quarantine")
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            (target / ".x86qw").mkdir()
+            personal = target / "personal.txt"
+            personal.write_bytes(b"personal")
+            installer.prepare_cache()
+            cached = cache / "artifact"
+            cached.write_bytes(b"cache")
+
+            apply_quarantine = quarantine.apply_quarantine_removal
+            attempts = 0
+
+            def fail_second(path):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated cache quarantine failure")
+                return apply_quarantine(path)
+
+            with mock.patch.object(
+                quarantine,
+                "apply_quarantine_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.purge()
+
+            self.assertEqual(personal.read_bytes(), b"personal")
+            self.assertEqual(cached.read_bytes(), b"cache")
+            self.assertFalse(tuple(target.parent.glob(".x86qw-*-quarantine.*")))
+            self.assertFalse(tuple(cache.parent.glob(".x86qw-*-quarantine.*")))
+
     def test_purge_keeps_operation_lock_until_final_release(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

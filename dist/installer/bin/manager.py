@@ -58,7 +58,7 @@ from x86qw_runtime.io.archive import (
     scan_archive,
     validate_installer_bundle,
 )
-from x86qw_runtime.io import private_fs
+from x86qw_runtime.io import private_fs, quarantine
 from x86qw_runtime.io.atomic import (
     AtomicWriteError,
     atomic_copy_file,
@@ -80,6 +80,7 @@ from x86qw_runtime.transaction import (
     MutationRollbackError,
     MutationStep,
     execute_mutation,
+    finalize_mutation,
     prepare_mutation,
     rollback_mutation,
 )
@@ -6426,6 +6427,7 @@ class Installer:
 
     def purge(self, *, preserve_operation_lock: bool = False) -> None:
         caches = self.owned_cache_roots(include_legacy=True)
+        candidates: list[Path] = []
         if lexists(self.target):
             identity = (
                 self.target / METADATA_DIR,
@@ -6444,27 +6446,62 @@ class Installer:
                 sessions = metadata / "sessions"
                 for child in tuple(self.target.iterdir()):
                     if child != metadata:
-                        remove_path(child)
+                        candidates.append(child)
                 if metadata.is_dir() and not metadata.is_symlink():
                     for child in tuple(metadata.iterdir()):
                         if child != sessions:
-                            remove_path(child)
+                            candidates.append(child)
                 if sessions.is_dir() and not sessions.is_symlink():
                     for child in tuple(sessions.iterdir()):
                         if child.name != "active.lock":
-                            remove_path(child)
-                console.info(
-                    "Conteúdo da instalação removido; o diretório do lock será "
-                    "finalizado ao encerrar a operação."
-                )
+                            candidates.append(child)
             else:
-                remove_path(self.target)
-                console.success(f"Diretório da instalação removido: {self.target}")
+                candidates.append(self.target)
         else:
             console.info(f"Nenhum diretório de instalação foi encontrado em {self.target}.")
+        candidates.extend(caches)
+        selected = self._minimal_removal_paths(candidates)
+        if selected:
+            plan = MutationPlan(
+                identifier="purge-installation",
+                summary="Recolher instalação e caches em quarantines reversíveis",
+                steps=tuple(
+                    MutationStep(
+                        key=f"domain-{index}",
+                        description=f"Recolher {path}",
+                        observe=lambda path=path: (
+                            quarantine.observe_quarantine_target(path)
+                        ),
+                        apply=lambda path=path: (
+                            quarantine.apply_quarantine_removal(path)
+                        ),
+                        rollback=quarantine.rollback_quarantine,
+                        finalize=quarantine.finalize_quarantine,
+                    )
+                    for index, path in enumerate(selected, 1)
+                ),
+            )
+            try:
+                result = execute_mutation(prepare_mutation(plan))
+            except MutationRollbackError:
+                raise
+            except MutationApplyError as error:
+                if isinstance(error.operation_error, InstallerError):
+                    raise error.operation_error
+                raise InstallerError(
+                    "A remoção total falhou; instalação e caches anteriores foram restaurados."
+                ) from error
+            finalize_mutation(result)
+        if preserve_operation_lock and lexists(self.target):
+            console.info(
+                "Conteúdo da instalação removido; o diretório do lock será "
+                "finalizado ao encerrar a operação."
+            )
+        elif not lexists(self.target):
+            console.success(f"Diretório da instalação removido: {self.target}")
         for root in caches:
-            remove_path(root)
-            console.success(f"Cache removido: {root}")
+            if not lexists(root):
+                console.success(f"Cache removido: {root}")
         if not caches:
             console.info(f"Nenhum cache do instalador foi encontrado em {self.cache_root}.")
         console.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")

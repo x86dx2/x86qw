@@ -11,6 +11,11 @@ from .errors import InstallerError, PersistenceError
 Observe = Callable[[], object]
 Apply = Callable[[], object]
 Rollback = Callable[[object], None]
+Finalize = Callable[[object], None]
+
+
+def _retain_rollback_material(_token: object) -> None:
+    """Default finalizer for mutations whose rollback token needs no disposal."""
 
 
 class MutationError(InstallerError):
@@ -94,11 +99,12 @@ class MutationStep:
     observe: Observe
     apply: Apply
     rollback: Rollback
+    finalize: Finalize = _retain_rollback_material
 
     def __post_init__(self) -> None:
         if not self.key or not self.description:
             raise ValueError("mutation step key and description must be non-empty")
-        for value in (self.observe, self.apply, self.rollback):
+        for value in (self.observe, self.apply, self.rollback, self.finalize):
             if not callable(value):
                 raise TypeError("mutation step operations must be callable")
 
@@ -254,4 +260,27 @@ def rollback_mutation(result: MutationResult) -> None:
             step_key=rollback_errors[0][0],
             operation_error=operation_error,
             rollback_errors=tuple(rollback_errors),
+        ) from operation_error
+
+
+def finalize_mutation(result: MutationResult) -> None:
+    """Discard rollback material after the parent transaction commits logically."""
+
+    if not isinstance(result, MutationResult):
+        raise TypeError("result must be MutationResult")
+    failures: list[tuple[str, BaseException]] = []
+    for step, token in result._completed:
+        try:
+            step.finalize(token)
+        except BaseException as error:
+            failures.append((step.key, error))
+    if failures:
+        step_key, operation_error = failures[0]
+        detail = "; ".join(f"{key}: {error}" for key, error in failures)
+        raise MutationCommittedError(
+            f"A transação foi confirmada, mas a finalização ficou incompleta: {detail}",
+            plan_identifier=result.plan.identifier,
+            step_key=step_key,
+            operation_error=operation_error,
+            committed_steps=result.applied_steps,
         ) from operation_error
