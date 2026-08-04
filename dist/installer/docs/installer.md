@@ -4,7 +4,7 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle público corrente é `0.7.2`, com 62 pacotes e 21 componentes
+O bundle público corrente é `0.7.3`, com 63 pacotes e 21 componentes
 registrados no catálogo. Essa versão confere o requisito Python por
 `sys.version_info` antes de qualquer download ou mutação: macOS/Linux testam
 `python3` e `python`, nessa ordem; Windows testa `py -3`, `python3` e `python`.

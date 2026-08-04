@@ -243,7 +243,9 @@ def inspect_ezquake_bundle(
     return version, _hash_regular_file(binary)
 
 
-def _entitlements_payload(output: bytes) -> bytes:
+def _entitlements_payload(output: bytes) -> bytes | None:
+    """Extract the plist emitted by codesign, if the bundle has one."""
+
     binary = output.find(b"bplist00")
     if binary >= 0:
         return output[binary:]
@@ -251,7 +253,7 @@ def _entitlements_payload(output: bytes) -> bytes:
     end = output.rfind(b"</plist>")
     if start >= 0 and end >= start:
         return output[start:end + len(b"</plist>")]
-    raise MacOSAdapterError("Os entitlements do ezQuake não contêm um plist válido.")
+    return None
 
 
 def app_is_sandboxed(app: Path) -> bool:
@@ -276,8 +278,11 @@ def app_is_sandboxed(app: Path) -> bool:
         ) from error
     if result.returncode != 0:
         raise MacOSAdapterError("Não foi possível ler os entitlements do ezQuake.")
+    payload = _entitlements_payload(result.stdout + result.stderr)
+    if payload is None:
+        return False
     try:
-        document = plistlib.loads(_entitlements_payload(result.stdout + result.stderr))
+        document = plistlib.loads(payload)
     except (ValueError, plistlib.InvalidFileException) as error:
         raise MacOSAdapterError("Os entitlements do ezQuake são inválidos.") from error
     if not isinstance(document, dict):

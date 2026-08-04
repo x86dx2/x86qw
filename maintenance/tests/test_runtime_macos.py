@@ -215,6 +215,27 @@ class MacOSAdapterTests(unittest.TestCase):
             ):
                 self.assertFalse(macos.app_is_sandboxed(app))
 
+    def test_sandbox_detection_accepts_signed_bundle_without_entitlements(self):
+        """An upstream bundle without an entitlement plist is not sandboxed."""
+
+        assert macos is not None
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary) / "ezQuake.app"
+            self.write_bundle(app)
+            diagnostic = (
+                b"Executable=/tmp/ezQuake.app/Contents/MacOS/ezQuake\n"
+                b"warning: Specifying ':' in the path is deprecated\n"
+            )
+            with mock.patch.object(
+                macos.sys, "platform", "darwin",
+            ), mock.patch.object(
+                macos.subprocess, "run",
+                return_value=subprocess.CompletedProcess(
+                    ["codesign"], 0, stdout=b"", stderr=diagnostic,
+                ),
+            ):
+                self.assertFalse(macos.app_is_sandboxed(app))
+
     def test_nightly_preparation_updates_plist_and_runs_codesign_contract(self):
         """Nightly preparation owns plist mutation and both codesign phases."""
 
