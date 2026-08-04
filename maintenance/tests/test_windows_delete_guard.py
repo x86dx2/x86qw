@@ -75,6 +75,32 @@ class WindowsDeleteGuardTests(unittest.TestCase):
                 services.cleanup_current_session(journal, [config], [])
             self.assertFalse(config.exists())
 
+    def test_ktx_runtime_config_cannot_be_renamed_while_the_game_loads_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            game = target / "qw"
+            game.mkdir(parents=True)
+            config = services.gameplay.write_ktx_runtime_config(
+                target, (("k_fb_name_0", "/Luffy"),),
+            )
+            moved = game / "replacement.cfg"
+            renamed = False
+            try:
+                try:
+                    os.replace(config.path, moved)
+                    renamed = True
+                except OSError:
+                    pass
+                self.assertFalse(
+                    renamed,
+                    "a configuração KTX foi renomeada enquanto o ezQuake podia carregá-la",
+                )
+            finally:
+                if renamed:
+                    os.replace(moved, config.path)
+                self.assertTrue(services.gameplay.remove_ktx_runtime_config(config))
+            self.assertFalse(config.path.exists())
+
     @unittest.skipUnless(WINDOWS_POWERSHELL, "Windows PowerShell is unavailable")
     def test_bootstrap_workdir_cannot_be_renamed_during_download(self):
         bootstrap = ROOT / "site/public/install.ps1"

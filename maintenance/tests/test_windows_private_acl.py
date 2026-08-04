@@ -136,6 +136,45 @@ class WindowsPrivateAclTests(unittest.TestCase):
             self.assertIsNotNone(function.argtypes, function)
             self.assertIsNotNone(function.restype, function)
 
+    def test_precreated_broad_installation_mutex_is_rejected(self):
+        from ctypes import wintypes
+
+        class SecurityAttributes(ctypes.Structure):
+            _fields_ = (
+                ("length", wintypes.DWORD),
+                ("security_descriptor", ctypes.c_void_p),
+                ("inherit_handle", wintypes.BOOL),
+            )
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [
+            ctypes.POINTER(SecurityAttributes), wintypes.BOOL, wintypes.LPCWSTR,
+        ]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            name = services.session_control._windows_acquisition_mutex_name(target)
+            user = windows_acl.current_user_sid()
+            with windows_acl._descriptor_from_sddl(
+                f"O:{user}D:P(A;;GA;;;{user})(A;;GA;;;WD)",
+            ) as (descriptor, _):
+                attributes = SecurityAttributes(
+                    ctypes.sizeof(SecurityAttributes), descriptor, False,
+                )
+                hostile = kernel32.CreateMutexW(ctypes.byref(attributes), False, name)
+            self.assertTrue(hostile)
+            try:
+                with self.assertRaisesRegex(
+                    services.session_control.SessionControlError, "mutex.*privad",
+                ):
+                    with services.session_control._windows_acquisition_mutex(target):
+                        self.fail("mutex hostil foi aceito")
+            finally:
+                kernel32.CloseHandle(hostile)
+
     def test_generated_objects_override_everyone_and_users_inheritance(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -364,7 +403,7 @@ class WindowsPrivateAclTests(unittest.TestCase):
             finally:
                 windows_acl.protect_private_path(journal.path, directory=False)
 
-    def test_legacy_071_clean_session_is_hardened_without_recovery(self):
+    def test_legacy_071_clean_inert_session_is_hardened_without_recovery(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "quake-world"
             target.mkdir()
@@ -384,10 +423,7 @@ class WindowsPrivateAclTests(unittest.TestCase):
                 directory=False,
             )
 
-            with self.assertRaisesRegex(
-                services.InstallerError, "conteúdo histórico não pode autorizar",
-            ):
-                services.recover_sessions(target)
+            services.recover_sessions(target)
 
             self._assert_canonical(journal.directory, directory=True)
             self._assert_canonical(journal.path, directory=False)
@@ -395,6 +431,74 @@ class WindowsPrivateAclTests(unittest.TestCase):
                 "clean",
                 json.loads(journal.path.read_text(encoding="utf-8"))["status"],
             )
+
+    def test_legacy_071_interrupted_session_cannot_kill_or_unlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            game = target / "qw"
+            game.mkdir(parents=True)
+            child = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+            )
+            config = game / "legacy-sensitive.cfg"
+            config.write_text("rcon_password nao-remover\n", encoding="utf-8")
+            journal = services.SessionJournal(target, session_id="legacy-interrupted")
+            identity = services.process_identity(child.pid).identity
+            self.assertIsNotNone(identity)
+            assert identity is not None
+            journal.data.pop("private_filesystem")
+            journal.data["status"] = "interrupted"
+            journal.data["controller"] = {
+                "pid": 2_147_483_647,
+                "creation_token": "controlador-encerrado",
+                "executable": str(target / "controller.exe"),
+                "command": "host",
+            }
+            journal.data["processes"] = [{
+                "label": "MVDSV",
+                "runtime": "mvdsv",
+                "pid": child.pid,
+                "process_group": child.pid,
+                "executable": identity.executable,
+                "creation_token": identity.creation_token,
+                "started_at": "2026-08-03T00:00:00+00:00",
+                "address": "127.0.0.1",
+                "port": 28501,
+                "parameters": {},
+            }]
+            journal.data["temporary_files"] = [{
+                "path": "qw/legacy-sensitive.cfg",
+                "origin": "configuração efêmera legada",
+                "created_by_session": True,
+                "type": "temporary-config",
+                "sensitive": True,
+            }]
+            journal._write()
+            user = windows_acl.current_user_sid()
+            self._apply_sddl(
+                journal.directory,
+                f"O:{user}D:P(A;OICI;FA;;;{user})(A;OICI;GR;;;WD)",
+                directory=True,
+            )
+            self._apply_sddl(
+                journal.path,
+                f"O:{user}D:P(A;;FA;;;{user})(A;;GR;;;WD)",
+                directory=False,
+            )
+            try:
+                with self.assertRaisesRegex(
+                    services.InstallerError, "histórico.*não pode autorizar",
+                ):
+                    services.recover_sessions(target)
+                self.assertIsNone(child.poll())
+                self.assertTrue(config.is_file())
+                self.assertEqual(
+                    "interrupted",
+                    json.loads(journal.path.read_text(encoding="utf-8"))["status"],
+                )
+            finally:
+                child.terminate()
+                child.wait(timeout=5)
 
     def test_status_style_reader_does_not_block_lock_release(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1805,7 +1805,6 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw").exists())
             self.assertFalse(any(target.glob(".x86qw-update.*")))
 
-    @unittest.skipIf(os.name == "nt", "o lease Windows impede substituir o stage ativo")
     def test_cli_update_cleanup_preserves_a_replacement_of_the_stage_path(self):
         class StopHandoff(RuntimeError):
             pass
@@ -1820,6 +1819,10 @@ class InstallerTests(unittest.TestCase):
             def replace_stage(_package):
                 nonlocal personal_file
                 assert installer.stage is not None
+                lease = installer._stage_lease
+                installer._stage_lease = None
+                if lease is not None:
+                    lease.close()
                 installer.stage.rename(preserved_stage)
                 installer.stage.mkdir()
                 personal_file = installer.stage / "personal.txt"

@@ -1974,6 +1974,49 @@ class DownloaderTests(unittest.TestCase):
             self.assertFalse(Path(observed["source"]).exists())
             self.assert_no_download_temporaries(self, root)
 
+    @unittest.skipUnless(os.name == "nt", "a janela de troca é específica do Windows")
+    def test_windows_pinned_download_keeps_validated_identity_until_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "artifact.zip"
+            response = FakeResponse(
+                self.PAYLOAD,
+                headers={"Content-Length": str(len(self.PAYLOAD))},
+            )
+            original_remaining = downloader._remaining
+            replacement_attempts: list[bool] = []
+            displaced = root / "displaced.bin"
+
+            def attempt_replacement(deadline: float, clock) -> float:
+                remaining = original_remaining(deadline, clock)
+                for source in root.glob(".*.download"):
+                    try:
+                        os.replace(source, displaced)
+                    except OSError:
+                        replacement_attempts.append(False)
+                    else:
+                        replacement_attempts.append(True)
+                        os.replace(displaced, source)
+                return remaining
+
+            with mock.patch.object(
+                downloader, "_remaining", side_effect=attempt_replacement,
+            ):
+                result = self.download(
+                    self.pinned(destination),
+                    testing_open_url=self.response_opener(response),
+                )
+
+            self.assertTrue(replacement_attempts)
+            self.assertFalse(
+                any(replacement_attempts),
+                "o temporário validado pôde ser trocado antes da promoção",
+            )
+            self.assertEqual(self.PAYLOAD, destination.read_bytes())
+            self.assertEqual(destination, result.path)
+            self.assertFalse(displaced.exists())
+            self.assert_no_download_temporaries(self, root)
+
     def test_mirrors_share_one_deadline_across_retries_and_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "artifact.zip"
