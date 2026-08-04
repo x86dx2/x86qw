@@ -1730,6 +1730,98 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / "x86qw.sh").exists())
             self.assertFalse((target / "x86qw.cmd").exists())
 
+    def test_online_cli_rolls_back_every_generation_file_when_batch_launcher_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            cli = target / ".x86qw/cli"
+            cli.mkdir(parents=True)
+            old_identity = {"format": 1, "project": "x86qw", "version": "1.0.5"}
+            old_receipt = json.dumps(old_identity, sort_keys=True).encode("utf-8") + b"\n"
+            old_paths = {
+                cli / "x86qw.pyz": b"old application",
+                cli / "receipt": old_receipt,
+                target / ".x86qw/cli.receipt": old_receipt,
+                target / "x86qw.sh": b"old shell launcher\n",
+                target / "x86qw.cmd": b"old batch launcher\r\n",
+            }
+            for path, payload in old_paths.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+            if os.name != "nt":
+                (target / "x86qw.sh").chmod(0o751)
+                (target / "x86qw.cmd").chmod(0o640)
+            old_modes = {
+                path: path.stat().st_mode & 0o777 for path in old_paths
+            }
+
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_batch_launcher(prepared, destination):
+                if destination == target / "x86qw.cmd":
+                    raise OSError("simulated batch launcher promotion failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_online_cli()
+
+            for path, payload in old_paths.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+                self.assertEqual(old_modes[path], path.stat().st_mode & 0o777, path)
+            self.assertFalse((target / ".x86qw/staging").exists())
+            self.assertFalse(any(target.rglob("*.new")))
+
+    def test_online_cli_failed_first_install_leaves_no_metadata_or_launcher(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            target.mkdir()
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_batch_launcher(prepared, destination):
+                if destination == target / "x86qw.cmd":
+                    raise OSError("simulated batch launcher promotion failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_online_cli()
+
+            self.assertFalse((target / ".x86qw").exists())
+            self.assertFalse((target / "x86qw.sh").exists())
+            self.assertFalse((target / "x86qw.cmd").exists())
+
     def test_flat_metadata_is_migrated_into_contextual_directories(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

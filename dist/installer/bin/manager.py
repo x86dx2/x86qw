@@ -2314,6 +2314,33 @@ class Installer:
                 ) from error
             raise
 
+    def _apply_managed_path_removal(
+        self, destination: Path, *, label: str,
+    ) -> RuntimePayloadRollback:
+        """Move one managed node into the live transaction stage."""
+
+        assert self.stage is not None
+        backup_root = Path(tempfile.mkdtemp(prefix=".managed-old.", dir=self.stage))
+        previous = backup_root / "previous"
+        token = RuntimePayloadRollback(destination, None, previous, None)
+        if not lexists(destination):
+            return token
+        try:
+            token.previous_identity = self._runtime_path_identity(destination)
+            destination.replace(previous)
+            if self._runtime_path_identity(previous) != token.previous_identity:
+                raise InstallerError(f"{label} mudou durante a remoção: {destination}")
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_runtime_payload(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"Rollback de {label} falhou; recuperação mantida em {self.stage}: "
+                    f"{rollback_error}"
+                ) from error
+            raise
+
     def _rollback_runtime_receipt(self, token: RuntimeReceiptRollback) -> None:
         errors: list[str] = []
         if token.installed_identity is not None and lexists(token.destination):
@@ -6572,54 +6599,119 @@ class Installer:
                 raise InstallerError(f"Launcher público inválido: {source}") from error
             rendered_launchers[name] = (rendered, mode)
 
+        application = ZIPAPP_PATH or self.project_root / CLI_ARCHIVE_NAME
+        if not application.is_file() or application.is_symlink():
+            raise InstallerError(f"Aplicativo da CLI pública ausente ou inválido: {application}")
+        embedded = read_zipapp_json(
+            application, INSTALLER_BUNDLE_METADATA, "Identidade interna da CLI",
+        )
+        if embedded != identity:
+            raise InstallerError("A identidade do aplicativo x86QW diverge do recibo do bundle.")
+        application_digest = file_hash(application)
+
         metadata_root = self.target / METADATA_DIR
-        self.ensure_metadata_directory()
         cli_root = metadata_root / "cli"
-        replacement = Path(tempfile.mkdtemp(prefix=".cli-new.", dir=metadata_root))
-        backup = metadata_root / f".cli-old.{os.getpid()}"
-        try:
-            application = ZIPAPP_PATH or self.project_root / CLI_ARCHIVE_NAME
-            if not application.is_file() or application.is_symlink():
-                raise InstallerError(f"Aplicativo da CLI pública ausente ou inválido: {application}")
-            embedded = read_zipapp_json(
-                application, INSTALLER_BUNDLE_METADATA, "Identidade interna da CLI",
-            )
-            if embedded != identity:
-                raise InstallerError("A identidade do aplicativo x86QW diverge do recibo do bundle.")
-            destination = replacement / CLI_ARCHIVE_NAME
-            shutil.copyfile(application, destination)
-            if os.name != "nt":
-                destination.chmod(0o644)
-            if lexists(cli_root):
-                if not cli_root.is_dir() or cli_root.is_symlink():
-                    raise InstallerError(f"Diretório da CLI instalada inválido: {cli_root}")
-                if lexists(backup):
-                    raise InstallerError(f"Backup temporário inesperado da CLI: {backup}")
-                os.replace(cli_root, backup)
-            try:
-                os.replace(replacement, cli_root)
-            except OSError:
-                if lexists(backup) and not lexists(cli_root):
-                    os.replace(backup, cli_root)
-                raise
-            if lexists(backup):
-                remove_path(backup)
-        finally:
-            if lexists(replacement):
-                remove_path(replacement)
-
-        cli_receipt = self.target / CLI_RECEIPT
-        cli_receipt.parent.mkdir(parents=True, exist_ok=True)
-        self.write_cli_receipt_record(cli_receipt, identity)
-        remove_path(self.target / LEGACY_CLI_RECEIPT)
-
-        for name, (rendered, mode) in rendered_launchers.items():
+        if lexists(cli_root) and (not cli_root.is_dir() or cli_root.is_symlink()):
+            raise InstallerError(f"Diretório da CLI instalada inválido: {cli_root}")
+        self.cli_receipt_path()
+        for name, _ in launchers:
             destination = self.target / name
-            temporary = destination.with_name(destination.name + ".new")
-            temporary.write_text(rendered, encoding="utf-8", newline="\n")
+            if lexists(destination) and (
+                not destination.is_file() or destination.is_symlink()
+            ):
+                raise InstallerError(f"Launcher instalado inválido: {destination}")
+
+        parent_managed = self.stage is not None
+        with self.runtime_mutation_stage(
+            ".x86qw-cli.", parent_managed=parent_managed,
+        ):
+            assert self.stage is not None
+            prepared_cli = self.stage / "cli"
+            prepared_cli.mkdir()
+            prepared_application = prepared_cli / CLI_ARCHIVE_NAME
+            shutil.copyfile(application, prepared_application)
             if os.name != "nt":
-                temporary.chmod(mode)
-            temporary.replace(destination)
+                prepared_application.chmod(0o644)
+            if file_hash(prepared_application) != application_digest:
+                raise InstallerError("A cópia preparada da CLI diverge do bundle validado.")
+            self.write_cli_receipt_record(prepared_cli / "receipt", identity)
+
+            prepared_launchers: dict[str, Path] = {}
+            launcher_stage = self.stage / "launchers"
+            launcher_stage.mkdir()
+            for name, (rendered, mode) in rendered_launchers.items():
+                prepared = launcher_stage / name
+                prepared.write_text(rendered, encoding="utf-8", newline="\n")
+                if os.name != "nt":
+                    prepared.chmod(mode)
+                prepared_launchers[name] = prepared
+
+            legacy_receipt = self.target / LEGACY_CLI_RECEIPT
+            steps = [
+                MutationStep(
+                    key="cli",
+                    description="Publicar o aplicativo e o recibo da CLI",
+                    observe=lambda: (
+                        self._mutation_path_observation(prepared_cli),
+                        self._mutation_path_observation(cli_root),
+                    ),
+                    apply=lambda: self._apply_runtime_payload(prepared_cli, cli_root),
+                    rollback=self._rollback_runtime_payload,
+                ),
+                MutationStep(
+                    key="legacy-receipt",
+                    description="Remover o recibo legado da CLI",
+                    observe=lambda: self._mutation_path_observation(legacy_receipt),
+                    apply=lambda: self._apply_managed_path_removal(
+                        legacy_receipt, label="recibo legado da CLI",
+                    ),
+                    rollback=self._rollback_runtime_payload,
+                ),
+            ]
+            for name, _ in launchers:
+                prepared = prepared_launchers[name]
+                destination = self.target / name
+                steps.append(MutationStep(
+                    key=f"launcher:{name}",
+                    description=f"Publicar o launcher {name}",
+                    observe=lambda prepared=prepared, destination=destination: (
+                        self._mutation_path_observation(prepared),
+                        self._mutation_path_observation(destination),
+                    ),
+                    apply=lambda prepared=prepared, destination=destination: (
+                        self._apply_runtime_payload(prepared, destination)
+                    ),
+                    rollback=self._rollback_runtime_payload,
+                ))
+            plan = MutationPlan(
+                identifier=f"cli:{cli_version}",
+                summary=f"Publicar a CLI x86QW {cli_version}",
+                steps=tuple(steps),
+            )
+            try:
+                result = execute_mutation(prepare_mutation(plan))
+            except MutationApplyError as error:
+                if isinstance(error.operation_error, InstallerError):
+                    raise error.operation_error
+                raise InstallerError(
+                    "Não foi possível publicar a CLI, o recibo e os launchers como uma geração única."
+                ) from error
+            try:
+                if self.validate_cli_receipt(cli_root / "receipt") != identity:
+                    raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
+                if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
+                    raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
+                for name, (rendered, _) in rendered_launchers.items():
+                    if (self.target / name).read_text(encoding="utf-8") != rendered:
+                        raise InstallerError(f"O launcher instalado diverge do modelo: {name}")
+            except BaseException as error:
+                try:
+                    rollback_mutation(result)
+                except BaseException as rollback_error:
+                    raise InstallerError(
+                        f"A validação da CLI falhou e o rollback ficou incompleto: {rollback_error}"
+                    ) from error
+                raise
 
         shell_launcher = self.target / "x86qw.sh"
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
