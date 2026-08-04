@@ -73,6 +73,7 @@ from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_fi
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
 from x86qw_runtime.migrations import migrate_install_state
 from x86qw_runtime.state import (
+    INSTALLATION_PROFILES,
     StateError,
     parse_install_state,
     read_install_state,
@@ -792,22 +793,44 @@ class Installer:
         )
         self.selected_component_profile = "none"
         self.requested_components: list[str] = []
+        self._component_catalog: dict[str, object] | None = None
+        self._components: dict[str, dict[str, object]] | None = None
+        self._content_component_namespaces: set[str] | None = None
+
+    @property
+    def component_catalog(self) -> dict[str, object]:
+        if self._component_catalog is not None:
+            return self._component_catalog
         runtime_catalog_path = INSTALLER_ROOT / RUNTIME_COMPONENT_CATALOG
         development_catalog_path = INSTALLER_ROOT / DEVELOPMENT_COMPONENT_CATALOG
         try:
             if ZIPAPP_PATH is not None:
-                self.component_catalog = read_zipapp_json(
+                catalog = read_zipapp_json(
                     ZIPAPP_PATH, RUNTIME_COMPONENT_CATALOG, "Catálogo runtime da CLI",
                 )
-                validate_runtime_catalog(self.component_catalog)
+                validate_runtime_catalog(catalog)
             elif runtime_catalog_path.is_file() and not runtime_catalog_path.is_symlink():
-                self.component_catalog = load_runtime_catalog(runtime_catalog_path)
+                catalog = load_runtime_catalog(runtime_catalog_path)
             else:
-                self.component_catalog = load_component_catalog(development_catalog_path)
+                catalog = load_component_catalog(development_catalog_path)
         except (InstallerError, ValueError) as error:
             raise InstallerError(str(error)) from error
-        self.components = components_by_id(self.component_catalog)
-        self.content_component_namespaces = set(self.component_catalog["content_namespaces"])
+        self._component_catalog = catalog
+        return catalog
+
+    @property
+    def components(self) -> dict[str, dict[str, object]]:
+        if self._components is None:
+            self._components = components_by_id(self.component_catalog)
+        return self._components
+
+    @property
+    def content_component_namespaces(self) -> set[str]:
+        if self._content_component_namespaces is None:
+            self._content_component_namespaces = set(
+                self.component_catalog["content_namespaces"],
+            )
+        return self._content_component_namespaces
 
     def run_command(self, arguments: list[str], *, capture: bool = False) -> str:
         console.detail("$ " + " ".join(arguments))
@@ -1004,7 +1027,7 @@ class Installer:
             MAPS_RECEIPT, MAPS_INVENTORY, PRESETS_RECEIPT, PRESETS_INVENTORY,
         ):
             ensure_no_symlink(self.target / relative, "managed path")
-        for component in self.components:
+        for component in self.metadata_component_ids():
             for relative in self.component_metadata(component):
                 ensure_no_symlink(self.target / relative, "managed path")
 
@@ -2477,11 +2500,7 @@ class Installer:
         self.validate_inventory(destination)
 
     def component_metadata(self, component: str) -> tuple[str, str]:
-        known = {
-            *self.components, *LEGACY_COMPONENTS,
-            "maps", "presets", "play-support", "package-order",
-        }
-        if component not in known:
+        if not COMPONENT_VERSION.fullmatch(component):
             raise InstallerError(f"Componente desconhecido: {component}")
         return (
             f"{COMPONENT_METADATA_DIR}/{component}/receipt",
@@ -3512,7 +3531,7 @@ class Installer:
         ).to_document()
 
     def _install_state_profiles(self) -> frozenset[str]:
-        return frozenset({"none", "custom", *self.component_catalog["profiles"]})
+        return INSTALLATION_PROFILES
 
     @staticmethod
     def _install_state_error(error: StateError, path: Path) -> InstallerError:
@@ -5995,10 +6014,33 @@ class Installer:
             console.info("Configurações nQuake instaladas e aguardando a primeira execução do ezQuake.")
 
     def metadata_component_ids(self) -> tuple[str, ...]:
-        return tuple(dict.fromkeys((
-            *self.components, *LEGACY_COMPONENTS,
-            "maps", "presets", "play-support", "package-order",
-        )))
+        identifiers = list(LEGACY_COMPONENTS)
+        identifiers.extend(("maps", "presets", "play-support", "package-order"))
+        metadata = self.target / COMPONENT_METADATA_DIR
+        if metadata.is_dir() and not metadata.is_symlink():
+            identifiers.extend(
+                entry.name
+                for entry in metadata.iterdir()
+                if COMPONENT_VERSION.fullmatch(entry.name)
+            )
+        legacy_metadata = self.target / METADATA_DIR
+        if legacy_metadata.is_dir() and not legacy_metadata.is_symlink():
+            reserved_receipts = {
+                Path(NQUAKE_RECEIPT).name,
+                Path(LEGACY_CLI_RECEIPT).name,
+                *(
+                    Path(spec.legacy_receipt(channel)).name
+                    for spec in PLATFORMS.values()
+                    for channel in ("stable", "nightly")
+                ),
+            }
+            identifiers.extend(
+                entry.name.removesuffix(".receipt")
+                for entry in legacy_metadata.glob("*.receipt")
+                if COMPONENT_VERSION.fullmatch(entry.name.removesuffix(".receipt"))
+                and entry.name not in reserved_receipts
+            )
+        return tuple(dict.fromkeys(identifiers))
 
     def legacy_metadata_present(self) -> bool:
         if lexists(self.target / LEGACY_CLI_RECEIPT):

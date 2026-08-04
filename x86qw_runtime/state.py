@@ -23,6 +23,9 @@ class StateError(ValueError):
 
 
 MAX_INSTALL_STATE_BYTES = 256 * 1024
+INSTALLATION_PROFILES = frozenset({
+    "none", "custom", "essential", "recommended", "complete",
+})
 
 
 @dataclass(frozen=True)

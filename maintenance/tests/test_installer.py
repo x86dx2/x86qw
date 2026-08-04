@@ -44,6 +44,91 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    @contextlib.contextmanager
+    def component_catalog_unavailable(self):
+        with mock.patch.object(
+            install_qw, "load_component_catalog",
+            side_effect=AssertionError("component catalog was loaded"),
+        ), mock.patch.object(
+            install_qw, "load_runtime_catalog",
+            side_effect=AssertionError("runtime component catalog was loaded"),
+        ), mock.patch.object(
+            install_qw, "read_zipapp_json",
+            side_effect=AssertionError("zipapp component catalog was loaded"),
+        ):
+            yield
+
+    def test_hub_does_not_load_the_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, _, _ = self.make_installer(Path(temporary))
+                installer.remote.get = lambda *args, **kwargs: json.dumps([{
+                    "address": "127.0.0.1:28501",
+                    "players": [],
+                }]).encode("utf-8")
+                installer.reject_target_symlinks()
+                with contextlib.redirect_stdout(io.StringIO()):
+                    servers = installer.hub_servers()
+
+            self.assertEqual("127.0.0.1:28501", servers[0]["address"])
+
+    def test_cleanup_does_not_load_the_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, target, _ = self.make_installer(Path(temporary))
+                state = target / install_qw.INSTALL_STATE
+                state.parent.mkdir(parents=True)
+                state.write_text(json.dumps({
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": [],
+                    "capabilities": [],
+                    "component_fingerprint": (
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    ),
+                }), encoding="utf-8")
+                runtime_cache = target / "ezquake/temp/download.tmp"
+                runtime_cache.parent.mkdir(parents=True)
+                runtime_cache.write_bytes(b"cache")
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(
+                        (1, 0),
+                        installer.cleanup_data(downloads=False, personal_data=False),
+                    )
+
+            self.assertFalse(runtime_cache.exists())
+
+    def test_component_access_still_requires_a_valid_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, _, _ = self.make_installer(Path(temporary))
+                with mock.patch.object(
+                    install_qw, "load_component_catalog",
+                    side_effect=install_qw.InstallerError("invalid component catalog"),
+                ), self.assertRaisesRegex(
+                    install_qw.InstallerError, "invalid component catalog",
+                ):
+                    installer.choose_components()
+
+    def test_legacy_client_receipt_is_not_component_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            canonical, _, _ = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+            )
+            legacy = target / spec.legacy_receipt("stable")
+            canonical.replace(legacy)
+
+            self.assertEqual(
+                ("client:linux:stable",),
+                installer.managed_installation_identity(),
+            )
+
     def stage_backed_component_install(self, installer, target, installed, stages):
         marker = target / "qw/component-transaction.txt"
         marker.parent.mkdir(parents=True, exist_ok=True)
