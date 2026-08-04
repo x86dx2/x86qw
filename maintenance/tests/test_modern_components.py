@@ -14,6 +14,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from maintenance.tools import component_sources
+
 
 # Um teste que por engano iniciar o runtime real nunca deve capturar a tela.
 # Casos que verificam o comando normal removem a variável em escopo controlado.
@@ -26,6 +28,10 @@ install_qw = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = install_qw
 SPEC.loader.exec_module(install_qw)
+install_qw.configure_development_source_provider(install_qw.ComponentSourceProvider(
+    load_context=component_sources.load_source_context,
+    resolve_payloads=component_sources.resolve_component_payloads,
+))
 sys.modules["cli"] = install_qw
 
 PLAY_SPEC = importlib.util.spec_from_file_location("play_qw_modern", ROOT / "dist/installer/bin/gameplay.py")

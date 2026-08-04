@@ -314,6 +314,7 @@ def service_composition_context(services, gameplay):
         host_platforms=HOST_PLATFORMS,
         host_platform=host_platform,
         console=console,
+        gameplay_module=gameplay,
         gameplay_context=gameplay_composition_context(gameplay),
     )
 
@@ -848,6 +849,26 @@ class RuntimeCommitPersistenceError(PersistenceError):
         self.result = result
 
 
+@dataclass(frozen=True)
+class ComponentSourceProvider:
+    """Repository-only component source operations injected by development tools."""
+
+    load_context: Callable[[Path, Path, Path], object]
+    resolve_payloads: Callable[[object, str], tuple[dict[str, object], str, object]]
+
+
+_development_component_source_provider: ComponentSourceProvider | None = None
+
+
+def configure_development_source_provider(
+    provider: ComponentSourceProvider | None,
+) -> None:
+    global _development_component_source_provider
+    if provider is not None and not isinstance(provider, ComponentSourceProvider):
+        raise TypeError("provider de fontes de desenvolvimento inválido")
+    _development_component_source_provider = provider
+
+
 class Installer:
     def __init__(
         self,
@@ -856,6 +877,7 @@ class Installer:
         cache_root: Path | None = None,
         *,
         online_only: bool = False,
+        component_source_provider: ComponentSourceProvider | None = None,
     ):
         self.project_root = project_root.resolve()
         self.target = target
@@ -884,6 +906,9 @@ class Installer:
         self.update_ui = False
         self._public_catalog: dict[str, object] | None = None
         self._component_source_context: object | None = None
+        self.component_source_provider = (
+            component_source_provider or _development_component_source_provider
+        )
         self.selected_component_profile = "none"
         self.requested_components: list[str] = []
         runtime_catalog_path = INSTALLER_ROOT / RUNTIME_COMPONENT_CATALOG
@@ -4221,16 +4246,15 @@ class Installer:
         return artifact
 
     def component_source_context(self) -> object | None:
-        if self.online_only:
+        provider = self.component_source_provider
+        if self.online_only or provider is None:
             return None
         distribution = self.project_root / "dist"
         if not (distribution / "distributions/nquake").is_dir():
             return None
         if self._component_source_context is None:
             try:
-                from maintenance.tools.component_sources import load_source_context
-
-                self._component_source_context = load_source_context(
+                self._component_source_context = provider.load_context(
                     distribution,
                     self.project_root / DEVELOPMENT_COMPONENT_CATALOG,
                     self.project_root / COMPONENT_RELEASES,
@@ -4249,11 +4273,11 @@ class Installer:
         context = self.component_source_context()
         if context is None:
             return None
+        provider = self.component_source_provider
+        assert provider is not None
         identifier = str(package["package"])
         try:
-            from maintenance.tools.component_sources import resolve_component_payloads
-
-            release, source_revision, payloads = resolve_component_payloads(context, identifier)
+            release, source_revision, payloads = provider.resolve_payloads(context, identifier)
         except (OSError, ValueError, json.JSONDecodeError, tarfile.TarError) as error:
             raise InstallerError(
                 f"Não foi possível materializar {identifier} a partir das fontes canônicas locais. "

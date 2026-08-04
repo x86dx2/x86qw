@@ -10,6 +10,31 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class GameplayManagerCycleTests(unittest.TestCase):
+    def test_importing_services_does_not_load_gameplay_or_manager(self):
+        """Non-host service paths keep the gameplay adapter unopened."""
+
+        probe = textwrap.dedent(
+            f"""
+            import sys
+            from pathlib import Path
+
+            root = Path({str(ROOT)!r})
+            sys.path.insert(0, str(root))
+            sys.path.insert(0, str(root / "dist/installer/bin"))
+            sys.modules.pop("gameplay", None)
+            sys.modules.pop("manager", None)
+            import services
+            assert "gameplay" not in sys.modules
+            assert "manager" not in sys.modules
+            """
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe], cwd=ROOT, text=True,
+            capture_output=True, check=False,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_gameplay_import_and_player_factory_do_not_import_manager(self):
         """Pure gameplay import must work before the manager adapter is available."""
         probe = textwrap.dedent(

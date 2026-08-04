@@ -27,7 +27,6 @@ from pathlib import Path, PurePosixPath
 
 sys.dont_write_bytecode = True
 
-gameplay = importlib.import_module("gameplay")
 session_control = importlib.import_module("x86qw_runtime.session_control")
 from x86qw_runtime.ui import menu as navigation
 
@@ -74,7 +73,8 @@ class ServiceContext:
     host_platforms: dict[str, str]
     host_platform: object
     console: object
-    gameplay_context: gameplay.GameplayContext
+    gameplay_module: object
+    gameplay_context: object
 
 
 _service_context: ServiceContext | None = None
@@ -88,7 +88,7 @@ def configure_context(context: ServiceContext) -> None:
         raise TypeError("contexto de serviços inválido")
     _service_context = context
     console = context.console
-    gameplay.configure_context(context.gameplay_context)
+    context.gameplay_module.configure_context(context.gameplay_context)
 
 
 def _context() -> ServiceContext:
@@ -113,6 +113,14 @@ class _ContextProxy:
 
 
 core = _ContextProxy()
+
+
+class _GameplayProxy:
+    def __getattr__(self, name: str) -> object:
+        return getattr(_context().gameplay_module, name)
+
+
+gameplay = _GameplayProxy()
 console: object = RuntimeConsole()
 ProcessIdentity = session_control.ProcessIdentity
 ProcessProbe = session_control.ProcessProbe
@@ -4719,11 +4727,12 @@ def main(
     raw_arguments = sys.argv[1:] if arguments is None else arguments
     if _service_context is None and any(value in {"-h", "--help"} for value in raw_arguments):
         root = Path(__file__).resolve().parents[3]
+        gameplay_module = importlib.import_module("gameplay")
 
         def unavailable_catalog(*_arguments) -> dict[str, object]:
             raise RuntimeError("catálogo zipapp indisponível no adapter de ajuda")
 
-        gameplay_context = gameplay.GameplayContext(
+        gameplay_context = gameplay_module.GameplayContext(
             project_root=root,
             installer_root=root,
             zipapp_path=None,
@@ -4741,6 +4750,7 @@ def main(
             host_platforms={},
             host_platform=system_platform,
             console=console,
+            gameplay_module=gameplay_module,
             gameplay_context=gameplay_context,
         ))
     temporary_paths: list[Path] = []

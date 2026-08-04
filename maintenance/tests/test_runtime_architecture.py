@@ -172,6 +172,18 @@ class RuntimeArchitectureTests(unittest.TestCase):
         }
         self.assertEqual({}, violations)
 
+    def test_installed_entrypoints_do_not_import_maintenance(self) -> None:
+        """Repository tooling is supplied by a development composition root."""
+
+        violations = {
+            path.name: sorted(
+                imported for imported in literal_imports(path)
+                if imported == "maintenance" or imported.startswith("maintenance.")
+            )
+            for path in ENTRYPOINTS.values()
+        }
+        self.assertEqual({}, {name: values for name, values in violations.items() if values})
+
 
 if __name__ == "__main__":
     unittest.main()
