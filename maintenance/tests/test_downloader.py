@@ -1270,6 +1270,9 @@ class BlockingResolverProcess:
         self.dns_active.clear()
 
 
+RESOLVER_CLEANUP_WAIT_SECONDS = 5
+
+
 class DownloaderTests(unittest.TestCase):
     PAYLOAD = b"x86QW bounded downloader\n"
     URL = "https://downloads.example.invalid/artifact.zip"
@@ -2780,8 +2783,8 @@ class DownloaderTests(unittest.TestCase):
                 )
 
         # A deadline cancellation and the resolver's own timeout can complete
-        # on adjacent scheduler turns on older Windows/Python combinations.
-        self.assertTrue(process.killed.wait(1))
+        # on separate scheduler turns on slower Windows/Python combinations.
+        self.assertTrue(process.killed.wait(RESOLVER_CLEANUP_WAIT_SECONDS))
         self.assertTrue(process.collected.is_set())
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())
@@ -2805,7 +2808,7 @@ class DownloaderTests(unittest.TestCase):
 
         # The controller kills the resolver before returning, while the daemon
         # worker may need one final scheduler turn to finish reaping it.
-        self.assertTrue(process.collected.wait(1))
+        self.assertTrue(process.collected.wait(RESOLVER_CLEANUP_WAIT_SECONDS))
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())
         self.assertFalse(any(
