@@ -58,6 +58,7 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.errors import ExitCode, InstallerError
 
 from maintenance.tools.components import (
     components_by_id,
@@ -67,7 +68,7 @@ from maintenance.tools.components import (
     resolve_dependencies,
     validate_runtime_catalog,
 )
-from maintenance.tools.downloader import (
+from x86qw_runtime.io.downloader import (
     BoundedMetadata,
     DownloadError,
     DownloadHTTPError,
@@ -383,10 +384,6 @@ gl_part_trails \"1\"
 gl_part_gunshots \"1\"
 """,
 }
-
-class InstallerError(RuntimeError):
-    pass
-
 
 @dataclass(frozen=True)
 class UpdatePlanRow:
@@ -5866,25 +5863,25 @@ def main(arguments: list[str] | None = None) -> int:
         return execute_manager_action(options, project_root)
     except KeyboardInterrupt:
         console.error("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except navigation.MenuExit:
         console.info("Menu encerrado; nenhuma seleção pendente foi aplicada.")
-        return 0
+        return int(ExitCode.SUCCESS)
     except navigation.MenuCancelled:
         console.info("Operação cancelada; nenhuma seleção pendente foi aplicada.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except (InstallerError, session_control.SessionControlError) as error:
         console.error(str(error))
         if options is not None and not options.verbose:
             print("       Execute novamente com --verbose para obter detalhes técnicos.", file=sys.stderr)
-        return 1
+        return int(getattr(error, "exit_code", ExitCode.FAILURE))
     except Exception as error:  # pragma: no cover - last-resort CLI protection
         console.error(f"Falha inesperada: {error}")
         if options is not None and options.verbose:
             traceback.print_exc()
         else:
             print("       Execute novamente com --verbose para exibir o diagnóstico completo.", file=sys.stderr)
-        return 1
+        return int(ExitCode.FAILURE)
 
 
 if __name__ == "__main__":

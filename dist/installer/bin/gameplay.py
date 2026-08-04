@@ -32,8 +32,8 @@ from x86qw_runtime.io.archive import (
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.errors import ExitCode, InstallerError
 
-InstallerError = core.InstallerError
 console = core.console
 file_count = core.file_count
 file_hash = core.file_hash
@@ -2935,30 +2935,30 @@ def main(
             options.game, options.mode, options.map, options.ktx_options,
             configure_interactively=options.menu or options.mode is None,
         )
-        return 0
+        return int(ExitCode.SUCCESS)
     except KeyboardInterrupt:
         console.error("Operação cancelada. O jogo não foi iniciado.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except navigation.MenuExit:
         if propagate_menu_exit:
             raise
         console.info("Menu encerrado; o jogo não foi iniciado.")
-        return 0
+        return int(ExitCode.SUCCESS)
     except navigation.MenuCancelled:
         console.info("Operação cancelada; o jogo não foi iniciado.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except InstallerError as error:
         console.error(str(error))
         if options is not None and not options.verbose:
             print("       Execute novamente com --verbose para obter detalhes técnicos.", file=sys.stderr)
-        return 1
+        return int(error.exit_code)
     except Exception as error:  # pragma: no cover - proteção final da CLI
         console.error(f"Falha inesperada: {error}")
         if options is not None and options.verbose:
             traceback.print_exc()
         else:
             print("       Execute novamente com --verbose para exibir o diagnóstico completo.", file=sys.stderr)
-        return 1
+        return int(ExitCode.FAILURE)
     finally:
         if player is not None:
             player.cleanup_stage()

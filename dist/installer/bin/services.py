@@ -40,8 +40,8 @@ from x86qw_runtime.io.archive import (
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.errors import ExitCode, InstallerError
 
-InstallerError = core.InstallerError
 console = core.console
 lexists = core.lexists
 remove_path = core.remove_path
@@ -5538,21 +5538,21 @@ def main(
             return run_processes(specs, journal)
     except InstallerError as error:
         console.error(str(error))
-        return 1
+        return int(error.exit_code)
     except navigation.MenuExit:
         if propagate_menu_exit:
             raise
         console.info("Menu encerrado; nenhum serviço foi iniciado.")
-        return 0
+        return int(ExitCode.SUCCESS)
     except navigation.MenuCancelled:
         console.info("Operação cancelada; nenhum serviço foi iniciado.")
-        return 130
+        return int(ExitCode.INTERRUPTED)
     except Exception as error:
         if "options" in locals() and getattr(options, "verbose", False):
             import traceback
             traceback.print_exc()
         console.error(f"Falha inesperada nos serviços x86QW: {error}")
-        return 1
+        return int(ExitCode.FAILURE)
 
 
 if __name__ == "__main__":

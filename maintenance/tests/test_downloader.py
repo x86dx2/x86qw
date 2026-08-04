@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 import downloader  # noqa: E402
 
 
-DOWNLOADER_PATH = ROOT / "maintenance/tools/downloader.py"
+DOWNLOADER_PATH = ROOT / "x86qw_runtime/io/downloader.py"
 MANAGER_PATH = ROOT / "dist/installer/bin/manager.py"
 SERVICES_PATH = ROOT / "dist/installer/bin/services.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
@@ -811,7 +811,11 @@ def scan_python_remote_boundary(
         marker = next(
             (
                 module
-                for module in ("maintenance.tools.downloader", "downloader")
+                for module in (
+                    "x86qw_runtime.io.downloader",
+                    "maintenance.tools.downloader",
+                    "downloader",
+                )
                 if name == module or name.startswith(module + ".")
             ),
             None,
@@ -1269,6 +1273,7 @@ class DownloaderTests(unittest.TestCase):
 
     def test_no_consumer_bypasses_the_shared_remote_byte_boundary(self) -> None:
         roots = (
+            ROOT / "x86qw_runtime",
             ROOT / "maintenance/manage.py",
             ROOT / "maintenance/tools",
             ROOT / "dist/installer/bin",
