@@ -88,6 +88,7 @@ ZIPAPP_FILES = (
     ("x86qw_runtime/io/paths.py", "x86qw_runtime/io/paths.py"),
     ("x86qw_runtime/io/private_fs.py", "x86qw_runtime/io/private_fs.py"),
     ("x86qw_runtime/platform/__init__.py", "x86qw_runtime/platform/__init__.py"),
+    ("x86qw_runtime/platform/locking.py", "x86qw_runtime/platform/locking.py"),
     ("x86qw_runtime/platform/processes.py", "x86qw_runtime/platform/processes.py"),
     ("x86qw_runtime/platform/windows_acl.py", "x86qw_runtime/platform/windows_acl.py"),
 )

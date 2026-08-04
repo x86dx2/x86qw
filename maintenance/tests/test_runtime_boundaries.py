@@ -334,6 +334,7 @@ class RuntimeSupervisorOwnershipTests(unittest.TestCase):
             names = set(application.namelist())
         self.assertIn("x86qw_runtime/supervisor/core.py", names)
         self.assertIn("x86qw_runtime/io/paths.py", names)
+        self.assertIn("x86qw_runtime/platform/locking.py", names)
         self.assertIn("x86qw_runtime/ui/arguments.py", names)
         self.assertIn("x86qw_runtime/ui/console.py", names)
 
