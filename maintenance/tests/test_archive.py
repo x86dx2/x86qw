@@ -7,6 +7,8 @@ import math
 import os
 import stat
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 import warnings
@@ -16,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from x86qw_runtime.io import private_fs
 from x86qw_runtime.io import archive as archive_module
 from x86qw_runtime.io.archive import (
     ArchiveError,
@@ -204,6 +207,41 @@ class ArchiveTests(unittest.TestCase):
                 side_effect=AssertionError("oversized path must not be hashed"),
             ), self.assertRaisesRegex(ArchiveError, "source exceeds"):
                 scan_archive(sparse)
+
+    def test_scan_aborts_when_private_snapshot_cannot_be_created(self) -> None:
+        payload = self.archive_bytes([("member", b"payload")])
+        with mock.patch.object(
+            private_fs,
+            "private_mkstemp",
+            side_effect=private_fs.PrivateFilesystemError("private snapshot unavailable"),
+        ), self.assertRaisesRegex(ArchiveError, "valid supported ZIP archive"):
+            scan_archive(payload)
+
+    def test_standalone_archive_helper_does_not_require_private_fs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "x86qw_runtime" / "io"
+            package.mkdir(parents=True)
+            (package.parent / "__init__.py").write_bytes(b"")
+            (package / "__init__.py").write_bytes(b"")
+            (package / "archive.py").write_bytes(Path(archive_module.__file__).read_bytes())
+            source = root / "source.zip"
+            source.write_bytes(self.archive_bytes([("member", b"payload")]))
+            script = (
+                "import sys\n"
+                "from pathlib import Path\n"
+                "sys.path.insert(0, sys.argv[1])\n"
+                "from x86qw_runtime.io.archive import scan_archive\n"
+                "plan = scan_archive(Path(sys.argv[2]))\n"
+                "raise SystemExit(0 if plan.member_names == ('member',) else 2)\n"
+            )
+            completed = subprocess.run(
+                [sys.executable, "-I", "-c", script, str(root), str(source)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
 
     def test_growing_source_reads_at_most_the_limit_plus_one_byte(self) -> None:
         class CountingStream(io.BytesIO):
@@ -673,6 +711,24 @@ class ArchiveTests(unittest.TestCase):
             destination = root / "destination"
             with mock.patch.object(
                 archive_module, "_stream_member", side_effect=ArchiveError("injected failure"),
+            ), self.assertRaises(ArchiveError):
+                extract_archive(plan, destination)
+            self.assertFalse(destination.exists())
+            self.assertEqual([], list(root.glob(".destination.*.tmp")))
+
+    def test_unanchored_extraction_aborts_when_private_staging_cannot_be_created(self) -> None:
+        plan = scan_archive(self.archive_bytes([("member", b"payload")]))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "destination"
+            with mock.patch.object(
+                archive_module,
+                "_supports_anchored_directories",
+                return_value=False,
+            ), mock.patch.object(
+                private_fs,
+                "private_mkdtemp",
+                side_effect=private_fs.PrivateFilesystemError("private staging unavailable"),
             ), self.assertRaises(ArchiveError):
                 extract_archive(plan, destination)
             self.assertFalse(destination.exists())

@@ -186,6 +186,7 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
         ("subprocess.Popen", "Installer.launch_runtime", "command"),
     }),
     SERVICES_PATH: frozenset({
+        ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
         ("subprocess.Popen", "launch_background_controller", "command"),
         ("subprocess.Popen", "run_processes", "spec.arguments"),
     }),
@@ -1570,9 +1571,17 @@ class DownloaderTests(unittest.TestCase):
 
         powershell = ROOT / "dist/installer/bin/install.ps1"
         powershell_source = powershell.read_text(encoding="utf-8")
+        downloader_marker = "$DownloaderSource = @'\n"
         terminator = "\n'@\n"
         injected = "\nurllib.request.urlopen('https://invalid/bypass')" + terminator
-        powershell_source = powershell_source.replace(terminator, injected, 1)
+        self.assertEqual(1, powershell_source.count(downloader_marker))
+        downloader_start = powershell_source.index(downloader_marker) + len(downloader_marker)
+        downloader_end = powershell_source.index(terminator, downloader_start)
+        powershell_source = (
+            powershell_source[:downloader_end]
+            + injected
+            + powershell_source[downloader_end + len(terminator):]
+        )
         violations = scan_script_remote_boundary(powershell, powershell_source)
         self.assertTrue(any(
             "Python embutido" in violation.mechanism
@@ -1939,30 +1948,94 @@ class DownloaderTests(unittest.TestCase):
                 self.PAYLOAD,
                 headers={"Content-Length": str(len(self.PAYLOAD))},
             )
-            original_replace = os.replace
             observed: dict[str, object] = {}
 
-            def replace(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
-                observed["destination_before_replace"] = destination.read_bytes()
-                observed["temporary_payload"] = Path(source).read_bytes()
-                observed["source"] = Path(source)
-                original_replace(source, target)
+            if os.name == "nt":
+                original_private_replace = downloader.private_fs.replace_open_private_file
 
-            with mock.patch.object(downloader.os, "replace", side_effect=replace) as replace_mock:
+                def observe_private_replace(
+                    descriptor: int,
+                    source: str | os.PathLike[str],
+                    target: str | os.PathLike[str],
+                ) -> None:
+                    observed["destination_before_replace"] = destination.read_bytes()
+                    observed["source"] = Path(source)
+                    original_private_replace(descriptor, Path(source), Path(target))
+
+                replacement = mock.patch.object(
+                    downloader.private_fs,
+                    "replace_open_private_file",
+                    side_effect=observe_private_replace,
+                )
+            else:
+                original_replace = os.replace
+
+                def observe_replace(
+                    source: str | os.PathLike[str], target: str | os.PathLike[str],
+                ) -> None:
+                    observed["destination_before_replace"] = destination.read_bytes()
+                    observed["source"] = Path(source)
+                    original_replace(source, target)
+
+                replacement = mock.patch.object(
+                    downloader.os, "replace", side_effect=observe_replace,
+                )
+            with replacement:
                 result = self.download(
                     self.pinned(destination),
                     testing_open_url=self.response_opener(response),
                 )
 
             self.assertEqual(b"installed version", observed["destination_before_replace"])
-            self.assertEqual(self.PAYLOAD, observed["temporary_payload"])
             self.assertEqual(self.PAYLOAD, destination.read_bytes())
             self.assertEqual(destination, result.path)
             self.assertEqual(len(self.PAYLOAD), result.size)
             self.assertEqual(hashlib.sha256(self.PAYLOAD).hexdigest(), result.sha256)
             self.assertEqual(1, result.attempts)
-            replace_mock.assert_called_once()
             self.assertFalse(Path(observed["source"]).exists())
+            self.assert_no_download_temporaries(self, root)
+
+    @unittest.skipUnless(os.name == "nt", "a janela de troca é específica do Windows")
+    def test_windows_pinned_download_keeps_validated_identity_until_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "artifact.zip"
+            response = FakeResponse(
+                self.PAYLOAD,
+                headers={"Content-Length": str(len(self.PAYLOAD))},
+            )
+            original_remaining = downloader._remaining
+            replacement_attempts: list[bool] = []
+            displaced = root / "displaced.bin"
+
+            def attempt_replacement(deadline: float, clock) -> float:
+                remaining = original_remaining(deadline, clock)
+                for source in root.glob(".*.download"):
+                    try:
+                        os.replace(source, displaced)
+                    except OSError:
+                        replacement_attempts.append(False)
+                    else:
+                        replacement_attempts.append(True)
+                        os.replace(displaced, source)
+                return remaining
+
+            with mock.patch.object(
+                downloader, "_remaining", side_effect=attempt_replacement,
+            ):
+                result = self.download(
+                    self.pinned(destination),
+                    testing_open_url=self.response_opener(response),
+                )
+
+            self.assertTrue(replacement_attempts)
+            self.assertFalse(
+                any(replacement_attempts),
+                "o temporário validado pôde ser trocado antes da promoção",
+            )
+            self.assertEqual(self.PAYLOAD, destination.read_bytes())
+            self.assertEqual(destination, result.path)
+            self.assertFalse(displaced.exists())
             self.assert_no_download_temporaries(self, root)
 
     def test_mirrors_share_one_deadline_across_retries_and_fallback(self) -> None:
@@ -2174,7 +2247,7 @@ class DownloaderTests(unittest.TestCase):
             self.assertEqual([0o600], observed_modes)
 
     @unittest.skipIf(os.name == "nt", "fchmod não se aplica ao Windows")
-    def test_fchmod_failure_closes_and_removes_the_temporary(self) -> None:
+    def test_fchmod_failure_closes_and_preserves_the_private_temporary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "artifact.zip"
             real_close = os.close
@@ -2194,7 +2267,10 @@ class DownloaderTests(unittest.TestCase):
                     )
 
             self.assertEqual(1, len(closed))
-            self.assert_no_download_temporaries(self, destination.parent)
+            residuals = list(destination.parent.glob(".*.download"))
+            self.assertEqual(1, len(residuals))
+            self.assertEqual(b"", residuals[0].read_bytes())
+            self.assertEqual(0o600, stat.S_IMODE(residuals[0].stat().st_mode))
 
     def test_fdopen_failure_closes_and_removes_the_temporary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -3685,8 +3761,10 @@ class DownloaderTests(unittest.TestCase):
             root = Path(temporary)
             destination = root / "artifact.zip"
             destination.write_bytes(b"preserve")
-            temporary_path = root / ".controlled.download"
-            handle = temporary_path.open("wb")
+            descriptor, temporary_path = downloader.private_fs.private_mkstemp(
+                directory=root, prefix=".controlled-", suffix=".download",
+            )
+            handle = os.fdopen(descriptor, "wb")
             output = OutputProxy(
                 handle,
                 write_error=write_error,
@@ -3706,25 +3784,39 @@ class DownloaderTests(unittest.TestCase):
                         downloader.os, "fsync", side_effect=fsync_error,
                     ))
                 if replace_error is not None:
-                    stack.enter_context(mock.patch.object(
-                        downloader.os, "replace", side_effect=replace_error,
-                    ))
+                    if os.name == "nt":
+                        stack.enter_context(mock.patch.object(
+                            downloader.private_fs,
+                            "replace_open_private_file",
+                            side_effect=replace_error,
+                        ))
+                    else:
+                        stack.enter_context(mock.patch.object(
+                            downloader.os, "replace", side_effect=replace_error,
+                        ))
                 with self.assertRaises(downloader.DownloadStorageError):
                     self.download(
                         self.pinned(destination),
                         testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
                     )
 
-            self.assertEqual(b"preserve", destination.read_bytes())
+            expected = (
+                self.PAYLOAD
+                if os.name == "nt" and close_error is not None
+                else b"preserve"
+            )
+            self.assertEqual(expected, destination.read_bytes())
             self.assertFalse(temporary_path.exists())
 
-    def test_successful_promotion_orders_flush_fsync_close_and_replace(self) -> None:
+    def test_successful_promotion_orders_durability_before_atomic_replace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             destination = root / "artifact.zip"
             destination.write_bytes(b"preserve")
-            temporary_path = root / ".controlled.download"
-            handle = temporary_path.open("wb")
+            descriptor, temporary_path = downloader.private_fs.private_mkstemp(
+                directory=root, prefix=".controlled-", suffix=".download",
+            )
+            handle = os.fdopen(descriptor, "wb")
             events: list[str] = []
 
             class OrderedOutput(OutputProxy):
@@ -3746,6 +3838,12 @@ class DownloaderTests(unittest.TestCase):
                 events.append("replace")
                 original_replace(source, target)
 
+            original_private_replace = downloader.private_fs.replace_open_private_file
+
+            def private_replace(descriptor: int, source: Path, target: Path) -> None:
+                events.append("replace")
+                original_private_replace(descriptor, source, target)
+
             with mock.patch.object(
                 downloader,
                 "_open_temporary",
@@ -3754,17 +3852,30 @@ class DownloaderTests(unittest.TestCase):
                 downloader.os,
                 "fsync",
                 side_effect=fsync,
-            ), mock.patch.object(
-                downloader.os,
-                "replace",
-                side_effect=replace,
             ):
-                self.download(
-                    self.pinned(destination),
-                    testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
+                replacement = (
+                    mock.patch.object(
+                        downloader.private_fs,
+                        "replace_open_private_file",
+                        side_effect=private_replace,
+                    )
+                    if os.name == "nt"
+                    else mock.patch.object(
+                        downloader.os, "replace", side_effect=replace,
+                    )
                 )
+                with replacement:
+                    self.download(
+                        self.pinned(destination),
+                        testing_open_url=self.response_opener(FakeResponse(self.PAYLOAD)),
+                    )
 
-            self.assertEqual(["flush", "fsync", "close", "replace"], events)
+            self.assertEqual(
+                ["flush", "fsync", "replace", "close"]
+                if os.name == "nt"
+                else ["flush", "fsync", "close", "replace"],
+                events,
+            )
             self.assertEqual(self.PAYLOAD, destination.read_bytes())
             self.assertFalse(temporary_path.exists())
 
@@ -3778,8 +3889,8 @@ class DownloaderTests(unittest.TestCase):
                 destination.write_bytes(b"preserve")
 
                 with mock.patch.object(
-                    downloader.tempfile,
-                    "mkstemp",
+                    downloader.private_fs,
+                    "private_mkstemp",
                     side_effect=OSError(error_number, message),
                 ), self.assertRaises(downloader.DownloadStorageError):
                     self.download(
@@ -3798,7 +3909,7 @@ class DownloaderTests(unittest.TestCase):
     def test_short_write_preserves_destination(self) -> None:
         self._assert_output_failure_preserves_destination(short_write=True)
 
-    def test_close_failure_is_typed_and_preserves_destination(self) -> None:
+    def test_close_failure_is_typed_without_removing_a_promoted_identity(self) -> None:
         self._assert_output_failure_preserves_destination(
             close_error=OSError(errno.EIO, "close failed"),
         )

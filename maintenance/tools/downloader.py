@@ -18,7 +18,6 @@ import ssl
 import string
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.error
@@ -29,6 +28,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from x86qw_runtime.io import private_fs
 
 
 CHUNK_SIZE = 1024 * 1024
@@ -1071,12 +1077,9 @@ def _open_temporary(destination: Path) -> tuple[BinaryIO, Path]:
     descriptor: int | None = None
     temporary: Path | None = None
     try:
-        descriptor, name = tempfile.mkstemp(
-            prefix=f".{destination.name}.", suffix=".download", dir=destination.parent,
+        descriptor, temporary = private_fs.private_mkstemp(
+            prefix=f".{destination.name}.", suffix=".download", directory=destination.parent,
         )
-        temporary = Path(name)
-        if os.name != "nt":
-            os.fchmod(descriptor, 0o600)
         output = os.fdopen(descriptor, "wb")
         descriptor = None
         return output, temporary
@@ -1262,10 +1265,18 @@ def _attempt(
             try:
                 output.flush()
                 os.fsync(output.fileno())
-                output.close()
-                _remaining(deadline, clock)
-                os.replace(temporary, contract.destination)
-                temporary = None
+                if os.name == "nt":
+                    _remaining(deadline, clock)
+                    private_fs.replace_open_private_file(
+                        output.fileno(), temporary, contract.destination,
+                    )
+                    temporary = None
+                    output.close()
+                else:
+                    output.close()
+                    _remaining(deadline, clock)
+                    os.replace(temporary, contract.destination)
+                    temporary = None
             except OSError as error:
                 raise DownloadStorageError(
                     f"Não foi possível promover {contract.label} atomicamente."

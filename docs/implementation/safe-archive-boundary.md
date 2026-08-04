@@ -212,7 +212,10 @@ ou QWFWD.
 
 ## Riscos residuais
 
-- a DACL privada no Windows pertence ao PR 4;
+- a DACL privada no Windows foi implementada no candidato da PR 4 conforme o
+  [ADR 0003](../adr/0003-dacl-privada-windows.md) e validada nativamente nos
+  runners Windows com Python 3.10 e 3.13; o smoke de runtime sob conta padrão
+  permanece pendente;
 - trust metadata pertence ao PR 9;
 - promoção transacional de candidato e atualização segura de `latest` pertencem
   à PR 10; este candidato falha fechado diante de um ponteiro divergente;

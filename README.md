@@ -241,6 +241,15 @@ smokes nativos dos runtimes. O candidato não foi publicado e não pertence à
 release pública imutável `0.7.1`; o contrato está no
 [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
 
+O código corretivo da PR 4 também faz objetos privados gerenciados nascerem no
+Windows com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`.
+Arquivos de senha externos são somente validados e nunca reescritos. A
+matriz nativa Windows com Python 3.10 e 3.13 validou esse contrato. Isso não
+equivale ao smoke de runtime sob uma conta padrão sem elevação, reservado à
+evidência de release. A mudança não faz parte da release pública `0.7.1`.
+Consulte o
+[ADR 0003](docs/adr/0003-dacl-privada-windows.md).
+
 ## Arquitetura
 
 <a href="docs/diagrams/x86qw-platform.html">

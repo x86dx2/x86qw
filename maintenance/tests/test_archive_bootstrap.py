@@ -274,6 +274,58 @@ class ArchiveBootstrapTests(unittest.TestCase):
             )
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
+    def test_unix_bootstrap_scopes_archive_temporary_files_to_private_workdir(self):
+        version = "9.9.5"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_temporary = root / "archive-tmp.txt"
+            installer_temporary = root / "installer-tmp.txt"
+            bundle = root / f"x86qw-installer-{version}.zip"
+            application = (
+                "import os, pathlib\n"
+                "pathlib.Path(os.environ['X86QW_TEST_INSTALLER_TMP']).write_text("
+                "os.environ.get('TMPDIR', ''), encoding='utf-8')\n"
+            )
+            self._write_installer_bundle(bundle, version, application)
+            bootstrap, binaries = self._prepare_unix_bootstrap(root, version, bundle)
+            python = binaries / "python3"
+            python.unlink()
+            python.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *x86qw_runtime.io.archive*) "
+                "printf '%s' \"${TMPDIR-}\" > \"$X86QW_TEST_ARCHIVE_TMP\" ;;\n"
+                "esac\n"
+                "exec \"$X86QW_TEST_REAL_PYTHON\" \"$@\"\n",
+                encoding="utf-8",
+            )
+            python.chmod(0o755)
+            completed = subprocess.run(
+                [str(bootstrap)],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_TEST_ARCHIVE_TMP": os.fspath(archive_temporary),
+                    "X86QW_TEST_INSTALLER_TMP": os.fspath(installer_temporary),
+                    "X86QW_TEST_REAL_PYTHON": sys.executable,
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            helper_temp = Path(archive_temporary.read_text(encoding="utf-8"))
+            self.assertEqual(root, helper_temp.parent)
+            self.assertTrue(helper_temp.name.startswith("x86qw-installer."))
+            self.assertFalse(helper_temp.exists())
+            self.assertEqual(
+                os.fspath(root),
+                installer_temporary.read_text(encoding="utf-8"),
+            )
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_invalid_archive_never_executes_its_zipapp(self):
         version = "9.9.8"
         prefix = f"x86qw-installer-{version}"

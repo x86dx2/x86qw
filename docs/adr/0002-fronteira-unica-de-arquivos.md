@@ -219,8 +219,9 @@ fronteira. A exceção é escrita explícita em modo `w`, seguida de scan.
 
 Permanecem fora desta decisão:
 
-- DACL privada de staging e temporários no Windows, tratada no PR 4 e na
-  [issue #47](https://github.com/x86dx2/x86qw/issues/47);
+- a política de DACL privada do staging e dos temporários Windows, definida
+  separadamente no [ADR 0003](0003-dacl-privada-windows.md) e validada
+  nativamente na [issue #47](https://github.com/x86dx2/x86qw/issues/47);
 - autenticação, expiração, rollback e freeze de metadados, tratadas no PR 9 e
   na [issue #48](https://github.com/x86dx2/x86qw/issues/48);
 - evidência e smokes nativos dos runtimes, que não são substituídos por testes

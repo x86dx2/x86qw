@@ -6,11 +6,18 @@ import contextlib
 import hashlib
 import os
 import stat
-import tempfile
+import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, TypeVar
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from x86qw_runtime.io import private_fs
 
 
 _CHUNK_SIZE = 1024 * 1024
@@ -212,13 +219,13 @@ def staged_artifact(
 ) -> Iterator[StagedArtifact]:
     """Yield a private file beside ``target`` under an explicit output root."""
     target, parent_identity = _prepare_output_parent(root, target)
-    descriptor, name = tempfile.mkstemp(prefix=prefix, dir=target.parent)
+    descriptor, staged_path = private_fs.private_mkstemp(
+        prefix=prefix, directory=target.parent,
+    )
     try:
-        if os.name != "nt":
-            os.fchmod(descriptor, 0o600)
         metadata = os.fstat(descriptor)
         staged = StagedArtifact(
-            path=Path(name),
+            path=staged_path,
             target=target,
             parent_identity=parent_identity,
             stream=os.fdopen(descriptor, "w+b", closefd=True),

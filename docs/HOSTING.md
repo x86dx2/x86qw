@@ -183,7 +183,11 @@ startup e encerramento normal encerram os filhos na ordem inversa, aguardam a
 saída e forçam apenas processos que não responderem. No Unix, a CLI verifica o
 grupo completo depois de `SIGTERM` e aplica `SIGKILL` se um descendente
 permanecer. No Windows, todos os processos entram em um Job Object com
-`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; falha de associação interrompe o startup.
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. No código corretivo da PR 4, cada processo
+nasce suspenso, entra no Job Object e só então tem sua thread inicial retomada;
+falha de associação encerra o líder ainda suspenso, sem executar o runtime.
+Os casos Win32 passaram nos jobs Windows com Python 3.10 e 3.13; smokes de
+MVDSV, QTV e QWFWD reais sob conta padrão permanecem no PR 11.
 
 Somente uma stack de serviços ou operação mutável pode ficar ativa por
 instalação. `host`, `proxy`, `qtv`, `install`, `components`, `presets`,
@@ -201,6 +205,11 @@ orienta a inspeção do lock. Um lock abandonado só é reclamado quando PID, to
 de criação e executável confirmam que o controlador anterior morreu. A
 recuperação valida também o controlador gravado no próprio journal: remover
 apenas `active.lock` nunca autoriza recuperar uma stack ainda viva.
+Na PR 4, observação, reclamação e substituição de um lock abandonado também são
+serializadas por instalação (`flock` no POSIX e mutex global privado no
+Windows), eliminando a disputa em que duas CLIs poderiam reclamar o mesmo lock.
+A serialização e a DACL do mutex foram exercitadas nos dois jobs Windows;
+operação real dos serviços continua sendo evidência separada.
 
 Cada execução mantém um journal privado em
 `.x86qw/sessions/<session-id>/session.json` (`0700` para diretórios e `0600`
@@ -210,6 +219,17 @@ e registram PID, grupo, token de criação e executável. Após crash confirmado
 recuperação encerra somente o processo cuja identidade corresponda exatamente;
 PID reutilizado é preservado. Identidade inconclusiva bloqueia a nova stack e a
 remoção de arquivos dos quais o processo possa depender.
+
+No código corretivo da PR 4, `.x86qw/`, sessões, locks, journals, pedidos de
+parada, logs e configurações sensíveis usam no Windows uma DACL protegida com
+acesso somente ao usuário atual e a `LOCAL SYSTEM`. O objeto nasce privado,
+antes da primeira escrita; um volume ou ACL inconclusivo faz a operação falhar
+fechada. Arquivos externos de senha são apenas validados e lidos pelo mesmo
+handle, nunca reconfigurados pelo x86QW. A matriz nativa Windows foi validada
+nos runners Windows com Python 3.10 e 3.13. O smoke dos runtimes sob
+uma conta padrão sem elevação permanece pendente na evidência de release, e a
+release pública `0.7.1` não contém essa mudança. Consulte o
+[ADR 0003](adr/0003-dacl-privada-windows.md).
 
 Arquivos materializados e temporários não sensíveis atuais registram também o
 tamanho e a identidade exatos. A recuperação nunca calcula hash além desse

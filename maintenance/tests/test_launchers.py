@@ -1845,32 +1845,42 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertFalse(residual[0].is_alive())
 
         late_process = BlockingResolver()
+        spawn_entered = threading.Event()
+        release_spawn = threading.Event()
 
         def delayed_spawn(*_args, **_kwargs):
-            time.sleep(1.2)
+            spawn_entered.set()
+            if not release_spawn.wait(5):
+                raise AssertionError("the delayed resolver fixture was not released")
             return late_process
 
+        release_timer = threading.Timer(3, release_spawn.set)
+        release_timer.start()
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "late-resolver.zip"
-            started = time.monotonic()
-            with mock.patch.object(
-                namespace["subprocess"], "Popen", side_effect=delayed_spawn,
-            ):
-                with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
-                    namespace["download_mirrors"](
-                        ["https://resolver.example.invalid/archive.zip"],
-                        os.fspath(destination),
-                        1,
-                        hashlib.sha256(b"x").hexdigest(),
-                        1,
-                        1,
-                        0,
-                        1,
-                    )
-            elapsed = time.monotonic() - started
-            self.assertFalse(destination.exists())
+            try:
+                with mock.patch.object(
+                    namespace["subprocess"], "Popen", side_effect=delayed_spawn,
+                ):
+                    with self.assertRaisesRegex(namespace["DownloadError"], "prazo"):
+                        namespace["download_mirrors"](
+                            ["https://resolver.example.invalid/archive.zip"],
+                            os.fspath(destination),
+                            1,
+                            hashlib.sha256(b"x").hexdigest(),
+                            1,
+                            1,
+                            0,
+                            1,
+                        )
+                returned_before_spawn = not release_spawn.is_set()
+                self.assertFalse(destination.exists())
+            finally:
+                release_spawn.set()
+                release_timer.cancel()
 
-        self.assertLess(elapsed, 1.15)
+        self.assertTrue(spawn_entered.is_set())
+        self.assertTrue(returned_before_spawn)
         self.assertTrue(late_process.collected.wait(1))
         self.assertTrue(late_process.killed.is_set())
         self.assertNotIn(b"G", late_process.inputs)
@@ -1972,6 +1982,133 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual(0, completed.returncode, completed.stderr)
 
     @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
+    def test_public_powershell_bootstrap_creates_private_workdir_before_content(self):
+        bootstrap = ROOT / "site/public/install.ps1"
+        for candidate in (
+            ROOT / "dist/installer/bin/install.ps1",
+            bootstrap,
+        ):
+            with self.subTest(no_pathname_cleanup=candidate):
+                self.assertNotIn(
+                    "[System.IO.Directory]::Delete($Path",
+                    candidate.read_text(encoding="utf-8"),
+                )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            broad_temporary = root / "broad-temporary"
+            broad_temporary.mkdir()
+            report = root / "private-workdir.json"
+            harness = root / "private-workdir-harness.ps1"
+            harness.write_text(
+                r'''param(
+  [string]$Bootstrap,
+  [string]$BroadTemporary,
+  [string]$Report
+)
+$WindowsPlatform = (
+  [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+)
+if ($WindowsPlatform) {
+  $Icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
+  & $Icacls $BroadTemporary "/inheritance:r" "/grant:r" "*S-1-1-0:(OI)(CI)F" | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "nao foi possivel preparar o diretorio temporario amplo"
+  }
+}
+$env:TEMP = $BroadTemporary
+$env:TMP = $BroadTemporary
+
+function Get-Command {
+  param([string]$Name, [object]$ErrorAction)
+  if ($Name -eq "python") {
+    return [pscustomobject]@{ Name = "python" }
+  }
+  return $null
+}
+
+function python {
+  if ($args -contains "-c") {
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  for ($Index = 0; $Index -lt $args.Count; $Index++) {
+    if ([string]$args[$Index] -like "*x86qw-bootstrap-download.py") {
+      $Downloader = [string]$args[$Index]
+      $WorkDir = Split-Path -Parent $Downloader
+      if ($WindowsPlatform) {
+        $CurrentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $Acl = Microsoft.PowerShell.Security\Get-Acl -LiteralPath $WorkDir
+        $Rules = @($Acl.GetAccessRules(
+          $true,
+          $true,
+          [System.Security.Principal.SecurityIdentifier]
+        ))
+        $Payload = [ordered]@{
+          windows = $true
+          protected = $Acl.AreAccessRulesProtected
+          owner = $Acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+          current_sid = $CurrentSid
+          principals = @($Rules | ForEach-Object { $_.IdentityReference.Value } | Sort-Object)
+          inherited = @($Rules | ForEach-Object { $_.IsInherited })
+        }
+      } else {
+        $Payload = [ordered]@{
+          windows = $false
+          mode = [int][System.IO.File]::GetUnixFileMode($WorkDir)
+        }
+      }
+      [System.IO.File]::WriteAllText(
+        $Report,
+        ($Payload | ConvertTo-Json -Compress),
+        (New-Object System.Text.UTF8Encoding($false))
+      )
+      Set-Variable -Name LASTEXITCODE -Scope 1 -Value 1
+      return
+    }
+  }
+  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 1
+}
+
+$Source = Get-Content -LiteralPath $Bootstrap -Raw
+try {
+  Invoke-Expression $Source
+} catch {
+  # The controlled downloader stops the bootstrap after inspecting the workdir.
+}
+''',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(harness),
+                    str(bootstrap),
+                    str(broad_temporary),
+                    str(report),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            observed = json.loads(report.read_text(encoding="utf-8"))
+
+        if observed["windows"]:
+            self.assertTrue(observed["protected"])
+            self.assertEqual(observed["current_sid"], observed["owner"])
+            self.assertEqual(
+                sorted((observed["current_sid"], "S-1-5-18")),
+                observed["principals"],
+            )
+            self.assertEqual([False, False], observed["inherited"])
+        else:
+            self.assertEqual(0o700, observed["mode"])
+
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_preserves_the_calling_session(self):
         bootstrap = ROOT / "site/public/install.ps1"
         source = bootstrap.read_text(encoding="utf-8")
@@ -1989,6 +2126,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 )
 $global:X86QWTestMockVersion = $MockVersion
 $global:X86QWTestFixture = $Fixture
+$global:X86QWArchiveTempPrivate = $false
 function Invoke-WebRequest {
   param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
   [System.IO.File]::WriteAllBytes($OutFile, [byte[]]@(0))
@@ -2002,6 +2140,13 @@ function Get-Command {
 }
 function python {
   if ($args -contains "-c") {
+    if (($args -join "`n") -like "*runpy.run_module*") {
+      $HelperRoot = [string]$args[2]
+      $WorkDir = Split-Path -Parent $HelperRoot
+      $global:X86QWArchiveTempPrivate = (
+        $env:TEMP -eq $WorkDir -and $env:TMP -eq $WorkDir
+      )
+    }
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
     return
   }
@@ -2018,12 +2163,19 @@ function python {
 $ErrorActionPreference = "Continue"
 $ExpectedConsoleCodePage = [Console]::OutputEncoding.CodePage
 $OutputEncoding = [System.Text.Encoding]::ASCII
+$ExpectedProcessTemp = [Environment]::GetEnvironmentVariable("TEMP", "Process")
+$ExpectedProcessTmp = [Environment]::GetEnvironmentVariable("TMP", "Process")
 $Source = Get-Content -LiteralPath $Bootstrap -Raw
 Invoke-Expression $Source
 Write-Output "X86QW_BOOTSTRAP_SURVIVED:$global:LASTEXITCODE"
 Write-Output "X86QW_ERROR_ACTION_AFTER:$ErrorActionPreference"
 Write-Output ("X86QW_CONSOLE_ENCODING_RESTORED:" + ([Console]::OutputEncoding.CodePage -eq $ExpectedConsoleCodePage))
 Write-Output ("X86QW_PIPELINE_ENCODING_RESTORED:" + ($OutputEncoding.CodePage -eq [System.Text.Encoding]::ASCII.CodePage))
+Write-Output ("X86QW_ARCHIVE_TEMP_PRIVATE:" + $global:X86QWArchiveTempPrivate)
+Write-Output ("X86QW_PROCESS_TEMP_RESTORED:" + (
+  [Environment]::GetEnvironmentVariable("TEMP", "Process") -eq $ExpectedProcessTemp -and
+  [Environment]::GetEnvironmentVariable("TMP", "Process") -eq $ExpectedProcessTmp
+))
 if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
   Write-Output "X86QW_INSTALLER_VERSION_LEAKED"
 }
@@ -2044,6 +2196,8 @@ if (Get-Variable -Name InstallerVersion -ErrorAction SilentlyContinue) {
                     self.assertIn("X86QW_ERROR_ACTION_AFTER:Continue", completed.stdout)
                     self.assertIn("X86QW_CONSOLE_ENCODING_RESTORED:True", completed.stdout)
                     self.assertIn("X86QW_PIPELINE_ENCODING_RESTORED:True", completed.stdout)
+                    self.assertIn("X86QW_ARCHIVE_TEMP_PRIVATE:True", completed.stdout)
+                    self.assertIn("X86QW_PROCESS_TEMP_RESTORED:True", completed.stdout)
                     self.assertNotIn("X86QW_INSTALLER_VERSION_LEAKED", completed.stdout)
                     self.assertIn("instalador terminou", completed.stderr)
                     self.assertIn("7", completed.stderr)
