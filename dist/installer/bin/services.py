@@ -10,13 +10,10 @@ import importlib
 import ipaddress
 import json
 import os
-import platform as system_platform
 import secrets
 import signal
 import stat
-import subprocess
 import sys
-import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,9 +26,7 @@ session_control = importlib.import_module("x86qw_runtime.session_control")
 from x86qw_runtime.ui import menu as navigation
 
 from x86qw_runtime.io.archive import (
-    DEFAULT_ARCHIVE_LIMITS,
     ArchiveError,
-    extract_archive,
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
@@ -41,30 +36,18 @@ from x86qw_runtime.io.managed_files import (
     MAX_MANAGED_FILE_SIZE as _MAX_MANAGED_FILE_SIZE,
     MaterializedDirectory,
     MaterializedFile,
-    _PosixRenameApi,
-    _WindowsFileApi,
-    _assert_archive_parent_stable,
-    _assert_hashable_size,
-    _bounded_hash_limit,
-    _cleanup_materialized_directory,
-    _cleanup_materialized_file,
-    _close_windows_handle,
-    _describe_non_sensitive_temporary,
-    _directory_open_flags,
-    _file_identity,
-    _get_posix_rename_api,
-    _get_windows_file_api,
-    _hash_open_file,
-    _open_relative_directory,
-    _persistent_path_identity,
-    _secure_archive_dir_fd_supported,
-    _secure_archive_parent,
-    _windows_archive_parent,
+    cleanup_materialized_archive,
+    cleanup_materialized_directory,
+    cleanup_materialized_file,
+    cleanup_sensitive_temporary,
+    describe_non_sensitive_temporary,
     file_matches_sha256,
     file_sha256,
+    materialize_archive,
     unlink_sensitive_temporary,
 )
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.platform import host as host_adapter
 from x86qw_runtime.ui.arguments import FriendlyArgumentParser
 from x86qw_runtime.ui.console import Console as RuntimeConsole
 from x86qw_runtime.supervisor.models import ProcessSpec, ServiceReadiness, StartupRcon
@@ -79,9 +62,9 @@ from x86qw_runtime.supervisor.core import (
     POPEN_TYPE,
     ServiceSignal,
     WindowsJobObject,
-    _windows_job_kernel32,
     posix_process_group_status,
     run_processes,
+    spawn_background_controller,
     stop_processes,
 )
 from x86qw_runtime.supervisor import sessions as runtime_sessions
@@ -101,6 +84,8 @@ signal_recorded_process = runtime_sessions.signal_recorded_process
 terminate_recorded_process = runtime_sessions.terminate_recorded_process
 write_session_journal = runtime_sessions.write_session_journal
 unlink_stop_request = runtime_sessions.unlink_stop_request
+publish_stop_request = runtime_sessions.publish_stop_request
+activate_background_log = runtime_sessions.activate_background_log
 
 
 @dataclass(frozen=True)
@@ -341,10 +326,7 @@ def read_password_file(path: Path, label: str) -> str:
     try:
         value = private_fs.read_private_user_file(path, maximum_size=4096).decode("utf-8")
     except (OSError, UnicodeError) as error:
-        guidance = (
-            "proteja a DACL para o usuário atual e LOCAL SYSTEM"
-            if os.name == "nt" else "use chmod 600"
-        )
+        guidance = private_fs.private_file_permission_guidance()
         raise InstallerError(
             f"Permissões inseguras no arquivo de {label}; {guidance}."
         ) from error
@@ -457,26 +439,6 @@ def ensure_private_directory(path: Path) -> None:
         private_fs.ensure_private_directory(path)
     except OSError as error:
         raise InstallerError(f"Diretório de serviço ausente ou inseguro: {path}") from error
-
-
-def cleanup_private_staging(
-    path: Path,
-    *,
-    expected_identity: tuple[int, int],
-    label: str,
-    primary_error: BaseException | None,
-) -> None:
-    """Remove private staging without replacing an earlier operational error."""
-    if not lexists(path):
-        return
-    try:
-        private_fs.unlink_private_file(path, expected_identity=expected_identity)
-    except OSError as cleanup_error:
-        message = f"Falha ao remover {label} privado; arquivo preservado: {path}"
-        if primary_error is not None:
-            console.warning(f"{message} ({cleanup_error})")
-            return
-        raise InstallerError(message) from cleanup_error
 
 
 STATUS_PARAMETER_LABELS = {
@@ -717,17 +679,17 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
             "requested_at": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
-    publish_stop_request(request, payload)
+    request_identity = publish_stop_request(request, payload)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not lexists(lock_path):
-            unlink_stop_request(request)
+            unlink_stop_request(request, expected_identity=request_identity)
             return
         try:
             current = session_control.read_lock_owner(lock_path)
         except session_control.SessionControlError:
             if not lexists(lock_path):
-                unlink_stop_request(request)
+                unlink_stop_request(request, expected_identity=request_identity)
                 return
             raise
         if current.get("session_id") != session_id:
@@ -738,56 +700,13 @@ def request_service_stop(target: Path, *, timeout: float = 15.0) -> None:
     )
 
 
-def publish_stop_request(request: Path, payload: bytes) -> None:
-    """Publish a complete stop request without exposing an open writer on Windows."""
-    try:
-        descriptor, temporary = private_fs.private_mkstemp(
-            prefix=".stop-", suffix=".request", directory=request.parent,
-        )
-        try:
-            metadata = os.fstat(descriptor)
-            temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
-        except OSError:
-            os.close(descriptor)
-            raise
-    except OSError as error:
-        raise InstallerError(
-            "Não foi possível criar o pedido privado de encerramento."
-        ) from error
-    primary_error: BaseException | None = None
-    try:
-        with os.fdopen(descriptor, "wb") as output:
-            output.write(payload)
-            output.flush()
-            os.fsync(output.fileno())
-        try:
-            os.link(temporary, request)
-            private_fs.validate_private_file(request)
-        except FileExistsError as error:
-            raise InstallerError("Já existe um pedido de encerramento para esta stack.") from error
-        except OSError as error:
-            raise InstallerError(
-                "Não foi possível publicar o pedido privado de encerramento."
-            ) from error
-    except BaseException as error:
-        primary_error = error
-        raise
-    finally:
-        cleanup_private_staging(
-            temporary,
-            expected_identity=temporary_identity,
-            label="o temporário do pedido de encerramento",
-            primary_error=primary_error,
-        )
-
-
 def cleanup_current_session(
     journal: SessionJournal | None,
     temporary_paths: list[Path],
     materialized_packages: list[MaterializedKtx],
 ) -> None:
     temporary_records: dict[str, tuple[str, int, tuple[int, int]]] = {}
-    sensitive_paths: set[str] = set()
+    sensitive_records: dict[str, tuple[int, int] | None] = {}
     if journal is not None:
         entries = journal.data.get("temporary_files", [])
         if isinstance(entries, list):
@@ -805,8 +724,13 @@ def cleanup_current_session(
                     and type(entry.get("inode")) is int
                 )
             }
-            sensitive_paths = {
-                str(entry.get("path"))
+            sensitive_records = {
+                str(entry.get("path")): (
+                    (int(entry["device"]), int(entry["inode"]))
+                    if type(entry.get("device")) is int
+                    and type(entry.get("inode")) is int
+                    else None
+                )
                 for entry in entries
                 if isinstance(entry, dict) and entry.get("sensitive") is True
             }
@@ -814,12 +738,21 @@ def cleanup_current_session(
         for path in temporary_paths:
             relative = journal._relative(path) if journal is not None else ""
             expected = temporary_records.get(relative)
-            if relative in sensitive_paths and journal is not None:
+            if relative in sensitive_records and journal is not None:
                 journal.release_sensitive_temporary(path)
             if not lexists(path):
                 continue
-            if relative in sensitive_paths:
-                unlink_sensitive_temporary(path)
+            if relative in sensitive_records:
+                if not cleanup_sensitive_temporary(
+                    path, sensitive_records[relative],
+                ):
+                    console.warning(
+                        f"Temporário sensível substituído foi preservado: {path}"
+                    )
+                    raise InstallerError(
+                        "Temporário sensível sem identidade original confirmável foi "
+                        f"preservado: {path}"
+                    )
             elif expected is not None and journal is not None:
                 entry = MaterializedFile(
                     path,
@@ -831,7 +764,7 @@ def cleanup_current_session(
                     expected[2],
                     expected[1],
                 )
-                if not _cleanup_materialized_file(entry):
+                if not cleanup_materialized_file(entry):
                     console.warning(f"Arquivo temporário alterado foi preservado: {path}")
             elif journal is None:
                 unlink_sensitive_temporary(path)
@@ -908,27 +841,16 @@ def runtime_variant(
     machine: str | None = None,
     runtime_id: str | None = None,
 ) -> str:
-    host_system = system or core.host_platform.system()
-    host_machine = (machine or core.host_platform.machine()).casefold()
-    system_id = core.HOST_PLATFORMS.get(host_system, host_system.casefold())
     architecture_aliases = core.CAPABILITY_CATALOG.get("architecture_aliases")
     if not isinstance(architecture_aliases, dict):
         raise InstallerError("Catálogo de arquiteturas da CLI está inválido.")
-    variants = {
-        str(platform_entry["variant"])
-        for selected_runtime in ((runtime_id,) if runtime_id is not None else ("mvdsv", "qtv", "qwfwd"))
-        for platform_entry in core.RUNTIMES[selected_runtime]["platforms"]
-        if (
-            isinstance(platform_entry, dict)
-            and platform_entry.get("system") == system_id
-            and host_machine in architecture_aliases.get(platform_entry.get("architecture"), [])
-        )
-    }
-    if len(variants) == 1:
-        return variants.pop()
-    raise InstallerError(
-        f"Runtime de serviço indisponível para {host_system} {host_machine}. "
-        "Os alvos distribuídos são macOS arm64, Linux amd64 e Windows x64."
+    return host_adapter.service_runtime_variant(
+        core.RUNTIMES,
+        architecture_aliases,
+        core.HOST_PLATFORMS,
+        runtime_id=runtime_id,
+        system=system,
+        machine=machine,
     )
 
 
@@ -946,13 +868,34 @@ def runtime_binary(installer: core.Installer, component: str) -> Path:
     if not isinstance(runtime_paths, dict) or not isinstance(runtime_paths.get(variant), str):
         raise InstallerError(f"Runtime {component} indisponível na variante {variant}.")
     binary = installer.target.joinpath(*PurePosixPath(runtime_paths[variant]).parts)
-    if not binary.is_file() or binary.is_symlink():
-        raise InstallerError(f"Executável gerenciado ausente ou inseguro: {binary}")
-    if os.name != "nt" and not os.access(binary, os.X_OK):
+    return host_adapter.service_runtime_executable(binary)
+
+
+def runtime_launch_target(
+    installer: core.Installer, component: str,
+) -> host_adapter.LaunchTarget:
+    """Bind a service executable to the inventory entry verified for it."""
+
+    binary = runtime_binary(installer, component)
+    present, entries, _receipt = installer.validate_component_pair(component)
+    if not present:
         raise InstallerError(
-            f"Executável gerenciado sem permissão de execução: {binary}. Execute repair."
+            f"O inventário do componente {component} não pôde ser validado."
         )
-    return binary
+    try:
+        relative = binary.relative_to(installer.target).as_posix()
+    except ValueError as error:
+        raise InstallerError(
+            f"Executável {component} fora da instalação gerenciada: {binary}"
+        ) from error
+    expected_sha256 = dict(entries).get(relative)
+    if expected_sha256 is None:
+        raise InstallerError(
+            f"O inventário de {component} não registra seu executável: {relative}"
+        )
+    return host_adapter.executable_launch_target(
+        binary, expected_sha256=expected_sha256,
+    )
 
 
 def temporary_config(
@@ -965,6 +908,13 @@ def temporary_config(
 ) -> Path:
     if not directory.is_dir() or directory.is_symlink():
         raise InstallerError(f"Diretório de configuração ausente ou inseguro: {directory}")
+    payload = bytearray(
+        "// x86QW: configuração efêmera removida ao encerrar.\n".encode("utf-8")
+    )
+    for line in lines:
+        payload.extend(line.encode("utf-8") if isinstance(line, str) else line)
+        payload.extend(b"\n")
+    expected_hash = hashlib.sha256(payload).hexdigest()
     try:
         descriptor, path = private_fs.private_mkstemp(
             prefix=prefix, suffix=".cfg", directory=directory,
@@ -974,18 +924,39 @@ def temporary_config(
             "Não foi possível criar a configuração efêmera com acesso privado."
         ) from error
     tracked: MaterializedFile | None = None
+    reservation: MaterializedFile | None = None
     sensitive_guard: object | None = None
     try:
         with os.fdopen(descriptor, "wb") as output:
-            output.write("// x86QW: configuração efêmera removida ao encerrar.\n".encode("utf-8"))
-            for line in lines:
-                output.write(line.encode("utf-8") if isinstance(line, str) else line)
-                output.write(b"\n")
+            metadata = os.fstat(output.fileno())
+            identity = (int(metadata.st_dev), int(metadata.st_ino))
+            reservation = MaterializedFile(
+                path,
+                hashlib.sha256(b"").hexdigest(),
+                "reserva de configuração efêmera",
+                True,
+                False,
+                journal.target if journal is not None else directory,
+                identity,
+                0,
+            )
+            if journal is not None:
+                journal.record_temporary_intent(
+                    path,
+                    "configuração efêmera redigida",
+                    sensitive=sensitive,
+                    identity=identity,
+                    expected_hash=None if sensitive else expected_hash,
+                    expected_size=None if sensitive else len(payload),
+                )
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
         private_fs.validate_private_file(path)
         if sensitive and journal is not None:
             sensitive_guard = private_fs.hold_private_path(path, directory=False)
         if not sensitive:
-            tracked = _describe_non_sensitive_temporary(
+            tracked = describe_non_sensitive_temporary(
                 path,
                 journal.target if journal is not None else directory,
                 "configuração efêmera redigida",
@@ -1013,9 +984,19 @@ def temporary_config(
         if lexists(path):
             try:
                 if sensitive:
-                    unlink_sensitive_temporary(path)
+                    if not cleanup_sensitive_temporary(
+                        path, reservation.identity if reservation is not None else None,
+                    ):
+                        console.warning(
+                            f"Temporário sensível substituído foi preservado: {path}"
+                        )
                 elif tracked is not None:
-                    if not _cleanup_materialized_file(tracked):
+                    if not cleanup_materialized_file(tracked):
+                        console.warning(
+                            f"Temporário não sensível alterado foi preservado: {path}"
+                        )
+                elif reservation is not None:
+                    if not cleanup_materialized_file(reservation):
                         console.warning(
                             f"Temporário não sensível alterado foi preservado: {path}"
                         )
@@ -1047,681 +1028,25 @@ def ktx_assets(target: Path) -> frozenset[str]:
         raise InstallerError(f"Pacote KTX inválido: {package}") from error
 
 
-def _open_verified_archive_member(
-    parent_descriptor: int,
-    name: str,
-    expected_hash: str,
-    expected_size: int,
-    path: Path,
-) -> tuple[int, int]:
-    flags = os.O_RDONLY | os.O_NOFOLLOW
-    if hasattr(os, "O_CLOEXEC"):
-        flags |= os.O_CLOEXEC
-    try:
-        descriptor = os.open(name, flags, dir_fd=parent_descriptor)
-    except OSError as error:
-        raise InstallerError(f"Arquivo local conflita com a carga dedicada: {path}") from error
-    try:
-        metadata = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or _hash_open_file(descriptor, expected_size=expected_size) != expected_hash
-        ):
-            raise InstallerError(f"Arquivo local conflita com a carga dedicada: {path}")
-        return _file_identity(metadata)
-    finally:
-        os.close(descriptor)
-
-
-def _fallback_safe_chain(root: Path, parent: Path) -> None:
-    """Best-effort path check for platforms without POSIX *at operations."""
-    try:
-        relative = parent.relative_to(root)
-    except ValueError as error:
-        raise InstallerError(f"Diretório fora da instalação: {parent}") from error
-    cursor = root
-    for part in relative.parts:
-        cursor /= part
-        try:
-            metadata = cursor.lstat()
-        except FileNotFoundError:
-            return
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-            raise InstallerError(f"Diretório inseguro ao preparar o pacote: {cursor}")
-
-
-def _windows_remove_confirmed_file(
-    api: object,
-    path: Path,
-    expected_identity: tuple[int, int],
-    expected_hash: str,
-    expected_size: int,
-) -> bool:
-    """Delete only the exact, unchanged file object named by ``path``."""
-    try:
-        handle = api.open_handle(
-            path,
-            access=api.GENERIC_READ | api.DELETE,
-            creation=api.OPEN_EXISTING,
-            directory=False,
-        )
-    except FileNotFoundError:
-        return True
-    except OSError:
-        return False
-    try:
-        if (
-            api.checked_identity(handle, directory=False) != expected_identity
-            or api.hash(handle, expected_size=expected_size) != expected_hash
-        ):
-            return False
-        api.mark_delete(handle)
-        return True
-    except OSError:
-        return False
-    finally:
-        _close_windows_handle(api, handle)
-
-
-def _windows_existing_member(
-    api: object,
-    destination_root: Path,
-    member: object,
-    destination: Path,
-    label: str,
-    *,
-    package: Path | None = None,
-    journal: SessionJournal | None = None,
-) -> MaterializedFile | None | bool:
-    parent_parts = tuple(member.path.parts[:-1])
-    try:
-        with _windows_archive_parent(
-            api, destination_root, parent_parts, create=False,
-        ):
-            try:
-                handle = api.open_handle(
-                    destination,
-                    access=api.GENERIC_READ,
-                    creation=api.OPEN_EXISTING,
-                    directory=False,
-                )
-            except FileNotFoundError:
-                return False
-            try:
-                identity = api.checked_identity(handle, directory=False)
-                digest = api.hash(handle, expected_size=member.size)
-                if digest != member.sha256:
-                    raise InstallerError(
-                        f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
-                    )
-                if package is None:
-                    return True
-                entry = MaterializedFile(
-                    destination,
-                    member.sha256,
-                    package.as_posix(),
-                    False,
-                    True,
-                    destination_root,
-                    identity,
-                    member.size,
-                )
-                if journal is not None:
-                    journal.record_materialized(entry)
-                return entry
-            except InstallerError:
-                raise
-            except OSError as error:
-                raise InstallerError(
-                    f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
-                ) from error
-            finally:
-                _close_windows_handle(api, handle)
-    except FileNotFoundError:
-        return False
-
-
-def _windows_materialize_member(
-    api: object,
-    source_path: Path,
-    destination: Path,
-    member: object,
-    label: str,
-    destination_root: Path,
-    package: Path,
-    journal: SessionJournal | None,
-    created_directories: list[MaterializedDirectory],
-    materialized_files: list[MaterializedFile],
-) -> MaterializedFile:
-    """Stage, verify and atomically rename one member without replacing a name."""
-    parent_parts = tuple(member.path.parts[:-1])
-    with _windows_archive_parent(
-        api,
-        destination_root,
-        parent_parts,
-        create=True,
-        created_directories=created_directories,
-        journal=journal,
-    ):
-        temporary: Path | None = None
-        temporary_handle: int | None = None
-        for _ in range(128):
-            candidate = destination.parent / f".x86qw_ktx_{secrets.token_hex(12)}"
-            try:
-                temporary_handle = api.open_handle(
-                    candidate,
-                    access=api.GENERIC_READ | api.GENERIC_WRITE | api.DELETE,
-                    creation=api.CREATE_NEW,
-                    directory=False,
-                )
-            except FileExistsError:
-                continue
-            temporary = candidate
-            break
-        if temporary is None or temporary_handle is None:
-            raise InstallerError(
-                f"Não foi possível reservar staging para a carga dedicada de {label}: {destination}"
-            )
-
-        temporary_identity: tuple[int, int] | None = None
-        copied_size = 0
-        digest_builder = hashlib.sha256()
-        try:
-            temporary_identity = api.checked_identity(temporary_handle, directory=False)
-            with source_path.open("rb") as source:
-                for block in iter(lambda: source.read(1024 * 1024), b""):
-                    copied_size += len(block)
-                    if copied_size > member.size:
-                        raise InstallerError(
-                            f"Tamanho divergente no pacote {label}: {member.path.as_posix()}"
-                        )
-                    digest_builder.update(block)
-                    api.write(temporary_handle, block)
-            api.flush(temporary_handle)
-            digest = digest_builder.hexdigest()
-            if (
-                copied_size != member.size
-                or digest != member.sha256
-                or api.hash(temporary_handle, expected_size=member.size) != member.sha256
-            ):
-                raise InstallerError(
-                    f"Conteúdo divergente no pacote {label}: {member.path.as_posix()}"
-                )
-        except Exception:
-            if temporary_identity is not None:
-                try:
-                    if api.checked_identity(
-                        temporary_handle, directory=False,
-                    ) == temporary_identity:
-                        api.mark_delete(temporary_handle)
-                except OSError:
-                    pass
-            raise
-        finally:
-            _close_windows_handle(api, temporary_handle)
-
-        assert temporary_identity is not None
-        try:
-            api.move_no_replace(temporary, destination)
-        except FileExistsError as error:
-            _windows_remove_confirmed_file(
-                api, temporary, temporary_identity, member.sha256, member.size,
-            )
-            raise InstallerError(
-                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
-            ) from error
-        except OSError as error:
-            _windows_remove_confirmed_file(
-                api, temporary, temporary_identity, member.sha256, member.size,
-            )
-            raise InstallerError(
-                f"Não foi possível promover a carga dedicada de {label}: {destination}"
-            ) from error
-
-        entry = MaterializedFile(
-            destination,
-            member.sha256,
-            package.as_posix(),
-            True,
-            False,
-            destination_root,
-            temporary_identity,
-            member.size,
-        )
-        materialized_files.append(entry)
-        try:
-            destination_handle = api.open_handle(
-                destination,
-                access=api.GENERIC_READ | api.DELETE,
-                creation=api.OPEN_EXISTING,
-                directory=False,
-            )
-        except OSError as error:
-            removed = _windows_remove_confirmed_file(
-                api, destination, temporary_identity, member.sha256, member.size,
-            )
-            detail = (
-                "a carga promovida inalterada foi revertida"
-                if removed else "o arquivo inconclusivo ou alterado foi preservado"
-            )
-            raise InstallerError(
-                f"Não foi possível confirmar a carga dedicada em {destination}; {detail}."
-            ) from error
-        rollback = True
-        try:
-            promoted_identity = api.checked_identity(destination_handle, directory=False)
-            if (
-                promoted_identity != temporary_identity
-                or api.hash(
-                    destination_handle, expected_size=member.size,
-                ) != member.sha256
-            ):
-                rollback = False
-                raise InstallerError(
-                    f"Arquivo foi substituído durante a preparação e foi preservado: {destination}"
-                )
-            if journal is not None:
-                journal.record_materialized(entry)
-            rollback = False
-            return entry
-        except Exception:
-            if rollback:
-                try:
-                    if (
-                        api.checked_identity(
-                            destination_handle, directory=False,
-                        ) == temporary_identity
-                        and api.hash(
-                            destination_handle, expected_size=member.size,
-                        ) == member.sha256
-                    ):
-                        api.mark_delete(destination_handle)
-                except OSError:
-                    pass
-            raise
-        finally:
-            _close_windows_handle(api, destination_handle)
-
-
-def _fallback_materialize_member(
-    source_path: Path,
-    destination: Path,
-    member: object,
-    label: str,
-    destination_root: Path,
-) -> tuple[str, tuple[int, int]]:
-    """Use atomic no-replace promotion and abort on every observable path race."""
-    _fallback_safe_chain(destination_root, destination.parent)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".x86qw_ktx_", dir=destination.parent)
-    temporary = Path(temporary_name)
-    temporary_identity: tuple[int, int] | None = None
-    try:
-        digest_builder = hashlib.sha256()
-        copied_size = 0
-        with os.fdopen(descriptor, "wb") as output, source_path.open("rb") as source:
-            for block in iter(lambda: source.read(1024 * 1024), b""):
-                copied_size += len(block)
-                if copied_size > member.size:
-                    raise InstallerError(
-                        f"Tamanho divergente no pacote {label}: {member.path.as_posix()}"
-                    )
-                digest_builder.update(block)
-                output.write(block)
-            output.flush()
-            os.fsync(output.fileno())
-            temporary_identity = _file_identity(os.fstat(output.fileno()))
-        digest = digest_builder.hexdigest()
-        if copied_size != member.size or digest != member.sha256:
-            raise InstallerError(
-                f"Conteúdo divergente no pacote {label}: {member.path.as_posix()}"
-            )
-        if os.name != "nt":
-            temporary.chmod(0o644)
-        _fallback_safe_chain(destination_root, destination.parent)
-        try:
-            os.link(temporary, destination, follow_symlinks=False)
-        except FileExistsError as error:
-            raise InstallerError(
-                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
-            ) from error
-        _fallback_safe_chain(destination_root, destination.parent)
-        metadata = destination.lstat()
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or temporary_identity is None
-            or _file_identity(metadata) != temporary_identity
-        ):
-            raise InstallerError(
-                f"Arquivo foi substituído durante a preparação e foi preservado: {destination}"
-            )
-        temporary.unlink()
-        return digest, temporary_identity
-    finally:
-        try:
-            _fallback_safe_chain(destination_root, temporary.parent)
-            metadata = temporary.lstat()
-            if (
-                stat.S_ISREG(metadata.st_mode)
-                and (
-                    temporary_identity is None
-                    or _file_identity(metadata) == temporary_identity
-                )
-            ):
-                temporary.unlink()
-        except (FileNotFoundError, InstallerError, OSError):
-            pass
-
-
 def materialize_dedicated_pk3(
     package: Path,
     destination_root: Path,
     label: str,
     journal: SessionJournal | None = None,
 ) -> MaterializedKtx:
-    """Expose verified PK3 members to MVDSV, which does not implement PK3 loading."""
-    if not package.is_file() or package.is_symlink():
-        raise InstallerError(f"Pacote {label} ausente ou inseguro: {package}")
-    if not destination_root.is_dir() or destination_root.is_symlink():
-        raise InstallerError(f"Diretório de {label} ausente ou inseguro: {destination_root}")
-    materialized_files: list[MaterializedFile] = []
-    created_directories: list[MaterializedDirectory] = []
-    windows_api = _get_windows_file_api()
-    secure_dir_fd = _secure_archive_dir_fd_supported()
-    try:
-        plan = scan_archive(package)
-        with tempfile.TemporaryDirectory(prefix="x86qw-pk3-") as temporary_root:
-            extracted = Path(temporary_root) / "payload"
-            extract_archive(plan, extracted)
-            prepared: list[tuple[object, Path, bool]] = []
-            for member in plan.members:
-                if member.kind != "file":
-                    continue
-                destination = destination_root.joinpath(*member.path.parts)
-                parent_parts = tuple(member.path.parts[:-1])
-                if windows_api is not None:
-                    existed = bool(_windows_existing_member(
-                        windows_api,
-                        destination_root,
-                        member,
-                        destination,
-                        label,
-                    ))
-                elif secure_dir_fd:
-                    try:
-                        with _secure_archive_parent(
-                            destination_root, parent_parts, create=False,
-                        ) as (root_descriptor, parent_descriptor):
-                            _assert_archive_parent_stable(
-                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
-                            )
-                            try:
-                                metadata = os.stat(
-                                    member.path.name,
-                                    dir_fd=parent_descriptor,
-                                    follow_symlinks=False,
-                                )
-                            except FileNotFoundError:
-                                existed = False
-                            else:
-                                if not stat.S_ISREG(metadata.st_mode):
-                                    raise InstallerError(
-                                        f"Arquivo local conflita com a carga dedicada de {label}: "
-                                        f"{destination}"
-                                    )
-                                _open_verified_archive_member(
-                                    parent_descriptor,
-                                    member.path.name,
-                                    member.sha256,
-                                    member.size,
-                                    destination,
-                                )
-                                existed = True
-                    except FileNotFoundError:
-                        existed = False
-                else:
-                    _fallback_safe_chain(destination_root, destination.parent)
-                    existed = lexists(destination)
-                    if existed:
-                        metadata = destination.lstat()
-                        if (
-                            not stat.S_ISREG(metadata.st_mode)
-                            or not file_matches_sha256(
-                                destination, member.sha256, member.size,
-                            )
-                        ):
-                            raise InstallerError(
-                                f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
-                            )
-                prepared.append((member, destination, existed))
+    """Expose verified PK3 members through the canonical runtime boundary."""
 
-            for member, destination, existed in prepared:
-                relative = member.path
-                parent_parts = tuple(relative.parts[:-1])
-                source_path = extracted.joinpath(*relative.parts)
-                if windows_api is not None:
-                    if existed:
-                        entry = _windows_existing_member(
-                            windows_api,
-                            destination_root,
-                            member,
-                            destination,
-                            label,
-                            package=package,
-                            journal=journal,
-                        )
-                        if not isinstance(entry, MaterializedFile):
-                            raise InstallerError(
-                                f"Arquivo desapareceu durante a preparação: {destination}"
-                            )
-                    else:
-                        entry = _windows_materialize_member(
-                            windows_api,
-                            source_path,
-                            destination,
-                            member,
-                            label,
-                            destination_root,
-                            package,
-                            journal,
-                            created_directories,
-                            materialized_files,
-                        )
-                    if existed:
-                        materialized_files.append(entry)
-                    continue
-                if secure_dir_fd:
-                    with _secure_archive_parent(
-                        destination_root,
-                        parent_parts,
-                        create=True,
-                        created_directories=created_directories,
-                        journal=journal,
-                    ) as (root_descriptor, parent_descriptor):
-                        _assert_archive_parent_stable(
-                            root_descriptor, parent_parts, parent_descriptor, destination.parent,
-                        )
-                        if existed:
-                            identity = _open_verified_archive_member(
-                                parent_descriptor,
-                                relative.name,
-                                member.sha256,
-                                member.size,
-                                destination,
-                            )
-                            _assert_archive_parent_stable(
-                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
-                            )
-                            entry = MaterializedFile(
-                                destination, member.sha256, package.as_posix(), False, True,
-                                destination_root, identity, member.size,
-                            )
-                            if journal is not None:
-                                journal.record_materialized(entry)
-                            materialized_files.append(entry)
-                            continue
-                        try:
-                            os.stat(
-                                relative.name,
-                                dir_fd=parent_descriptor,
-                                follow_symlinks=False,
-                            )
-                        except FileNotFoundError:
-                            pass
-                        else:
-                            raise InstallerError(
-                                f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
-                            )
-                        temporary_name = f".x86qw_ktx_{secrets.token_hex(12)}"
-                        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-                        if hasattr(os, "O_CLOEXEC"):
-                            flags |= os.O_CLOEXEC
-                        descriptor = os.open(
-                            temporary_name, flags, 0o600, dir_fd=parent_descriptor,
-                        )
-                        promoted_identity: tuple[int, int] | None = None
-                        try:
-                            digest_builder = hashlib.sha256()
-                            copied_size = 0
-                            temporary_identity: tuple[int, int] | None = None
-                            with os.fdopen(descriptor, "wb") as output, source_path.open("rb") as source:
-                                for block in iter(lambda: source.read(1024 * 1024), b""):
-                                    copied_size += len(block)
-                                    if copied_size > member.size:
-                                        raise InstallerError(
-                                            f"Tamanho divergente no pacote {label}: {relative.as_posix()}"
-                                        )
-                                    digest_builder.update(block)
-                                    output.write(block)
-                                output.flush()
-                                os.fsync(output.fileno())
-                                os.fchmod(output.fileno(), 0o644)
-                                temporary_identity = _file_identity(os.fstat(output.fileno()))
-                            digest = digest_builder.hexdigest()
-                            if copied_size != member.size or digest != member.sha256:
-                                raise InstallerError(
-                                    f"Conteúdo divergente no pacote {label}: {relative.as_posix()}"
-                                )
-                            _assert_archive_parent_stable(
-                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
-                            )
-                            try:
-                                os.link(
-                                    temporary_name,
-                                    relative.name,
-                                    src_dir_fd=parent_descriptor,
-                                    dst_dir_fd=parent_descriptor,
-                                    follow_symlinks=False,
-                                )
-                            except FileExistsError as error:
-                                raise InstallerError(
-                                    f"Arquivo surgiu durante a preparação e foi preservado: {destination}"
-                                ) from error
-                            assert temporary_identity is not None
-                            promoted_identity = temporary_identity
-                            entry = MaterializedFile(
-                                destination, digest, package.as_posix(), True, False,
-                                destination_root, promoted_identity, member.size,
-                            )
-                            # Once the hardlink is public, every subsequent
-                            # failure must flow through the identity+hash cleanup
-                            # policy.  Recording it before journal I/O prevents
-                            # an exception from falling back to inode-only unlink.
-                            materialized_files.append(entry)
-                            metadata = os.stat(
-                                relative.name,
-                                dir_fd=parent_descriptor,
-                                follow_symlinks=False,
-                            )
-                            if _file_identity(metadata) != promoted_identity:
-                                raise InstallerError(
-                                    f"Arquivo foi substituído durante a preparação e foi preservado: "
-                                    f"{destination}"
-                                )
-                            _assert_archive_parent_stable(
-                                root_descriptor, parent_parts, parent_descriptor, destination.parent,
-                            )
-                            os.unlink(temporary_name, dir_fd=parent_descriptor)
-                            os.fsync(parent_descriptor)
-                            if journal is not None:
-                                journal.record_materialized(entry)
-                        finally:
-                            try:
-                                os.unlink(temporary_name, dir_fd=parent_descriptor)
-                            except FileNotFoundError:
-                                pass
-                    continue
-
-                missing_parents: list[Path] = []
-                cursor = destination.parent
-                while cursor != destination_root and not lexists(cursor):
-                    missing_parents.append(cursor)
-                    cursor = cursor.parent
-                _fallback_safe_chain(destination_root, cursor)
-                for directory in reversed(missing_parents):
-                    try:
-                        directory.mkdir()
-                        created = True
-                    except FileExistsError:
-                        created = False
-                    _fallback_safe_chain(destination_root, directory)
-                    if created:
-                        metadata = directory.lstat()
-                        entry = MaterializedDirectory(
-                            directory, destination_root, _file_identity(metadata),
-                        )
-                        created_directories.append(entry)
-                        if journal is not None:
-                            journal.record_directory(entry)
-                if existed:
-                    _fallback_safe_chain(destination_root, destination.parent)
-                    metadata = destination.lstat()
-                    if (
-                        not stat.S_ISREG(metadata.st_mode)
-                        or not file_matches_sha256(
-                            destination, member.sha256, member.size,
-                        )
-                    ):
-                        raise InstallerError(
-                            f"Arquivo local conflita com a carga dedicada de {label}: {destination}"
-                        )
-                    entry = MaterializedFile(
-                        destination, member.sha256, package.as_posix(), False, True,
-                        destination_root, _file_identity(metadata), member.size,
-                    )
-                else:
-                    digest, identity = _fallback_materialize_member(
-                        source_path, destination, member, label, destination_root,
-                    )
-                    entry = MaterializedFile(
-                        destination, digest, package.as_posix(), True, False,
-                        destination_root, identity, member.size,
-                    )
-                tracked_before_journal = entry.created_by_session
-                if tracked_before_journal:
-                    materialized_files.append(entry)
-                try:
-                    if journal is not None:
-                        journal.record_materialized(entry)
-                except Exception:
-                    if entry.created_by_session:
-                        _cleanup_materialized_file(entry)
-                    raise
-                if not tracked_before_journal:
-                    materialized_files.append(entry)
-    except InstallerError:
-        cleanup_dedicated_ktx(MaterializedKtx(
-            tuple(materialized_files), tuple(created_directories), destination_root,
-        ))
-        raise
-    except (ArchiveError, OSError, RuntimeError) as error:
-        cleanup_dedicated_ktx(MaterializedKtx(
-            tuple(materialized_files), tuple(created_directories), destination_root,
-        ))
-        raise InstallerError(
-            f"Não foi possível preparar a carga de {label} para o MVDSV: {error}"
-        ) from error
+    materialized = materialize_archive(
+        package,
+        destination_root,
+        label,
+        journal,
+        warning=console.warning,
+    )
     return MaterializedKtx(
-        tuple(materialized_files), tuple(created_directories), destination_root,
+        materialized.files,
+        materialized.directories,
+        materialized.root,
     )
 
 
@@ -1730,27 +1055,7 @@ def materialize_dedicated_ktx(target: Path) -> MaterializedKtx:
 
 
 def cleanup_dedicated_ktx(materialized: MaterializedKtx) -> None:
-    for entry in reversed(materialized.files):
-        if not entry.created_by_session:
-            continue
-        try:
-            removed = _cleanup_materialized_file(entry)
-        except (InstallerError, OSError):
-            removed = False
-        if not removed:
-            console.warning(
-                f"Arquivo materializado alterado durante a sessão foi preservado: {entry.path}"
-            )
-    for directory in reversed(materialized.directories):
-        try:
-            removed = _cleanup_materialized_directory(directory)
-        except (InstallerError, OSError, ValueError):
-            removed = False
-        if not removed:
-            console.warning(
-                "Diretório materializado alterado ou não removível com segurança foi "
-                f"preservado: {directory.path}"
-            )
+    cleanup_materialized_archive(materialized, warning=console.warning)
 
 
 def select_hosted_game(
@@ -1936,7 +1241,8 @@ def host_spec(
     materialized_ktx: list[MaterializedKtx],
     journal: SessionJournal | None = None,
 ) -> ProcessSpec:
-    binary = runtime_binary(installer, "mvdsv")
+    launch_target = runtime_launch_target(installer, "mvdsv")
+    binary = launch_target.executable
     game = selection.game
     mode = selection.mode
     map_name = selection.map_name
@@ -2087,12 +1393,13 @@ def host_spec(
     ))
     return ProcessSpec(
         "MVDSV", tuple(arguments), installer.target, startup_rcon,
-        parameters=tuple(parameters),
+        parameters=tuple(parameters), launch_target=launch_target,
     )
 
 
 def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> ProcessSpec:
-    binary = runtime_binary(installer, "qwfwd")
+    launch_target = runtime_launch_target(installer, "qwfwd")
+    binary = launch_target.executable
     directory = installer.target / "qwfwd"
     config = directory / "qwfwd.cfg"
     if not config.is_file() or config.is_symlink():
@@ -2105,6 +1412,7 @@ def proxy_spec(installer: core.Installer, options: argparse.Namespace) -> Proces
             ("port", str(options.proxy_port)),
             ("protocol", "UDP QuakeWorld"),
         ),
+        launch_target=launch_target,
     )
 
 
@@ -2118,7 +1426,8 @@ def qtv_spec(
     session_paths: list[Path],
     journal: SessionJournal | None = None,
 ) -> ProcessSpec:
-    binary = runtime_binary(installer, "qtv")
+    launch_target = runtime_launch_target(installer, "qtv")
+    binary = launch_target.executable
     directory = installer.target / "qtv"
     config = directory / "qtv.cfg"
     if not config.is_file() or config.is_symlink():
@@ -2149,6 +1458,7 @@ def qtv_spec(
             ("upstream", upstream or "nenhum"),
             ("upstream_secret", "configurado" if password else "não configurado"),
         ),
+        launch_target=launch_target,
     )
 
 
@@ -2740,34 +2050,6 @@ def read_background_request(options: argparse.Namespace) -> None:
     options.background = True
 
 
-def activate_background_log(target: Path, relative: str) -> Path:
-    pure = PurePosixPath(relative)
-    if (
-        pure.is_absolute()
-        or pure.parts[:2] != (".x86qw", "logs")
-        or len(pure.parts) != 3
-        or any(part in {"", ".", ".."} for part in pure.parts)
-        or not pure.name.startswith("service-")
-        or pure.suffix != ".log"
-    ):
-        raise InstallerError("Caminho interno do log em segundo plano é inválido.")
-    directory = target / ".x86qw" / "logs"
-    ensure_private_directory(directory)
-    path = target.joinpath(*pure.parts)
-    if lexists(path) and (path.is_symlink() or not path.is_file()):
-        raise InstallerError(f"Log em segundo plano ausente ou inseguro: {path}")
-    try:
-        descriptor = private_fs.open_private_append(path)
-    except OSError as error:
-        raise InstallerError(f"Log em segundo plano não pôde ser protegido: {path}") from error
-    try:
-        os.dup2(descriptor, sys.stdout.fileno())
-        os.dup2(descriptor, sys.stderr.fileno())
-    finally:
-        os.close(descriptor)
-    return path
-
-
 def background_log_tail(path: Path, secrets_to_redact: tuple[str, ...]) -> str:
     if not path.is_file() or path.is_symlink():
         return ""
@@ -2794,35 +2076,21 @@ def launch_background_controller(
     log_relative = f".x86qw/logs/service-{token}.log"
     log_path = options.target.joinpath(*PurePosixPath(log_relative).parts)
     arguments = background_controller_arguments(options, selection, log_relative)
-    command = [sys.executable, str(background_entrypoint()), *arguments]
-    popen_options: dict[str, object] = {
-        "cwd": core.PROJECT_ROOT,
-        "stdin": subprocess.PIPE,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-    }
-    if os.name == "nt":
-        popen_options["creationflags"] = (
-            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-        )
-    else:
-        popen_options["start_new_session"] = True
+    command = (sys.executable, str(background_entrypoint()), *arguments)
+    request = (
+        json.dumps({
+            "format": 1,
+            "project": "x86qw",
+            "secrets": {
+                name: str(getattr(options, name, "") or "")
+                for name in BACKGROUND_SECRET_FIELDS
+            },
+        }, ensure_ascii=False, sort_keys=True) + "\n"
+    ).encode("utf-8")
     try:
-        process = subprocess.Popen(command, **popen_options)
-        assert process.stdin is not None
-        request = (
-            json.dumps({
-                "format": 1,
-                "project": "x86qw",
-                "secrets": {
-                    name: str(getattr(options, name, "") or "")
-                    for name in BACKGROUND_SECRET_FIELDS
-                },
-            }, ensure_ascii=False, sort_keys=True) + "\n"
-        ).encode("utf-8")
-        process.stdin.write(request)
-        process.stdin.close()
+        process = spawn_background_controller(
+            command, core.PROJECT_ROOT, request,
+        )
     except OSError as error:
         raise InstallerError(
             f"Não foi possível criar o controlador em segundo plano: {error}"
@@ -2999,7 +2267,7 @@ def main(
             runtimes={},
             capability_catalog={},
             host_platforms={},
-            host_platform=system_platform,
+            host_platform=host_adapter,
             console=console,
             gameplay_module=gameplay_module,
             gameplay_context=gameplay_context,

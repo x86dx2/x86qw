@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..platform.host import LaunchTarget
+
 
 @dataclass(frozen=True)
 class StartupRcon:
@@ -32,6 +34,7 @@ class ProcessSpec:
     startup_rcon: StartupRcon | None = None
     readiness: ServiceReadiness | None = None
     parameters: tuple[tuple[str, str], ...] = ()
+    launch_target: LaunchTarget | None = None
 
 
 __all__ = ("ProcessSpec", "ServiceReadiness", "StartupRcon")

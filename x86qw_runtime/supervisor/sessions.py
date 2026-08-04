@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import stat
-import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -22,9 +23,9 @@ from x86qw_runtime.io.managed_files import (
     MaterializedFile,
     cleanup_materialized_directory,
     cleanup_materialized_file,
+    cleanup_sensitive_temporary,
     describe_non_sensitive_temporary,
     persistent_path_identity,
-    unlink_sensitive_temporary,
 )
 from x86qw_runtime.io.paths import lexists
 
@@ -35,6 +36,8 @@ from .models import ProcessSpec
 _MAX_SESSION_JOURNAL_BYTES = 2 * 1024 * 1024
 _MAX_STOP_REQUEST_BYTES = 64 * 1024
 _LEGACY_ACL_MIGRATED = "_x86qw_legacy_acl_migrated"
+_SESSION_DIRECTORY_NAME = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}\Z")
+_INITIAL_JOURNAL_STAGING_NAME = re.compile(r"\.session\.json\.[0-9a-f]{24}\.tmp\Z")
 
 
 class RecoveryReporter(Protocol):
@@ -50,12 +53,16 @@ def _ensure_private_directory(path: Path) -> None:
         raise InstallerError(f"Diretório de serviço ausente ou inseguro: {path}") from error
 
 
-def unlink_stop_request(request: Path) -> None:
-    """Remove a private request, tolerating short-lived Windows sharing locks."""
+def unlink_stop_request(
+    request: Path, *, expected_identity: tuple[int, int] | None = None,
+) -> None:
+    """Remove an ephemeral transactional request after it is consumed or cancelled."""
 
     for attempt in range(20):
         try:
-            private_fs.unlink_private_file(request)
+            private_fs.unlink_private_file(
+                request, expected_identity=expected_identity,
+            )
             return
         except FileNotFoundError:
             return
@@ -68,6 +75,173 @@ def unlink_stop_request(request: Path) -> None:
             raise InstallerError(
                 f"Pedido de encerramento sem privacidade comprovada foi preservado: {request}"
             ) from error
+
+
+def _cleanup_stop_request_staging(
+    path: Path,
+    *,
+    expected_identity: tuple[int, int],
+    primary_error: BaseException | None,
+) -> None:
+    if not lexists(path):
+        return
+    try:
+        private_fs.unlink_private_file(path, expected_identity=expected_identity)
+    except OSError as cleanup_error:
+        message = (
+            "Falha ao remover o temporário privado do pedido de encerramento; "
+            f"arquivo preservado: {path} ({cleanup_error})"
+        )
+        if primary_error is not None:
+            add_note = getattr(primary_error, "add_note", None)
+            if add_note is not None:
+                add_note(message)
+            return
+        raise InstallerError(message) from cleanup_error
+
+
+def publish_stop_request(request: Path, payload: bytes) -> tuple[int, int]:
+    """Publish an ephemeral transactional stop request with create-only commit.
+
+    The complete private payload becomes visible only after ``fsync``.  A
+    concurrent request wins without replacement; callers remove the request
+    through :func:`unlink_stop_request` after consumption or cancellation.
+    """
+
+    try:
+        descriptor, temporary = private_fs.private_mkstemp(
+            prefix=".stop-", suffix=".request", directory=request.parent,
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            temporary_identity = int(metadata.st_dev), int(metadata.st_ino)
+        except OSError:
+            os.close(descriptor)
+            raise
+    except OSError as error:
+        raise InstallerError(
+            "Não foi possível criar o pedido privado de encerramento."
+        ) from error
+    primary_error: BaseException | None = None
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        try:
+            os.link(temporary, request)
+            private_fs.validate_private_file(request)
+        except FileExistsError as error:
+            raise InstallerError(
+                "Já existe um pedido de encerramento para esta stack."
+            ) from error
+        except OSError as error:
+            raise InstallerError(
+                "Não foi possível publicar o pedido privado de encerramento."
+            ) from error
+    except BaseException as error:
+        primary_error = error
+        raise
+    finally:
+        _cleanup_stop_request_staging(
+            temporary,
+            expected_identity=temporary_identity,
+            primary_error=primary_error,
+        )
+    return temporary_identity
+
+
+def activate_background_log(target: Path, relative: str) -> Path:
+    """Attach stdout/stderr to one private append-only background log.
+
+    Existing bytes are never truncated.  A failed redirection restores both
+    descriptors and removes only unchanged artifacts created by this call.
+    """
+
+    pure = PurePosixPath(relative)
+    if (
+        pure.is_absolute()
+        or pure.parts[:2] != (".x86qw", "logs")
+        or len(pure.parts) != 3
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or not pure.name.startswith("service-")
+        or pure.suffix != ".log"
+    ):
+        raise InstallerError("Caminho interno do log em segundo plano é inválido.")
+    directory = target / ".x86qw" / "logs"
+    path = target.joinpath(*pure.parts)
+    stdout = sys.stdout.fileno()
+    stderr = sys.stderr.fileno()
+    backups: list[tuple[int, int, bool]] = []
+    descriptor: int | None = None
+    created_directory: MaterializedDirectory | None = None
+    created_log_identity: tuple[int, int] | None = None
+    failure: BaseException | None = None
+    try:
+        backups.append((os.dup(stdout), stdout, os.get_inheritable(stdout)))
+        backups.append((os.dup(stderr), stderr, os.get_inheritable(stderr)))
+        try:
+            private_fs.create_private_directory(directory)
+            created_directory = MaterializedDirectory(
+                directory,
+                target,
+                persistent_path_identity(directory, directory=True),
+            )
+        except FileExistsError:
+            _ensure_private_directory(directory)
+        if lexists(path) and (path.is_symlink() or not path.is_file()):
+            raise InstallerError(f"Log em segundo plano ausente ou inseguro: {path}")
+        try:
+            created = private_fs.create_private_file(path)
+        except FileExistsError:
+            descriptor = private_fs.open_private_append(path)
+        else:
+            try:
+                metadata = os.fstat(created)
+                created_log_identity = int(metadata.st_dev), int(metadata.st_ino)
+            finally:
+                os.close(created)
+            descriptor = private_fs.open_private_append(path)
+            metadata = os.fstat(descriptor)
+            if (int(metadata.st_dev), int(metadata.st_ino)) != created_log_identity:
+                raise InstallerError(
+                    f"Log em segundo plano mudou de identidade durante a abertura: {path}"
+                )
+        os.dup2(descriptor, sys.stdout.fileno())
+        os.dup2(descriptor, sys.stderr.fileno())
+    except BaseException as error:
+        failure = error
+        for backup, destination, inheritable in backups:
+            try:
+                os.dup2(backup, destination, inheritable=inheritable)
+            except OSError as rollback_error:
+                add_note = getattr(error, "add_note", None)
+                if add_note is not None:
+                    add_note(
+                        f"Falha ao restaurar descritor {destination}: {rollback_error}"
+                    )
+        if isinstance(error, OSError) and descriptor is None:
+            raise InstallerError(
+                f"Log em segundo plano não pôde ser protegido: {path}"
+            ) from error
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        for backup, _destination, _inheritable in backups:
+            os.close(backup)
+        if failure is not None and created_log_identity is not None:
+            try:
+                private_fs.unlink_private_file(
+                    path, expected_identity=created_log_identity,
+                )
+            except OSError as cleanup_error:
+                add_note = getattr(failure, "add_note", None)
+                if add_note is not None:
+                    add_note(f"Log concorrente preservado após falha: {cleanup_error}")
+        if failure is not None and created_directory is not None:
+            cleanup_materialized_directory(created_directory)
+    return path
 
 
 class SessionJournal:
@@ -86,9 +260,6 @@ class SessionJournal:
         sessions = self.target / ".x86qw" / "sessions"
         _ensure_private_directory(sessions.parent)
         _ensure_private_directory(sessions)
-        if os.name != "nt":
-            sessions.parent.chmod(0o700)
-            sessions.chmod(0o700)
         self.session_id = session_id or session_control.new_session_id()
         self._sensitive_guards: dict[str, object] = {}
         self.directory = sessions / self.session_id
@@ -98,6 +269,11 @@ class SessionJournal:
             raise InstallerError(
                 f"Diretório exclusivo da sessão não pôde ser criado: {self.directory}"
             ) from error
+        created_directory = MaterializedDirectory(
+            self.directory,
+            self.target,
+            persistent_path_identity(self.directory, directory=True),
+        )
         self.path = self.directory / "session.json"
         self.data: dict[str, object] = {
             "format": 1,
@@ -119,7 +295,11 @@ class SessionJournal:
             "materialized_files": [],
             "created_directories": [],
         }
-        self._write()
+        try:
+            self._write()
+        except BaseException:
+            cleanup_materialized_directory(created_directory)
+            raise
 
     def _relative(self, path: Path) -> str:
         try:
@@ -149,11 +329,15 @@ class SessionJournal:
         if not lexists(request):
             return False
         try:
+            before = persistent_path_identity(request, directory=False)
             payload = json.loads(
                 private_fs.read_private_file(
                     request, maximum_size=_MAX_STOP_REQUEST_BYTES,
                 ).decode("utf-8")
             )
+            identity = persistent_path_identity(request, directory=False)
+            if identity != before:
+                raise OSError("o pedido mudou de identidade durante a leitura")
             if (
                 not isinstance(payload, dict)
                 or set(payload) != {"format", "project", "session_id", "requested_at"}
@@ -163,7 +347,7 @@ class SessionJournal:
                 or not isinstance(payload.get("requested_at"), str)
             ):
                 raise ValueError("pedido inválido")
-            unlink_stop_request(request)
+            unlink_stop_request(request, expected_identity=identity)
             return True
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
             raise InstallerError(
@@ -173,13 +357,24 @@ class SessionJournal:
     def record_process(
         self,
         spec: ProcessSpec,
-        process: subprocess.Popen[bytes],
+        process: object,
         process_group: int,
     ) -> None:
-        probe = session_control.process_identity(process.pid)
+        pid = getattr(process, "pid", None)
+        if type(pid) is not int or pid <= 0:
+            raise InstallerError(f"PID inválido para o processo {spec.label}.")
+        probe = session_control.process_identity(pid)
         if probe.status != "alive" or probe.identity is None:
             raise InstallerError(f"Não foi possível registrar a identidade do processo {spec.label}.")
         identity = probe.identity
+        runtime_executable = (
+            spec.launch_target.executable
+            if spec.launch_target is not None
+            else spec.arguments[0] if spec.arguments else None
+        )
+        if runtime_executable is None or not os.fspath(runtime_executable):
+            raise InstallerError(f"Executável inválido para o processo {spec.label}.")
+        pending = getattr(process, "_x86qw_runtime_pending", False) is True
         address = None
         port = None
         if spec.startup_rcon is not None:
@@ -191,15 +386,86 @@ class SessionJournal:
         processes.append({
             "label": spec.label,
             "runtime": spec.label.casefold(),
-            "pid": process.pid,
+            "pid": pid,
             "process_group": process_group,
             "executable": identity.executable,
             "creation_token": identity.creation_token,
+            "runtime_executable": os.fspath(runtime_executable),
+            "runtime_pid": None if pending else pid,
+            "state": "pending" if pending else "ready",
             "started_at": datetime.now(timezone.utc).isoformat(),
             "address": address,
             "port": port,
             "parameters": dict(spec.parameters),
         })
+        self._write()
+
+    def record_process_started(self, process: object, runtime_pid: int) -> None:
+        if type(runtime_pid) is not int or runtime_pid <= 0:
+            raise InstallerError("O guardian informou um PID de runtime inválido.")
+        pid = getattr(process, "pid", None)
+        if type(pid) is not int or pid <= 0:
+            raise InstallerError("O guardian não possui PID válido.")
+        probe = session_control.process_identity(pid)
+        if probe.status != "alive" or probe.identity is None:
+            raise InstallerError("A identidade do guardian não pôde ser confirmada.")
+        identity = probe.identity
+        processes = self.data["processes"]
+        assert isinstance(processes, list)
+        matches = [
+            entry for entry in processes
+            if isinstance(entry, dict)
+            and entry.get("pid") == pid
+            and entry.get("creation_token") == identity.creation_token
+            and entry.get("executable") == identity.executable
+            and entry.get("state") == "pending"
+            and entry.get("runtime_pid") is None
+        ]
+        if len(matches) != 1:
+            raise InstallerError("Entrada pending do guardian ausente ou ambígua.")
+        entry = matches[0]
+        entry["runtime_pid"] = runtime_pid
+        entry["state"] = "ready"
+        try:
+            self._write()
+        except BaseException:
+            entry["runtime_pid"] = None
+            entry["state"] = "pending"
+            raise
+
+    def record_temporary_intent(
+        self,
+        path: Path,
+        origin: str,
+        *,
+        sensitive: bool,
+        identity: tuple[int, int],
+        expected_hash: str | None = None,
+        expected_size: int | None = None,
+    ) -> None:
+        entries = self.data["temporary_files"]
+        assert isinstance(entries, list)
+        entry: dict[str, object] = {
+            "path": self._relative(path),
+            "origin": origin,
+            "created_by_session": True,
+            "type": "temporary-config",
+            "sensitive": sensitive,
+            "state": "pending",
+            "device": identity[0],
+            "inode": identity[1],
+        }
+        if not sensitive:
+            if (
+                not isinstance(expected_hash, str)
+                or len(expected_hash) != 64
+                or type(expected_size) is not int
+                or not 0 <= expected_size <= MAX_MANAGED_FILE_SIZE
+            ):
+                raise InstallerError(f"Intenção incoerente do temporário {path}.")
+            entry["expected_hash"] = expected_hash
+            entry["expected_size"] = expected_size
+        entries.append(entry)
         self._write()
 
     def record_temporary(
@@ -218,6 +484,7 @@ class SessionJournal:
             "created_by_session": True,
             "type": "temporary-config",
             "sensitive": sensitive,
+            "state": "ready",
         }
         if not sensitive:
             tracked = tracked or describe_non_sensitive_temporary(
@@ -235,7 +502,24 @@ class SessionJournal:
             identity = tracked.identity
             entry["device"] = identity[0]
             entry["inode"] = identity[1]
-        entries.append(entry)
+        relative = entry["path"]
+        for index, recorded in enumerate(entries):
+            if (
+                isinstance(recorded, dict)
+                and recorded.get("path") == relative
+                and recorded.get("state") == "pending"
+            ):
+                if (
+                    sensitive
+                    and type(recorded.get("device")) is int
+                    and type(recorded.get("inode")) is int
+                ):
+                    entry["device"] = recorded["device"]
+                    entry["inode"] = recorded["inode"]
+                entries[index] = entry
+                break
+        else:
+            entries.append(entry)
         self._write()
 
     def hold_sensitive_temporary(self, path: Path, lease: object) -> None:
@@ -263,9 +547,9 @@ class SessionJournal:
         if first_error is not None:
             raise first_error
 
-    def record_materialized(self, entry: MaterializedFile) -> None:
-        entries = self.data["materialized_files"]
-        assert isinstance(entries, list)
+    def _materialized_record(
+        self, entry: MaterializedFile, *, state: str,
+    ) -> dict[str, object]:
         identity = entry.identity
         if identity is None:
             try:
@@ -292,7 +576,7 @@ class SessionJournal:
             raise InstallerError(
                 f"Tamanho inválido do arquivo materializado {entry.path}."
             )
-        recorded = {
+        return {
             "path": self._relative(entry.path),
             "expected_hash": entry.expected_hash,
             "expected_size": expected_size,
@@ -304,8 +588,30 @@ class SessionJournal:
             "sensitive": False,
             "device": identity[0],
             "inode": identity[1],
+            "state": state,
         }
-        entries.append(recorded)
+
+    def record_materialized_intent(self, entry: MaterializedFile) -> None:
+        entries = self.data["materialized_files"]
+        assert isinstance(entries, list)
+        entries.append(self._materialized_record(entry, state="pending"))
+        self._write()
+
+    def record_materialized(self, entry: MaterializedFile) -> None:
+        entries = self.data["materialized_files"]
+        assert isinstance(entries, list)
+        recorded = self._materialized_record(entry, state="ready")
+        relative = recorded["path"]
+        for index, existing in enumerate(entries):
+            if (
+                isinstance(existing, dict)
+                and existing.get("path") == relative
+                and existing.get("state") == "pending"
+            ):
+                entries[index] = recorded
+                break
+        else:
+            entries.append(recorded)
         self._write()
 
     def record_directory(self, entry: MaterializedDirectory) -> None:
@@ -411,6 +717,7 @@ def load_session_journal(path: Path) -> dict[str, object]:
             if isinstance(entry, dict):
                 entry.setdefault("type", "temporary-config")
                 entry.setdefault("sensitive", True)
+                entry.setdefault("state", "ready")
                 if entry.get("sensitive") is True:
                     entry.pop("expected_hash", None)
                     entry.pop("expected_size", None)
@@ -418,6 +725,7 @@ def load_session_journal(path: Path) -> dict[str, object]:
             if isinstance(entry, dict):
                 entry.setdefault("type", "materialized-content")
                 entry.setdefault("sensitive", False)
+                entry.setdefault("state", "ready")
         controller = data.get("controller")
         if controller is not None and (
             not isinstance(controller, dict)
@@ -432,11 +740,30 @@ def load_session_journal(path: Path) -> dict[str, object]:
         for entry in data["processes"]:
             if isinstance(entry, dict):
                 entry.setdefault("parameters", {})
+                entry.setdefault("runtime_executable", entry.get("executable"))
+                entry.setdefault("runtime_pid", entry.get("pid"))
+                entry.setdefault("state", "ready")
             if (
                 not isinstance(entry, dict)
                 or type(entry.get("pid")) is not int
                 or not isinstance(entry.get("label"), str)
                 or not isinstance(entry.get("parameters"), dict)
+                or not (
+                    entry.get("runtime_executable") is None
+                    or isinstance(entry.get("runtime_executable"), str)
+                )
+                or entry.get("state") not in {"pending", "ready"}
+                or entry.get("state") == "pending"
+                and (
+                    not isinstance(entry.get("runtime_executable"), str)
+                    or not entry.get("runtime_executable")
+                    or entry.get("runtime_pid") is not None
+                )
+                or entry.get("state") == "ready"
+                and (
+                    type(entry.get("runtime_pid")) is not int
+                    or entry.get("runtime_pid") <= 0
+                )
                 or not all(
                     isinstance(name, str) and isinstance(value, str)
                     for name, value in entry.get("parameters", {}).items()
@@ -451,6 +778,7 @@ def load_session_journal(path: Path) -> dict[str, object]:
                     or not isinstance(entry.get("path"), str)
                     or not isinstance(entry.get("created_by_session"), bool)
                     or not isinstance(entry.get("sensitive"), bool)
+                    or entry.get("state") not in {"pending", "ready"}
                     or (
                         ("device" in entry) != ("inode" in entry)
                         or "device" in entry
@@ -535,6 +863,43 @@ def legacy_clean_journal_is_inert(data: dict[str, object]) -> bool:
     )
 
 
+def _remove_incomplete_initial_session(directory: Path, sessions: Path) -> bool:
+    """Remove only an unambiguous pre-journal crash residue."""
+
+    if _SESSION_DIRECTORY_NAME.fullmatch(directory.name) is None:
+        return False
+    try:
+        metadata = directory.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            return False
+        directory_identity = int(metadata.st_dev), int(metadata.st_ino)
+        entries = list(directory.iterdir())
+    except OSError:
+        return False
+    if len(entries) == 1:
+        staging = entries[0]
+        if _INITIAL_JOURNAL_STAGING_NAME.fullmatch(staging.name) is None:
+            return False
+        try:
+            private_fs.validate_private_file(staging)
+            staging_metadata = staging.lstat()
+            if staging_metadata.st_size != 0:
+                return False
+            staging_identity = (
+                int(staging_metadata.st_dev), int(staging_metadata.st_ino),
+            )
+            private_fs.unlink_private_file(
+                staging, expected_identity=staging_identity,
+            )
+        except OSError:
+            return False
+    elif entries:
+        return False
+    return cleanup_materialized_directory(MaterializedDirectory(
+        directory, sessions, directory_identity,
+    ))
+
+
 def session_journal_paths(target: Path, session_id: str | None = None) -> list[Path]:
     sessions = target / ".x86qw" / "sessions"
     if not lexists(sessions):
@@ -558,7 +923,15 @@ def session_journal_paths(target: Path, session_id: str | None = None) -> list[P
             raise InstallerError(
                 f"Diretório de sessão sem privacidade comprovada: {directory}"
             ) from error
-        paths.append(directory / "session.json")
+        journal = directory / "session.json"
+        if lexists(journal):
+            paths.append(journal)
+            continue
+        if _remove_incomplete_initial_session(directory, sessions):
+            continue
+        raise InstallerError(
+            f"Journal de sessão inválido preservado para inspeção: {directory}"
+        )
     return paths
 
 
@@ -778,7 +1151,17 @@ def reconcile_journal(
             if candidate is None or not lexists(candidate):
                 continue
             if sensitive:
-                unlink_sensitive_temporary(candidate)
+                if cleanup_sensitive_temporary(candidate, identity):
+                    continue
+                entry["modified_during_session"] = True
+                reporter.warning(
+                    "Temporário sensível substituído foi preservado: "
+                    f"{candidate}"
+                )
+                raise InstallerError(
+                    "Temporário sensível sem identidade original confirmável foi "
+                    f"preservado: {candidate}"
+                )
             elif collection == "materialized_files":
                 if (
                     isinstance(expected, str)
@@ -860,6 +1243,7 @@ __all__ = (
     "MaterializedFile",
     "RecoveryReporter",
     "SessionJournal",
+    "activate_background_log",
     "assert_recovery_processes_confirmable",
     "journal_controller_probe",
     "journal_path",
@@ -867,6 +1251,7 @@ __all__ = (
     "legacy_clean_journal_is_inert",
     "load_session_journal",
     "process_still_matches",
+    "publish_stop_request",
     "reconcile_journal",
     "recover_sessions",
     "session_journal_paths",

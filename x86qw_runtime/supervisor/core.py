@@ -8,14 +8,21 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
 from x86qw_runtime.errors import InstallerError
+from x86qw_runtime.platform.host import (
+    LaunchTarget,
+    bound_launch_target,
+    revalidate_launch_target,
+)
 
 from .models import ProcessSpec, ServiceReadiness, StartupRcon
+from .posix_guardian import GuardianError, PosixGuardian, spawn_guardian
 from .readiness import apply_startup_rcon, wait_http_readiness, wait_udp_readiness
 
 
@@ -32,6 +39,7 @@ class Journal(Protocol):
     def record_process(
         self, spec: ProcessSpec, process: Any, process_group: int,
     ) -> None: ...
+    def record_process_started(self, process: Any, runtime_pid: int) -> None: ...
     def set_status(self, status: str) -> None: ...
     def consume_stop_request(self) -> bool: ...
 
@@ -39,6 +47,139 @@ class Journal(Protocol):
 class ServiceSignal(Exception):
     def __init__(self, signum: int) -> None:
         self.signum = signum
+
+
+def spawn_detached_client(
+    arguments: tuple[str, ...],
+    cwd: Path,
+    *,
+    launch_target: LaunchTarget | None = None,
+    process_factory: Callable[..., Any] | None = None,
+    os_name: str | None = None,
+) -> Any:
+    """Start one interactive client without exposing platform flags to the CLI."""
+
+    spawn = subprocess.Popen if process_factory is None else process_factory
+    if launch_target is not None:
+        if not arguments or arguments[0] != str(launch_target.executable):
+            raise InstallerError("O comando do cliente diverge do alvo validado.")
+    options: dict[str, object] = {
+        "cwd": cwd,
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    active_os_name = os.name if os_name is None else os_name
+    if active_os_name != "nt":
+        options["start_new_session"] = True
+    if active_os_name != "nt" and process_factory is None:
+        guardian = spawn_guardian(
+            arguments,
+            cwd=cwd,
+            launch_target=launch_target,
+            quiet=True,
+        )
+        try:
+            guardian.release(timeout=4.0)
+        except GuardianError as error:
+            raise InstallerError(
+                f"Não foi possível iniciar o cliente validado: {error}"
+            ) from error
+        process = guardian.process
+        setattr(process, "_x86qw_process_group", guardian.process_group)
+        return process
+    if launch_target is not None:
+        lease = bound_launch_target(launch_target)
+        bound = lease.__enter__()
+        options["executable"] = bound.executable
+        if bound.pass_fds:
+            options["pass_fds"] = bound.pass_fds
+        try:
+            process = spawn(arguments, **options)
+        except BaseException:
+            lease.__exit__(*sys.exc_info())
+            raise
+        if bound.retain_until_exit and callable(getattr(process, "wait", None)):
+            def release_after_exit() -> None:
+                try:
+                    process.wait()
+                finally:
+                    lease.__exit__(None, None, None)
+
+            threading.Thread(
+                target=release_after_exit,
+                name="x86qw-launch-lease",
+                daemon=True,
+            ).start()
+        else:
+            lease.__exit__(None, None, None)
+        return process
+    return spawn(arguments, **options)
+
+
+def process_remains_alive(
+    process: object, *, duration: float, interval: float = 0.05,
+) -> bool:
+    """Observe a process handle for one bounded startup stability window."""
+
+    if not isinstance(process, POPEN_TYPE):
+        return True
+    poll = process.poll
+    deadline = time.monotonic() + duration
+    while time.monotonic() < deadline:
+        if poll() is not None:
+            return False
+        time.sleep(interval)
+    return True
+
+
+def spawn_background_controller(
+    arguments: tuple[str, ...],
+    cwd: Path,
+    request: bytes,
+    *,
+    process_factory: Callable[..., Any] | None = None,
+    os_name: str | None = None,
+) -> Any:
+    """Detach one controller and transfer secrets exclusively through stdin."""
+
+    if not isinstance(request, bytes) or not request or len(request) > 1024 * 1024:
+        raise ValueError("invalid background controller request")
+    spawn = subprocess.Popen if process_factory is None else process_factory
+    active_os_name = os.name if os_name is None else os_name
+    options: dict[str, object] = {
+        "cwd": cwd,
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if active_os_name == "nt":
+        options["creationflags"] = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        )
+    else:
+        options["start_new_session"] = True
+    process = spawn(arguments, **options)
+    pipe = process.stdin
+    try:
+        if pipe is None:
+            raise OSError("background controller stdin is unavailable")
+        try:
+            pipe.write(request)
+        finally:
+            pipe.close()
+    except BaseException as operation_error:
+        try:
+            stop_processes([process])
+        except BaseException as cleanup_error:
+            raise InstallerError(
+                f"O handoff privado do controlador falhou: {operation_error}; "
+                "seu encerramento não pôde ser confirmado: "
+                f"{cleanup_error}"
+            ) from operation_error
+        raise
+    return process
 
 
 def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
@@ -455,8 +596,35 @@ def run_processes(
         for spec in specs:
             if reporter is not None:
                 reporter.detail(f"Iniciando {spec.label}: {spec.arguments[0]}")
+            if spec.launch_target is not None:
+                if (
+                    not spec.arguments
+                    or spec.arguments[0] != str(spec.launch_target.executable)
+                ):
+                    raise InstallerError(
+                        f"O comando de {spec.label} diverge do alvo validado."
+                    )
+                if process_factory is not None:
+                    revalidate_launch_target(spec.launch_target)
+            guardian: PosixGuardian | None = None
             if windows_job is not None:
-                process = windows_job.start_process(spec.arguments, spec.cwd)
+                if spec.launch_target is None:
+                    process = windows_job.start_process(spec.arguments, spec.cwd)
+                else:
+                    with bound_launch_target(spec.launch_target):
+                        process = windows_job.start_process(spec.arguments, spec.cwd)
+            elif process_factory is None:
+                try:
+                    guardian = spawn_guardian(
+                        spec.arguments,
+                        cwd=spec.cwd,
+                        launch_target=spec.launch_target,
+                    )
+                except GuardianError as error:
+                    raise InstallerError(
+                        f"Não foi possível preparar {spec.label}: {error}"
+                    ) from error
+                process = guardian.process
             else:
                 process = spawn(
                     spec.arguments,
@@ -466,9 +634,40 @@ def run_processes(
                 )
             process_group = process.pid
             setattr(process, "_x86qw_process_group", process_group)
+            if guardian is not None:
+                setattr(process, "_x86qw_runtime_pending", True)
             processes.append(process)
-            if journal is not None:
-                journal.record_process(spec, process, process_group)
+            try:
+                if journal is not None:
+                    journal.record_process(spec, process, process_group)
+                if guardian is not None:
+                    acknowledgement = guardian.release(timeout=4.0)
+                    if journal is not None:
+                        journal.record_process_started(
+                            process, acknowledgement.pid,
+                        )
+            except BaseException as operation_error:
+                cleanup_error: GuardianError | None = None
+                if guardian is not None:
+                    try:
+                        guardian.abort(timeout=4.0)
+                    except GuardianError as error:
+                        cleanup_error = error
+                if isinstance(operation_error, GuardianError):
+                    suffix = (
+                        f" O guardian também não pôde ser encerrado: {cleanup_error}"
+                        if cleanup_error is not None else ""
+                    )
+                    raise InstallerError(
+                        f"Não foi possível iniciar {spec.label}: "
+                        f"{operation_error}.{suffix}"
+                    ) from operation_error
+                if cleanup_error is not None and isinstance(operation_error, Exception):
+                    raise InstallerError(
+                        f"{operation_error} O guardian de {spec.label} "
+                        f"também não pôde ser encerrado: {cleanup_error}"
+                    ) from operation_error
+                raise
             if spec.startup_rcon is not None:
                 apply_rcon(spec.startup_rcon)
                 if reporter is not None:
@@ -537,10 +736,10 @@ def run_processes(
 __all__ = (
     "Journal",
     "POPEN_TYPE",
+    "process_remains_alive",
     "Reporter",
     "ServiceSignal",
     "WindowsJobObject",
-    "_windows_job_kernel32",
     "posix_process_group_status",
     "run_processes",
     "stop_processes",

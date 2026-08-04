@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -110,6 +111,51 @@ def read_lock_owner(path: Path) -> dict[str, object]:
     return data
 
 
+def _private_file_identity(path: Path) -> tuple[int, int]:
+    private_fs.validate_private_file(path)
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise SessionControlError(f"Lock de operação mudou de tipo: {path}")
+    return int(metadata.st_dev), int(metadata.st_ino)
+
+
+def _read_lock_owner_with_identity(
+    path: Path,
+) -> tuple[dict[str, object], tuple[int, int]]:
+    before = _private_file_identity(path)
+    owner = read_lock_owner(path)
+    identity = _private_file_identity(path)
+    if identity != before:
+        raise SessionControlError(
+            f"Lock de operação mudou de identidade durante a leitura: {path}"
+        )
+    return owner, identity
+
+
+def _move_private_lock_no_replace(
+    source: Path, destination: Path, expected_identity: tuple[int, int],
+) -> None:
+    """Move one exact lock without replacing a concurrent owner."""
+
+    os.link(source, destination)
+    try:
+        if _private_file_identity(destination) != expected_identity:
+            raise SessionControlError(
+                f"Lock movido mudou de identidade: {destination}"
+            )
+        private_fs.unlink_private_file(
+            source, expected_identity=expected_identity,
+        )
+    except BaseException:
+        try:
+            private_fs.unlink_private_file(
+                destination, expected_identity=expected_identity,
+            )
+        except OSError:
+            pass
+        raise
+
+
 def _ensure_private_directory(path: Path, created: list[Path]) -> None:
     existed = lexists(path)
     try:
@@ -130,6 +176,8 @@ class InstallationLock:
         owner: dict[str, object],
         *,
         reclaimed_path: Path | None = None,
+        active_identity: tuple[int, int] | None = None,
+        reclaimed_identity: tuple[int, int] | None = None,
         created_directories: tuple[Path, ...] = (),
         control_lease: object | None = None,
     ) -> None:
@@ -138,6 +186,8 @@ class InstallationLock:
         self.owner = owner
         self.session_id = str(owner["session_id"])
         self.reclaimed_path = reclaimed_path
+        self.active_identity = active_identity
+        self.reclaimed_identity = reclaimed_identity
         self.created_directories = created_directories
         self.control_lease = control_lease
 
@@ -213,11 +263,12 @@ class InstallationLock:
     ) -> "InstallationLock":
         session_id = str(owner["session_id"])
         reclaimed_path: Path | None = None
+        reclaimed_identity: tuple[int, int] | None = None
         while True:
             try:
                 descriptor = private_fs.create_private_file(path)
             except FileExistsError:
-                existing = read_lock_owner(path)
+                existing, existing_identity = _read_lock_owner_with_identity(path)
                 if existing.get(_LEGACY_ACL_MIGRATED) is True:
                     raise SessionControlError(
                         "Lock legado do Windows foi protegido, mas seu conteúdo histórico "
@@ -245,10 +296,19 @@ class InstallationLock:
                     )
                 candidate = sessions / f".active.lock.reclaimed.{session_id}"
                 try:
-                    os.replace(path, candidate)
+                    _move_private_lock_no_replace(
+                        path, candidate, existing_identity,
+                    )
                 except FileNotFoundError:
                     continue
+                candidate_identity = _private_file_identity(candidate)
+                if candidate_identity != existing_identity:
+                    raise SessionControlError(
+                        "O lock mudou de identidade durante a recuperação; "
+                        f"{candidate} foi preservado para inspeção."
+                    )
                 reclaimed_path = candidate
+                reclaimed_identity = candidate_identity
                 continue
             except OSError as error:
                 for directory in reversed(created):
@@ -328,12 +388,17 @@ class InstallationLock:
                         " O lock privado foi preservado para inspeção "
                         f"({cleanup_error})."
                     )
-                if reclaimed_path is not None and lexists(reclaimed_path):
+                if (
+                    reclaimed_path is not None
+                    and reclaimed_identity is not None
+                    and lexists(reclaimed_path)
+                ):
                     try:
-                        if lexists(path):
-                            raise OSError("o novo lock ainda ocupa o caminho ativo")
-                        os.replace(reclaimed_path, path)
+                        _move_private_lock_no_replace(
+                            reclaimed_path, path, reclaimed_identity,
+                        )
                         reclaimed_path = None
+                        reclaimed_identity = None
                     except OSError as restore_error:
                         cleanup_detail += (
                             " O lock anterior também não pôde ser restaurado "
@@ -345,27 +410,53 @@ class InstallationLock:
                 ) from error
             return cls(
                 target, path, owner, reclaimed_path=reclaimed_path,
+                active_identity=created_identity,
+                reclaimed_identity=reclaimed_identity,
                 created_directories=tuple(created),
                 control_lease=control_lease,
             )
 
     def confirm_recovery(self) -> None:
         if self.reclaimed_path is not None and lexists(self.reclaimed_path):
-            private_fs.unlink_private_file(self.reclaimed_path)
+            if self.reclaimed_identity is None:
+                raise SessionControlError(
+                    "A identidade do lock recuperado não está disponível."
+                )
+            private_fs.unlink_private_file(
+                self.reclaimed_path,
+                expected_identity=self.reclaimed_identity,
+            )
         self.reclaimed_path = None
+        self.reclaimed_identity = None
 
     def release(self, *, restore_reclaimed: bool = False) -> None:
         try:
             if lexists(self.path):
-                current = read_lock_owner(self.path)
+                current, _current_identity = _read_lock_owner_with_identity(self.path)
                 if current.get("session_id") == self.session_id:
-                    private_fs.unlink_private_file(self.path)
+                    if self.active_identity is None:
+                        raise SessionControlError(
+                            "A identidade do lock ativo não está disponível."
+                        )
+                    private_fs.unlink_private_file(
+                        self.path, expected_identity=self.active_identity,
+                    )
             if self.reclaimed_path is not None and lexists(self.reclaimed_path):
-                if restore_reclaimed and not lexists(self.path):
-                    os.replace(self.reclaimed_path, self.path)
+                if self.reclaimed_identity is None:
+                    raise SessionControlError(
+                        "A identidade do lock recuperado não está disponível."
+                    )
+                if restore_reclaimed:
+                    _move_private_lock_no_replace(
+                        self.reclaimed_path, self.path, self.reclaimed_identity,
+                    )
                 else:
-                    private_fs.unlink_private_file(self.reclaimed_path)
+                    private_fs.unlink_private_file(
+                        self.reclaimed_path,
+                        expected_identity=self.reclaimed_identity,
+                    )
             self.reclaimed_path = None
+            self.reclaimed_identity = None
         finally:
             lease = self.control_lease
             self.control_lease = None
