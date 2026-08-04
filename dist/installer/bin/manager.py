@@ -769,6 +769,29 @@ class ComponentMetadataRollback:
     legacy_backups: list[tuple[Path, Path, tuple[int, int]]]
 
 
+@dataclass
+class RuntimePayloadRollback:
+    destination: Path
+    installed_identity: tuple[int, int] | None
+    previous: Path
+    previous_identity: tuple[int, int] | None
+
+
+@dataclass
+class RuntimeReceiptRollback:
+    destination: Path
+    installed_identity: tuple[int, int] | None
+    previous: list[tuple[Path, Path, tuple[int, int]]]
+
+
+class RuntimeCommitPersistenceError(PersistenceError):
+    """The runtime pair committed, but its final durability sync failed."""
+
+    def __init__(self, message: str, *, result: MutationResult) -> None:
+        super().__init__(message, committed=True)
+        self.result = result
+
+
 class Installer:
     def __init__(
         self,
@@ -2153,43 +2176,190 @@ class Installer:
         elif receipt_path is not None:
             self.validate_ezquake_receipt(receipt_path, self.spec, self.channel)
 
-    def commit_runtime(self, prepared: Path, staged_receipt: Path) -> None:
+    @staticmethod
+    def _runtime_path_identity(path: Path) -> tuple[int, int]:
+        metadata = path.lstat()
+        if stat.S_ISLNK(metadata.st_mode):
+            raise InstallerError(f"Caminho de runtime inválido: {path}")
+        return int(metadata.st_dev), int(metadata.st_ino)
+
+    def _rollback_runtime_payload(self, token: RuntimePayloadRollback) -> None:
+        if token.installed_identity is not None and lexists(token.destination):
+            if self._runtime_path_identity(token.destination) != token.installed_identity:
+                raise InstallerError(
+                    f"Runtime alterado foi preservado: {token.destination}"
+                )
+            remove_path(token.destination)
+        if token.previous_identity is not None:
+            if lexists(token.destination):
+                raise InstallerError(
+                    f"Destino do runtime ocupado foi preservado: {token.destination}"
+                )
+            if self._runtime_path_identity(token.previous) != token.previous_identity:
+                raise InstallerError(
+                    f"Backup do runtime alterado foi preservado: {token.previous}"
+                )
+            token.previous.replace(token.destination)
+
+    def _apply_runtime_payload(
+        self, prepared: Path, destination: Path,
+    ) -> RuntimePayloadRollback:
+        assert self.stage is not None
+        backup_root = Path(tempfile.mkdtemp(prefix=".runtime-old.", dir=self.stage))
+        previous = backup_root / "runtime"
+        token = RuntimePayloadRollback(destination, None, previous, None)
+        try:
+            if lexists(destination):
+                destination.replace(previous)
+                token.previous_identity = self._runtime_path_identity(previous)
+            prepared.replace(destination)
+            token.installed_identity = self._runtime_path_identity(destination)
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_runtime_payload(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"Rollback do runtime falhou; recuperação mantida em {self.stage}: "
+                    f"{rollback_error}"
+                ) from error
+            raise
+
+    def _rollback_runtime_receipt(self, token: RuntimeReceiptRollback) -> None:
+        errors: list[str] = []
+        if token.installed_identity is not None and lexists(token.destination):
+            try:
+                if self._runtime_path_identity(token.destination) != token.installed_identity:
+                    raise InstallerError(
+                        f"Recibo alterado foi preservado: {token.destination}"
+                    )
+                remove_path(token.destination)
+            except BaseException as error:
+                errors.append(str(error))
+        for original, backup, identity in reversed(token.previous):
+            try:
+                if lexists(original):
+                    raise InstallerError(
+                        f"Destino do recibo ocupado foi preservado: {original}"
+                    )
+                if self._runtime_path_identity(backup) != identity:
+                    raise InstallerError(
+                        f"Backup do recibo alterado foi preservado: {backup}"
+                    )
+                original.parent.mkdir(parents=True, exist_ok=True)
+                backup.replace(original)
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                "Rollback do recibo ezQuake ficou incompleto: " + "; ".join(errors)
+            )
+
+    def _apply_runtime_receipt(
+        self,
+        staged_receipt: Path,
+        destination: Path,
+        previous_paths: tuple[Path, ...],
+        durability_errors: list[AtomicWriteError],
+    ) -> RuntimeReceiptRollback:
+        assert self.spec is not None and self.stage is not None
+        backup_root = Path(tempfile.mkdtemp(prefix=".runtime-receipts-old.", dir=self.stage))
+        token = RuntimeReceiptRollback(destination, None, [])
+        try:
+            for index, original in enumerate(previous_paths, 1):
+                if not lexists(original):
+                    continue
+                identity = self._runtime_path_identity(original)
+                backup = backup_root / f"receipt-{index}"
+                original.replace(backup)
+                token.previous.append((original, backup, identity))
+            payload = read_bounded_regular_file(
+                staged_receipt, maximum_size=MAX_RECEIPT_BYTES,
+            )
+            try:
+                atomic_write_bytes(destination, payload)
+            except AtomicWriteError as error:
+                if lexists(destination):
+                    token.installed_identity = self._runtime_path_identity(destination)
+                if not error.committed:
+                    self._rollback_runtime_receipt(token)
+                    raise PersistenceError(
+                        f"Recibo ezQuake não pôde ser promovido: {destination}",
+                        committed=False,
+                    ) from error
+                self.validate_ezquake_receipt(destination, self.spec, self.channel)
+                durability_errors.append(error)
+                return token
+            token.installed_identity = self._runtime_path_identity(destination)
+            self.validate_ezquake_receipt(destination, self.spec, self.channel)
+            return token
+        except PersistenceError:
+            raise
+        except BaseException as error:
+            try:
+                self._rollback_runtime_receipt(token)
+            except BaseException as rollback_error:
+                raise InstallerError(
+                    f"Rollback do recibo ezQuake falhou; recuperação mantida em "
+                    f"{self.stage}: {rollback_error}"
+                ) from error
+            raise
+
+    def commit_runtime(
+        self, prepared: Path, staged_receipt: Path,
+    ) -> MutationResult:
         assert self.spec is not None and self.stage is not None
         runtime = self.target / self.spec.runtime(self.channel)
         receipt = self.target / self.spec.receipt(self.channel)
         receipt.parent.mkdir(parents=True, exist_ok=True)
-        existing_receipt = self.ezquake_receipt_path(self.spec, self.channel)
-        previous_runtime = self.stage / "previous-runtime"
-        previous_receipt = self.stage / "previous-receipt"
-        moved_runtime = moved_receipt = installed_runtime = installed_receipt = False
+        legacy_receipt = self.target / self.spec.legacy_receipt(self.channel)
+        previous_receipts = tuple(dict.fromkeys((receipt, legacy_receipt)))
+        self.ezquake_receipt_path(self.spec, self.channel)
+        durability_errors: list[AtomicWriteError] = []
+        plan = MutationPlan(
+            identifier=f"runtime:{self.spec.key}:{self.channel}",
+            summary=f"Instalar ezQuake {self.spec.label} {self.channel}",
+            steps=(
+                MutationStep(
+                    key="runtime",
+                    description="Publicar o runtime ezQuake",
+                    observe=lambda: (
+                        self._mutation_path_observation(prepared),
+                        self._mutation_path_observation(runtime),
+                    ),
+                    apply=lambda: self._apply_runtime_payload(prepared, runtime),
+                    rollback=self._rollback_runtime_payload,
+                ),
+                MutationStep(
+                    key="receipt",
+                    description="Publicar o recibo ezQuake",
+                    observe=lambda: (
+                        self._mutation_path_observation(staged_receipt),
+                        *(self._mutation_path_observation(path) for path in previous_receipts),
+                    ),
+                    apply=lambda: self._apply_runtime_receipt(
+                        staged_receipt, receipt, previous_receipts, durability_errors,
+                    ),
+                    rollback=self._rollback_runtime_receipt,
+                ),
+            ),
+        )
         try:
-            if lexists(runtime):
-                runtime.replace(previous_runtime)
-                moved_runtime = True
-            if existing_receipt is not None:
-                existing_receipt.replace(previous_receipt)
-                moved_receipt = True
-            prepared.replace(runtime)
-            installed_runtime = True
-            shutil.copy2(staged_receipt, receipt)
-            installed_receipt = True
-            legacy_receipt = self.target / self.spec.legacy_receipt(self.channel)
-            if legacy_receipt != receipt and lexists(legacy_receipt):
-                remove_path(legacy_receipt)
-        except Exception as error:
-            try:
-                if installed_receipt and lexists(receipt):
-                    remove_path(receipt)
-                if installed_runtime and lexists(runtime):
-                    remove_path(runtime)
-                if moved_runtime:
-                    previous_runtime.replace(runtime)
-                if moved_receipt and existing_receipt is not None:
-                    existing_receipt.parent.mkdir(parents=True, exist_ok=True)
-                    previous_receipt.replace(existing_receipt)
-            except Exception as rollback_error:
-                raise InstallerError(f"automatic rollback failed; recovery files kept in {self.stage}: {rollback_error}") from error
-            raise InstallerError(f"could not commit {runtime} and its receipt") from error
+            result = execute_mutation(prepare_mutation(plan))
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, PersistenceError):
+                raise error.operation_error
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                f"Não foi possível publicar {runtime} e seu recibo."
+            ) from error
+        if durability_errors:
+            raise RuntimeCommitPersistenceError(
+                f"Runtime e recibo foram promovidos, mas a durabilidade final falhou: {receipt}",
+                result=result,
+            ) from durability_errors[0]
+        return result
 
     def validate_managed_path(self, value: str) -> None:
         if not value or "\\" in value or ":" in value:
@@ -3977,13 +4147,15 @@ class Installer:
 
     @contextmanager
     def component_state_transaction(self) -> Iterator[list[MutationResult]]:
-        """Keep component inverses alive until the parent state commit resolves."""
+        """Keep managed inverses alive until the parent state commit resolves."""
 
         results: list[MutationResult] = []
         cleanup = True
         try:
             yield results
         except BaseException as error:
+            if isinstance(error, MutationRollbackError):
+                cleanup = False
             if not isinstance(error, PersistenceError) or not error.committed:
                 try:
                     self.rollback_component_transactions(results, error)
@@ -3995,6 +4167,32 @@ class Installer:
             if cleanup:
                 self.cleanup_stage()
                 self.stage = None
+
+    @contextmanager
+    def runtime_mutation_stage(
+        self, prefix: str, *, parent_managed: bool,
+    ) -> Iterator[None]:
+        """Give one runtime an isolated workspace under its parent's live stage."""
+
+        if not parent_managed:
+            self._create_stage(prefix)
+            try:
+                yield
+            finally:
+                self.cleanup_stage()
+                self.stage = None
+            return
+        if self.stage is None:
+            self._create_stage(".x86qw-state-transaction.")
+        parent_stage = self.stage
+        workspace = private_fs.private_mkdtemp(
+            directory=parent_stage, prefix=prefix,
+        )
+        self.stage = workspace
+        try:
+            yield
+        finally:
+            self.stage = parent_stage
 
     def install_component_batch(
         self,
@@ -4810,7 +5008,12 @@ class Installer:
             package_order_invalid, tuple(client_issues), tuple(metadata_diagnostics), recovered_state,
         )
 
-    def repair_client_runtime(self, issue: ClientRepairIssue) -> None:
+    def repair_client_runtime(
+        self,
+        issue: ClientRepairIssue,
+        *,
+        mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         if issue.release is None:
             raise InstallerError(
                 f"A versão registrada do ezQuake {issue.channel} não está disponível para reparo."
@@ -4819,17 +5022,24 @@ class Installer:
         self.channel = issue.channel
         self.configure_release(issue.release)
         self.ensure_macos_ezquake_closed()
-        self._create_stage(".x86qw-client-repair.")
-        try:
+        with self.runtime_mutation_stage(
+            ".x86qw-client-repair.",
+            parent_managed=mutation_results is not None,
+        ):
             self.prepare_cache()
             archive = self.ensure_archive()
             prepared = self.prepare_runtime(archive)
+            assert self.stage is not None
             staged_receipt = self.stage / "ezquake-receipt"
             self.write_ezquake_receipt(staged_receipt)
-            self.commit_runtime(prepared, staged_receipt)
-        finally:
-            self.cleanup_stage()
-            self.stage = None
+            try:
+                result = self.commit_runtime(prepared, staged_receipt)
+            except RuntimeCommitPersistenceError as error:
+                if mutation_results is not None:
+                    mutation_results.append(error.result)
+                raise
+            if mutation_results is not None:
+                mutation_results.append(result)
         console.success(
             f"ezQuake {issue.spec.label} {issue.channel} {issue.receipt['selection']} reparado."
         )
@@ -4911,12 +5121,14 @@ class Installer:
                 "O plano exige payload validado. A CLI instalada não baixa conteúdo durante repair; "
                 "reexecute o bootstrap install.sh no mesmo destino."
             )
-        for issue in payload_clients:
-            self.repair_client_runtime(issue)
-        with self.component_state_transaction() as component_results:
+        with self.component_state_transaction() as mutation_results:
+            for issue in payload_clients:
+                self.repair_client_runtime(
+                    issue, mutation_results=mutation_results,
+                )
             if assessment.invalid_components:
                 self.install_component_batch(
-                    component_results,
+                    mutation_results,
                     list(assessment.invalid_components),
                     stage_prefix=".x86qw-repair.",
                 )
@@ -5201,17 +5413,22 @@ class Installer:
         staged_receipt = self.stage / "ezquake-receipt"
         self.write_ezquake_receipt(staged_receipt)
         self.ensure_metadata_directory()
-        self.commit_runtime(prepared, staged_receipt)
-        if reset_macos_game_directory:
-            self.reset_macos_game_directory()
-        console.success("ezQuake instalado e recibo registrado.")
-        if reset_macos_game_directory:
-            console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
-        if self.confirm_components():
-            self.install_component_phase()
-        else:
-            console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
-            self.write_install_state("none", [])
+        runtime_result = self.commit_runtime(prepared, staged_receipt)
+        try:
+            if reset_macos_game_directory:
+                self.reset_macos_game_directory()
+            console.success("ezQuake instalado e recibo registrado.")
+            if reset_macos_game_directory:
+                console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
+            if self.confirm_components():
+                self.install_component_phase()
+            else:
+                console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+                self.write_install_state("none", [])
+        except BaseException as error:
+            if not isinstance(error, PersistenceError) or not error.committed:
+                rollback_mutation(runtime_result)
+            raise
         if file_hash(self.target / "id1/pak0.pak") != pak0_before or file_hash(self.target / "id1/pak1.pak") != pak1_before:
             raise InstallerError("Um PAK registrado foi alterado durante a instalação; a operação foi interrompida.")
         console.section("Verificação final")
@@ -5241,6 +5458,7 @@ class Installer:
         dry_run: bool,
         preview: bool = False,
         plan_rows: list[UpdatePlanRow] | None = None,
+        mutation_results: list[MutationResult] | None = None,
     ) -> bool:
         self.spec = spec
         self.channel = channel
@@ -5291,8 +5509,10 @@ class Installer:
 
         self.ensure_macos_ezquake_closed()
         self.check_runtime_destination_ownership()
-        self._create_stage(".x86qw-runtime-update.")
-        try:
+        with self.runtime_mutation_stage(
+            ".x86qw-runtime-update.",
+            parent_managed=mutation_results is not None,
+        ):
             self.prepare_cache()
             archive = self.ensure_archive()
             if restore_stable_bundle:
@@ -5302,12 +5522,17 @@ class Installer:
             else:
                 console.info(f"Atualizando ezQuake {spec.label} {channel}: {installed} → {available}...")
             prepared = self.prepare_runtime(archive)
+            assert self.stage is not None
             staged_receipt = self.stage / "ezquake-receipt"
             self.write_ezquake_receipt(staged_receipt)
-            self.commit_runtime(prepared, staged_receipt)
-        finally:
-            self.cleanup_stage()
-            self.stage = None
+            try:
+                result = self.commit_runtime(prepared, staged_receipt)
+            except RuntimeCommitPersistenceError as error:
+                if mutation_results is not None:
+                    mutation_results.append(error.result)
+                raise
+            if mutation_results is not None:
+                mutation_results.append(result)
         if restore_stable_bundle:
             console.success("Bundle upstream integral do ezQuake stable restaurado.")
         else:
@@ -5391,14 +5616,18 @@ class Installer:
             for name in ("pak0.pak", "pak1.pak")
         }
         changed = layout_change or state_change
-        if not dry_run:
-            console.section("Clientes ezQuake instalados")
-        for spec, channel, receipt in runtimes:
-            changed = self.update_runtime(
-                spec, channel, receipt, dry_run=dry_run, preview=preview, plan_rows=plan_rows,
-            ) or changed
+        with self.component_state_transaction() as mutation_results:
+            if not dry_run:
+                console.section("Clientes ezQuake instalados")
+            for spec, channel, receipt in runtimes:
+                changed = self.update_runtime(
+                    spec, channel, receipt,
+                    dry_run=dry_run,
+                    preview=preview,
+                    plan_rows=plan_rows,
+                    mutation_results=mutation_results,
+                ) or changed
 
-        with self.component_state_transaction() as component_results:
             if not dry_run:
                 console.section("Componentes instalados")
             if legacy_removals:
@@ -5434,7 +5663,7 @@ class Installer:
                             ))
                 else:
                     self.install_component_batch(
-                        component_results,
+                        mutation_results,
                         replacements,
                         stage_prefix=".x86qw-components-migrate.",
                     )
@@ -5454,7 +5683,7 @@ class Installer:
                             ))
                 else:
                     self.install_component_batch(
-                        component_results,
+                        mutation_results,
                         outdated,
                         stage_prefix=".x86qw-components-update.",
                     )

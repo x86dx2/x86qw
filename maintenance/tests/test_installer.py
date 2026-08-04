@@ -405,6 +405,32 @@ class InstallerTests(unittest.TestCase):
         installer.write_ezquake_receipt_record(receipt_path, receipt)
         return receipt_path, receipt, runtime
 
+    def prepare_runtime_commit_fixture(self, root: Path):
+        installer, target, _ = self.make_installer(root)
+        spec = install_qw.PLATFORMS["linux"]
+        receipt_path, receipt, runtime = self.write_ezquake_fixture(
+            installer, target, spec, "stable", payload=b"old-runtime\n",
+        )
+        original_receipt = receipt_path.read_bytes()
+        installer.spec = spec
+        installer.channel = "stable"
+        installer.stage = target / ".stage"
+        installer.stage.mkdir()
+        prepared = installer.stage / "prepared-runtime"
+        prepared.write_bytes(b"new-runtime\n")
+        staged_receipt = installer.stage / "staged-receipt"
+        updated = dict(receipt)
+        updated.update({
+            "selection": "3.6.10",
+            "bundle_version": "3.6.10",
+            "binary_sha256": install_qw.file_hash(prepared),
+        })
+        installer.write_ezquake_receipt_record(staged_receipt, updated)
+        return (
+            installer, target, spec, runtime, receipt_path, original_receipt,
+            prepared, staged_receipt, updated,
+        )
+
     @staticmethod
     def macos_bundle_members(version: str = "3.6.9") -> dict[str, bytes]:
         binary = b"".join((
@@ -1186,14 +1212,146 @@ class InstallerTests(unittest.TestCase):
             staged_receipt.write_bytes(original_receipt)
 
             with mock.patch.object(
-                install_qw.shutil, "copy2", side_effect=OSError("disco indisponível"),
+                install_qw,
+                "atomic_write_bytes",
+                side_effect=install_qw.AtomicWriteError(
+                    "disco indisponível", committed=False,
+                ),
             ):
-                with self.assertRaisesRegex(install_qw.InstallerError, "could not commit"):
+                with self.assertRaises(install_qw.PersistenceError):
                     installer.commit_runtime(prepared, staged_receipt)
 
             self.assertEqual(b"legacy", legacy_marker.read_bytes())
             self.assertEqual(original_receipt, receipt_path.read_bytes())
             self.assertFalse((runtime / "upstream-marker").exists())
+
+    def test_runtime_receipt_precommit_failure_restores_the_compatible_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (
+                installer, _, _, runtime, receipt_path, original_receipt,
+                prepared, staged_receipt, _,
+            ) = self.prepare_runtime_commit_fixture(Path(temporary))
+
+            def truncate_then_fail(path, payload, **kwargs):
+                Path(path).write_bytes(b"truncated-receipt\n")
+                raise install_qw.AtomicWriteError(
+                    "injected receipt promotion failure", committed=False,
+                )
+
+            with mock.patch.object(
+                install_qw, "atomic_write_bytes", side_effect=truncate_then_fail,
+            ):
+                with self.assertRaises(install_qw.PersistenceError) as raised:
+                    installer.commit_runtime(prepared, staged_receipt)
+
+            self.assertFalse(raised.exception.committed)
+            self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+            self.assertEqual(original_receipt, receipt_path.read_bytes())
+
+    def test_runtime_receipt_committed_error_keeps_the_new_compatible_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (
+                installer, _, spec, runtime, receipt_path, _,
+                prepared, staged_receipt, updated,
+            ) = self.prepare_runtime_commit_fixture(Path(temporary))
+            atomic_write = install_qw.atomic_write_bytes
+
+            def commit_then_fail(path, payload, **kwargs):
+                atomic_write(path, payload, **kwargs)
+                raise install_qw.AtomicWriteError(
+                    "injected receipt directory fsync failure", committed=True,
+                )
+
+            with mock.patch.object(
+                install_qw, "atomic_write_bytes", side_effect=commit_then_fail,
+            ):
+                with self.assertRaises(install_qw.PersistenceError) as raised:
+                    installer.commit_runtime(prepared, staged_receipt)
+
+            self.assertTrue(raised.exception.committed)
+            self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+            persisted = installer.validate_ezquake_receipt(
+                receipt_path, spec, "stable",
+            )
+            self.assertEqual(updated, persisted)
+            self.assertEqual(install_qw.file_hash(runtime), persisted["binary_sha256"])
+
+    def test_install_keeps_client_inverse_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                installer.spec = spec
+                installer.channel = "stable"
+                installer.selected_version = "3.6.10"
+                installer.app_archive_name = spec.stable_archive
+                installer.app_url = f"https://example.invalid/{spec.stable_archive}"
+                installer.app_archive_sha256 = "c" * 64
+                state_stages: list[Path] = []
+
+                def prepare_runtime(_archive):
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                patches = (
+                    mock.patch.object(installer, "select_platform"),
+                    mock.patch.object(installer, "choose_channel"),
+                    mock.patch.object(installer, "choose_release"),
+                    mock.patch.object(installer, "macos_game_directory_reset_required", return_value=False),
+                    mock.patch.object(installer, "ensure_macos_ezquake_closed"),
+                    mock.patch.object(installer, "check_runtime_destination_ownership"),
+                    mock.patch.object(installer, "prepare_install_target"),
+                    mock.patch.object(installer, "reject_target_symlinks"),
+                    mock.patch.object(installer, "provision_install_target"),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "prepare_cache"),
+                    mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
+                    mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
+                    mock.patch.object(installer, "confirm_components", return_value=False),
+                    mock.patch.object(installer, "installed_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.install()
+
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertEqual(
+                        old_receipt,
+                        installer.validate_ezquake_receipt(receipt_path, spec, "stable"),
+                    )
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+                installer.cleanup_stage()
+                installer.stage = None
 
     def test_legacy_stable_update_commits_the_unmodified_upstream_bundle(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1996,6 +2154,102 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(committed, state_path.is_file())
                 self.assertEqual(["ktx"] if committed else [], installed)
 
+    def test_update_keeps_client_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                state_stages: list[Path] = []
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                selected = (
+                    "3.6.10",
+                    (f"https://example.invalid/{spec.stable_archive}",),
+                    "c" * 64,
+                )
+
+                def prepare_runtime(_archive):
+                    self.assertIsNotNone(installer.stage)
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_archive_sha256 = "c" * 64
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                patches = (
+                    mock.patch.object(installer, "preflight_ezquake_receipts"),
+                    mock.patch.object(installer, "preflight_component_receipts"),
+                    mock.patch.object(installer, "legacy_metadata_present", return_value=False),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "load_install_state", return_value=state),
+                    mock.patch.object(installer, "current_install_state", return_value=state),
+                    mock.patch.object(installer, "installed_legacy_component_replacements", return_value={}),
+                    mock.patch.object(installer, "installed_legacy_component_removals", return_value=[]),
+                    mock.patch.object(install_qw, "PLATFORMS", {"linux": spec}),
+                    mock.patch.object(installer, "check_runtime"),
+                    mock.patch.object(installer, "latest_release", return_value=selected),
+                    mock.patch.object(installer, "check_runtime_destination_ownership"),
+                    mock.patch.object(installer, "prepare_cache"),
+                    mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
+                    mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
+                    mock.patch.object(installer, "outdated_installed_components", return_value=[]),
+                    mock.patch.object(installer, "installed_components", return_value=[]),
+                    mock.patch.object(installer, "reconcile_play_support", return_value=False),
+                    mock.patch.object(installer, "desired_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.update()
+
+                self.assertEqual(1, len(state_stages))
+                self.assertFalse(state_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertEqual(
+                        install_qw.file_hash(runtime), persisted["binary_sha256"],
+                    )
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertEqual(
+                        old_receipt,
+                        installer.validate_ezquake_receipt(receipt_path, spec, "stable"),
+                    )
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
     def test_existing_installation_profile_is_inferred_and_persisted(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2712,6 +2966,89 @@ class InstallerTests(unittest.TestCase):
                     committed, (target / install_qw.INSTALL_STATE).is_file(),
                 )
                 self.assertEqual(["ktx"] if committed else [], installed)
+
+    def test_repair_keeps_client_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                selected = (
+                    "3.6.10",
+                    (f"https://example.invalid/{spec.stable_archive}",),
+                    "c" * 64,
+                )
+                issue = install_qw.ClientRepairIssue(
+                    spec, "stable", receipt_path, old_receipt,
+                    "runtime divergente", "payload", selected,
+                )
+                assessment = install_qw.RepairAssessment(
+                    (), False, (), False, (issue,), (),
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                state_stages: list[Path] = []
+
+                def prepare_runtime(_archive):
+                    self.assertIsNotNone(installer.stage)
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_archive_sha256 = "c" * 64
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "repair_plan", return_value=assessment,
+                ), mock.patch.object(
+                    installer, "ensure_macos_ezquake_closed",
+                ), mock.patch.object(
+                    installer, "prepare_cache",
+                ), mock.patch.object(
+                    installer, "ensure_archive", return_value=target / "archive",
+                ), mock.patch.object(
+                    installer, "prepare_runtime", side_effect=prepare_runtime,
+                ), mock.patch.object(
+                    installer, "installed_components", return_value=[],
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.repair(dry_run=False, plan_rows=[])
+
+                self.assertEqual(1, len(state_stages))
+                self.assertFalse(state_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
 
     def test_installed_cli_repair_reports_payload_plan_without_downloading(self):
         with tempfile.TemporaryDirectory() as temporary:
