@@ -205,10 +205,6 @@ class _WindowsApi:
             wintypes.HANDLE, ctypes.POINTER(ctypes.c_longlong),
         ]
         self.kernel32.GetFileSizeEx.restype = wintypes.BOOL
-        self.kernel32.GetFinalPathNameByHandleW.argtypes = [
-            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
-        ]
-        self.kernel32.GetFinalPathNameByHandleW.restype = wintypes.DWORD
         self.kernel32.SetFileInformationByHandle.argtypes = [
             wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
         ]
@@ -407,15 +403,11 @@ def _assert_handle_type(handle: int, *, directory: bool) -> None:
         raise WindowsAclError(f"private path is not a {expected}")
 
 
-def _open_path(
-    path: Path, *, directory: bool, writable_dacl: bool, guard_delete: bool = False,
-) -> int:
+def _open_path(path: Path, *, directory: bool, writable_dacl: bool) -> int:
     api = _api()
     access = api.READ_CONTROL | api.FILE_READ_ATTRIBUTES
     if writable_dacl:
         access |= api.WRITE_DAC
-    if guard_delete:
-        access |= api.DELETE
     flags = api.FILE_FLAG_OPEN_REPARSE_POINT
     if directory:
         flags |= api.FILE_FLAG_BACKUP_SEMANTICS
@@ -573,25 +565,6 @@ def validate_private_kernel_object(handle: int) -> None:
     _assert_acl(acl)
 
 
-def _normalized_handle_path(handle: int) -> str:
-    api = _api()
-    required = int(api.kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0))
-    if required <= 0:
-        raise api.error("GetFinalPathNameByHandleW size query failed")
-    buffer = ctypes.create_unicode_buffer(required + 1)
-    written = int(
-        api.kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
-    )
-    if written <= 0 or written >= len(buffer):
-        raise api.error("GetFinalPathNameByHandleW failed")
-    value = buffer.value
-    if value.startswith("\\\\?\\UNC\\"):
-        value = "\\\\" + value[8:]
-    elif value.startswith("\\\\?\\"):
-        value = value[4:]
-    return os.path.normcase(os.path.abspath(value))
-
-
 def replace_open_private_file(descriptor: int, source: Path, destination: Path) -> None:
     """Atomically promote the exact private file represented by ``descriptor``."""
     import msvcrt
@@ -607,8 +580,6 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
         _assert_persistent_acls(destination.parent)
         _assert_handle_type(native_handle, directory=False)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
-        if _normalized_handle_path(native_handle) != os.path.normcase(str(source)):
-            raise WindowsAclError("private promotion source changed identity")
         encoded = str(destination).encode("utf-16-le")
         name_offset = _FileRenameInfo.file_name.offset
         buffer = ctypes.create_string_buffer(name_offset + len(encoded))
@@ -625,8 +596,6 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
             len(buffer),
         ):
             raise api.error(f"could not promote private file {source}")
-        if _normalized_handle_path(native_handle) != os.path.normcase(str(destination)):
-            raise WindowsAclError("private promotion did not retain the destination identity")
         _assert_acl(_acl_from_handle(native_handle, directory=False))
 
 
@@ -677,9 +646,7 @@ def hold_private_path(path: Path, *, directory: bool) -> WindowsPathLease:
     """Pin a canonical private object so its parent cannot delete or rename it."""
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
-        handle = _open_path(
-            path, directory=directory, writable_dacl=False, guard_delete=True,
-        )
+        handle = _open_path(path, directory=directory, writable_dacl=False)
         try:
             _assert_acl(_acl_from_handle(handle, directory=directory))
             return WindowsPathLease(handle, path)
@@ -982,7 +949,6 @@ def api_functions() -> tuple[object, ...]:
         api.kernel32.GetFileInformationByHandleEx,
         api.kernel32.GetFileType,
         api.kernel32.GetFileSizeEx,
-        api.kernel32.GetFinalPathNameByHandleW,
         api.kernel32.SetFileInformationByHandle,
         api.kernel32.GetVolumePathNameW,
         api.kernel32.GetVolumeInformationW,
