@@ -4,9 +4,9 @@ Este roadmap usa o estado real do produto como baseline e separa entrega de
 validação. Ele complementa o [índice geral](ROADMAP.md); não autoriza release,
 publicação ou incorporação automática de conteúdo.
 
-Baseline publicada: tag `x86qw-installer-0.7.1`. O estado funcional é descrito
-pela própria tag imutável no commit
-`78dc30b58f9ba2a2ec8aeb31879d9b8072ab576b`, publicada em 3 de agosto de 2026.
+Baseline publicada: tag `x86qw-installer-0.7.2`. O estado funcional é descrito
+pela própria tag imutável, publicada em 4 de agosto de 2026. A `0.7.1`
+permanece inalterada no histórico.
 
 Baseline inicial da issue #45: merge
 `afb4f666095e37fe262b87b49339e18d25738522`.
@@ -27,8 +27,8 @@ Baseline inicial da PR 6: merge
 `29d76a48721190aad1203d0986a31d839d62070e`: ownership de I/O, catálogos,
 estado, transações, UI, gameplay, plataforma, sessão e supervisor foi movido
 incrementalmente para `x86qw_runtime`. O zipapp possui 56 membros e sua projeção
-é derivada do manifesto declarativo. Essa implementação permanece na branch da
-PR 6, não foi publicada e não altera a release pública `0.7.1`.
+é derivada do manifesto declarativo. Essa implementação foi integrada pela PR
+64 e publicada na `0.7.2`; a PR 6 permanece pausada como trilha auditável.
 
 ## Escala de estado
 
@@ -42,8 +42,8 @@ plataforma.
 
 ## Baseline do produto
 
-- instalador público `0.7.1`; as linhas anteriores permanecem imutáveis;
-- 61 pacotes e 21 componentes no catálogo;
+- instalador público `0.7.2`; as linhas anteriores permanecem imutáveis;
+- 62 pacotes e 21 componentes no catálogo;
 - ezQuake stable `3.6.9` e nightly `20260616-101233_a86996a`;
 - cinco jogos atuais: KTX `1.47`, Final Arena `1.20`, Pro-X `1.1`, Team
   Fortress `2.9` e Total Destruction 2 `2.22`;

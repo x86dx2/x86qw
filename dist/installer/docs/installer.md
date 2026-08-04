@@ -4,7 +4,7 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle público corrente é `0.7.1`, com 61 pacotes e 21 componentes
+O bundle público corrente é `0.7.2`, com 62 pacotes e 21 componentes
 registrados no catálogo. Essa versão confere o requisito Python por
 `sys.version_info` antes de qualquer download ou mutação: macOS/Linux testam
 `python3` e `python`, nessa ordem; Windows testa `py -3`, `python3` e `python`.
@@ -82,7 +82,7 @@ atual.
 
 ## Fronteira de downloads
 
-O código corretivo posterior à `0.7.1`, ainda não publicado como nova release,
+O código publicado na `0.7.2`
 centraliza bytes HTTP recebidos pelo Python. Artefatos persistentes exigem antes
 da chamada uma URL HTTPS, tamanho exato, SHA-256, limite máximo e deadline total.
 O limite global aceito pelo catálogo é 512 MiB; o catálogo do instalador tem
@@ -122,7 +122,7 @@ persistente não puder ser comprovada, a operação falha de forma conservadora 
 sem solicitar elevação. A matriz nativa Windows com Python 3.10 e 3.13 validou
 DACL, herança hostil, arquivos de senha e bootstrap. O smoke de runtime sob uma
 conta padrão sem elevação continua pendente na evidência de release; a release
-pública `0.7.1` ainda não contém a mudança. Consulte o
+pública `0.7.2` contém a mudança. Consulte o
 [`ADR 0003`](../../../docs/adr/0003-dacl-privada-windows.md).
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos

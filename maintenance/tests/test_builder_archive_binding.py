@@ -454,7 +454,7 @@ class BuilderArchiveBindingTests(unittest.TestCase):
     def test_installer_history_accepts_every_immutable_repository_bundle(self) -> None:
         packages = installer_builder.package_results(ROOT / "dist/installer/packages")
         self.assertGreaterEqual(len(packages), 1)
-        self.assertEqual("0.7.1", packages[-1]["version"])
+        self.assertEqual(installer_builder.VERSION, packages[-1]["version"])
         self.assertEqual(
             {path.name for path in (ROOT / "dist/installer/packages").iterdir()}
             - {"latest"},
