@@ -2619,6 +2619,81 @@ class ModernComponentTests(unittest.TestCase):
                 self.assertIn("locs/dm6.loc", names)
                 self.assertIn("configs/usermodes/dmm4base.cfg", names)
 
+    def test_legacy_component_removal_rolls_back_when_replacement_preparation_fails(self):
+        """A failed replacement must not erase the still-usable legacy component."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "legacy"
+            payload = managed / "qw/ktx.pk3"
+            payload.parent.mkdir(parents=True)
+            payload.write_bytes(b"legacy-ktx")
+            installer.install_component_overlay(
+                "nquake-ktx",
+                managed,
+                "legacy",
+                "legacy mirror",
+            )
+            installed = target / "qw/ktx.pk3"
+
+            with mock.patch.object(
+                installer,
+                "component_package_record",
+                side_effect=install_qw.InstallerError("replacement unavailable"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_components(["ktx"])
+
+            self.assertTrue(installed.is_file(), "legacy payload was not restored")
+            self.assertEqual(installed.read_bytes(), b"legacy-ktx")
+            self.assertTrue(installer.validate_component_pair("nquake-ktx")[0])
+            self.assertFalse(installer.validate_component_pair("ktx")[0])
+
+    def test_legacy_nquake_generation_rolls_back_when_component_preparation_fails(self):
+        """The aggregate receipt must remain usable until its replacements commit."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / install_qw.METADATA_DIR
+            metadata.mkdir(parents=True)
+            managed = target / "qw/legacy.dat"
+            managed.parent.mkdir(parents=True)
+            managed.write_bytes(b"legacy-nquake")
+            inventory = target / install_qw.NQUAKE_INVENTORY
+            inventory.write_text(
+                f"qw/legacy.dat\t{install_qw.file_hash(managed)}\n",
+                encoding="utf-8",
+            )
+            receipt = target / install_qw.NQUAKE_RECEIPT
+            receipt.write_text(
+                "format\t1\n"
+                f"distfiles_commit\t{'a' * 40}\n"
+                f"inventory_sha256\t{install_qw.file_hash(inventory)}\n",
+                encoding="utf-8",
+            )
+            before = {
+                path: path.read_bytes()
+                for path in (managed, inventory, receipt)
+            }
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+
+            with mock.patch.object(
+                installer,
+                "component_package_record",
+                side_effect=install_qw.InstallerError("replacement unavailable"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_components(["ktx"])
+
+            self.assertTrue(installer.validate_nquake_pair()[0])
+            self.assertEqual(
+                before,
+                {path: path.read_bytes() for path in before},
+            )
+
     def test_nquake_component_accepts_a_standalone_source_revision(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -2755,6 +2830,48 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue((target / "arena/x86qw_arena.dat").is_file())
             _, entries, _ = installer.validate_component_pair("play-support")
             self.assertEqual(["arena/x86qw_arena.dat"], [name for name, _ in entries])
+
+    def test_play_support_release_rolls_back_when_metadata_promotion_fails(self):
+        """Released profiles and their old inventory must change as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "play"
+            for relative in (
+                "arena/x86qw-arena.cfg",
+                "arena/server.cfg",
+                "arena/x86qw_arena.dat",
+            ):
+                destination = managed / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(relative, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "play-support", managed, "3", "x86QW legacy local-play layer",
+                )
+            tracked = (
+                target / "arena/x86qw-arena.cfg",
+                target / "arena/server.cfg",
+                target / "arena/x86qw_arena.dat",
+                target / ".x86qw/components/play-support/inventory",
+                target / ".x86qw/components/play-support/receipt",
+            )
+            before = {path: path.read_bytes() for path in tracked}
+
+            with mock.patch.object(
+                installer,
+                "commit_component_metadata",
+                side_effect=OSError("simulated metadata promotion failure"),
+            ):
+                with self.assertRaises(install_qw.MutationApplyError):
+                    installer.release_play_support_profiles(["final-arena"])
+
+            self.assertEqual(
+                before,
+                {path: path.read_bytes() for path in tracked},
+            )
 
     def test_component_download_falls_back_from_github_to_gitlab(self):
         with tempfile.TemporaryDirectory() as temporary:

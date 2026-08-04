@@ -4717,11 +4717,14 @@ class Installer:
             f"Configuração pessoal de {component} retirada do inventário imutável e preservada."
         )
 
-    def migrate_legacy_nquake(self) -> None:
+    def migrate_legacy_nquake(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         present, entries, _ = self.validate_nquake_pair()
         if not present:
             return
         console.info("Migrando o recibo nQuake antigo para componentes independentes...")
+        selected: list[Path] = []
         for name, expected in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
             if not lexists(managed):
@@ -4729,25 +4732,56 @@ class Installer:
             if not managed.is_file() or managed.is_symlink():
                 raise InstallerError(f"Caminho legado gerenciado inválido: {managed}")
             if file_hash(managed) == expected:
-                remove_path(managed)
+                selected.append(managed)
             else:
                 console.warning(f"Arquivo modificado preservado durante a migração: {managed}")
-        remove_path(self.target / NQUAKE_RECEIPT)
-        remove_path(self.target / NQUAKE_INVENTORY)
+        selected.extend((
+            self.target / NQUAKE_RECEIPT,
+            self.target / NQUAKE_INVENTORY,
+        ))
+        owned_stage = self.stage is None
+        cleanup_stage = True
+        try:
+            result = self._remove_paths_transaction(
+                (path for path in selected if lexists(path)),
+                identifier="migrate-legacy-nquake",
+                summary="Recolher a geração agregada nQuake",
+            )
+            if result is not None and mutation_results is not None:
+                mutation_results.append(result)
+        except MutationRollbackError:
+            cleanup_stage = False
+            raise
+        finally:
+            if owned_stage and cleanup_stage:
+                self.cleanup_stage()
+                self.stage = None
 
-    def migrate_legacy_clan_arena(self, selected: list[str]) -> None:
+    def migrate_legacy_clan_arena(
+        self,
+        selected: list[str],
+        mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         if not {"final-arena", "pro-x"} & set(selected):
             return
         present, _, _ = self.validate_component_pair("clan-arena")
         if not present:
             return
         console.info("Separando o componente antigo Clan Arena e Pro-X...")
-        removed = self.remove_component("clan-arena")
+        if mutation_results is None:
+            removed = self.remove_component("clan-arena")
+        else:
+            removed, result = self.remove_component_transaction("clan-arena")
+            mutation_results.append(result)
         console.success(
             f"Recibo combinado removido ({file_count(removed)}); arquivos modificados foram preservados."
         )
 
-    def migrate_legacy_component_replacements(self, selected: list[str]) -> None:
+    def migrate_legacy_component_replacements(
+        self,
+        selected: list[str],
+        mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         selected_set = set(selected)
         for legacy, replacement in LEGACY_COMPONENT_REPLACEMENTS.items():
             if replacement not in selected_set:
@@ -4761,13 +4795,21 @@ class Installer:
                     f"Os componentes antigo ({legacy}) e atual ({replacement}) estão registrados ao mesmo tempo."
                 )
             console.info(f"Migrando a identidade do componente {legacy} para {replacement}...")
-            removed = self.remove_component(legacy)
+            if mutation_results is None:
+                removed = self.remove_component(legacy)
+            else:
+                removed, result = self.remove_component_transaction(legacy)
+                mutation_results.append(result)
             console.success(
                 f"Componente legado {legacy} removido ({file_count(removed)}); "
                 "arquivos modificados foram preservados."
             )
 
-    def release_play_support_profiles(self, selected: list[str]) -> None:
+    def release_play_support_profiles(
+        self,
+        selected: list[str],
+        mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         present, entries, receipt = self.validate_component_pair("play-support")
         if not present:
             return
@@ -4786,6 +4828,7 @@ class Installer:
         if not released:
             return
         remaining: list[tuple[str, str]] = []
+        removable: list[Path] = []
         changed = False
         for name, digest in entries:
             if name not in released:
@@ -4798,26 +4841,56 @@ class Installer:
             if not managed.is_file() or managed.is_symlink():
                 raise InstallerError(f"Perfil local legado inválido: {managed}")
             if file_hash(managed) == digest:
-                remove_path(managed)
+                removable.append(managed)
             else:
                 console.warning(f"Perfil modificado preservado durante a migração: {managed}")
         if not changed:
             return
         if not remaining:
-            metadata = self.target / METADATA_DIR
-            canonical = self.component_pair_paths("play-support", metadata)
-            remove_path(canonical[0].parent)
-            for path in self.component_pair_paths("play-support", metadata, legacy=True):
-                remove_path(path)
+            if mutation_results is None:
+                self.remove_component("play-support")
+            else:
+                _, result = self.remove_component_transaction("play-support")
+                mutation_results.append(result)
             return
         assert self.stage is not None and receipt is not None
+        local_results: list[MutationResult] = []
+        destination_results = (
+            mutation_results if mutation_results is not None else local_results
+        )
+        removal_result = self._remove_paths_transaction(
+            removable,
+            identifier="release-play-support-profiles",
+            summary="Liberar perfis do play-support legado",
+        )
+        if removal_result is not None:
+            destination_results.append(removal_result)
         inventory = self.stage / "play-support-migrated.inventory"
         self.write_inventory_record(inventory, remaining)
         staged_receipt = self.stage / "play-support-migrated.receipt"
         self.write_component_receipt(
             "play-support", receipt["selection"], receipt["source"], inventory, staged_receipt,
         )
-        self.commit_component_metadata("play-support", inventory, staged_receipt)
+        metadata_plan = MutationPlan(
+            identifier="migrate-play-support-metadata",
+            summary="Atualizar metadados do play-support legado",
+            steps=(MutationStep(
+                key="metadata",
+                description="Publicar inventário restante do play-support",
+                observe=lambda: self._component_metadata_observation("play-support"),
+                apply=lambda: self.commit_component_metadata(
+                    "play-support", inventory, staged_receipt,
+                ),
+                rollback=self._rollback_component_metadata,
+            ),),
+        )
+        try:
+            metadata_result = execute_mutation(prepare_mutation(metadata_plan))
+            destination_results.append(metadata_result)
+        except BaseException as error:
+            if mutation_results is None:
+                self.rollback_component_transactions(local_results, error)
+            raise
 
     @staticmethod
     def rollback_component_transactions(
@@ -5034,10 +5107,10 @@ class Installer:
         assert self.stage is not None
         results: list[MutationResult] = []
         try:
-            self.migrate_legacy_nquake()
-            self.migrate_legacy_clan_arena(selected)
-            self.migrate_legacy_component_replacements(selected)
-            self.release_play_support_profiles(selected)
+            self.migrate_legacy_nquake(results)
+            self.migrate_legacy_clan_arena(selected, results)
+            self.migrate_legacy_component_replacements(selected, results)
+            self.release_play_support_profiles(selected, results)
             for index, identifier in enumerate(selected, 1):
                 component = self.components[identifier]
                 console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
