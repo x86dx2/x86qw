@@ -51,15 +51,15 @@ preserva o stable macOS upstream e também permanece não publicado.
 | Downloads remotos | completa no código corretivo da PR 2, mesclado no baseline da issue #49; ainda não publicado em release | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
 | Arquivos ZIP/PK3/PYZ | completa no código corretivo da issue #49; ainda não publicada | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
 | DACL privada Windows | implementada no código corretivo da PR 4; ainda não publicada | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
-| Confiança do stable macOS | preservação upstream implementada no candidato da PR 5; ainda não publicada | unitária; assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
+| Confiança do stable macOS | preservação upstream implementada no candidato da PR 5; ainda não publicada | matriz 7/7 no [run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055); assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.
 
 ## Próximos marcos do núcleo
 
-1. Concluir a matriz da PR 5 e manter o stable macOS upstream sem mutação; a
-   disponibilidade segue condicional até os smokes nativos do PR 11.
+1. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
+   candidato exato; a disponibilidade segue condicional até o PR 11.
 2. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
    Windows x64, além do cliente em macOS Intel.
 3. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do

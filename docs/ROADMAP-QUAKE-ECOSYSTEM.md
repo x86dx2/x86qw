@@ -289,8 +289,9 @@ executá-lo como conta padrão em um smoke nativo ainda pertence ao PR 11.
 **Entrega funcional:** preservação upstream implementada no candidato da PR 5;
 ainda não publicada
 
-**Validação:** unitária e auditoria de assinatura/hashes no macOS; smokes de
-primeira e segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11
+**Validação:** unitária, auditoria de assinatura/hashes no macOS e matriz 7/7
+em Ubuntu/macOS/Windows; smokes de primeira e segunda abertura, Gatekeeper,
+arm64 e Intel pendentes no PR 11
 
 O stable 3.6.9 é extraído e promovido sem alteração de `Info.plist`, sandbox,
 entitlements ou assinatura. A transformação local foi limitada ao nightly e
@@ -304,6 +305,9 @@ O upstream continua ad hoc, sem Team ID ou ticket stapled e rejeitado por
 `spctl`; `codesign --verify` não autentica o publicador. Stable e nightly macOS
 são projetados como `conditional`. Consulte o
 [ADR 0004](adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
+A matriz canônica da PR 5 é o
+[run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055),
+aprovado em 7/7 jobs.
 
 ## Instalador e perfis
 
