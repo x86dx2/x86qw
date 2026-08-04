@@ -6331,12 +6331,13 @@ class Installer:
             path = self.target / relative
             if path.is_file():
                 preserved[relative] = file_hash(path)
+        removal_paths: list[Path] = []
         if present:
             for name, expected in entries:
                 managed = self.target.joinpath(*PurePosixPath(name).parts)
                 if lexists(managed):
                     if file_hash(managed) == expected:
-                        remove_path(managed)
+                        removal_paths.append(managed)
                     else:
                         console.warning(f"Arquivo modificado preservado: {managed}")
         elif not modular_nquake_present:
@@ -6347,41 +6348,80 @@ class Installer:
                 if receipt_path is None:
                     continue
                 self.validate_ezquake_receipt(receipt_path, spec, channel)
-                remove_path(self.target / spec.runtime(channel))
-                remove_path(receipt_path)
-        for component in (
-            "package-order", "play-support", "presets", "maps",
-            *reversed(tuple(self.components)), *LEGACY_COMPONENTS,
-        ):
-            self.remove_component(component)
-        remove_path(self.target / NQUAKE_RECEIPT)
-        remove_path(self.target / NQUAKE_INVENTORY)
-        remove_path(self.target / INSTALL_STATE)
-        for name in ("arena", "prox", "fortress", "qw", "ezquake"):
-            remove_empty_directories(self.target / name)
-        self.remove_installed_cli()
+                removal_paths.extend((self.target / spec.runtime(channel), receipt_path))
+        removal_paths.extend((
+            self.target / NQUAKE_RECEIPT,
+            self.target / NQUAKE_INVENTORY,
+            self.target / INSTALL_STATE,
+            *self._installed_cli_paths(),
+        ))
+        cli_present = any(
+            lexists(path) for path in self._installed_cli_paths()
+        )
+        with self.component_state_transaction() as mutation_results:
+            if self.stage is None:
+                self._create_stage(".x86qw-uninstall.")
+            result = self._remove_paths_transaction(
+                (path for path in removal_paths if lexists(path)),
+                identifier="uninstall-managed-roots",
+                summary="Remover runtimes e metadados gerenciados",
+            )
+            if result is not None:
+                mutation_results.append(result)
+            for component in (
+                "package-order", "play-support", "presets", "maps",
+                *reversed(tuple(self.components)), *LEGACY_COMPONENTS,
+            ):
+                component_present, _, _ = self.validate_component_pair(component)
+                if not component_present:
+                    continue
+                _, component_result = self.remove_component_transaction(component)
+                mutation_results.append(component_result)
+            for relative, expected in preserved.items():
+                if file_hash(self.target / relative) != expected:
+                    raise InstallerError(f"{relative} changed during uninstall")
+        self._prune_component_directories()
         remove_empty_directories(self.target / METADATA_DIR)
-        for relative, expected in preserved.items():
-            if file_hash(self.target / relative) != expected:
-                raise InstallerError(f"{relative} changed during uninstall")
+        if cli_present:
+            console.success("CLI permanente x86QW removida.")
         console.success(f"Componentes gerenciados removidos de {self.target}.")
         console.info("PAKs registrados e arquivos pessoais foram preservados.")
 
-    def remove_installed_cli(self) -> None:
-        removed = False
-        for path in (
+    def _installed_cli_paths(self) -> tuple[Path, ...]:
+        paths = [
             self.target / METADATA_DIR / "cli",
             self.target / LEGACY_CLI_RECEIPT,
             self.target / "x86qw.sh",
-        ):
-            if lexists(path):
-                remove_path(path)
-                removed = True
+        ]
         windows_launcher = self.target / "x86qw.cmd"
-        if os.name != "nt" and lexists(windows_launcher):
-            remove_path(windows_launcher)
-            removed = True
-        if removed:
+        if os.name != "nt":
+            paths.append(windows_launcher)
+        return tuple(paths)
+
+    def remove_installed_cli(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
+        selected = tuple(path for path in self._installed_cli_paths() if lexists(path))
+        if not selected:
+            return
+        owned_stage = mutation_results is None and self.stage is None
+        cleanup_stage = True
+        try:
+            result = self._remove_paths_transaction(
+                selected,
+                identifier="uninstall-cli",
+                summary="Remover a CLI instalada",
+            )
+            if result is not None and mutation_results is not None:
+                mutation_results.append(result)
+        except MutationRollbackError:
+            cleanup_stage = False
+            raise
+        finally:
+            if owned_stage and cleanup_stage:
+                self.cleanup_stage()
+                self.stage = None
+        if selected:
             console.success("CLI permanente x86QW removida.")
 
     def purge(self, *, preserve_operation_lock: bool = False) -> None:

@@ -4229,6 +4229,46 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
 
+    def test_uninstall_rolls_back_cli_generation_when_a_later_removal_fails(self):
+        """Uninstall must either remove its complete selection or restore all of it."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            application = target / ".x86qw/cli/x86qw.pyz"
+            application.parent.mkdir(parents=True)
+            application.write_bytes(b"installed-cli")
+            self.write_cli_receipt(target, "1.0.5")
+            launcher = target / "x86qw.sh"
+            launcher.write_bytes(b"#!/bin/sh\n")
+
+            receipt = target / install_qw.CLI_RECEIPT
+            before = {
+                application: application.read_bytes(),
+                receipt: receipt.read_bytes(),
+                launcher: launcher.read_bytes(),
+            }
+            apply_removal = installer._apply_managed_path_removal
+            attempts = 0
+
+            def fail_second(destination, *, label):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated uninstall removal failure")
+                return apply_removal(destination, label=label)
+
+            with mock.patch.object(
+                installer,
+                "_apply_managed_path_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.uninstall()
+
+            for path, payload in before.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((target / install_qw.METADATA_DIR / "staging").exists())
+
     def test_purge_without_an_installation_still_removes_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
