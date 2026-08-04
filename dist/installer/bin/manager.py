@@ -6829,7 +6829,13 @@ class Installer:
                 return True
             receipt_path = self.ezquake_receipt_path(spec, channel)
             assert receipt_path is not None
-            self.repair_installed_macos_runtime(spec, channel, receipt_path, receipt)
+            self.repair_installed_macos_runtime(
+                spec,
+                channel,
+                receipt_path,
+                receipt,
+                mutation_results=mutation_results,
+            )
             return True
         if available != installed and not self.release_is_newer(available, installed, channel):
             console.warning(

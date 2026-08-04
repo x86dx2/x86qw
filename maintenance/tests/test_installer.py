@@ -1165,6 +1165,55 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual("área segura", rows[0].installed)
             self.assertEqual("tela inteira", rows[0].available)
 
+    def test_same_version_macos_repair_retains_inverse_for_parent_update(self):
+        """A later update failure must restore an offline nightly preparation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+            receipt_before = receipt_path.read_bytes()
+            results = []
+
+            def prepare(app):
+                (app / "Contents/x86qw-prepared").write_bytes(b"prepared")
+                return True
+
+            selected = (
+                receipt["selection"],
+                (f"https://example.invalid/{receipt['artifact_name']}",),
+                receipt["artifact_sha256"],
+            )
+            with mock.patch.object(
+                installer, "latest_release", return_value=selected,
+            ), mock.patch.object(
+                installer, "macos_app_needs_preparation", return_value=True,
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                installer, "prepare_macos_nightly_app", side_effect=prepare,
+            ), mock.patch.object(
+                installer,
+                "inspect_macos_app",
+                return_value=(receipt["bundle_version"], "c" * 64),
+            ):
+                self.assertTrue(installer.update_runtime(
+                    spec,
+                    "nightly",
+                    receipt,
+                    dry_run=False,
+                    mutation_results=results,
+                ))
+
+            installer.rollback_component_transactions(
+                results, install_qw.InstallerError("late state failure"),
+            )
+            self.assertFalse((runtime / "Contents/x86qw-prepared").exists())
+            self.assertEqual(receipt_before, receipt_path.read_bytes())
+
     def test_legacy_resigned_stable_macos_runtime_is_restored_by_update(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
