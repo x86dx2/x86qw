@@ -403,11 +403,19 @@ def _assert_handle_type(handle: int, *, directory: bool) -> None:
         raise WindowsAclError(f"private path is not a {expected}")
 
 
-def _open_path(path: Path, *, directory: bool, writable_dacl: bool) -> int:
+def _open_path(
+    path: Path, *, directory: bool, writable_dacl: bool, guard_delete: bool = False,
+) -> int:
     api = _api()
     access = api.READ_CONTROL | api.FILE_READ_ATTRIBUTES
     if writable_dacl:
         access |= api.WRITE_DAC
+    if guard_delete:
+        # Attribute-only access is excluded from CreateFile sharing checks.
+        # A directory lease stays exclusive; a file lease requests real read
+        # access so ordinary readers remain compatible while delete/rename
+        # opens are rejected by the missing FILE_SHARE_DELETE flag.
+        access |= api.DELETE if directory else api.FILE_READ_DATA
     flags = api.FILE_FLAG_OPEN_REPARSE_POINT
     if directory:
         flags |= api.FILE_FLAG_BACKUP_SEMANTICS
@@ -580,22 +588,30 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
         _assert_persistent_acls(destination.parent)
         _assert_handle_type(native_handle, directory=False)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
-        encoded = str(destination).encode("utf-16-le")
-        name_offset = _FileRenameInfo.file_name.offset
-        buffer = ctypes.create_string_buffer(name_offset + len(encoded))
-        information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
-        information.replace_if_exists = 1
-        information.root_directory = None
-        information.file_name_length = len(encoded)
-        ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
         api = _api()
-        if not api.kernel32.SetFileInformationByHandle(
-            native_handle,
-            api.FILE_RENAME_INFO,
-            buffer,
-            len(buffer),
-        ):
-            raise api.error(f"could not promote private file {source}")
+        root_handle = _open_path(
+            destination.parent, directory=True, writable_dacl=False,
+        )
+        try:
+            encoded = destination.name.encode("utf-16-le")
+            name_offset = _FileRenameInfo.file_name.offset
+            buffer = ctypes.create_string_buffer(
+                name_offset + len(encoded) + ctypes.sizeof(ctypes.c_wchar)
+            )
+            information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
+            information.replace_if_exists = 1
+            information.root_directory = root_handle
+            information.file_name_length = len(encoded)
+            ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
+            if not api.kernel32.SetFileInformationByHandle(
+                native_handle,
+                api.FILE_RENAME_INFO,
+                buffer,
+                len(buffer),
+            ):
+                raise api.error(f"could not promote private file {source}")
+        finally:
+            api.kernel32.CloseHandle(root_handle)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
 
 
@@ -633,7 +649,9 @@ def validate_private_path(path: Path, *, directory: bool, exact: bool = True) ->
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
         api = _api()
-        handle = _open_path(path, directory=directory, writable_dacl=False)
+        handle = _open_path(
+            path, directory=directory, writable_dacl=False, guard_delete=True,
+        )
         try:
             acl = _acl_from_handle(handle, directory=directory, canonical=exact)
             _assert_acl(acl, exact=exact)
