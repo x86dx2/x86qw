@@ -23,7 +23,7 @@ import textwrap
 import time
 import traceback
 import urllib.parse
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from html.parser import HTMLParser
@@ -59,8 +59,34 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
 )
 from x86qw_runtime.io import private_fs
-from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_json
+from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_bytes
+from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.migrations import migrate_install_state
+from x86qw_runtime.state import (
+    StateError,
+    parse_install_state,
+    read_install_state,
+    serialize_install_state,
+)
+from x86qw_runtime.receipts import (
+    ComponentReceipt,
+    EzQuakeReceipt,
+    EzQuakeReceiptContext,
+    InventoryEntry,
+    MAX_INVENTORY_BYTES,
+    MAX_RECEIPT_BYTES,
+    ReceiptError,
+    parse_component_receipt,
+    parse_ezquake_receipt,
+    parse_inventory,
+    parse_cli_receipt,
+    parse_legacy_nquake_receipt,
+    serialize_cli_receipt,
+    serialize_component_receipt,
+    serialize_ezquake_receipt,
+    serialize_inventory,
+)
 from x86qw_runtime.versioning import (
     COMPONENT_VERSION,
     NIGHTLY_VERSION,
@@ -720,26 +746,6 @@ def copy_overlay(source: Path, destination: Path) -> None:
     else:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
-
-
-def read_table(path: Path, keys: set[str], label: str) -> dict[str, str]:
-    if not path.is_file() or path.is_symlink():
-        raise InstallerError(f"invalid {label}: {path}")
-    result: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        fields = raw_line.split("\t")
-        if len(fields) != 2 or fields[0] not in keys or fields[0] in result:
-            raise InstallerError(f"invalid {label}: {path}")
-        result[fields[0]] = fields[1]
-    if set(result) != keys:
-        raise InstallerError(f"invalid {label}: {path}")
-    return result
-
-
-def write_table(path: Path, rows: list[tuple[str, str]]) -> None:
-    path.write_text("".join(f"{key}\t{value}\n" for key, value in rows), encoding="utf-8")
-    if os.name != "nt":
-        path.chmod(0o644)
 
 
 class Installer:
@@ -1991,34 +1997,42 @@ class Installer:
         return prepared
 
     def validate_ezquake_receipt(self, path: Path, spec: PlatformSpec, channel: str) -> dict[str, str]:
-        keys = {"format", "platform", "architecture", "channel", "selection", "install_name", "bundle_version", "artifact_name", "artifact_url", "artifact_sha256", "binary_sha256"}
-        receipt = read_table(path, keys, "ezQuake receipt")
-        if receipt["format"] != "1" or receipt["platform"] != spec.key or receipt["architecture"] != spec.architecture:
-            raise InstallerError(f"invalid platform metadata in ezQuake receipt: {path}")
-        if receipt["channel"] != channel or receipt["install_name"] != spec.runtime(channel):
-            raise InstallerError(f"invalid target metadata in ezQuake receipt: {path}")
-        validate_hex(receipt["artifact_sha256"], HEX64, "artifact SHA-256 in ezQuake receipt")
-        validate_hex(receipt["binary_sha256"], HEX64, "binary SHA-256 in ezQuake receipt")
-        selection = receipt["selection"]
-        if channel == "stable":
-            if not STABLE_VERSION.fullmatch(selection) or receipt["bundle_version"] != selection:
-                raise InstallerError(f"invalid stable selection in ezQuake receipt: {selection}")
-            expected_name = spec.stable_archive
-        else:
-            if not NIGHTLY_VERSION.fullmatch(selection):
-                raise InstallerError(f"invalid nightly selection in ezQuake receipt: {selection}")
-            if spec.key == "macos":
-                if f"-g{selection.rsplit('_', 1)[-1]}" not in receipt["bundle_version"]:
-                    raise InstallerError("nightly bundle version differs from ezQuake selection")
-            elif receipt["bundle_version"] != selection:
-                raise InstallerError("nightly version differs from ezQuake selection")
-            expected_name = selection + spec.nightly_suffix
-        if (
-            receipt["artifact_name"] != expected_name
-            or https_url_filename(receipt["artifact_url"], "URL do artefato no recibo") != expected_name
-        ):
-            raise InstallerError(f"unexpected artifact in ezQuake receipt: {path}")
-        return receipt
+        try:
+            return parse_ezquake_receipt(
+                read_bounded_regular_file(path, maximum_size=MAX_RECEIPT_BYTES),
+                context=EzQuakeReceiptContext(
+                    platform=spec.key,
+                    architecture=spec.architecture,
+                    channel=channel,
+                    install_name=spec.runtime(channel),
+                    stable_archive=spec.stable_archive,
+                    nightly_suffix=spec.nightly_suffix,
+                ),
+            ).to_legacy_dict()
+        except MetadataFileError as error:
+            raise InstallerError(f"invalid ezQuake receipt: {path}") from error
+        except ReceiptError as error:
+            if error.code == "ezquake_platform":
+                message = f"invalid platform metadata in ezQuake receipt: {path}"
+            elif error.code == "ezquake_target":
+                message = f"invalid target metadata in ezQuake receipt: {path}"
+            elif error.code == "ezquake_hash":
+                message = f"invalid {error.field_name}"
+            elif error.code == "ezquake_stable_selection":
+                message = f"invalid stable selection in ezQuake receipt: {error.value}"
+            elif error.code == "ezquake_nightly_selection":
+                message = f"invalid nightly selection in ezQuake receipt: {error.value}"
+            elif error.code == "ezquake_macos_bundle":
+                message = "nightly bundle version differs from ezQuake selection"
+            elif error.code == "ezquake_nightly_bundle":
+                message = "nightly version differs from ezQuake selection"
+            elif error.code == "ezquake_artifact_url":
+                message = str(error)
+            elif error.code == "ezquake_artifact":
+                message = f"unexpected artifact in ezQuake receipt: {path}"
+            else:
+                message = f"invalid ezQuake receipt: {path}"
+            raise InstallerError(message) from error
 
     def write_ezquake_receipt(self, path: Path) -> None:
         assert self.spec is not None
@@ -2032,14 +2046,13 @@ class Installer:
         self.validate_ezquake_receipt(path, self.spec, self.channel)
 
     def write_ezquake_receipt_record(self, path: Path, receipt: dict[str, str]) -> None:
-        write_table(path, [
-            ("format", receipt["format"]), ("platform", receipt["platform"]),
-            ("architecture", receipt["architecture"]), ("channel", receipt["channel"]),
-            ("selection", receipt["selection"]), ("install_name", receipt["install_name"]),
-            ("bundle_version", receipt["bundle_version"]), ("artifact_name", receipt["artifact_name"]),
-            ("artifact_url", receipt["artifact_url"]), ("artifact_sha256", receipt["artifact_sha256"]),
-            ("binary_sha256", receipt["binary_sha256"]),
-        ])
+        try:
+            atomic_write_bytes(
+                path,
+                serialize_ezquake_receipt(EzQuakeReceipt(**receipt)),
+            )
+        except (AtomicWriteError, TypeError) as error:
+            raise InstallerError(f"Não foi possível gravar o recibo ezQuake: {path}") from error
 
     def repair_installed_macos_runtime(
         self,
@@ -2185,33 +2198,57 @@ class Installer:
             raise InstallerError(f"unexpected path in managed inventory: {value}")
 
     def validate_inventory(self, path: Path) -> list[tuple[str, str]]:
-        if not path.is_file() or path.is_symlink():
-            raise InstallerError(f"missing managed inventory: {path}")
-        entries: list[tuple[str, str]] = []
-        seen = set()
-        for line in path.read_text(encoding="utf-8").splitlines():
-            fields = line.split("\t")
-            if len(fields) != 2 or fields[0] in seen:
-                raise InstallerError(f"invalid managed inventory entry: {line}")
-            self.validate_managed_path(fields[0])
-            validate_hex(fields[1], HEX64, f"hash in managed inventory: {fields[0]}")
-            entries.append((fields[0], fields[1]))
-            seen.add(fields[0])
+        _, entries = self._read_inventory(path)
         return entries
 
+    def _read_inventory(self, path: Path) -> tuple[bytes, list[tuple[str, str]]]:
+        try:
+            payload = read_bounded_regular_file(
+                path, maximum_size=MAX_INVENTORY_BYTES,
+            )
+            parsed = parse_inventory(payload)
+        except MetadataFileError as error:
+            if not path.is_file() or path.is_symlink():
+                raise InstallerError(f"missing managed inventory: {path}") from error
+            raise InstallerError(f"Inventário gerenciado inválido: {path}") from error
+        except ReceiptError as error:
+            if error.code == "inventory_entry":
+                message = f"invalid managed inventory entry: {error.value}"
+            elif error.code == "inventory_hash":
+                message = f"invalid hash in managed inventory: {error.field_name}"
+            else:
+                message = f"Inventário gerenciado inválido: {path}"
+            raise InstallerError(message) from error
+        entries: list[tuple[str, str]] = []
+        for entry in parsed:
+            self.validate_managed_path(entry.path)
+            entries.append((entry.path, entry.sha256))
+        return payload, entries
+
     def create_inventory(self, managed: Path, destination: Path) -> list[tuple[str, str]]:
-        entries = []
+        entries: list[tuple[str, str]] = []
         for path in sorted((path for path in managed.rglob("*") if path.is_file()), key=lambda item: item.relative_to(managed).as_posix()):
             if path.is_symlink():
                 raise InstallerError(f"distribution contains an unsupported symlink: {path}")
             relative = path.relative_to(managed).as_posix()
             self.validate_managed_path(relative)
             entries.append((relative, file_hash(path)))
-        destination.write_text("".join(f"{name}\t{digest}\n" for name, digest in entries), encoding="utf-8")
-        if os.name != "nt":
-            destination.chmod(0o644)
-        self.validate_inventory(destination)
+        self.write_inventory_record(destination, entries)
         return entries
+
+    def write_inventory_record(
+        self, destination: Path, entries: Iterable[tuple[str, str]],
+    ) -> None:
+        try:
+            atomic_write_bytes(
+                destination,
+                serialize_inventory(
+                    InventoryEntry(name, digest) for name, digest in entries
+                ),
+            )
+        except AtomicWriteError as error:
+            raise InstallerError(f"Inventário não pôde ser gravado: {destination}") from error
+        self.validate_inventory(destination)
 
     def component_metadata(self, component: str) -> tuple[str, str]:
         known = {
@@ -2248,19 +2285,29 @@ class Installer:
     def validate_component_paths(
         self, component: str, receipt_path: Path, inventory_path: Path,
     ) -> tuple[list[tuple[str, str]], dict[str, str]]:
-        receipt = read_table(
-            receipt_path, {"format", "component", "selection", "source", "inventory_sha256"},
-            f"recibo do componente {component}",
-        )
-        if receipt["format"] != "1" or receipt["component"] != component:
-            raise InstallerError(f"Recibo inválido do componente {component}.")
-        if not receipt["selection"] or "\n" in receipt["selection"] or "\t" in receipt["selection"]:
-            raise InstallerError(f"Seleção inválida no recibo do componente {component}.")
-        if not receipt["source"] or "\n" in receipt["source"] or "\t" in receipt["source"]:
-            raise InstallerError(f"Origem inválida no recibo do componente {component}.")
-        validate_hex(receipt["inventory_sha256"], HEX64, f"SHA-256 do inventário {component}")
-        entries = self.validate_inventory(inventory_path)
-        if file_hash(inventory_path) != receipt["inventory_sha256"]:
+        try:
+            receipt = parse_component_receipt(
+                read_bounded_regular_file(
+                    receipt_path, maximum_size=MAX_RECEIPT_BYTES,
+                ),
+                component=component,
+            ).to_legacy_dict()
+        except MetadataFileError as error:
+            raise InstallerError(f"Recibo inválido do componente {component}.") from error
+        except ReceiptError as error:
+            if error.code == "component_selection":
+                message = f"Seleção inválida no recibo do componente {component}."
+            elif error.code == "component_source":
+                message = f"Origem inválida no recibo do componente {component}."
+            elif error.code == "component_inventory_hash":
+                message = f"invalid SHA-256 do inventário {component}"
+            elif error.code == "component_identity":
+                message = f"Recibo inválido do componente {component}."
+            else:
+                message = f"invalid recibo do componente {component}: {receipt_path}"
+            raise InstallerError(message) from error
+        inventory_payload, entries = self._read_inventory(inventory_path)
+        if hashlib.sha256(inventory_payload).hexdigest() != receipt["inventory_sha256"]:
             raise InstallerError(f"O inventário do componente {component} diverge do recibo.")
         return entries, receipt
 
@@ -2306,10 +2353,15 @@ class Installer:
         remove_empty_directories(managed)
 
     def write_component_receipt(self, component: str, selection: str, source: str, inventory: Path, destination: Path) -> None:
-        write_table(destination, [
-            ("format", "1"), ("component", component), ("selection", selection),
-            ("source", source), ("inventory_sha256", file_hash(inventory)),
-        ])
+        receipt = ComponentReceipt(
+            "1", component, selection, source, file_hash(inventory),
+        )
+        try:
+            atomic_write_bytes(destination, serialize_component_receipt(receipt))
+        except AtomicWriteError as error:
+            raise InstallerError(
+                f"Recibo do componente {component} não pôde ser gravado."
+            ) from error
 
     def remove_stale_component_files(self, component: str, new_entries: list[tuple[str, str]]) -> None:
         present, old_entries, _ = self.validate_component_pair(component)
@@ -2535,12 +2587,22 @@ class Installer:
         console.success(f"Presets instalados ({file_count(count)}). Carregue um deles com cfg_load x86-qw-modern.")
 
     def validate_nquake_receipt(self, path: Path) -> dict[str, str]:
-        receipt = read_table(path, {"format", "distfiles_commit", "inventory_sha256"}, "installation receipt")
-        if receipt["format"] != "1":
-            raise InstallerError(f"unsupported receipt format: {receipt['format']}")
-        validate_hex(receipt["distfiles_commit"], HEX40, "distfiles commit in receipt")
-        validate_hex(receipt["inventory_sha256"], HEX64, "inventory SHA-256 in receipt")
-        return receipt
+        try:
+            return parse_legacy_nquake_receipt(
+                read_bounded_regular_file(path, maximum_size=MAX_RECEIPT_BYTES)
+            ).to_legacy_dict()
+        except MetadataFileError as error:
+            raise InstallerError(f"Recibo histórico da instalação inválido: {path}") from error
+        except ReceiptError as error:
+            if error.code == "legacy_nquake_format":
+                message = f"unsupported receipt format: {error.value}"
+            elif error.code == "legacy_nquake_revision":
+                message = "invalid distfiles commit in receipt"
+            elif error.code == "legacy_nquake_inventory_hash":
+                message = "invalid inventory SHA-256 in receipt"
+            else:
+                message = f"invalid installation receipt: {path}"
+            raise InstallerError(message) from error
 
     def validate_nquake_pair(self, metadata: Path | None = None) -> tuple[bool, list[tuple[str, str]], dict[str, str] | None]:
         metadata = metadata or self.target / METADATA_DIR
@@ -2592,47 +2654,47 @@ class Installer:
         return replaced
 
     def current_install_state(self, state: dict[str, object]) -> dict[str, object]:
-        migrated = dict(state)
-        for field in ("requested_components", "recorded_components", "known_components"):
-            migrated[field] = self.replace_legacy_component_ids(list(state[field]))
-        migrated["format"] = 2
-        migrated.setdefault("capabilities", [])
-        migrated["component_fingerprint"] = profile_fingerprint(
-            list(migrated["recorded_components"]),
-        )
-        return self.validate_install_state(migrated)
+        parsed = self._parse_install_state(state)
+        return migrate_install_state(
+            parsed,
+            replacements=LEGACY_COMPONENT_REPLACEMENTS,
+            removals=LEGACY_COMPONENT_REMOVALS,
+            allowed_profiles=self._install_state_profiles(),
+            allowed_capabilities=INSTALLATION_CAPABILITIES,
+        ).to_document()
+
+    def _install_state_profiles(self) -> frozenset[str]:
+        return frozenset({"none", "custom", *self.component_catalog["profiles"]})
+
+    @staticmethod
+    def _install_state_error(error: StateError, path: Path) -> InstallerError:
+        if error.code == "component_field" and error.field_name is not None:
+            return InstallerError(
+                f"Campo {error.field_name} inválido no estado da instalação: {path}"
+            )
+        if error.code == "custom_requested":
+            return InstallerError(
+                f"Somente o perfil custom pode registrar escolhas explícitas: {path}"
+            )
+        if error.code == "capabilities":
+            return InstallerError(
+                f"Capacidades ou fingerprint inválidos no estado da instalação: {path}"
+            )
+        return InstallerError(f"Estado da instalação inválido: {path}")
+
+    def _parse_install_state(self, state: object):
+        path = self.target / INSTALL_STATE
+        try:
+            return parse_install_state(
+                state,
+                allowed_profiles=self._install_state_profiles(),
+                allowed_capabilities=INSTALLATION_CAPABILITIES,
+            )
+        except StateError as error:
+            raise self._install_state_error(error, path) from error
 
     def validate_install_state(self, state: object) -> dict[str, object]:
-        path = self.target / INSTALL_STATE
-        if not isinstance(state, dict):
-            raise InstallerError(f"Estado da instalação inválido: {path}")
-        profiles = {"none", "custom", *self.component_catalog["profiles"]}
-        profile = state.get("profile")
-        if state.get("format") not in {1, 2} or state.get("project") != "x86qw" or profile not in profiles:
-            raise InstallerError(f"Estado da instalação inválido: {path}")
-        for field in ("requested_components", "recorded_components", "known_components"):
-            values = state.get(field)
-            if (
-                not isinstance(values, list)
-                or len(values) != len(set(values))
-                or not all(isinstance(value, str) and COMPONENT_VERSION.fullmatch(value) for value in values)
-            ):
-                raise InstallerError(f"Campo {field} inválido no estado da instalação: {path}")
-        requested = state["requested_components"]
-        if profile != "custom" and requested:
-            raise InstallerError(f"Somente o perfil custom pode registrar escolhas explícitas: {path}")
-        if state["format"] == 2:
-            capabilities = state.get("capabilities")
-            fingerprint = state.get("component_fingerprint")
-            if (
-                not isinstance(capabilities, list)
-                or len(capabilities) != len(set(capabilities))
-                or not all(isinstance(value, str) and COMPONENT_VERSION.fullmatch(value) for value in capabilities)
-                or set(capabilities) - INSTALLATION_CAPABILITIES
-                or fingerprint != profile_fingerprint(list(state["recorded_components"]))
-            ):
-                raise InstallerError(f"Capacidades ou fingerprint inválidos no estado da instalação: {path}")
-        return state
+        return self._parse_install_state(state).to_document()
 
     def write_install_state(
         self,
@@ -2656,7 +2718,10 @@ class Installer:
         })
         destination = self.target / INSTALL_STATE
         try:
-            atomic_write_json(destination, state)
+            atomic_write_bytes(
+                destination,
+                serialize_install_state(self._parse_install_state(state)),
+            )
         except AtomicWriteError as error:
             raise InstallerError(
                 f"Estado da instalação não pôde ser gravado de forma atômica: {destination}"
@@ -2712,10 +2777,7 @@ class Installer:
     def load_install_state(self, *, persist_migration: bool) -> dict[str, object]:
         path = self.target / INSTALL_STATE
         if path.is_file() and not path.is_symlink():
-            try:
-                state = self.validate_install_state(json.loads(path.read_text(encoding="utf-8")))
-            except (OSError, json.JSONDecodeError) as error:
-                raise InstallerError(f"Estado da instalação inválido: {path}") from error
+            state = self.read_install_state_document(path)
             original = state
             state = self.current_install_state(state)
             migrated = self.migrate_stale_custom_profile(state)
@@ -2744,6 +2806,16 @@ class Installer:
         else:
             console.info(f"Perfil inferido para a simulação: {state['profile']}.")
         return state
+
+    def read_install_state_document(self, path: Path) -> dict[str, object]:
+        try:
+            return read_install_state(
+                path,
+                allowed_profiles=self._install_state_profiles(),
+                allowed_capabilities=INSTALLATION_CAPABILITIES,
+            ).to_document()
+        except StateError as error:
+            raise self._install_state_error(error, path) from error
 
     def desired_components(self, state: dict[str, object]) -> list[str]:
         profile = str(state["profile"])
@@ -2961,20 +3033,35 @@ class Installer:
         return package
 
     def validate_cli_receipt(self, receipt: Path) -> dict[str, object]:
-        if not receipt.is_file() or receipt.is_symlink():
-            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
         try:
-            metadata = json.loads(receipt.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
+            metadata = parse_cli_receipt(
+                read_bounded_regular_file(
+                    receipt, maximum_size=MAX_RECEIPT_BYTES,
+                )
+            ).to_legacy_dict()
+        except MetadataFileError as error:
             raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}") from error
-        if not isinstance(metadata, dict):
-            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
-        version = metadata.get("version")
-        if metadata.get("format") != 1 or metadata.get("project") != "x86qw" or not isinstance(version, str):
-            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}")
-        if not STABLE_VERSION.fullmatch(version):
-            raise InstallerError(f"Versão inválida no recibo da CLI x86QW: {version}")
+        except ReceiptError as error:
+            if error.code == "cli_version":
+                raise InstallerError(
+                    f"Versão inválida no recibo da CLI x86QW: {error.value}"
+                ) from error
+            raise InstallerError(f"Recibo da CLI x86QW inválido: {receipt}") from error
         return metadata
+
+    def write_cli_receipt_record(
+        self, receipt: Path, metadata: dict[str, object],
+    ) -> None:
+        try:
+            model = parse_cli_receipt(
+                json.dumps(metadata, ensure_ascii=False).encode("utf-8")
+            )
+            atomic_write_bytes(receipt, serialize_cli_receipt(model))
+        except (AtomicWriteError, ReceiptError) as error:
+            raise InstallerError(
+                f"Recibo da CLI x86QW não pôde ser gravado: {receipt}"
+            ) from error
+        self.validate_cli_receipt(receipt)
 
     def cli_receipt_path(self) -> Path | None:
         canonical = self.target / CLI_RECEIPT
@@ -3416,13 +3503,10 @@ class Installer:
         self._create_stage(".quake-migrate.")
         try:
             inventory = self.stage / f"{component}.inventory"
-            inventory.write_text(
-                "".join(f"{name}\t{digest}\n" for name, digest in entries if name not in mutable),
-                encoding="utf-8",
+            self.write_inventory_record(
+                inventory,
+                ((name, digest) for name, digest in entries if name not in mutable),
             )
-            if os.name != "nt":
-                inventory.chmod(0o644)
-            self.validate_inventory(inventory)
             staged_receipt = self.stage / f"{component}.receipt"
             self.write_component_receipt(
                 component, receipt["selection"], receipt["source"], inventory, staged_receipt,
@@ -3532,13 +3616,7 @@ class Installer:
             return
         assert self.stage is not None and receipt is not None
         inventory = self.stage / "play-support-migrated.inventory"
-        inventory.write_text(
-            "".join(f"{name}\t{digest}\n" for name, digest in remaining),
-            encoding="utf-8",
-        )
-        if os.name != "nt":
-            inventory.chmod(0o644)
-        self.validate_inventory(inventory)
+        self.write_inventory_record(inventory, remaining)
         staged_receipt = self.stage / "play-support-migrated.receipt"
         self.write_component_receipt(
             "play-support", receipt["selection"], receipt["source"], inventory, staged_receipt,
@@ -4275,8 +4353,9 @@ class Installer:
         recovered_state: dict[str, object] | None = None
         try:
             if state_path.is_file() and not state_path.is_symlink():
-                state = json.loads(state_path.read_text(encoding="utf-8"))
-                state = self.current_install_state(self.validate_install_state(state))
+                state = self.current_install_state(
+                    self.read_install_state_document(state_path)
+                )
                 recorded = set(state["recorded_components"])
                 installed = {identifier for identifier in valid_metadata if identifier in self.components}
                 missing_metadata = recorded - installed
@@ -4297,7 +4376,7 @@ class Installer:
                 recovered_state = self.infer_install_state()
             else:
                 self.infer_install_state()
-        except (OSError, json.JSONDecodeError, InstallerError) as error:
+        except InstallerError as error:
             metadata_diagnostics.append(f"state.json: {error}")
         invalid_components: list[str] = []
         for identifier in valid_metadata:
@@ -4872,12 +4951,7 @@ class Installer:
         state_path = self.target / INSTALL_STATE
         persisted_state: dict[str, object] | None = None
         if state_path.is_file() and not state_path.is_symlink():
-            try:
-                persisted_state = self.validate_install_state(
-                    json.loads(state_path.read_text(encoding="utf-8"))
-                )
-            except (OSError, json.JSONDecodeError) as error:
-                raise InstallerError(f"Estado da instalação inválido: {state_path}") from error
+            persisted_state = self.read_install_state_document(state_path)
         state = self.current_install_state(
             self.load_install_state(persist_migration=not dry_run)
         )
@@ -5299,13 +5373,7 @@ class Installer:
 
         cli_receipt = self.target / CLI_RECEIPT
         cli_receipt.parent.mkdir(parents=True, exist_ok=True)
-        temporary_receipt = cli_receipt.with_name(cli_receipt.name + ".new")
-        temporary_receipt.write_text(
-            json.dumps(identity, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        self.validate_cli_receipt(temporary_receipt)
-        temporary_receipt.replace(cli_receipt)
+        self.write_cli_receipt_record(cli_receipt, identity)
         remove_path(self.target / LEGACY_CLI_RECEIPT)
 
         for name, (rendered, mode) in rendered_launchers.items():

@@ -204,5 +204,42 @@ class RuntimeCatalogOwnershipTests(unittest.TestCase):
         self.assertIn("x86qw_runtime/io/atomic.py", names)
 
 
+class RuntimeStateOwnershipTests(unittest.TestCase):
+    def test_manager_uses_the_runtime_state_parser_migration_and_codec(self) -> None:
+        """State logic duplicated in manager would let persisted contracts drift."""
+
+        manager = importlib.import_module("manager")
+        state = importlib.import_module("x86qw_runtime.state")
+        migrations = importlib.import_module("x86qw_runtime.migrations")
+
+        self.assertIs(manager.parse_install_state, state.parse_install_state)
+        self.assertIs(manager.read_install_state, state.read_install_state)
+        self.assertIs(
+            getattr(manager, "serialize_install_state", None),
+            state.serialize_install_state,
+        )
+        self.assertIs(manager.migrate_install_state, migrations.migrate_install_state)
+
+    def test_installed_zipapp_contains_state_and_migration_contracts(self) -> None:
+        """The installed manager must not fall back to repository-only state code."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/state.py", names)
+        self.assertIn("x86qw_runtime/migrations.py", names)
+
+
+class RuntimeReceiptOwnershipTests(unittest.TestCase):
+    def test_installed_zipapp_contains_receipt_codecs_and_bounded_metadata_io(self) -> None:
+        """Installed receipt parsing must not depend on unshipped manager duplicates."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/receipts.py", names)
+        self.assertIn("x86qw_runtime/io/metadata.py", names)
+
+
 if __name__ == "__main__":
     unittest.main()

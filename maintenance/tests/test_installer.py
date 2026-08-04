@@ -20,6 +20,8 @@ from unittest import mock
 from maintenance.tools import downloader as bounded_downloader
 from maintenance.tools.build_installer_bundle import public_bootstrap_assignments, zipapp_bytes
 from x86qw_runtime.io import atomic as atomic_io
+from x86qw_runtime import state as runtime_state
+from x86qw_runtime import receipts as runtime_receipts
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -2033,6 +2035,279 @@ class InstallerTests(unittest.TestCase):
 
             self.assertEqual(state_path.read_bytes(), previous)
             self.assertEqual(list(state_path.parent.glob(".state.json.*.tmp")), [])
+
+    def test_install_state_loader_rejects_oversized_valid_json(self):
+        """The manager facade must consume the runtime's bounded state reader."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            document = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "none",
+                "requested_components": [],
+                "recorded_components": [],
+                "known_components": [],
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }
+            payload = json.dumps(document).encode("utf-8")
+            state_path.write_bytes(
+                payload + b" " * (runtime_state.MAX_INSTALL_STATE_BYTES + 1)
+            )
+
+            with self.assertRaisesRegex(install_qw.InstallerError, "Estado da instalação inválido"):
+                installer.load_install_state(persist_migration=False)
+
+    def test_install_state_loader_preserves_specific_validation_message(self):
+        """Moving state parsing must not collapse an actionable field error."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps({
+                "format": 2,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": ["invalid component"],
+                "recorded_components": [],
+                "known_components": [],
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }), encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.load_install_state(persist_migration=False)
+
+            self.assertEqual(
+                str(raised.exception),
+                f"Campo requested_components inválido no estado da instalação: {state_path}",
+            )
+
+    def test_cli_receipt_loader_rejects_oversized_valid_json(self):
+        """CLI metadata must use the same bounded reader as state and TSV receipts."""
+
+        self.assertTrue(
+            hasattr(runtime_receipts, "MAX_RECEIPT_BYTES"),
+            "runtime receipts must publish their persisted read limit",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            payload = json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "version": "0.7.1",
+            }).encode("utf-8")
+            receipt.write_bytes(
+                payload + b" " * (runtime_receipts.MAX_RECEIPT_BYTES + 1)
+            )
+
+            with self.assertRaisesRegex(install_qw.InstallerError, "Recibo da CLI"):
+                installer.validate_cli_receipt(receipt)
+
+    def test_cli_receipt_loader_preserves_invalid_version_message(self):
+        """Typed CLI receipts must keep the historical actionable version error."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "version": "nightly",
+            }), encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_cli_receipt(receipt)
+
+            self.assertEqual(
+                str(raised.exception),
+                "Versão inválida no recibo da CLI x86QW: nightly",
+            )
+
+    def test_cli_receipt_writer_is_canonical_and_preserves_previous_on_fsync_failure(self):
+        """CLI publication must use its runtime codec through the atomic writer."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            self.assertTrue(
+                hasattr(installer, "write_cli_receipt_record"),
+                "manager must expose one canonical CLI receipt writer",
+            )
+            installer.write_cli_receipt_record(receipt, {
+                "format": 1,
+                "project": "x86qw",
+                "version": "0.7.1",
+            })
+            canonical = (
+                b'{\n  "format": 1,\n  "project": "x86qw",\n'
+                b'  "version": "0.7.1"\n}\n'
+            )
+            self.assertEqual(receipt.read_bytes(), canonical)
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected CLI receipt fsync failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.write_cli_receipt_record(receipt, {
+                        "format": 1,
+                        "project": "x86qw",
+                        "version": "0.7.2",
+                    })
+
+            self.assertEqual(receipt.read_bytes(), canonical)
+
+    def test_ezquake_receipt_loader_rejects_oversized_valid_tsv(self):
+        """A huge URL query must not turn a client receipt into unbounded input."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path = target / spec.receipt("stable")
+            receipt_path.parent.mkdir(parents=True)
+            installer.write_ezquake_receipt_record(receipt_path, {
+                "format": "1",
+                "platform": "linux",
+                "architecture": "x86_64",
+                "channel": "stable",
+                "selection": "3.6.9",
+                "install_name": spec.runtime("stable"),
+                "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": (
+                    f"https://example.invalid/{spec.stable_archive}?padding="
+                    + "x" * runtime_receipts.MAX_RECEIPT_BYTES
+                ),
+                "artifact_sha256": "a" * 64,
+                "binary_sha256": "b" * 64,
+            })
+
+            with self.assertRaises(install_qw.InstallerError):
+                installer.validate_ezquake_receipt(receipt_path, spec, "stable")
+
+    def test_ezquake_receipt_loader_preserves_platform_error_message(self):
+        """Typed ezQuake receipts must not hide which persisted identity diverged."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path, _, _ = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+            )
+            receipt_path.write_bytes(
+                receipt_path.read_bytes().replace(
+                    b"platform\tlinux\n", b"platform\twindows\n",
+                )
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_ezquake_receipt(receipt_path, spec, "stable")
+
+            self.assertEqual(
+                str(raised.exception),
+                f"invalid platform metadata in ezQuake receipt: {receipt_path}",
+            )
+
+    def test_component_receipt_loader_rejects_oversized_valid_tsv(self):
+        """A component source field must not permit unbounded receipt reads."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            inventory.write_text(
+                "qw/ktx.pk3\t" + "a" * 64 + "\n",
+                encoding="utf-8",
+            )
+            installer.write_component_receipt(
+                "ktx",
+                "1.47+x86qw.18",
+                "x" * runtime_receipts.MAX_RECEIPT_BYTES,
+                inventory,
+                receipt,
+            )
+
+            with self.assertRaises(install_qw.InstallerError):
+                installer.validate_component_paths("ktx", receipt, inventory)
+
+    def test_component_receipt_loader_preserves_selection_error_message(self):
+        """Typed component receipts must retain the field-specific diagnosis."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            inventory.write_text(
+                "qw/ktx.pk3\t" + "a" * 64 + "\n", encoding="utf-8",
+            )
+            receipt.write_text(
+                "format\t1\n"
+                "component\tktx\n"
+                "selection\t\n"
+                "source\thttps://example.invalid/ktx.zip\n"
+                f"inventory_sha256\t{install_qw.file_hash(inventory)}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_component_paths("ktx", receipt, inventory)
+
+            self.assertEqual(
+                str(raised.exception),
+                "Seleção inválida no recibo do componente ktx.",
+            )
+
+    def test_inventory_loader_preserves_the_invalid_entry(self):
+        """A malformed inventory must identify the offending persisted row."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            inventory = target / ".x86qw/components/ktx/inventory"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("linha-sem-hash\n", encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_inventory(inventory)
+
+            self.assertEqual(
+                str(raised.exception),
+                "invalid managed inventory entry: linha-sem-hash",
+            )
+
+    def test_legacy_nquake_receipt_preserves_format_error_message(self):
+        """The one-way migration must keep its historical format diagnosis."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / ".x86qw/receipt"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(
+                "format\t2\n"
+                f"distfiles_commit\t{'a' * 40}\n"
+                f"inventory_sha256\t{'b' * 64}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_nquake_receipt(receipt)
+
+            self.assertEqual(str(raised.exception), "unsupported receipt format: 2")
 
     def test_repair_plans_missing_stable_and_nightly_clients_at_recorded_version(self):
         for channel in ("stable", "nightly"):
