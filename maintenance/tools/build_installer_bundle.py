@@ -66,6 +66,7 @@ ZIPAPP_FILES = (
     ("x86qw_runtime/errors.py", "x86qw_runtime/errors.py"),
     ("x86qw_runtime/versioning.py", "x86qw_runtime/versioning.py"),
     ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
+    ("x86qw_runtime/io/atomic.py", "x86qw_runtime/io/atomic.py"),
     ("x86qw_runtime/io/archive.py", "x86qw_runtime/io/archive.py"),
     ("x86qw_runtime/io/private_fs.py", "x86qw_runtime/io/private_fs.py"),
     ("x86qw_runtime/platform/__init__.py", "x86qw_runtime/platform/__init__.py"),

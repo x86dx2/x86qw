@@ -40,6 +40,7 @@ from x86qw_runtime.io.archive import (
     scan_archive,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_json
 from x86qw_runtime.errors import ExitCode, InstallerError
 
 console = core.console
@@ -532,37 +533,12 @@ class SessionJournal:
 
     def _write(self) -> None:
         try:
-            descriptor, temporary = private_fs.private_mkstemp(
-                prefix=".session-", suffix=".json", directory=self.directory,
-            )
-            try:
-                metadata = os.fstat(descriptor)
-                temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
-            except OSError:
-                os.close(descriptor)
-                raise
+            atomic_write_json(self.path, self.data, private=True)
+            private_fs.validate_private_file(self.path)
+        except AtomicWriteError as error:
+            raise InstallerError("O journal privado da sessão não pôde ser gravado.") from error
         except OSError as error:
-            raise InstallerError("O temporário privado do journal não pôde ser criado.") from error
-        primary_error: BaseException | None = None
-        try:
-            try:
-                with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
-                    json.dump(self.data, output, ensure_ascii=False, indent=2, sort_keys=True)
-                    output.write("\n")
-                temporary.replace(self.path)
-                private_fs.validate_private_file(self.path)
-            except OSError as error:
-                raise InstallerError("O journal privado da sessão não pôde ser gravado.") from error
-        except BaseException as error:
-            primary_error = error
-            raise
-        finally:
-            cleanup_private_staging(
-                temporary,
-                expected_identity=temporary_identity,
-                label="o temporário do journal",
-                primary_error=primary_error,
-            )
+            raise InstallerError("O journal privado da sessão não pôde ser validado.") from error
 
     def set_status(self, status: str) -> None:
         if status not in {"starting", "running", "stopping", "interrupted", "clean"}:
@@ -1115,42 +1091,18 @@ def terminate_recorded_process(entry: dict[str, object], timeout: float = 4.0) -
 
 
 def write_session_journal(path: Path, data: dict[str, object], prefix: str = ".recovery-") -> None:
+    del prefix  # retained for compatibility with the former staging helper
+    serialized = {
+        key: value for key, value in data.items()
+        if key != _LEGACY_ACL_MIGRATED
+    }
     try:
-        descriptor, temporary = private_fs.private_mkstemp(
-            prefix=prefix, directory=path.parent,
-        )
-        try:
-            metadata = os.fstat(descriptor)
-            temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
-        except OSError:
-            os.close(descriptor)
-            raise
+        atomic_write_json(path, serialized, private=True)
+        private_fs.validate_private_file(path)
+    except AtomicWriteError as error:
+        raise InstallerError("O journal privado de recuperação não pôde ser gravado.") from error
     except OSError as error:
-        raise InstallerError("O temporário privado de recuperação não pôde ser criado.") from error
-    primary_error: BaseException | None = None
-    try:
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
-                serialized = {
-                    key: value for key, value in data.items()
-                    if key != _LEGACY_ACL_MIGRATED
-                }
-                json.dump(serialized, output, ensure_ascii=False, indent=2, sort_keys=True)
-                output.write("\n")
-            temporary.replace(path)
-            private_fs.validate_private_file(path)
-        except OSError as error:
-            raise InstallerError("O journal privado de recuperação não pôde ser gravado.") from error
-    except BaseException as error:
-        primary_error = error
-        raise
-    finally:
-        cleanup_private_staging(
-            temporary,
-            expected_identity=temporary_identity,
-            label="o temporário de recuperação",
-            primary_error=primary_error,
-        )
+        raise InstallerError("O journal privado de recuperação não pôde ser validado.") from error
 
 
 def reconcile_journal(target: Path, path: Path) -> None:

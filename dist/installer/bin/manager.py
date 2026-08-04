@@ -59,6 +59,7 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
 )
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.atomic import AtomicWriteError, atomic_write_json
 from x86qw_runtime.errors import ExitCode, InstallerError
 from x86qw_runtime.versioning import (
     COMPONENT_VERSION,
@@ -2654,18 +2655,12 @@ class Installer:
             "component_fingerprint": profile_fingerprint(recorded),
         })
         destination = self.target / INSTALL_STATE
-        descriptor, temporary_name = tempfile.mkstemp(prefix=".state-", suffix=".json", dir=destination.parent)
-        temporary = Path(temporary_name)
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-                json.dump(state, output, ensure_ascii=False, indent=2, sort_keys=True)
-                output.write("\n")
-            if os.name != "nt":
-                temporary.chmod(0o644)
-            temporary.replace(destination)
-        finally:
-            if lexists(temporary):
-                remove_path(temporary)
+            atomic_write_json(destination, state)
+        except AtomicWriteError as error:
+            raise InstallerError(
+                f"Estado da instalação não pôde ser gravado de forma atômica: {destination}"
+            ) from error
         return state
 
     def infer_install_state(self) -> dict[str, object]:

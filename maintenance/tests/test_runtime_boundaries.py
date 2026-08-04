@@ -195,6 +195,14 @@ class RuntimeCatalogOwnershipTests(unittest.TestCase):
             sorted(name for name in names if name.startswith("maintenance")),
         )
 
+    def test_installed_zipapp_contains_the_atomic_runtime_boundary(self) -> None:
+        """State and journal consumers in the public CLI need the canonical writer."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            names = set(application.namelist())
+
+        self.assertIn("x86qw_runtime/io/atomic.py", names)
+
 
 if __name__ == "__main__":
     unittest.main()

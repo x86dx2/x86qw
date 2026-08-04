@@ -19,6 +19,7 @@ from unittest import mock
 
 from maintenance.tools import downloader as bounded_downloader
 from maintenance.tools.build_installer_bundle import public_bootstrap_assignments, zipapp_bytes
+from x86qw_runtime.io import atomic as atomic_io
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -2011,6 +2012,27 @@ class InstallerTests(unittest.TestCase):
             }
             with self.assertRaisesRegex(install_qw.InstallerError, "Capacidades"):
                 installer.validate_install_state(state)
+
+    def test_install_state_fsync_failure_preserves_previous_bytes(self):
+        """Bypassing atomic I/O would replace state even though durability failed."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            previous = b"estado-anterior\n"
+            state_path.write_bytes(previous)
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected state fsync failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.write_install_state("none", [], known=[])
+
+            self.assertEqual(state_path.read_bytes(), previous)
+            self.assertEqual(list(state_path.parent.glob(".state.json.*.tmp")), [])
 
     def test_repair_plans_missing_stable_and_nightly_clients_at_recorded_version(self):
         for channel in ("stable", "nightly"):

@@ -20,6 +20,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
 import services  # noqa: E402
+from x86qw_runtime.io import atomic as atomic_io  # noqa: E402
 
 
 class FakeWindowsFileApi:
@@ -2137,22 +2138,41 @@ with session_control._installation_acquisition_mutex(target, sessions):
             services.unlink_stop_request(request)
             self.assertFalse(request.exists())
 
-    def test_private_staging_cleanup_never_masks_the_operational_error(self):
+    def test_session_journal_fsync_failure_preserves_previous_bytes(self):
+        """A journal update must use the same durable atomic boundary as state."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            journal = services.SessionJournal(target)
+            previous = journal.path.read_bytes()
+            journal.data["status"] = "running"
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected journal fsync failure"),
+            ):
+                with self.assertRaises(services.InstallerError):
+                    journal._write()
+
+            self.assertEqual(journal.path.read_bytes(), previous)
+            self.assertEqual(list(journal.directory.glob(".session.json.*.tmp")), [])
+
+    def test_invalid_journal_json_fails_before_private_staging(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             (target / ".x86qw").mkdir()
             journal = services.SessionJournal(target)
             journal.data["not_json"] = object()
-            output = io.StringIO()
             with mock.patch.object(
                 services.private_fs,
-                "unlink_private_file",
-                side_effect=OSError("cleanup-failed"),
-            ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                "private_mkstemp",
+                side_effect=AssertionError("staging must not begin"),
+            ):
                 with self.assertRaises(TypeError) as raised:
                     journal._write()
             self.assertIn("not JSON serializable", str(raised.exception))
-            self.assertIn("cleanup-failed", output.getvalue())
+            self.assertEqual(list(journal.directory.glob("*.tmp")), [])
 
     def test_sensitive_config_cleanup_never_masks_the_operational_error(self):
         with tempfile.TemporaryDirectory() as temporary:
