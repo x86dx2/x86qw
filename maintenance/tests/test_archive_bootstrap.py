@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from maintenance.tools import build_installer_bundle
+from x86qw_runtime.io import atomic as atomic_io
 from maintenance.tools.build_installer_bundle import (
     ARCHIVE_BASE64_ASSIGNMENTS,
     ARCHIVE_SOURCE,
@@ -136,6 +137,43 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 side_effect=OSError("simulated disk failure"),
             ), self.assertRaisesRegex(OSError, "simulated disk failure"):
                 update_public_bootstrap(source, {"VALUE": "new"})
+            self.assertEqual(original, source.read_bytes())
+            self.assertEqual([], list(source.parent.glob(f".{source.name}.*")))
+
+    def test_bootstrap_publication_uses_the_runtime_directory_barrier(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.sh"
+            source.write_bytes(b'VALUE="old"\n')
+            calls: list[Path] = []
+            real_barrier = atomic_io.sync_directory
+
+            def record(path: Path) -> None:
+                calls.append(Path(path))
+                real_barrier(path)
+
+            with mock.patch.object(
+                atomic_io,
+                "sync_directory",
+                side_effect=record,
+            ):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
+            self.assertEqual([source.parent, source.parent], calls)
+            self.assertEqual(b'VALUE="new"\n', source.read_bytes())
+
+    def test_bootstrap_runtime_barrier_failure_preserves_previous_destination(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "bootstrap.sh"
+            original = b'VALUE="old"\n'
+            source.write_bytes(original)
+
+            with mock.patch.object(
+                atomic_io,
+                "sync_directory",
+                side_effect=OSError("simulated directory fsync failure"),
+            ), self.assertRaisesRegex(OSError, "simulated directory fsync failure"):
+                update_public_bootstrap(source, {"VALUE": "new"})
+
             self.assertEqual(original, source.read_bytes())
             self.assertEqual([], list(source.parent.glob(f".{source.name}.*")))
 

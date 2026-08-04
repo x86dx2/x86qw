@@ -21,6 +21,17 @@ Baseline corretiva consolidada após a PR 4: merge
 publicados nem promovidos no catálogo. O candidato da PR 5 parte desse commit,
 preserva o stable macOS upstream e também permanece não publicado.
 
+Baseline inicial da PR 6: merge
+`00098330e5833ba2c83c7121272d644c2a204a7b`. O HEAD documental atual da PR 6 é
+`29d76a48721190aad1203d0986a31d839d62070e`. Downloader, archive, filesystem
+privado, catálogos, estado/recibos/migração, transações compostas, UI,
+gameplay, plataforma e supervisor possuem ownership canônico no runtime. O
+zipapp tem 56 membros e sua projeção é derivada de um manifesto declarativo,
+também conferido contra o arquivo produzido. A regressão local integral passou;
+a issue #52 permanece aberta até a revisão e a matriz da PR. Esse código não
+foi publicado nem promovido no catálogo; a baseline pública continua sendo
+`0.7.1`.
+
 - instalador público `0.7.1`; as linhas anteriores permanecem imutáveis no histórico;
 - 61 pacotes e 21 componentes;
 - cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
@@ -52,25 +63,28 @@ preserva o stable macOS upstream e também permanece não publicado.
 | Arquivos ZIP/PK3/PYZ | completa no código corretivo da issue #49; ainda não publicada | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
 | DACL privada Windows | implementada no código corretivo da PR 4; ainda não publicada | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
 | Confiança do stable macOS | preservação upstream implementada no candidato da PR 5; ainda não publicada | matriz 7/7 no [run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055); assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
+| Fronteiras `x86qw_runtime` | implementada no código da PR 6: ownership canônico de I/O, filesystem privado, catálogos, estado/recibos/migração, transações, UI, gameplay, plataforma, sessão e supervisor; mutações duráveis de CLI/PAKs/defaults/repair/migrações/cleanup/uninstall retêm inversos até o resultado lógico final | 1.190 testes de manutenção aprovados localmente, com 37 skips explícitos, e 5 testes do site; zipapp de 56 membros derivado do manifesto, grafo sem ciclo e rollback adversarial validados; revisão e matriz da PR pendentes; smokes nativos reservados ao PR 11 |
 
 “MVP entregue” não significa que o runtime foi executado em todas as
 plataformas. A coluna de validação é sempre a autoridade para essa distinção.
 
 ## Próximos marcos do núcleo
 
-1. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
+1. Concluir a PR 6 enviando o snapshot validado para revisão e executando a
+   matriz Linux, macOS e Windows sem publicar release.
+2. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
    candidato exato; a disponibilidade segue condicional até o PR 11.
-2. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
+3. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
    Windows x64, além do cliente em macOS Intel.
-3. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
+4. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
    QWFWD em suíte de rede isolada.
-4. Transformar a validação de release em evidência publicada somente após
+5. Transformar a validação de release em evidência publicada somente após
    aprovação humana dos checks das três plataformas.
-5. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
+6. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
    ou gameplay.
-6. Manter bundles publicados imutáveis e preparar uma versão nova somente em
+7. Manter bundles publicados imutáveis e preparar uma versão nova somente em
    etapa de release separada.
-7. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
+8. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
    confundir esse contrato com os limites de transporte já implementados.
 
 ## Decisões históricas superadas

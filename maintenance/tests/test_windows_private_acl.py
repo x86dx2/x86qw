@@ -13,10 +13,17 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
 
+import gameplay  # noqa: E402
 import services  # noqa: E402
+import manager  # noqa: E402
 from maintenance.tools import downloader  # noqa: E402
 from x86qw_runtime.io import private_fs  # noqa: E402
+from x86qw_runtime.io.managed_files import persistent_descriptor_identity  # noqa: E402
 from x86qw_runtime.platform import windows_acl  # noqa: E402
+
+services.configure_context(
+    manager.service_composition_context(services, gameplay),
+)
 
 
 class PrivateFilesystemContractTests(unittest.TestCase):
@@ -225,7 +232,9 @@ class WindowsPrivateAclTests(unittest.TestCase):
             self._make_broad_parent(root)
             output, path = downloader._open_temporary(root / "installer.zip")
             metadata = os.fstat(output.fileno())
-            identity = (int(metadata.st_dev), int(metadata.st_ino))
+            identity = persistent_descriptor_identity(
+                output.fileno(), directory=False,
+            )
             try:
                 self._assert_canonical(path, directory=False)
                 self.assertEqual(0, metadata.st_size)

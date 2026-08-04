@@ -22,6 +22,14 @@ candidato da PR 5 parte desse commit, preserva o stable macOS upstream e
 permanece não publicado; smokes de runtime e de conta padrão continuam
 separados.
 
+Baseline inicial da PR 6: merge
+`00098330e5833ba2c83c7121272d644c2a204a7b`. O HEAD documental atual é
+`29d76a48721190aad1203d0986a31d839d62070e`: ownership de I/O, catálogos,
+estado, transações, UI, gameplay, plataforma, sessão e supervisor foi movido
+incrementalmente para `x86qw_runtime`. O zipapp possui 56 membros e sua projeção
+é derivada do manifesto declarativo. Essa implementação permanece na branch da
+PR 6, não foi publicada e não altera a release pública `0.7.1`.
+
 ## Escala de estado
 
 **Entrega funcional:** não iniciada · parcial · MVP entregue · completa
@@ -106,6 +114,36 @@ chegar à validação nativa completa dos runtimes:
 - registrar skips explícitos com motivo;
 - executar smokes nativos dos runtimes suportados;
 - guardar a evidência de release sem expor segredos.
+
+### ARCH-05 — Fronteiras incrementais do runtime
+
+**Entrega funcional:** implementada no código da PR 6; revisão pendente
+**Validação:** 1.190 testes de manutenção e 5 do site aprovados localmente; matriz da PR pendente
+
+O runtime é a fonte canônica para downloader, archive, persistência atômica,
+filesystem privado e arquivos gerenciados, catálogos, estado, recibos,
+migrações, transações, navegação, gameplay, adapters de plataforma, lock da
+instalação e supervisor de processos/sessões. Navegação, console e argumentos
+são compartilhados pelos três entrypoints; o manager permanece como raiz de
+composição do grafo de comandos. Manutenção e entrypoints consomem as demais
+fronteiras; `x86qw_runtime` não pode importar `maintenance`, `dist` nem as
+fachadas instaladas.
+
+O zipapp observado tem exatamente 56 membros: 44 módulos de
+`x86qw_runtime`, quatro entrypoints/fachadas no topo, duas projeções KTX e seis
+membros gerados. `maintenance/inventory/installer-runtime-members.json`
+declara origem, consumidor e contrato de cada membro e gera a projeção do
+builder; testes exigem igualdade com o ZIP produzido e proíbem módulos de
+manutenção no artefato.
+
+No HEAD documentado, a regressão integral executou 1.190 testes de manutenção,
+com 37 skips explícitos de plataforma/rede, e os 5 testes do site. Console,
+parser e navegação são canônicos no runtime; o manager permanece como raiz de
+composição do grafo de comandos. Cleanup, uninstall e purge usam quarantine
+reversível até o commit e tiveram rollback adversarial validado. A finalização
+remove arquivos regulares e diretórios vazios por identidade; links e tipos
+especiais são preservados no quarantine com erro explícito. A matriz da PR e os
+smokes nativos do PR 11 ainda não foram executados para este snapshot.
 
 ## Gameplay atual
 

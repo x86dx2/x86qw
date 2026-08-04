@@ -32,9 +32,13 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 import downloader  # noqa: E402
 
 
-DOWNLOADER_PATH = ROOT / "maintenance/tools/downloader.py"
+DOWNLOADER_PATH = ROOT / "x86qw_runtime/io/downloader.py"
 MANAGER_PATH = ROOT / "dist/installer/bin/manager.py"
-SERVICES_PATH = ROOT / "dist/installer/bin/services.py"
+SUPERVISOR_READINESS_PATH = ROOT / "x86qw_runtime/supervisor/readiness.py"
+SUPERVISOR_CORE_PATH = ROOT / "x86qw_runtime/supervisor/core.py"
+POSIX_GUARDIAN_PATH = ROOT / "x86qw_runtime/supervisor/posix_guardian.py"
+MACOS_PLATFORM_PATH = ROOT / "x86qw_runtime/platform/macos.py"
+PYTHON_RUNTIME_PATH = ROOT / "x86qw_runtime/platform/python_runtime.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
     ROOT / "dist/installer/bin/install.ps1",
     ROOT / "site/public/install.ps1",
@@ -53,7 +57,7 @@ NETWORK_EXECUTABLES = frozenset({
 })
 ALLOWED_NETWORK_MODULES = {
     DOWNLOADER_PATH: frozenset({"http.client", "socket", "ssl", "urllib.request"}),
-    SERVICES_PATH: frozenset({"socket"}),
+    SUPERVISOR_READINESS_PATH: frozenset({"socket"}),
     **{
         path: frozenset({"http.client", "socket", "ssl", "urllib.request"})
         for path in POWERSHELL_BOOTSTRAP_PATHS
@@ -125,7 +129,7 @@ ALLOWED_NETWORK_MODULE_USAGES = {
         ("urllib.request", "_open_with_deadline", "urllib.request.Request"): 1,
         ("urllib.request", "_select_transport.selected_open", "urllib.request.Request"): 1,
     },
-    SERVICES_PATH: {
+    SUPERVISOR_READINESS_PATH: {
         ("socket", "apply_startup_rcon", "socket.AF_INET"): 1,
         ("socket", "apply_startup_rcon", "socket.AF_INET6"): 1,
         ("socket", "apply_startup_rcon", "socket.SOCK_DGRAM"): 1,
@@ -180,15 +184,17 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     ROOT / "maintenance/manage.py": frozenset({
         ("subprocess.run", "run", "command"),
     }),
-    MANAGER_PATH: frozenset({
-        ("subprocess.run", "Installer.handoff_cli_update", "command"),
-        ("subprocess.run", "Installer.run_command", "arguments"),
-        ("subprocess.Popen", "Installer.launch_runtime", "command"),
+    PYTHON_RUNTIME_PATH: frozenset({
+        ("subprocess.run", "run_handoff", "command"),
     }),
-    SERVICES_PATH: frozenset({
+    SUPERVISOR_CORE_PATH: frozenset({
         ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
-        ("subprocess.Popen", "launch_background_controller", "command"),
-        ("subprocess.Popen", "run_processes", "spec.arguments"),
+    }),
+    POSIX_GUARDIAN_PATH: frozenset({
+        ("subprocess.Popen", "_child_main", "tuple(launch['arguments'])"),
+    }),
+    MACOS_PLATFORM_PATH: frozenset({
+        ("subprocess.run", "_run_codesign", "arguments"),
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),
@@ -200,9 +206,6 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
 PROCESS_WRAPPER_MODELS = {
     ROOT / "maintenance/manage.py": {
         "run": ("argv", ()),
-    },
-    MANAGER_PATH: {
-        "Installer.run_command": ("argv", ()),
     },
     ROOT / "maintenance/tools/check_lfs.py": {
         "git": ("varargs", ("git",)),
@@ -811,7 +814,11 @@ def scan_python_remote_boundary(
         marker = next(
             (
                 module
-                for module in ("maintenance.tools.downloader", "downloader")
+                for module in (
+                    "x86qw_runtime.io.downloader",
+                    "maintenance.tools.downloader",
+                    "downloader",
+                )
                 if name == module or name.startswith(module + ".")
             ),
             None,
@@ -1269,6 +1276,7 @@ class DownloaderTests(unittest.TestCase):
 
     def test_no_consumer_bypasses_the_shared_remote_byte_boundary(self) -> None:
         roots = (
+            ROOT / "x86qw_runtime",
             ROOT / "maintenance/manage.py",
             ROOT / "maintenance/tools",
             ROOT / "dist/installer/bin",

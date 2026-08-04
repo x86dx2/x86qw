@@ -19,6 +19,9 @@ from unittest import mock
 
 from maintenance.tools import downloader as bounded_downloader
 from maintenance.tools.build_installer_bundle import public_bootstrap_assignments, zipapp_bytes
+from x86qw_runtime.io import atomic as atomic_io
+from x86qw_runtime import state as runtime_state
+from x86qw_runtime import receipts as runtime_receipts
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +43,226 @@ class InstallerTests(unittest.TestCase):
         target.mkdir(parents=True)
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
+
+    @contextlib.contextmanager
+    def component_catalog_unavailable(self):
+        with mock.patch.object(
+            install_qw, "load_component_catalog",
+            side_effect=AssertionError("component catalog was loaded"),
+        ), mock.patch.object(
+            install_qw, "load_runtime_catalog",
+            side_effect=AssertionError("runtime component catalog was loaded"),
+        ), mock.patch.object(
+            install_qw, "read_zipapp_json",
+            side_effect=AssertionError("zipapp component catalog was loaded"),
+        ):
+            yield
+
+    def test_hub_does_not_load_the_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, _, _ = self.make_installer(Path(temporary))
+                installer.remote.get = lambda *args, **kwargs: json.dumps([{
+                    "address": "127.0.0.1:28501",
+                    "players": [],
+                }]).encode("utf-8")
+                installer.reject_target_symlinks()
+                with contextlib.redirect_stdout(io.StringIO()):
+                    servers = installer.hub_servers()
+
+            self.assertEqual("127.0.0.1:28501", servers[0]["address"])
+
+    def test_cleanup_does_not_load_the_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, target, _ = self.make_installer(Path(temporary))
+                state = target / install_qw.INSTALL_STATE
+                state.parent.mkdir(parents=True)
+                state.write_text(json.dumps({
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": [],
+                    "capabilities": [],
+                    "component_fingerprint": (
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    ),
+                }), encoding="utf-8")
+                runtime_cache = target / "ezquake/temp/download.tmp"
+                runtime_cache.parent.mkdir(parents=True)
+                runtime_cache.write_bytes(b"cache")
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(
+                        (1, 0),
+                        installer.cleanup_data(downloads=False, personal_data=False),
+                    )
+
+            self.assertFalse(runtime_cache.exists())
+
+    def test_component_access_still_requires_a_valid_component_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.component_catalog_unavailable():
+                installer, _, _ = self.make_installer(Path(temporary))
+                with mock.patch.object(
+                    install_qw, "load_component_catalog",
+                    side_effect=install_qw.InstallerError("invalid component catalog"),
+                ), self.assertRaisesRegex(
+                    install_qw.InstallerError, "invalid component catalog",
+                ):
+                    installer.choose_components()
+
+    def test_legacy_client_receipt_is_not_component_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            canonical, _, _ = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+            )
+            legacy = target / spec.legacy_receipt("stable")
+            canonical.replace(legacy)
+
+            self.assertEqual(
+                ("client:linux:stable",),
+                installer.managed_installation_identity(),
+            )
+
+    def stage_backed_component_install(self, installer, target, installed, stages):
+        marker = target / "qw/component-transaction.txt"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("old\n", encoding="utf-8")
+
+        def install(selected):
+            stage = installer.stage
+            self.assertIsNotNone(stage)
+            assert stage is not None
+            stages.append(stage)
+            backup = stage / "component-transaction.backup"
+
+            def apply():
+                backup.write_bytes(marker.read_bytes())
+                marker.write_text("new\n", encoding="utf-8")
+                installed.extend(selected)
+                return backup, tuple(selected)
+
+            def rollback(token):
+                saved, added = token
+                marker.write_bytes(saved.read_bytes())
+                for identifier in added:
+                    installed.remove(identifier)
+
+            plan = install_qw.MutationPlan(
+                identifier="test:component-stage-lifetime",
+                summary="exercise component stage lifetime",
+                steps=(install_qw.MutationStep(
+                    key="payload",
+                    description="publish test payload",
+                    observe=marker.read_bytes,
+                    apply=apply,
+                    rollback=rollback,
+                ),),
+            )
+            return (install_qw.execute_mutation(install_qw.prepare_mutation(plan)),)
+
+        return marker, install
+
+    def state_failure_after_optional_commit(self, installer, committed, state_stages):
+        write_state = installer.write_install_state
+
+        def fail(*args, **kwargs):
+            stage = installer.stage
+            self.assertIsNotNone(stage, "component stage was cleaned before state commit")
+            assert stage is not None
+            self.assertTrue(stage.is_dir())
+            state_stages.append(stage)
+            if committed:
+                write_state(*args, **kwargs)
+            raise install_qw.PersistenceError(
+                "injected state durability failure", committed=committed,
+            )
+
+        return fail
+
+    def test_component_state_transaction_preserves_stage_on_incomplete_rollback(self):
+        """Recovery backups must survive when an inverse cannot complete."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            stage = installer._create_stage(".rollback-recovery.")
+            recovery = stage / "payload.backup"
+            recovery.write_bytes(b"recover me\n")
+
+            with mock.patch.object(
+                installer,
+                "rollback_component_transactions",
+                side_effect=install_qw.InstallerError("injected rollback failure"),
+            ), mock.patch.object(
+                installer, "cleanup_stage", wraps=installer.cleanup_stage,
+            ) as cleanup:
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "injected rollback failure",
+                ):
+                    with installer.component_state_transaction():
+                        raise install_qw.InstallerError("injected operation failure")
+
+            cleanup.assert_not_called()
+            self.assertEqual(stage, installer.stage)
+            self.assertEqual(b"recover me\n", recovery.read_bytes())
+
+            installer.cleanup_stage()
+            installer.stage = None
+
+    def test_component_metadata_rollback_removes_contextual_parent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / install_qw.METADATA_DIR
+            installer.stage = metadata / "staging/transaction"
+            installer.stage.mkdir(parents=True)
+            inventory = installer.stage / "inventory"
+            receipt = installer.stage / "receipt"
+            installer.write_inventory_record(inventory, (("qw/test.cfg", "a" * 64),))
+            installer.write_component_receipt(
+                "presets", "v1", "x86QW test", inventory, receipt,
+            )
+
+            token = installer.commit_component_metadata("presets", inventory, receipt)
+            self.assertTrue((metadata / "components/presets/receipt").is_file())
+            installer._rollback_component_metadata(token)
+
+            self.assertFalse((metadata / "components").exists())
+
+    def test_component_removal_never_prunes_preexisting_empty_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            personal_directories = (target / "qw/maps", target / "prox")
+            for directory in personal_directories:
+                directory.mkdir(parents=True)
+
+            with mock.patch.object(
+                install_qw.navigation, "select_one", return_value="remove",
+            ), mock.patch.object(
+                installer, "check_paks",
+            ), mock.patch.object(
+                installer, "choose_components_to_remove", return_value=[],
+            ), mock.patch.object(
+                installer, "refresh_qw_package_order",
+            ), mock.patch.object(
+                installer, "reconcile_play_support_transaction",
+            ), mock.patch.object(
+                installer, "installed_components", return_value=[],
+            ), mock.patch.object(
+                installer, "write_install_state",
+                side_effect=install_qw.InstallerError("falha tardia do estado"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "falha tardia do estado",
+                ):
+                    installer.manage_components()
+
+            for directory in personal_directories:
+                self.assertTrue(directory.is_dir())
 
     def test_direct_maintenance_builders_find_the_runtime_boundary(self):
         scripts = (
@@ -185,9 +408,10 @@ class InstallerTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
             bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
-            self.assertIn("session_control.py", application.namelist())
+            self.assertNotIn("session_control.py", application.namelist())
             self.assertIn("python_runtime.py", application.namelist())
-            self.assertIn("maintenance/tools/downloader.py", application.namelist())
+            self.assertIn("x86qw_runtime/io/downloader.py", application.namelist())
+            self.assertNotIn("maintenance/tools/downloader.py", application.namelist())
             self.assertIn("x86qw_runtime/io/private_fs.py", application.namelist())
             self.assertIn("x86qw_runtime/platform/__init__.py", application.namelist())
             self.assertIn("x86qw_runtime/platform/windows_acl.py", application.namelist())
@@ -316,20 +540,56 @@ class InstallerTests(unittest.TestCase):
         installer.write_ezquake_receipt_record(receipt_path, receipt)
         return receipt_path, receipt, runtime
 
+    def prepare_runtime_commit_fixture(self, root: Path):
+        installer, target, _ = self.make_installer(root)
+        spec = install_qw.PLATFORMS["linux"]
+        receipt_path, receipt, runtime = self.write_ezquake_fixture(
+            installer, target, spec, "stable", payload=b"old-runtime\n",
+        )
+        original_receipt = receipt_path.read_bytes()
+        installer.spec = spec
+        installer.channel = "stable"
+        installer.stage = target / ".stage"
+        installer.stage.mkdir()
+        prepared = installer.stage / "prepared-runtime"
+        prepared.write_bytes(b"new-runtime\n")
+        staged_receipt = installer.stage / "staged-receipt"
+        updated = dict(receipt)
+        updated.update({
+            "selection": "3.6.10",
+            "bundle_version": "3.6.10",
+            "binary_sha256": install_qw.file_hash(prepared),
+        })
+        installer.write_ezquake_receipt_record(staged_receipt, updated)
+        return (
+            installer, target, spec, runtime, receipt_path, original_receipt,
+            prepared, staged_receipt, updated,
+        )
+
     @staticmethod
     def macos_bundle_members(version: str = "3.6.9") -> dict[str, bytes]:
-        binary = b"".join((
-            struct.pack(">II", 0xCAFEBABE, 2),
-            struct.pack(">IIIII", 0x01000007, 0, 0, 0, 0),
-            struct.pack(">IIIII", 0x0100000C, 0, 0, 0, 0),
-        ))
+        slice_size = 64
+        x86_offset = 4096
+        arm_offset = x86_offset + slice_size
+        binary = bytearray(arm_offset + slice_size)
+        struct.pack_into(">II", binary, 0, 0xCAFEBABE, 2)
+        struct.pack_into(
+            ">IIIII", binary, 8,
+            0x01000007, 0, x86_offset, slice_size, 0,
+        )
+        struct.pack_into(
+            ">IIIII", binary, 28,
+            0x0100000C, 0, arm_offset, slice_size, 0,
+        )
+        struct.pack_into("<II", binary, x86_offset, 0xFEEDFACF, 0x01000007)
+        struct.pack_into("<II", binary, arm_offset, 0xFEEDFACF, 0x0100000C)
         return {
             "Contents/Info.plist": plistlib.dumps({
                 "CFBundleIdentifier": "com.ezquake.ezQuake",
                 "CFBundleShortVersionString": version,
                 "CFBundleVersion": version,
             }),
-            "Contents/MacOS/ezQuake": binary,
+            "Contents/MacOS/ezQuake": bytes(binary),
             "Contents/_CodeSignature/CodeResources": b"upstream-code-resources",
         }
 
@@ -378,11 +638,12 @@ class InstallerTests(unittest.TestCase):
     def test_cancel_after_new_install_lock_leaves_no_session_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "new-install"
-            installer = mock.Mock()
+            installer = mock.MagicMock()
             installer.target = target
+            installer.component_state_transaction.return_value.__enter__.return_value = []
 
-            def cancel(*, platform=None, before_mutation=None):
-                del platform
+            def cancel(*, platform=None, before_mutation=None, mutation_results=None):
+                del platform, mutation_results
                 before_mutation()
                 raise KeyboardInterrupt
 
@@ -391,6 +652,55 @@ class InstallerTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     self.assertEqual(130, install_qw.main(["install", str(target)]))
             self.assertFalse(target.exists())
+
+    def test_new_install_rolls_back_created_topology_when_staging_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            target.rmdir()
+
+            def select_platform(_requested=None):
+                installer.spec = install_qw.PLATFORMS["linux"]
+                return installer.spec
+
+            with mock.patch.object(
+                installer, "select_platform", side_effect=select_platform,
+            ), mock.patch.object(
+                installer, "choose_channel",
+            ), mock.patch.object(
+                installer, "choose_release",
+            ), mock.patch.object(
+                installer, "macos_game_directory_reset_required", return_value=False,
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                installer, "check_runtime_destination_ownership",
+            ), mock.patch.object(
+                installer, "_create_stage",
+                side_effect=install_qw.InstallerError("falha de staging"),
+            ), contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(install_qw.InstallerError, "falha de staging"):
+                    installer.install()
+
+            self.assertFalse(target.exists())
+
+    def test_install_topology_rollback_preserves_a_foreign_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            result = installer.prepare_install_target()
+            self.assertIsInstance(result, install_qw.MutationResult)
+            assert result is not None
+            personal = target / "id1" / "personal.cfg"
+            personal.write_bytes(b"only copy")
+
+            with self.assertRaises(install_qw.MutationRollbackError) as raised:
+                install_qw.rollback_mutation(result)
+
+            self.assertIn(
+                "topologia inicial ficou incompleto",
+                str(raised.exception.rollback_errors[0][1]),
+            )
+            self.assertEqual(b"only copy", personal.read_bytes())
+            self.assertTrue(target.is_dir())
 
     def test_development_install_receives_registered_paks_from_core_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -405,11 +715,69 @@ class InstallerTests(unittest.TestCase):
             with mock.patch.object(install_qw, "ID1_PAK0_SHA256", install_qw.hashlib.sha256(pak0).hexdigest()):
                 with mock.patch.object(install_qw, "ID1_PAK1_SHA256", install_qw.hashlib.sha256(pak1).hexdigest()):
                     installer.validate_target("install")
+                    installer.prepare_install_target()
                     with contextlib.redirect_stdout(io.StringIO()):
                         installer.provision_install_target()
                     installer.check_paks()
             self.assertEqual(pak0, (target / "id1/pak0.pak").read_bytes())
             self.assertEqual(pak1, (target / "id1/pak1.pak").read_bytes())
+
+    def test_core_paks_roll_back_as_one_unit_when_second_promotion_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            bundled = installer.project_root / "dist/game-data/id1"
+            bundled.mkdir(parents=True)
+            pak0 = b"PACK" + b"pak0"
+            pak1 = b"PACK" + b"pak1"
+            (bundled / "pak0.pak").write_bytes(pak0)
+            (bundled / "pak1.pak").write_bytes(pak1)
+            replace = os.replace
+
+            def fail_second_pak(source, destination):
+                if Path(destination) == target / "id1/pak1.pak":
+                    raise OSError("simulated second PAK promotion failure")
+                return replace(source, destination)
+
+            with mock.patch.object(
+                install_qw, "ID1_PAK0_SHA256",
+                install_qw.hashlib.sha256(pak0).hexdigest(),
+            ), mock.patch.object(
+                install_qw, "ID1_PAK1_SHA256",
+                install_qw.hashlib.sha256(pak1).hexdigest(),
+            ), mock.patch.object(
+                install_qw.os, "replace", side_effect=fail_second_pak,
+            ):
+                installer.prepare_install_target()
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.provision_install_target()
+
+            self.assertFalse((target / "id1/pak0.pak").exists())
+            self.assertFalse((target / "id1/pak1.pak").exists())
+            self.assertFalse(any((target / "id1").glob(".*.x86qw-part")))
+
+    def test_core_paks_keep_an_inverse_for_the_parent_install_transaction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            bundled = installer.project_root / "dist/game-data/id1"
+            bundled.mkdir(parents=True)
+            pak0 = b"PACK" + b"pak0"
+            pak1 = b"PACK" + b"pak1"
+            (bundled / "pak0.pak").write_bytes(pak0)
+            (bundled / "pak1.pak").write_bytes(pak1)
+            with mock.patch.object(
+                install_qw, "ID1_PAK0_SHA256",
+                install_qw.hashlib.sha256(pak0).hexdigest(),
+            ), mock.patch.object(
+                install_qw, "ID1_PAK1_SHA256",
+                install_qw.hashlib.sha256(pak1).hexdigest(),
+            ):
+                installer.prepare_install_target()
+                result = installer.provision_install_target()
+            self.assertIsInstance(result, install_qw.MutationResult)
+            assert result is not None
+            install_qw.rollback_mutation(result)
+            self.assertFalse((target / "id1/pak0.pak").exists())
+            self.assertFalse((target / "id1/pak1.pak").exists())
 
     def test_public_install_downloads_registered_paks_as_a_separate_core_package(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -575,31 +943,48 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
-            process = mock.Mock(returncode=0, stdout="1234\n", stderr="")
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.subprocess, "run", return_value=process):
+                with mock.patch.object(
+                    install_qw.macos,
+                    "ensure_process_absent",
+                    side_effect=install_qw.InstallerError("Feche o ezQuake"),
+                ) as ensure_process_absent:
                     with self.assertRaisesRegex(install_qw.InstallerError, "Feche o ezQuake"):
                         installer.ensure_macos_ezquake_closed()
+            ensure_process_absent.assert_called_once_with("ezQuake")
 
     def test_native_macos_install_clears_stale_game_directory_preferences(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
-            closed = mock.Mock(returncode=1, stdout="", stderr="")
-            deleted = mock.Mock(returncode=0, stdout="", stderr="")
-            missing = mock.Mock(returncode=1, stdout="", stderr="Domain not found.")
-            responses = [closed, deleted, missing, deleted]
+            state = {
+                "basedir": "/Games/old",
+                "version": 7,
+                "NSOSPLastRootDirectory": b"bookmark",
+                "volume": 0.5,
+            }
+
+            def export(_domain):
+                return dict(state)
+
+            def publish(_domain, values):
+                state.clear()
+                state.update(values)
+
             output = io.StringIO()
-            with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.subprocess, "run", side_effect=responses) as run:
-                    with contextlib.redirect_stdout(output):
-                        installer.reset_macos_game_directory()
-            self.assertEqual(4, run.call_count)
-            for key, call in zip(install_qw.MACOS_DIRECTORY_KEYS, run.call_args_list[1:]):
-                self.assertEqual(
-                    ["defaults", "delete", install_qw.MACOS_PREFERENCES_DOMAIN, key],
-                    call.args[0],
-                )
+            with mock.patch.object(
+                install_qw.host_platform, "system", return_value="Darwin",
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                install_qw.macos, "_export_preference_domain", side_effect=export,
+            ), mock.patch.object(
+                install_qw.macos, "_publish_preference_domain", side_effect=publish,
+            ), contextlib.redirect_stdout(output):
+                result = installer.reset_macos_game_directory()
+
+            self.assertIsInstance(result, install_qw.MutationResult)
+            self.assertEqual({"volume": 0.5}, state)
             self.assertIn("Seleção antiga", output.getvalue())
 
     def test_macos_preferences_are_untouched_for_cross_platform_packages(self):
@@ -607,7 +992,7 @@ class InstallerTests(unittest.TestCase):
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["windows"]
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.subprocess, "run") as run:
+                with mock.patch.object(install_qw.macos.subprocess, "run") as run:
                     installer.reset_macos_game_directory()
             run.assert_not_called()
 
@@ -628,6 +1013,116 @@ class InstallerTests(unittest.TestCase):
 
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
                 self.assertTrue(installer.macos_game_directory_reset_required())
+
+    def test_macos_preference_reset_rolls_back_when_install_verification_fails(self):
+        """A failed installation must restore the user's previous bookmark."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            (target / "id1").mkdir()
+            (target / "id1/pak0.pak").write_bytes(b"pak0")
+            (target / "id1/pak1.pak").write_bytes(b"pak1")
+            preference = {"basedir": "/Games/previous"}
+
+            runtime_result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                install_qw.MutationPlan(
+                    identifier="test:runtime-before-preferences",
+                    summary="publish the runtime",
+                    steps=(install_qw.MutationStep(
+                        key="runtime",
+                        description="publish a runtime fixture",
+                        observe=lambda: None,
+                        apply=lambda: None,
+                        rollback=lambda _token: None,
+                    ),),
+                )
+            ))
+
+            def reset_preferences():
+                old_value = preference["basedir"]
+                return install_qw.execute_mutation(install_qw.prepare_mutation(
+                    install_qw.MutationPlan(
+                        identifier="test:macos-preferences",
+                        summary="clear the previous bookmark",
+                        steps=(install_qw.MutationStep(
+                            key="bookmark",
+                            description="clear the previous bookmark",
+                            observe=lambda: preference.get("basedir"),
+                            apply=lambda: preference.pop("basedir", None),
+                            rollback=lambda _token: preference.update(basedir=old_value),
+                        ),),
+                    )
+                ))
+
+            def select_platform(_platform=None):
+                installer.spec = install_qw.PLATFORMS["macos"]
+
+            def choose_channel():
+                installer.channel = "stable"
+
+            def choose_release():
+                installer.selected_version = "3.6.9"
+
+            def create_stage(_prefix):
+                installer.stage = target / ".stage"
+                installer.stage.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(
+                    installer, "select_platform", side_effect=select_platform,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_channel", side_effect=choose_channel,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "choose_release", side_effect=choose_release,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "macos_game_directory_reset_required", return_value=True,
+                ))
+                stack.enter_context(mock.patch.object(installer, "ensure_macos_ezquake_closed"))
+                stack.enter_context(mock.patch.object(installer, "check_runtime_destination_ownership"))
+                stack.enter_context(mock.patch.object(
+                    installer, "prepare_install_target", return_value=None,
+                ))
+                stack.enter_context(mock.patch.object(installer, "reject_target_symlinks"))
+                stack.enter_context(mock.patch.object(
+                    installer, "_create_stage", side_effect=create_stage,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "provision_install_target", return_value=None,
+                ))
+                stack.enter_context(mock.patch.object(installer, "check_paks"))
+                stack.enter_context(mock.patch.object(installer, "prepare_cache"))
+                stack.enter_context(mock.patch.object(
+                    installer, "ensure_archive", return_value=target / "archive",
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "prepare_runtime", return_value=target / "prepared",
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_ezquake_receipt"))
+                stack.enter_context(mock.patch.object(installer, "ensure_metadata_directory"))
+                stack.enter_context(mock.patch.object(
+                    installer, "commit_runtime", return_value=runtime_result,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "reset_macos_game_directory", side_effect=reset_preferences,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "confirm_components", return_value=False,
+                ))
+                stack.enter_context(mock.patch.object(installer, "write_install_state"))
+                stack.enter_context(mock.patch.object(
+                    installer, "verify_installation",
+                    side_effect=install_qw.InstallerError("final verification failed"),
+                ))
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "final verification failed",
+                ):
+                    installer.install()
+
+            self.assertEqual({"basedir": "/Games/previous"}, preference)
 
     def test_install_decides_bookmark_reset_only_after_acquiring_the_operation_lock(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -674,12 +1169,16 @@ class InstallerTests(unittest.TestCase):
                 ))
                 stack.enter_context(mock.patch.object(installer, "ensure_macos_ezquake_closed"))
                 stack.enter_context(mock.patch.object(installer, "check_runtime_destination_ownership"))
-                stack.enter_context(mock.patch.object(installer, "prepare_install_target"))
+                stack.enter_context(mock.patch.object(
+                    installer, "prepare_install_target", return_value=None,
+                ))
                 stack.enter_context(mock.patch.object(installer, "reject_target_symlinks"))
                 stack.enter_context(mock.patch.object(
                     installer, "_create_stage", side_effect=create_stage,
                 ))
-                stack.enter_context(mock.patch.object(installer, "provision_install_target"))
+                stack.enter_context(mock.patch.object(
+                    installer, "provision_install_target", return_value=None,
+                ))
                 stack.enter_context(mock.patch.object(installer, "check_paks"))
                 stack.enter_context(mock.patch.object(installer, "prepare_cache"))
                 stack.enter_context(mock.patch.object(
@@ -717,8 +1216,10 @@ class InstallerTests(unittest.TestCase):
             with plist.open("wb") as destination:
                 plistlib.dump({"CFBundleName": "ezQuake"}, destination)
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(installer, "macos_app_is_sandboxed", side_effect=[True, False]):
-                    with mock.patch.object(installer, "run_command") as command:
+                with mock.patch.object(
+                    install_qw.macos, "app_is_sandboxed", side_effect=[True, False],
+                ):
+                    with mock.patch.object(install_qw.macos, "_run_codesign") as command:
                         self.assertTrue(installer.prepare_macos_nightly_app(app))
             self.assertEqual(
                 ["codesign", "--force", "--deep", "--sign", "-", str(app)],
@@ -743,7 +1244,7 @@ class InstallerTests(unittest.TestCase):
             plist.write_bytes(original)
 
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(installer, "run_command") as command:
+                with mock.patch.object(install_qw.macos, "_run_codesign") as command:
                     with self.assertRaisesRegex(
                         install_qw.InstallerError, "somente.*nightly",
                     ):
@@ -764,10 +1265,11 @@ class InstallerTests(unittest.TestCase):
             expected = self.write_macos_archive(archive)
 
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(
-                    installer, "macos_app_is_sandboxed", side_effect=[True, False],
-                ):
-                    with mock.patch.object(installer, "run_command") as command:
+                with mock.patch.object(install_qw.macos, "verify_app_signature"):
+                    with mock.patch.object(
+                        install_qw.macos, "prepare_nightly_bundle",
+                        side_effect=AssertionError("stable bundle was rewritten"),
+                    ):
                         prepared = installer.prepare_runtime(archive)
 
             actual = {
@@ -775,9 +1277,6 @@ class InstallerTests(unittest.TestCase):
                 for path in prepared.rglob("*") if path.is_file()
             }
             self.assertEqual(expected, actual)
-            self.assertFalse(any(
-                "--sign" in call.args[0] for call in command.call_args_list
-            ))
 
     def test_stable_macos_identity_table_matches_the_registered_upstream_archive(self):
         archive = (
@@ -807,7 +1306,7 @@ class InstallerTests(unittest.TestCase):
 
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
                 with mock.patch.object(
-                    installer, "run_command",
+                    install_qw.macos, "verify_app_signature",
                     side_effect=install_qw.InstallerError("assinatura upstream inválida"),
                 ):
                     with self.assertRaisesRegex(
@@ -834,6 +1333,31 @@ class InstallerTests(unittest.TestCase):
                             self.fail(str(error))
 
             self.assertEqual([("ezQuake stable 3.6.9", runtime)], choices)
+
+    def test_launch_rejects_a_client_replaced_after_runtime_selection(self):
+        """The receipt verified by selection must remain bound through spawn."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            original = b"selected client\n"
+            _receipt_path, _receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=original,
+            )
+            with mock.patch.object(
+                install_qw.host_platform, "system", return_value="Linux",
+            ), mock.patch.object(installer, "check_runtime"):
+                self.assertEqual(
+                    [("ezQuake stable 3.6.9", runtime)], installer.host_runtimes(),
+                )
+
+            runtime.write_bytes(b"replaced client\n")
+            with mock.patch.object(
+                install_qw.host_adapter.platform, "system", return_value="Linux",
+            ), self.assertRaisesRegex(
+                install_qw.InstallerError, "mudou",
+            ):
+                installer.launch_runtime(runtime, ["+map", "dm6"])
 
     def test_legacy_resigned_stable_macos_runtime_requires_upstream_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -993,6 +1517,55 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual("área segura", rows[0].installed)
             self.assertEqual("tela inteira", rows[0].available)
 
+    def test_same_version_macos_repair_retains_inverse_for_parent_update(self):
+        """A later update failure must restore an offline nightly preparation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+            receipt_before = receipt_path.read_bytes()
+            results = []
+
+            def prepare(app):
+                (app / "Contents/x86qw-prepared").write_bytes(b"prepared")
+                return True
+
+            selected = (
+                receipt["selection"],
+                (f"https://example.invalid/{receipt['artifact_name']}",),
+                receipt["artifact_sha256"],
+            )
+            with mock.patch.object(
+                installer, "latest_release", return_value=selected,
+            ), mock.patch.object(
+                installer, "macos_app_needs_preparation", return_value=True,
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                installer, "prepare_macos_nightly_app", side_effect=prepare,
+            ), mock.patch.object(
+                installer,
+                "inspect_macos_app",
+                return_value=(receipt["bundle_version"], "c" * 64),
+            ):
+                self.assertTrue(installer.update_runtime(
+                    spec,
+                    "nightly",
+                    receipt,
+                    dry_run=False,
+                    mutation_results=results,
+                ))
+
+            installer.rollback_component_transactions(
+                results, install_qw.InstallerError("late state failure"),
+            )
+            self.assertFalse((runtime / "Contents/x86qw-prepared").exists())
+            self.assertEqual(receipt_before, receipt_path.read_bytes())
+
     def test_legacy_resigned_stable_macos_runtime_is_restored_by_update(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -1097,14 +1670,242 @@ class InstallerTests(unittest.TestCase):
             staged_receipt.write_bytes(original_receipt)
 
             with mock.patch.object(
-                install_qw.shutil, "copy2", side_effect=OSError("disco indisponível"),
+                install_qw,
+                "atomic_write_bytes",
+                side_effect=install_qw.AtomicWriteError(
+                    "disco indisponível", committed=False,
+                ),
             ):
-                with self.assertRaisesRegex(install_qw.InstallerError, "could not commit"):
+                with self.assertRaises(install_qw.PersistenceError):
                     installer.commit_runtime(prepared, staged_receipt)
 
             self.assertEqual(b"legacy", legacy_marker.read_bytes())
             self.assertEqual(original_receipt, receipt_path.read_bytes())
             self.assertFalse((runtime / "upstream-marker").exists())
+
+    def test_runtime_receipt_precommit_failure_restores_the_compatible_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (
+                installer, _, _, runtime, receipt_path, original_receipt,
+                prepared, staged_receipt, _,
+            ) = self.prepare_runtime_commit_fixture(Path(temporary))
+
+            def truncate_then_fail(path, payload, **kwargs):
+                Path(path).write_bytes(b"truncated-receipt\n")
+                raise install_qw.AtomicWriteError(
+                    "injected receipt promotion failure", committed=False,
+                )
+
+            with mock.patch.object(
+                install_qw, "atomic_write_bytes", side_effect=truncate_then_fail,
+            ):
+                with self.assertRaises(install_qw.PersistenceError) as raised:
+                    installer.commit_runtime(prepared, staged_receipt)
+
+            self.assertFalse(raised.exception.committed)
+            self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+            self.assertEqual(original_receipt, receipt_path.read_bytes())
+
+    def test_runtime_receipt_committed_error_keeps_the_new_compatible_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (
+                installer, _, spec, runtime, receipt_path, _,
+                prepared, staged_receipt, updated,
+            ) = self.prepare_runtime_commit_fixture(Path(temporary))
+            atomic_write = install_qw.atomic_write_bytes
+
+            def commit_then_fail(path, payload, **kwargs):
+                atomic_write(path, payload, **kwargs)
+                raise install_qw.AtomicWriteError(
+                    "injected receipt directory fsync failure", committed=True,
+                )
+
+            with mock.patch.object(
+                install_qw, "atomic_write_bytes", side_effect=commit_then_fail,
+            ):
+                with self.assertRaises(install_qw.PersistenceError) as raised:
+                    installer.commit_runtime(prepared, staged_receipt)
+
+            self.assertTrue(raised.exception.committed)
+            self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+            persisted = installer.validate_ezquake_receipt(
+                receipt_path, spec, "stable",
+            )
+            self.assertEqual(updated, persisted)
+            self.assertEqual(install_qw.file_hash(runtime), persisted["binary_sha256"])
+
+    def test_runtime_rollback_removes_contextual_receipt_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            installer.spec = spec
+            installer.channel = "stable"
+            metadata = target / install_qw.METADATA_DIR
+            installer.stage = metadata / "staging/transaction"
+            installer.stage.mkdir(parents=True)
+            prepared = installer.stage / "prepared-runtime"
+            prepared.write_bytes(b"runtime")
+            staged_receipt = installer.stage / "staged-receipt"
+            installer.write_ezquake_receipt_record(staged_receipt, {
+                "format": "1",
+                "platform": spec.key,
+                "architecture": spec.architecture,
+                "channel": "stable",
+                "selection": "3.6.9",
+                "install_name": spec.runtime("stable"),
+                "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": f"https://example.invalid/{spec.stable_archive}",
+                "artifact_sha256": "a" * 64,
+                "binary_sha256": install_qw.file_hash(prepared),
+            })
+
+            result = installer.commit_runtime(prepared, staged_receipt)
+            self.assertTrue((metadata / "clients/ezquake/linux/stable.receipt").is_file())
+            install_qw.rollback_mutation(result)
+
+            self.assertFalse((metadata / "clients").exists())
+
+    def test_install_keeps_client_inverse_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                installer.spec = spec
+                installer.channel = "stable"
+                installer.selected_version = "3.6.10"
+                installer.app_archive_name = spec.stable_archive
+                installer.app_url = f"https://example.invalid/{spec.stable_archive}"
+                installer.app_archive_sha256 = "c" * 64
+                state_stages: list[Path] = []
+
+                def prepare_runtime(_archive):
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                patches = (
+                    mock.patch.object(installer, "select_platform"),
+                    mock.patch.object(installer, "choose_channel"),
+                    mock.patch.object(installer, "choose_release"),
+                    mock.patch.object(installer, "macos_game_directory_reset_required", return_value=False),
+                    mock.patch.object(installer, "ensure_macos_ezquake_closed"),
+                    mock.patch.object(installer, "check_runtime_destination_ownership"),
+                    mock.patch.object(
+                        installer, "prepare_install_target", return_value=None,
+                    ),
+                    mock.patch.object(installer, "reject_target_symlinks"),
+                    mock.patch.object(
+                        installer, "provision_install_target", return_value=None,
+                    ),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "prepare_cache"),
+                    mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
+                    mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
+                    mock.patch.object(installer, "confirm_components", return_value=False),
+                    mock.patch.object(installer, "installed_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.install()
+
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertEqual(
+                        old_receipt,
+                        installer.validate_ezquake_receipt(receipt_path, spec, "stable"),
+                    )
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+                installer.cleanup_stage()
+                installer.stage = None
+
+    def test_install_rolls_back_new_core_paks_when_later_preparation_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "id1/pak-transaction-marker"
+            marker.parent.mkdir(parents=True)
+            for name in ("pak0.pak", "pak1.pak"):
+                (marker.parent / name).write_bytes(name.encode("ascii"))
+
+            def provision():
+                def apply():
+                    marker.write_bytes(b"installed")
+                    return marker
+
+                def rollback(path):
+                    path.unlink()
+
+                plan = install_qw.MutationPlan(
+                    identifier="test:core-pak-parent",
+                    summary="retain core PAK inverse",
+                    steps=(install_qw.MutationStep(
+                        key="paks", description="publish PAK marker",
+                        observe=lambda: marker.exists(),
+                        apply=apply, rollback=rollback,
+                    ),),
+                )
+                return install_qw.execute_mutation(
+                    install_qw.prepare_mutation(plan)
+                )
+
+            patches = (
+                mock.patch.object(installer, "select_platform"),
+                mock.patch.object(installer, "choose_channel"),
+                mock.patch.object(installer, "choose_release"),
+                mock.patch.object(
+                    installer, "macos_game_directory_reset_required", return_value=False,
+                ),
+                mock.patch.object(installer, "ensure_macos_ezquake_closed"),
+                mock.patch.object(installer, "check_runtime_destination_ownership"),
+                mock.patch.object(
+                    installer, "prepare_install_target", return_value=None,
+                ),
+                mock.patch.object(installer, "reject_target_symlinks"),
+                mock.patch.object(
+                    installer, "provision_install_target", side_effect=provision,
+                ),
+                mock.patch.object(installer, "check_paks"),
+                mock.patch.object(
+                    installer, "prepare_cache",
+                    side_effect=install_qw.InstallerError("simulated cache failure"),
+                ),
+            )
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                for patcher in patches:
+                    stack.enter_context(patcher)
+                with self.assertRaisesRegex(install_qw.InstallerError, "cache failure"):
+                    installer.install()
+            self.assertFalse(marker.exists())
+            installer.cleanup_stage()
 
     def test_legacy_stable_update_commits_the_unmodified_upstream_bundle(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1144,10 +1945,14 @@ class InstallerTests(unittest.TestCase):
                                     with mock.patch.object(
                                         installer, "ensure_archive", side_effect=provide_archive,
                                     ):
-                                        with mock.patch.object(installer, "run_command") as command:
-                                            self.assertTrue(installer.update_runtime(
-                                                spec, "stable", receipt, dry_run=False,
-                                            ))
+                                        with mock.patch.object(install_qw.macos, "verify_app_signature"):
+                                            with mock.patch.object(
+                                                install_qw.macos, "prepare_nightly_bundle",
+                                                side_effect=AssertionError("stable bundle was rewritten"),
+                                            ):
+                                                self.assertTrue(installer.update_runtime(
+                                                    spec, "stable", receipt, dry_run=False,
+                                                ))
 
             actual = {
                 path.relative_to(runtime).as_posix(): path.read_bytes()
@@ -1159,9 +1964,6 @@ class InstallerTests(unittest.TestCase):
                 install_qw.file_hash(runtime / "Contents/MacOS/ezQuake"),
                 restored["binary_sha256"],
             )
-            self.assertFalse(any(
-                "--sign" in call.args[0] for call in command.call_args_list
-            ))
 
     def test_macos_nightly_local_repair_preserves_the_shared_bookmark(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1188,6 +1990,75 @@ class InstallerTests(unittest.TestCase):
                                 )
 
             self.assertEqual("c" * 64, updated["binary_sha256"])
+
+    @unittest.skipIf(os.name == "nt", "criação de symlink exige privilégio no Windows")
+    def test_macos_nightly_repair_rejects_symlink_before_inspecting_bundle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+            (runtime / "Contents" / "Resources").mkdir()
+            (runtime / "Contents" / "Resources" / "unsafe").symlink_to(
+                runtime / "Contents" / "Info.plist",
+            )
+
+            with mock.patch.object(
+                installer,
+                "macos_app_needs_preparation",
+                side_effect=AssertionError("bundle inspecionado antes de validar symlinks"),
+            ):
+                with self.assertRaisesRegex(install_qw.InstallerError, "symlink"):
+                    installer.repair_installed_macos_runtime(
+                        spec, "nightly", receipt_path, receipt,
+                    )
+
+    def test_macos_nightly_repair_rolls_back_bundle_when_receipt_commit_fails(self):
+        """Offline preparation and its receipt must publish as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["macos"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "nightly",
+            )
+            self.write_macos_bundle(runtime, receipt["bundle_version"])
+            receipt_before = receipt_path.read_bytes()
+            mutation_results = []
+
+            def prepare(app):
+                (app / "Contents/x86qw-prepared").write_bytes(b"prepared")
+                return True
+
+            with mock.patch.object(
+                installer, "macos_app_needs_preparation", return_value=True,
+            ), mock.patch.object(
+                installer, "ensure_macos_ezquake_closed",
+            ), mock.patch.object(
+                installer, "prepare_macos_nightly_app", side_effect=prepare,
+            ), mock.patch.object(
+                installer,
+                "inspect_macos_app",
+                return_value=(receipt["bundle_version"], "c" * 64),
+            ), mock.patch.object(
+                installer,
+                "_apply_runtime_receipt",
+                side_effect=OSError("simulated receipt promotion failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.repair_installed_macos_runtime(
+                        spec,
+                        "nightly",
+                        receipt_path,
+                        receipt,
+                        mutation_results=mutation_results,
+                    )
+
+            self.assertFalse((runtime / "Contents/x86qw-prepared").exists())
+            self.assertEqual(receipt_before, receipt_path.read_bytes())
+            self.assertEqual([], mutation_results)
 
     def test_macos_nightly_local_repair_configures_runtime_context(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1288,8 +2159,8 @@ class InstallerTests(unittest.TestCase):
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ):
                     self.assertEqual(
@@ -1300,8 +2171,8 @@ class InstallerTests(unittest.TestCase):
             installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ):
                     with self.assertRaises(install_qw.InstallerError):
@@ -1316,8 +2187,8 @@ class InstallerTests(unittest.TestCase):
             )
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ) as get:
                     installer.stable_catalog()
@@ -1365,8 +2236,8 @@ class InstallerTests(unittest.TestCase):
             remote = {"format": 1, "project": "x86qw", "packages": []}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(remote).encode(), install_qw.CATALOG_URL),
                 ) as get:
                     self.assertEqual(remote, installer.public_catalog("remote"))
@@ -1483,6 +2354,144 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / "x86qw.sh").exists())
             self.assertFalse((target / "x86qw.cmd").exists())
 
+    def test_online_cli_rolls_back_every_generation_file_when_batch_launcher_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            cli = target / ".x86qw/cli"
+            cli.mkdir(parents=True)
+            old_identity = {"format": 1, "project": "x86qw", "version": "1.0.5"}
+            old_receipt = json.dumps(old_identity, sort_keys=True).encode("utf-8") + b"\n"
+            old_paths = {
+                cli / "x86qw.pyz": b"old application",
+                cli / "receipt": old_receipt,
+                target / ".x86qw/cli.receipt": old_receipt,
+                target / "x86qw.sh": b"old shell launcher\n",
+                target / "x86qw.cmd": b"old batch launcher\r\n",
+            }
+            for path, payload in old_paths.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+            if os.name != "nt":
+                (target / "x86qw.sh").chmod(0o751)
+                (target / "x86qw.cmd").chmod(0o640)
+            old_modes = {
+                path: path.stat().st_mode & 0o777 for path in old_paths
+            }
+
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_batch_launcher(prepared, destination):
+                if destination == target / "x86qw.cmd":
+                    raise OSError("simulated batch launcher promotion failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_online_cli()
+
+            for path, payload in old_paths.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+                self.assertEqual(old_modes[path], path.stat().st_mode & 0o777, path)
+            self.assertFalse((target / ".x86qw/staging").exists())
+            self.assertFalse(any(target.rglob("*.new")))
+
+    def test_online_cli_retains_its_inverse_until_the_parent_transaction_finishes(self):
+        """A later generation failure must restore every previous CLI file."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            cli = target / ".x86qw/cli"
+            cli.mkdir(parents=True)
+            old_identity = {"format": 1, "project": "x86qw", "version": "1.0.5"}
+            old_receipt = json.dumps(old_identity, sort_keys=True).encode("utf-8") + b"\n"
+            old_paths = {
+                cli / "x86qw.pyz": b"old application",
+                cli / "receipt": old_receipt,
+                target / "x86qw.sh": b"old shell launcher\n",
+                target / "x86qw.cmd": b"old batch launcher\r\n",
+            }
+            for path, payload in old_paths.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "late generation failure",
+                ):
+                    with installer.component_state_transaction() as results:
+                        installer.install_online_cli(mutation_results=results)
+                        raise install_qw.InstallerError("late generation failure")
+
+            for path, payload in old_paths.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((target / ".x86qw/staging").exists())
+
+    def test_online_cli_failed_first_install_leaves_no_metadata_or_launcher(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            target.mkdir()
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_batch_launcher(prepared, destination):
+                if destination == target / "x86qw.cmd":
+                    raise OSError("simulated batch launcher promotion failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer,
+                "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.install_online_cli()
+
+            self.assertFalse((target / ".x86qw").exists())
+            self.assertFalse((target / "x86qw.sh").exists())
+            self.assertFalse((target / "x86qw.cmd").exists())
+
     def test_flat_metadata_is_migrated_into_contextual_directories(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -1526,6 +2535,97 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(legacy_inventory.exists())
             self.assertFalse(installer.migrate_metadata_layout())
 
+    def test_metadata_layout_migration_rolls_back_every_context_on_late_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / ".x86qw"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
+            self.write_cli_receipt(target, "1.0.5", legacy=True)
+
+            spec = install_qw.PLATFORMS["macos"]
+            legacy_client = target / spec.legacy_receipt("stable")
+            installer.write_ezquake_receipt_record(legacy_client, {
+                "format": "1", "platform": "macos", "architecture": "universal",
+                "channel": "stable", "selection": "3.6.9",
+                "install_name": spec.runtime("stable"), "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": f"https://example.invalid/{spec.stable_archive}",
+                "artifact_sha256": "a" * 64, "binary_sha256": "b" * 64,
+            })
+            legacy_receipt, legacy_inventory = (
+                target / relative
+                for relative in installer.legacy_component_metadata("nquake-bootstrap")
+            )
+            legacy_inventory.write_text(
+                f"qw/test.cfg\t{'c' * 64}\n", encoding="utf-8",
+            )
+            installer.write_component_receipt(
+                "nquake-bootstrap", "test", "https://example.invalid/component.zip",
+                legacy_inventory, legacy_receipt,
+            )
+            legacy_snapshot = {
+                path: path.read_bytes()
+                for path in (target / ".x86qw").glob("*.receipt")
+            }
+            legacy_snapshot.update({
+                legacy_inventory: legacy_inventory.read_bytes(),
+            })
+
+            with mock.patch.object(
+                installer, "commit_component_metadata",
+                side_effect=OSError("simulated late metadata migration failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.migrate_metadata_layout()
+
+            for path, payload in legacy_snapshot.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((metadata / "cli/receipt").exists())
+            self.assertFalse((metadata / "clients").exists())
+            self.assertFalse((metadata / "components").exists())
+
+    def test_metadata_layout_keeps_inverses_for_parent_update_transaction(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / ".x86qw"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "cli/x86qw.pyz").write_bytes(b"zipapp")
+            legacy = self.write_cli_receipt(target, "1.0.5", legacy=True)
+            original = legacy.read_bytes()
+            results = []
+
+            self.assertTrue(installer.migrate_metadata_layout(results))
+            self.assertTrue((metadata / "cli/receipt").is_file())
+            self.assertFalse(legacy.exists())
+            self.assertTrue(results)
+
+            installer.rollback_component_transactions(
+                results, install_qw.InstallerError("simulated parent failure"),
+            )
+            self.assertEqual(original, legacy.read_bytes())
+            self.assertFalse((metadata / "cli/receipt").exists())
+            installer.cleanup_stage()
+
+    def test_failed_metadata_migration_preserves_preexisting_empty_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            metadata = target / install_qw.METADATA_DIR
+            self.write_cli_receipt(target, "1.0.5", legacy=True)
+            personal = metadata / "clients/personal-layout"
+            personal.mkdir(parents=True)
+
+            with mock.patch.object(
+                installer, "_migrate_metadata_file_transaction",
+                side_effect=install_qw.InstallerError("falha de migração"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "falha de migração",
+                ):
+                    installer.migrate_metadata_layout()
+
+            self.assertTrue(personal.is_dir())
+
     def test_installed_cli_rejects_installation_actions(self):
         for action in ("install", "components", "presets"):
             with self.subTest(action=action):
@@ -1565,8 +2665,9 @@ class InstallerTests(unittest.TestCase):
 
     def test_main_passes_platform_override_to_installation(self):
         target = Path("/tmp/x86qw-platform-test")
-        installer = mock.Mock()
+        installer = mock.MagicMock()
         installer.target = target
+        installer.component_state_transaction.return_value.__enter__.return_value = []
         with mock.patch.object(install_qw, "Installer", return_value=installer):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(
@@ -1680,6 +2781,134 @@ class InstallerTests(unittest.TestCase):
         final_cli.handoff_cli_update.assert_not_called()
         operation_lock.release.assert_called_once()
 
+    def test_cli_publication_failure_rolls_back_the_content_update(self):
+        """Content and the installed CLI must publish as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "qw/content-generation.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b"old\n")
+
+            def update(*, dry_run, plan_rows=None, mutation_results=None, **_options):
+                if dry_run:
+                    assert plan_rows is not None
+                    plan_rows.append(install_qw.UpdatePlanRow(
+                        "Componente", "KTX", "old", "new", "Atualizar",
+                    ))
+                    return True
+                old_payload = marker.read_bytes()
+                result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                    install_qw.MutationPlan(
+                        identifier="test:content-cli-generation",
+                        summary="publish content before the CLI",
+                        steps=(install_qw.MutationStep(
+                            key="content",
+                            description="replace the managed content",
+                            observe=marker.read_bytes,
+                            apply=lambda: marker.write_bytes(b"new\n"),
+                            rollback=lambda _token: marker.write_bytes(old_payload),
+                        ),),
+                    )
+                ))
+                if mutation_results is not None:
+                    mutation_results.append(result)
+                return True
+
+            installer.update = mock.Mock(side_effect=update)
+            installer.handoff_cli_update = mock.Mock(return_value=False)
+            installer.cli_update_plan_row = mock.Mock(return_value=None)
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.install_online_cli = mock.Mock(
+                side_effect=install_qw.InstallerError("CLI publication failed"),
+            )
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire",
+                return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+                io.StringIO(),
+            ):
+                self.assertEqual(1, install_qw.main([
+                    "--online-only", "--installed-cli", "--skip-cli-update",
+                    "update", str(target), "--yes",
+                ]))
+
+            self.assertEqual(b"old\n", marker.read_bytes())
+
+    def test_cli_only_handoff_publishes_without_rewriting_content(self):
+        """A validated CLI plan must not depend on a content update."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            published = target / "cli-published"
+            installer.update = mock.Mock(return_value=False)
+            installer.handoff_cli_update = mock.Mock(return_value=False)
+            installer.cli_update_plan_row = mock.Mock(return_value=install_qw.UpdatePlanRow(
+                "CLI", "x86QW", "1.0.5", "1.0.6", "Atualizar",
+            ))
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.install_online_cli = mock.Mock(
+                side_effect=lambda **_options: published.write_bytes(b"published\n"),
+            )
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire",
+                return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main([
+                    "--online-only", "--installed-cli", "--skip-cli-update",
+                    "update", str(target), "--yes",
+                ]))
+
+            self.assertTrue(published.is_file())
+            self.assertEqual(b"published\n", published.read_bytes())
+            self.assertEqual(1, installer.update.call_count)
+            self.assertTrue(installer.update.call_args.kwargs["dry_run"])
+
+    def test_maintenance_recovery_does_not_load_service_or_gameplay_entrypoints(self):
+        """Maintenance must recover journals through the canonical runtime boundary."""
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            installer = mock.Mock()
+            installer.target = target
+            installer.require_managed_installation_identity.return_value = ("state",)
+            installer.cleanup_data.return_value = (0, 0)
+            operation_lock = mock.Mock()
+            with mock.patch.object(install_qw, "Installer", return_value=installer):
+                with mock.patch.object(
+                    install_qw.session_control.InstallationLock,
+                    "acquire", return_value=operation_lock,
+                ):
+                    with mock.patch.object(
+                        install_qw,
+                        "load_services_module",
+                        side_effect=AssertionError(
+                            "manutenção carregou o entrypoint de serviços"
+                        ),
+                    ):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            self.assertEqual(0, install_qw.main(["cleanup", str(target)]))
+            operation_lock.confirm_recovery.assert_called_once_with()
+            operation_lock.release.assert_called_once_with(restore_reclaimed=False)
+
     def test_update_shows_homebrew_style_plan_and_requires_confirmation(self):
         target = Path("/tmp/x86qw-confirmation-test")
         confirm = install_qw.Installer.confirm_update_plan
@@ -1711,7 +2940,8 @@ class InstallerTests(unittest.TestCase):
         confirm = install_qw.Installer.confirm_update_plan
         installer = mock.Mock()
         installer.target = target
-        def upgrade(*, dry_run, preview=False, plan_rows=None):
+        def upgrade(*, dry_run, preview=False, plan_rows=None, mutation_results=None):
+            del mutation_results
             del preview
             if dry_run and plan_rows is not None:
                 plan_rows.append(install_qw.UpdatePlanRow(
@@ -1720,6 +2950,10 @@ class InstallerTests(unittest.TestCase):
             return True
         installer.upgrade.side_effect = upgrade
         installer.confirm_update_plan.side_effect = confirm
+        @contextlib.contextmanager
+        def transaction():
+            yield []
+        installer.component_state_transaction.side_effect = transaction
         output = io.StringIO()
         with mock.patch.object(install_qw, "Installer", return_value=installer):
             with mock.patch("builtins.input") as prompt:
@@ -1838,18 +3072,204 @@ class InstallerTests(unittest.TestCase):
                             self.assertEqual([], installer.outdated_installed_components())
             self.assertIn("é mais novo que o catálogo", output.getvalue())
 
+    def test_update_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "custom",
+                    "requested_components": ["ktx"],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                spec = install_qw.PLATFORMS["linux"]
+                receipt = {"selection": "3.6.9"}
+
+                patches = (
+                    mock.patch.object(installer, "preflight_ezquake_receipts"),
+                    mock.patch.object(installer, "preflight_component_receipts"),
+                    mock.patch.object(installer, "legacy_metadata_present", return_value=False),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "load_install_state", return_value=state),
+                    mock.patch.object(installer, "current_install_state", return_value=state),
+                    mock.patch.object(installer, "installed_legacy_component_replacements", return_value={}),
+                    mock.patch.object(installer, "installed_legacy_component_removals", return_value=[]),
+                    mock.patch.object(install_qw, "PLATFORMS", {"linux": spec}),
+                    mock.patch.object(installer, "ezquake_receipt_path", return_value=target / "receipt"),
+                    mock.patch.object(installer, "validate_ezquake_receipt", return_value=receipt),
+                    mock.patch.object(installer, "check_runtime"),
+                    mock.patch.object(installer, "update_runtime", return_value=False),
+                    mock.patch.object(installer, "outdated_installed_components", return_value=["ktx"]),
+                    mock.patch.object(installer, "installed_components", side_effect=lambda: list(installed)),
+                    mock.patch.object(installer, "install_components", side_effect=install_components),
+                    mock.patch.object(installer, "reconcile_play_support", return_value=False),
+                    mock.patch.object(installer, "desired_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.update()
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                state_path = target / install_qw.INSTALL_STATE
+                self.assertEqual(committed, state_path.is_file())
+                self.assertEqual(["ktx"] if committed else [], installed)
+
+    def test_update_keeps_client_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                state_stages: list[Path] = []
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                selected = (
+                    "3.6.10",
+                    (f"https://example.invalid/{spec.stable_archive}",),
+                    "c" * 64,
+                )
+
+                def prepare_runtime(_archive):
+                    self.assertIsNotNone(installer.stage)
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_archive_sha256 = "c" * 64
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                patches = (
+                    mock.patch.object(installer, "preflight_ezquake_receipts"),
+                    mock.patch.object(installer, "preflight_component_receipts"),
+                    mock.patch.object(installer, "legacy_metadata_present", return_value=False),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "load_install_state", return_value=state),
+                    mock.patch.object(installer, "current_install_state", return_value=state),
+                    mock.patch.object(installer, "installed_legacy_component_replacements", return_value={}),
+                    mock.patch.object(installer, "installed_legacy_component_removals", return_value=[]),
+                    mock.patch.object(install_qw, "PLATFORMS", {"linux": spec}),
+                    mock.patch.object(installer, "check_runtime"),
+                    mock.patch.object(installer, "latest_release", return_value=selected),
+                    mock.patch.object(installer, "check_runtime_destination_ownership"),
+                    mock.patch.object(installer, "prepare_cache"),
+                    mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
+                    mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
+                    mock.patch.object(installer, "outdated_installed_components", return_value=[]),
+                    mock.patch.object(installer, "installed_components", return_value=[]),
+                    mock.patch.object(installer, "reconcile_play_support", return_value=False),
+                    mock.patch.object(installer, "desired_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.update()
+
+                self.assertEqual(1, len(state_stages))
+                self.assertFalse(state_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertEqual(
+                        install_qw.file_hash(runtime), persisted["binary_sha256"],
+                    )
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertEqual(
+                        old_receipt,
+                        installer.validate_ezquake_receipt(receipt_path, spec, "stable"),
+                    )
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
     def test_existing_installation_profile_is_inferred_and_persisted(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             recommended = list(installer.component_catalog["profiles"]["recommended"])
             with mock.patch.object(installer, "installed_components", return_value=recommended):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    state = installer.load_install_state(persist_migration=True)
+                    state = installer.load_install_state()
             self.assertEqual("recommended", state["profile"])
             self.assertEqual([], state["requested_components"])
             self.assertEqual(recommended, state["recorded_components"])
-            persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
-            self.assertEqual(state, persisted)
+            self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
+    def test_install_state_loader_is_always_read_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            historical = {
+                "format": 1,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": [],
+                "recorded_components": [],
+                "known_components": [],
+            }
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(historical), encoding="utf-8")
+            original = state_path.read_bytes()
+
+            with mock.patch.object(installer, "installed_components", return_value=[]):
+                migrated = installer.load_install_state()
+
+            self.assertEqual(2, migrated["format"])
+            self.assertEqual(original, state_path.read_bytes())
 
     def test_historical_profile_fingerprint_recognizes_clients_that_skipped_releases(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1895,12 +3315,12 @@ class InstallerTests(unittest.TestCase):
             )
             with mock.patch.object(installer, "installed_components", return_value=installed):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    migrated = installer.load_install_state(persist_migration=True)
+                    migrated = installer.load_install_state()
             self.assertEqual("complete", migrated["profile"])
             self.assertEqual([], migrated["requested_components"])
             persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
-            self.assertEqual("complete", persisted["profile"])
-            self.assertEqual([], persisted["requested_components"])
+            self.assertEqual("custom", persisted["profile"])
+            self.assertEqual(["ktx"], persisted["requested_components"])
 
     def test_valid_custom_state_is_not_reclassified_as_a_named_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1920,7 +3340,7 @@ class InstallerTests(unittest.TestCase):
                 json.dumps(state), encoding="utf-8",
             )
             with mock.patch.object(installer, "installed_components", return_value=installed):
-                loaded = installer.load_install_state(persist_migration=True)
+                loaded = installer.load_install_state()
             self.assertEqual("custom", loaded["profile"])
             self.assertEqual(installed, loaded["requested_components"])
 
@@ -1957,8 +3377,8 @@ class InstallerTests(unittest.TestCase):
             state_path.write_text(json.dumps(historical), encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "installed_components", return_value=list(selected)):
-                    migrated = installer.load_install_state(persist_migration=True)
-                    loaded_again = installer.load_install_state(persist_migration=True)
+                    migrated = installer.load_install_state()
+                    loaded_again = installer.load_install_state()
             self.assertEqual(2, migrated["format"])
             self.assertEqual("custom", migrated["profile"])
             self.assertEqual(selected, migrated["requested_components"])
@@ -1968,8 +3388,7 @@ class InstallerTests(unittest.TestCase):
                 install_qw.profile_fingerprint(selected), migrated["component_fingerprint"],
             )
             self.assertEqual(migrated, loaded_again)
-            persisted = json.loads(state_path.read_text(encoding="utf-8"))
-            self.assertEqual(migrated, persisted)
+            self.assertEqual(json.dumps(historical).encode("utf-8"), state_path.read_bytes())
 
     def test_format_two_state_preserves_empty_installation_capabilities(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1990,7 +3409,7 @@ class InstallerTests(unittest.TestCase):
             state_path.parent.mkdir(parents=True)
             state_path.write_text(json.dumps(state), encoding="utf-8")
             with mock.patch.object(installer, "installed_components", return_value=list(selected)):
-                loaded = installer.load_install_state(persist_migration=True)
+                loaded = installer.load_install_state()
             self.assertEqual(capabilities, loaded["capabilities"])
             self.assertEqual(state, json.loads(state_path.read_text(encoding="utf-8")))
 
@@ -2010,6 +3429,327 @@ class InstallerTests(unittest.TestCase):
             }
             with self.assertRaisesRegex(install_qw.InstallerError, "Capacidades"):
                 installer.validate_install_state(state)
+
+    def test_install_state_fsync_failure_preserves_previous_bytes(self):
+        """Bypassing atomic I/O would replace state even though durability failed."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            previous = b"estado-anterior\n"
+            state_path.write_bytes(previous)
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected state fsync failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.write_install_state("none", [], known=[])
+
+            self.assertEqual(state_path.read_bytes(), previous)
+            self.assertEqual(list(state_path.parent.glob(".state.json.*.tmp")), [])
+
+    def test_install_state_transaction_restores_present_and_absent_parent_snapshots(self):
+        for present in (False, True):
+            with self.subTest(present=present), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                state_path = target / install_qw.INSTALL_STATE
+                with mock.patch.object(installer, "installed_components", return_value=[]):
+                    if present:
+                        installer.write_install_state("none", [], known=[])
+                        original = state_path.read_bytes()
+                    else:
+                        original = None
+                    installer._create_stage(".state-parent-test.")
+                    results = []
+                    installer.write_install_state(
+                        "none", [], known=list(installer.components),
+                        mutation_results=results,
+                    )
+                    self.assertTrue(state_path.is_file())
+                    installer.rollback_component_transactions(
+                        results, install_qw.InstallerError("simulated parent failure"),
+                    )
+                if original is None:
+                    self.assertFalse(state_path.exists())
+                else:
+                    self.assertEqual(original, state_path.read_bytes())
+                installer.cleanup_stage()
+
+    def test_install_state_loader_rejects_oversized_valid_json(self):
+        """The manager facade must consume the runtime's bounded state reader."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            document = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "none",
+                "requested_components": [],
+                "recorded_components": [],
+                "known_components": [],
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }
+            payload = json.dumps(document).encode("utf-8")
+            state_path.write_bytes(
+                payload + b" " * (runtime_state.MAX_INSTALL_STATE_BYTES + 1)
+            )
+
+            with self.assertRaisesRegex(install_qw.InstallerError, "Estado da instalação inválido"):
+                installer.load_install_state()
+
+    def test_install_state_loader_preserves_specific_validation_message(self):
+        """Moving state parsing must not collapse an actionable field error."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            state_path = target / install_qw.INSTALL_STATE
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps({
+                "format": 2,
+                "project": "x86qw",
+                "profile": "custom",
+                "requested_components": ["invalid component"],
+                "recorded_components": [],
+                "known_components": [],
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }), encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.load_install_state()
+
+            self.assertEqual(
+                str(raised.exception),
+                f"Campo requested_components inválido no estado da instalação: {state_path}",
+            )
+
+    def test_cli_receipt_loader_rejects_oversized_valid_json(self):
+        """CLI metadata must use the same bounded reader as state and TSV receipts."""
+
+        self.assertTrue(
+            hasattr(runtime_receipts, "MAX_RECEIPT_BYTES"),
+            "runtime receipts must publish their persisted read limit",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            payload = json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "version": "0.7.1",
+            }).encode("utf-8")
+            receipt.write_bytes(
+                payload + b" " * (runtime_receipts.MAX_RECEIPT_BYTES + 1)
+            )
+
+            with self.assertRaisesRegex(install_qw.InstallerError, "Recibo da CLI"):
+                installer.validate_cli_receipt(receipt)
+
+    def test_cli_receipt_loader_preserves_invalid_version_message(self):
+        """Typed CLI receipts must keep the historical actionable version error."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(json.dumps({
+                "format": 1,
+                "project": "x86qw",
+                "version": "nightly",
+            }), encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_cli_receipt(receipt)
+
+            self.assertEqual(
+                str(raised.exception),
+                "Versão inválida no recibo da CLI x86QW: nightly",
+            )
+
+    def test_cli_receipt_writer_is_canonical_and_preserves_previous_on_fsync_failure(self):
+        """CLI publication must use its runtime codec through the atomic writer."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / install_qw.CLI_RECEIPT
+            receipt.parent.mkdir(parents=True)
+            self.assertTrue(
+                hasattr(installer, "write_cli_receipt_record"),
+                "manager must expose one canonical CLI receipt writer",
+            )
+            installer.write_cli_receipt_record(receipt, {
+                "format": 1,
+                "project": "x86qw",
+                "version": "0.7.1",
+            })
+            canonical = (
+                b'{\n  "format": 1,\n  "project": "x86qw",\n'
+                b'  "version": "0.7.1"\n}\n'
+            )
+            self.assertEqual(receipt.read_bytes(), canonical)
+
+            with mock.patch.object(
+                atomic_io.os,
+                "fsync",
+                side_effect=OSError("injected CLI receipt fsync failure"),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.write_cli_receipt_record(receipt, {
+                        "format": 1,
+                        "project": "x86qw",
+                        "version": "0.7.2",
+                    })
+
+            self.assertEqual(receipt.read_bytes(), canonical)
+
+    def test_ezquake_receipt_loader_rejects_oversized_valid_tsv(self):
+        """A huge URL query must not turn a client receipt into unbounded input."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path = target / spec.receipt("stable")
+            receipt_path.parent.mkdir(parents=True)
+            installer.write_ezquake_receipt_record(receipt_path, {
+                "format": "1",
+                "platform": "linux",
+                "architecture": "x86_64",
+                "channel": "stable",
+                "selection": "3.6.9",
+                "install_name": spec.runtime("stable"),
+                "bundle_version": "3.6.9",
+                "artifact_name": spec.stable_archive,
+                "artifact_url": (
+                    f"https://example.invalid/{spec.stable_archive}?padding="
+                    + "x" * runtime_receipts.MAX_RECEIPT_BYTES
+                ),
+                "artifact_sha256": "a" * 64,
+                "binary_sha256": "b" * 64,
+            })
+
+            with self.assertRaises(install_qw.InstallerError):
+                installer.validate_ezquake_receipt(receipt_path, spec, "stable")
+
+    def test_ezquake_receipt_loader_preserves_platform_error_message(self):
+        """Typed ezQuake receipts must not hide which persisted identity diverged."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path, _, _ = self.write_ezquake_fixture(
+                installer, target, spec, "stable",
+            )
+            receipt_path.write_bytes(
+                receipt_path.read_bytes().replace(
+                    b"platform\tlinux\n", b"platform\twindows\n",
+                )
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_ezquake_receipt(receipt_path, spec, "stable")
+
+            self.assertEqual(
+                str(raised.exception),
+                f"invalid platform metadata in ezQuake receipt: {receipt_path}",
+            )
+
+    def test_component_receipt_loader_rejects_oversized_valid_tsv(self):
+        """A component source field must not permit unbounded receipt reads."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            inventory.write_text(
+                "qw/ktx.pk3\t" + "a" * 64 + "\n",
+                encoding="utf-8",
+            )
+            installer.write_component_receipt(
+                "ktx",
+                "1.47+x86qw.18",
+                "x" * runtime_receipts.MAX_RECEIPT_BYTES,
+                inventory,
+                receipt,
+            )
+
+            with self.assertRaises(install_qw.InstallerError):
+                installer.validate_component_paths("ktx", receipt, inventory)
+
+    def test_component_receipt_loader_preserves_selection_error_message(self):
+        """Typed component receipts must retain the field-specific diagnosis."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt, inventory = (
+                target / relative
+                for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            inventory.write_text(
+                "qw/ktx.pk3\t" + "a" * 64 + "\n", encoding="utf-8",
+            )
+            receipt.write_text(
+                "format\t1\n"
+                "component\tktx\n"
+                "selection\t\n"
+                "source\thttps://example.invalid/ktx.zip\n"
+                f"inventory_sha256\t{install_qw.file_hash(inventory)}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_component_paths("ktx", receipt, inventory)
+
+            self.assertEqual(
+                str(raised.exception),
+                "Seleção inválida no recibo do componente ktx.",
+            )
+
+    def test_inventory_loader_preserves_the_invalid_entry(self):
+        """A malformed inventory must identify the offending persisted row."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            inventory = target / ".x86qw/components/ktx/inventory"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("linha-sem-hash\n", encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_inventory(inventory)
+
+            self.assertEqual(
+                str(raised.exception),
+                "invalid managed inventory entry: linha-sem-hash",
+            )
+
+    def test_legacy_nquake_receipt_preserves_format_error_message(self):
+        """The one-way migration must keep its historical format diagnosis."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            receipt = target / ".x86qw/receipt"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(
+                "format\t2\n"
+                f"distfiles_commit\t{'a' * 40}\n"
+                f"inventory_sha256\t{'b' * 64}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(install_qw.InstallerError) as raised:
+                installer.validate_nquake_receipt(receipt)
+
+            self.assertEqual(str(raised.exception), "unsupported receipt format: 2")
 
     def test_repair_plans_missing_stable_and_nightly_clients_at_recorded_version(self):
         for channel in ("stable", "nightly"):
@@ -2106,6 +3846,93 @@ class InstallerTests(unittest.TestCase):
                             ))
             self.assertTrue(os.access(runtime, os.X_OK))
 
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_does_not_apply_local_changes_when_required_payload_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            receipt_path, receipt, runtime = self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=b"runtime\n",
+            )
+            runtime.chmod(0o600)
+            permission = install_qw.ClientRepairIssue(
+                spec, "stable", receipt_path, receipt,
+                "sem permissão de execução", "permission", None, "local-repair",
+            )
+            payload = install_qw.ClientRepairIssue(
+                spec, "stable", receipt_path, receipt,
+                "payload ausente", "payload", None, "payload-required",
+            )
+            assessment = install_qw.RepairAssessment(
+                (), False, (), False, (permission, payload), (),
+            )
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "reexecute o bootstrap",
+                ):
+                    installer.repair(
+                        dry_run=False, plan_rows=[], allow_download=False,
+                    )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_rolls_back_local_permission_when_state_commit_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "mvdsv"
+            runtime.write_bytes(b"runtime\n")
+            runtime.chmod(0o600)
+            assessment = install_qw.RepairAssessment(
+                (), False, (runtime,), False, (), (),
+            )
+            state = {
+                "profile": "none", "requested_components": [],
+                "known_components": [], "capabilities": [],
+            }
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(installer, "load_install_state", return_value=state):
+                    with mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=install_qw.PersistenceError(
+                            "simulated state failure", committed=False,
+                        ),
+                    ):
+                        with self.assertRaises(install_qw.PersistenceError):
+                            installer.repair(
+                                dry_run=False, plan_rows=[], allow_download=False,
+                            )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+
+    @unittest.skipIf(os.name == "nt", "permissão executável usa bits POSIX")
+    def test_repair_keeps_permission_and_state_inverses_through_final_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            runtime = target / "mvdsv"
+            runtime.write_bytes(b"runtime\n")
+            runtime.chmod(0o600)
+            with mock.patch.object(installer, "installed_components", return_value=[]):
+                installer.write_install_state("none", [], known=[])
+            state_path = target / install_qw.INSTALL_STATE
+            original_state = state_path.read_bytes()
+            assessment = install_qw.RepairAssessment(
+                (), False, (runtime,), False, (), (),
+            )
+            with mock.patch.object(installer, "repair_plan", return_value=assessment):
+                with mock.patch.object(
+                    installer, "verify_installation",
+                    side_effect=install_qw.InstallerError(
+                        "simulated final verification failure"
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        install_qw.InstallerError, "verification failure",
+                    ):
+                        installer.repair(
+                            dry_run=False, plan_rows=[], allow_download=False,
+                        )
+            self.assertEqual(0o600, runtime.stat().st_mode & 0o777)
+            self.assertEqual(original_state, state_path.read_bytes())
+
     def test_offline_macos_nightly_preparation_repair_completes_without_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2130,7 +3957,13 @@ class InstallerTests(unittest.TestCase):
                                 self.assertTrue(installer.repair(
                                     dry_run=False, plan_rows=[], allow_download=False,
                                 ))
-            prepare.assert_called_once_with(spec, "nightly", receipt_path, receipt)
+            prepare.assert_called_once_with(
+                spec,
+                "nightly",
+                receipt_path,
+                receipt,
+                mutation_results=mock.ANY,
+            )
 
     def test_repair_diagnoses_partial_component_metadata_in_both_directions(self):
         for missing in ("receipt", "inventory"):
@@ -2203,6 +4036,147 @@ class InstallerTests(unittest.TestCase):
                 self.assertFalse(installer.repair(dry_run=True, plan_rows=[]))
                 self.assertFalse(installer.repair(dry_run=False, plan_rows=[]))
 
+    def test_repair_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                assessment = install_qw.RepairAssessment(
+                    ("ktx",), False, (), False, (), (),
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "custom",
+                    "requested_components": ["ktx"],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "repair_plan", return_value=assessment,
+                ), mock.patch.object(
+                    installer, "validate_component_pair",
+                    return_value=(True, [], {"selection": "old"}),
+                ), mock.patch.object(
+                    installer, "component_package_record", return_value={"version": "new"},
+                ), mock.patch.object(
+                    installer, "install_components", side_effect=install_components,
+                ), mock.patch.object(
+                    installer, "installed_components", side_effect=lambda: list(installed),
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.repair(dry_run=False, plan_rows=[])
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    committed, (target / install_qw.INSTALL_STATE).is_file(),
+                )
+                self.assertEqual(["ktx"] if committed else [], installed)
+
+    def test_repair_keeps_client_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                spec = install_qw.PLATFORMS["linux"]
+                receipt_path, old_receipt, runtime = self.write_ezquake_fixture(
+                    installer, target, spec, "stable", payload=b"old-runtime\n",
+                )
+                old_receipt_bytes = receipt_path.read_bytes()
+                selected = (
+                    "3.6.10",
+                    (f"https://example.invalid/{spec.stable_archive}",),
+                    "c" * 64,
+                )
+                issue = install_qw.ClientRepairIssue(
+                    spec, "stable", receipt_path, old_receipt,
+                    "runtime divergente", "payload", selected,
+                )
+                assessment = install_qw.RepairAssessment(
+                    (), False, (), False, (issue,), (),
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "none",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                state_stages: list[Path] = []
+
+                def prepare_runtime(_archive):
+                    self.assertIsNotNone(installer.stage)
+                    assert installer.stage is not None
+                    prepared = installer.stage / "prepared-runtime"
+                    prepared.write_bytes(b"new-runtime\n")
+                    installer.app_archive_sha256 = "c" * 64
+                    installer.app_bundle_version = "3.6.10"
+                    installer.app_binary_sha256 = install_qw.file_hash(prepared)
+                    return prepared
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "repair_plan", return_value=assessment,
+                ), mock.patch.object(
+                    installer, "ensure_macos_ezquake_closed",
+                ), mock.patch.object(
+                    installer, "prepare_cache",
+                ), mock.patch.object(
+                    installer, "ensure_archive", return_value=target / "archive",
+                ), mock.patch.object(
+                    installer, "prepare_runtime", side_effect=prepare_runtime,
+                ), mock.patch.object(
+                    installer, "installed_components", return_value=[],
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.repair(dry_run=False, plan_rows=[])
+
+                self.assertEqual(1, len(state_stages))
+                self.assertFalse(state_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                if committed:
+                    self.assertEqual(b"new-runtime\n", runtime.read_bytes())
+                    persisted = installer.validate_ezquake_receipt(
+                        receipt_path, spec, "stable",
+                    )
+                    self.assertEqual("3.6.10", persisted["selection"])
+                    self.assertTrue((target / install_qw.INSTALL_STATE).is_file())
+                else:
+                    self.assertEqual(b"old-runtime\n", runtime.read_bytes())
+                    self.assertEqual(old_receipt_bytes, receipt_path.read_bytes())
+                    self.assertFalse((target / install_qw.INSTALL_STATE).exists())
+
     def test_installed_cli_repair_reports_payload_plan_without_downloading(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2261,6 +4235,7 @@ class InstallerTests(unittest.TestCase):
 
             def install_missing(selected):
                 installed.extend(selected)
+                return ()
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "update", return_value=False):
@@ -2272,6 +4247,124 @@ class InstallerTests(unittest.TestCase):
             apply.assert_called_once_with([desired[-1]])
             persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
             self.assertEqual(desired, persisted["recorded_components"])
+
+    def test_upgrade_rolls_back_updates_when_new_profile_component_fails(self):
+        """A profile failure must not leave the preceding update published."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "qw/update-generation.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b"old\n")
+            state = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "essential",
+                "requested_components": [],
+                "recorded_components": [],
+                "known_components": list(installer.components),
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }
+
+            def update(*, mutation_results=None, **_options):
+                old_payload = marker.read_bytes()
+                plan = install_qw.MutationPlan(
+                    identifier="test:upgrade-parent",
+                    summary="publish an existing component update",
+                    steps=(install_qw.MutationStep(
+                        key="payload",
+                        description="replace the existing payload",
+                        observe=marker.read_bytes,
+                        apply=lambda: marker.write_bytes(b"new\n"),
+                        rollback=lambda _token: marker.write_bytes(old_payload),
+                    ),),
+                )
+                result = install_qw.execute_mutation(
+                    install_qw.prepare_mutation(plan),
+                )
+                if mutation_results is not None:
+                    mutation_results.append(result)
+                return True
+
+            with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                installer, "update", side_effect=update,
+            ), mock.patch.object(
+                installer, "load_install_state", return_value=state,
+            ), mock.patch.object(
+                installer, "current_install_state", return_value=state,
+            ), mock.patch.object(
+                installer, "desired_components", return_value=["ktx"],
+            ), mock.patch.object(
+                installer, "installed_components", return_value=[],
+            ), mock.patch.object(
+                installer, "installed_legacy_component_replacements", return_value={},
+            ), mock.patch.object(
+                installer, "install_component_batch",
+                side_effect=install_qw.InstallerError("profile component failed"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "profile component failed",
+                ):
+                    installer.upgrade()
+
+            self.assertEqual(b"old\n", marker.read_bytes())
+
+    def test_upgrade_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "essential",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "update", return_value=False,
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "current_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "desired_components", return_value=["ktx"],
+                ), mock.patch.object(
+                    installer, "installed_components", side_effect=lambda: list(installed),
+                ), mock.patch.object(
+                    installer, "installed_legacy_component_replacements", return_value={},
+                ), mock.patch.object(
+                    installer, "install_components", side_effect=install_components,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.upgrade()
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    committed, (target / install_qw.INSTALL_STATE).is_file(),
+                )
+                self.assertEqual(["ktx"] if committed else [], installed)
 
     def test_upgrade_dry_run_reports_new_profile_components_without_applying_them(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2351,7 +4444,6 @@ class InstallerTests(unittest.TestCase):
             archive = root / "x86qw-installer-1.0.5.zip"
             self.write_installer_bundle(archive, "1.0.5")
             record = {"version": "1.0.5"}
-            completed = subprocess.CompletedProcess([], 0)
             observed_stages: list[Path] = []
 
             def provide_archive(_package):
@@ -2364,17 +4456,18 @@ class InstallerTests(unittest.TestCase):
                     with mock.patch.object(
                         installer, "download_component_package", side_effect=provide_archive,
                     ):
-                        with mock.patch.object(install_qw.subprocess, "run", return_value=completed) as run:
+                        with mock.patch.object(
+                            install_qw.python_runtime, "run_handoff", return_value=0,
+                        ) as run:
                             self.assertTrue(installer.handoff_cli_update(
                                 "upgrade", dry_run=False, assume_yes=True,
                             ))
-            command = run.call_args.args[0]
-            self.assertEqual(sys.executable, command[0])
-            self.assertIn("--installed-cli", command)
-            self.assertIn("--skip-cli-update", command)
-            self.assertIn("--yes", command)
-            self.assertEqual(["upgrade", str(target)], command[-2:])
-            self.assertNotIn("shell", run.call_args.kwargs)
+            application, arguments = run.call_args.args
+            self.assertEqual("x86qw.pyz", application.name)
+            self.assertIn("--installed-cli", arguments)
+            self.assertIn("--skip-cli-update", arguments)
+            self.assertIn("--yes", arguments)
+            self.assertEqual(["upgrade", str(target)], arguments[-2:])
             self.assertTrue(all(target not in path.parents for path in observed_stages))
             self.assertEqual(before_target, [
                 (
@@ -2400,7 +4493,9 @@ class InstallerTests(unittest.TestCase):
             ), mock.patch.object(
                 installer, "download_component_package",
                 side_effect=AssertionError("download iniciou sem stage privado"),
-            ) as download, mock.patch.object(install_qw.subprocess, "run") as run:
+            ) as download, mock.patch.object(
+                install_qw.python_runtime, "run_handoff",
+            ) as run:
                 with self.assertRaisesRegex(install_qw.InstallerError, "área privada"):
                     installer.handoff_cli_update("update", dry_run=False)
             download.assert_not_called()
@@ -2463,9 +4558,9 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch.object(installer, "installer_bundle_record", return_value=record):
                     with mock.patch.object(installer, "download_component_package", return_value=archive):
                         with mock.patch.object(
-                            install_qw.subprocess,
-                            "run",
-                            return_value=subprocess.CompletedProcess([], 0),
+                            install_qw.python_runtime,
+                            "run_handoff",
+                            return_value=0,
                         ) as run:
                             with self.assertRaises(install_qw.InstallerError):
                                 installer.handoff_cli_update("upgrade", dry_run=False)
@@ -2484,9 +4579,9 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch.object(installer, "installer_bundle_record", return_value=record):
                     with mock.patch.object(installer, "download_component_package", return_value=archive):
                         with mock.patch.object(
-                            install_qw.subprocess,
-                            "run",
-                            return_value=subprocess.CompletedProcess([], 0),
+                            install_qw.python_runtime,
+                            "run_handoff",
+                            return_value=0,
                         ) as run:
                             with self.assertRaises(install_qw.InstallerError):
                                 installer.handoff_cli_update("upgrade", dry_run=False)
@@ -2546,13 +4641,13 @@ class InstallerTests(unittest.TestCase):
                 ):
                     with mock.patch.object(installer, "download_component_package", return_value=archive):
                         with mock.patch.object(
-                            install_qw.subprocess, "run",
-                            return_value=subprocess.CompletedProcess([], 0),
+                            install_qw.python_runtime, "run_handoff",
+                            return_value=0,
                         ) as run:
                             self.assertTrue(installer.handoff_cli_update("upgrade", dry_run=True))
-            command = run.call_args.args[0]
-            self.assertIn("--dry-run", command)
-            self.assertIn("--skip-cli-update", command)
+            _application, arguments = run.call_args.args
+            self.assertIn("--dry-run", arguments)
+            self.assertIn("--skip-cli-update", arguments)
             self.assertNotIn("CLI x86QW disponível", output.getvalue())
 
     def test_resilient_connection_uses_reachable_dns_address_without_waiting(self):
@@ -2647,7 +4742,7 @@ class InstallerTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    install_qw, "bounded_download_mirrors", side_effect=fallback,
+                    installer.remote, "download_many", side_effect=fallback,
                 ) as get:
                     self.assertEqual(catalog, installer.public_catalog("remote"))
             get.assert_called_once()
@@ -2661,11 +4756,11 @@ class InstallerTests(unittest.TestCase):
                 {"x-ratelimit-remaining": "0"},
             )
             with mock.patch.object(
-                install_qw, "bounded_download", side_effect=error,
+                installer.remote, "download_one", side_effect=error,
             ), self.assertRaisesRegex(
                 install_qw.InstallerError, "limite temporário de consultas do GitHub"
             ):
-                installer.http_get(
+                installer.remote.get(
                     "https://github.com/example/catalog.json",
                     maximum_size=1024,
                     attempts=1,
@@ -2677,11 +4772,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             with mock.patch.object(
-                install_qw, "bounded_download",
+                installer.remote, "download_one",
                 side_effect=install_qw.DownloadError("falha controlada"),
             ) as download, mock.patch.object(install_qw.console, "detail") as detail:
                 with self.assertRaises(install_qw.InstallerError) as raised:
-                    installer.http_get(url, maximum_size=1024, attempts=1)
+                    installer.remote.get(url, maximum_size=1024, attempts=1)
 
         self.assertEqual(url, download.call_args.args[0].url)
         diagnostics = [str(call.args[0]) for call in detail.call_args_list]
@@ -2694,10 +4789,10 @@ class InstallerTests(unittest.TestCase):
         url = f"https://example.invalid/catalog.json?token={sentinel}\n[ERRO] forged"
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            with mock.patch.object(install_qw, "bounded_download") as download, mock.patch.object(
+            with mock.patch.object(installer.remote, "download_one") as download, mock.patch.object(
                 install_qw.console, "detail",
             ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
-                installer.http_get(url, maximum_size=1024, attempts=1)
+                installer.remote.get(url, maximum_size=1024, attempts=1)
 
         download.assert_not_called()
         detail.assert_not_called()
@@ -2713,11 +4808,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             with mock.patch.object(
-                install_qw, "bounded_download_mirrors",
+                installer.remote, "download_many",
             ) as download, mock.patch.object(
                 install_qw.console, "detail",
             ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
-                installer.http_get_mirrors(urls, maximum_size=1024, attempts=1)
+                installer.remote.get_mirrors(urls, maximum_size=1024, attempts=1)
 
         download.assert_not_called()
         detail.assert_not_called()
@@ -2763,7 +4858,7 @@ class InstallerTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    install_qw, "bounded_download_mirrors", side_effect=fallback,
+                    installer.remote, "download_many", side_effect=fallback,
                 ):
                     archive = installer.ensure_archive()
             self.assertEqual(payload, archive.read_bytes())
@@ -2786,7 +4881,7 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch("builtins.input", return_value="1"):
                     installer.choose_release()
                 with mock.patch.object(
-                    installer, "http_get_mirrors", side_effect=AssertionError("network used"),
+                    installer.remote, "get_mirrors", side_effect=AssertionError("network used"),
                 ):
                     artifact = installer.ensure_archive()
             source = ROOT / "dist" / installer.app_distribution_path
@@ -2830,6 +4925,18 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(cache.exists())
             self.assertTrue(cache.parent.exists())
 
+    def test_cache_discovery_does_not_create_missing_parents(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            target = project / "quake-world"
+            target.mkdir(parents=True)
+            cache = root / "missing/cache-parent/x86qw"
+            installer = install_qw.Installer(project, target, cache)
+
+            self.assertEqual([], installer.owned_cache_roots(include_legacy=True))
+            self.assertFalse(cache.parent.exists())
+
     def test_unmarked_cache_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, cache = self.make_installer(Path(temporary))
@@ -2839,10 +4946,191 @@ class InstallerTests(unittest.TestCase):
                 installer.prepare_cache()
             self.assertEqual("keep", (cache / "foreign").read_text(encoding="utf-8"))
 
+    def test_cleanup_entrypoint_refuses_an_unowned_target(self):
+        """A fixed cache-looking path is not evidence that x86QW owns a directory."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            victim = target / "ezquake/temp/personal.bin"
+            victim.parent.mkdir(parents=True)
+            victim.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "cleanup", str(target)], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", victim.read_bytes())
+
+    def test_install_entrypoint_rolls_back_content_when_cli_publication_fails(self):
+        """Content and the installed CLI must publish as one generation."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "x86qw"
+            target.mkdir()
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            marker = target / "managed-content"
+            received_results: list[list[install_qw.MutationResult] | None] = []
+
+            plan = install_qw.MutationPlan(
+                identifier="test-content",
+                summary="Publicar conteúdo de teste",
+                steps=(install_qw.MutationStep(
+                    key="content",
+                    description="Criar conteúdo gerenciado",
+                    observe=lambda: marker.exists(),
+                    apply=lambda: marker.write_bytes(b"managed"),
+                    rollback=lambda _token: marker.unlink(),
+                ),),
+            )
+
+            def install_content(*, platform=None, before_mutation=None, mutation_results=None):
+                del platform
+                assert before_mutation is not None
+                before_mutation()
+                result = install_qw.execute_mutation(install_qw.prepare_mutation(plan))
+                received_results.append(mutation_results)
+                if mutation_results is not None:
+                    mutation_results.append(result)
+
+            def fail_cli(*, mutation_results=None):
+                received_results.append(mutation_results)
+                raise install_qw.InstallerError("falha tardia da CLI")
+
+            options = install_qw.parse_arguments(
+                ["--online-only", "install", str(target), "--platform", "linux"], ROOT,
+            )
+            with mock.patch.object(install_qw, "Installer", return_value=installer), \
+                    mock.patch.object(installer, "install", side_effect=install_content), \
+                    mock.patch.object(installer, "install_online_cli", side_effect=fail_cli), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(install_qw.InstallerError, "falha tardia"):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertFalse(marker.exists())
+            self.assertEqual(2, len(received_results))
+            self.assertIsNotNone(received_results[0])
+            self.assertIs(received_results[0], received_results[1])
+
+    def test_component_entrypoints_roll_back_when_cli_publication_fails(self):
+        for action, method_name in (
+            ("components", "manage_components"),
+            ("presets", "manage_presets"),
+        ):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as temporary:
+                target = Path(temporary) / "x86qw"
+                target.mkdir()
+                installer = install_qw.Installer(ROOT, target, online_only=True)
+                marker = target / f"managed-{action}"
+                received_results: list[list[install_qw.MutationResult] | None] = []
+                plan = install_qw.MutationPlan(
+                    identifier=f"test-{action}",
+                    summary=f"Publicar {action} de teste",
+                    steps=(install_qw.MutationStep(
+                        key="content",
+                        description="Criar conteúdo gerenciado",
+                        observe=lambda: marker.exists(),
+                        apply=lambda: marker.write_bytes(b"managed"),
+                        rollback=lambda _token: marker.unlink(),
+                    ),),
+                )
+
+                def mutate(*, mutation_results=None):
+                    result = install_qw.execute_mutation(install_qw.prepare_mutation(plan))
+                    received_results.append(mutation_results)
+                    if mutation_results is not None:
+                        mutation_results.append(result)
+
+                def fail_cli(*, mutation_results=None):
+                    received_results.append(mutation_results)
+                    raise install_qw.InstallerError("falha tardia da CLI")
+
+                options = install_qw.parse_arguments(
+                    ["--online-only", action, str(target)], ROOT,
+                )
+                with mock.patch.object(install_qw, "Installer", return_value=installer), \
+                        mock.patch.object(installer, method_name, side_effect=mutate), \
+                        mock.patch.object(installer, "install_online_cli", side_effect=fail_cli), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(install_qw.InstallerError, "falha tardia"):
+                        install_qw.execute_manager_action(options, ROOT)
+
+                self.assertFalse(marker.exists())
+                self.assertEqual(2, len(received_results))
+                self.assertIsNotNone(received_results[0])
+                self.assertIs(received_results[0], received_results[1])
+
+    def test_uninstall_entrypoint_refuses_a_launcher_without_receipt(self):
+        """A personal script named x86qw.sh must never become managed by inference."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            target.mkdir()
+            launcher = target / "x86qw.sh"
+            launcher.write_bytes(b"personal launcher")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target)], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"personal launcher", launcher.read_bytes())
+
+    def test_purge_entrypoint_refuses_metadata_created_only_by_its_lock(self):
+        """The operation lock cannot manufacture authority to erase its target."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            target.mkdir()
+            sentinel = target / "only-copy-of-personal-data.txt"
+            sentinel.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target), "--purge"], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "identidade gerenciada",
+                ):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", sentinel.read_bytes())
+            self.assertTrue(target.is_dir())
+
+    def test_purge_entrypoint_refuses_malformed_identity_metadata(self):
+        """Malformed state is uncertainty, never authority for destructive cleanup."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "foreign"
+            state = target / install_qw.INSTALL_STATE
+            state.parent.mkdir(parents=True)
+            state.write_text("not-json\n", encoding="utf-8")
+            sentinel = target / "personal.txt"
+            sentinel.write_bytes(b"only copy")
+            options = install_qw.parse_arguments(
+                ["--online-only", "uninstall", str(target), "--purge"], ROOT,
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(install_qw.InstallerError):
+                    install_qw.execute_manager_action(options, ROOT)
+
+            self.assertEqual(b"only copy", sentinel.read_bytes())
+            self.assertEqual("not-json\n", state.read_text(encoding="utf-8"))
+
     def test_purge_removes_the_entire_installation_and_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
             (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
             (target / "id1").mkdir()
             (target / "id1/pak0.pak").write_bytes(b"remove")
             (target / "qw").mkdir()
@@ -2855,10 +5143,48 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(target.exists())
             self.assertFalse(cache.exists())
 
+    def test_purge_rolls_back_installation_when_a_later_domain_fails(self):
+        """Target and external cache must form one reversible purge transaction."""
+
+        quarantine = importlib.import_module("x86qw_runtime.io.quarantine")
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
+            personal = target / "personal.txt"
+            personal.write_bytes(b"personal")
+            installer.prepare_cache()
+            cached = cache / "artifact"
+            cached.write_bytes(b"cache")
+
+            apply_quarantine = quarantine.apply_quarantine_removal
+            attempts = 0
+
+            def fail_second(path):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated cache quarantine failure")
+                return apply_quarantine(path)
+
+            with mock.patch.object(
+                quarantine,
+                "apply_quarantine_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.purge()
+
+            self.assertEqual(personal.read_bytes(), b"personal")
+            self.assertEqual(cached.read_bytes(), b"cache")
+            self.assertFalse(tuple(target.parent.glob(".x86qw-*-quarantine.*")))
+            self.assertFalse(tuple(cache.parent.glob(".x86qw-*-quarantine.*")))
+
     def test_purge_keeps_operation_lock_until_final_release(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             (target / ".x86qw").mkdir()
+            self.write_cli_receipt(target, "1.0.5")
             (target / "personal.txt").write_text("remove", encoding="utf-8")
             operation_lock = install_qw.session_control.InstallationLock.acquire(
                 target, "uninstall", "maintenance",
@@ -2903,6 +5229,46 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw/cli").exists())
             self.assertEqual(b"preserve", (target / "id1/pak0.pak").read_bytes())
 
+    def test_uninstall_rolls_back_cli_generation_when_a_later_removal_fails(self):
+        """Uninstall must either remove its complete selection or restore all of it."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            application = target / ".x86qw/cli/x86qw.pyz"
+            application.parent.mkdir(parents=True)
+            application.write_bytes(b"installed-cli")
+            self.write_cli_receipt(target, "1.0.5")
+            launcher = target / "x86qw.sh"
+            launcher.write_bytes(b"#!/bin/sh\n")
+
+            receipt = target / install_qw.CLI_RECEIPT
+            before = {
+                application: application.read_bytes(),
+                receipt: receipt.read_bytes(),
+                launcher: launcher.read_bytes(),
+            }
+            apply_removal = installer._apply_managed_path_removal
+            attempts = 0
+
+            def fail_second(destination, *, label):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated uninstall removal failure")
+                return apply_removal(destination, label=label)
+
+            with mock.patch.object(
+                installer,
+                "_apply_managed_path_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.uninstall()
+
+            for path, payload in before.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((target / install_qw.METADATA_DIR / "staging").exists())
+
     def test_purge_without_an_installation_still_removes_owned_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, cache = self.make_installer(Path(temporary))
@@ -2916,7 +5282,9 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
             (target / "unrelated.txt").write_text("preserve", encoding="utf-8")
-            with self.assertRaisesRegex(install_qw.InstallerError, "sem identidade x86QW"):
+            with self.assertRaisesRegex(
+                install_qw.InstallerError, "sem identidade gerenciada x86QW",
+            ):
                 installer.purge()
             self.assertTrue((target / "unrelated.txt").is_file())
 
@@ -2931,15 +5299,57 @@ class InstallerTests(unittest.TestCase):
             (current / install_qw.CACHE_MARKER_NAME).write_text(
                 install_qw.CACHE_MARKER_VALUE + "\n", encoding="utf-8",
             )
+            install_qw.private_fs.protect_private_file(
+                current / install_qw.CACHE_MARKER_NAME,
+            )
             legacy_name, legacy_marker, legacy_value = install_qw.LEGACY_CACHE
             self.assertEqual("x86-qw", legacy_name)
             (legacy / legacy_marker).write_text(legacy_value + "\n", encoding="utf-8")
+            install_qw.private_fs.protect_private_file(legacy / legacy_marker)
             installer._cache_root = None
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "resolve_cache_root", return_value=current):
                     installer.cleanup_cache()
             self.assertFalse(current.exists())
             self.assertFalse(legacy.exists())
+
+    def test_cleanup_restores_owned_cache_when_runtime_cleanup_domain_fails(self):
+        """Native cache and installed data must share one cleanup transaction."""
+
+        self.assertTrue(
+            hasattr(install_qw.Installer, "cleanup_data"),
+            "cleanup needs one cross-filesystem transaction entrypoint",
+        )
+        quarantine = importlib.import_module("x86qw_runtime.io.quarantine")
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, cache = self.make_installer(Path(temporary))
+            installer.prepare_cache()
+            cached = cache / "artifact"
+            cached.write_bytes(b"cache")
+            runtime_cache = target / "ezquake/temp/download"
+            runtime_cache.parent.mkdir(parents=True)
+            runtime_cache.write_bytes(b"runtime")
+
+            apply_quarantine = quarantine.apply_quarantine_removal
+            attempts = 0
+
+            def fail_second(path):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 2:
+                    raise OSError("simulated runtime cleanup failure")
+                return apply_quarantine(path)
+
+            with mock.patch.object(
+                quarantine,
+                "apply_quarantine_removal",
+                side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.cleanup_data(downloads=False, personal_data=False)
+
+            self.assertEqual(cached.read_bytes(), b"cache")
+            self.assertEqual(runtime_cache.read_bytes(), b"runtime")
 
     def test_zip_traversal_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
