@@ -144,6 +144,25 @@ class RuntimeMenuBoundaryTests(unittest.TestCase):
         self.assertNotIn("menu.py", names)
 
 
+class RuntimeConsoleBoundaryTests(unittest.TestCase):
+    def test_manager_uses_the_canonical_console_and_argument_contracts(self) -> None:
+        """Terminal formatting and argparse errors must have one runtime owner."""
+
+        manager = importlib.import_module("manager")
+        console = importlib.import_module("x86qw_runtime.ui.console")
+        arguments = importlib.import_module("x86qw_runtime.ui.arguments")
+
+        for name in (
+            "Console", "UpdatePlanRow", "format_bytes", "format_bytes_compact",
+        ):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(manager, name), getattr(console, name, None))
+        self.assertIs(
+            manager.FriendlyArgumentParser,
+            arguments.FriendlyArgumentParser,
+        )
+
+
 class RuntimeDownloaderBoundaryTests(unittest.TestCase):
     def test_maintenance_downloader_is_the_runtime_compatibility_module(self) -> None:
         """A second downloader implementation must not survive under maintenance."""

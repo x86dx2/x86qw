@@ -20,7 +20,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import textwrap
 import time
 import traceback
 import urllib.parse
@@ -51,6 +50,13 @@ except python_runtime.UnsupportedPythonError as error:
 session_control = importlib.import_module("x86qw_runtime.session_control")
 macos = importlib.import_module("x86qw_runtime.platform.macos")
 from x86qw_runtime.ui import menu as navigation
+from x86qw_runtime.ui.arguments import FriendlyArgumentParser
+from x86qw_runtime.ui.console import (
+    Console,
+    UpdatePlanRow,
+    format_bytes,
+    format_bytes_compact,
+)
 
 from x86qw_runtime.io.archive import (
     ArchiveError,
@@ -515,16 +521,6 @@ gl_part_gunshots \"1\"
 }
 
 @dataclass(frozen=True)
-class UpdatePlanRow:
-    kind: str
-    item: str
-    installed: str
-    available: str
-    action: str
-    size: int | None = None
-
-
-@dataclass(frozen=True)
 class ClientRepairIssue:
     spec: PlatformSpec
     channel: str
@@ -566,126 +562,7 @@ class LinkCollector(HTMLParser):
                 self.links.append(value)
 
 
-class Console:
-    def __init__(self) -> None:
-        self.verbose = False
-        self.color = False
-
-    def configure(self, *, verbose: bool, no_color: bool) -> None:
-        self.verbose = verbose
-        self.color = sys.stdout.isatty() and not no_color and "NO_COLOR" not in os.environ
-
-    def paint(self, text: str, code: str) -> str:
-        return f"\033[{code}m{text}\033[0m" if self.color else text
-
-    def banner(self, action: str, target: Path) -> None:
-        title = self.paint(f"x86-qw {application_version()}", "1;36")
-        print(f"\n{title} · instalador QuakeWorld", flush=True)
-        print(f"Ação: {action}  |  Destino: {target}", flush=True)
-
-    def section(self, title: str) -> None:
-        print(f"\n{self.paint(title, '1;36')}", flush=True)
-
-    def heading(self, title: str) -> None:
-        print(f"\n{self.paint('==>', '1;36')} {self.paint(title, '1')}", flush=True)
-
-    def info(self, message: str) -> None:
-        print(f"{self.paint('[INFO]', '36')} {message}", flush=True)
-
-    def success(self, message: str) -> None:
-        print(f"{self.paint('[OK]', '32')} {message}", flush=True)
-
-    def warning(self, message: str) -> None:
-        print(f"{self.paint('[ATENÇÃO]', '33')} {message}", flush=True)
-
-    def detail(self, message: str) -> None:
-        if self.verbose:
-            print(self.paint(f"       {message}", "2"), flush=True)
-
-    def error(self, message: str) -> None:
-        label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
-        print(f"{label} {message}", file=sys.stderr, flush=True)
-
-    def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
-        noun = "pacote" if len(rows) == 1 else "pacotes"
-        adjective = "desatualizado" if len(rows) == 1 else "desatualizados"
-        action_label = {
-            "update": "atualizar", "upgrade": "incorporar", "repair": "reparar",
-        }[action]
-        self.heading(f"Plano: {action_label} {len(rows)} {noun} {adjective}")
-        names = [row.item for row in rows]
-        installed = [row.installed for row in rows]
-        available = [row.available for row in rows]
-        name_width = max(map(len, names))
-        installed_width = max(map(len, installed))
-        available_width = max(map(len, available))
-        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
-        for row in rows:
-            size = f" ({format_bytes_compact(row.size)})" if row.size is not None else ""
-            line = (
-                f"{row.item.ljust(name_width)}  "
-                f"{row.installed.ljust(installed_width)} -> "
-                f"{row.available.ljust(available_width)}{size}"
-            )
-            if len(line) <= terminal_width:
-                print(line, flush=True)
-                continue
-            print("\n".join(textwrap.wrap(
-                row.item, width=terminal_width,
-                initial_indent="  ", subsequent_indent="    ",
-                break_long_words=False, break_on_hyphens=False,
-            )), flush=True)
-            print(f"    Instalado  | {row.installed}", flush=True)
-            print(f"    Disponível | {row.available}", flush=True)
-            if row.size is not None:
-                print(f"    Download   | {format_bytes_compact(row.size)}", flush=True)
-
-    def download_result(
-        self, label: str, *, size: int, status: str = "Baixado",
-    ) -> None:
-        amount = format_bytes_compact(size)
-        check = self.paint("✔︎", "32")
-        line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
-        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
-        if len(line) <= terminal_width:
-            print(line, flush=True)
-        else:
-            print(f"{check} {label}", flush=True)
-            print(f"    {status} | {amount}/{amount}", flush=True)
-
-    def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
-        if not sys.stdout.isatty():
-            return
-        if total:
-            width = 24
-            ratio = min(received / total, 1)
-            filled = int(width * ratio)
-            bar = "#" * filled + "-" * (width - filled)
-            status = f"[{bar}] {ratio:6.1%}  {format_bytes(received)} / {format_bytes(total)}"
-        else:
-            status = f"Recebidos {format_bytes(received)}"
-        print(f"\r       {status}", end="\n" if done else "", flush=True)
-
-
-console = Console()
-
-
-def format_bytes(size: int) -> str:
-    value = float(size)
-    for unit in ("B", "KiB", "MiB", "GiB"):
-        if value < 1024 or unit == "GiB":
-            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    return f"{value:.1f} GiB"
-
-
-def format_bytes_compact(size: int) -> str:
-    value = float(size)
-    for unit in ("B", "KB", "MB", "GB"):
-        if value < 1000 or unit == "GB":
-            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
-        value /= 1000
-    return f"{value:.1f}GB"
+console = Console(application_version)
 
 
 def package_size(package: dict[str, object]) -> int | None:
@@ -7455,12 +7332,6 @@ class Installer:
 
         shell_launcher = self.target / "x86qw.sh"
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
-
-
-class FriendlyArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
-        self.print_usage(sys.stderr)
-        self.exit(2, f"{self.prog}: erro: {message}\n")
 
 
 def platform_argument(value: str) -> str:
