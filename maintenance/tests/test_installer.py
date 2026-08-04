@@ -3643,6 +3643,68 @@ class InstallerTests(unittest.TestCase):
             persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
             self.assertEqual(desired, persisted["recorded_components"])
 
+    def test_upgrade_rolls_back_updates_when_new_profile_component_fails(self):
+        """A profile failure must not leave the preceding update published."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            marker = target / "qw/update-generation.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b"old\n")
+            state = {
+                "format": 2,
+                "project": "x86qw",
+                "profile": "essential",
+                "requested_components": [],
+                "recorded_components": [],
+                "known_components": list(installer.components),
+                "capabilities": [],
+                "component_fingerprint": install_qw.profile_fingerprint([]),
+            }
+
+            def update(*, mutation_results=None, **_options):
+                old_payload = marker.read_bytes()
+                plan = install_qw.MutationPlan(
+                    identifier="test:upgrade-parent",
+                    summary="publish an existing component update",
+                    steps=(install_qw.MutationStep(
+                        key="payload",
+                        description="replace the existing payload",
+                        observe=marker.read_bytes,
+                        apply=lambda: marker.write_bytes(b"new\n"),
+                        rollback=lambda _token: marker.write_bytes(old_payload),
+                    ),),
+                )
+                result = install_qw.execute_mutation(
+                    install_qw.prepare_mutation(plan),
+                )
+                if mutation_results is not None:
+                    mutation_results.append(result)
+                return True
+
+            with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                installer, "update", side_effect=update,
+            ), mock.patch.object(
+                installer, "load_install_state", return_value=state,
+            ), mock.patch.object(
+                installer, "current_install_state", return_value=state,
+            ), mock.patch.object(
+                installer, "desired_components", return_value=["ktx"],
+            ), mock.patch.object(
+                installer, "installed_components", return_value=[],
+            ), mock.patch.object(
+                installer, "installed_legacy_component_replacements", return_value={},
+            ), mock.patch.object(
+                installer, "install_component_batch",
+                side_effect=install_qw.InstallerError("profile component failed"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "profile component failed",
+                ):
+                    installer.upgrade()
+
+            self.assertEqual(b"old\n", marker.read_bytes())
+
     def test_upgrade_keeps_component_stage_until_state_outcome(self):
         for committed in (False, True):
             with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:

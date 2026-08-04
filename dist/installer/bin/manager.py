@@ -4965,9 +4965,14 @@ class Installer:
             ) from operation_error
 
     @contextmanager
-    def component_state_transaction(self) -> Iterator[list[MutationResult]]:
+    def component_state_transaction(
+        self, existing: list[MutationResult] | None = None,
+    ) -> Iterator[list[MutationResult]]:
         """Keep managed inverses alive until the parent state commit resolves."""
 
+        if existing is not None:
+            yield existing
+            return
         results: list[MutationResult] = []
         cleanup = True
         try:
@@ -6916,6 +6921,7 @@ class Installer:
     def update(
         self, *, dry_run: bool = False, profile_upgrade: bool = False, preview: bool = False,
         plan_rows: list[UpdatePlanRow] | None = None,
+        mutation_results: list[MutationResult] | None = None,
     ) -> bool:
         self.preflight_ezquake_receipts()
         self.preflight_component_receipts()
@@ -6963,7 +6969,7 @@ class Installer:
             for name in ("pak0.pak", "pak1.pak")
         }
         changed = layout_change or state_change
-        with self.component_state_transaction() as mutation_results:
+        with self.component_state_transaction(mutation_results) as mutation_results:
             if not dry_run and layout_change:
                 self.migrate_metadata_layout(mutation_results)
             if not dry_run:
@@ -7087,26 +7093,34 @@ class Installer:
         self, *, dry_run: bool = False, preview: bool = False,
         plan_rows: list[UpdatePlanRow] | None = None,
     ) -> bool:
-        changed = self.update(
-            dry_run=dry_run, profile_upgrade=True, preview=preview, plan_rows=plan_rows,
-        )
-        state = self.current_install_state(
-            self.load_install_state(persist_migration=False)
-        )
-        desired = self.desired_components(state)
-        installed = self.installed_components()
-        legacy_replacements = self.installed_legacy_component_replacements()
-        installed_or_planned = {*installed, *legacy_replacements.values()}
-        missing = [identifier for identifier in desired if identifier not in installed_or_planned]
-        extras = [identifier for identifier in installed if identifier not in desired]
-
-        if not dry_run:
-            console.section(f"Convergência do perfil {state['profile']}")
-        if extras and not dry_run:
-            console.warning(
-                "Componentes fora do perfil foram preservados: " + ", ".join(extras) + "."
-            )
         with self.component_state_transaction() as component_results:
+            changed = self.update(
+                dry_run=dry_run,
+                profile_upgrade=True,
+                preview=preview,
+                plan_rows=plan_rows,
+                mutation_results=component_results,
+            )
+            state = self.current_install_state(
+                self.load_install_state(persist_migration=False)
+            )
+            desired = self.desired_components(state)
+            installed = self.installed_components()
+            legacy_replacements = self.installed_legacy_component_replacements()
+            installed_or_planned = {*installed, *legacy_replacements.values()}
+            missing = [
+                identifier for identifier in desired
+                if identifier not in installed_or_planned
+            ]
+            extras = [identifier for identifier in installed if identifier not in desired]
+
+            if not dry_run:
+                console.section(f"Convergência do perfil {state['profile']}")
+            if extras and not dry_run:
+                console.warning(
+                    "Componentes fora do perfil foram preservados: "
+                    + ", ".join(extras) + "."
+                )
             if not missing:
                 pass
             elif dry_run:
