@@ -4869,7 +4869,7 @@ class Installer:
                         results.append(default_result)
                         console.info(f"Configuração inicial criada: {destination}")
                 if identifier == "nquake-bootstrap":
-                    self.migrate_nquake_texture_limit()
+                    self.migrate_nquake_texture_limit(results)
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
             if "nquake-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
@@ -4882,7 +4882,7 @@ class Installer:
                     )
                     if preset_result is not None:
                         results.append(preset_result)
-            self.migrate_saved_configs()
+            self.migrate_saved_configs(results)
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
             return tuple(results)
@@ -4966,8 +4966,82 @@ class Installer:
         )
         return changed
 
-    def migrate_nquake_texture_limit(self) -> None:
-        migrated = 0
+    def _personal_config_transaction(
+        self,
+        identifier: str,
+        replacements: list[tuple[Path, bytes]],
+        backups: list[tuple[Path, bytes, int]],
+        *,
+        mutation_results: list[MutationResult] | None,
+    ) -> MutationResult | None:
+        if not replacements and not backups:
+            return None
+        created_stage = self.stage is None
+        if created_stage:
+            self._create_stage(f".x86qw-{identifier}.")
+        assert self.stage is not None
+        workspace = private_fs.private_mkdtemp(
+            directory=self.stage, prefix=f".{identifier}.prepared.",
+        )
+        steps: list[MutationStep] = []
+        prepared_entries = [
+            ("backup", destination, payload, mode)
+            for destination, payload, mode in backups
+        ] + [
+            (
+                "config", destination, payload,
+                stat.S_IMODE(destination.lstat().st_mode),
+            )
+            for destination, payload in replacements
+        ]
+        counters = {"backup": 0, "config": 0}
+        for kind, destination, payload, source_mode in prepared_entries:
+            counters[kind] += 1
+            index = counters[kind]
+            prepared = workspace / f"{kind}-{index}"
+            prepared.write_bytes(payload)
+            if os.name != "nt":
+                prepared.chmod(source_mode)
+            steps.append(MutationStep(
+                key=f"{kind}:{index}",
+                description=f"Publicar {kind} pessoal {destination.name}",
+                observe=lambda prepared=prepared, destination=destination: (
+                    self._mutation_path_observation(prepared),
+                    self._mutation_path_observation(destination),
+                ),
+                apply=lambda prepared=prepared, destination=destination: (
+                    self._apply_runtime_payload(prepared, destination)
+                ),
+                rollback=self._rollback_runtime_payload,
+            ))
+        plan = MutationPlan(
+            identifier=f"personal-config:{identifier}",
+            summary="Migrar configurações pessoais de forma reversível",
+            steps=tuple(steps),
+        )
+        cleanup = created_stage
+        try:
+            result = execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            cleanup = False
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise InstallerError(
+                "A migração das configurações pessoais falhou e foi revertida."
+            ) from error
+        finally:
+            if cleanup:
+                self.cleanup_stage()
+        if mutation_results is not None:
+            mutation_results.append(result)
+        return result
+
+    def migrate_nquake_texture_limit(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
+        replacements: list[tuple[Path, bytes]] = []
         configs = sorted(set(self.target.glob("*/configs/config.cfg")))
         for config in configs:
             if not lexists(config):
@@ -4983,21 +5057,15 @@ class Installer:
             updated, count = NQUAKE_TEXTURE_LIMIT.subn(rb'\g<1>"16384"\g<2>\g<3>', contents)
             if count == 0:
                 continue
-            descriptor, temporary_name = tempfile.mkstemp(prefix=f".{config.name}.", dir=config.parent)
-            temporary = Path(temporary_name)
-            try:
-                with os.fdopen(descriptor, "wb") as output:
-                    output.write(updated)
-                if os.name != "nt":
-                    temporary.chmod(0o644)
-                temporary.replace(config)
-            finally:
-                if lexists(temporary):
-                    remove_path(temporary)
-            migrated += 1
-        if migrated:
+            replacements.append((config, updated))
+        self._personal_config_transaction(
+            "nquake-texture-limit", replacements, [],
+            mutation_results=mutation_results,
+        )
+        if replacements:
             console.info(
-                f"Limite de textura nQuake ajustado de 32768 para 16384 em {file_count(migrated)}; "
+                "Limite de textura nQuake ajustado de 32768 para 16384 em "
+                f"{file_count(len(replacements))}; "
                 "demais preferências foram preservadas."
             )
 
@@ -5034,25 +5102,37 @@ class Installer:
             if lexists(temporary):
                 remove_path(temporary)
 
-    def migrate_saved_configs(self) -> None:
+    def migrate_saved_configs(
+        self, mutation_results: list[MutationResult] | None = None,
+    ) -> None:
         aliases = self.managed_temporary_aliases()
         configs = sorted(set(self.target.glob("*/configs/config.cfg")))
         prox = self.target / "prox/configs/config.cfg"
         base = self.target / "ezquake/configs/config.cfg"
+        originals: dict[Path, bytes] = {}
+        working: dict[Path, bytes] = {}
+        for config in configs:
+            if not config.is_file() or config.is_symlink():
+                raise InstallerError(f"Configuração pessoal inválida: {config}")
+            originals[config] = config.read_bytes()
+            working[config] = originals[config]
+        backups: list[tuple[Path, bytes, int]] = []
         prox_migrated = False
         if prox.is_file() and not prox.is_symlink():
-            contents = prox.read_bytes()
+            contents = working[prox]
             if b"// Niclas's config" in contents:
                 backup = prox.with_name("config.pre-x86qw.cfg")
                 if not lexists(backup):
-                    shutil.copy2(prox, backup)
+                    backups.append((
+                        backup, contents, stat.S_IMODE(prox.lstat().st_mode),
+                    ))
                 if not base.is_file() or base.is_symlink():
                     raise InstallerError("A migração do Pro-X exige ezquake/configs/config.cfg válido.")
                 modern = (
                     b"// x86QW: base Pro-X migrada; original preservado em config.pre-x86qw.cfg\n"
-                    + base.read_bytes()
+                    + working[base]
                 )
-                self.write_personal_config(prox, modern)
+                working[prox] = modern
                 prox_migrated = True
 
         changed = 0
@@ -5062,9 +5142,7 @@ class Installer:
             re.MULTILINE | re.IGNORECASE,
         )
         for config in configs:
-            if not config.is_file() or config.is_symlink():
-                raise InstallerError(f"Configuração pessoal inválida: {config}")
-            original = config.read_bytes()
+            original = working[config]
 
             def keep_personal_alias(match: re.Match[bytes]) -> bytes:
                 name = match.group(1).decode("utf-8", errors="replace").casefold()
@@ -5075,9 +5153,20 @@ class Installer:
             if updated != original:
                 backup = config.with_name("config.aliases-pre-x86qw.cfg")
                 if not lexists(backup):
-                    shutil.copy2(config, backup)
-                self.write_personal_config(config, updated)
+                    backups.append((
+                        backup, original, stat.S_IMODE(config.lstat().st_mode),
+                    ))
+                working[config] = updated
                 changed += 1
+        replacements = [
+            (config, working[config])
+            for config in configs
+            if working[config] != originals[config]
+        ]
+        self._personal_config_transaction(
+            "saved-configs", replacements, backups,
+            mutation_results=mutation_results,
+        )
         if prox_migrated:
             console.success("Configuração Pro-X migrada para a base x86QW atual; backup pessoal preservado.")
         if changed:

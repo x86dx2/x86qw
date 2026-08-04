@@ -2857,6 +2857,32 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(b'gl_max_size "16384"\nname "td2"\n', td2_config.read_bytes())
             self.assertEqual('gl_max_size "2048"\n', prox_config.read_text(encoding="utf-8"))
 
+    def test_texture_config_migration_rolls_back_all_personal_files_on_late_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            base = target / "ezquake/configs/config.cfg"
+            base.parent.mkdir(parents=True)
+            base.write_bytes(b'gl_max_size "32768"\nname "base"\n')
+            td2 = target / "td2/configs/config.cfg"
+            td2.parent.mkdir(parents=True)
+            td2.write_bytes(b'gl_max_size "32768"\nname "td2"\n')
+            original = {base: base.read_bytes(), td2: td2.read_bytes()}
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_td2(prepared, destination):
+                if destination == td2:
+                    raise OSError("simulated second personal config failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_td2,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.migrate_nquake_texture_limit()
+
+            for path, payload in original.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+
     def test_package_order_is_deterministic_and_tracks_custom_pk3_last(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2911,6 +2937,41 @@ class ModernComponentTests(unittest.TestCase):
             self.assertNotIn('alias +zoom', migrated)
             self.assertIn('alias personal "say oi"', migrated)
             self.assertIn('alias +zoom', (prox.parent / "config.aliases-pre-x86qw.cfg").read_text(encoding="utf-8"))
+
+    def test_saved_config_migration_rolls_back_configs_and_new_backups_together(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            autoexec = target / "qw/autoexec.cfg"
+            autoexec.parent.mkdir()
+            autoexec.write_text('tempalias +zoom "fov 50"\n', encoding="utf-8")
+            base = target / "ezquake/configs/config.cfg"
+            base.parent.mkdir(parents=True)
+            base.write_text(
+                'alias +zoom "fov 50"\nalias personal "say oi"\n',
+                encoding="utf-8",
+            )
+            prox = target / "prox/configs/config.cfg"
+            prox.parent.mkdir(parents=True)
+            prox.write_bytes(b"// Niclas's config\nalias +zoom \"fov 10\"\n")
+            original = {base: base.read_bytes(), prox: prox.read_bytes()}
+            apply_payload = installer._apply_runtime_payload
+
+            def fail_prox(prepared, destination):
+                if destination == prox:
+                    raise OSError("simulated Pro-X config promotion failure")
+                return apply_payload(prepared, destination)
+
+            with mock.patch.object(
+                installer, "_apply_runtime_payload", side_effect=fail_prox,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.migrate_saved_configs()
+
+            for path, payload in original.items():
+                self.assertEqual(payload, path.read_bytes(), path)
+            self.assertFalse((base.parent / "config.aliases-pre-x86qw.cfg").exists())
+            self.assertFalse((prox.parent / "config.pre-x86qw.cfg").exists())
+            self.assertFalse((prox.parent / "config.aliases-pre-x86qw.cfg").exists())
 
     def test_cleanup_separates_regenerable_downloaded_and_personal_data(self):
         with tempfile.TemporaryDirectory() as temporary:
