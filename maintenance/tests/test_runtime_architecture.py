@@ -260,6 +260,35 @@ class RuntimeArchitectureTests(unittest.TestCase):
         }
         self.assertNotIn("load_services_module", calls)
 
+    def test_manager_does_not_own_http_transport_or_policy(self) -> None:
+        """The CLI composition root must consume the canonical remote client."""
+
+        manager_path = ENTRYPOINTS["manager"]
+        tree = ast.parse(
+            manager_path.read_text("utf-8"), filename=str(manager_path),
+        )
+        imports = literal_imports(
+            manager_path, "manager", PRODUCTION_MODULES,
+        )
+        self.assertFalse(
+            any(name == "urllib" or name.startswith("urllib.") for name in imports),
+            sorted(imports),
+        )
+        definitions = {
+            node.name for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        self.assertTrue({"http_get", "http_get_mirrors"}.isdisjoint(definitions))
+        forbidden_constructors = {
+            "BoundedMetadata", "PinnedArtifact", "RetryPolicy",
+            "bounded_download", "bounded_download_mirrors",
+        }
+        called = {
+            node.func.id for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        self.assertTrue(forbidden_constructors.isdisjoint(called), sorted(called))
+
 
 if __name__ == "__main__":
     unittest.main()

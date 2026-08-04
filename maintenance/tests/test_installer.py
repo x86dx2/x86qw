@@ -1867,8 +1867,8 @@ class InstallerTests(unittest.TestCase):
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ):
                     self.assertEqual(
@@ -1879,8 +1879,8 @@ class InstallerTests(unittest.TestCase):
             installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ):
                     with self.assertRaises(install_qw.InstallerError):
@@ -1895,8 +1895,8 @@ class InstallerTests(unittest.TestCase):
             )
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
                 ) as get:
                     installer.stable_catalog()
@@ -1944,8 +1944,8 @@ class InstallerTests(unittest.TestCase):
             remote = {"format": 1, "project": "x86qw", "packages": []}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer,
-                    "http_get_mirrors",
+                    installer.remote,
+                    "get_mirrors",
                     return_value=(json.dumps(remote).encode(), install_qw.CATALOG_URL),
                 ) as get:
                     self.assertEqual(remote, installer.public_catalog("remote"))
@@ -4408,7 +4408,7 @@ class InstallerTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    install_qw, "bounded_download_mirrors", side_effect=fallback,
+                    installer.remote, "download_many", side_effect=fallback,
                 ) as get:
                     self.assertEqual(catalog, installer.public_catalog("remote"))
             get.assert_called_once()
@@ -4422,11 +4422,11 @@ class InstallerTests(unittest.TestCase):
                 {"x-ratelimit-remaining": "0"},
             )
             with mock.patch.object(
-                install_qw, "bounded_download", side_effect=error,
+                installer.remote, "download_one", side_effect=error,
             ), self.assertRaisesRegex(
                 install_qw.InstallerError, "limite temporário de consultas do GitHub"
             ):
-                installer.http_get(
+                installer.remote.get(
                     "https://github.com/example/catalog.json",
                     maximum_size=1024,
                     attempts=1,
@@ -4438,11 +4438,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             with mock.patch.object(
-                install_qw, "bounded_download",
+                installer.remote, "download_one",
                 side_effect=install_qw.DownloadError("falha controlada"),
             ) as download, mock.patch.object(install_qw.console, "detail") as detail:
                 with self.assertRaises(install_qw.InstallerError) as raised:
-                    installer.http_get(url, maximum_size=1024, attempts=1)
+                    installer.remote.get(url, maximum_size=1024, attempts=1)
 
         self.assertEqual(url, download.call_args.args[0].url)
         diagnostics = [str(call.args[0]) for call in detail.call_args_list]
@@ -4455,10 +4455,10 @@ class InstallerTests(unittest.TestCase):
         url = f"https://example.invalid/catalog.json?token={sentinel}\n[ERRO] forged"
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            with mock.patch.object(install_qw, "bounded_download") as download, mock.patch.object(
+            with mock.patch.object(installer.remote, "download_one") as download, mock.patch.object(
                 install_qw.console, "detail",
             ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
-                installer.http_get(url, maximum_size=1024, attempts=1)
+                installer.remote.get(url, maximum_size=1024, attempts=1)
 
         download.assert_not_called()
         detail.assert_not_called()
@@ -4474,11 +4474,11 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             with mock.patch.object(
-                install_qw, "bounded_download_mirrors",
+                installer.remote, "download_many",
             ) as download, mock.patch.object(
                 install_qw.console, "detail",
             ) as detail, self.assertRaises(install_qw.InstallerError) as raised:
-                installer.http_get_mirrors(urls, maximum_size=1024, attempts=1)
+                installer.remote.get_mirrors(urls, maximum_size=1024, attempts=1)
 
         download.assert_not_called()
         detail.assert_not_called()
@@ -4524,7 +4524,7 @@ class InstallerTests(unittest.TestCase):
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    install_qw, "bounded_download_mirrors", side_effect=fallback,
+                    installer.remote, "download_many", side_effect=fallback,
                 ):
                     archive = installer.ensure_archive()
             self.assertEqual(payload, archive.read_bytes())
@@ -4547,7 +4547,7 @@ class InstallerTests(unittest.TestCase):
                 with mock.patch("builtins.input", return_value="1"):
                     installer.choose_release()
                 with mock.patch.object(
-                    installer, "http_get_mirrors", side_effect=AssertionError("network used"),
+                    installer.remote, "get_mirrors", side_effect=AssertionError("network used"),
                 ):
                     artifact = installer.ensure_archive()
             source = ROOT / "dist" / installer.app_distribution_path

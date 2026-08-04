@@ -25,6 +25,7 @@
     {"member": "x86qw_runtime/io/paths.py", "source": "x86qw_runtime/io/paths.py", "consumer": "supervisor e entrypoints", "contract": "primitivas portáveis de caminhos"},
     {"member": "x86qw_runtime/io/private_fs.py", "source": "x86qw_runtime/io/private_fs.py", "consumer": "manager, downloader e sessions", "contract": "objetos privados sem janela insegura"},
     {"member": "x86qw_runtime/io/quarantine.py", "source": "x86qw_runtime/io/quarantine.py", "consumer": "manager.py", "contract": "quarantine reversível por filesystem para mutações destrutivas"},
+    {"member": "x86qw_runtime/io/remote.py", "source": "x86qw_runtime/io/remote.py", "consumer": "manager.py", "contract": "composição HTTP, mirrors, progresso e diagnósticos"},
     {"member": "x86qw_runtime/platform/__init__.py", "source": "x86qw_runtime/platform/__init__.py", "consumer": "importador Python", "contract": "pacote de adapters de plataforma"},
     {"member": "x86qw_runtime/platform/python_runtime.py", "source": "x86qw_runtime/platform/python_runtime.py", "consumer": "python_runtime.py", "contract": "resolvedor canônico de Python"},
     {"member": "x86qw_runtime/platform/locking.py", "source": "x86qw_runtime/platform/locking.py", "consumer": "session_control", "contract": "mutex POSIX e Windows"},

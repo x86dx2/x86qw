@@ -20,9 +20,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import time
 import traceback
-import urllib.parse
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
@@ -124,17 +122,15 @@ from x86qw_runtime.catalogs import (
     validate_component_catalog as validate_runtime_catalog,
 )
 from x86qw_runtime.io.downloader import (
-    BoundedMetadata,
     DownloadError,
     DownloadHTTPError,
-    DownloadPolicyError,
     MAX_ARTIFACT_BYTES,
-    PinnedArtifact,
-    RetryPolicy,
-    download as bounded_download,
-    download_mirrors as bounded_download_mirrors,
     safe_url_for_log,
-    validate_https_url as validate_download_url,
+)
+from x86qw_runtime.io.remote import (
+    RemoteClient,
+    https_url_filename,
+    validate_https_url,
 )
 from x86qw_runtime.catalogs import (
     load_capabilities,
@@ -591,21 +587,6 @@ def validate_hex(value: str, pattern: re.Pattern[str], label: str) -> None:
         raise InstallerError(f"invalid {label}")
 
 
-def validate_https_url(url: object, label: str) -> urllib.parse.SplitResult:
-    try:
-        return validate_download_url(url, label)
-    except DownloadPolicyError as error:
-        raise InstallerError(str(error)) from error
-
-
-def https_url_filename(url: object, label: str) -> str:
-    parsed = validate_https_url(url, label)
-    filename = PurePosixPath(urllib.parse.unquote(parsed.path)).name
-    if not filename or filename in (".", ".."):
-        raise InstallerError(f"{label} não identifica um arquivo")
-    return filename
-
-
 def ensure_no_symlink(path: Path, label: str) -> None:
     if path.is_symlink():
         raise InstallerError(f"{label} must not be a symlink: {path}")
@@ -803,6 +784,7 @@ class Installer:
         self.app_distribution_path = ""
         self.cache_prefix = ""
         self.update_ui = False
+        self.remote = RemoteClient(console)
         self._public_catalog: dict[str, object] | None = None
         self._component_source_context: object | None = None
         self.component_source_provider = (
@@ -1753,206 +1735,6 @@ class Installer:
             invalid_message="Resposta inválida. Digite s para sim ou n para não.",
         )
 
-    def http_get(
-        self,
-        url: str,
-        destination: Path | None = None,
-        headers: dict[str, str] | None = None,
-        *,
-        expected_size: int | None = None,
-        expected_sha256: str | None = None,
-        maximum_size: int | None = None,
-        timeout: float = 60.0,
-        attempts: int = 3,
-    ) -> bytes:
-        try:
-            validate_download_url(url, "URL de download")
-        except DownloadPolicyError as error:
-            raise InstallerError(str(error)) from error
-        display_url = safe_url_for_log(url)
-        console.detail(f"GET {display_url}")
-        retry = RetryPolicy(attempts=attempts)
-        request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
-        if destination is None:
-            if maximum_size is None:
-                raise InstallerError("O download de metadados exige um limite máximo explícito.")
-            contract: PinnedArtifact | BoundedMetadata = BoundedMetadata(
-                url=url,
-                maximum_size=maximum_size,
-                deadline_seconds=timeout,
-                retry=retry,
-                headers=request_headers,
-                label="metadados x86QW",
-            )
-        else:
-            if expected_size is None or expected_sha256 is None:
-                raise InstallerError(
-                    "O download de um artefato exige tamanho e SHA-256 esperados."
-                )
-            contract = PinnedArtifact(
-                url=url,
-                destination=destination,
-                expected_size=expected_size,
-                expected_sha256=expected_sha256,
-                maximum_size=maximum_size if maximum_size is not None else expected_size,
-                deadline_seconds=timeout,
-                retry=retry,
-                headers=request_headers,
-                label=destination.name,
-            )
-
-        last_update = 0.0
-
-        def progress(received: int, total: int | None, done: bool) -> None:
-            nonlocal last_update
-            now = time.monotonic()
-            if done or now - last_update >= 0.1:
-                console.download_progress(received, total, done=done)
-                last_update = now
-
-        def retry_notice(next_attempt: int, error: Exception, delay: float) -> None:
-            console.detail(f"Tentativa de download falhou: {error}")
-            console.warning(
-                "Falha temporária no download. "
-                f"Tentando novamente ({next_attempt}/{attempts}) em {delay:.1f}s..."
-            )
-
-        try:
-            result = bounded_download(
-                contract,
-                progress=progress if destination is not None else None,
-                on_retry=retry_notice,
-            )
-        except DownloadHTTPError as error:
-            rate_limit_remaining = next((
-                value for name, value in error.headers.items()
-                if name.casefold() == "x-ratelimit-remaining"
-            ), None)
-            if error.status == 403 and rate_limit_remaining == "0":
-                raise InstallerError(
-                    "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
-                    "ou defina GITHUB_TOKEN para ampliar o limite."
-                ) from error
-            console.detail(f"Tentativa de download falhou: {error}")
-            raise InstallerError(f"Não foi possível baixar {display_url}: {error}") from error
-        except DownloadError as error:
-            console.detail(f"Tentativa de download falhou: {error}")
-            raise InstallerError(f"Não foi possível baixar {display_url}: {error}") from error
-        return result.data or b""
-
-    def http_get_mirrors(
-        self,
-        urls: tuple[str, ...],
-        destination: Path | None = None,
-        headers: dict[str, str] | None = None,
-        *,
-        expected_size: int | None = None,
-        expected_sha256: str | None = None,
-        maximum_size: int | None = None,
-        timeout: float = 60.0,
-        attempts: int = 3,
-        mirror_label: str = "Mirror",
-    ) -> tuple[bytes, str]:
-        if not urls:
-            raise InstallerError("O download exige ao menos um mirror.")
-        display_urls: list[str] = []
-        for index, url in enumerate(urls, start=1):
-            try:
-                validate_download_url(url, f"URL do mirror {index}")
-            except DownloadPolicyError as error:
-                raise InstallerError(str(error)) from error
-            display_urls.append(safe_url_for_log(url))
-        retry = RetryPolicy(attempts=attempts)
-        request_headers = {"User-Agent": "x86-qw-installer/1", **(headers or {})}
-        if destination is None:
-            if maximum_size is None:
-                raise InstallerError("O download de metadados exige um limite máximo explícito.")
-            contracts: tuple[PinnedArtifact | BoundedMetadata, ...] = tuple(
-                BoundedMetadata(
-                    url=url,
-                    maximum_size=maximum_size,
-                    deadline_seconds=timeout,
-                    retry=retry,
-                    headers=request_headers,
-                    label="metadados x86QW",
-                )
-                for url in urls
-            )
-        else:
-            if expected_size is None or expected_sha256 is None:
-                raise InstallerError(
-                    "O download de um artefato exige tamanho e SHA-256 esperados."
-                )
-            contracts = tuple(
-                PinnedArtifact(
-                    url=url,
-                    destination=destination,
-                    expected_size=expected_size,
-                    expected_sha256=expected_sha256,
-                    maximum_size=maximum_size if maximum_size is not None else expected_size,
-                    deadline_seconds=timeout,
-                    retry=retry,
-                    headers=request_headers,
-                    label=destination.name,
-                )
-                for url in urls
-            )
-
-        last_update = 0.0
-        selected_index = 0
-
-        def progress(received: int, total: int | None, done: bool) -> None:
-            nonlocal last_update
-            now = time.monotonic()
-            if done or now - last_update >= 0.1:
-                console.download_progress(received, total, done=done)
-                last_update = now
-
-        def retry_notice(next_attempt: int, error: Exception, delay: float) -> None:
-            console.detail(f"Tentativa de download falhou: {error}")
-            console.warning(
-                "Falha temporária no download. "
-                f"Tentando novamente ({next_attempt}/{attempts}) em {delay:.1f}s..."
-            )
-
-        def mirror_failure(index: int, contract: object, error: DownloadError) -> None:
-            nonlocal selected_index
-            del contract
-            selected_index = index
-            console.detail(str(error))
-            if index < len(urls):
-                host = urllib.parse.urlsplit(urls[index - 1]).hostname or urls[index - 1]
-                console.warning(
-                    f"{mirror_label} indisponível ou inválido em {host}; "
-                    "tentando a próxima cópia..."
-                )
-
-        for display_url in display_urls:
-            console.detail(f"GET {display_url}")
-        try:
-            result = bounded_download_mirrors(
-                contracts,
-                progress=progress if destination is not None else None,
-                on_retry=retry_notice,
-                on_mirror_failure=mirror_failure,
-            )
-        except DownloadHTTPError as error:
-            rate_limit_remaining = next((
-                value for name, value in error.headers.items()
-                if name.casefold() == "x-ratelimit-remaining"
-            ), None)
-            if error.status == 403 and rate_limit_remaining == "0":
-                raise InstallerError(
-                    "O limite temporário de consultas do GitHub foi atingido. Aguarde a renovação "
-                    "ou defina GITHUB_TOKEN para ampliar o limite."
-                ) from error
-            console.detail(f"Tentativa de download falhou: {error}")
-            raise InstallerError(f"O download por mirrors falhou: {error}") from error
-        except DownloadError as error:
-            console.detail(f"Tentativa de download falhou: {error}")
-            raise InstallerError(f"O download por mirrors falhou: {error}") from error
-        return result.data or b"", urls[selected_index]
-
     def catalog_records(
         self,
         component: str,
@@ -2132,7 +1914,7 @@ class Installer:
             download = self.stage / f"{self.app_archive_name}.download"
             if not self.update_ui:
                 console.info(f"Baixando {self.app_archive_name}...")
-            _, self.app_url = self.http_get_mirrors(
+            _, self.app_url = self.remote.get_mirrors(
                 self.app_urls or (self.app_url,),
                 download,
                 expected_size=self.app_expected_size,
@@ -4340,7 +4122,7 @@ class Installer:
             catalog_status = "Loaded"
             try:
                 if catalog_url:
-                    catalog_payload = self.http_get(
+                    catalog_payload = self.remote.get(
                         catalog_url,
                         maximum_size=CATALOG_MAX_BYTES,
                         timeout=CATALOG_TIMEOUT,
@@ -4354,7 +4136,7 @@ class Installer:
                     catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    catalog_payload, selected_url = self.http_get_mirrors(
+                    catalog_payload, selected_url = self.remote.get_mirrors(
                         CATALOG_URLS,
                         maximum_size=CATALOG_MAX_BYTES,
                         timeout=CATALOG_TIMEOUT,
@@ -4453,7 +4235,7 @@ class Installer:
                     console.success(f"Pacote carregado da distribuição local: {distribution_path}")
                 return artifact
         temporary = self.stage / f"{identifier}.download"
-        self.http_get_mirrors(
+        self.remote.get_mirrors(
             tuple(str(url) for url in package["urls"]),
             temporary,
             expected_size=int(package["size"]),
@@ -5479,7 +5261,7 @@ class Installer:
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
         try:
-            servers = json.loads(self.http_get(
+            servers = json.loads(self.remote.get(
                 HUB_SERVERS_API,
                 maximum_size=HUB_MAX_BYTES,
                 timeout=CATALOG_TIMEOUT,
