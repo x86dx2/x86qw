@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import errno
 import hashlib
 import importlib
@@ -3974,6 +3975,42 @@ class Installer:
                 + "; ".join(rollback_errors)
             ) from operation_error
 
+    @contextmanager
+    def component_state_transaction(self) -> Iterator[list[MutationResult]]:
+        """Keep component inverses alive until the parent state commit resolves."""
+
+        results: list[MutationResult] = []
+        cleanup = True
+        try:
+            yield results
+        except BaseException as error:
+            if not isinstance(error, PersistenceError) or not error.committed:
+                try:
+                    self.rollback_component_transactions(results, error)
+                except BaseException:
+                    cleanup = False
+                    raise
+            raise
+        finally:
+            if cleanup:
+                self.cleanup_stage()
+                self.stage = None
+
+    def install_component_batch(
+        self,
+        results: list[MutationResult],
+        selected: list[str],
+        *,
+        stage_prefix: str,
+    ) -> None:
+        """Install one batch in the state transaction's shared live stage."""
+
+        if not selected:
+            return
+        if self.stage is None:
+            self._create_stage(stage_prefix)
+        results.extend(self.install_components(selected))
+
     def install_components(self, selected: list[str]) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         results: list[MutationResult] = []
@@ -4876,22 +4913,22 @@ class Installer:
             )
         for issue in payload_clients:
             self.repair_client_runtime(issue)
-        if assessment.invalid_components:
-            self._create_stage(".x86qw-repair.")
-            try:
-                self.install_components(list(assessment.invalid_components))
-            finally:
-                self.cleanup_stage()
-                self.stage = None
-        elif assessment.support_invalid:
-            self.reconcile_play_support()
-        if assessment.package_order_invalid:
-            self.refresh_qw_package_order()
-        state = assessment.recovered_state or self.load_install_state(persist_migration=True)
-        self.write_install_state(
-            str(state["profile"]), list(state["requested_components"]),
-            known=list(state["known_components"]), capabilities=list(state["capabilities"]),
-        )
+        with self.component_state_transaction() as component_results:
+            if assessment.invalid_components:
+                self.install_component_batch(
+                    component_results,
+                    list(assessment.invalid_components),
+                    stage_prefix=".x86qw-repair.",
+                )
+            elif assessment.support_invalid:
+                self.reconcile_play_support()
+            if assessment.package_order_invalid:
+                self.refresh_qw_package_order()
+            state = assessment.recovered_state or self.load_install_state(persist_migration=True)
+            self.write_install_state(
+                str(state["profile"]), list(state["requested_components"]),
+                known=list(state["known_components"]), capabilities=list(state["capabilities"]),
+            )
         self.verify_installation()
         return True
 
@@ -5361,102 +5398,101 @@ class Installer:
                 spec, channel, receipt, dry_run=dry_run, preview=preview, plan_rows=plan_rows,
             ) or changed
 
-        if not dry_run:
-            console.section("Componentes instalados")
-        if legacy_removals:
-            if dry_run:
-                for identifier in legacy_removals:
-                    _, _, receipt = self.validate_component_pair(identifier)
-                    assert receipt is not None
-                    if plan_rows is not None:
-                        plan_rows.append(UpdatePlanRow(
-                            "Componente", "Sons redundantes nQuake",
-                            str(receipt["selection"]), "incorporado ao KTX", "Remover",
-                        ))
-            else:
-                for identifier in legacy_removals:
-                    removed = self.remove_component(identifier)
-                    console.success(
-                        f"Componente obsoleto {identifier} removido ({file_count(removed)}); "
-                        f"{LEGACY_COMPONENT_REMOVALS[identifier]}."
+        with self.component_state_transaction() as component_results:
+            if not dry_run:
+                console.section("Componentes instalados")
+            if legacy_removals:
+                if dry_run:
+                    for identifier in legacy_removals:
+                        _, _, receipt = self.validate_component_pair(identifier)
+                        assert receipt is not None
+                        if plan_rows is not None:
+                            plan_rows.append(UpdatePlanRow(
+                                "Componente", "Sons redundantes nQuake",
+                                str(receipt["selection"]), "incorporado ao KTX", "Remover",
+                            ))
+                else:
+                    for identifier in legacy_removals:
+                        removed = self.remove_component(identifier)
+                        console.success(
+                            f"Componente obsoleto {identifier} removido ({file_count(removed)}); "
+                            f"{LEGACY_COMPONENT_REMOVALS[identifier]}."
+                        )
+                changed = True
+            if legacy_replacements:
+                replacements = list(dict.fromkeys(legacy_replacements.values()))
+                if dry_run:
+                    for legacy, replacement in legacy_replacements.items():
+                        _, _, receipt = self.validate_component_pair(legacy)
+                        assert receipt is not None
+                        package = self.component_package_record(replacement)
+                        if plan_rows is not None:
+                            plan_rows.append(UpdatePlanRow(
+                                "Componente", str(self.components[replacement]["label"]),
+                                str(receipt["selection"]), str(package["version"]), "Migrar",
+                                package_size(package),
+                            ))
+                else:
+                    self.install_component_batch(
+                        component_results,
+                        replacements,
+                        stage_prefix=".x86qw-components-migrate.",
                     )
-            changed = True
-        if legacy_replacements:
-            replacements = list(dict.fromkeys(legacy_replacements.values()))
-            if dry_run:
-                for legacy, replacement in legacy_replacements.items():
-                    _, _, receipt = self.validate_component_pair(legacy)
-                    assert receipt is not None
-                    package = self.component_package_record(replacement)
-                    if plan_rows is not None:
-                        plan_rows.append(UpdatePlanRow(
-                            "Componente", str(self.components[replacement]["label"]),
-                            str(receipt["selection"]), str(package["version"]), "Migrar",
-                            package_size(package),
-                        ))
-            else:
-                self._create_stage(".x86qw-components-migrate.")
-                try:
-                    self.install_components(replacements)
-                finally:
-                    self.cleanup_stage()
-                    self.stage = None
-            changed = True
-        outdated = self.outdated_installed_components()
-        if outdated:
-            if dry_run:
-                for identifier in outdated:
-                    _, _, receipt = self.validate_component_pair(identifier)
-                    assert receipt is not None
-                    package = self.component_package_record(identifier)
-                    available = str(package["version"])
-                    if plan_rows is not None:
-                        plan_rows.append(UpdatePlanRow(
-                            "Componente", str(self.components[identifier]["label"]),
-                            str(receipt["selection"]), available, "Atualizar", package_size(package),
-                        ))
-            else:
-                self._create_stage(".x86qw-components-update.")
-                try:
-                    self.install_components(outdated)
-                finally:
-                    self.cleanup_stage()
-                    self.stage = None
-            changed = True
-        elif not dry_run and not self.installed_components():
-            console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
+                changed = True
+            outdated = self.outdated_installed_components()
+            if outdated:
+                if dry_run:
+                    for identifier in outdated:
+                        _, _, receipt = self.validate_component_pair(identifier)
+                        assert receipt is not None
+                        package = self.component_package_record(identifier)
+                        available = str(package["version"])
+                        if plan_rows is not None:
+                            plan_rows.append(UpdatePlanRow(
+                                "Componente", str(self.components[identifier]["label"]),
+                                str(receipt["selection"]), available, "Atualizar", package_size(package),
+                            ))
+                else:
+                    self.install_component_batch(
+                        component_results,
+                        outdated,
+                        stage_prefix=".x86qw-components-update.",
+                    )
+                changed = True
+            elif not dry_run and not self.installed_components():
+                console.info("Nenhum componente x86QW está instalado; nenhum componente novo foi adicionado.")
 
-        changed = self.reconcile_play_support(
-            dry_run=dry_run, plan_rows=plan_rows,
-        ) or changed
+            changed = self.reconcile_play_support(
+                dry_run=dry_run, plan_rows=plan_rows,
+            ) or changed
 
-        desired = self.desired_components(state)
-        installed_or_planned = {
-            *self.installed_components(), *legacy_replacements.values(),
-        }
-        missing_from_profile = [identifier for identifier in desired if identifier not in installed_or_planned]
-        if missing_from_profile and not dry_run:
-            suffix = (
-                ". Elas serão incorporadas nesta operação."
-                if profile_upgrade
-                else ". Use ./x86qw.sh upgrade para incorporá-las."
-            )
-            console.info(
-                "Novidades disponíveis para o perfil " + str(state["profile"]) + ": "
-                + ", ".join(missing_from_profile) + suffix
-            )
+            desired = self.desired_components(state)
+            installed_or_planned = {
+                *self.installed_components(), *legacy_replacements.values(),
+            }
+            missing_from_profile = [identifier for identifier in desired if identifier not in installed_or_planned]
+            if missing_from_profile and not dry_run:
+                suffix = (
+                    ". Elas serão incorporadas nesta operação."
+                    if profile_upgrade
+                    else ". Use ./x86qw.sh upgrade para incorporá-las."
+                )
+                console.info(
+                    "Novidades disponíveis para o perfil " + str(state["profile"]) + ": "
+                    + ", ".join(missing_from_profile) + suffix
+                )
 
-        for name, expected in pak_hashes.items():
-            if file_hash(self.target / "id1" / name) != expected:
-                raise InstallerError(f"O PAK registrado {name} foi alterado durante a atualização.")
-        if not dry_run:
-            state = self.write_install_state(
-                str(state["profile"]), list(state["requested_components"]), known=list(self.components),
-                capabilities=list(state["capabilities"]),
-            )
-            if changed and not profile_upgrade:
-                console.section("Verificação final")
-                self.verify_installation()
+            for name, expected in pak_hashes.items():
+                if file_hash(self.target / "id1" / name) != expected:
+                    raise InstallerError(f"O PAK registrado {name} foi alterado durante a atualização.")
+            if not dry_run:
+                state = self.write_install_state(
+                    str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+                    capabilities=list(state["capabilities"]),
+                )
+        if not dry_run and changed and not profile_upgrade:
+            console.section("Verificação final")
+            self.verify_installation()
         if not dry_run and changed and not profile_upgrade:
             console.success("Conteúdo instalado atualizado e validado.")
         return changed
@@ -5484,35 +5520,35 @@ class Installer:
             console.warning(
                 "Componentes fora do perfil foram preservados: " + ", ".join(extras) + "."
             )
-        if not missing:
-            pass
-        elif dry_run:
-            for identifier in missing:
-                package = self.component_package_record(identifier)
-                if plan_rows is not None:
-                    plan_rows.append(UpdatePlanRow(
-                        "Componente", str(self.components[identifier]["label"]),
-                        "não instalado", str(package["version"]), "Adicionar", package_size(package),
-                    ))
-            changed = True
-        else:
-            console.info("Novos componentes do perfil: " + ", ".join(missing))
-            self._create_stage(".x86qw-profile-upgrade.")
-            try:
-                self.install_components(missing)
-            finally:
-                self.cleanup_stage()
-                self.stage = None
-            changed = True
+        with self.component_state_transaction() as component_results:
+            if not missing:
+                pass
+            elif dry_run:
+                for identifier in missing:
+                    package = self.component_package_record(identifier)
+                    if plan_rows is not None:
+                        plan_rows.append(UpdatePlanRow(
+                            "Componente", str(self.components[identifier]["label"]),
+                            "não instalado", str(package["version"]), "Adicionar", package_size(package),
+                        ))
+                changed = True
+            else:
+                console.info("Novos componentes do perfil: " + ", ".join(missing))
+                self.install_component_batch(
+                    component_results,
+                    missing,
+                    stage_prefix=".x86qw-profile-upgrade.",
+                )
+                changed = True
 
-        if not dry_run:
-            self.write_install_state(
-                str(state["profile"]), list(state["requested_components"]), known=list(self.components),
-                capabilities=list(state["capabilities"]),
-            )
-            if changed:
-                console.section("Verificação final do perfil")
-                self.verify_installation()
+            if not dry_run:
+                self.write_install_state(
+                    str(state["profile"]), list(state["requested_components"]), known=list(self.components),
+                    capabilities=list(state["capabilities"]),
+                )
+        if not dry_run and changed:
+            console.section("Verificação final do perfil")
+            self.verify_installation()
         if not dry_run and changed:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
         return changed

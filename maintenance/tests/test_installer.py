@@ -44,6 +44,91 @@ class InstallerTests(unittest.TestCase):
         cache.parent.mkdir()
         return install_qw.Installer(project, target, cache), target, cache
 
+    def stage_backed_component_install(self, installer, target, installed, stages):
+        marker = target / "qw/component-transaction.txt"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("old\n", encoding="utf-8")
+
+        def install(selected):
+            stage = installer.stage
+            self.assertIsNotNone(stage)
+            assert stage is not None
+            stages.append(stage)
+            backup = stage / "component-transaction.backup"
+
+            def apply():
+                backup.write_bytes(marker.read_bytes())
+                marker.write_text("new\n", encoding="utf-8")
+                installed.extend(selected)
+                return backup, tuple(selected)
+
+            def rollback(token):
+                saved, added = token
+                marker.write_bytes(saved.read_bytes())
+                for identifier in added:
+                    installed.remove(identifier)
+
+            plan = install_qw.MutationPlan(
+                identifier="test:component-stage-lifetime",
+                summary="exercise component stage lifetime",
+                steps=(install_qw.MutationStep(
+                    key="payload",
+                    description="publish test payload",
+                    observe=marker.read_bytes,
+                    apply=apply,
+                    rollback=rollback,
+                ),),
+            )
+            return (install_qw.execute_mutation(install_qw.prepare_mutation(plan)),)
+
+        return marker, install
+
+    def state_failure_after_optional_commit(self, installer, committed, state_stages):
+        write_state = installer.write_install_state
+
+        def fail(*args, **kwargs):
+            stage = installer.stage
+            self.assertIsNotNone(stage, "component stage was cleaned before state commit")
+            assert stage is not None
+            self.assertTrue(stage.is_dir())
+            state_stages.append(stage)
+            if committed:
+                write_state(*args, **kwargs)
+            raise install_qw.PersistenceError(
+                "injected state durability failure", committed=committed,
+            )
+
+        return fail
+
+    def test_component_state_transaction_preserves_stage_on_incomplete_rollback(self):
+        """Recovery backups must survive when an inverse cannot complete."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            stage = installer._create_stage(".rollback-recovery.")
+            recovery = stage / "payload.backup"
+            recovery.write_bytes(b"recover me\n")
+
+            with mock.patch.object(
+                installer,
+                "rollback_component_transactions",
+                side_effect=install_qw.InstallerError("injected rollback failure"),
+            ), mock.patch.object(
+                installer, "cleanup_stage", wraps=installer.cleanup_stage,
+            ) as cleanup:
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "injected rollback failure",
+                ):
+                    with installer.component_state_transaction():
+                        raise install_qw.InstallerError("injected operation failure")
+
+            cleanup.assert_not_called()
+            self.assertEqual(stage, installer.stage)
+            self.assertEqual(b"recover me\n", recovery.read_bytes())
+
+            installer.cleanup_stage()
+            installer.stage = None
+
     def test_direct_maintenance_builders_find_the_runtime_boundary(self):
         scripts = (
             "build_component_packages.py",
@@ -1842,6 +1927,75 @@ class InstallerTests(unittest.TestCase):
                             self.assertEqual([], installer.outdated_installed_components())
             self.assertIn("é mais novo que o catálogo", output.getvalue())
 
+    def test_update_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                for name in ("pak0.pak", "pak1.pak"):
+                    pak = target / "id1" / name
+                    pak.parent.mkdir(parents=True, exist_ok=True)
+                    pak.write_bytes(name.encode("ascii"))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "custom",
+                    "requested_components": ["ktx"],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+                spec = install_qw.PLATFORMS["linux"]
+                receipt = {"selection": "3.6.9"}
+
+                patches = (
+                    mock.patch.object(installer, "preflight_ezquake_receipts"),
+                    mock.patch.object(installer, "preflight_component_receipts"),
+                    mock.patch.object(installer, "legacy_metadata_present", return_value=False),
+                    mock.patch.object(installer, "check_paks"),
+                    mock.patch.object(installer, "load_install_state", return_value=state),
+                    mock.patch.object(installer, "current_install_state", return_value=state),
+                    mock.patch.object(installer, "installed_legacy_component_replacements", return_value={}),
+                    mock.patch.object(installer, "installed_legacy_component_removals", return_value=[]),
+                    mock.patch.object(install_qw, "PLATFORMS", {"linux": spec}),
+                    mock.patch.object(installer, "ezquake_receipt_path", return_value=target / "receipt"),
+                    mock.patch.object(installer, "validate_ezquake_receipt", return_value=receipt),
+                    mock.patch.object(installer, "check_runtime"),
+                    mock.patch.object(installer, "update_runtime", return_value=False),
+                    mock.patch.object(installer, "outdated_installed_components", return_value=["ktx"]),
+                    mock.patch.object(installer, "installed_components", side_effect=lambda: list(installed)),
+                    mock.patch.object(installer, "install_components", side_effect=install_components),
+                    mock.patch.object(installer, "reconcile_play_support", return_value=False),
+                    mock.patch.object(installer, "desired_components", return_value=[]),
+                    mock.patch.object(
+                        installer, "write_install_state",
+                        side_effect=self.state_failure_after_optional_commit(
+                            installer, committed, state_stages,
+                        ),
+                    ),
+                )
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    for patcher in patches:
+                        stack.enter_context(patcher)
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.update()
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                state_path = target / install_qw.INSTALL_STATE
+                self.assertEqual(committed, state_path.is_file())
+                self.assertEqual(["ktx"] if committed else [], installed)
+
     def test_existing_installation_profile_is_inferred_and_persisted(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2501,6 +2655,64 @@ class InstallerTests(unittest.TestCase):
                 self.assertFalse(installer.repair(dry_run=True, plan_rows=[]))
                 self.assertFalse(installer.repair(dry_run=False, plan_rows=[]))
 
+    def test_repair_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                assessment = install_qw.RepairAssessment(
+                    ("ktx",), False, (), False, (), (),
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "custom",
+                    "requested_components": ["ktx"],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "repair_plan", return_value=assessment,
+                ), mock.patch.object(
+                    installer, "validate_component_pair",
+                    return_value=(True, [], {"selection": "old"}),
+                ), mock.patch.object(
+                    installer, "component_package_record", return_value={"version": "new"},
+                ), mock.patch.object(
+                    installer, "install_components", side_effect=install_components,
+                ), mock.patch.object(
+                    installer, "installed_components", side_effect=lambda: list(installed),
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.repair(dry_run=False, plan_rows=[])
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    committed, (target / install_qw.INSTALL_STATE).is_file(),
+                )
+                self.assertEqual(["ktx"] if committed else [], installed)
+
     def test_installed_cli_repair_reports_payload_plan_without_downloading(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2559,6 +2771,7 @@ class InstallerTests(unittest.TestCase):
 
             def install_missing(selected):
                 installed.extend(selected)
+                return ()
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "update", return_value=False):
@@ -2570,6 +2783,62 @@ class InstallerTests(unittest.TestCase):
             apply.assert_called_once_with([desired[-1]])
             persisted = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
             self.assertEqual(desired, persisted["recorded_components"])
+
+    def test_upgrade_keeps_component_stage_until_state_outcome(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed), tempfile.TemporaryDirectory() as temporary:
+                installer, target, _ = self.make_installer(Path(temporary))
+                installed: list[str] = []
+                component_stages: list[Path] = []
+                state_stages: list[Path] = []
+                marker, install_components = self.stage_backed_component_install(
+                    installer, target, installed, component_stages,
+                )
+                state = {
+                    "format": 2,
+                    "project": "x86qw",
+                    "profile": "essential",
+                    "requested_components": [],
+                    "recorded_components": [],
+                    "known_components": list(installer.components),
+                    "capabilities": [],
+                    "component_fingerprint": install_qw.profile_fingerprint([]),
+                }
+
+                with contextlib.redirect_stdout(io.StringIO()), mock.patch.object(
+                    installer, "update", return_value=False,
+                ), mock.patch.object(
+                    installer, "load_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "current_install_state", return_value=state,
+                ), mock.patch.object(
+                    installer, "desired_components", return_value=["ktx"],
+                ), mock.patch.object(
+                    installer, "installed_components", side_effect=lambda: list(installed),
+                ), mock.patch.object(
+                    installer, "installed_legacy_component_replacements", return_value={},
+                ), mock.patch.object(
+                    installer, "install_components", side_effect=install_components,
+                ), mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=self.state_failure_after_optional_commit(
+                        installer, committed, state_stages,
+                    ),
+                ), mock.patch.object(
+                    installer, "verify_installation",
+                ):
+                    with self.assertRaises(install_qw.PersistenceError):
+                        installer.upgrade()
+
+                self.assertEqual([component_stages[0]], state_stages)
+                self.assertFalse(component_stages[0].exists())
+                self.assertIsNone(installer.stage)
+                expected = "new\n" if committed else "old\n"
+                self.assertEqual(expected, marker.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    committed, (target / install_qw.INSTALL_STATE).is_file(),
+                )
+                self.assertEqual(["ktx"] if committed else [], installed)
 
     def test_upgrade_dry_run_reports_new_profile_components_without_applying_them(self):
         with tempfile.TemporaryDirectory() as temporary:
