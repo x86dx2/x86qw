@@ -192,8 +192,12 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             ):
                 installer_builder.build(output, version)
             expected = {
-                *(ROOT / source for source, _member in installer_builder.ZIPAPP_FILES),
+                *(
+                    ROOT / source
+                    for source, _member in installer_builder.runtime_member_files()
+                ),
                 *(ROOT / source for source, _member, _mode in installer_builder.BUNDLE_FILES),
+                installer_builder.RUNTIME_MEMBER_MANIFEST,
                 installer_builder.ARCHIVE_SOURCE,
                 installer_builder.SHELL_BOOTSTRAP,
                 installer_builder.POWERSHELL_BOOTSTRAP,

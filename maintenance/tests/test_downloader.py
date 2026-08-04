@@ -34,9 +34,11 @@ import downloader  # noqa: E402
 
 DOWNLOADER_PATH = ROOT / "x86qw_runtime/io/downloader.py"
 MANAGER_PATH = ROOT / "dist/installer/bin/manager.py"
-SERVICES_PATH = ROOT / "dist/installer/bin/services.py"
 SUPERVISOR_READINESS_PATH = ROOT / "x86qw_runtime/supervisor/readiness.py"
 SUPERVISOR_CORE_PATH = ROOT / "x86qw_runtime/supervisor/core.py"
+POSIX_GUARDIAN_PATH = ROOT / "x86qw_runtime/supervisor/posix_guardian.py"
+MACOS_PLATFORM_PATH = ROOT / "x86qw_runtime/platform/macos.py"
+PYTHON_RUNTIME_PATH = ROOT / "x86qw_runtime/platform/python_runtime.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
     ROOT / "dist/installer/bin/install.ps1",
     ROOT / "site/public/install.ps1",
@@ -182,16 +184,17 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     ROOT / "maintenance/manage.py": frozenset({
         ("subprocess.run", "run", "command"),
     }),
-    MANAGER_PATH: frozenset({
-        ("subprocess.run", "Installer.handoff_cli_update", "command"),
-        ("subprocess.run", "Installer.run_command", "arguments"),
-        ("subprocess.Popen", "Installer.launch_runtime", "command"),
-    }),
-    SERVICES_PATH: frozenset({
-        ("subprocess.Popen", "launch_background_controller", "command"),
+    PYTHON_RUNTIME_PATH: frozenset({
+        ("subprocess.run", "run_handoff", "command"),
     }),
     SUPERVISOR_CORE_PATH: frozenset({
         ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
+    }),
+    POSIX_GUARDIAN_PATH: frozenset({
+        ("subprocess.Popen", "_child_main", "tuple(launch['arguments'])"),
+    }),
+    MACOS_PLATFORM_PATH: frozenset({
+        ("subprocess.run", "_run_codesign", "arguments"),
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),
@@ -203,9 +206,6 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
 PROCESS_WRAPPER_MODELS = {
     ROOT / "maintenance/manage.py": {
         "run": ("argv", ()),
-    },
-    MANAGER_PATH: {
-        "Installer.run_command": ("argv", ()),
     },
     ROOT / "maintenance/tools/check_lfs.py": {
         "git": ("varargs", ("git",)),

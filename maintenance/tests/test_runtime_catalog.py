@@ -21,6 +21,20 @@ ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "maintenance/inventory"
 
 
+def runtime_projection_leaks(payload: bytes) -> tuple[str, ...]:
+    leaks: list[str] = []
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        for name in archive.namelist():
+            if not name.startswith("_x86qw/") or not name.endswith(".json"):
+                continue
+            serialized = json.dumps(json.loads(archive.read(name))).casefold()
+            if "https://" in serialized:
+                leaks.append(f"{name}:url")
+            if "source-patch" in serialized:
+                leaks.append(f"{name}:source-patch")
+    return tuple(leaks)
+
+
 class RuntimeCatalogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -180,7 +194,8 @@ class RuntimeCatalogTests(unittest.TestCase):
             self.validate(documents)
 
     def test_installer_zipapp_contains_only_runtime_projections(self):
-        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("0.1.25"))) as archive:
+        payload = zipapp_bytes("0.1.25")
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             names = set(archive.namelist())
             for name in (
                 "_x86qw/runtimes.json", "_x86qw/games.json",
@@ -189,12 +204,26 @@ class RuntimeCatalogTests(unittest.TestCase):
             ):
                 self.assertIn(name, names)
             self.assertNotIn("_x86qw/compatibility.json", names)
-            for name in names:
-                if name.startswith("catalog/") and name.endswith(".json"):
-                    document = json.loads(archive.read(name))
-                    serialized = json.dumps(document).casefold()
-                    self.assertNotIn("https://", serialized)
-                    self.assertNotIn("source-patch", serialized)
+        self.assertEqual((), runtime_projection_leaks(payload))
+
+    def test_runtime_projection_gate_rejects_remote_and_maintenance_data(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr(
+                "_x86qw/games.json",
+                json.dumps({
+                    "url": "https://example.invalid/payload",
+                    "kind": "source-patch",
+                }),
+            )
+
+        self.assertEqual(
+            (
+                "_x86qw/games.json:url",
+                "_x86qw/games.json:source-patch",
+            ),
+            runtime_projection_leaks(payload.getvalue()),
+        )
 
     def test_static_command_contract_matches_pre_refactor_golden(self):
         golden = json.loads(

@@ -15,7 +15,7 @@ import sys
 import tempfile
 import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     from .build_artifacts import publish_verified_file, read_regular_file, staged_artifact
@@ -40,6 +40,7 @@ from x86qw_runtime.io.archive import (
     validate_installer_bundle,
     validate_installer_history_bundle,
 )
+from x86qw_runtime.io import atomic as atomic_io
 from x86qw_runtime.versioning import STABLE_VERSION as VERSION_PATTERN, version_key
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
@@ -51,56 +52,25 @@ BUNDLE_FILES = (
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
 )
-ZIPAPP_FILES = (
-    ("dist/installer/bin/manager.py", "manager.py"),
-    ("dist/installer/bin/python_runtime.py", "python_runtime.py"),
-    ("x86qw_runtime/platform/python_runtime.py", "x86qw_runtime/platform/python_runtime.py"),
-    ("dist/installer/bin/gameplay.py", "gameplay.py"),
-    ("dist/installer/bin/services.py", "services.py"),
-    ("x86qw_runtime/session_control.py", "x86qw_runtime/session_control.py"),
-    ("dist/mods/ktx/1.47/x86qw/catalog/modes.json", "_x86qw/ktx-modes.json"),
-    ("dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "_x86qw/ktx-frogbot-names.json"),
-    ("x86qw_runtime/io/downloader.py", "x86qw_runtime/io/downloader.py"),
-    ("x86qw_runtime/__init__.py", "x86qw_runtime/__init__.py"),
-    ("x86qw_runtime/ui/__init__.py", "x86qw_runtime/ui/__init__.py"),
-    ("x86qw_runtime/ui/arguments.py", "x86qw_runtime/ui/arguments.py"),
-    ("x86qw_runtime/ui/console.py", "x86qw_runtime/ui/console.py"),
-    ("x86qw_runtime/ui/menu.py", "x86qw_runtime/ui/menu.py"),
-    ("x86qw_runtime/catalogs.py", "x86qw_runtime/catalogs.py"),
-    ("x86qw_runtime/gameplay/__init__.py", "x86qw_runtime/gameplay/__init__.py"),
-    ("x86qw_runtime/gameplay/catalogs.py", "x86qw_runtime/gameplay/catalogs.py"),
-    ("x86qw_runtime/gameplay/models.py", "x86qw_runtime/gameplay/models.py"),
-    ("x86qw_runtime/gameplay/planning.py", "x86qw_runtime/gameplay/planning.py"),
-    ("x86qw_runtime/supervisor/__init__.py", "x86qw_runtime/supervisor/__init__.py"),
-    ("x86qw_runtime/supervisor/core.py", "x86qw_runtime/supervisor/core.py"),
-    ("x86qw_runtime/supervisor/models.py", "x86qw_runtime/supervisor/models.py"),
-    ("x86qw_runtime/supervisor/readiness.py", "x86qw_runtime/supervisor/readiness.py"),
-    ("x86qw_runtime/supervisor/sessions.py", "x86qw_runtime/supervisor/sessions.py"),
-    ("x86qw_runtime/errors.py", "x86qw_runtime/errors.py"),
-    ("x86qw_runtime/migrations.py", "x86qw_runtime/migrations.py"),
-    ("x86qw_runtime/receipts.py", "x86qw_runtime/receipts.py"),
-    ("x86qw_runtime/state.py", "x86qw_runtime/state.py"),
-    ("x86qw_runtime/transaction.py", "x86qw_runtime/transaction.py"),
-    ("x86qw_runtime/versioning.py", "x86qw_runtime/versioning.py"),
-    ("x86qw_runtime/io/__init__.py", "x86qw_runtime/io/__init__.py"),
-    ("x86qw_runtime/io/atomic.py", "x86qw_runtime/io/atomic.py"),
-    ("x86qw_runtime/io/archive.py", "x86qw_runtime/io/archive.py"),
-    ("x86qw_runtime/io/metadata.py", "x86qw_runtime/io/metadata.py"),
-    ("x86qw_runtime/io/managed_files.py", "x86qw_runtime/io/managed_files.py"),
-    ("x86qw_runtime/io/paths.py", "x86qw_runtime/io/paths.py"),
-    ("x86qw_runtime/io/private_fs.py", "x86qw_runtime/io/private_fs.py"),
-    ("x86qw_runtime/io/quarantine.py", "x86qw_runtime/io/quarantine.py"),
-    ("x86qw_runtime/io/remote.py", "x86qw_runtime/io/remote.py"),
-    ("x86qw_runtime/platform/__init__.py", "x86qw_runtime/platform/__init__.py"),
-    ("x86qw_runtime/platform/locking.py", "x86qw_runtime/platform/locking.py"),
-    ("x86qw_runtime/platform/macos.py", "x86qw_runtime/platform/macos.py"),
-    ("x86qw_runtime/platform/processes.py", "x86qw_runtime/platform/processes.py"),
-    ("x86qw_runtime/platform/windows_acl.py", "x86qw_runtime/platform/windows_acl.py"),
+RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
+RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
+GENERATED_RUNTIME_SOURCES = frozenset({
+    "generated:entrypoint",
+    "generated:capabilities",
+    "generated:runtimes",
+    "generated:games",
+    "generated:identity",
+    "generated:component-catalog",
+})
+STATIC_RUNTIME_SOURCE_PREFIXES = (
+    "dist/installer/bin/",
+    "dist/mods/ktx/",
+    "x86qw_runtime/",
 )
-RUNTIME_CONTRACT_FILES = (
-    ("capabilities", "maintenance/inventory/capabilities.json", "_x86qw/capabilities.json"),
-    ("runtimes", "maintenance/inventory/runtimes.json", "_x86qw/runtimes.json"),
-    ("games", "maintenance/inventory/games.json", "_x86qw/games.json"),
+RUNTIME_CONTRACT_SOURCES = (
+    ("capabilities", "maintenance/inventory/capabilities.json"),
+    ("runtimes", "maintenance/inventory/runtimes.json"),
+    ("games", "maintenance/inventory/games.json"),
 )
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
@@ -122,12 +92,111 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[3]
 os.execv(sys.executable, [sys.executable, str(root / "x86qw.pyz"), *sys.argv[1:]])
 """
+ZIPAPP_ENTRYPOINT = (
+    b"import sys\n"
+    b"from python_runtime import require_supported_runtime, UnsupportedPythonError\n"
+    b"try:\n"
+    b"    require_supported_runtime()\n"
+    b"except UnsupportedPythonError as error:\n"
+    b"    print(f'[ERRO] {error}', file=sys.stderr)\n"
+    b"    raise SystemExit(2)\n"
+    b"from manager import main\n"
+    b"raise SystemExit(main())\n"
+)
+
+
+def _portable_relative_path(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value or "\\" in value or ":" in value:
+        raise ValueError(f"{label} inválido no manifesto do zipapp: {value!r}")
+    raw_parts = value.split("/")
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in ("", ".", "..") for part in raw_parts):
+        raise ValueError(f"{label} inseguro no manifesto do zipapp: {value!r}")
+    return path.as_posix()
+
+
+def runtime_member_contracts() -> tuple[dict[str, str], ...]:
+    """Load the sole declarative source for every installed zipapp member."""
+
+    try:
+        payload = read_regular_file(
+            RUNTIME_MEMBER_MANIFEST, maximum_size=MAX_TEXT_INPUT_BYTES,
+        )
+        document = json.loads(payload.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("manifesto de membros do zipapp ausente ou inválido") from error
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"format", "project", "members"}
+        or document.get("format") != 1
+        or document.get("project") != "x86qw"
+        or not isinstance(document.get("members"), list)
+        or not document["members"]
+    ):
+        raise ValueError("identidade ou campos inválidos do manifesto de membros do zipapp")
+
+    contracts: list[dict[str, str]] = []
+    members: set[str] = set()
+    sources: set[str] = set()
+    for index, entry in enumerate(document["members"]):
+        if not isinstance(entry, dict) or set(entry) != RUNTIME_MEMBER_FIELDS:
+            raise ValueError(f"contrato inválido em members[{index}]")
+        if not all(isinstance(entry[field], str) for field in RUNTIME_MEMBER_FIELDS):
+            raise ValueError(f"campos inválidos em members[{index}]")
+        member = _portable_relative_path(entry["member"], f"membro {index}")
+        source = entry["source"]
+        consumer = entry["consumer"].strip()
+        contract = entry["contract"].strip()
+        if not consumer:
+            raise ValueError(f"consumidor ausente em members[{index}]")
+        if not contract:
+            raise ValueError(f"contrato ausente em members[{index}]")
+        if source.startswith("generated:"):
+            if source not in GENERATED_RUNTIME_SOURCES:
+                raise ValueError(f"gerador desconhecido em members[{index}]: {source}")
+        else:
+            source = _portable_relative_path(source, f"origem {index}")
+            if not source.startswith(STATIC_RUNTIME_SOURCE_PREFIXES):
+                raise ValueError(f"origem fora do runtime em members[{index}]: {source}")
+        if member in members:
+            raise ValueError(f"membro duplicado no manifesto do zipapp: {member}")
+        if source in sources:
+            raise ValueError(f"origem duplicada no manifesto do zipapp: {source}")
+        members.add(member)
+        sources.add(source)
+        contracts.append({
+            "member": member,
+            "source": source,
+            "consumer": consumer,
+            "contract": contract,
+        })
+
+    generated = {entry["source"] for entry in contracts if entry["source"].startswith("generated:")}
+    if generated != GENERATED_RUNTIME_SOURCES:
+        missing = sorted(GENERATED_RUNTIME_SOURCES - generated)
+        extra = sorted(generated - GENERATED_RUNTIME_SOURCES)
+        raise ValueError(
+            f"projeções geradas divergentes no manifesto; ausentes={missing}, extras={extra}"
+        )
+    return tuple(contracts)
+
+
+def runtime_member_files() -> tuple[tuple[str, str], ...]:
+    """Return the static source projection derived from the canonical manifest."""
+
+    return tuple(
+        (entry["source"], entry["member"])
+        for entry in runtime_member_contracts()
+        if not entry["source"].startswith("generated:")
+    )
 
 
 def bundle_files() -> tuple[str, ...]:
     return tuple(source for source, _, _ in BUNDLE_FILES) + tuple(
-        source for source, _ in ZIPAPP_FILES
-    ) + tuple(source for _, source, _ in RUNTIME_CONTRACT_FILES)
+        source for source, _ in runtime_member_files()
+    ) + tuple(source for _, source in RUNTIME_CONTRACT_SOURCES) + (
+        RUNTIME_MEMBER_MANIFEST.relative_to(ROOT).as_posix(),
+    )
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -157,45 +226,33 @@ def write_member(
 def zipapp_bytes(version: str) -> bytes:
     output = io.BytesIO()
     identity = {"format": 1, "project": "x86qw", "version": version}
+    contracts = runtime_member_contracts()
     component_catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
     runtime_inventory = load_runtime_inventory(
         ROOT / "maintenance/inventory", component_catalog=component_catalog,
     )
+    generated_payloads = {
+        "generated:entrypoint": ZIPAPP_ENTRYPOINT,
+        "generated:capabilities": json_bytes(runtime_inventory["capabilities"]),
+        "generated:runtimes": json_bytes(runtime_inventory["runtimes"]),
+        "generated:games": json_bytes(runtime_inventory["games"]),
+        "generated:identity": json_bytes(identity),
+        "generated:component-catalog": runtime_catalog_bytes(),
+    }
     with zipfile.ZipFile(output, "w", allowZip64=True) as application:
-        write_member(
-            application,
-            "__main__.py",
-            (
-                b"import sys\n"
-                b"from python_runtime import require_supported_runtime, UnsupportedPythonError\n"
-                b"try:\n"
-                b"    require_supported_runtime()\n"
-                b"except UnsupportedPythonError as error:\n"
-                b"    print(f'[ERRO] {error}', file=sys.stderr)\n"
-                b"    raise SystemExit(2)\n"
-                b"from manager import main\n"
-                b"raise SystemExit(main())\n"
-            ),
-        )
-        for source_name, member in ZIPAPP_FILES:
-            source = ROOT / source_name
-            write_member(
-                application,
-                member,
-                read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES),
+        for entry in contracts:
+            source_name = entry["source"]
+            payload = (
+                generated_payloads[source_name]
+                if source_name.startswith("generated:")
+                else read_regular_file(
+                    ROOT.joinpath(*PurePosixPath(source_name).parts),
+                    maximum_size=MAX_BUILD_INPUT_BYTES,
+                )
             )
-        for key, _, member in RUNTIME_CONTRACT_FILES:
-            write_member(application, member, json_bytes(runtime_inventory[key]))
-        write_member(application, "_x86qw/installer.json", json_bytes(identity))
-        write_member(application, "_x86qw/components.json", runtime_catalog_bytes())
+            write_member(application, entry["member"], payload)
     payload = output.getvalue()
-    required = (
-        "__main__.py",
-        *(member for _, member in ZIPAPP_FILES),
-        *(member for _, _, member in RUNTIME_CONTRACT_FILES),
-        "_x86qw/installer.json",
-        "_x86qw/components.json",
-    )
+    required = tuple(entry["member"] for entry in contracts)
     try:
         plan = scan_archive(payload, required_members=required)
     except ArchiveError as error:
@@ -276,19 +333,6 @@ def _path_stat_identity(path: Path) -> tuple[int, int, int, int, int, int]:
     )
 
 
-def _fsync_parent(path: Path) -> None:
-    if os.name == "nt":
-        return
-    descriptor = os.open(
-        path.parent,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),
-    )
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
 def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
     try:
         initial_identity = _path_stat_identity(path)
@@ -315,10 +359,11 @@ def update_public_bootstrap(path: Path, assignments: dict[str, str]) -> None:
         current = read_regular_file(path, maximum_size=MAX_TEXT_INPUT_BYTES)
         if current != original or _path_stat_identity(path) != initial_identity:
             raise ValueError(f"public bootstrap changed before replacement: {path}")
+        atomic_io.sync_directory(path.parent)
         os.replace(staged.path, path)
         if read_regular_file(path, maximum_size=len(updated)) != updated:
             raise ValueError(f"public bootstrap changed during replacement: {path}")
-        _fsync_parent(path)
+        atomic_io.sync_directory(path.parent)
 
 
 def archive_source_bytes() -> bytes:

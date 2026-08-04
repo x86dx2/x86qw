@@ -11,6 +11,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from maintenance.tools import build_installer_bundle as installer_builder
 from maintenance.tools.build_installer_bundle import zipapp_bytes
@@ -26,6 +27,47 @@ if str(INSTALLER_BIN) not in sys.path:
 
 
 class RuntimeMemberContractTests(unittest.TestCase):
+    def build_with_manifest(self, document: dict[str, object]) -> bytes:
+        """Build through the real reader while substituting only the manifest bytes."""
+
+        payload = json.dumps(document, ensure_ascii=False).encode("utf-8")
+        read_regular_file = installer_builder.read_regular_file
+
+        def read(path: Path, *args: object, **kwargs: object) -> bytes:
+            if Path(path) == RUNTIME_MEMBER_MANIFEST:
+                return payload
+            return read_regular_file(path, *args, **kwargs)
+
+        with mock.patch.object(installer_builder, "read_regular_file", side_effect=read):
+            return zipapp_bytes("9.9.9")
+
+    def test_builder_rejects_a_duplicate_member_declared_by_the_manifest(self) -> None:
+        """A duplicate contract must fail before the public zipapp is emitted."""
+
+        manifest = json.loads(RUNTIME_MEMBER_MANIFEST.read_text(encoding="utf-8"))
+        manifest["members"].append(dict(manifest["members"][0]))
+
+        with self.assertRaisesRegex(ValueError, "duplicado"):
+            self.build_with_manifest(manifest)
+
+    def test_builder_rejects_a_manifest_member_without_a_consumer(self) -> None:
+        """Every shipped member must retain an explicit runtime consumer."""
+
+        manifest = json.loads(RUNTIME_MEMBER_MANIFEST.read_text(encoding="utf-8"))
+        manifest["members"][0]["consumer"] = ""
+
+        with self.assertRaisesRegex(ValueError, "consumidor"):
+            self.build_with_manifest(manifest)
+
+    def test_builder_rejects_an_unknown_root_manifest_field(self) -> None:
+        """An unconsumed root field must not silently change the zipapp contract."""
+
+        manifest = json.loads(RUNTIME_MEMBER_MANIFEST.read_text(encoding="utf-8"))
+        manifest["ignored-policy"] = "would not affect the artifact"
+
+        with self.assertRaisesRegex(ValueError, "campos.*manifesto"):
+            self.build_with_manifest(manifest)
+
     def test_every_installed_member_has_an_independent_consumer_contract(self) -> None:
         """An unused or undeclared file must not silently enter the public zipapp."""
 
@@ -63,7 +105,7 @@ class RuntimeMemberContractTests(unittest.TestCase):
             for entry in entries
             if not entry["source"].startswith("generated:")
         }
-        self.assertEqual(static_projection, set(installer_builder.ZIPAPP_FILES))
+        self.assertEqual(static_projection, set(installer_builder.runtime_member_files()))
         declared_runtime_sources = {
             source for source, _member in static_projection
             if source.startswith("x86qw_runtime/")
@@ -276,6 +318,16 @@ class LazyCatalogBoundaryTests(unittest.TestCase):
                 ("version",),
                 ("play", "--help"),
                 ("host", "--help"),
+                ("proxy", "--help"),
+                ("qtv", "--help"),
+                ("status", "--help"),
+                ("hub", "--help"),
+                ("update", "--help"),
+                ("upgrade", "--help"),
+                ("verify", "--help"),
+                ("repair", "--help"),
+                ("cleanup", "--help"),
+                ("uninstall", "--help"),
             ):
                 with self.subTest(arguments=arguments):
                     result = subprocess.run(
@@ -292,6 +344,47 @@ class LazyCatalogBoundaryTests(unittest.TestCase):
                         0,
                         result.stdout + result.stderr,
                     )
+
+
+class RuntimeIsolationBehaviorTests(unittest.TestCase):
+    def test_every_runtime_module_imports_without_repository_or_entrypoint_layers(self) -> None:
+        """Importing the complete runtime must not execute a reverse dependency."""
+
+        modules = sorted(
+            ".".join(
+                path.relative_to(ROOT).with_suffix("").parts[:-1]
+                if path.name == "__init__.py"
+                else path.relative_to(ROOT).with_suffix("").parts
+            )
+            for path in (ROOT / "x86qw_runtime").rglob("*.py")
+        )
+        script = f"""
+import builtins
+import importlib
+
+real_import = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name.split('.', 1)[0] in {{
+        'maintenance', 'dist', 'manager', 'gameplay', 'services',
+        'session_control', 'menu', 'python_runtime',
+    }}:
+        raise AssertionError('reverse runtime import: ' + name)
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+for module in {modules!r}:
+    importlib.import_module(module)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=20,
+            env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 class RuntimeCatalogOwnershipTests(unittest.TestCase):
@@ -393,6 +486,28 @@ class RuntimeTransactionOwnershipTests(unittest.TestCase):
         self.assertIn("x86qw_runtime/transaction.py", names)
 
 
+class RuntimeFilesystemOwnershipTests(unittest.TestCase):
+    def test_manager_uses_runtime_path_and_hash_primitives(self) -> None:
+        """Basic path and hashing policy must not have a second manager owner."""
+
+        manager = importlib.import_module("manager")
+        paths = importlib.import_module("x86qw_runtime.io.paths")
+        managed = importlib.import_module("x86qw_runtime.io.managed_files")
+
+        self.assertIs(manager.lexists, paths.lexists)
+        self.assertIs(manager.remove_path, paths.remove_path)
+        self.assertIs(manager.file_hash, managed.file_sha256)
+
+    def test_gameplay_uses_the_runtime_hash_primitive(self) -> None:
+        """Gameplay verification must not retain an unbounded parallel hasher."""
+
+        gameplay = importlib.import_module("gameplay")
+        managed = importlib.import_module("x86qw_runtime.io.managed_files")
+
+        self.assertIs(getattr(gameplay, "file_sha256", None), managed.file_sha256)
+        self.assertNotIn("file_hash", gameplay.__dict__)
+
+
 class RuntimeSupervisorOwnershipTests(unittest.TestCase):
     def test_services_use_runtime_path_primitives_without_manager(self) -> None:
         """Session recovery must not import the installer for basic filesystem I/O."""
@@ -430,14 +545,19 @@ class RuntimeSupervisorOwnershipTests(unittest.TestCase):
 
         for name in (
             "SessionJournal",
+            "activate_background_log",
             "load_session_journal",
             "journal_controller_probe",
             "journal_process_probe",
+            "publish_stop_request",
             "session_journal_paths",
             "assert_recovery_processes_confirmable",
+            "unlink_stop_request",
         ):
             with self.subTest(symbol=name):
-                self.assertIs(getattr(services, name), getattr(sessions, name))
+                runtime_symbol = getattr(sessions, name, None)
+                self.assertIsNotNone(runtime_symbol, f"runtime session API missing: {name}")
+                self.assertIs(getattr(services, name), runtime_symbol)
         for name in ("MaterializedFile", "MaterializedDirectory"):
             with self.subTest(symbol=name):
                 self.assertIs(getattr(services, name), getattr(managed, name))
