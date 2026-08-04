@@ -13,6 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "dist/installer/bin"))
 
+import gameplay  # noqa: E402
 import services  # noqa: E402
 import manager  # noqa: E402
 from maintenance.tools import downloader  # noqa: E402
@@ -20,7 +21,7 @@ from x86qw_runtime.io import private_fs  # noqa: E402
 from x86qw_runtime.platform import windows_acl  # noqa: E402
 
 services.configure_context(
-    manager.service_composition_context(services, services.gameplay),
+    manager.service_composition_context(services, gameplay),
 )
 
 
