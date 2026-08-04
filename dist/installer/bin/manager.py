@@ -5529,7 +5529,7 @@ class Installer:
             return
         selected = self.choose_components()
         self._create_stage(".quake-install.")
-        results = self.install_components(selected)
+        results = list(self.install_components(selected))
         try:
             self.write_install_state(
                 self.selected_component_profile,
@@ -5545,7 +5545,7 @@ class Installer:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
         selected = self.choose_components()
-        results = self.install_components(selected)
+        results = list(self.install_components(selected))
         try:
             self.write_install_state(
                 self.selected_component_profile,
@@ -5556,7 +5556,7 @@ class Installer:
             if not isinstance(error, PersistenceError) or not error.committed:
                 self.rollback_component_transactions(results, error)
             raise
-        return results
+        return tuple(results)
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")

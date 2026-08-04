@@ -2150,6 +2150,43 @@ class ModernComponentTests(unittest.TestCase):
             self.assertFalse((target / ".x86qw/components/nquake-maps").exists())
             self.assertFalse((target / install_qw.INSTALL_STATE).exists())
 
+    def test_component_phase_publishes_state_after_component_tuple(self):
+        """The component phase must retain a mutable parent transaction for state."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            installer.selected_component_profile = "none"
+            installer.requested_components = []
+            result = install_qw.execute_mutation(install_qw.prepare_mutation(
+                install_qw.MutationPlan(
+                    identifier="fixture-component-phase",
+                    summary="fixture",
+                    steps=(install_qw.MutationStep(
+                        key="noop",
+                        description="noop",
+                        observe=lambda: None,
+                        apply=lambda: None,
+                        rollback=lambda _token: None,
+                    ),),
+                ),
+            ))
+
+            with mock.patch.object(
+                installer, "choose_components", return_value=[],
+            ), mock.patch.object(
+                installer, "install_components", return_value=(result,),
+            ):
+                completed = installer.install_component_phase()
+
+            self.assertIs(result, completed[0])
+            self.assertEqual(2, len(completed))
+            self.assertEqual(
+                "none",
+                installer.load_install_state(persist_migration=False)["profile"],
+            )
+
     def test_component_default_created_before_state_is_rolled_back(self):
         """A newly created personal default cannot survive a failed parent state."""
 
