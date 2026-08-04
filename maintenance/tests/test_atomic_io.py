@@ -42,16 +42,18 @@ class AtomicWriteTests(unittest.TestCase):
 
     def test_public_directory_barrier_does_not_open_directories_on_windows(self) -> None:
         atomic = importlib.import_module("x86qw_runtime.io.atomic")
-        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
-            atomic.os,
-            "name",
-            "nt",
-        ), mock.patch.object(
-            atomic.os,
-            "open",
-            side_effect=AssertionError("Windows must not open a directory for fsync"),
-        ) as opened:
-            atomic.sync_directory(Path(directory))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(
+                atomic.os,
+                "name",
+                "nt",
+            ), mock.patch.object(
+                atomic.os,
+                "open",
+                side_effect=AssertionError("Windows must not open a directory for fsync"),
+            ) as opened:
+                atomic.sync_directory(root)
 
         opened.assert_not_called()
 
@@ -209,8 +211,8 @@ class AtomicWriteTests(unittest.TestCase):
             destination.write_bytes(b"stable\n")
 
             with mock.patch.object(
-                atomic.os,
-                "replace",
+                atomic.private_fs,
+                "replace_open_private_file",
                 side_effect=OSError(errno.EACCES, "injected replace failure"),
             ):
                 try:
@@ -285,7 +287,9 @@ class AtomicWriteTests(unittest.TestCase):
             replacement: Path | None = None
 
             def replace_with_foreign_file(
-                source: os.PathLike[str], _target: os.PathLike[str],
+                _descriptor: int,
+                source: os.PathLike[str],
+                _target: os.PathLike[str],
             ) -> None:
                 nonlocal replacement
                 replacement = Path(source)
@@ -293,7 +297,11 @@ class AtomicWriteTests(unittest.TestCase):
                 replacement.write_bytes(b"foreign\n")
                 raise OSError(errno.EACCES, "injected identity swap")
 
-            with mock.patch.object(atomic.os, "replace", side_effect=replace_with_foreign_file):
+            with mock.patch.object(
+                atomic.private_fs,
+                "replace_open_private_file",
+                side_effect=replace_with_foreign_file,
+            ):
                 try:
                     atomic.atomic_write_bytes(destination, b"candidate\n")
                 except atomic.AtomicWriteError as error:

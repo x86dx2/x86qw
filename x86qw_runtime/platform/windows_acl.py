@@ -93,6 +93,17 @@ class _FileDispositionInfo(ctypes.Structure):
     _fields_ = (("delete_file", ctypes.c_ubyte),)
 
 
+class _FileId128(ctypes.Structure):
+    _fields_ = (("identifier", ctypes.c_ubyte * 16),)
+
+
+class _FileIdInfo(ctypes.Structure):
+    _fields_ = (
+        ("volume_serial_number", ctypes.c_ulonglong),
+        ("file_id", _FileId128),
+    )
+
+
 class _FileRenameInfo(ctypes.Structure):
     _fields_ = (
         ("replace_if_exists", ctypes.c_ubyte),
@@ -157,6 +168,7 @@ class _WindowsApi:
     FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
     FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
     FILE_ATTRIBUTE_TAG_INFO = 9
+    FILE_ID_INFO = 18
     FILE_DISPOSITION_INFO = 4
     FILE_RENAME_INFO = 3
     FILE_TYPE_DISK = 1
@@ -930,13 +942,13 @@ def unlink_private_file(
                 int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0),
             )
             transferred = True
-            if expected_identity is not None:
-                metadata = os.fstat(descriptor)
-                actual_identity = (int(metadata.st_dev), int(metadata.st_ino))
-                if actual_identity != expected_identity:
-                    raise WindowsAclError("private cleanup path changed identity")
             disposition = _FileDispositionInfo(True)
             native_handle = msvcrt.get_osfhandle(descriptor)
+            if (
+                expected_identity is not None
+                and persistent_file_identity(native_handle) != expected_identity
+            ):
+                raise WindowsAclError("private cleanup path changed identity")
             if not api.kernel32.SetFileInformationByHandle(
                 native_handle, api.FILE_DISPOSITION_INFO,
                 ctypes.byref(disposition), ctypes.sizeof(disposition),
@@ -947,6 +959,22 @@ def unlink_private_file(
                 os.close(descriptor)
             else:
                 api.kernel32.CloseHandle(handle)
+
+
+def persistent_file_identity(handle: int) -> tuple[int, int]:
+    """Return the stable volume/file ID of an already validated Windows handle."""
+
+    api = _api()
+    information = _FileIdInfo()
+    if not api.kernel32.GetFileInformationByHandleEx(
+        handle,
+        api.FILE_ID_INFO,
+        ctypes.byref(information),
+        ctypes.sizeof(information),
+    ):
+        raise api.error("GetFileInformationByHandleEx(FILE_ID_INFO) failed")
+    identifier = int.from_bytes(bytes(information.file_id.identifier), "little")
+    return int(information.volume_serial_number), identifier
 
 
 def api_functions() -> tuple[object, ...]:

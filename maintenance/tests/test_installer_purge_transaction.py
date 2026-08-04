@@ -145,6 +145,10 @@ class InstallerPurgeTransactionTests(unittest.TestCase):
 
             with mock.patch.object(
                 Path, "rmdir", autospec=True, side_effect=fail_target,
+            ), mock.patch.object(
+                install_qw.host_adapter,
+                "user_cache_directory",
+                return_value=Path(temporary) / "cache" / "x86qw",
             ), contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(
                     install_qw.InstallerError, "finalização",

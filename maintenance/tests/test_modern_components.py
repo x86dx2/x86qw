@@ -1965,8 +1965,10 @@ class ModernComponentTests(unittest.TestCase):
             backup = next(installer.stage.glob(
                 ".nquake-maps-remove-payload.*/qw/maps/owned.loc",
             ))
+            replacement = backup.with_name("replacement-owned.loc")
+            replacement.write_text("replacement", encoding="utf-8")
             backup.unlink()
-            backup.write_text("replacement", encoding="utf-8")
+            replacement.replace(backup)
 
             with self.assertRaises(install_qw.MutationRollbackError):
                 install_qw.rollback_mutation(result)

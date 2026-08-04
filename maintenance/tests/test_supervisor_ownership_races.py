@@ -25,6 +25,13 @@ def _write_private(path: Path, payload: bytes) -> tuple[int, int]:
     return int(identity.st_dev), int(identity.st_ino)
 
 
+def _replace_private(path: Path, payload: bytes) -> None:
+    replacement = path.with_name(f".{path.name}.replacement")
+    _write_private(replacement, payload)
+    path.unlink()
+    replacement.replace(path)
+
+
 def _owner(target: Path, session_id: str) -> dict[str, object]:
     return {
         "format": 3,
@@ -161,8 +168,7 @@ else:
 
             def replace_after_read(path: Path, *, maximum_size: int) -> bytes:
                 read = real_read(path, maximum_size=maximum_size)
-                path.unlink()
-                _write_private(path, replacement)
+                _replace_private(path, replacement)
                 return read
 
             with mock.patch.object(
@@ -184,8 +190,7 @@ else:
 
             def replace_after_publish(request: Path, payload: bytes):
                 identity = real_publish(request, payload)
-                request.unlink()
-                _write_private(request, replacement)
+                _replace_private(request, replacement)
                 lock.release()
                 return identity
 
@@ -210,8 +215,7 @@ else:
             replacement = (
                 json.dumps(lock.owner, ensure_ascii=False, sort_keys=True) + "\n"
             ).encode("utf-8")
-            lock.path.unlink()
-            _write_private(lock.path, replacement)
+            _replace_private(lock.path, replacement)
 
             with self.assertRaises(OSError):
                 lock.release()
@@ -233,9 +237,8 @@ else:
             self.assertIsNotNone(lock.reclaimed_path)
             reclaimed = lock.reclaimed_path
             assert reclaimed is not None
-            reclaimed.unlink()
             replacement = b"concurrent reclaimed lock\n"
-            _write_private(reclaimed, replacement)
+            _replace_private(reclaimed, replacement)
 
             try:
                 with self.assertRaises(OSError):
@@ -329,8 +332,12 @@ else:
             def replace_directory(_journal: sessions.SessionJournal) -> None:
                 nonlocal replacement
                 replacement = _journal.directory
+                candidate = replacement.with_name(
+                    f".{replacement.name}.replacement"
+                )
+                candidate.mkdir(mode=0o700)
                 replacement.rmdir()
-                replacement.mkdir(mode=0o700)
+                candidate.replace(replacement)
                 raise RuntimeError("injected initial write failure")
 
             with mock.patch.object(

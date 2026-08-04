@@ -18,7 +18,7 @@ from x86qw_runtime.io.managed_files import (
     cleanup_materialized_directory,
     cleanup_materialized_file,
     persistent_path_identity,
-    unlink_identity_bound_regular,
+    remove_identity_bound_path,
 )
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.io.paths import lexists
@@ -187,6 +187,26 @@ def _quarantine_identity(path: Path) -> tuple[int, int, int]:
     return int(metadata.st_dev), int(metadata.st_ino), int(stat.S_IFMT(metadata.st_mode))
 
 
+def _persistent_quarantine_identity(token: QuarantineToken) -> tuple[int, int]:
+    if len(token.identity) == 5:
+        return int(token.identity[3]), int(token.identity[4])
+    if len(token.identity) == 3:
+        return int(token.identity[0]), int(token.identity[1])
+    raise QuarantineError(f"Identidade de quarantine inválida: {token.previous}")
+
+
+def _quarantined_regular_matches(token: QuarantineToken, path: Path) -> bool:
+    try:
+        identity = _quarantine_identity(path)
+        return (
+            stat.S_ISREG(identity[2])
+            and persistent_path_identity(path, directory=False)
+            == _persistent_quarantine_identity(token)
+        )
+    except OSError:
+        return False
+
+
 def _restore_quarantined_file(token: QuarantineToken) -> None:
     """Restore one regular file with an atomic no-replace publication."""
 
@@ -196,7 +216,7 @@ def _restore_quarantined_file(token: QuarantineToken) -> None:
         )
     if (
         not lexists(token.previous)
-        or _quarantine_identity(token.previous) != token.identity
+        or not _quarantined_regular_matches(token, token.previous)
         or not stat.S_ISREG(token.identity[2])
     ):
         raise QuarantineError(f"Backup de quarantine mudou: {token.previous}")
@@ -211,11 +231,13 @@ def _restore_quarantined_file(token: QuarantineToken) -> None:
             f"Original preservado no quarantine: {token.previous}"
         ) from error
     try:
-        if _quarantine_identity(token.destination) != token.identity:
+        if not _quarantined_regular_matches(token, token.destination):
             raise QuarantineError(
                 f"Identidade restaurada divergiu: {token.destination}"
             )
-        if not unlink_identity_bound_regular(token.previous, token.identity[:2]):
+        if not remove_identity_bound_path(
+            token.previous, token.identity, directory=False,
+        ):
             raise QuarantineError(f"Backup de quarantine mudou: {token.previous}")
         token.quarantine.rmdir()
         sync_directory(token.destination.parent)
@@ -251,7 +273,7 @@ def apply_personal_file(
                 maximum_size=MAX_MANAGED_FILE_SIZE,
             )
             if (
-                quarantine.identity[:2] != snapshot.identity
+                _persistent_quarantine_identity(quarantine) != snapshot.identity
                 or quarantined_payload != snapshot.payload
                 or persistent_path_identity(
                     quarantine.previous, directory=False,

@@ -112,8 +112,11 @@ class HostPlatformAdapterTests(unittest.TestCase):
             )
 
             executable.chmod(0o600)
-            with self.assertRaisesRegex(host.HostPlatformError, "permissão de execução"):
-                host.service_runtime_executable(executable, os_name="posix")
+            with mock.patch.object(host.os, "access", return_value=False):
+                with self.assertRaisesRegex(
+                    host.HostPlatformError, "permissão de execução",
+                ):
+                    host.service_runtime_executable(executable, os_name="posix")
             self.assertEqual(
                 executable,
                 host.service_runtime_executable(executable, os_name="nt"),
@@ -270,10 +273,11 @@ class HostPlatformAdapterTests(unittest.TestCase):
             struct.pack_into("<H", payload, 18, 62)
             binary.write_bytes(payload)
             binary.chmod(0o600)
-            with self.assertRaisesRegex(host.HostPlatformError, "executable"):
-                host.inspect_portable_binary(
-                    binary, platform_id="linux", os_name="posix",
-                )
+            with mock.patch.object(host.os, "access", return_value=False):
+                with self.assertRaisesRegex(host.HostPlatformError, "executable"):
+                    host.inspect_portable_binary(
+                        binary, platform_id="linux", os_name="posix",
+                    )
 
     def test_user_cache_directory_follows_each_native_contract(self):
         self.assertIsNotNone(host, "the canonical host adapter is missing")

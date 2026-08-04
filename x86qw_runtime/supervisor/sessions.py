@@ -25,6 +25,7 @@ from x86qw_runtime.io.managed_files import (
     cleanup_materialized_file,
     cleanup_sensitive_temporary,
     describe_non_sensitive_temporary,
+    persistent_descriptor_identity,
     persistent_path_identity,
 )
 from x86qw_runtime.io.paths import lexists
@@ -113,8 +114,9 @@ def publish_stop_request(request: Path, payload: bytes) -> tuple[int, int]:
             prefix=".stop-", suffix=".request", directory=request.parent,
         )
         try:
-            metadata = os.fstat(descriptor)
-            temporary_identity = int(metadata.st_dev), int(metadata.st_ino)
+            temporary_identity = persistent_descriptor_identity(
+                descriptor, directory=False,
+            )
         except OSError:
             os.close(descriptor)
             raise
@@ -197,13 +199,15 @@ def activate_background_log(target: Path, relative: str) -> Path:
             descriptor = private_fs.open_private_append(path)
         else:
             try:
-                metadata = os.fstat(created)
-                created_log_identity = int(metadata.st_dev), int(metadata.st_ino)
+                created_log_identity = persistent_descriptor_identity(
+                    created, directory=False,
+                )
             finally:
                 os.close(created)
             descriptor = private_fs.open_private_append(path)
-            metadata = os.fstat(descriptor)
-            if (int(metadata.st_dev), int(metadata.st_ino)) != created_log_identity:
+            if persistent_descriptor_identity(
+                descriptor, directory=False,
+            ) != created_log_identity:
                 raise InstallerError(
                     f"Log em segundo plano mudou de identidade durante a abertura: {path}"
                 )
@@ -872,7 +876,7 @@ def _remove_incomplete_initial_session(directory: Path, sessions: Path) -> bool:
         metadata = directory.lstat()
         if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
             return False
-        directory_identity = int(metadata.st_dev), int(metadata.st_ino)
+        directory_identity = persistent_path_identity(directory, directory=True)
         entries = list(directory.iterdir())
     except OSError:
         return False
@@ -885,8 +889,8 @@ def _remove_incomplete_initial_session(directory: Path, sessions: Path) -> bool:
             staging_metadata = staging.lstat()
             if staging_metadata.st_size != 0:
                 return False
-            staging_identity = (
-                int(staging_metadata.st_dev), int(staging_metadata.st_ino),
+            staging_identity = persistent_path_identity(
+                staging, directory=False,
             )
             private_fs.unlink_private_file(
                 staging, expected_identity=staging_identity,

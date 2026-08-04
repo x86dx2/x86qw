@@ -37,6 +37,7 @@ from x86qw_runtime.io.managed_files import (
     cleanup_materialized_directory,
     cleanup_materialized_file,
     file_sha256,
+    persistent_path_identity,
 )
 from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.io.personal_files import (
@@ -169,7 +170,11 @@ class _PersonalProfileToken:
 
 def _entry_identity(path: Path) -> tuple[int, int]:
     metadata = path.lstat()
-    return int(metadata.st_dev), int(metadata.st_ino)
+    if stat.S_ISLNK(metadata.st_mode):
+        raise OSError(f"identidade insegura: {path}")
+    return persistent_path_identity(
+        path, directory=stat.S_ISDIR(metadata.st_mode),
+    )
 
 
 def _profile_parent_paths(target: Path, destination: Path) -> tuple[Path, ...]:

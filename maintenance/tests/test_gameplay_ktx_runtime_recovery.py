@@ -228,10 +228,10 @@ class KtxRuntimeConfigRecoveryTests(unittest.TestCase):
                     (
                         "import os, pathlib, sys; import gameplay; "
                         "from x86qw_runtime.gameplay import runtime_configs; "
-                        "real_unlink = runtime_configs.private_fs.unlink_private_file; "
-                        "runtime_configs.private_fs.unlink_private_file = "
-                        "lambda path, **kwargs: os._exit(32) if "
-                        "str(path).endswith('.stage') else real_unlink(path, **kwargs); "
+                        "real_unlink = runtime_configs.remove_persistent_identity_bound_path; "
+                        "runtime_configs.remove_persistent_identity_bound_path = "
+                        "lambda path, *args, **kwargs: os._exit(32) if "
+                        "str(path).endswith('.stage') else real_unlink(path, *args, **kwargs); "
                         "gameplay.write_ktx_runtime_config(pathlib.Path(sys.argv[1]), ())"
                     ),
                     str(target),

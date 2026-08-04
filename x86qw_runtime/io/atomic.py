@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import private_fs
+from .managed_files import (
+    persistent_descriptor_identity,
+    remove_persistent_identity_bound_path,
+)
 
 
 class AtomicWriteError(OSError):
@@ -116,9 +120,8 @@ def atomic_copy_file(
     except BaseException:
         os.close(source_descriptor)
         raise
-    temporary_metadata = os.fstat(descriptor)
-    temporary_identity = (
-        int(temporary_metadata.st_dev), int(temporary_metadata.st_ino),
+    temporary_identity = persistent_descriptor_identity(
+        descriptor, directory=False,
     )
     committed = False
     copied = 0
@@ -253,8 +256,9 @@ def atomic_write_bytes(
         prefix=f".{path.name}.",
         suffix=".tmp",
     )
-    metadata = os.fstat(descriptor)
-    temporary_identity = (int(metadata.st_dev), int(metadata.st_ino))
+    temporary_identity = persistent_descriptor_identity(
+        descriptor, directory=False,
+    )
     committed = False
     result: AtomicWriteResult | None = None
     primary_error: BaseException | None = None
@@ -350,8 +354,9 @@ def atomic_create_bytes(
         prefix=f".{path.name}.",
         suffix=".tmp",
     )
-    metadata = os.fstat(descriptor)
-    temporary_identity = int(metadata.st_dev), int(metadata.st_ino)
+    temporary_identity = persistent_descriptor_identity(
+        descriptor, directory=False,
+    )
     committed = False
     result: AtomicWriteResult | None = None
     primary_error: BaseException | None = None
@@ -387,15 +392,12 @@ def atomic_create_bytes(
     finally:
         os.close(descriptor)
         try:
-            temporary_metadata = temporary.lstat()
-            if (
-                stat.S_ISLNK(temporary_metadata.st_mode)
-                or not stat.S_ISREG(temporary_metadata.st_mode)
-                or (int(temporary_metadata.st_dev), int(temporary_metadata.st_ino))
-                != temporary_identity
-            ):
-                raise OSError(f"managed staging path changed identity: {temporary}")
-            temporary.unlink()
+            if not remove_persistent_identity_bound_path(
+                temporary, temporary_identity, directory=False,
+            ) and os.path.lexists(temporary):
+                raise OSError(
+                    f"managed staging path changed identity: {temporary}"
+                )
         except FileNotFoundError:
             cleanup_error: OSError | None = None
         except OSError as error:

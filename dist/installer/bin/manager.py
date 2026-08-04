@@ -74,7 +74,11 @@ from x86qw_runtime.io.atomic import (
     atomic_copy_file,
     atomic_write_bytes,
 )
-from x86qw_runtime.io.managed_files import file_sha256 as file_hash
+from x86qw_runtime.io.managed_files import (
+    file_sha256 as file_hash,
+    persistent_descriptor_identity,
+    persistent_path_identity,
+)
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
@@ -1145,23 +1149,22 @@ class Installer:
                 raise InstallerError(f"Não foi possível criar o marcador privado do cache: {marker}") from error
             else:
                 try:
-                    reservation = os.fstat(descriptor)
+                    reservation_identity = persistent_descriptor_identity(
+                        descriptor, directory=False,
+                    )
                 except OSError as error:
                     raise InstallerError(
                         f"Não foi possível confirmar o marcador privado do cache: {marker}"
                     ) from error
                 finally:
                     os.close(descriptor)
-                reservation_identity = (
-                    int(reservation.st_dev), int(reservation.st_ino),
-                )
                 try:
                     private_fs.protect_private_directory(root)
                     current = marker.lstat()
                     if (
                         stat.S_ISLNK(current.st_mode)
                         or not stat.S_ISREG(current.st_mode)
-                        or (int(current.st_dev), int(current.st_ino))
+                        or persistent_path_identity(marker, directory=False)
                         != reservation_identity
                     ):
                         raise InstallerError(
@@ -1172,9 +1175,8 @@ class Installer:
                         (CACHE_MARKER_VALUE + "\n").encode("utf-8"),
                         mode=0o600,
                     )
-                    published = marker.lstat()
-                    published_identity = (
-                        int(published.st_dev), int(published.st_ino),
+                    published_identity = persistent_path_identity(
+                        marker, directory=False,
                     )
                     foreign = tuple(entry for entry in root.iterdir() if entry != marker)
                     if foreign:
@@ -3261,6 +3263,7 @@ class Installer:
         self, *, mutation_results: list[MutationResult] | None = None,
     ) -> tuple[MutationResult, ...]:
         packages = self.expected_qw_package_order()
+        payload = "".join(f"{name}\n" for name in packages).encode("utf-8")
         created: list[MutationResult] = []
         if not packages:
             present, _, _ = self.validate_component_pair("package-order")
@@ -3298,7 +3301,7 @@ class Installer:
                 remove_path(managed, self.target.stat().st_dev)
             target = managed / "qw/pak.lst"
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text("".join(f"{name}\n" for name in packages), encoding="utf-8")
+            target.write_bytes(payload)
             count, result = self.install_component_overlay_transaction(
                 "package-order", managed, "1", "x86QW deterministic PK3 order",
             )
@@ -5615,6 +5618,7 @@ class Installer:
             ])
         target = host_adapter.client_launch_target(
             runtime,
+            system=host_platform.system(),
             expected_sha256=self._runtime_launch_hashes.get(runtime),
         )
         command = [str(target.executable), *base_arguments, *quake_arguments]

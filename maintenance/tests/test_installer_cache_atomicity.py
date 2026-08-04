@@ -188,17 +188,20 @@ class InstallerCacheAtomicityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, cache = self.make_installer(Path(temporary))
             resolved_cache = cache.resolve(strict=False)
-            path_type = type(cache)
-            real_mkdir = path_type.mkdir
+            real_create = private_fs.create_private_directory
 
-            def inject_foreign(path, *args, **kwargs):
-                result = real_mkdir(path, *args, **kwargs)
-                if path == resolved_cache:
-                    (path / "foreign.txt").write_text("personal\n", encoding="utf-8")
+            def inject_foreign(path):
+                result = real_create(path)
+                if Path(path) == resolved_cache:
+                    (Path(path) / "foreign.txt").write_text(
+                        "personal\n", encoding="utf-8",
+                    )
                 return result
 
             with mock.patch.object(
-                path_type, "mkdir", autospec=True, side_effect=inject_foreign,
+                private_fs,
+                "create_private_directory",
+                side_effect=inject_foreign,
             ):
                 with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(
                     install_qw.InstallerError,

@@ -943,11 +943,15 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.spec = install_qw.PLATFORMS["macos"]
-            process = mock.Mock(returncode=0, stdout="1234\n", stderr="")
             with mock.patch.object(install_qw.host_platform, "system", return_value="Darwin"):
-                with mock.patch.object(install_qw.macos.subprocess, "run", return_value=process):
+                with mock.patch.object(
+                    install_qw.macos,
+                    "ensure_process_absent",
+                    side_effect=install_qw.InstallerError("Feche o ezQuake"),
+                ) as ensure_process_absent:
                     with self.assertRaisesRegex(install_qw.InstallerError, "Feche o ezQuake"):
                         installer.ensure_macos_ezquake_closed()
+            ensure_process_absent.assert_called_once_with("ezQuake")
 
     def test_native_macos_install_clears_stale_game_directory_preferences(self):
         with tempfile.TemporaryDirectory() as temporary:

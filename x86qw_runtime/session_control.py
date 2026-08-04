@@ -10,6 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from x86qw_runtime.io import private_fs
+from x86qw_runtime.io.managed_files import (
+    persistent_descriptor_identity,
+    persistent_path_identity,
+)
 from x86qw_runtime.platform.locking import (
     SessionControlError,
     installation_acquisition_mutex as _installation_acquisition_mutex,
@@ -116,7 +120,7 @@ def _private_file_identity(path: Path) -> tuple[int, int]:
     metadata = path.lstat()
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
         raise SessionControlError(f"Lock de operação mudou de tipo: {path}")
-    return int(metadata.st_dev), int(metadata.st_ino)
+    return persistent_path_identity(path, directory=False)
 
 
 def _read_lock_owner_with_identity(
@@ -322,8 +326,9 @@ class InstallationLock:
             created_identity: tuple[int, int] | None = None
             failure: OSError | None = None
             try:
-                metadata = os.fstat(descriptor)
-                created_identity = (int(metadata.st_dev), int(metadata.st_ino))
+                created_identity = persistent_descriptor_identity(
+                    descriptor, directory=False,
+                )
                 payload = (
                     json.dumps(owner, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
                 ).encode("utf-8")

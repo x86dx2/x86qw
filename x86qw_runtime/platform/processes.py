@@ -128,6 +128,8 @@ def _windows_process_identity(pid: int) -> ProcessProbe:
             ctypes.byref(kernel), ctypes.byref(user),
         ):
             return ProcessProbe("inconclusive", detail="GetProcessTimes falhou")
+        if int(exit_time.high) != 0 or int(exit_time.low) != 0:
+            return ProcessProbe("dead")
         capacity = wintypes.DWORD(32768)
         buffer = ctypes.create_unicode_buffer(capacity.value)
         if not kernel32.QueryFullProcessImageNameW(

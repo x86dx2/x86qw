@@ -3192,7 +3192,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             private_fs.validate_private_file(log)
             self.assertEqual(
-                b"existing diagnostics\nnew diagnostics\n",
+                b"existing diagnostics\nnew diagnostics" + os.linesep.encode(),
                 log.read_bytes(),
             )
 
@@ -3701,7 +3701,7 @@ os.write(2, b'stderr-restored\\n')
             marker = Path(temporary) / "executed.txt"
             job = services.WindowsJobObject()
             spawned: list[subprocess.Popen[bytes]] = []
-            original_popen = services.subprocess.Popen
+            original_popen = supervisor_core.subprocess.Popen
 
             def capture(*arguments, **options):
                 process = original_popen(*arguments, **options)
@@ -3713,7 +3713,9 @@ os.write(2, b'stderr-restored\\n')
 
             job.assign = reject
             try:
-                with mock.patch.object(services.subprocess, "Popen", side_effect=capture):
+                with mock.patch.object(
+                    supervisor_core.subprocess, "Popen", side_effect=capture,
+                ):
                     with self.assertRaisesRegex(
                         services.InstallerError, "associação recusada",
                     ):

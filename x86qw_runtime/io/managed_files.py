@@ -256,19 +256,12 @@ class _WindowsFileApi:
     FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
     FILE_BEGIN = 0
     FILE_ATTRIBUTE_TAG_INFO_CLASS = 9
-    FILE_ID_INFO_CLASS = 18
     FILE_DISPOSITION_INFO_CLASS = 4
     MOVEFILE_WRITE_THROUGH = 0x00000008
     ERROR_FILE_NOT_FOUND = 2
     ERROR_PATH_NOT_FOUND = 3
     ERROR_FILE_EXISTS = 80
     ERROR_ALREADY_EXISTS = 183
-
-    class _FileId128(ctypes.Structure):
-        _fields_ = (("identifier", ctypes.c_ubyte * 16),)
-
-    class _FileIdInfo(ctypes.Structure):
-        pass
 
     class _FileAttributeTagInfo(ctypes.Structure):
         _fields_ = (
@@ -278,11 +271,6 @@ class _WindowsFileApi:
 
     class _FileDispositionInfo(ctypes.Structure):
         _fields_ = (("delete_file", ctypes.c_ubyte),)
-
-    _FileIdInfo._fields_ = (
-        ("volume_serial_number", ctypes.c_ulonglong),
-        ("file_id", _FileId128),
-    )
 
     def __init__(self) -> None:
         from ctypes import wintypes
@@ -405,16 +393,9 @@ class _WindowsFileApi:
         return int(information.file_attributes)
 
     def identity(self, handle: int) -> tuple[int, int]:
-        information = self._FileIdInfo()
-        if not self.kernel32.GetFileInformationByHandleEx(
-            handle,
-            self.FILE_ID_INFO_CLASS,
-            ctypes.byref(information),
-            ctypes.sizeof(information),
-        ):
-            self._raise_last_error()
-        identifier = int.from_bytes(bytes(information.file_id.identifier), "little")
-        return int(information.volume_serial_number), identifier
+        from x86qw_runtime.platform.windows_acl import persistent_file_identity
+
+        return persistent_file_identity(handle)
 
     def checked_identity(self, handle: int, *, directory: bool) -> tuple[int, int]:
         attributes = self.attributes(handle)
@@ -548,6 +529,29 @@ def persistent_path_identity(path: Path, *, directory: bool) -> tuple[int, int]:
     if stat.S_ISLNK(metadata.st_mode) or not valid_type:
         raise OSError(f"tipo de arquivo materializado inseguro: {path}")
     return _file_identity(metadata)
+
+
+def persistent_descriptor_identity(
+    descriptor: int, *, directory: bool,
+) -> tuple[int, int]:
+    """Return the canonical persistent identity of one open file descriptor."""
+
+    metadata = os.fstat(descriptor)
+    valid_type = (
+        stat.S_ISDIR(metadata.st_mode)
+        if directory
+        else stat.S_ISREG(metadata.st_mode)
+    )
+    if not valid_type:
+        raise OSError("tipo de descritor materializado inseguro")
+    api = _get_windows_file_api()
+    if api is None:
+        return _file_identity(metadata)
+    import msvcrt
+
+    return api.checked_identity(
+        msvcrt.get_osfhandle(descriptor), directory=directory,
+    )
 
 
 @contextmanager
@@ -1103,6 +1107,42 @@ def remove_identity_bound_path(
     if directory:
         return _rmdir_identity_bound_directory(path, expected_identity[:2])
     return unlink_identity_bound_regular(path, expected_identity[:2])
+
+
+def remove_persistent_identity_bound_path(
+    path: Path,
+    expected_identity: tuple[int, int],
+    *,
+    directory: bool,
+) -> bool:
+    """Remove the object carrying a previously recorded persistent identity."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) != 2
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+    ):
+        raise ValueError("expected_identity must be a persistent identity pair")
+    expected_type = stat.S_IFDIR if directory else stat.S_IFREG
+    windows_api = _get_windows_file_api()
+    if windows_api is None:
+        return remove_identity_bound_path(
+            path, (*expected_identity, expected_type), directory=directory,
+        )
+    try:
+        metadata = Path(path).lstat()
+    except OSError:
+        return False
+    return remove_identity_bound_path(
+        path,
+        (
+            int(metadata.st_dev),
+            int(metadata.st_ino),
+            expected_type,
+            *expected_identity,
+        ),
+        directory=directory,
+    )
 
 
 def cleanup_materialized_file(entry: MaterializedFile) -> bool:
@@ -2069,8 +2109,10 @@ def cleanup_sensitive_temporary(
         return False
     try:
         metadata = path.lstat()
-        identity = int(metadata.st_dev), int(metadata.st_ino)
-        if identity != expected_identity or not stat.S_ISREG(metadata.st_mode):
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or persistent_path_identity(path, directory=False) != expected_identity
+        ):
             return False
         private_fs.unlink_private_file(path, expected_identity=expected_identity)
         return not lexists(path)
@@ -2100,6 +2142,8 @@ __all__ = (
     "file_sha256",
     "materialize_archive",
     "persistent_path_identity",
+    "persistent_descriptor_identity",
     "remove_identity_bound_path",
+    "remove_persistent_identity_bound_path",
     "unlink_sensitive_temporary",
 )

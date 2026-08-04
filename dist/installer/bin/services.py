@@ -44,6 +44,7 @@ from x86qw_runtime.io.managed_files import (
     file_matches_sha256,
     file_sha256,
     materialize_archive,
+    persistent_descriptor_identity,
     unlink_sensitive_temporary,
 )
 from x86qw_runtime.errors import ExitCode, InstallerError
@@ -928,8 +929,9 @@ def temporary_config(
     sensitive_guard: object | None = None
     try:
         with os.fdopen(descriptor, "wb") as output:
-            metadata = os.fstat(output.fileno())
-            identity = (int(metadata.st_dev), int(metadata.st_ino))
+            identity = persistent_descriptor_identity(
+                output.fileno(), directory=False,
+            )
             reservation = MaterializedFile(
                 path,
                 hashlib.sha256(b"").hexdigest(),

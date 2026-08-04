@@ -22,6 +22,8 @@ from x86qw_runtime.io.managed_files import (
     MaterializedFile,
     cleanup_materialized_file,
     file_sha256,
+    persistent_path_identity,
+    remove_persistent_identity_bound_path,
 )
 from x86qw_runtime.io.paths import lexists
 from x86qw_runtime.platform.processes import process_identity, probe_expected_process
@@ -123,16 +125,14 @@ def _unlink_journal(ownership: RuntimeConfigOwnership) -> None:
     )
 
 
-def _unlink_staging(ownership: RuntimeConfigOwnership) -> bool:
+def _unlink_staging(target: Path, ownership: RuntimeConfigOwnership) -> bool:
     if ownership.config_identity is None:
         return not lexists(ownership.staging)
-    try:
-        private_fs.unlink_private_file(
-            ownership.staging, expected_identity=ownership.config_identity,
-        )
-    except OSError:
-        return False
-    return not lexists(ownership.staging)
+    return remove_persistent_identity_bound_path(
+        ownership.staging,
+        ownership.config_identity,
+        directory=False,
+    )
 
 
 def _cleanup_public_config(target: Path, ownership: RuntimeConfigOwnership) -> bool:
@@ -154,7 +154,7 @@ def _discard_owned_paths(
     target: Path, ownership: RuntimeConfigOwnership,
 ) -> tuple[bool, tuple[Path, ...]]:
     preserved: list[Path] = []
-    if not _unlink_staging(ownership) and lexists(ownership.staging):
+    if not _unlink_staging(target, ownership) and lexists(ownership.staging):
         preserved.append(ownership.staging)
     removed = _cleanup_public_config(target, ownership)
     if not removed and lexists(ownership.config):
@@ -192,7 +192,7 @@ def _verified_intent_staging(
         ownership.journal_identity,
         ownership.config,
         ownership.staging,
-        (int(metadata.st_dev), int(metadata.st_ino)),
+        persistent_path_identity(ownership.staging, directory=False),
         ownership.sha256,
         ownership.size,
         ownership.state,
@@ -248,7 +248,7 @@ def create_runtime_config(target: Path, payload: bytes) -> RuntimeConfigOwnershi
     try:
         atomic_create_bytes(staging, payload, mode=0o600)
         metadata = staging.lstat()
-        identity = int(metadata.st_dev), int(metadata.st_ino)
+        identity = persistent_path_identity(staging, directory=False)
         if (
             not stat.S_ISREG(metadata.st_mode)
             or metadata.st_size != len(payload)
@@ -263,10 +263,9 @@ def create_runtime_config(target: Path, payload: bytes) -> RuntimeConfigOwnershi
         ).encode()
         atomic_write_bytes(journal, ready_payload, mode=0o600)
         private_fs.validate_private_file(journal)
-        journal_metadata = journal.lstat()
         ownership = RuntimeConfigOwnership(
             journal,
-            (int(journal_metadata.st_dev), int(journal_metadata.st_ino)),
+            persistent_path_identity(journal, directory=False),
             config,
             staging,
             identity,
@@ -276,7 +275,7 @@ def create_runtime_config(target: Path, payload: bytes) -> RuntimeConfigOwnershi
         )
         os.link(staging, config, follow_symlinks=False)
         sync_directory(directory)
-        _unlink_staging(ownership)
+        _unlink_staging(target, ownership)
         return ownership
     except (AtomicWriteError, OSError, ValueError) as error:
         if ownership is not None:
@@ -302,7 +301,6 @@ def _read_ownership(
     try:
         payload = private_fs.read_private_file(journal, maximum_size=_MAX_JOURNAL_SIZE)
         document = json.loads(payload.decode("utf-8"))
-        journal_metadata = journal.lstat()
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
         raise InstallerError(
             f"Journal KTX inválido preservado para inspeção: {journal}"
@@ -368,7 +366,7 @@ def _read_ownership(
         identity = int(device), int(inode)
     ownership = RuntimeConfigOwnership(
         journal,
-        (int(journal_metadata.st_dev), int(journal_metadata.st_ino)),
+        persistent_path_identity(journal, directory=False),
         target.joinpath(*config_relative.parts),
         target.joinpath(*staging_relative.parts),
         identity,
