@@ -1742,6 +1742,44 @@ class ModernComponentTests(unittest.TestCase):
             )
             self.assertEqual("test", receipt["selection"])
 
+    def test_component_menu_removal_rolls_back_when_state_commit_fails(self):
+        """Interactive removal and state.json are one mutation boundary."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".seed-stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            owned = managed / "qw/maps/owned.loc"
+            owned.parent.mkdir(parents=True)
+            owned.write_text("owned", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "fixture",
+            )
+            installer.cleanup_stage()
+            installer.stage = None
+
+            with (
+                mock.patch.object(play_qw.navigation, "select_one", return_value="remove"),
+                mock.patch.object(installer, "check_paks"),
+                mock.patch.object(
+                    installer, "choose_components_to_remove", return_value=["nquake-maps"],
+                ),
+                mock.patch.object(installer, "refresh_qw_package_order"),
+                mock.patch.object(installer, "reconcile_play_support_transaction"),
+                mock.patch.object(
+                    installer, "write_install_state",
+                    side_effect=install_qw.PersistenceError(
+                        "falha de state.json", committed=False,
+                    ),
+                ),
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.manage_components()
+
+            self.assertEqual("owned", (target / "qw/maps/owned.loc").read_text())
+            self.assertTrue(installer.validate_component_pair("nquake-maps")[0])
+
     def test_component_removal_tracks_a_node_before_post_move_identity_validation(self):
         """A post-rename identity failure must still restore the moved payload."""
 

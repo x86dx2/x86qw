@@ -4892,14 +4892,21 @@ class Installer:
         self.check_paks()
         if answer == "remove":
             selected = self.choose_components_to_remove()
-            for identifier in selected:
-                removed = self.remove_component(identifier)
-                console.success(f"{self.components[identifier]['label']} removido ({file_count(removed)}).")
             with self.component_state_transaction() as mutation_results:
+                if selected and self.stage is None:
+                    self._create_stage(".x86qw-components-remove.")
+                for identifier in selected:
+                    removed, result = self.remove_component_transaction(identifier)
+                    mutation_results.append(result)
+                    console.success(
+                        f"{self.components[identifier]['label']} removido "
+                        f"({file_count(removed)})."
+                    )
                 self.refresh_qw_package_order(mutation_results=mutation_results)
                 self.reconcile_play_support_transaction(
                     mutation_results=mutation_results,
                 )
+                self._prune_component_directories()
                 self.write_install_state(
                     "custom" if self.installed_components() else "none",
                     self.installed_components(),
