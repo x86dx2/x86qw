@@ -41,7 +41,7 @@ INSTALLER_BIN = Path(__file__).resolve().parent
 if str(INSTALLER_BIN) not in sys.path:
     sys.path.insert(0, str(INSTALLER_BIN))
 
-python_runtime = importlib.import_module("python_runtime")
+python_runtime = importlib.import_module("x86qw_runtime.platform.python_runtime")
 try:
     python_runtime.require_supported_runtime()
 except python_runtime.UnsupportedPythonError as error:

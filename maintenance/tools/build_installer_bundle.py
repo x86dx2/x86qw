@@ -54,6 +54,7 @@ BUNDLE_FILES = (
 ZIPAPP_FILES = (
     ("dist/installer/bin/manager.py", "manager.py"),
     ("dist/installer/bin/python_runtime.py", "python_runtime.py"),
+    ("x86qw_runtime/platform/python_runtime.py", "x86qw_runtime/platform/python_runtime.py"),
     ("dist/installer/bin/menu.py", "menu.py"),
     ("dist/installer/bin/gameplay.py", "gameplay.py"),
     ("dist/installer/bin/services.py", "services.py"),
