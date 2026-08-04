@@ -770,6 +770,20 @@ class ComponentMetadataRollback:
 
 
 @dataclass
+class ComponentRemovalNode:
+    original: Path
+    backup: Path
+    identity: tuple[int, int]
+    kind: str
+
+
+@dataclass
+class ComponentRemovalRollback:
+    backup_root: Path
+    moved: list[ComponentRemovalNode]
+
+
+@dataclass
 class RuntimePayloadRollback:
     destination: Path
     installed_identity: tuple[int, int] | None
@@ -3004,11 +3018,209 @@ class Installer:
                 "x86QW no mesmo destino."
             )
 
-    def remove_component(self, component: str) -> int:
+    def _component_removal_payload_observation(
+        self, names: Iterable[str],
+    ) -> tuple[tuple[str, tuple[object, ...]], ...]:
+        return tuple(
+            (
+                name,
+                self._mutation_path_observation(
+                    self.target.joinpath(*PurePosixPath(name).parts),
+                ),
+            )
+            for name in sorted(set(names))
+        )
+
+    def _component_removal_node_identity(self, path: Path, kind: str) -> tuple[int, int]:
+        if kind == "file":
+            return self._regular_identity(path)
+        if kind == "directory":
+            return self._directory_identity(path)
+        raise InstallerError(f"Tipo de backup gerenciado inválido: {kind}")
+
+    def _move_component_removal_node(
+        self,
+        original: Path,
+        backup: Path,
+        *,
+        token: ComponentRemovalRollback,
+        kind: str,
+        expected_identity: tuple[int, int],
+    ) -> None:
+        if self._component_removal_node_identity(original, kind) != expected_identity:
+            raise InstallerError(f"Caminho gerenciado mudou antes da remoção: {original}")
+        backup.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        original.replace(backup)
+        node = ComponentRemovalNode(original, backup, expected_identity, kind)
+        token.moved.append(node)
+        if self._component_removal_node_identity(backup, kind) != expected_identity:
+            raise InstallerError(f"Backup gerenciado mudou durante a remoção: {backup}")
+
+    def _rollback_component_removal(self, token: ComponentRemovalRollback) -> None:
+        errors: list[str] = []
+        for node in reversed(token.moved):
+            try:
+                if lexists(node.original):
+                    raise InstallerError(
+                        f"Destino reapareceu e foi preservado: {node.original}"
+                    )
+                if (
+                    self._component_removal_node_identity(node.backup, node.kind)
+                    != node.identity
+                ):
+                    raise InstallerError(
+                        f"Backup alterado foi preservado: {node.backup}"
+                    )
+                node.original.parent.mkdir(parents=True, exist_ok=True)
+                node.backup.replace(node.original)
+                if (
+                    self._component_removal_node_identity(node.original, node.kind)
+                    != node.identity
+                ):
+                    raise InstallerError(
+                        f"Caminho restaurado diverge do backup: {node.original}"
+                    )
+            except BaseException as error:
+                errors.append(str(error))
+        if errors:
+            raise InstallerError(
+                "Rollback da remoção ficou incompleto: " + "; ".join(errors)
+            )
+
+    def _component_removal_apply_error(
+        self,
+        *,
+        component: str,
+        step_key: str,
+        operation_error: BaseException,
+        rollback_error: BaseException,
+    ) -> MutationRollbackError:
+        return MutationRollbackError(
+            f"A remoção de {component} falhou e o rollback ficou incompleto.",
+            plan_identifier=f"component-remove:{component}",
+            step_key=step_key,
+            operation_error=operation_error,
+            rollback_errors=((step_key, rollback_error),),
+        )
+
+    def _apply_component_removal_payload(
+        self,
+        component: str,
+        entries: Iterable[tuple[str, str, tuple[int, int]]],
+    ) -> ComponentRemovalRollback:
+        assert self.stage is not None
+        backup_root = private_fs.private_mkdtemp(
+            directory=self.stage, prefix=f".{component}-remove-payload.",
+        )
+        token = ComponentRemovalRollback(backup_root, [])
+        try:
+            for name, digest, identity in entries:
+                original = self.target.joinpath(*PurePosixPath(name).parts)
+                if file_hash(original) != digest:
+                    raise InstallerError(
+                        f"Arquivo gerenciado mudou antes da remoção: {original}"
+                    )
+                backup = backup_root.joinpath(*PurePosixPath(name).parts)
+                self._move_component_removal_node(
+                    original,
+                    backup,
+                    token=token,
+                    kind="file",
+                    expected_identity=identity,
+                )
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_component_removal(token)
+            except BaseException as rollback_error:
+                raise self._component_removal_apply_error(
+                    component=component,
+                    step_key="payload",
+                    operation_error=error,
+                    rollback_error=rollback_error,
+                ) from error
+            raise
+
+    def _component_removal_metadata_nodes(
+        self, component: str,
+    ) -> tuple[tuple[Path, str, str, tuple[int, int]], ...]:
+        metadata = self.target / METADATA_DIR
+        canonical = self.component_pair_paths(component, metadata)
+        nodes: list[tuple[Path, str, str, tuple[int, int]]] = []
+        if lexists(canonical[0].parent):
+            nodes.append((
+                canonical[0].parent,
+                "canonical",
+                "directory",
+                self._directory_identity(canonical[0].parent),
+            ))
+        for index, legacy in enumerate(
+            self.component_pair_paths(component, metadata, legacy=True), 1,
+        ):
+            if lexists(legacy):
+                nodes.append((
+                    legacy,
+                    f"legacy-{index}",
+                    "file",
+                    self._regular_identity(legacy),
+                ))
+        return tuple(nodes)
+
+    def _apply_component_removal_metadata(
+        self,
+        component: str,
+        expected_observation: tuple[tuple[str, tuple[object, ...]], ...],
+        expected_nodes: tuple[tuple[Path, str, str, tuple[int, int]], ...],
+    ) -> ComponentRemovalRollback:
+        assert self.stage is not None
+        backup_root = private_fs.private_mkdtemp(
+            directory=self.stage, prefix=f".{component}-remove-metadata.",
+        )
+        token = ComponentRemovalRollback(backup_root, [])
+        try:
+            if self._component_metadata_observation(component) != expected_observation:
+                raise InstallerError(
+                    f"Os metadados de {component} mudaram antes da remoção."
+                )
+            for original, backup_name, kind, identity in expected_nodes:
+                self._move_component_removal_node(
+                    original,
+                    backup_root / backup_name,
+                    token=token,
+                    kind=kind,
+                    expected_identity=identity,
+                )
+            return token
+        except BaseException as error:
+            try:
+                self._rollback_component_removal(token)
+            except BaseException as rollback_error:
+                raise self._component_removal_apply_error(
+                    component=component,
+                    step_key="metadata",
+                    operation_error=error,
+                    rollback_error=rollback_error,
+                ) from error
+            raise
+
+    def remove_component_transaction(
+        self, component: str,
+    ) -> tuple[int, MutationResult]:
         present, entries, _ = self.validate_component_pair(component)
         if not present:
-            return 0
-        removed = 0
+            plan = MutationPlan(
+                identifier=f"component-remove:{component}",
+                summary=f"Remover componente ausente {component}",
+                steps=(MutationStep(
+                    key="absent",
+                    description=f"Confirmar ausência de {component}",
+                    observe=lambda: self._component_metadata_observation(component),
+                    apply=lambda: None,
+                    rollback=lambda _token: None,
+                ),),
+            )
+            return 0, execute_mutation(prepare_mutation(plan))
+        unchanged: list[tuple[str, str, tuple[int, int]]] = []
         for name, digest in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
             if not lexists(managed):
@@ -3016,15 +3228,63 @@ class Installer:
             if not managed.is_file() or managed.is_symlink():
                 raise InstallerError(f"Caminho gerenciado inválido: {managed}")
             if file_hash(managed) == digest:
-                remove_path(managed)
-                removed += 1
+                unchanged.append((name, digest, self._regular_identity(managed)))
             else:
                 console.warning(f"Arquivo modificado preservado: {managed}")
         metadata = self.target / METADATA_DIR
-        canonical = self.component_pair_paths(component, metadata)
-        remove_path(canonical[0].parent)
-        for path in self.component_pair_paths(component, metadata, legacy=True):
-            remove_path(path)
+        metadata_paths = [
+            self.metadata_path(metadata, relative)
+            for relative in (
+                *self.component_metadata(component),
+                *self.legacy_component_metadata(component),
+            )
+        ]
+        expected_metadata_observation = tuple(
+            (str(path), self._mutation_path_observation(path))
+            for path in metadata_paths
+        )
+        expected_metadata_nodes = self._component_removal_metadata_nodes(component)
+        plan = MutationPlan(
+            identifier=f"component-remove:{component}",
+            summary=f"Remover componente {component}",
+            steps=(
+                MutationStep(
+                    key="payload",
+                    description=f"Retirar payload gerenciado de {component}",
+                    observe=lambda: self._component_removal_payload_observation(
+                        name for name, _digest, _identity in unchanged
+                    ),
+                    apply=lambda: self._apply_component_removal_payload(
+                        component, unchanged,
+                    ),
+                    rollback=self._rollback_component_removal,
+                ),
+                MutationStep(
+                    key="metadata",
+                    description=f"Retirar recibo e inventário de {component}",
+                    observe=lambda: self._component_metadata_observation(component),
+                    apply=lambda: self._apply_component_removal_metadata(
+                        component,
+                        expected_metadata_observation,
+                        expected_metadata_nodes,
+                    ),
+                    rollback=self._rollback_component_removal,
+                ),
+            ),
+        )
+        try:
+            result = execute_mutation(prepare_mutation(plan))
+        except MutationRollbackError:
+            raise
+        except MutationApplyError as error:
+            if isinstance(error.operation_error, MutationRollbackError):
+                raise error.operation_error
+            if isinstance(error.operation_error, InstallerError):
+                raise error.operation_error
+            raise
+        return len(unchanged), result
+
+    def _prune_component_directories(self) -> None:
         for name in (
             "qw/maps", "ezquake/configs", "arena", "prox", "fortress", "td2",
             "qtv", "qwfwd", "docs/licenses", "docs",
@@ -3032,7 +3292,26 @@ class Installer:
             remove_empty_directories(self.target / name)
         remove_empty_directories(self.target / COMPONENT_METADATA_DIR)
         remove_empty_directories(self.target / METADATA_DIR)
-        return removed
+
+    def remove_component(self, component: str) -> int:
+        present, _, _ = self.validate_component_pair(component)
+        if not present:
+            return 0
+        owned_stage = self.stage is None
+        if owned_stage:
+            self._create_stage(f".{component}-remove.")
+        cleanup = True
+        try:
+            removed, _ = self.remove_component_transaction(component)
+            self._prune_component_directories()
+            return removed
+        except MutationRollbackError:
+            cleanup = False
+            raise
+        finally:
+            if owned_stage and cleanup:
+                self.cleanup_stage()
+                self.stage = None
 
     def verify_component(self, component: str) -> int:
         present, entries, receipt = self.validate_component_pair(component)
@@ -5642,7 +5921,12 @@ class Installer:
                             ))
                 else:
                     for identifier in legacy_removals:
-                        removed = self.remove_component(identifier)
+                        if self.stage is None:
+                            self._create_stage(".x86qw-components-remove.")
+                        removed, removal_result = self.remove_component_transaction(
+                            identifier,
+                        )
+                        mutation_results.append(removal_result)
                         console.success(
                             f"Componente obsoleto {identifier} removido ({file_count(removed)}); "
                             f"{LEGACY_COMPONENT_REMOVALS[identifier]}."

@@ -1690,6 +1690,224 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("mine", personal.read_text(encoding="utf-8"))
             self.assertFalse((target / "qw/maps/new.loc").exists())
 
+    def test_component_removal_transaction_rolls_back_after_parent_state_failure(self):
+        """A state failure must restore owned payload and metadata, not personal edits."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            maps = managed / "qw/maps"
+            maps.mkdir(parents=True)
+            (maps / "owned.loc").write_text("owned", encoding="utf-8")
+            (maps / "personal.loc").write_text("original", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.install_component_overlay(
+                    "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+                )
+            personal = target / "qw/maps/personal.loc"
+            personal.write_text("personal edit", encoding="utf-8")
+
+            with self.assertRaises(install_qw.InstallerError):
+                with installer.component_state_transaction() as results:
+                    removed, result = installer.remove_component_transaction("nquake-maps")
+                    results.append(result)
+                    self.assertEqual(1, removed)
+                    self.assertFalse((target / "qw/maps/owned.loc").exists())
+                    self.assertEqual("personal edit", personal.read_text(encoding="utf-8"))
+                    raise install_qw.PersistenceError(
+                        "injected state failure", committed=False,
+                    )
+
+            self.assertEqual(
+                "owned", (target / "qw/maps/owned.loc").read_text(encoding="utf-8"),
+            )
+            self.assertEqual("personal edit", personal.read_text(encoding="utf-8"))
+            present, entries, receipt = installer.validate_component_pair("nquake-maps")
+            self.assertTrue(present)
+            self.assertEqual(
+                ["qw/maps/owned.loc", "qw/maps/personal.loc"],
+                [name for name, _digest in entries],
+            )
+            self.assertEqual("test", receipt["selection"])
+
+    def test_component_removal_tracks_a_node_before_post_move_identity_validation(self):
+        """A post-rename identity failure must still restore the moved payload."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            payload = managed / "qw/maps/owned.loc"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("owned", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+            )
+            original_identity = installer._component_removal_node_identity
+            rejected = False
+
+            def reject_moved_backup(path, kind):
+                nonlocal rejected
+                identity = original_identity(path, kind)
+                if "remove-payload" in str(path) and not rejected:
+                    rejected = True
+                    return identity[0], identity[1] + 1
+                return identity
+
+            with mock.patch.object(
+                installer,
+                "_component_removal_node_identity",
+                side_effect=reject_moved_backup,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.remove_component_transaction("nquake-maps")
+
+            self.assertEqual(
+                "owned", (target / "qw/maps/owned.loc").read_text(encoding="utf-8"),
+            )
+            self.assertTrue(installer.validate_component_pair("nquake-maps")[0])
+
+    def test_component_removal_rejects_metadata_identity_swap_after_revalidation(self):
+        """A same-content inode swap must not be removed as the observed metadata."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            payload = managed / "qw/maps/owned.loc"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("owned", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+            )
+            canonical = target / install_qw.COMPONENT_METADATA_DIR / "nquake-maps"
+            displaced = installer.stage / "displaced-metadata"
+            real_observation = installer._component_metadata_observation
+            observations = 0
+
+            def swap_after_revalidation(component):
+                nonlocal observations
+                result = real_observation(component)
+                observations += 1
+                if observations == 2:
+                    canonical.replace(displaced)
+                    canonical.mkdir()
+                    for source in displaced.iterdir():
+                        (canonical / source.name).write_bytes(source.read_bytes())
+                return result
+
+            with mock.patch.object(
+                installer,
+                "_component_metadata_observation",
+                side_effect=swap_after_revalidation,
+            ):
+                with self.assertRaises(install_qw.InstallerError):
+                    installer.remove_component_transaction("nquake-maps")
+
+            self.assertEqual(
+                "owned", (target / "qw/maps/owned.loc").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((canonical / "receipt").is_file())
+            self.assertTrue((canonical / "inventory").is_file())
+
+    def test_component_removal_failure_on_second_payload_restores_first_file(self):
+        """An nth-file failure must leave the whole component installed."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            maps = managed / "qw/maps"
+            maps.mkdir(parents=True)
+            (maps / "a.loc").write_text("a", encoding="utf-8")
+            (maps / "b.loc").write_text("b", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+            )
+            real_move = installer._move_component_removal_node
+            calls = 0
+
+            def fail_second(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("injected second-file failure")
+                return real_move(*args, **kwargs)
+
+            with mock.patch.object(
+                installer, "_move_component_removal_node", side_effect=fail_second,
+            ):
+                with self.assertRaises(install_qw.MutationApplyError) as raised:
+                    installer.remove_component_transaction("nquake-maps")
+            self.assertIsInstance(raised.exception.operation_error, OSError)
+
+            self.assertEqual("a", (target / "qw/maps/a.loc").read_text(encoding="utf-8"))
+            self.assertEqual("b", (target / "qw/maps/b.loc").read_text(encoding="utf-8"))
+            self.assertTrue(installer.validate_component_pair("nquake-maps")[0])
+
+    def test_component_removal_metadata_failure_restores_payload(self):
+        """A metadata-step failure must reverse the completed payload step."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            payload = managed / "qw/maps/owned.loc"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("owned", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+            )
+
+            with mock.patch.object(
+                installer,
+                "_apply_component_removal_metadata",
+                side_effect=install_qw.InstallerError("injected metadata failure"),
+            ):
+                with self.assertRaisesRegex(
+                    install_qw.InstallerError, "injected metadata failure",
+                ):
+                    installer.remove_component_transaction("nquake-maps")
+
+            self.assertEqual(
+                "owned", (target / "qw/maps/owned.loc").read_text(encoding="utf-8"),
+            )
+            self.assertTrue(installer.validate_component_pair("nquake-maps")[0])
+
+    def test_component_removal_rollback_preserves_identity_swapped_backup(self):
+        """Rollback must not restore a stage pathname whose inode was replaced."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            payload = managed / "qw/maps/owned.loc"
+            payload.parent.mkdir(parents=True)
+            payload.write_text("owned", encoding="utf-8")
+            installer.install_component_overlay(
+                "nquake-maps", managed, "test", "https://example.invalid/maps.zip",
+            )
+            _removed, result = installer.remove_component_transaction("nquake-maps")
+            backup = next(installer.stage.glob(
+                ".nquake-maps-remove-payload.*/qw/maps/owned.loc",
+            ))
+            backup.unlink()
+            backup.write_text("replacement", encoding="utf-8")
+
+            with self.assertRaises(install_qw.MutationRollbackError):
+                install_qw.rollback_mutation(result)
+
+            self.assertFalse((target / "qw/maps/owned.loc").exists())
+            self.assertEqual("replacement", backup.read_text(encoding="utf-8"))
+            self.assertTrue(installer.validate_component_pair("nquake-maps")[0])
+
     def test_component_metadata_failure_rolls_back_payload_and_stale_files(self):
         """A receipt failure must not leave a new payload under old metadata."""
 
