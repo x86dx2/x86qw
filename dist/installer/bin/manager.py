@@ -78,6 +78,7 @@ from x86qw_runtime.io.managed_files import (
     file_sha256 as file_hash,
     persistent_descriptor_identity,
     persistent_path_identity,
+    remove_persistent_identity_bound_path,
 )
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.io.paths import lexists, remove_path
@@ -4956,14 +4957,17 @@ class Installer:
         destination = token.destination
         removed = False
         if lexists(destination):
-            metadata = destination.lstat()
-            identity = (int(metadata.st_dev), int(metadata.st_ino))
-            if (
-                destination.is_file()
-                and not destination.is_symlink()
-                and identity == token.identity
-                and file_hash(destination) == token.digest
-            ):
+            try:
+                identity = persistent_path_identity(
+                    destination, directory=False,
+                )
+                unchanged = (
+                    identity == token.identity
+                    and file_hash(destination) == token.digest
+                )
+            except OSError:
+                unchanged = False
+            if unchanged:
                 host_adapter.unlink_identity_bound_file(
                     destination, token.identity,
                 )
@@ -4978,15 +4982,10 @@ class Installer:
             for directory, identity in reversed(token.created_directories):
                 if not lexists(directory):
                     continue
-                metadata = directory.lstat()
-                if (
-                    directory.is_symlink()
-                    or not directory.is_dir()
-                    or (int(metadata.st_dev), int(metadata.st_ino)) != identity
-                ):
-                    continue
                 try:
-                    directory.rmdir()
+                    remove_persistent_identity_bound_path(
+                        directory, identity, directory=True,
+                    )
                 except OSError:
                     pass
 
@@ -5010,11 +5009,13 @@ class Installer:
         try:
             for directory in reversed(missing):
                 directory.mkdir(mode=0o700)
-                metadata = directory.lstat()
-                created.append((directory, (int(metadata.st_dev), int(metadata.st_ino))))
+                created.append((directory, persistent_path_identity(
+                    directory, directory=True,
+                )))
             descriptor = private_fs.create_private_file(destination)
-            identity_metadata = os.fstat(descriptor)
-            identity = (int(identity_metadata.st_dev), int(identity_metadata.st_ino))
+            identity = persistent_descriptor_identity(
+                descriptor, directory=False,
+            )
             copied = hashlib.sha256()
             with source.open("rb") as input_file, os.fdopen(
                 descriptor, "wb", closefd=False,
@@ -5031,8 +5032,9 @@ class Installer:
             return token
         except BaseException:
             if token is None and descriptor >= 0:
-                metadata = os.fstat(descriptor)
-                identity = (int(metadata.st_dev), int(metadata.st_ino))
+                identity = persistent_descriptor_identity(
+                    descriptor, directory=False,
+                )
                 os.close(descriptor)
                 descriptor = -1
                 try:
@@ -5043,9 +5045,9 @@ class Installer:
                     pass
             for directory, identity in reversed(created):
                 try:
-                    metadata = directory.lstat()
-                    if (int(metadata.st_dev), int(metadata.st_ino)) == identity:
-                        directory.rmdir()
+                    remove_persistent_identity_bound_path(
+                        directory, identity, directory=True,
+                    )
                 except OSError:
                     pass
             raise

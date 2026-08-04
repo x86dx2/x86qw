@@ -2779,7 +2779,9 @@ class DownloaderTests(unittest.TestCase):
                     )
                 )
 
-        self.assertTrue(process.killed.is_set())
+        # A deadline cancellation and the resolver's own timeout can complete
+        # on adjacent scheduler turns on older Windows/Python combinations.
+        self.assertTrue(process.killed.wait(1))
         self.assertTrue(process.collected.is_set())
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())

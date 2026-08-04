@@ -2123,12 +2123,14 @@ sessions.SessionJournal(Path(sys.argv[2]), session_id=sys.argv[3])
                 config_dir, "session-", ["password secret"], journal,
             )
 
-            metadata = config.lstat()
+            identity = managed_files.persistent_path_identity(
+                config, directory=False,
+            )
             entry = json.loads(journal.path.read_text(encoding="utf-8"))[
                 "temporary_files"
             ][0]
-            self.assertEqual(metadata.st_dev, entry["device"])
-            self.assertEqual(metadata.st_ino, entry["inode"])
+            self.assertEqual(identity[0], entry["device"])
+            self.assertEqual(identity[1], entry["inode"])
             self.assertEqual("ready", entry["state"])
             journal.release_all_sensitive_temporaries()
             config.unlink()
