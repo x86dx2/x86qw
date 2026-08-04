@@ -95,7 +95,7 @@ class _FileDispositionInfo(ctypes.Structure):
 
 class _FileRenameInfo(ctypes.Structure):
     _fields_ = (
-        ("replace_if_exists", ctypes.c_ulong),
+        ("replace_if_exists", ctypes.c_ubyte),
         ("root_directory", ctypes.c_void_p),
         ("file_name_length", ctypes.c_ulong),
         ("file_name", ctypes.c_wchar * 1),
@@ -589,29 +589,23 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
         _assert_handle_type(native_handle, directory=False)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
         api = _api()
-        root_handle = _open_path(
-            destination.parent, directory=True, writable_dacl=False,
+        encoded = destination.name.encode("utf-16-le")
+        name_offset = _FileRenameInfo.file_name.offset
+        buffer = ctypes.create_string_buffer(
+            name_offset + len(encoded) + ctypes.sizeof(ctypes.c_wchar)
         )
-        try:
-            encoded = destination.name.encode("utf-16-le")
-            name_offset = _FileRenameInfo.file_name.offset
-            buffer = ctypes.create_string_buffer(
-                name_offset + len(encoded) + ctypes.sizeof(ctypes.c_wchar)
-            )
-            information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
-            information.replace_if_exists = 1
-            information.root_directory = root_handle
-            information.file_name_length = len(encoded)
-            ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
-            if not api.kernel32.SetFileInformationByHandle(
-                native_handle,
-                api.FILE_RENAME_INFO,
-                buffer,
-                len(buffer),
-            ):
-                raise api.error(f"could not promote private file {source}")
-        finally:
-            api.kernel32.CloseHandle(root_handle)
+        information = ctypes.cast(buffer, ctypes.POINTER(_FileRenameInfo)).contents
+        information.replace_if_exists = 1
+        information.root_directory = None
+        information.file_name_length = len(encoded)
+        ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
+        if not api.kernel32.SetFileInformationByHandle(
+            native_handle,
+            api.FILE_RENAME_INFO,
+            buffer,
+            len(buffer),
+        ):
+            raise api.error(f"could not promote private file {source}")
         _assert_acl(_acl_from_handle(native_handle, directory=False))
 
 
@@ -649,9 +643,7 @@ def validate_private_path(path: Path, *, directory: bool, exact: bool = True) ->
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
         api = _api()
-        handle = _open_path(
-            path, directory=directory, writable_dacl=False, guard_delete=True,
-        )
+        handle = _open_path(path, directory=directory, writable_dacl=False)
         try:
             acl = _acl_from_handle(handle, directory=directory, canonical=exact)
             _assert_acl(acl, exact=exact)
@@ -664,7 +656,9 @@ def hold_private_path(path: Path, *, directory: bool) -> WindowsPathLease:
     """Pin a canonical private object so its parent cannot delete or rename it."""
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
-        handle = _open_path(path, directory=directory, writable_dacl=False)
+        handle = _open_path(
+            path, directory=directory, writable_dacl=False, guard_delete=True,
+        )
         try:
             _assert_acl(_acl_from_handle(handle, directory=directory))
             return WindowsPathLease(handle, path)

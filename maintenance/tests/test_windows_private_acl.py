@@ -44,6 +44,9 @@ class PrivateFilesystemContractTests(unittest.TestCase):
     def test_win32_file_disposition_uses_the_one_byte_boolean_abi(self):
         self.assertEqual(1, ctypes.sizeof(windows_acl._FileDispositionInfo))
 
+    def test_win32_file_rename_uses_the_one_byte_boolean_abi(self):
+        self.assertEqual(1, windows_acl._FileRenameInfo.replace_if_exists.size)
+
     def test_managed_reads_allow_atomic_metadata_mutation_but_password_reads_do_not(self):
         managed = windows_acl._private_read_share_mode(exact=True)
         external = windows_acl._private_read_share_mode(exact=False)
