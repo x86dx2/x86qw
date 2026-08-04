@@ -36,6 +36,7 @@ DOWNLOADER_PATH = ROOT / "x86qw_runtime/io/downloader.py"
 MANAGER_PATH = ROOT / "dist/installer/bin/manager.py"
 SERVICES_PATH = ROOT / "dist/installer/bin/services.py"
 SUPERVISOR_READINESS_PATH = ROOT / "x86qw_runtime/supervisor/readiness.py"
+SUPERVISOR_CORE_PATH = ROOT / "x86qw_runtime/supervisor/core.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
     ROOT / "dist/installer/bin/install.ps1",
     ROOT / "site/public/install.ps1",
@@ -187,9 +188,10 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
         ("subprocess.Popen", "Installer.launch_runtime", "command"),
     }),
     SERVICES_PATH: frozenset({
-        ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
         ("subprocess.Popen", "launch_background_controller", "command"),
-        ("subprocess.Popen", "run_processes", "spec.arguments"),
+    }),
+    SUPERVISOR_CORE_PATH: frozenset({
+        ("subprocess.Popen", "WindowsJobObject.start_process", "arguments"),
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),

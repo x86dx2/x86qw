@@ -147,10 +147,11 @@ class KtxRuntimeConfig:
 
 
 def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
-    manager_api = _manager_api()
-    if manager_api.ZIPAPP_PATH is not None:
+    manager_api = sys.modules.get("manager")
+    zipapp_path = getattr(manager_api, "ZIPAPP_PATH", None)
+    if zipapp_path is not None:
         document = manager_api.read_zipapp_json(
-            manager_api.ZIPAPP_PATH, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
+            zipapp_path, RUNTIME_GAME_CATALOG, "Catálogo de jogos da CLI",
         )
     else:
         document = load_games(project_root / DEVELOPMENT_GAME_CATALOG)
@@ -159,7 +160,13 @@ def load_local_games(project_root: Path) -> tuple[LocalGameSpec, ...]:
 
 @lru_cache(maxsize=1)
 def local_games() -> tuple[LocalGameSpec, ...]:
-    return load_local_games(_manager_api().PROJECT_ROOT)
+    manager_api = sys.modules.get("manager")
+    project_root = (
+        manager_api.PROJECT_ROOT
+        if manager_api is not None
+        else Path(__file__).resolve().parents[3]
+    )
+    return load_local_games(project_root)
 
 
 class LazyTuple(Sequence[object]):

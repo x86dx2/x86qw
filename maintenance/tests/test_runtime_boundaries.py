@@ -298,5 +298,66 @@ class RuntimeTransactionOwnershipTests(unittest.TestCase):
         self.assertIn("x86qw_runtime/transaction.py", names)
 
 
+class RuntimeSupervisorOwnershipTests(unittest.TestCase):
+    def test_services_use_runtime_path_primitives_without_manager(self) -> None:
+        """Session recovery must not import the installer for basic filesystem I/O."""
+
+        services = importlib.import_module("services")
+        paths = importlib.import_module("x86qw_runtime.io.paths")
+        arguments = importlib.import_module("x86qw_runtime.ui.arguments")
+
+        self.assertIs(services.lexists, paths.lexists)
+        self.assertIs(services.remove_path, paths.remove_path)
+        self.assertIs(services.FriendlyArgumentParser, arguments.FriendlyArgumentParser)
+
+    def test_services_reexports_the_runtime_supervisor_contract(self) -> None:
+        """The installed services facade must not retain a second supervisor."""
+
+        services = importlib.import_module("services")
+        supervisor = importlib.import_module("x86qw_runtime.supervisor.core")
+
+        for name in (
+            "ServiceSignal",
+            "WindowsJobObject",
+            "posix_process_group_status",
+            "run_processes",
+            "stop_processes",
+        ):
+            with self.subTest(symbol=name):
+                self.assertIs(getattr(services, name), getattr(supervisor, name))
+
+    def test_installed_zipapp_contains_and_executes_the_runtime_supervisor(self) -> None:
+        """Service commands must use the canonical supervisor in the public artifact."""
+
+        payload = zipapp_bytes("9.9.9")
+        with zipfile.ZipFile(io.BytesIO(payload)) as application:
+            names = set(application.namelist())
+        self.assertIn("x86qw_runtime/supervisor/core.py", names)
+        self.assertIn("x86qw_runtime/io/paths.py", names)
+        self.assertIn("x86qw_runtime/ui/arguments.py", names)
+        self.assertIn("x86qw_runtime/ui/console.py", names)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            application = Path(temporary_directory) / "x86qw.pyz"
+            application.write_bytes(payload)
+            environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+            for arguments in (("host", "--help"), ("status", "--help")):
+                with self.subTest(arguments=arguments):
+                    result = subprocess.run(
+                        [sys.executable, os.fspath(application), *arguments],
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=False,
+                        timeout=10,
+                        env=environment,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        result.stdout + result.stderr,
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()

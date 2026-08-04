@@ -158,6 +158,226 @@ class ServiceHardeningTests(unittest.TestCase):
         self.assertIs(services.wait_udp_readiness, readiness.wait_udp_readiness)
         self.assertIs(services.apply_startup_rcon, readiness.apply_startup_rcon)
 
+    def test_supervisor_core_owns_process_tree_backends(self):
+        from x86qw_runtime.supervisor import core
+
+        self.assertIs(services.stop_processes, core.stop_processes)
+        self.assertIs(services.posix_process_group_status, core.posix_process_group_status)
+        self.assertIs(services._windows_job_kernel32, core._windows_job_kernel32)
+        self.assertIs(services.WindowsJobObject, core.WindowsJobObject)
+        self.assertIs(services.ServiceSignal, core.ServiceSignal)
+        self.assertIs(services.run_processes, core.run_processes)
+
+    def test_supervisor_runner_preserves_coordinated_stop_order(self):
+        events = []
+
+        class Reporter:
+            def detail(self, message):
+                events.append(("detail", message))
+
+            def info(self, message):
+                events.append(("info", message))
+
+            def warning(self, message):
+                events.append(("warning", message))
+
+        class Journal:
+            def record_process(self, spec, process, process_group):
+                events.append(("record", spec.label, process.pid, process_group))
+
+            def set_status(self, status):
+                events.append(("status", status))
+
+            def consume_stop_request(self):
+                events.append(("stop-request",))
+                return True
+
+        process = SimpleNamespace(pid=4242, poll=lambda: None)
+
+        def spawn(arguments, **options):
+            events.append((
+                "spawn", arguments, options["cwd"], options["start_new_session"],
+            ))
+            return process
+
+        def set_signal(signum, handler):
+            phase = "install" if callable(handler) else f"restore:{handler}"
+            events.append(("signal", int(signum), phase))
+            return f"old-{int(signum)}"
+
+        result = services.run_processes(
+            [services.ProcessSpec("fixture", ("fixture", "--flag"), Path("/tmp"))],
+            Journal(),
+            reporter=Reporter(),
+            process_factory=spawn,
+            signal_setter=set_signal,
+            stopper=lambda processes: events.append(
+                ("stop", tuple(process.pid for process in processes)),
+            ),
+            os_name="posix",
+            sleep=lambda _delay: self.fail("stop coordenado não deve aguardar"),
+        )
+
+        self.assertEqual(0, result)
+        self.assertEqual([
+            ("signal", 2, "install"),
+            ("signal", 15, "install"),
+            ("detail", "Iniciando fixture: fixture"),
+            ("spawn", ("fixture", "--flag"), Path("/tmp"), True),
+            ("record", "fixture", 4242, 4242),
+            ("status", "running"),
+            ("stop-request",),
+            ("info", "Encerramento solicitado pelo gerenciador x86QW…"),
+            ("stop", (4242,)),
+            ("signal", 2, "restore:old-2"),
+            ("signal", 15, "restore:old-15"),
+        ], events)
+
+    def test_supervisor_runner_preserves_signal_exit_codes(self):
+        for signum, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+            with self.subTest(signum=signum):
+                events = []
+
+                class Reporter:
+                    detail = lambda _self, _message: None
+                    warning = lambda _self, _message: None
+
+                    def info(self, message):
+                        events.append(("info", message))
+
+                class Journal:
+                    record_process = lambda _self, _spec, _process, _group: None
+
+                    def set_status(self, status):
+                        events.append(("status", status))
+
+                    def consume_stop_request(self):
+                        return False
+
+                process = SimpleNamespace(pid=5151, poll=lambda: None)
+
+                def interrupt(_delay):
+                    raise services.ServiceSignal(signum)
+
+                result = services.run_processes(
+                    [services.ProcessSpec("fixture", ("fixture",), Path("/tmp"))],
+                    Journal(),
+                    reporter=Reporter(),
+                    process_factory=lambda *_args, **_options: process,
+                    signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+                    stopper=lambda processes: events.append(
+                        ("stop", tuple(item.pid for item in processes)),
+                    ),
+                    os_name="posix",
+                    sleep=interrupt,
+                )
+
+                self.assertEqual(expected, result)
+                self.assertEqual([
+                    ("status", "running"),
+                    ("info", "Encerrando serviços x86QW…"),
+                    ("status", "interrupted"),
+                    ("stop", (5151,)),
+                ], events)
+
+    def test_supervisor_runner_uses_windows_job_backend(self):
+        events = []
+        process = SimpleNamespace(pid=6262, poll=lambda: None)
+
+        class Job:
+            def start_process(self, arguments, cwd):
+                events.append(("job-start", arguments, cwd))
+                return process
+
+            def close(self):
+                events.append(("job-close",))
+
+        class Journal:
+            def record_process(self, spec, candidate, process_group):
+                events.append(("record", spec.label, candidate.pid, process_group))
+
+            def set_status(self, status):
+                events.append(("status", status))
+
+            def consume_stop_request(self):
+                return True
+
+        result = services.run_processes(
+            [services.ProcessSpec("fixture", ("fixture",), Path("C:/x86qw"))],
+            Journal(),
+            reporter=mock.Mock(),
+            process_factory=lambda *_args, **_options: self.fail(
+                "Windows deve iniciar pelo Job Object"
+            ),
+            windows_job_factory=lambda _reporter: Job(),
+            signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+            stopper=lambda processes: events.append(
+                ("stop", tuple(item.pid for item in processes)),
+            ),
+            os_name="nt",
+        )
+
+        self.assertEqual(0, result)
+        self.assertEqual([
+            ("job-start", ("fixture",), Path("C:/x86qw")),
+            ("record", "fixture", 6262, 6262),
+            ("status", "running"),
+            ("stop", (6262,)),
+            ("job-close",),
+        ], events)
+
+    def test_supervisor_runner_attempts_every_finalizer_after_cleanup_failure(self):
+        events = []
+        process = SimpleNamespace(pid=7373, poll=lambda: 0)
+
+        class Reporter:
+            detail = lambda _self, _message: None
+            info = lambda _self, _message: None
+
+            def warning(self, message):
+                events.append(("warning", message))
+
+        class Job:
+            def start_process(self, _arguments, _cwd):
+                return process
+
+            def close(self):
+                events.append(("job-close",))
+                raise RuntimeError("job")
+
+        def set_signal(signum, handler):
+            events.append((
+                "signal", int(signum), "install" if callable(handler) else "restore",
+            ))
+            return f"old-{int(signum)}"
+
+        def fail_stop(_processes):
+            events.append(("stop",))
+            raise RuntimeError("stop")
+
+        with self.assertRaisesRegex(
+            services.InstallerError, "Falha ao finalizar a árvore de processos",
+        ):
+            services.run_processes(
+                [services.ProcessSpec("fixture", ("fixture",), Path("C:/x86qw"))],
+                reporter=Reporter(),
+                windows_job_factory=lambda _reporter: Job(),
+                signal_setter=set_signal,
+                stopper=fail_stop,
+                os_name="nt",
+            )
+
+        self.assertEqual([
+            ("signal", 2, "install"),
+            ("signal", 15, "install"),
+            ("stop",),
+            ("job-close",),
+            ("signal", 2, "restore"),
+            ("signal", 15, "restore"),
+            ("warning", "Falha ao finalizar árvore de processos: stop"),
+            ("warning", "Falha ao finalizar árvore de processos: job"),
+        ], events)
+
     def test_preflight_accepts_an_injected_socket_factory(self):
         class OccupiedSocket:
             def __enter__(self):
@@ -2518,6 +2738,35 @@ with session_control._installation_acquisition_mutex(target, sessions):
         self.assertIn(("terminate-job", 99, 1), events)
         self.assertIn(("wait-process", 8767, 4000), events)
 
+    def test_windows_job_reports_failed_rollback(self):
+        warnings = []
+
+        class Kernel:
+            def AssignProcessToJobObject(self, _job_handle, _process_handle):
+                return False
+
+            def TerminateProcess(self, _process_handle, _exit_code):
+                return False
+
+        process = SimpleNamespace(pid=4315, _handle=8768)
+        job = object.__new__(services.WindowsJobObject)
+        job.handle = 99
+        job.kernel32 = Kernel()
+        job.reporter = SimpleNamespace(warning=warnings.append)
+
+        with mock.patch.object(
+            services.ctypes, "get_last_error", return_value=5, create=True,
+        ), mock.patch.object(services.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(
+                services.InstallerError, "reversão segura também falhou",
+            ):
+                job.start_process(("fixture",), Path("C:/x86qw"))
+
+        self.assertEqual([
+            "Falha ao reverter PID 4315 após startup recusado: "
+            "Não foi possível reverter o PID suspenso 4315 (5).",
+        ], warnings)
+
     def test_windows_job_close_terminates_tree_and_retains_failed_handle_for_retry(self):
         events: list[tuple[str, int, int] | tuple[str, int]] = []
 
@@ -2782,28 +3031,28 @@ with session_control._installation_acquisition_mutex(target, sessions):
         processes = [mock.Mock(pid=101), mock.Mock(pid=102)]
         for process in processes:
             process.poll.return_value = None
-        windows_job = mock.Mock()
-        windows_job.start_process.side_effect = processes
-        with mock.patch.object(
-            services.subprocess, "Popen", side_effect=processes,
-        ) as popen, mock.patch.object(
-            services, "apply_startup_rcon",
-        ), mock.patch.object(
-            services, "wait_http_readiness", side_effect=services.InstallerError("QTV falhou"),
-        ), mock.patch.object(
-            services, "WindowsJobObject", return_value=windows_job,
-        ):
-            specs = [
-                services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
-                services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),
-            ]
-            with self.assertRaisesRegex(services.InstallerError, "QTV falhou"):
-                services.run_processes(specs)
+        spawn = mock.Mock(side_effect=processes)
+        specs = [
+            services.ProcessSpec("MVDSV", ("mvdsv",), Path.cwd(), services.StartupRcon("127.0.0.1", 28501, "secret", "post.cfg", "dm6", "ktx")),
+            services.ProcessSpec("QTV", ("qtv",), Path.cwd(), readiness=services.ServiceReadiness("http", "127.0.0.1", 28000)),
+        ]
+
+        def fail_http(_process, _readiness):
+            raise services.InstallerError("QTV falhou")
+
+        with self.assertRaisesRegex(services.InstallerError, "QTV falhou"):
+            services.run_processes(
+                specs,
+                reporter=mock.Mock(),
+                process_factory=spawn,
+                signal_setter=lambda _signum, _handler: signal.SIG_DFL,
+                os_name="posix",
+                apply_rcon=lambda _startup: None,
+                http_readiness=fail_http,
+            )
         for process in processes:
             process.terminate.assert_called_once()
-        if os.name == "nt":
-            windows_job.close.assert_called_once_with()
-        for call in popen.call_args_list:
+        for call in spawn.call_args_list:
             self.assertIs(call.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_mvdsv_readiness_checks_map_gamecode_and_applies_post_map(self):
