@@ -3931,7 +3931,7 @@ class Installer:
             except AtomicWriteError as error:
                 raise PersistenceError(
                     f"Estado preparado não pôde ser gravado: {staged}",
-                    committed=error.committed,
+                    committed=False,
                 ) from error
             plan = MutationPlan(
                 identifier=f"install-state:{profile}",

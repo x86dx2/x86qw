@@ -2260,8 +2260,8 @@ class InstallerTests(unittest.TestCase):
             target.mkdir()
             installer = mock.Mock()
             installer.target = target
-            installer.cleanup_cache.return_value = None
-            installer.cleanup_runtime_data.return_value = (0, 0)
+            installer.require_managed_installation_identity.return_value = ("state",)
+            installer.cleanup_data.return_value = (0, 0)
             operation_lock = mock.Mock()
             with mock.patch.object(install_qw, "Installer", return_value=installer):
                 with mock.patch.object(

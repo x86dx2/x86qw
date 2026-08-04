@@ -2260,8 +2260,8 @@ class ModernComponentTests(unittest.TestCase):
 
             self.assertEqual("personal\n", destination.read_text(encoding="utf-8"))
 
-    def test_committed_state_durability_error_keeps_matching_component_payload(self):
-        """A post-rename fsync failure must not roll payload back behind state.json."""
+    def test_state_staging_durability_error_rolls_back_component_payload(self):
+        """A durable staging failure is not a committed state generation."""
 
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -2309,16 +2309,13 @@ class ModernComponentTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     install_qw.InstallerError,
-                    "Estado da instalação não pôde ser gravado",
+                    "Estado preparado não pôde ser gravado",
                 ):
                     installer.install_component_phase()
 
-            self.assertEqual(
-                "new", (target / "qw/maps/new.loc").read_text(encoding="utf-8"),
-            )
-            self.assertTrue((target / ".x86qw/components/nquake-maps").is_dir())
-            state = json.loads((target / install_qw.INSTALL_STATE).read_text(encoding="utf-8"))
-            self.assertEqual(["nquake-maps"], state["recorded_components"])
+            self.assertFalse((target / "qw/maps/new.loc").exists())
+            self.assertFalse((target / ".x86qw/components/nquake-maps").exists())
+            self.assertFalse((target / install_qw.INSTALL_STATE).exists())
 
     def test_component_metadata_uses_unique_legacy_backups_within_one_stage(self):
         """Two commits in one parent transaction must retain both inverses."""
