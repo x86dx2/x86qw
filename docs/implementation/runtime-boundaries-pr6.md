@@ -1,15 +1,15 @@
-# Fronteiras incrementais de runtime — implementação parcial da PR 6
+# Fronteiras incrementais de runtime — evidência da PR 6
 
 - **Issue:** [#52](https://github.com/x86dx2/x86qw/issues/52)
 - **Baseline inicial:** `00098330e5833ba2c83c7121272d644c2a204a7b`
-- **Recorte documentado:** `23194fd..49594cd`
+- **HEAD analisado:** `29d76a48721190aad1203d0986a31d839d62070e`
+- **Recorte documentado:** `23194fd..29d76a4`
 - **Versão pública preservada:** `0.7.1`
-- **Estado:** implementação parcial em branch; PR 6 ainda aberta; não publicada
+- **Estado:** código e regressão local concluídos; revisão/matriz pendentes; não publicada
 
-Esta nota registra somente mudanças já commitadas na branch
-`agent/runtime-boundaries`. Alterações locais posteriores, critérios ainda
-abertos da issue e trabalho reservado às PRs 7–12 não são apresentados como
-entregues.
+Esta nota registra somente mudanças commitadas na branch
+`agent/runtime-boundaries`. A matriz da futura PR, smokes nativos e o trabalho
+reservado às PRs 7–12 não são apresentados como entregues.
 
 ## Problema e risco confirmados
 
@@ -42,6 +42,25 @@ os limites deste recorte estão no
 | `839d4ef` | clientes | runtime e recibo do cliente passam a uma transação coordenada com o estado pai |
 | `73eb431` | lifecycle | execução, sinais, grupos/Job Object e encerramento passam ao supervisor runtime |
 | `49594cd` | remoção de componentes | payload e metadados gerenciados ganham backup identificado e rollback; remoções legadas do update participam da transação pai |
+| `cf6e959`–`3929c9c` | lock e composição | mutex da instalação passa à plataforma runtime; entrypoints recebem contextos explícitos; `session_control` passa a ser o contrato canônico |
+| `189679d` | componentes gerados | inversos de conteúdo derivado permanecem disponíveis até o resultado do estado pai |
+| `04e5672`–`71ca24c` | composição e Python | composição de desenvolvimento fica fora do runtime; resolvedor Python passa à plataforma canônica; projeção compatível não consumida sai do zipapp |
+| `3b14559`–`1d4fe21` | remoções e defaults | remoções interativas participam do commit do estado e defaults novos são revertidos em falha posterior |
+| `f932f21` | sessões | journal, recuperação após crash e reconciliação passam a `x86qw_runtime.supervisor.sessions`; arquivos materializados passam a `x86qw_runtime.io.managed_files` |
+| `c5a9ae4` | CLI instalada | runtime, recibo e launchers da CLI são publicados como uma geração transacional |
+| `d2e81e5` | PAKs centrais | os dois PAKs preservados passam por promoção e rollback atômicos sem mudar seus bytes ou política |
+| `513ffaa`–`a59452b` | repair e migrações | permissões locais, metadados determinísticos e configurações pessoais retêm inversos até o resultado final |
+| `78310a8`–`422baef` | composição final | inversos de instalação, estado e repair sobrevivem até a verificação final e são descartados somente depois dela |
+| `1fea5ed` | superfície instalada | fachadas de compatibilidade não consumidas deixam o zipapp |
+| `2807ceb` | contrato do zipapp | cada um dos 47 membros recebe origem, consumidor e contrato em manifesto independente, conferido contra o builder e o arquivo gerado |
+| `efc4875` | cleanup | todos os caminhos selecionados pela limpeza formam uma transação; falha posterior restaura a seleção inteira |
+| `d08f727` | uninstall | runtimes, componentes, metadados e geração da CLI são removidos como uma transação; falha restaura o snapshot anterior |
+| `ff249ec`–`0cf2222` | gates e composição | detector de ciclos cobre imports relativos e `from package import module`; UI, HTTP e catálogos passam às fronteiras canônicas e lazy loading é preservado |
+| `7a1dc9b` | gameplay e plataforma | PAKs, configurações runtime/pessoais e fatos de display/host/macOS passam ao runtime, com ownership de rollback identificado |
+| `a2f041f` | mutações residuais | cache, purge e operações restantes do instalador passam por plano/quarantine e revalidação de identidade |
+| `1409607` | supervisor e sessão | autoria de locks, journals, logs, stop requests, grupos e recuperação passa a contratos canônicos resistentes a corridas |
+| `7ab1677` | projeção do zipapp | o builder passa a derivar os membros do manifesto declarativo; uma segunda lista estática deixa de existir |
+| `29d76a4` | finalização de quarantine | arquivos regulares/diretórios usam remoção vinculada à observação; Windows valida o handle nativo; links e tipos especiais são preservados |
 
 O scanner e extrator `x86qw_runtime.io.archive` já pertenciam ao runtime no
 baseline, conforme o ADR 0002. O recorte mantém essa fronteira como única dona
@@ -60,11 +79,15 @@ maintenance builders ───────┤
                             v
                       x86qw_runtime/
                       ├── catalogs, versioning, errors
-                      ├── io/{archive,atomic,downloader,metadata,paths}
+                      ├── io/{archive,atomic,downloader,managed_files,
+                      │       metadata,paths,personal_files,private_fs,
+                      │       quarantine,remote}
                       ├── state, receipts, migrations, transaction
                       ├── gameplay
-                      ├── platform/processes
-                      ├── supervisor
+                      ├── platform/{display,host,locking,macos,processes,
+                      │            python_runtime,windows_acl}
+                      ├── session_control
+                      ├── supervisor/{core,models,posix_guardian,readiness,sessions}
                       └── ui
 ```
 
@@ -72,13 +95,22 @@ O runtime não pode importar `maintenance`, `dist` nem fachadas instaladas. O
 builder incorpora os módulos canônicos e projeções necessárias no zipapp, mas
 não `maintenance/`.
 
+O zipapp observado em `29d76a4` contém exatamente 56 membros: 44 módulos de
+`x86qw_runtime`, quatro entrypoints/fachadas no topo, duas projeções KTX e seis
+membros gerados. O arquivo
+`maintenance/inventory/installer-runtime-members.json` declara, para cada
+membro, origem, consumidor e contrato. O builder deriva sua projeção desse
+manifesto e o teste de fronteira exige igualdade exata com o ZIP gerado;
+arquivo não declarado ou sem consumidor não pode entrar silenciosamente.
+
 ## Persistência e rollback já cobertos
 
 A fronteira `MutationPlan` captura o snapshot observado antes da confirmação,
 revalida-o antes da primeira alteração e aplica etapas em ordem. Uma falha
-reverte etapas concluídas na ordem inversa. Subtransações de componentes e
-clientes mantêm seus backups/staging até o estado pai ser gravado, o que
-permite rollback composto.
+reverte etapas concluídas na ordem inversa. Subtransações de componentes,
+clientes, CLI instalada, PAKs, defaults, reparos, migrações, cleanup e uninstall
+mantêm seus backups/staging até o estado pai e a verificação final, o que
+permite rollback composto sem descartar os inversos cedo demais.
 
 Os writes atômicos usam temporário privado, validação, `flush`, `fsync` e
 `replace`. Uma exceção anterior à promoção preserva o destino antigo. Uma
@@ -114,28 +146,41 @@ evidência parcial, não como validação do HEAD final da PR:
 | regressão moderna após gameplay | 143 testes; aprovado |
 | identidade de processo e CLI autocontida | 5 testes; aprovado |
 | readiness, serviços e gate de rede | 104 testes; 6 skips explícitos; aprovado |
+| HEAD `29d76a4`: regressão integral de manutenção | 1.190 testes; aprovados; 37 skips explícitos de plataforma/rede |
+| HEAD `29d76a4`: site | 5 testes; aprovados |
+| HEAD `29d76a4`: transação, ownership e arquitetura focais | 349 testes; aprovados; 6 skips nativos Windows no macOS |
 
-Os skips pertencem às condições de plataforma/rede já declaradas pelas suítes;
-o fechamento da PR precisa registrar novamente cada skip no snapshot final. A
-matriz Linux, macOS e Windows e a regressão integral após todos os incrementos
-continuam obrigatórias.
+O resultado integral foi reproduzido no HEAD documentado e inclui a igualdade
+dos 56 membros com a projeção derivada do manifesto, ausência de
+`maintenance/` no zipapp, imports sem ciclo, carregamento tardio de catálogos,
+identidade de fachadas, recuperação sem importar `services.py` e execução de
+`host --help`/`status --help` no zipapp. Os testes adversariais exercitam
+rollback de cleanup, uninstall e purge; substituição concorrente de raízes,
+folhas e backups; ownership de locks, journals, logs e stop requests; e
+preservação de caminhos que mudem de identidade. Os skips locais exigem APIs ou
+shells nativos Windows, com um smoke de rede opt-in. A matriz Linux, macOS e
+Windows deve reproduzir o snapshot enviado à PR.
 
 ## Riscos residuais
 
-- instalação e atualização da CLI ainda não estão integralmente sob a mesma
-  transação composta;
-- defaults, ordem de pacotes e outros artefatos derivados ainda possuem
-  caminhos de mutação fora do contrato comum;
-- chamadores residuais de remoção, migrações mutáveis, `cleanup`, `uninstall` e
-  `--purge` precisam de planos explícitos que não prometam rollback impossível;
-- existem responsabilidades residuais de plataforma e composição nos
-  entrypoints;
+- `manager.py`, `gameplay.py` e `services.py` continuam sendo entrypoints e
+  raízes de composição extensas; novas regras reutilizáveis não podem voltar a
+  ser implementadas neles;
+- logs de execução são append-only e não participam de rollback; o contrato
+  transacional cobre mutações duráveis de payload, metadados e configurações
+  gerenciadas;
+- a finalização de quarantine é a barreira irreversível posterior ao commit;
+  no Windows ela remove pelo handle validado; no POSIX usa descritor, identidade
+  e rename exclusivo para nome privado imprevisível, enquanto links, tipos
+  especiais, falhas ou trocas observadas preservam o conteúdo para inspeção;
+- o POSIX não oferece `unlink`/`rmdir` condicional por inode; o lock da
+  instalação exclui outras operações x86QW, mas não pretende defender contra
+  código hostil executando como o mesmo usuário;
 - a ausência de ciclo e de import inverso precisa permanecer verde depois das
   próximas extrações;
-- o snapshot final ainda precisa de regressão integral, matriz portável e
-  inspeção do zipapp mínimo;
+- o snapshot final ainda precisa da matriz portável da PR;
 - smokes nativos de clientes e serviços pertencem ao PR 11.
 
-Por isso a issue #52 e a PR 6 permanecem abertas. A `0.7.1`, seus artefatos,
-hashes, tag, catálogo e bootstraps públicos permanecem imutáveis. Não houve
-publicação.
+Por isso a issue #52 permanece aberta até a revisão e a matriz. A `0.7.1`, seus
+artefatos, hashes, tag, catálogo e bootstraps públicos permanecem imutáveis.
+Não houve publicação.

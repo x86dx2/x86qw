@@ -1,10 +1,11 @@
 # ADR 0005 — Fronteiras incrementais em `x86qw_runtime`
 
-- **Estado:** aceita parcialmente no código da PR 6; issue aberta; não publicada
+- **Estado:** aceita e implementada no código da PR 6; revisão aberta; não publicada
 - **Data:** 2026-08-04
 - **Issue:** [#52](https://github.com/x86dx2/x86qw/issues/52)
 - **Baseline:** `00098330e5833ba2c83c7121272d644c2a204a7b`
-- **Recorte documentado:** `23194fd..49594cd`
+- **HEAD analisado:** `29d76a48721190aad1203d0986a31d839d62070e`
+- **Recorte documentado:** `23194fd..29d76a4`
 
 ## Contexto
 
@@ -46,8 +47,9 @@ As regras são:
    exige; `--help` e `--version` não dependem deles;
 5. mutações cobertas usam um plano imutável, preflight, revalidação,
    aplicação ordenada e rollback inverso;
-6. o zipapp inclui somente o runtime e as projeções declarativas necessárias,
-   sem incorporar `maintenance/`;
+6. o zipapp inclui somente o runtime, os entrypoints consumidos e as projeções
+   declarativas necessárias, sem incorporar `maintenance/`; cada membro deve
+   declarar origem, consumidor e contrato em manifesto independente;
 7. a extração continua pertencendo à fronteira única
    `x86qw_runtime.io.archive`, aceita anteriormente no
    [ADR 0002](0002-fronteira-unica-de-arquivos.md); esta PR não cria um scanner
@@ -56,21 +58,23 @@ As regras são:
    estáveis durante esta refatoração. Mudanças públicas de SemVer, schemas,
    códigos de saída e JSON pertencem à PR 7.
 
-## Ownership implementado no recorte
+## Ownership implementado no HEAD analisado
 
-| Área | Fronteira canônica | Estado em `49594cd` |
+| Área | Fronteira canônica | Estado em `29d76a4` |
 |---|---|---|
 | Versão e erros | `x86qw_runtime.versioning`, `x86qw_runtime.errors` | consumidores compartilham tipos e parser atuais |
 | Download | `x86qw_runtime.io.downloader` | manutenção é fachada; zipapp leva somente o runtime |
 | Arquivos | `x86qw_runtime.io.archive` | contrato seguro anterior preservado como fronteira única |
-| Persistência atômica | `x86qw_runtime.io.atomic`, `io.metadata`, `io.paths` | gravação durável e primitivas de caminho centralizadas |
+| Persistência e filesystem | `x86qw_runtime.io.atomic`, `io.metadata`, `io.paths`, `io.private_fs`, `io.managed_files`, `io.personal_files`, `io.quarantine` | gravação durável, objetos privados, identidade, arquivos pessoais e remoção reversível centralizados |
 | Catálogos | `x86qw_runtime.catalogs` | modelos/loaders canônicos e carregamento tardio |
 | Estado persistido | `x86qw_runtime.state`, `receipts`, `migrations` | parsing, serialização e migração atuais extraídos sem mudar formato |
-| Transações | `x86qw_runtime.transaction` | instalação e remoção de componentes, clientes e composição com o estado pai cobertas pelos incrementos já integrados |
-| UI | `x86qw_runtime.ui` | menu canônico; console e argumentos compartilhados pelos serviços, com migração dos demais consumidores ainda parcial |
+| Transações | `x86qw_runtime.transaction` | componentes, clientes, geração da CLI, PAKs, defaults, repair, migrações, cleanup e uninstall retêm inversos até o resultado lógico final |
+| UI | `x86qw_runtime.ui` | menu, console e parser canônicos compartilhados; manager permanece raiz de composição do grafo de comandos |
 | Gameplay | `x86qw_runtime.gameplay` | modelos, catálogos e planejamento extraídos; ciclo com manager removido |
-| Plataforma | `x86qw_runtime.platform.processes` | identidade nativa e proteção contra PID reutilizado centralizadas |
-| Supervisor | `x86qw_runtime.supervisor` | modelos, readiness e lifecycle de processos centralizados |
+| Plataforma | `x86qw_runtime.platform.{display,host,locking,macos,processes,python_runtime,windows_acl}` | display, cache/variantes, preferências macOS, Python, mutex, identidade, encerramento e ACL pertencem aos adapters runtime |
+| Sessão da instalação | `x86qw_runtime.session_control` | lock, ownership e reclamação conservadora são canônicos |
+| Supervisor | `x86qw_runtime.supervisor.{core,models,posix_guardian,readiness,sessions}` | lifecycle, readiness, journal, gate de grupo POSIX e recuperação após crash centralizados |
+| Artefato instalado | `maintenance/inventory/installer-runtime-members.json` | 56 membros com origem, consumidor e contrato; a projeção do builder é derivada do manifesto e conferida contra o zipapp |
 
 ## Contratos preservados
 
@@ -88,7 +92,9 @@ As regras são:
 - ownership de regras reutilizáveis passa dos entrypoints e de
   `maintenance.tools` para `x86qw_runtime`;
 - manutenção e builders passam a importar a implementação runtime;
-- o zipapp deixa de incorporar módulos de manutenção;
+- o zipapp deixa de incorporar módulos de manutenção e fachadas não consumidas;
+- um manifesto declarativo passa a declarar cada membro instalado e seu
+  consumidor, gera a projeção do builder e rejeita divergência com o ZIP;
 - leitura de catálogo deixa de ocorrer durante comandos que não o consomem;
 - componentes e clientes cobertos passam a expor transações compostas, que
   retêm staging até o commit do estado pai;
@@ -102,27 +108,39 @@ Uma única implementação passa a definir cada contrato migrado. Os testes pode
 comparar identidade de símbolos entre fachadas e runtime, inspecionar o zipapp,
 provar lazy loading e rejeitar ciclos ou imports invertidos por AST.
 
-A transação comum melhora a composição de mudanças: o estado pai pode reverter
-uma subtransação concluída enquanto seu staging ainda existe. Ao mesmo tempo,
-uma falha depois de `replace` que não permite comprovar `fsync` é relatada como
-efeito comprometido e preservado para recuperação, não como rollback completo.
+A transação comum melhora a composição de mudanças: o estado pai e a
+verificação final podem reverter uma subtransação concluída enquanto seu
+staging ainda existe. Isso já abrange a geração da CLI, os PAKs preservados,
+defaults, reparos e migrações pessoais/metadata. Ao mesmo tempo, uma falha
+depois de `replace` que não permite comprovar `fsync` é relatada como efeito
+comprometido e preservado para recuperação, não como rollback completo.
+
+O zipapp do HEAD analisado possui exatamente 56 membros: 44 módulos canônicos
+de `x86qw_runtime`, quatro entrypoints/fachadas no topo, duas projeções KTX e
+seis membros gerados. O manifesto é a fonte declarativa consumida pelo
+builder, não uma segunda lista copiada no código. O teste compara a projeção
+derivada com o arquivo realmente produzido.
 
 ## Riscos residuais e condição de fechamento
 
-Esta decisão **não** declara a PR 6 concluída. No recorte documentado ainda
-faltam, no mínimo:
+Esta decisão declara concluído o recorte de código da PR 6, mas não sua revisão.
+Os entrypoints continuam sendo raízes de composição extensas; isso é permitido
+desde que não voltem a possuir HTTP, ZIP, persistência, plataforma ou regras de
+domínio já extraídas. Logs de execução são append-only e não participam de
+rollback; mutações duráveis de payload, metadados e configurações gerenciadas
+usam planos, quarantine ou inversos identificados. A finalização do quarantine
+remove arquivos regulares e diretórios vazios após descritor, identidade e
+rename exclusivo para nome privado imprevisível no POSIX, e pelo handle validado
+no Windows. Links e tipos especiais são preservados com diagnóstico. Como o
+POSIX não oferece `unlink`/`rmdir` condicional por inode, código hostil com a
+mesma identidade do usuário permanece fora da fronteira de confiança, assim
+como já documentado para ACLs privadas.
 
-- aplicar o contrato transacional à instalação/atualização da própria CLI;
-- cobrir defaults e artefatos derivados ainda gravados fora da transação;
-- converter os chamadores residuais de remoção e as migrações mutáveis sem
-  simular reversibilidade inexistente;
-- tratar `cleanup`, `uninstall` e `--purge` com plano explícito e recuperação;
-- eliminar dependências residuais dos entrypoints em ferramentas do
-  repositório e reduzir adaptações de plataforma ainda locais;
-- executar a regressão integral e a matriz Linux, macOS e Windows sobre o
-  snapshot final da PR.
-
-Os testes focais já obtidos comprovam somente as unidades integradas até
-`49594cd`; não substituem a matriz final nem os smokes nativos do candidato. A
-issue #52 permanece aberta. A release pública `0.7.1` não é alterada, nenhuma
-versão nova é preparada e esta decisão não autoriza publicação.
+No HEAD `29d76a4`, 1.190 testes de manutenção passaram com 37 skips explícitos,
+e os 5 testes do site passaram. Eles comprovam localmente o ownership, o grafo
+sem ciclo, o zipapp de 56 membros e as corridas adversariais de rollback,
+quarantine, locks, journals e arquivos pessoais. A matriz Linux, macOS e
+Windows do snapshot enviado à PR continua necessária e não substitui os smokes
+nativos do candidato previstos no PR 11. A issue #52 permanece aberta até essa
+revisão. A release pública `0.7.1` não é alterada e esta decisão não autoriza
+publicação.
