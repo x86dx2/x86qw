@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 PROJECT = "x86qw"
 FORMAT = 1
+PLAN_FORMAT = 2
 PLATFORM = "macOS-ARM64"
 MAX_JSON_BYTES = 1024 * 1024
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -42,10 +43,17 @@ CANONICAL_CASES = (
 )
 
 IDENTITY_FIELDS = frozenset({"version", "commit", "manifest_sha256"})
-PLAN_FIELDS = frozenset({"format", "project", "platform", "candidate", "cases"})
-PLAN_CASE_FIELDS = frozenset({
-    "name", "candidate_artifact", "runtime", "command", "timeout_seconds",
+PLAN_FIELDS = frozenset({
+    "format", "project", "platform", "candidate", "entrypoint", "cases",
 })
+PLAN_CASE_FIELDS = frozenset({"name", "arguments", "timeout_seconds"})
+ENTRYPOINT_FIELDS = frozenset({
+    "contract_artifact", "contract_sha256", "artifact", "size", "sha256",
+})
+ENTRYPOINT_CONTRACT_FIELDS = frozenset({
+    "format", "project", "platform", "protocol", "entrypoint_artifact",
+})
+NATIVE_CASE_PROTOCOL = "x86qw-native-case-v1"
 RUNTIME_FIELDS = frozenset({"path", "size", "sha256"})
 HANDOFF_FIELDS = frozenset({
     "format", "project", "status", "platform", "candidate", "environment",
@@ -139,7 +147,7 @@ def candidate_identity(candidate: Path) -> dict[str, str]:
     }
 
 
-def _artifact(candidate: Path, name: str) -> tuple[Path, str]:
+def candidate_artifact(candidate: Path, name: str) -> tuple[Path, int, str]:
     root = _candidate_root(candidate)
     manifest = read_json(root / "candidate.json", label="manifest do candidato")
     artifacts = manifest.get("artifacts")
@@ -169,7 +177,7 @@ def _artifact(candidate: Path, name: str) -> tuple[Path, str]:
     size, digest = _digest(path)
     if size != expected_size or digest != expected_digest:
         raise NativeHandoffError(f"bytes do artifact divergem do candidato exato: {name}")
-    return path, digest
+    return path, size, digest
 
 
 def validate_runtime(value: object) -> dict[str, object]:
@@ -198,14 +206,49 @@ def validate_runtime(value: object) -> dict[str, object]:
 
 
 def validate_plan(value: object, *, candidate: Path) -> list[dict[str, object]]:
-    if not isinstance(value, Mapping) or set(value) != PLAN_FIELDS:
+    if not isinstance(value, Mapping):
+        raise NativeHandoffError("plano nativo precisa ser objeto")
+    if value.get("format") != PLAN_FORMAT:
+        raise NativeHandoffError("plano nativo usa formato legado ou inválido")
+    if set(value) != PLAN_FIELDS:
         raise NativeHandoffError("plano nativo possui campos desconhecidos ou ausentes")
-    if value.get("format") != FORMAT or value.get("project") != PROJECT or value.get("platform") != PLATFORM:
+    if (
+        value.get("format") != PLAN_FORMAT
+        or value.get("project") != PROJECT
+        or value.get("platform") != PLATFORM
+    ):
         raise NativeHandoffError("plano nativo possui formato/projeto/plataforma inválido")
     expected_identity = candidate_identity(candidate)
     identity = value.get("candidate")
     if not isinstance(identity, Mapping) or set(identity) != IDENTITY_FIELDS or dict(identity) != expected_identity:
         raise NativeHandoffError("plano não corresponde ao candidato exato")
+    entrypoint = value.get("entrypoint")
+    if not isinstance(entrypoint, Mapping) or set(entrypoint) != ENTRYPOINT_FIELDS:
+        raise NativeHandoffError("plano nativo não possui entrypoint fechado")
+    contract_name = _relative_path(
+        entrypoint.get("contract_artifact"), label="entrypoint.contract_artifact",
+    )
+    contract_path, _contract_size, contract_digest = candidate_artifact(
+        candidate, contract_name,
+    )
+    artifact = _relative_path(entrypoint.get("artifact"), label="entrypoint.artifact")
+    artifact_path, artifact_size, artifact_digest = candidate_artifact(candidate, artifact)
+    contract = read_json(contract_path, label="contrato de entrypoint")
+    if (
+        set(contract) != ENTRYPOINT_CONTRACT_FIELDS
+        or contract.get("format") != 1
+        or contract.get("project") != PROJECT
+        or contract.get("platform") != PLATFORM
+        or contract.get("protocol") != NATIVE_CASE_PROTOCOL
+        or contract.get("entrypoint_artifact") != artifact
+    ):
+        raise NativeHandoffError("contrato de entrypoint não autoriza o protocolo fechado")
+    if (
+        entrypoint.get("contract_sha256") != contract_digest
+        or entrypoint.get("size") != artifact_size
+        or entrypoint.get("sha256") != artifact_digest
+    ):
+        raise NativeHandoffError("entrypoint diverge dos bytes do candidato exato")
     cases = value.get("cases")
     if not isinstance(cases, list) or len(cases) != len(CANONICAL_CASES):
         raise NativeHandoffError("plano não contém o lifecycle completo")
@@ -215,22 +258,9 @@ def validate_plan(value: object, *, candidate: Path) -> list[dict[str, object]]:
             raise NativeHandoffError(f"caso inválido: {expected_name}")
         if raw_case.get("name") != expected_name:
             raise NativeHandoffError(f"caso ausente ou fora de ordem: {expected_name}")
-        artifact = _relative_path(raw_case.get("candidate_artifact"), label="candidate_artifact")
-        artifact_path, artifact_digest = _artifact(candidate, artifact)
-        runtime = validate_runtime(raw_case.get("runtime"))
-        command = raw_case.get("command")
-        if (
-            not isinstance(command, list)
-            or not command
-            or len(command) > 128
-            or not all(isinstance(part, str) and part and "\x00" not in part and len(part) <= 4096 for part in command)
-        ):
-            raise NativeHandoffError(f"comando inválido: {expected_name}")
-        artifact_token = "{candidate}/" + artifact
-        if artifact_token not in command:
-            raise NativeHandoffError(f"comando não referencia bytes do candidato: {expected_name}")
-        if command[0] != runtime["path"]:
-            raise NativeHandoffError(f"comando não usa o runtime exato declarado: {expected_name}")
+        arguments = raw_case.get("arguments")
+        if arguments != ["--candidate-root", "{candidate}", "--case", expected_name]:
+            raise NativeHandoffError(f"argumentos fora do protocolo fechado: {expected_name}")
         timeout = raw_case.get("timeout_seconds")
         if type(timeout) is not int or not 1 <= timeout <= 900:
             raise NativeHandoffError(f"timeout inválido: {expected_name}")
@@ -239,8 +269,8 @@ def validate_plan(value: object, *, candidate: Path) -> list[dict[str, object]]:
             "candidate_artifact": artifact,
             "candidate_artifact_path": artifact_path,
             "candidate_artifact_sha256": artifact_digest,
-            "runtime": runtime,
-            "command": list(command),
+            "runtime_size": artifact_size,
+            "arguments": list(arguments),
             "timeout_seconds": timeout,
         })
     return validated
@@ -273,7 +303,7 @@ def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
         if case.get("name") != expected_name or case.get("status") != "passed" or case.get("exit_code") != 0:
             raise NativeHandoffError(f"caso nativo não aprovado: {expected_name}")
         artifact = _relative_path(case.get("candidate_artifact"), label="candidate_artifact")
-        _artifact_path, artifact_digest = _artifact(candidate, artifact)
+        _artifact_path, _artifact_size, artifact_digest = candidate_artifact(candidate, artifact)
         if case.get("candidate_artifact_sha256") != artifact_digest:
             raise NativeHandoffError(f"resultado diverge dos bytes do candidato: {expected_name}")
         duration = case.get("duration_ms")

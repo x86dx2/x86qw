@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -17,33 +18,57 @@ from maintenance.tools.native_handoff import (
 from maintenance.tools.native_macos_harness import execute_cases, select_platform
 
 
+CONTRACT_PATH = "runtime/native-smoke/macos-arm64/entrypoint.json"
+ENTRYPOINT_PATH = "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
+
+
 class NativeMacosHarnessTests(unittest.TestCase):
     def _candidate(self, root: Path) -> tuple[Path, dict[str, str]]:
         candidate = root / "candidate"
         candidate.mkdir()
-        runner = candidate / "runner.py"
-        runner.write_text(
-            """from pathlib import Path
-import sys
-
-case, journal = sys.argv[1:]
-with Path(journal).open("a", encoding="utf-8") as stream:
-    stream.write(case + "\\n")
-print("executed", case)
+        entrypoint = candidate / ENTRYPOINT_PATH
+        entrypoint.parent.mkdir(parents=True)
+        entrypoint.write_text(
+            """#!/bin/sh
+test "$1" = "--candidate-root" || exit 64
+test "$3" = "--case" || exit 64
+printf '%s\\n' "$4" >> "$TMPDIR/execucoes.txt"
+printf 'executed %s\\n' "$4"
 """,
             encoding="utf-8",
         )
-        payload = runner.read_bytes()
+        entrypoint.chmod(0o644)
+        contract = candidate / CONTRACT_PATH
+        contract.write_text(
+            json.dumps(
+                {
+                    "format": 1,
+                    "project": "x86qw",
+                    "platform": "macOS-ARM64",
+                    "protocol": "x86qw-native-case-v1",
+                    "entrypoint_artifact": ENTRYPOINT_PATH,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        entrypoint_bytes = entrypoint.read_bytes()
+        contract_bytes = contract.read_bytes()
         manifest = {
             "format": 2,
             "project": "x86qw",
             "version": "1.0.0-rc.1",
             "commit": "c" * 40,
             "artifacts": {
-                "runner.py": {
-                    "size": len(payload),
-                    "sha256": hashlib.sha256(payload).hexdigest(),
-                }
+                CONTRACT_PATH: {
+                    "size": len(contract_bytes),
+                    "sha256": hashlib.sha256(contract_bytes).hexdigest(),
+                },
+                ENTRYPOINT_PATH: {
+                    "size": len(entrypoint_bytes),
+                    "sha256": hashlib.sha256(entrypoint_bytes).hexdigest(),
+                },
             },
         }
         manifest_path = candidate / "candidate.json"
@@ -55,29 +80,25 @@ print("executed", case)
         }
         return candidate, identity
 
-    def _plan(self, identity: dict[str, str], journal: Path) -> dict[str, object]:
-        runtime = Path(sys.executable).resolve()
-        runtime_bytes = runtime.read_bytes()
+    def _plan(self, candidate: Path, identity: dict[str, str]) -> dict[str, object]:
+        contract_bytes = (candidate / CONTRACT_PATH).read_bytes()
+        entrypoint_bytes = (candidate / ENTRYPOINT_PATH).read_bytes()
         return {
-            "format": 1,
+            "format": 2,
             "project": "x86qw",
             "platform": "macOS-ARM64",
             "candidate": identity,
+            "entrypoint": {
+                "contract_artifact": CONTRACT_PATH,
+                "contract_sha256": hashlib.sha256(contract_bytes).hexdigest(),
+                "artifact": ENTRYPOINT_PATH,
+                "size": len(entrypoint_bytes),
+                "sha256": hashlib.sha256(entrypoint_bytes).hexdigest(),
+            },
             "cases": [
                 {
                     "name": name,
-                    "candidate_artifact": "runner.py",
-                    "runtime": {
-                        "path": str(runtime),
-                        "size": len(runtime_bytes),
-                        "sha256": hashlib.sha256(runtime_bytes).hexdigest(),
-                    },
-                    "command": [
-                        str(runtime),
-                        "{candidate}/runner.py",
-                        name,
-                        str(journal),
-                    ],
+                    "arguments": ["--candidate-root", "{candidate}", "--case", name],
                     "timeout_seconds": 10,
                 }
                 for name in CANONICAL_CASES
@@ -105,22 +126,35 @@ print("executed", case)
                 self.assertIsNone(platform)
                 self.assertTrue(reason)
 
+        mode, platform, reason = select_platform(
+            system="Darwin",
+            machine="arm64",
+            candidate_available=True,
+            plan_available=False,
+        )
+        self.assertEqual("not-run", mode)
+        self.assertIsNone(platform)
+        self.assertIn("plano", reason)
+
     def test_portable_executor_runs_the_complete_lifecycle_in_canonical_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate, identity = self._candidate(root)
-            journal = root / "execucoes.txt"
+            output = root / "logs"
             results = execute_cases(
                 candidate=candidate,
-                plan=self._plan(identity, journal),
-                output_dir=root / "logs",
+                plan=self._plan(candidate, identity),
+                output_dir=output,
             )
 
+            journal = output / "execucoes.txt"
             self.assertEqual(list(CANONICAL_CASES), journal.read_text(encoding="utf-8").splitlines())
             self.assertEqual(list(CANONICAL_CASES), [result["name"] for result in results])
             self.assertTrue(all(result["status"] == "passed" for result in results))
             self.assertTrue(all(result["exit_code"] == 0 for result in results))
             self.assertTrue(all((root / "logs" / result["stdout"]).is_file() for result in results))
+            self.assertFalse(os.access(candidate / ENTRYPOINT_PATH, os.X_OK))
+            self.assertTrue(all(os.access(result["runtime"]["path"], os.X_OK) for result in results))
 
             handoff_path = root / "logs" / "handoff.json"
             handoff = {
@@ -146,27 +180,25 @@ print("executed", case)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate, identity = self._candidate(root)
-            journal = root / "nao-deve-existir.txt"
-            plan = self._plan(identity, journal)
+            plan = self._plan(candidate, identity)
             plan["candidate"] = {**identity, "manifest_sha256": "0" * 64}
 
             with self.assertRaisesRegex(NativeHandoffError, "candidato exato"):
                 execute_cases(candidate=candidate, plan=plan, output_dir=root / "logs")
 
-            self.assertFalse(journal.exists())
+            self.assertFalse((root / "logs").exists())
 
-    def test_runtime_mismatch_is_rejected_before_any_command_runs(self) -> None:
+    def test_entrypoint_mismatch_is_rejected_before_any_command_runs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate, identity = self._candidate(root)
-            journal = root / "nao-deve-existir.txt"
-            plan = self._plan(identity, journal)
-            plan["cases"][0]["runtime"]["sha256"] = "0" * 64
+            plan = self._plan(candidate, identity)
+            plan["entrypoint"]["sha256"] = "0" * 64
 
-            with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
+            with self.assertRaisesRegex(NativeHandoffError, "entrypoint"):
                 execute_cases(candidate=candidate, plan=plan, output_dir=root / "logs")
 
-            self.assertFalse(journal.exists())
+            self.assertFalse((root / "logs").exists())
 
     def test_missing_or_not_run_handoff_is_never_accepted_as_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

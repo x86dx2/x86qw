@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import platform as host_platform
+import stat
 import subprocess
 import sys
 import time
@@ -29,13 +30,21 @@ from maintenance.tools.native_handoff import (
 )
 
 
-def select_platform(*, system: str, machine: str, candidate_available: bool) -> tuple[str, str | None, str]:
+def select_platform(
+    *,
+    system: str,
+    machine: str,
+    candidate_available: bool,
+    plan_available: bool = True,
+) -> tuple[str, str | None, str]:
     """Return execute only for the live platform this PR can truthfully prove."""
 
     if not candidate_available:
         return "not-run", None, "candidato exato não foi fornecido"
     if system != "Darwin" or machine.casefold() != "arm64":
         return "not-run", None, f"host {system}/{machine} não é macOS arm64"
+    if not plan_available:
+        return "not-run", None, "plano nativo validável não foi fornecido"
     return "execute", PLATFORM, "candidato explícito disponível em macOS arm64"
 
 
@@ -47,23 +56,101 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _stage_entrypoint(
+    *, source: Path, destination: Path, expected_size: int, expected_digest: str,
+) -> dict[str, object]:
+    """Copy candidate-owned bytes into an executable, private staging file."""
+
+    source_descriptor = -1
+    destination_descriptor = -1
+    created = False
+    try:
+        source_descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        before = os.fstat(source_descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise NativeHandoffError(f"entrypoint não é arquivo regular: {source}")
+        destination_descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        created = True
+        digest = hashlib.sha256()
+        size = 0
+        while chunk := os.read(source_descriptor, 1024 * 1024):
+            digest.update(chunk)
+            size += len(chunk)
+            pending = memoryview(chunk)
+            while pending:
+                written = os.write(destination_descriptor, pending)
+                if written <= 0:
+                    raise OSError("escrita incompleta durante staging do entrypoint")
+                pending = pending[written:]
+        after = os.fstat(source_descriptor)
+        unchanged = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) == (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        )
+        if not unchanged or size != expected_size or digest.hexdigest() != expected_digest:
+            raise NativeHandoffError("bytes do entrypoint divergiram durante staging")
+        os.fsync(destination_descriptor)
+        os.fchmod(destination_descriptor, 0o700)
+    except OSError as error:
+        raise NativeHandoffError(f"não foi possível preparar entrypoint privado: {source}") from error
+    finally:
+        if destination_descriptor >= 0:
+            os.close(destination_descriptor)
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        if created and (
+            not destination.exists()
+            or destination.stat().st_size != expected_size
+            or _sha256(destination) != expected_digest
+        ):
+            destination.unlink(missing_ok=True)
+    runtime = {
+        "path": str(destination.absolute()),
+        "size": expected_size,
+        "sha256": expected_digest,
+    }
+    return validate_runtime(runtime)
+
+
 def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path) -> list[dict[str, object]]:
-    """Run real processes for every canonical case without claiming native evidence."""
+    """Run the candidate-owned entrypoint for every canonical case."""
 
     candidate = Path(candidate).absolute()
     cases = validate_plan(plan, candidate=candidate)
+    initial_identity = candidate_identity(candidate)
     output_dir = Path(output_dir)
     try:
         output_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError as error:
         raise NativeHandoffError(f"destino de logs já existe: {output_dir}") from error
-    environment = os.environ.copy()
-    identity = candidate_identity(candidate)
-    environment.update({
+    output_dir.chmod(0o700)
+    runtime_dir = output_dir / ".runtime"
+    runtime_dir.mkdir(mode=0o700)
+    first_case = cases[0]
+    runtime = _stage_entrypoint(
+        source=Path(first_case["candidate_artifact_path"]),
+        destination=runtime_dir / "x86qw-native-smoke",
+        expected_size=int(first_case["runtime_size"]),
+        expected_digest=str(first_case["candidate_artifact_sha256"]),
+    )
+    environment = {
+        "HOME": str(output_dir.absolute()),
+        "TMPDIR": str(output_dir.absolute()),
         "X86QW_CANDIDATE_ROOT": str(candidate),
-        "X86QW_CANDIDATE_COMMIT": identity["commit"],
-        "X86QW_CANDIDATE_MANIFEST_SHA256": identity["manifest_sha256"],
-    })
+        "X86QW_CANDIDATE_COMMIT": initial_identity["commit"],
+        "X86QW_CANDIDATE_MANIFEST_SHA256": initial_identity["manifest_sha256"],
+    }
     results: list[dict[str, object]] = []
     for index, case in enumerate(cases, start=1):
         name = str(case["name"])
@@ -71,12 +158,12 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
         stderr_name = f"{index:02d}-{name}.stderr.log"
         stdout_path = output_dir / stdout_name
         stderr_path = output_dir / stderr_name
-        artifact_path = str(case["candidate_artifact_path"])
-        runtime = validate_runtime(case["runtime"])
-        command = [
-            artifact_path if part == "{candidate}/" + str(case["candidate_artifact"]) else part
-            for part in case["command"]
+        validate_runtime(runtime)
+        arguments = [
+            str(candidate) if part == "{candidate}" else str(part)
+            for part in case["arguments"]
         ]
+        command = [str(runtime["path"]), *arguments]
         started = time.monotonic()
         timed_out = False
         with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
@@ -103,7 +190,7 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
             "duration_ms": int((time.monotonic() - started) * 1000),
             "candidate_artifact": case["candidate_artifact"],
             "candidate_artifact_sha256": case["candidate_artifact_sha256"],
-            "runtime": runtime,
+            "runtime": dict(runtime),
             "stdout": stdout_name,
             "stdout_sha256": _sha256(stdout_path),
             "stderr": stderr_name,
@@ -112,6 +199,9 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
         results.append(result)
         if result["status"] != "passed":
             break
+    validate_plan(plan, candidate=candidate)
+    if candidate_identity(candidate) != initial_identity:
+        raise NativeHandoffError("candidato exato divergiu durante execução")
     return results
 
 
@@ -147,6 +237,7 @@ def run_native(*, candidate: Path, plan: dict[str, object], output_dir: Path) ->
         system=system,
         machine=machine,
         candidate_available=(candidate / "candidate.json").is_file(),
+        plan_available=bool(plan),
     )
     output_dir = Path(output_dir)
     if mode != "execute":
@@ -191,6 +282,7 @@ def main(arguments: list[str] | None = None) -> int:
             system=host_platform.system(),
             machine=host_platform.machine(),
             candidate_available=(options.candidate / "candidate.json").is_file(),
+            plan_available=options.plan.is_file(),
         )[0]
         plan = {} if mode != "execute" else read_json(options.plan, label="plano nativo")
         handoff = run_native(candidate=options.candidate, plan=plan, output_dir=options.output_dir)
