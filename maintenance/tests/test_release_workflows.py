@@ -42,6 +42,29 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
+    def test_candidate_binds_native_runtime_bytes_before_any_smoke(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("for runtime_root in clients servers services; do", source)
+        self.assertIn('find "dist/$runtime_root" -type f -print0', source)
+        self.assertIn(
+            '"release-work/input/runtime/$runtime_root/$relative"',
+            source,
+        )
+        self.assertLess(
+            source.index("for runtime_root in clients servers services; do"),
+            source.index("release_candidate.py prepare"),
+        )
+
+    def test_candidate_declares_candidate_owned_native_entrypoint_before_prepare(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("maintenance/tools/native_case_entrypoint.py", source)
+        self.assertIn("runtime/native-smoke/macos-arm64/x86qw-native-smoke", source)
+        self.assertIn("runtime/native-smoke/macos-arm64/entrypoint.json", source)
+        self.assertLess(
+            source.index("native_case_entrypoint.py"),
+            source.index("release_candidate.py prepare"),
+        )
+
     def test_release_keeps_rehearsal_separate_from_fail_closed_promotion(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("mode == 'rehearsal'", source)

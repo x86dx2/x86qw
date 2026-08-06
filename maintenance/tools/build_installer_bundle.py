@@ -458,18 +458,22 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         results.append({
             "version": version,
             "filename": filename,
-            "distribution_path": distribution_path_for(archive, version, filename),
+            "distribution_path": distribution_path_for(archive, package_root),
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
     return sorted(results, key=lambda item: parse_semver(str(item["version"])))
 
 
-def distribution_path_for(archive: Path, version: str, filename: str) -> str:
+def distribution_path_for(archive: Path, package_root: Path) -> str:
+    try:
+        rehearsal_path = archive.relative_to(package_root)
+    except ValueError as error:
+        raise ValueError(f"installer package escaped its output root: {archive}") from error
     try:
         return archive.relative_to(ROOT / "dist").as_posix()
     except ValueError:
-        return PurePosixPath("installer", "packages", version, filename).as_posix()
+        return rehearsal_path.as_posix()
 
 
 def update_latest_link(package_root: Path) -> str:
@@ -729,7 +733,7 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
     result = {
         "version": version,
         "filename": filename,
-        "distribution_path": distribution_path_for(target, version, filename),
+        "distribution_path": distribution_path_for(target, output),
         "size": accepted_plan.source_size,
         "sha256": accepted_plan.source_sha256,
     }

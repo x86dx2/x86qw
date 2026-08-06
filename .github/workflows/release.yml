@@ -75,14 +75,27 @@ jobs:
           python3 maintenance/tools/build_installer_bundle.py \
             --output release-work/installer-build \
             --version "$CANDIDATE_VERSION"
-          mkdir -p release-work/input/content release-work/input/installer
+          mkdir -p release-work/input/content release-work/input/installer release-work/input/runtime
           find maintenance/build/packages -type f -print0 | while IFS= read -r -d '' artifact; do
             relative="${artifact#maintenance/build/packages/}"
             install -Dm644 "$artifact" "release-work/input/content/$relative"
           done
+          for runtime_root in clients servers services; do
+            find "dist/$runtime_root" -type f -print0 | while IFS= read -r -d '' artifact; do
+              relative="${artifact#dist/$runtime_root/}"
+              install -Dm644 "$artifact" "release-work/input/runtime/$runtime_root/$relative"
+            done
+          done
           install -m644 \
             "release-work/installer-build/$CANDIDATE_VERSION/x86qw-installer-$CANDIDATE_VERSION.zip" \
             "release-work/input/installer/x86qw-installer-$CANDIDATE_VERSION.zip"
+          mkdir -p release-work/input/runtime/native-smoke/macos-arm64
+          install -m644 \
+            maintenance/tools/native_case_entrypoint.py \
+            release-work/input/runtime/native-smoke/macos-arm64/x86qw-native-smoke
+          install -m644 \
+            maintenance/native/macos-arm64/entrypoint.json \
+            release-work/input/runtime/native-smoke/macos-arm64/entrypoint.json
           python3 maintenance/tools/release_candidate.py prepare \
             --source release-work/input \
             --output release-work/candidate \
