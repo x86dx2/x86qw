@@ -11,12 +11,28 @@
 - Incluído:
 - Fora de escopo:
 
+## Estado após esta PR
+
+Baseline:
+Issue concluída:
+Contrato introduzido:
+Testes portáveis:
+Teste nativo Mac M3:
+Plataformas não executadas:
+Riscos restantes:
+Próxima issue desbloqueada:
+Branches que podem ser apagadas:
+
 ## Validação
 
 - [ ] `./maintenance/manage.py verify`
 - [ ] CLI pública relevante analisada com `--help`
-- [ ] `cd site && npx --yes wrangler@4.114.0 deploy --dry-run` quando aplicável
-- [ ] Smoke nativo executado ou limitação registrada
+- [ ] `cd site && npm ci && npm run deploy:dry-run` quando aplicável
+- [ ] Validação executada diretamente no Mac local, com comandos e resultados registrados
+- [ ] Limitações de Linux, Windows e macOS Intel declaradas sem alegar execução
+- [ ] Nenhum runner, workflow ou gate externo é necessário
+- [ ] Links Markdown locais resolvidos a partir do diretório de cada documento
+- [ ] `PROJECT-STATUS.md`, `ROADMAP.md` e README continuam coerentes
 
 ## Distribuição e proveniência
 
@@ -27,7 +43,8 @@
 
 ## Evidência
 
-<!-- Saída resumida, screenshots, plataforma e detalhes de compatibilidade. Remova segredos. -->
+<!-- Saída resumida, screenshots quando úteis e detalhes de compatibilidade.
+     Declare a plataforma local sem apresentar compatibilidade como execução. Remova segredos. -->
 
 ## Risco e reversão
 
