@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "dependencies": [
+    {
+      "name": "tuf",
+      "version": "7.0.0",
+      "filename": "tuf-7.0.0-py3-none-any.whl",
+      "sha256": "572bdbdc9ff4a82278a0d4773e6100863b9b33023f27575e84ca65b486dd0d79",
+      "license": "Apache-2.0 OR MIT",
+      "source": "https://pypi.org/project/tuf/7.0.0/",
+      "package_prefixes": ["tuf/"]
+    },
+    {
+      "name": "securesystemslib",
+      "version": "1.4.0",
+      "filename": "securesystemslib-1.4.0-py3-none-any.whl",
+      "sha256": "a0743a3d978cf26e98a70a57e3fbd5a18e0a74c20cabe615f6a55b02ef0272b3",
+      "license": "MIT",
+      "source": "https://pypi.org/project/securesystemslib/1.4.0/",
+      "package_prefixes": ["securesystemslib/"]
+    },
+    {
+      "name": "urllib3",
+      "version": "2.7.0",
+      "filename": "urllib3-2.7.0-py3-none-any.whl",
+      "sha256": "9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897",
+      "license": "MIT",
+      "source": "https://pypi.org/project/urllib3/2.7.0/",
+      "package_prefixes": ["urllib3/"]
+    }
+  ]
+}

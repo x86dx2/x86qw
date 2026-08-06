@@ -41,6 +41,7 @@
     {"member": "x86qw_runtime/contracts/schema.py", "source": "x86qw_runtime/contracts/schema.py", "consumer": "manager, receipts e catalogs", "contract": "schemas versionados de catálogos, estado e recibos"},
     {"member": "x86qw_runtime/contracts/output.py", "source": "x86qw_runtime/contracts/output.py", "consumer": "manager e UI JSON", "contract": "envelope JSON determinístico, redaction e códigos"},
     {"member": "x86qw_runtime/contracts/policy.py", "source": "x86qw_runtime/contracts/policy.py", "consumer": "contratos públicos", "contract": "política de canais e compatibilidade SemVer"},
+    {"member": "x86qw_runtime/trust.py", "source": "x86qw_runtime/trust.py", "consumer": "manager.py", "contract": "verificação TUF do catálogo público"},
     {"member": "x86qw_runtime/io/__init__.py", "source": "x86qw_runtime/io/__init__.py", "consumer": "importador Python", "contract": "pacote de I/O canônico"},
     {"member": "x86qw_runtime/io/atomic.py", "source": "x86qw_runtime/io/atomic.py", "consumer": "manager, state, receipts e sessions", "contract": "escrita e promoção atômica"},
     {"member": "x86qw_runtime/io/archive.py", "source": "x86qw_runtime/io/archive.py", "consumer": "manager.py", "contract": "scan e extração segura de arquivos"},
@@ -62,6 +63,7 @@
     {"member": "_x86qw/runtimes.json", "source": "generated:runtimes", "consumer": "manager, gameplay e services", "contract": "runtimes e plataformas disponíveis"},
     {"member": "_x86qw/games.json", "source": "generated:games", "consumer": "gameplay.py", "contract": "jogos e compatibilidade"},
     {"member": "_x86qw/installer.json", "source": "generated:identity", "consumer": "manager.py", "contract": "identidade interna do bundle"},
-    {"member": "_x86qw/components.json", "source": "generated:component-catalog", "consumer": "manager.py", "contract": "catálogo mínimo de componentes"}
+    {"member": "_x86qw/components.json", "source": "generated:component-catalog", "consumer": "manager.py", "contract": "catálogo mínimo de componentes"},
+    {"member": "_x86qw/runtime-dependencies.json", "source": "generated:runtime-dependencies", "consumer": "auditoria do zipapp", "contract": "versões, hashes e licenças das dependências TUF"}
   ]
 }
