@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -64,6 +65,20 @@ class ReleaseWorkflowTests(unittest.TestCase):
             source.index("native_case_entrypoint.py"),
             source.index("release_candidate.py prepare"),
         )
+
+    def test_candidate_entrypoint_contract_is_present_and_closed(self):
+        contract = ROOT / "maintenance/native/macos-arm64/entrypoint.json"
+        self.assertEqual(
+            {
+                "format": 1,
+                "project": "x86qw",
+                "platform": "macOS-ARM64",
+                "protocol": "x86qw-native-case-v1",
+                "entrypoint_artifact": "runtime/native-smoke/macos-arm64/x86qw-native-smoke",
+            },
+            json.loads(contract.read_text(encoding="utf-8")),
+        )
+        self.assertTrue((ROOT / "maintenance/tools/native_case_entrypoint.py").is_file())
 
     def test_release_keeps_rehearsal_separate_from_fail_closed_promotion(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
