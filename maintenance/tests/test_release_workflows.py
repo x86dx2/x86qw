@@ -58,7 +58,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_candidate_declares_candidate_owned_native_entrypoint_before_prepare(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("maintenance/tools/native_case_entrypoint.py", source)
+        self.assertIn("maintenance/native_case_entrypoint.py", source)
         self.assertIn("runtime/native-smoke/macos-arm64/x86qw-native-smoke", source)
         self.assertIn("runtime/native-smoke/macos-arm64/entrypoint.json", source)
         self.assertLess(
@@ -78,7 +78,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             },
             json.loads(contract.read_text(encoding="utf-8")),
         )
-        self.assertTrue((ROOT / "maintenance/tools/native_case_entrypoint.py").is_file())
+        self.assertTrue((ROOT / "maintenance/native_case_entrypoint.py").is_file())
 
     def test_release_keeps_rehearsal_separate_from_fail_closed_promotion(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

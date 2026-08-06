@@ -91,7 +91,7 @@ jobs:
             "release-work/input/installer/x86qw-installer-$CANDIDATE_VERSION.zip"
           mkdir -p release-work/input/runtime/native-smoke/macos-arm64
           install -m644 \
-            maintenance/tools/native_case_entrypoint.py \
+            maintenance/native_case_entrypoint.py \
             release-work/input/runtime/native-smoke/macos-arm64/x86qw-native-smoke
           install -m644 \
             maintenance/native/macos-arm64/entrypoint.json \
