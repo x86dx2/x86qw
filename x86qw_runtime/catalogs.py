@@ -8,6 +8,7 @@ import re
 import unicodedata
 from pathlib import Path, PurePosixPath
 
+from .contracts.schema import ContractError, SchemaKind, validate_document_versions
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 COMPONENT_ID = IDENTIFIER
@@ -69,45 +70,86 @@ def validate_portable_relative_path(value: object, label: str) -> str:
     return path.as_posix()
 
 
-def _load_document(path: Path, collection: str) -> dict[str, object]:
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate catalog field: {key}")
+        document[key] = value
+    return document
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, object]:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read {collection} catalog: {path}") from error
+        document = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"cannot read {label} catalog: {path}") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"invalid {label} catalog identity")
+    return document
+
+
+def _load_document(
+    path: Path,
+    collection: str,
+    *,
+    allow_legacy: bool = True,
+) -> dict[str, object]:
+    document = _read_json_object(path, collection)
     if (
-        not isinstance(document, dict)
+        type(document.get("format")) is not int
         or document.get("format") != 1
         or document.get("project") != "x86qw"
         or not isinstance(document.get(collection), list)
     ):
         raise ValueError(f"invalid {collection} catalog identity")
+    try:
+        validate_document_versions(
+            document,
+            kind=SchemaKind.CATALOG,
+            allow_legacy=allow_legacy,
+        )
+    except ContractError as error:
+        raise ValueError(f"invalid {collection} catalog contract") from error
     return document
 
 
-def load_capabilities(path: Path) -> dict[str, object]:
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read capabilities catalog: {path}") from error
+def load_capabilities(
+    path: Path,
+    *,
+    allow_legacy: bool = True,
+) -> dict[str, object]:
+    document = _read_json_object(path, "capabilities")
     if (
-        not isinstance(document, dict)
+        type(document.get("format")) is not int
         or document.get("format") != 1
         or document.get("project") != "x86qw"
     ):
         raise ValueError("invalid capabilities catalog identity")
+    try:
+        validate_document_versions(
+            document,
+            kind=SchemaKind.CATALOG,
+            allow_legacy=allow_legacy,
+        )
+    except ContractError as error:
+        raise ValueError("invalid capabilities catalog contract") from error
     return document
 
 
-def load_runtimes(path: Path) -> dict[str, object]:
-    return _load_document(path, "runtimes")
+def load_runtimes(path: Path, *, allow_legacy: bool = True) -> dict[str, object]:
+    return _load_document(path, "runtimes", allow_legacy=allow_legacy)
 
 
-def load_games(path: Path) -> dict[str, object]:
-    return _load_document(path, "games")
+def load_games(path: Path, *, allow_legacy: bool = True) -> dict[str, object]:
+    return _load_document(path, "games", allow_legacy=allow_legacy)
 
 
-def load_compatibility(path: Path) -> dict[str, object]:
-    return _load_document(path, "compatibility")
+def load_compatibility(path: Path, *, allow_legacy: bool = True) -> dict[str, object]:
+    return _load_document(path, "compatibility", allow_legacy=allow_legacy)
 
 
 def _id_entries(
@@ -371,12 +413,15 @@ def project_component_catalog(catalog: dict[str, object]) -> dict[str, object]:
 
 
 def load_development_component_catalog(path: Path) -> dict[str, object]:
+    catalog = _read_json_object(path, "component")
     try:
-        catalog = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read component catalog: {path}") from error
-    if not isinstance(catalog, dict):
-        raise ValueError("invalid development component catalog")
+        validate_document_versions(
+            catalog,
+            kind=SchemaKind.CATALOG,
+            allow_legacy=True,
+        )
+    except ContractError as error:
+        raise ValueError("invalid development component catalog contract") from error
     # Validate the exact runtime projection while preserving repository-only
     # source metadata required by development installs.
     project_component_catalog(catalog)

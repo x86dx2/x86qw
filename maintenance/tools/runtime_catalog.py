@@ -8,6 +8,8 @@ import struct
 import tarfile
 from pathlib import Path, PurePosixPath
 
+from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
+
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VARIANT = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
@@ -413,6 +415,15 @@ def validate_inventory(
     project_root: Path | None = None,
     public_catalog: dict[str, object] | None = None,
 ) -> None:
+    for document in (capabilities, runtimes, games, compatibility):
+        try:
+            validate_document_versions(
+                document,
+                kind=SchemaKind.CATALOG,
+                allow_legacy=False,
+            )
+        except ContractError as error:
+            raise ValueError("invalid runtime inventory contract") from error
     if component_catalog is not None and project_root is not None:
         validate_ktx_mode_catalog(project_root, component_catalog)
     for document, key in ((runtimes, "runtimes"), (games, "games"), (compatibility, "compatibility")):
@@ -707,10 +718,10 @@ def load_inventory(
     public_catalog: dict[str, object] | None = None,
 ) -> dict[str, dict[str, object]]:
     documents = {
-        "capabilities": load_capabilities(directory / "capabilities.json"),
-        "runtimes": load_runtimes(directory / "runtimes.json"),
-        "games": load_games(directory / "games.json"),
-        "compatibility": load_compatibility(directory / "compatibility.json"),
+        "capabilities": load_capabilities(directory / "capabilities.json", allow_legacy=False),
+        "runtimes": load_runtimes(directory / "runtimes.json", allow_legacy=False),
+        "games": load_games(directory / "games.json", allow_legacy=False),
+        "compatibility": load_compatibility(directory / "compatibility.json", allow_legacy=False),
     }
     validate_inventory(
         documents["capabilities"], documents["runtimes"], documents["games"],

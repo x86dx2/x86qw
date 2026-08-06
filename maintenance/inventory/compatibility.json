@@ -1,6 +1,8 @@
 {
   "format": 1,
   "project": "x86qw",
+  "catalog_version": 1,
+  "min_cli_version": "0.7.0",
   "compatibility": [
     {"kind": "client", "runtime": "ezquake-stable", "games": ["ktx", "final-arena", "pro-x", "team-fortress", "td2"], "protocol": "quakeworld", "smoke_test": "client-game-golden"},
     {"kind": "client", "runtime": "ezquake-nightly", "games": ["ktx", "final-arena", "pro-x", "team-fortress", "td2"], "protocol": "quakeworld", "smoke_test": "client-game-golden"},
