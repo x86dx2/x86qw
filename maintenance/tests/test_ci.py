@@ -195,6 +195,11 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("wrangler@4.114.0 deploy --dry-run", workflow)
         self.assertNotIn("secrets.", workflow)
 
+    def test_portable_jobs_are_named_as_contracts_not_native_smokes(self):
+        workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}", workflow)
+        self.assertNotIn("name: ${{ matrix.os }} / Python ${{ matrix.python }}", workflow)
+
     def test_committed_diff_gate_uses_event_shas_and_rejects_committed_whitespace(self):
         script = ROOT / "maintenance/tools/check_committed_diff.py"
         source = script.read_text(encoding="utf-8")

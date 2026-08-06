@@ -11,9 +11,9 @@
       "component": "ezquake",
       "channels": ["stable"],
       "platforms": [
-        {"system": "macos", "architecture": "universal", "variant": "macos-universal", "executable": "Contents/MacOS/ezQuake", "runtime_path": "ezQuake Stable.app", "format": "macho-universal", "permissions": "executable", "support": "conditional", "origin": "official", "test_required": true, "archive": "ezQuake-macOS-universal.zip", "archive_binary": "ezQuake.app", "receipt": ".x86qw/clients/ezquake/macos/stable.receipt"},
-        {"system": "linux", "architecture": "x86_64", "variant": "linux-x86_64", "executable": "ezquake-stable-x86_64.AppImage", "runtime_path": "ezquake-stable-x86_64.AppImage", "format": "elf-amd64", "permissions": "executable", "support": "supported", "origin": "official", "test_required": true, "archive": "ezQuake-linux-x86_64.zip", "archive_binary": "ezQuake-x86_64.AppImage", "receipt": ".x86qw/clients/ezquake/linux/stable.receipt"},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "ezquake-stable.exe", "runtime_path": "ezquake-stable.exe", "format": "pe-x64", "permissions": "native", "support": "supported", "origin": "official", "test_required": true, "archive": "ezQuake-windows-x64.zip", "archive_binary": "ezquake.exe", "receipt": ".x86qw/clients/ezquake/windows/stable.receipt"}
+        {"system": "macos", "architecture": "universal", "variant": "macos-universal", "executable": "Contents/MacOS/ezQuake", "runtime_path": "ezQuake Stable.app", "format": "macho-universal", "permissions": "executable", "support": "conditional", "validation": "portable-contract", "support_targets": [{"variant": "macos-arm64", "support": "conditional", "validation": "portable-contract"}, {"variant": "macos-x64", "support": "preview", "validation": "portable-contract"}], "origin": "official", "test_required": true, "archive": "ezQuake-macOS-universal.zip", "archive_binary": "ezQuake.app", "receipt": ".x86qw/clients/ezquake/macos/stable.receipt"},
+        {"system": "linux", "architecture": "x86_64", "variant": "linux-x86_64", "executable": "ezquake-stable-x86_64.AppImage", "runtime_path": "ezquake-stable-x86_64.AppImage", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true, "archive": "ezQuake-linux-x86_64.zip", "archive_binary": "ezQuake-x86_64.AppImage", "receipt": ".x86qw/clients/ezquake/linux/stable.receipt"},
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "ezquake-stable.exe", "runtime_path": "ezquake-stable.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true, "archive": "ezQuake-windows-x64.zip", "archive_binary": "ezquake.exe", "receipt": ".x86qw/clients/ezquake/windows/stable.receipt"}
       ],
       "architectures": ["universal", "x86_64", "x64"],
       "executable": {"macos-universal": "Contents/MacOS/ezQuake", "linux-x86_64": "ezquake-stable-x86_64.AppImage", "windows-x64": "ezquake-stable.exe"},
@@ -37,9 +37,9 @@
       "component": "ezquake",
       "channels": ["nightly"],
       "platforms": [
-        {"system": "macos", "architecture": "universal", "variant": "macos-universal", "executable": "Contents/MacOS/ezQuake", "runtime_path": "ezQuake Nightly.app", "format": "macho-universal", "permissions": "executable", "support": "conditional", "origin": "official", "test_required": true, "filename_suffix": "_ezQuake-macOS-universal.zip", "archive_binary": "ezQuake.app", "receipt": ".x86qw/clients/ezquake/macos/nightly.receipt"},
-        {"system": "linux", "architecture": "x86_64", "variant": "linux-x86_64", "executable": "ezquake-nightly-x86_64.AppImage", "runtime_path": "ezquake-nightly-x86_64.AppImage", "format": "elf-amd64", "permissions": "executable", "support": "supported", "origin": "official", "test_required": true, "filename_suffix": "_ezQuake-x86_64.AppImage", "archive_binary": "ezQuake-x86_64.AppImage", "receipt": ".x86qw/clients/ezquake/linux/nightly.receipt"},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "ezquake-nightly.exe", "runtime_path": "ezquake-nightly.exe", "format": "pe-x64", "permissions": "native", "support": "supported", "origin": "official", "test_required": true, "filename_suffix": "_ezquake.exe", "archive_binary": "ezquake.exe", "receipt": ".x86qw/clients/ezquake/windows/nightly.receipt"}
+        {"system": "macos", "architecture": "universal", "variant": "macos-universal", "executable": "Contents/MacOS/ezQuake", "runtime_path": "ezQuake Nightly.app", "format": "macho-universal", "permissions": "executable", "support": "preview", "validation": "portable-contract", "support_targets": [{"variant": "macos-arm64", "support": "preview", "validation": "portable-contract"}, {"variant": "macos-x64", "support": "preview", "validation": "portable-contract"}], "origin": "official", "test_required": true, "filename_suffix": "_ezQuake-macOS-universal.zip", "archive_binary": "ezQuake.app", "receipt": ".x86qw/clients/ezquake/macos/nightly.receipt"},
+        {"system": "linux", "architecture": "x86_64", "variant": "linux-x86_64", "executable": "ezquake-nightly-x86_64.AppImage", "runtime_path": "ezquake-nightly-x86_64.AppImage", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true, "filename_suffix": "_ezQuake-x86_64.AppImage", "archive_binary": "ezQuake-x86_64.AppImage", "receipt": ".x86qw/clients/ezquake/linux/nightly.receipt"},
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "ezquake-nightly.exe", "runtime_path": "ezquake-nightly.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true, "filename_suffix": "_ezquake.exe", "archive_binary": "ezquake.exe", "receipt": ".x86qw/clients/ezquake/windows/nightly.receipt"}
       ],
       "architectures": ["universal", "x86_64", "x64"],
       "executable": {"macos-universal": "Contents/MacOS/ezQuake", "linux-x86_64": "ezquake-nightly-x86_64.AppImage", "windows-x64": "ezquake-nightly.exe"},
@@ -63,9 +63,9 @@
       "component": "mvdsv",
       "channels": ["stable"],
       "platforms": [
-        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "macho-arm64", "permissions": "executable", "support": "supported", "origin": "x86qw-build", "test_required": true},
-        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "elf-amd64", "permissions": "executable", "support": "supported", "origin": "official", "test_required": true},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "mvdsv.exe", "runtime_path": "mvdsv.exe", "format": "pe-x64", "permissions": "native", "support": "supported", "origin": "official", "test_required": true}
+        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "macho-arm64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true},
+        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true},
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "mvdsv.exe", "runtime_path": "mvdsv.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true}
       ],
       "architectures": ["arm64", "amd64", "x64"],
       "executable": {"macos-arm64": "mvdsv", "linux-amd64": "mvdsv", "windows-x64": "mvdsv.exe"},
@@ -89,9 +89,9 @@
       "component": "qtv",
       "channels": ["stable"],
       "platforms": [
-        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "qtv", "runtime_path": "qtv/qtv", "format": "macho-arm64", "permissions": "executable", "support": "supported", "origin": "x86qw-build", "test_required": true},
-        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "qtv", "runtime_path": "qtv/qtv", "format": "elf-amd64", "permissions": "executable", "support": "supported", "origin": "x86qw-build", "test_required": true},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "qtv.exe", "runtime_path": "qtv/qtv.exe", "format": "pe-x64", "permissions": "native", "support": "supported", "origin": "x86qw-build", "test_required": true}
+        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "qtv", "runtime_path": "qtv/qtv", "format": "macho-arm64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true},
+        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "qtv", "runtime_path": "qtv/qtv", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true},
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "qtv.exe", "runtime_path": "qtv/qtv.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true}
       ],
       "architectures": ["arm64", "amd64", "x64"],
       "executable": {"macos-arm64": "qtv", "linux-amd64": "qtv", "windows-x64": "qtv.exe"},
@@ -115,9 +115,9 @@
       "component": "qwfwd",
       "channels": ["stable"],
       "platforms": [
-        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "qwfwd", "runtime_path": "qwfwd/qwfwd", "format": "macho-arm64", "permissions": "executable", "support": "supported", "origin": "x86qw-build", "test_required": true},
-        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "qwfwd", "runtime_path": "qwfwd/qwfwd", "format": "elf-amd64", "permissions": "executable", "support": "supported", "origin": "official", "test_required": true},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "qwfwd.exe", "runtime_path": "qwfwd/qwfwd.exe", "format": "pe-x64", "permissions": "native", "support": "supported", "origin": "official", "test_required": true}
+        {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "qwfwd", "runtime_path": "qwfwd/qwfwd", "format": "macho-arm64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true},
+        {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "qwfwd", "runtime_path": "qwfwd/qwfwd", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true},
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "qwfwd.exe", "runtime_path": "qwfwd/qwfwd.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true}
       ],
       "architectures": ["arm64", "amd64", "x64"],
       "executable": {"macos-arm64": "qwfwd", "linux-amd64": "qwfwd", "windows-x64": "qwfwd.exe"},

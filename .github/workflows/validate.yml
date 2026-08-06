@@ -42,7 +42,7 @@ jobs:
         run: npx --yes wrangler@4.114.0 deploy --dry-run
 
   portable:
-    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
