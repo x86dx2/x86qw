@@ -224,6 +224,33 @@ def _artifact_matching(candidate: Candidate, predicate: object, label: str) -> C
     return matches[0]
 
 
+def _snapshot_artifact(artifact: CandidateArtifact, destination: Path) -> Path:
+    """Copy one candidate artifact into scratch without losing its identity."""
+
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    expected = (artifact.size, artifact.sha256)
+    if _digest(artifact.path) != expected:
+        raise CandidateCaseError(f"bytes do artifact divergiram antes do snapshot: {artifact.path}")
+    copied_digest = hashlib.sha256()
+    copied_size = 0
+    try:
+        with artifact.path.open("rb") as source, destination.open("xb") as target:
+            while chunk := source.read(1024 * 1024):
+                target.write(chunk)
+                copied_size += len(chunk)
+                copied_digest.update(chunk)
+        if (copied_size, copied_digest.hexdigest()) != expected:
+            raise CandidateCaseError(f"snapshot do artifact divergiu: {artifact.path}")
+        if _digest(artifact.path) != expected:
+            raise CandidateCaseError(f"bytes do artifact mudaram durante o snapshot: {artifact.path}")
+    except CandidateCaseError:
+        raise
+    except OSError as error:
+        raise CandidateCaseError(f"não foi possível criar snapshot do artifact: {artifact.path}") from error
+    return destination
+
+
 def _zip_member_name(name: str) -> str:
     if not isinstance(name, str) or not name or name.endswith("/") or "\\" in name:
         raise CandidateCaseError("membro ZIP nativo inválido")
@@ -236,8 +263,9 @@ def _zip_member_name(name: str) -> str:
 def _extract_zip_member(archive: CandidateArtifact, suffix: str, scratch: Path, label: str) -> Path:
     destination_root = Path(scratch) / "extracted" / label
     destination_root.mkdir(parents=True, exist_ok=True)
+    snapshot = _snapshot_artifact(archive, destination_root / "archive.zip")
     try:
-        with zipfile.ZipFile(archive.path) as bundle:
+        with zipfile.ZipFile(snapshot) as bundle:
             members = [_zip_member_name(name) for name in bundle.namelist()]
             selected = [name for name in members if name.endswith(suffix)]
             if len(selected) != 1:
@@ -302,7 +330,7 @@ def _service_command(candidate: Candidate, case: str, scratch: Path) -> Prepared
     # stages and makes the exact bytes executable immediately before launch.
     staged = Path(scratch) / "services" / Path(suffix).name
     staged.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(artifact.path, staged)
+    _snapshot_artifact(artifact, staged)
     os.chmod(staged, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
     return PreparedCase(executable=artifact.path, argv=(str(staged), "-version"), cwd=Path(scratch))
 
