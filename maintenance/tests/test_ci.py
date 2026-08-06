@@ -197,8 +197,11 @@ class ContinuousIntegrationTests(unittest.TestCase):
 
     def test_portable_jobs_are_named_as_contracts_not_native_smokes(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        self.assertIn("name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}", workflow)
-        self.assertNotIn("name: ${{ matrix.os }} / Python ${{ matrix.python }}", workflow)
+        portable = workflow.split("\n  portable:\n", 1)[1].split(
+            "\n  # Keep the protected contexts", 1,
+        )[0]
+        self.assertIn("name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}", portable)
+        self.assertNotIn("name: ${{ matrix.os }} / Python ${{ matrix.python }}", portable)
 
     def test_committed_diff_gate_uses_event_shas_and_rejects_committed_whitespace(self):
         script = ROOT / "maintenance/tools/check_committed_diff.py"
