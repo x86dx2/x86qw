@@ -108,3 +108,5 @@ jobs:
       - name: Mirror the portable contract result
         shell: bash
         run: test "${{ needs.portable.result }}" = success
+
+# Keep the pull_request gate visible when the branch is synchronized.
