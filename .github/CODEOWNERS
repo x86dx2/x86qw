@@ -1,0 +1,6 @@
+# Revisão obrigatória para fronteiras de runtime, trust, release, inventários e site.
+* @x86dx2
+/x86qw_runtime/ @x86dx2
+/maintenance/inventory/ @x86dx2
+/maintenance/tools/ @x86dx2
+/site/ @x86dx2
