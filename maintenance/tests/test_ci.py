@@ -192,7 +192,9 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("./maintenance/manage.py verify", workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertIn("maintenance/tools/check_committed_diff.py", workflow)
-        self.assertIn("wrangler@4.114.0 deploy --dry-run", workflow)
+        self.assertIn("npm ci", workflow)
+        self.assertIn("npm run deploy:dry-run", workflow)
+        self.assertNotIn("npx --yes", workflow)
         self.assertNotIn("secrets.", workflow)
 
     def test_portable_jobs_are_named_as_contracts_not_native_smokes(self):
@@ -238,15 +240,17 @@ class ContinuousIntegrationTests(unittest.TestCase):
     def test_publication_is_manual_protected_and_depends_on_validation(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("prepare-candidate:", workflow)
         self.assertIn("needs: validate", workflow)
         self.assertIn("environment: release", workflow)
         self.assertIn("git diff --exit-code", workflow)
-        self.assertIn("./maintenance/manage.py publish --dry-run", workflow)
-        self.assertIn("./maintenance/manage.py publish", workflow)
-        self.assertIn("GLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", workflow)
-        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\r'/}\"", workflow)
-        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\n'/}\"", workflow)
-        self.assertIn('export GITLAB_TOKEN="${GLAB_TOKEN}"', workflow)
+        self.assertIn("release_candidate.py prepare", workflow)
+        self.assertIn("release_candidate.py rehearse", workflow)
+        self.assertIn("release_candidate.py promote", workflow)
+        self.assertIn("release-evidence.json", workflow)
+        self.assertIn("metadata-last", workflow)
+        self.assertNotIn("./maintenance/manage.py publish", workflow)
+        self.assertNotIn("gh release create", workflow)
         self.assertNotIn("pull_request:", workflow)
 
     def test_large_runtime_and_demo_payloads_are_lfs_managed(self):
