@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "known_components": ["ktx", "qtv"],
+  "profile": "custom",
+  "project": "x86qw",
+  "recorded_components": ["ktx"],
+  "requested_components": ["ktx"]
+}

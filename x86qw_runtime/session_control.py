@@ -33,7 +33,7 @@ from x86qw_runtime.platform.processes import (
 SERVICE_COMMANDS = frozenset({"host", "proxy", "qtv"})
 MAINTENANCE_COMMANDS = frozenset({
     "install", "components", "presets", "update", "upgrade", "repair",
-    "cleanup", "uninstall", "purge",
+    "cleanup", "uninstall", "purge", "migrate",
 })
 LOCK_COMMANDS = SERVICE_COMMANDS | MAINTENANCE_COMMANDS
 _LEGACY_ACL_MIGRATED = "_x86qw_legacy_acl_migrated"
