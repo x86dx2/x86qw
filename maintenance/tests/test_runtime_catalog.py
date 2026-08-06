@@ -6,6 +6,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from x86qw_runtime.contracts.schema import SchemaKind, validate_document_versions
 from maintenance.tools.build_installer_bundle import zipapp_bytes
 from maintenance.tools.components import load_catalog as load_component_catalog
 from maintenance.tools.runtime_catalog import (
@@ -62,6 +63,23 @@ class RuntimeCatalogTests(unittest.TestCase):
             {"ktx", "final-arena", "pro-x", "team-fortress", "td2"},
             set(games_by_id(self.inventory["games"])),
         )
+
+    def test_canonical_inventories_declare_schema_and_cli_bounds(self):
+        for name, document in self.inventory.items():
+            with self.subTest(name=name):
+                versions = validate_document_versions(
+                    document,
+                    kind=SchemaKind.CATALOG,
+                    allow_legacy=False,
+                )
+                self.assertEqual(1, versions.catalog_version)
+                self.assertEqual("0.7.0", str(versions.min_cli_version))
+        component_versions = validate_document_versions(
+            self.components,
+            kind=SchemaKind.CATALOG,
+            allow_legacy=False,
+        )
+        self.assertEqual(1, component_versions.catalog_version)
 
     def test_service_platforms_are_explicit_and_exclude_macos_intel(self):
         runtimes = runtimes_by_id(self.inventory["runtimes"])

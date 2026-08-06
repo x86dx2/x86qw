@@ -12,7 +12,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterator
 
 from x86qw_runtime.errors import InstallerError
@@ -664,6 +664,31 @@ def _open_relative_directory(root_descriptor: int, parts: tuple[str, ...]) -> in
         raise
 
 
+def _open_posix_directory_chain(path: Path) -> int:
+    """Open every lexical directory component without following links."""
+
+    if os.name != "posix":
+        raise OSError("cadeia de diretórios POSIX indisponível nesta plataforma")
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    anchor = Path(absolute.anchor)
+    if not anchor:
+        raise OSError(f"caminho de diretório sem âncora absoluta: {path}")
+    try:
+        relative = absolute.relative_to(anchor)
+    except ValueError as error:
+        raise OSError(f"caminho de diretório inválido: {path}") from error
+    descriptor = os.open(anchor, _directory_open_flags())
+    try:
+        for part in relative.parts:
+            child = os.open(part, _directory_open_flags(), dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 @contextmanager
 def _secure_archive_parent(
     destination_root: Path,
@@ -752,6 +777,158 @@ def _assert_archive_parent_stable(
             )
     finally:
         os.close(current)
+
+
+def read_regular_file_beneath(
+    root: Path,
+    relative: PurePosixPath,
+    *,
+    expected_size: int,
+    expected_hash: str,
+    max_size: int = MAX_MANAGED_FILE_SIZE,
+) -> tuple[int, str]:
+    """Hash one regular file beneath a non-link directory tree.
+
+    The operation never resolves an untrusted path into a new absolute path.
+    POSIX uses descriptor-relative ``O_NOFOLLOW`` opens for the root, every
+    ancestor and the final file.  Windows holds non-reparse directory handles
+    and opens the final file through the existing handle-based adapter.  The
+    caller receives only the bounded size and digest, never an unbounded read.
+    """
+
+    root = Path(root)
+    relative = PurePosixPath(relative)
+    if (
+        not relative.parts
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or "\\" in relative.as_posix()
+        or type(expected_size) is not int
+        or expected_size < 0
+        or type(max_size) is not int
+        or max_size < 0
+        or expected_size > max_size
+    ):
+        raise OSError("caminho ou limite de artefato inválido")
+    if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+        raise OSError("hash de artefato inválido")
+
+    parts = tuple(relative.parts)
+    parent_parts = parts[:-1]
+    final_name = parts[-1]
+    absolute_root = Path(os.path.abspath(os.fspath(root)))
+    try:
+        lexical_root = absolute_root.lstat()
+    except OSError as error:
+        raise OSError("raiz de artefatos ausente ou ilegível") from error
+    if not stat.S_ISDIR(lexical_root.st_mode) or stat.S_ISLNK(lexical_root.st_mode):
+        raise OSError("raiz de artefatos não é diretório regular")
+    # Temporary roots on macOS commonly live below the system /var alias.
+    # Canonicalize only that already-validated root directory, then bind the
+    # canonical descriptor back to the lexical root identity before reading.
+    # Windows keeps the lexical spelling so its reparse-point chain can be
+    # checked by the native handle adapter instead of being resolved away.
+    canonical_root = (
+        absolute_root if os.name == "nt" else absolute_root.resolve(strict=True)
+    )
+    final_path = canonical_root.joinpath(*parts)
+
+    if os.name == "posix":
+        if not _secure_archive_dir_fd_supported():
+            raise OSError("o sistema não oferece leitura POSIX segura")
+        root_descriptor = _open_posix_directory_chain(canonical_root)
+        parent_descriptor = -1
+        file_descriptor = -1
+        try:
+            if _file_identity(os.fstat(root_descriptor)) != _file_identity(lexical_root):
+                raise OSError("raiz de artefatos foi alterada durante a abertura")
+            parent_descriptor = _open_relative_directory(root_descriptor, parent_parts)
+            _assert_archive_parent_stable(
+                root_descriptor,
+                parent_parts,
+                parent_descriptor,
+                final_path.parent,
+            )
+            flags = os.O_RDONLY | os.O_NOFOLLOW
+            if hasattr(os, "O_CLOEXEC"):
+                flags |= os.O_CLOEXEC
+            file_descriptor = os.open(final_name, flags, dir_fd=parent_descriptor)
+            metadata = os.fstat(file_descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                raise OSError("artefato não é arquivo regular exclusivo")
+            if metadata.st_size != expected_size or metadata.st_size > max_size:
+                raise OSError("tamanho do artefato diverge do declarado")
+            identity = _file_identity(metadata)
+            digest = hashlib.sha256()
+            total = 0
+            while True:
+                block = os.read(
+                    file_descriptor,
+                    min(_HASH_CHUNK_SIZE, max_size - total + 1),
+                )
+                if not block:
+                    break
+                total += len(block)
+                if total > max_size:
+                    raise OSError("artefato excede o limite declarado")
+                digest.update(block)
+            final_metadata = os.fstat(file_descriptor)
+            if (
+                total != expected_size
+                or final_metadata.st_size != total
+                or _file_identity(final_metadata) != identity
+            ):
+                raise OSError("artefato foi alterado durante a leitura")
+            _assert_archive_parent_stable(
+                root_descriptor,
+                parent_parts,
+                parent_descriptor,
+                final_path.parent,
+            )
+            actual_hash = digest.hexdigest()
+            if actual_hash != expected_hash:
+                raise OSError("hash do artefato diverge do declarado")
+            return total, actual_hash
+        finally:
+            if file_descriptor >= 0:
+                os.close(file_descriptor)
+            if parent_descriptor >= 0:
+                os.close(parent_descriptor)
+            os.close(root_descriptor)
+
+    if os.name == "nt":
+        from x86qw_runtime.platform.windows_acl import _hold_plain_directory_chain
+
+        api = _get_windows_file_api()
+        if api is None:
+            raise OSError("o Windows não oferece leitura por handle segura")
+        # The plain lexical chain rejects junctions/reparse points in the
+        # root's ancestors; the archive parent context keeps the in-tree
+        # components and their identities alive until the final read finishes.
+        with _hold_plain_directory_chain(canonical_root):
+            with _windows_archive_parent(
+                api, canonical_root, parent_parts, create=False,
+            ):
+                handle = api.open_handle(
+                    final_path,
+                    access=api.GENERIC_READ,
+                    creation=api.OPEN_EXISTING,
+                    directory=False,
+                )
+                try:
+                    identity = api.checked_identity(handle, directory=False)
+                    if api.size(handle) != expected_size or expected_size > max_size:
+                        raise OSError("tamanho do artefato diverge do declarado")
+                    actual_hash = api.hash(handle, expected_size=expected_size)
+                    if api.checked_identity(handle, directory=False) != identity:
+                        raise OSError("artefato foi alterado durante a leitura")
+                    if actual_hash != expected_hash:
+                        raise OSError("hash do artefato diverge do declarado")
+                    return expected_size, actual_hash
+                finally:
+                    _close_windows_handle(api, handle)
+
+    raise OSError(f"plataforma sem leitura segura de artefatos: {os.name}")
 
 
 def _windows_cleanup_materialized_file(

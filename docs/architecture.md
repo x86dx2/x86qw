@@ -85,19 +85,23 @@ builders e fachadas instaladas consumirem o runtime; `x86qw_runtime` não pode
 importar `maintenance`, `dist` ou os entrypoints. O zipapp leva somente módulos
 runtime e projeções declarativas necessárias, sem a árvore `maintenance/`.
 
-No recorte parcial `23194fd..49594cd`, o runtime já possui versioning e erros,
-download limitado, scanner/extrator de arquivos, escrita atômica, modelos de
-catálogo, estado, recibos, migração, transações, UI, gameplay, identidade de
-processo e supervisor/readiness. Fachadas antigas permanecem apenas onde a
-compatibilidade de imports ainda precisa ser preservada.
+No recorte histórico `23194fd..49594cd`, o runtime já possuía versioning e
+erros, download limitado, scanner/extrator de arquivos, escrita atômica,
+modelos de catálogo, estado, recibos, migração, transações, UI, gameplay,
+identidade de processo e supervisor/readiness. Essa fronteira foi integrada
+incrementalmente pela PR 64 e publicada na release `0.7.3`; fachadas antigas
+permanecem apenas onde a compatibilidade de imports ainda precisa ser
+preservada.
 
-Essa etapa não está concluída: mutações da própria CLI, defaults, remoções
-residuais,
-migrações mutáveis e uninstall ainda precisam entrar em planos explícitos. A
-decisão, a evidência focal e os riscos estão no
+A frente da PR 6 permanece pausada como trilha auditável: mutações da própria
+CLI, defaults, remoções residuais, migrações mutáveis e uninstall ainda
+precisam entrar em planos explícitos para a linha 1.0. As extensões locais
+desse trabalho não estão publicadas. A decisão, a evidência focal e os riscos
+estão no
 [ADR 0005](adr/0005-fronteiras-incrementais-x86qw-runtime.md) e na
 [nota de implementação](implementation/runtime-boundaries-pr6.md). A release
-pública `0.7.1` não contém essa refatoração e permanece imutável.
+pública `0.7.3` contém somente as fronteiras já validadas; ela permanece
+imutável.
 
 ## Regra de entrada de componentes
 
@@ -203,8 +207,8 @@ gerenciados no Windows nascem com DACL protegida e somente o usuário atual e
 mesma política antes da primeira escrita. Arquivos de senha externos são
 validados pelo mesmo limite, sem terem owner, DACL ou conteúdo modificados. A
 matriz nativa Windows comprovou essa mudança com Python 3.10 e 3.13; o smoke de
-runtime sob conta padrão permanece pendente e a release pública `0.7.1` não a
-contém. Consulte o
+runtime sob conta padrão permanece pendente. A mudança foi publicada na release
+pública `0.7.3`. Consulte o
 [`ADR 0003`](adr/0003-dacl-privada-windows.md). Os
 endereços são resolvidos em subprocesso limitado e cancelável; candidatos TCP
 usam conexão não bloqueante e o cancelamento de TLS/headers executa `shutdown`
@@ -234,8 +238,8 @@ contra rollback/freeze permanecem na
 
 ## Segurança e recuperação
 
-- workflows de pull request usam somente `contents: read` e não recebem secrets;
-- a matriz Linux, macOS e Windows bloqueia a etapa manual de release;
+- a validação operacional é executada diretamente no Mac e não depende de
+  workflows, runners ou secrets externos;
 - toda URL inicial, redirecionada e final de artefato usa HTTPS;
 - nomes de arquivo não podem conter caminhos;
 - nenhum artefato persistente é aceito sem tamanho e SHA-256 prévios;
@@ -247,8 +251,8 @@ contra rollback/freeze permanecem na
 - senhas de serviço podem vir de prompt sem eco ou arquivo privado e nunca
   entram na linha de comando dos filhos;
 - no código corretivo da PR 4, objetos privados Windows usam DACL protegida
-  com acesso somente ao usuário atual e a `LOCAL SYSTEM`; falha de validação é
-  terminal, e a evidência nativa dos runners Windows foi concluída;
+  com acesso somente ao usuário atual e a `LOCAL SYSTEM`; o contrato Windows é
+  preservado, mas não é executado como smoke neste fluxo;
 - preflight de portas ocorre antes do primeiro processo; readiness e rollback
   encerram startups parciais;
 - `.x86qw/sessions/` registra journals privados e remove após crash somente

@@ -71,6 +71,28 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "supported download limit"):
             validate_catalog(catalog)
 
+    def test_catalog_rejects_boolean_sizes_and_format(self) -> None:
+        source = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        invalid_size = copy.deepcopy(source)
+        invalid_size["packages"][0]["size"] = True
+        with self.assertRaises(ValueError):
+            validate_catalog(invalid_size)
+        invalid_format = copy.deepcopy(source)
+        invalid_format["format"] = True
+        with self.assertRaises(ValueError):
+            validate_catalog(invalid_format)
+
+    def test_catalog_json_duplicate_top_level_field_is_rejected(self) -> None:
+        from validate_catalog import _reject_duplicate_pairs
+
+        with self.assertRaises(ValueError):
+            json.loads(
+                '{"format":1,"format":1,"project":"x86qw","packages":[]}',
+                object_pairs_hook=_reject_duplicate_pairs,
+            )
+
     def test_catalog_rejects_credential_fragment_and_control_urls_without_secret(self) -> None:
         source = json.loads(
             (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
@@ -309,6 +331,10 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(first["sha256"], second["sha256"])
             self.assertEqual(first["size"], second["size"])
             self.assertEqual("x86qw-core-id1", first["package"])
+            self.assertEqual(
+                "https://github.com/x86dx2/x86qw/blob/x86qw-content-core-0.1.0/LICENSE",
+                first["license_url"],
+            )
             self.assertEqual(2, len(first["urls"]))
             self.assertIn("gitlab.com/api/v4/projects/84813414", first["urls"][1])
             archive = next((root / "one").rglob(str(first["filename"])))

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import time
 import urllib.parse
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from ..errors import InstallerError
+from ..trust import MAX_METADATA_BYTES
 from .downloader import (
     BoundedMetadata,
     DownloadError,
@@ -175,6 +176,40 @@ class RemoteClient:
             self.reporter.detail(f"Tentativa de download falhou: {error}")
             raise InstallerError(f"Não foi possível baixar {display_url}: {error}") from error
         return result.data or b""
+
+    def get_metadata_roles(
+        self,
+        urls: Mapping[str, str],
+        *,
+        maximum_size: int = MAX_METADATA_BYTES,
+        timeout: float = 60.0,
+        attempts: int = 3,
+    ) -> dict[str, bytes]:
+        """Fetch the signed trust roles in their dependency order.
+
+        This method deliberately only composes bounded HTTPS reads.  The
+        trust verifier remains responsible for signatures, freshness and
+        target binding; callers receive no catalog bytes until all three
+        signed roles have been fetched successfully.
+        """
+
+        required = ("root", "current", "snapshot")
+        if not isinstance(urls, Mapping) or set(urls) != set(required):
+            raise InstallerError(
+                "As URLs de metadados de confiança devem conter root, current e snapshot."
+            )
+        payloads: dict[str, bytes] = {}
+        for role in required:
+            url = urls[role]
+            if not isinstance(url, str) or not url:
+                raise InstallerError(f"URL de metadados de confiança inválida: {role}")
+            payloads[role] = self.get(
+                url,
+                maximum_size=maximum_size,
+                timeout=timeout,
+                attempts=attempts,
+            )
+        return payloads
 
     def get_mirrors(
         self,

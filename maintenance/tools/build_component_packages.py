@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import zipfile
@@ -32,6 +33,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from x86qw_runtime.io.archive import ArchiveError, read_archive_members, scan_archive
+from maintenance.tools import release_ownership
 
 COMPONENT_CATALOG = ROOT / "maintenance/inventory/components.json"
 COMPONENT_RELEASES = ROOT / "maintenance/inventory/component-releases.json"
@@ -64,6 +66,70 @@ def component_package_metadata(
     return metadata
 
 
+def _validate_project_ref(value: str | None, *, required: bool) -> str | None:
+    if value is None:
+        if required:
+            raise ValueError("--project-ref é obrigatório quando --ownership-output é usado")
+        return None
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise ValueError("project-ref deve ser um SHA-1 hexadecimal minúsculo completo")
+    return value
+
+
+def _project_license_url(project_ref: str) -> str:
+    return f"https://github.com/x86dx2/x86qw/blob/{project_ref}/LICENSE"
+
+
+def _member_ownership(
+    source: str,
+    overrides: list[dict[str, object]],
+    *,
+    commit: str,
+) -> tuple[str, str, str | None, str]:
+    """Classify bytes using explicit builder markers, never a path suffix."""
+
+    markers = [item.get("ownership") for item in overrides if isinstance(item, dict)]
+    if "mixed" in markers or any(
+        isinstance(item, dict) and item.get("archive_member_override") is True
+        for item in overrides
+    ):
+        return "mixed", "composed-archive", None, "NOASSERTION"
+    if "project" in markers:
+        return "project", "project-override", _project_license_url(commit), release_ownership.PROJECT_COPYRIGHT
+    # The source provenance is recorded in component.json; a source without an
+    # explicit project marker remains upstream, even when its spelling happens
+    # to contain a project-looking directory.
+    return "upstream", "upstream-release", None, "NOASSERTION"
+
+
+def _ownership_entry(
+    *,
+    path: str,
+    payload: bytes,
+    kind: str,
+    ownership: str,
+    basis: str,
+    source: str,
+    license_url: str | None,
+    copyright_text: str,
+    members: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    license_concluded = "MIT" if ownership == "project" else "NOASSERTION"
+    return {
+        "path": path,
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "kind": kind,
+        "ownership": ownership,
+        "ownership_basis": basis,
+        "source": source,
+        "license_concluded": license_concluded,
+        "license_url": license_url,
+        "copyright_text": copyright_text,
+        "members": members or [],
+    }
+
+
 def zip_member(name: str, payload: bytes) -> tuple[zipfile.ZipInfo, bytes]:
     info = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
     info.compress_type = zipfile.ZIP_DEFLATED
@@ -77,21 +143,26 @@ def build_packages(
     *,
     component_catalog: Path = COMPONENT_CATALOG,
     component_releases: Path = COMPONENT_RELEASES,
+    ownership_output: Path | None = None,
+    project_ref: str | None = None,
 ) -> dict[str, object]:
     context = load_source_context(distribution, component_catalog, component_releases)
     components = context.components
     commit = context.commit
+    project_ref = _validate_project_ref(project_ref, required=ownership_output is not None)
     reference_release = f"nquake-{commit}"
     build_id = f"components-{commit}"
     release_root = output / build_id
     packages = []
+    ownership_entries: list[dict[str, object]] = []
     for identifier in components:
         release_metadata, source_revision, payloads = resolve_component_payloads(context, identifier)
         version = str(release_metadata["version"])
         strategy = str(release_metadata["strategy"])
         filename = f"{identifier}-{version}.zip"
         artifact = release_root / filename
-        members: list[dict[str, str]] = []
+        members: list[dict[str, object]] = []
+        ownership_members: list[dict[str, object]] = []
         with staged_artifact(
             artifact, root=output, prefix=f".{identifier}-",
         ) as staged:
@@ -105,6 +176,21 @@ def build_packages(
                     if overrides:
                         member_metadata["overrides"] = overrides
                     members.append(member_metadata)
+                    if ownership_output is not None:
+                        assert project_ref is not None
+                        member_ownership, member_basis, member_license_url, member_copyright = _member_ownership(
+                            upstream_path, overrides, commit=project_ref,
+                        )
+                        ownership_members.append(_ownership_entry(
+                            path=member_name,
+                            payload=payload,
+                            kind="archive" if member_name.casefold().endswith((".zip", ".pk3")) else "file",
+                            ownership=member_ownership,
+                            basis=member_basis,
+                            source=upstream_path,
+                            license_url=member_license_url,
+                            copyright_text=member_copyright,
+                        ))
                     info, data = zip_member(member_name, payload)
                     package.writestr(info, data)
                 metadata = component_package_metadata(
@@ -118,6 +204,18 @@ def build_packages(
                 package_metadata = json.dumps(
                     metadata, ensure_ascii=False, indent=2, sort_keys=True,
                 ).encode() + b"\n"
+                if ownership_output is not None:
+                    assert project_ref is not None
+                    ownership_members.append(_ownership_entry(
+                        path="_x86qw/component.json",
+                        payload=package_metadata,
+                        kind="metadata",
+                        ownership="project",
+                        basis="generated-project-metadata",
+                        source="generated:component-metadata",
+                        license_url=_project_license_url(project_ref),
+                        copyright_text=release_ownership.PROJECT_COPYRIGHT,
+                    ))
                 info, data = zip_member("_x86qw/component.json", package_metadata)
                 package.writestr(info, data)
             staged.seal()
@@ -145,6 +243,27 @@ def build_packages(
                 fingerprint=lambda value: (value.source_size, value.source_sha256),
                 conflict_message=f"component package target already differs: {artifact}",
             )
+        if ownership_output is not None:
+            assert project_ref is not None
+            package_ownership = "project" if all(
+                entry["ownership"] == "project" for entry in ownership_members
+            ) else "mixed"
+            package_basis = "build-output" if package_ownership == "project" else "composed-archive"
+            package_license_url = _project_license_url(project_ref) if package_ownership == "project" else None
+            package_copyright = (
+                release_ownership.PROJECT_COPYRIGHT if package_ownership == "project" else "NOASSERTION"
+            )
+            ownership_entries.append(_ownership_entry(
+                path=f"content/{artifact.relative_to(output).as_posix()}",
+                payload=artifact.read_bytes(),
+                kind="archive",
+                ownership=package_ownership,
+                basis=package_basis,
+                source="build-component-package",
+                license_url=package_license_url,
+                copyright_text=package_copyright,
+                members=ownership_members,
+            ))
         distribution_tag = str(release_metadata.get("distribution_tag", reference_release))
         mirror_url = f"https://github.com/{PRIMARY_GITHUB_REPOSITORY}/releases/download/{distribution_tag}/{filename}"
         gitlab_url = (
@@ -221,6 +340,24 @@ def build_packages(
             fingerprint=lambda value: value,
             conflict_message=f"component manifest already differs: {manifest_path}",
         )
+    if ownership_output is not None:
+        assert project_ref is not None
+        ownership_entries.append(_ownership_entry(
+            path=f"content/{manifest_path.relative_to(output).as_posix()}",
+            payload=manifest_path.read_bytes(),
+            kind="metadata",
+            ownership="project",
+            basis="generated-project-metadata",
+            source="generated:component-manifest",
+            license_url=_project_license_url(project_ref),
+            copyright_text=release_ownership.PROJECT_COPYRIGHT,
+        ))
+        ownership_document = release_ownership.validate_document({
+            "format": 1,
+            "project": "x86qw",
+            "artifacts": ownership_entries,
+        })
+        release_ownership.write_document(Path(ownership_output), ownership_document)
     return manifest
 
 
@@ -296,10 +433,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--distribution", type=Path, default=ROOT / "dist")
     parser.add_argument("--output", type=Path, default=ROOT / "maintenance/build/packages")
+    parser.add_argument("--ownership-output", type=Path)
+    parser.add_argument("--project-ref", help="SHA-1 do commit x86QW ligado ao fragmento de ownership")
     parser.add_argument("--register", action="store_true", help="registra os pacotes no catálogo público")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     arguments = parser.parse_args()
-    manifest = build_packages(arguments.distribution.resolve(), arguments.output.resolve())
+    manifest = build_packages(
+        arguments.distribution.resolve(),
+        arguments.output.resolve(),
+        ownership_output=arguments.ownership_output,
+        project_ref=arguments.project_ref,
+    )
     if arguments.register:
         register_packages(arguments.catalog.resolve(), manifest)
     print(f"built {len(manifest['packages'])} package(s) for {manifest['release']}")

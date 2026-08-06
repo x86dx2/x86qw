@@ -90,7 +90,7 @@ class RuntimeMemberContractTests(unittest.TestCase):
         declared_members = [entry["member"] for entry in entries]
         self.assertEqual(len(declared_members), len(set(declared_members)))
 
-        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("0.9.9"))) as application:
             installed_members = application.namelist()
         self.assertEqual(set(installed_members), set(declared_members))
         self.assertFalse(
@@ -137,6 +137,18 @@ class RuntimeMemberContractTests(unittest.TestCase):
                 "generated:component-catalog": "_x86qw/components.json",
             },
         )
+
+    def test_legal_notices_are_carried_only_by_modern_zipapps(self) -> None:
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("0.7.3"))) as legacy:
+            self.assertNotIn("_x86qw/LICENSE", legacy.namelist())
+            self.assertNotIn("_x86qw/NOTICE", legacy.namelist())
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("1.0.0"))) as modern:
+            self.assertEqual(
+                (ROOT / "LICENSE").read_bytes(), modern.read("_x86qw/LICENSE"),
+            )
+            self.assertEqual(
+                (ROOT / "NOTICE").read_bytes(), modern.read("_x86qw/NOTICE"),
+            )
 
 
 class RuntimeMenuBoundaryTests(unittest.TestCase):

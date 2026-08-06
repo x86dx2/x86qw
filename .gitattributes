@@ -15,6 +15,7 @@ dist/services/**/x86qw/runtime/** filter=lfs diff=lfs merge=lfs -text
 
 # Project-authored metadata and overlays remain reviewable as text.
 dist/manifest.json diff merge text
+dist/installer/VERSION diff merge text eol=lf
 dist/installer/**/*.py diff merge text eol=lf
 dist/installer/**/*.md diff merge text
 dist/installer/**/*.sh diff merge text eol=lf

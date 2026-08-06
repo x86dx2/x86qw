@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
 import urllib.parse
@@ -339,3 +340,130 @@ def parse_legacy_nquake_receipt(payload: bytes) -> LegacyNQuakeReceipt:
             code="legacy_nquake_inventory_hash",
         )
     return receipt
+
+
+@dataclass(frozen=True)
+class ReceiptIdentity:
+    """Minimal ownership evidence extracted from a historical receipt."""
+
+    kind: str
+    subject: str
+    format: str
+    channel: str | None = None
+    selection: str | None = None
+    inventory_sha256: str | None = None
+
+
+def inspect_receipt(payload: bytes) -> ReceiptIdentity:
+    """Validate a supported receipt and return its ownership identity.
+
+    Migration code must never infer ownership from a filename alone.  This
+    dispatcher keeps that rule in one runtime boundary while retaining the
+    exact legacy codecs above.
+    """
+
+    if not isinstance(payload, bytes):
+        raise TypeError("receipt payload must be bytes")
+    # CLI receipts are the only JSON receipt in the supported layouts.
+    try:
+        document = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        document = None
+    if isinstance(document, dict):
+        receipt = parse_cli_receipt(payload)
+        return ReceiptIdentity(
+            kind="cli",
+            subject="x86qw",
+            format=str(receipt.format),
+            selection=receipt.version,
+        )
+
+    try:
+        values = _parse_table(payload, _COMPONENT_FIELDS)
+    except ReceiptError:
+        values = None
+    if values is not None:
+        receipt = parse_component_receipt(
+            payload, component=values["component"],
+        )
+        return ReceiptIdentity(
+            kind="component",
+            subject=receipt.component,
+            format=receipt.format,
+            selection=receipt.selection,
+            inventory_sha256=receipt.inventory_sha256,
+        )
+
+    try:
+        values = _parse_table(payload, _EZQUAKE_FIELDS)
+    except ReceiptError:
+        values = None
+    if values is not None:
+        # The artifact name and suffix are part of the receipt's own contract;
+        # deriving these values lets us validate both channels without loading
+        # the product catalog during a dry-run migration.
+        selection = values["selection"]
+        artifact_name = values["artifact_name"]
+        if values["channel"] == "stable":
+            stable_archive = artifact_name
+            nightly_suffix = "-unused"
+        elif values["channel"] == "nightly" and artifact_name.startswith(selection):
+            stable_archive = "-unused"
+            nightly_suffix = artifact_name[len(selection):]
+        else:
+            raise ReceiptError("invalid ezQuake receipt channel", code="ezquake_target")
+        context = EzQuakeReceiptContext(
+            platform=values["platform"],
+            architecture=values["architecture"],
+            channel=values["channel"],
+            install_name=values["install_name"],
+            stable_archive=stable_archive,
+            nightly_suffix=nightly_suffix,
+        )
+        receipt = parse_ezquake_receipt(payload, context=context)
+        return ReceiptIdentity(
+            kind="ezquake",
+            subject=receipt.platform,
+            format=receipt.format,
+            channel=receipt.channel,
+            selection=receipt.selection,
+        )
+
+    try:
+        receipt = parse_legacy_nquake_receipt(payload)
+    except ReceiptError as error:
+        raise ReceiptError("unsupported or corrupt receipt", code="unknown_receipt") from error
+    return ReceiptIdentity(
+        kind="legacy-nquake",
+        subject="nquake",
+        format=receipt.format,
+        inventory_sha256=receipt.inventory_sha256,
+    )
+
+
+def receipt_sha256(payload: bytes) -> str:
+    """Hash receipt bytes without normalizing their historical encoding."""
+
+    if not isinstance(payload, bytes):
+        raise TypeError("receipt payload must be bytes")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def validate_receipt_inventory(
+    receipt_payload: bytes,
+    inventory_payload: bytes,
+    *,
+    component: str,
+) -> tuple[ComponentReceipt, tuple[InventoryEntry, ...]]:
+    """Validate component ownership and its exact inventory binding."""
+
+    receipt = parse_component_receipt(receipt_payload, component=component)
+    inventory = parse_inventory(inventory_payload)
+    digest = hashlib.sha256(inventory_payload).hexdigest()
+    if digest != receipt.inventory_sha256:
+        raise ReceiptError(
+            "managed inventory differs from receipt",
+            code="inventory_mismatch",
+            field_name=component,
+        )
+    return receipt, inventory

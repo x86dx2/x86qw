@@ -19,12 +19,8 @@ WRITE_ONLY_ZIP_MODULES = frozenset({
 
 
 def zip_boundary_violations(path: str, source: str) -> list[str]:
-    """Reject ZIP readers outside the canonical runtime boundary.
+    """Reject ZIP readers outside the canonical runtime boundary."""
 
-    The small allowlist contains deterministic writers only.  Imports through
-    aliases and dynamic import/getattr indirections are inspected explicitly so
-    a future reader cannot bypass this gate by merely renaming ``ZipFile``.
-    """
     tree = ast.parse(source, filename=path)
     violations: list[str] = []
     zipfile_aliases: set[str] = set()
@@ -40,8 +36,6 @@ def zip_boundary_violations(path: str, source: str) -> list[str]:
         elif isinstance(node, ast.ImportFrom) and node.module == "zipfile":
             violations.append(f"{path}:{node.lineno}:zipfile symbol import")
 
-    # Follow harmless module aliases (``archive_zip = zipfile``), but reject
-    # aliases of ZipFile itself because they obscure the write-only contract.
     changed = True
     while changed:
         changed = False
@@ -154,8 +148,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         ]
         violations: list[str] = []
         for path in production:
-            source = path.read_text(encoding="utf-8")
-            violations.extend(zip_boundary_violations(path.relative_to(ROOT).as_posix(), source))
+            violations.extend(zip_boundary_violations(path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")))
         self.assertEqual([], violations)
         for path in (
             ROOT / "dist/installer/bin/install.sh",
@@ -179,21 +172,25 @@ class ContinuousIntegrationTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertTrue(zip_boundary_violations("fixture.py", source))
 
-    def test_pull_request_workflow_is_read_only_and_multiplatform(self):
-        workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        self.assertIn("pull_request:", workflow)
-        self.assertIn("contents: read", workflow)
-        self.assertIn("ubuntu-latest", workflow)
-        self.assertIn("macos-latest", workflow)
-        self.assertIn("windows-latest", workflow)
-        self.assertIn('python: ["3.10", "3.13"]', workflow)
-        self.assertIn("git lfs pull", workflow)
-        self.assertIn("git lfs fsck", workflow)
-        self.assertIn("./maintenance/manage.py verify", workflow)
-        self.assertIn("fetch-depth: 0", workflow)
-        self.assertIn("maintenance/tools/check_committed_diff.py", workflow)
-        self.assertIn("wrangler@4.114.0 deploy --dry-run", workflow)
-        self.assertNotIn("secrets.", workflow)
+    def test_local_validation_documentation_replaces_external_ci(self):
+        runbook = (ROOT / "docs/runbooks/release.md").read_text(encoding="utf-8")
+        contributing = (ROOT / ".github/CONTRIBUTING.md").read_text(encoding="utf-8")
+        pull_request = (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+        stabilization = (ROOT / "docs/implementation/stabilization-1.0.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "docs/ROADMAP-QUAKE-ECOSYSTEM.md").read_text(encoding="utf-8")
+        self.assertIn("./maintenance/manage.py verify", runbook)
+        self.assertIn("release_candidate.py prepare", runbook)
+        self.assertIn("release_candidate.py verify", runbook)
+        self.assertIn("release_candidate.py promote", runbook)
+        self.assertIn("mktemp", runbook)
+        self.assertIn("Mac", contributing)
+        self.assertIn("Mac", pull_request)
+        self.assertIn("nenhum runner", pull_request.casefold())
+        self.assertNotIn("Smoke nativo executado", pull_request)
+        self.assertNotIn("sete checks", stabilization)
+        self.assertNotIn("os workflows de candidato rejeitam prereleases", stabilization)
+        self.assertNotIn("publicação da `1.0.0` sem os gates nativos", roadmap)
+        self.assertIn("sem gates nativos", roadmap)
 
     def test_committed_diff_gate_uses_event_shas_and_rejects_committed_whitespace(self):
         script = ROOT / "maintenance/tools/check_committed_diff.py"
@@ -217,9 +214,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
             subprocess.run(["git", "commit", "-qm", "bad whitespace"], cwd=repository, check=True)
             head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository, text=True).strip()
             event = repository / "event.json"
-            event.write_text(json.dumps({
-                "pull_request": {"base": {"sha": base}, "head": {"sha": head}},
-            }), encoding="utf-8")
+            event.write_text(json.dumps({"pull_request": {"base": {"sha": base}, "head": {"sha": head}}}), encoding="utf-8")
             result = subprocess.run(
                 [sys.executable, str(script), "--event-name", "pull_request", "--event-file", str(event)],
                 cwd=repository, text=True, capture_output=True, check=False,
@@ -227,19 +222,71 @@ class ContinuousIntegrationTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertIn("trailing whitespace", result.stdout + result.stderr)
 
-    def test_publication_is_manual_protected_and_depends_on_validation(self):
-        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("needs: validate", workflow)
-        self.assertIn("environment: release", workflow)
-        self.assertIn("git diff --exit-code", workflow)
-        self.assertIn("./maintenance/manage.py publish --dry-run", workflow)
-        self.assertIn("./maintenance/manage.py publish", workflow)
-        self.assertIn("GLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", workflow)
-        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\r'/}\"", workflow)
-        self.assertIn("GLAB_TOKEN=\"${GLAB_TOKEN//$'\\n'/}\"", workflow)
-        self.assertIn('export GITLAB_TOKEN="${GLAB_TOKEN}"', workflow)
-        self.assertNotIn("pull_request:", workflow)
+    def test_local_candidate_path_has_no_external_gate(self):
+        candidate = (ROOT / "maintenance/tools/release_candidate.py").read_text(encoding="utf-8")
+        runbook = (ROOT / "docs/runbooks/release.md").read_text(encoding="utf-8")
+        self.assertNotIn("verify_external_handoff", candidate)
+        self.assertNotIn("check_release_blockers", candidate)
+        self.assertNotIn("GITHUB_TOKEN", candidate)
+        self.assertNotIn("GLAB_TOKEN", candidate)
+        self.assertNotIn("release-approval", runbook)
+        self.assertNotIn("release-metadata", runbook)
+        self.assertIn("publicação remota", runbook)
+        self.assertIn("opcional", runbook)
+
+    def test_no_external_workflows_remain_active(self):
+        workflow_dir = ROOT / ".github/workflows"
+        workflow_files = sorted(
+            path for path in workflow_dir.glob("*")
+            if path.suffix in {".yml", ".yaml"}
+        )
+        self.assertEqual([], workflow_files)
+
+    def test_native_platform_contracts_remain_compatibility_only(self):
+        contract = (ROOT / "x86qw_runtime/contracts/native_evidence.py").read_text(encoding="utf-8")
+        for platform in ("Linux-X64", "Windows-X64", "macOS-ARM64", "macOS-X64"):
+            self.assertIn(platform, contract)
+        self.assertIn("REQUIRED_NATIVE_PLATFORMS", contract)
+        self.assertTrue((ROOT / "maintenance/tools/native_release_smoke.py").is_file())
+        self.assertTrue((ROOT / "maintenance/tools/native_release_evidence.py").is_file())
+
+    def test_site_uses_lockfile(self):
+        self.assertTrue((ROOT / "site/package.json").is_file())
+        self.assertTrue((ROOT / "site/package-lock.json").is_file())
+
+    def test_local_governance_contract_is_complete(self):
+        codeowners = (ROOT / ".github/CODEOWNERS").read_text(encoding="utf-8")
+        explicit_rules = {
+            "/x86qw_runtime/",
+            "/maintenance/inventory/",
+            "/maintenance/tools/",
+            "/site/",
+        }
+        rules: dict[str, list[str]] = {}
+        for raw_line in codeowners.splitlines():
+            line = raw_line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            fields = line.split()
+            rules[fields[0]] = fields[1:]
+        for pattern in explicit_rules:
+            with self.subTest(pattern=pattern):
+                self.assertTrue(rules.get(pattern), f"missing CODEOWNERS rule: {pattern}")
+                self.assertTrue(any(owner.startswith("@") for owner in rules[pattern]))
+
+        dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(dependabot, r"(?m)^version:\s*2\s*$")
+        self.assertNotIn("github-actions", dependabot)
+        self.assertIn("package-ecosystem: npm", dependabot)
+        self.assertIn('directory: "/site"', dependabot)
+        self.assertRegex(dependabot, r"(?m)^\s+interval:\s*weekly\s*$")
+
+        evidence_runbook = (ROOT / "docs/runbooks/native-evidence.md").read_text(encoding="utf-8")
+        release_runbook = (ROOT / "docs/runbooks/release.md").read_text(encoding="utf-8")
+        self.assertIn("Mac", evidence_runbook)
+        self.assertIn("Mac", release_runbook)
+        self.assertNotIn("release-metadata", release_runbook)
+        self.assertNotIn("release-approval", release_runbook)
 
     def test_large_runtime_and_demo_payloads_are_lfs_managed(self):
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")

@@ -322,7 +322,10 @@ time.sleep(60)
                 cwd=directory,
             )
             ack = handle.release(timeout=5)
-            self.wait_for(child_pid_path.exists)
+            self.wait_for(
+                lambda: child_pid_path.is_file()
+                and child_pid_path.read_text(encoding="ascii").strip().isdigit()
+            )
             child_pid = int(child_pid_path.read_text(encoding="ascii"))
 
             self.assertEqual(handle.pid, os.getpgid(handle.pid))

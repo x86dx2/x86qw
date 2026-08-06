@@ -428,6 +428,19 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("Luffy", luffy["name"])
         self.assertEqual({"name"}, set(luffy))
 
+    def test_public_zipapp_transfers_ktx_runtime_ownership(self):
+        """The generated installer must bind KTX cleanup to the client process."""
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            gameplay = application.read("gameplay.py").decode("utf-8")
+
+        self.assertIn(
+            "transfer_runtime_config_controller",
+            gameplay,
+        )
+        self.assertIn("runtime_config_handed_off = True", gameplay)
+        self.assertIn("not runtime_config_handed_off", gameplay)
+
     def test_fresh_zipapp_runs_version_and_help_without_network(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -482,6 +495,8 @@ class InstallerTests(unittest.TestCase):
         members = {
             "x86qw.pyz": zipapp_bytes(version),
             "VERSION": f"{version}\n",
+            "LICENSE": (ROOT / "LICENSE").read_text(encoding="utf-8"),
+            "NOTICE": (ROOT / "NOTICE").read_text(encoding="utf-8"),
             "x86qw.sh": "#!/bin/sh\n",
             "x86qw.cmd": "@echo off\r\n",
             "installer.json": identity,
@@ -2662,6 +2677,56 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()):
                 install_qw.parse_arguments(["verify", "--platform", "linux"], ROOT)
         self.assertEqual(2, raised.exception.code)
+
+    def test_non_interactive_install_requires_complete_selection_contract(self):
+        parsed = install_qw.parse_arguments([
+            "--non-interactive", "--platform", "linux", "--channel", "stable",
+            "--release", "latest", "--profile", "essential",
+            "install", "/tmp/x86qw-clean",
+        ], ROOT)
+        self.assertTrue(parsed.non_interactive)
+        self.assertEqual("linux", parsed.platform)
+        self.assertEqual("stable", parsed.channel)
+        self.assertEqual("latest", parsed.release)
+        self.assertEqual("essential", parsed.profile)
+        self.assertEqual(Path("/tmp/x86qw-clean"), parsed.target)
+
+        invalid = (
+            ["--non-interactive", "--platform", "linux", "--channel", "stable", "--release", "latest", "install"],
+            ["--channel", "stable", "verify", "/tmp/x86qw-clean"],
+            ["--non-interactive", "--platform", "linux", "--channel", "stable", "--release", "latest", "--profile", "essential", "update", "/tmp/x86qw-clean"],
+        )
+        for arguments in invalid:
+            with self.subTest(arguments=arguments):
+                with self.assertRaises(SystemExit) as raised:
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        install_qw.parse_arguments(arguments, ROOT)
+                self.assertEqual(2, raised.exception.code)
+
+    def test_non_interactive_install_forwards_all_choices_without_prompting(self):
+        target = Path("/tmp/x86qw-non-interactive")
+        installer = mock.MagicMock()
+        installer.target = target
+        installer.component_state_transaction.return_value.__enter__.return_value = []
+        with mock.patch.object(install_qw, "Installer", return_value=installer):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main([
+                    "--non-interactive", "--platform", "linux", "--channel", "stable",
+                    "--release", "latest", "--profile", "essential",
+                    "install", str(target),
+                ]))
+        installer.install.assert_called_once()
+        self.assertEqual({
+            "platform": "linux",
+            "channel": "stable",
+            "release": "latest",
+            "profile": "essential",
+            "non_interactive": True,
+        }, {
+            key: installer.install.call_args.kwargs[key]
+            for key in ("platform", "channel", "release", "profile", "non_interactive")
+        })
+        self.assertTrue(callable(installer.install.call_args.kwargs["before_mutation"]))
 
     def test_main_passes_platform_override_to_installation(self):
         target = Path("/tmp/x86qw-platform-test")

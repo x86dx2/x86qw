@@ -26,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from maintenance.tools.build_component_packages import build_packages, register_packages
 from maintenance.tools.build_core_package import build_core_package
+from maintenance.tools import release_ownership
 from maintenance.tools.build_package import verify_artifact
 from maintenance.tools.check_component_updates import check_updates
 from maintenance.tools.component_releases import (
@@ -76,6 +77,7 @@ from maintenance.tools.sync_distribution import (
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
 from maintenance.tools.upstreams import load_upstreams, source_owner, verify_preserved_sources
+from x86qw_runtime.trust import TrustError, verify_release_metadata
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -89,6 +91,7 @@ RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
 PRODUCT_CATALOG = PROJECT_ROOT / "site/public/api/v1/product.json"
+TRUST_METADATA = INVENTORY / "trust"
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 GITHUB_API_MAX_BYTES = 4 * 1024 * 1024
 GITHUB_API_DEADLINE_SECONDS = 60
@@ -1031,6 +1034,28 @@ def command_check(options: argparse.Namespace) -> int:
 def command_verify(options: argparse.Namespace) -> int:
     catalog = load_json(CATALOG)
     package_count = validate_catalog(catalog)
+    trust_paths = {
+        name: TRUST_METADATA / f"{name}.json"
+        for name in ("root", "current", "snapshot")
+    }
+    try:
+        trust_payloads = {
+            name: path.read_bytes()
+            for name, path in trust_paths.items()
+            if path.is_file() and not path.is_symlink()
+        }
+        if set(trust_payloads) != set(trust_paths):
+            raise TrustError("projeção de trust metadata incompleta")
+        verify_release_metadata(
+            trust_payloads["root"],
+            trust_payloads["current"],
+            trust_payloads["snapshot"],
+            CATALOG.read_bytes(),
+        )
+    except (OSError, TrustError) as error:
+        raise ManagerError(
+            f"trust metadata não autentica o catálogo público: {error}"
+        ) from error
     component_catalog = load_component_catalog(COMPONENTS)
     runtime_inventory = load_runtime_inventory(
         INVENTORY,
@@ -1063,7 +1088,7 @@ def command_verify(options: argparse.Namespace) -> int:
         f"runtimes: {len(runtime_inventory['runtimes']['runtimes'])}; "
         f"jogos: {len(runtime_inventory['games']['games'])}; "
         f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
-        f"nQuake: {revision[:12]}."
+        f"nQuake: {revision[:12]}; trust metadata: autenticada."
     )
     misplaced = [
         path for path in (
@@ -1095,6 +1120,7 @@ def command_verify(options: argparse.Namespace) -> int:
 
 
 def command_build(options: argparse.Namespace) -> int:
+    project_ref = getattr(options, "project_ref", None)
     for recipe in recipe_paths(RECIPES):
         raw = load_json(recipe)
         package = raw["package"]
@@ -1112,13 +1138,40 @@ def command_build(options: argparse.Namespace) -> int:
         verify_artifact(artifact, package)
     BUILDS.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix="packages-", dir=BUILDS.parent))
+    ownership_temporary = (
+        Path(tempfile.mkdtemp(prefix="ownership-", dir=BUILDS.parent))
+        if project_ref is not None else None
+    )
     try:
-        manifest = build_packages(DIST, temporary)
-        core_package = build_core_package(DIST, temporary)
+        component_ownership = ownership_temporary / "components.json" if ownership_temporary else None
+        core_ownership = ownership_temporary / "core.json" if ownership_temporary else None
+        manifest = build_packages(
+            DIST,
+            temporary,
+            ownership_output=component_ownership,
+            project_ref=project_ref,
+        )
+        core_package = build_core_package(
+            DIST,
+            temporary,
+            ownership_output=core_ownership,
+        )
         manifest["packages"].append(core_package)
+        ownership = None
+        if component_ownership is not None and core_ownership is not None:
+            ownership = release_ownership.merge_documents([
+                release_ownership.load_fragment(component_ownership),
+                release_ownership.load_fragment(core_ownership),
+            ])
         if BUILDS.exists():
             shutil.rmtree(BUILDS)
         os.replace(temporary, BUILDS)
+        ownership_root = BUILDS.parent / "ownership"
+        if ownership_root.exists():
+            shutil.rmtree(ownership_root)
+        if ownership is not None:
+            ownership_root.mkdir(parents=True, exist_ok=True)
+            release_ownership.write_document(ownership_root / "content.json", ownership)
         if options.register:
             register_packages(CATALOG, manifest)
             catalog = load_json(CATALOG)
@@ -1128,6 +1181,8 @@ def command_build(options: argparse.Namespace) -> int:
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
+        if ownership_temporary is not None and ownership_temporary.exists():
+            shutil.rmtree(ownership_temporary)
     return 0
 
 
@@ -2214,7 +2269,7 @@ def command_publish(options: argparse.Namespace) -> int:
     validate_catalog(catalog)
     if not BUILDS.exists():
         print("[INFO] Builds de componentes ausentes; gerando agora.")
-        command_build(argparse.Namespace(register=False))
+        command_build(argparse.Namespace(register=False, project_ref=None))
     if not options.gitlab_only:
         publish_github(catalog, dry_run=options.dry_run)
     if not options.github_only:
@@ -2286,6 +2341,7 @@ def parser() -> argparse.ArgumentParser:
 
     build = commands.add_parser("build", help="monta pacotes temporarios a partir do dist")
     build.add_argument("--register", action="store_true", help="atualiza o catalogo com os builds")
+    build.add_argument("--project-ref", help="SHA-1 do commit x86QW ligado ao ownership do candidato")
     build.set_defaults(handler=command_build)
 
     publish = commands.add_parser("publish", help="publica os artefatos nos mirrors GitHub e GitLab")

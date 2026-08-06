@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import io
 import json
 import os
@@ -42,6 +43,7 @@ from x86qw_runtime.io.archive import (
 )
 from x86qw_runtime.io import atomic as atomic_io
 from x86qw_runtime.versioning import STABLE_VERSION as VERSION_PATTERN, version_key
+from maintenance.tools import release_ownership
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
 MAX_BUILD_INPUT_BYTES = 128 * 1024 * 1024
@@ -51,6 +53,13 @@ BUNDLE_FILES = (
     ("dist/installer/VERSION", "VERSION", 0o644),
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
+)
+# Project-owned notices are carried by the first 1.0 bundle and newer.  They
+# are deliberately not part of the 0.x outer layout so immutable historical
+# artifacts remain byte-for-byte compatible.
+LEGAL_FILES = (
+    ("LICENSE", "LICENSE", 0o644),
+    ("NOTICE", "NOTICE", 0o644),
 )
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
@@ -192,11 +201,15 @@ def runtime_member_files() -> tuple[tuple[str, str], ...]:
 
 
 def bundle_files() -> tuple[str, ...]:
-    return tuple(source for source, _, _ in BUNDLE_FILES) + tuple(
+    return tuple(source for source, _, _ in (*BUNDLE_FILES, *LEGAL_FILES)) + tuple(
         source for source, _ in runtime_member_files()
     ) + tuple(source for _, source in RUNTIME_CONTRACT_SOURCES) + (
         RUNTIME_MEMBER_MANIFEST.relative_to(ROOT).as_posix(),
     )
+
+
+def includes_project_legal_files(version: str) -> bool:
+    return version_key(version) >= (1, 0, 0)
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -239,9 +252,16 @@ def zipapp_bytes(version: str) -> bytes:
         "generated:identity": json_bytes(identity),
         "generated:component-catalog": runtime_catalog_bytes(),
     }
+    entries: list[tuple[str, str, int]] = [
+        (entry["source"], entry["member"], 0o644) for entry in contracts
+    ]
+    if includes_project_legal_files(version):
+        entries.extend(
+            (source, f"_x86qw/{member}", mode)
+            for source, member, mode in LEGAL_FILES
+        )
     with zipfile.ZipFile(output, "w", allowZip64=True) as application:
-        for entry in contracts:
-            source_name = entry["source"]
+        for source_name, member_name, mode in entries:
             payload = (
                 generated_payloads[source_name]
                 if source_name.startswith("generated:")
@@ -250,9 +270,9 @@ def zipapp_bytes(version: str) -> bytes:
                     maximum_size=MAX_BUILD_INPUT_BYTES,
                 )
             )
-            write_member(application, entry["member"], payload)
+            write_member(application, member_name, payload, mode)
     payload = output.getvalue()
-    required = tuple(entry["member"] for entry in contracts)
+    required = tuple(member for _source, member, _mode in entries)
     try:
         plan = scan_archive(payload, required_members=required)
     except ArchiveError as error:
@@ -260,6 +280,105 @@ def zipapp_bytes(version: str) -> bytes:
     if set(plan.member_names) != set(required):
         raise ValueError("installer zipapp contains an unexpected member")
     return payload
+
+
+def installer_ownership_document(
+    version: str,
+    filename: str,
+    outer_payload: bytes,
+    zipapp_payload: bytes,
+) -> dict[str, object]:
+    """Describe builder-known project bytes for a modern installer bundle."""
+
+    if not includes_project_legal_files(version):
+        raise ValueError("ownership facts só estão disponíveis para bundles >= 1.0.0")
+    license_url = f"https://github.com/x86dx2/x86qw/blob/x86qw-installer-{version}/LICENSE"
+    nested_plan = scan_archive(zipapp_payload)
+    nested_payloads = read_archive_members(nested_plan)
+    nested_entries: list[dict[str, object]] = []
+    for contract in runtime_member_contracts():
+        member = contract["member"]
+        payload = nested_payloads[member]
+        basis = (
+            "generated-project-metadata"
+            if contract["source"].startswith("generated:")
+            else "project-source"
+        )
+        nested_entries.append({
+            "path": member,
+            "size": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "kind": "metadata" if member.endswith(".json") else "file",
+            "ownership": "project",
+            "ownership_basis": basis,
+            "source": contract["source"],
+            "license_concluded": "MIT",
+            "license_url": license_url,
+            "copyright_text": release_ownership.PROJECT_COPYRIGHT,
+            "members": [],
+        })
+    for member in ("_x86qw/LICENSE", "_x86qw/NOTICE"):
+        payload = nested_payloads[member]
+        nested_entries.append({
+            "path": member,
+            "size": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "kind": "metadata",
+            "ownership": "project",
+            "ownership_basis": "generated-project-metadata",
+            "source": member,
+            "license_concluded": "MIT",
+            "license_url": license_url,
+            "copyright_text": release_ownership.PROJECT_COPYRIGHT,
+            "members": [],
+        })
+
+    outer_plan = scan_archive(outer_payload)
+    direct_payloads = read_archive_members(outer_plan)
+    prefix = f"x86qw-installer-{version}/"
+    direct_entries: list[dict[str, object]] = []
+    for member, payload in sorted(direct_payloads.items()):
+        if not member.startswith(prefix):
+            continue
+        relative = member[len(prefix):]
+        if relative == "x86qw.pyz":
+            members = nested_entries
+            kind = "archive"
+            source = "build:x86qw.pyz"
+        else:
+            members = []
+            kind = "metadata" if relative.endswith((".json", ".md", "LICENSE", "NOTICE", "VERSION")) else "file"
+            source = f"dist/installer/{relative}"
+        direct_entries.append({
+            "path": member,
+            "size": len(payload),
+            "sha256": __import__("hashlib").sha256(payload).hexdigest(),
+            "kind": kind,
+            "ownership": "project",
+            "ownership_basis": "build-output",
+            "source": source,
+            "license_concluded": "MIT",
+            "license_url": license_url,
+            "copyright_text": release_ownership.PROJECT_COPYRIGHT,
+            "members": members,
+        })
+    return release_ownership.validate_document({
+        "format": 1,
+        "project": "x86qw",
+        "artifacts": [{
+            "path": f"installer/{filename}",
+            "size": len(outer_payload),
+            "sha256": hashlib.sha256(outer_payload).hexdigest(),
+            "kind": "archive",
+            "ownership": "project",
+            "ownership_basis": "build-output",
+            "source": "build-installer-bundle",
+            "license_concluded": "MIT",
+            "license_url": license_url,
+            "copyright_text": release_ownership.PROJECT_COPYRIGHT,
+            "members": direct_entries,
+        }],
+    })
 
 
 def package_results(package_root: Path) -> list[dict[str, object]]:
@@ -286,10 +405,19 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             raise ValueError(
                 f"installer history bundle failed canonical archive validation: {archive}: {error}"
             ) from error
+        try:
+            distribution_path = archive.relative_to(ROOT / "dist").as_posix()
+        except ValueError:
+            # Release candidates are deliberately assembled outside the
+            # checkout.  Keep the public path stable without pretending that
+            # the temporary candidate is already part of ``dist``.
+            distribution_path = PurePosixPath(
+                "installer", "packages", version, filename,
+            ).as_posix()
         results.append({
             "version": version,
             "filename": filename,
-            "distribution_path": archive.relative_to(ROOT / "dist").as_posix(),
+            "distribution_path": distribution_path,
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
@@ -482,22 +610,41 @@ def reset_history(package_root: Path) -> None:
     )
 
 
-def build(output: Path, version: str = VERSION) -> dict[str, object]:
+def build(
+    output: Path,
+    version: str = VERSION,
+    *,
+    ownership_output: Path | None = None,
+) -> dict[str, object]:
     validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
+    zipapp_payload = zipapp_bytes(version)
     target = output / version / filename
     with staged_artifact(target, root=output, prefix=".installer-") as staged:
         with zipfile.ZipFile(staged.stream, "w", allowZip64=True) as bundle:
             prefix = f"x86qw-installer-{version}"
-            write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_bytes(version))
+            write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_payload)
             for source_name, member, mode in BUNDLE_FILES:
                 source = ROOT / source_name
+                payload = read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES)
+                if source_name == "dist/installer/VERSION":
+                    payload = f"{version}\n".encode("ascii")
                 write_member(
                     bundle,
                     f"{prefix}/{member}",
-                    read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES),
+                    payload,
                     mode,
                 )
+            if includes_project_legal_files(version):
+                for source_name, member, mode in LEGAL_FILES:
+                    write_member(
+                        bundle,
+                        f"{prefix}/{member}",
+                        read_regular_file(
+                            ROOT / source_name, maximum_size=MAX_BUILD_INPUT_BYTES,
+                        ),
+                        mode,
+                    )
             write_member(
                 bundle,
                 f"{prefix}/installer.json",
@@ -533,13 +680,27 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
                 f"installer version {version} is immutable; bump VERSION before rebuilding"
             ),
         )
+    try:
+        distribution_path = target.relative_to(ROOT / "dist").as_posix()
+    except ValueError:
+        distribution_path = PurePosixPath(
+            "installer", "packages", version, filename,
+        ).as_posix()
     result = {
         "version": version,
         "filename": filename,
-        "distribution_path": target.relative_to(ROOT / "dist").as_posix(),
+        "distribution_path": distribution_path,
         "size": accepted_plan.source_size,
         "sha256": accepted_plan.source_sha256,
     }
+    if ownership_output is not None:
+        ownership = installer_ownership_document(
+            version,
+            filename,
+            target.read_bytes(),
+            zipapp_payload,
+        )
+        release_ownership.write_document(Path(ownership_output), ownership)
     update_latest_link(output)
     return result
 
@@ -580,8 +741,19 @@ def installer_record(result: dict[str, object], *, current: bool) -> dict[str, o
         "size": result["size"],
         "sha256": result["sha256"],
         "origin_url": github,
-        "license": "x86qw-project-terms",
-        "license_url": "https://github.com/x86dx2/x86qw",
+        "license": (
+            "MIT" if includes_project_legal_files(version)
+            else "x86qw-project-terms"
+        ),
+        # x86QW-owned terms must resolve to the immutable installer tag rather
+        # than a mutable repository root or branch for new bundles.  Historical
+        # records retain their published metadata and are never rewritten by a
+        # future registration.
+        "license_url": (
+            f"https://github.com/x86dx2/x86qw/blob/{release_tag}/LICENSE"
+            if includes_project_legal_files(version)
+            else "https://github.com/x86dx2/x86qw"
+        ),
         "source_urls": ["https://github.com/x86dx2/x86qw"],
         "redistribution_reviewed": True,
         "urls": [github, gitlab],
@@ -688,6 +860,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "dist/installer/packages")
     parser.add_argument("--version", default=VERSION)
+    parser.add_argument("--ownership-output", type=Path)
     parser.add_argument("--register", action="store_true")
     parser.add_argument(
         "--reset-history",
@@ -697,7 +870,11 @@ def main() -> int:
     options = parser.parse_args()
     if options.reset_history:
         reset_history(options.output.resolve())
-    result = build(options.output.resolve(), options.version)
+    result = build(
+        options.output.resolve(),
+        options.version,
+        ownership_output=options.ownership_output,
+    )
     if options.register:
         register(result)
     print(json.dumps(result, indent=2))

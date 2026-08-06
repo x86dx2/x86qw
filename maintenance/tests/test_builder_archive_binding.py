@@ -13,11 +13,13 @@ from maintenance.tools import build_artifacts as build_artifacts_runtime
 from maintenance.tools import build_component_packages as component_builder
 from maintenance.tools import build_core_package as core_builder
 from maintenance.tools import build_installer_bundle as installer_builder
+from maintenance.tools import release_ownership
 from x86qw_runtime.io import archive as archive_runtime
 
 
 ROOT = Path(__file__).resolve().parents[2]
 REPLACEMENT = b"replacement-after-canonical-validation"
+PROJECT_REF = "c" * 40
 
 
 class BuilderArchiveBindingTests(unittest.TestCase):
@@ -245,6 +247,108 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             payload = artifact.read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), record["sha256"])
             self.assertEqual(len(payload), record["size"])
+
+    def test_component_builder_emits_explicit_ownership_fragment_bound_to_package_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ownership_path = root / "ownership-content.json"
+            self.build_component_packages_with_ownership(root, ownership_path)
+            document = release_ownership.load_fragment(ownership_path)
+            self.assertTrue(document["artifacts"])
+            for entry in document["artifacts"]:
+                artifact = root / "output" / Path(str(entry["path"]).removeprefix("content/"))
+                self.assertEqual(artifact.stat().st_size, entry["size"])
+                self.assertEqual(hashlib.sha256(artifact.read_bytes()).hexdigest(), entry["sha256"])
+            flattened = release_ownership.flatten_entries(document)
+            self.assertIn(
+                "_x86qw/component.json",
+                {member["path"] for member in next(
+                    entry for entry in document["artifacts"] if entry["path"].endswith("test-component-1.2.3.zip")
+                )["members"]},
+            )
+            self.assertTrue(flattened)
+
+    def build_component_packages_with_ownership(self, root: Path, ownership_path: Path) -> dict[str, object]:
+        with mock.patch.object(
+            component_builder,
+            "load_source_context",
+            return_value=self.component_context(),
+        ), mock.patch.object(
+            component_builder,
+            "resolve_component_payloads",
+            return_value=self.component_payloads(),
+        ):
+            return component_builder.build_packages(
+                root / "dist",
+                root / "output",
+                ownership_output=ownership_path,
+                project_ref=PROJECT_REF,
+            )
+
+    def test_component_ownership_uses_only_the_explicit_project_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ownership_path = root / "ownership-content.json"
+            self.build_component_packages_with_ownership(root, ownership_path)
+            document = release_ownership.load_fragment(ownership_path)
+            project_urls = {
+                str(entry["license_url"])
+                for entry in release_ownership.flatten_entries(document).values()
+                if entry["ownership"] == "project"
+            }
+            self.assertEqual(
+                {f"https://github.com/x86dx2/x86qw/blob/{PROJECT_REF}/LICENSE"},
+                project_urls,
+            )
+
+    def test_component_ownership_requires_a_complete_project_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with mock.patch.object(
+                component_builder,
+                "load_source_context",
+                return_value=self.component_context(),
+            ), mock.patch.object(
+                component_builder,
+                "resolve_component_payloads",
+                return_value=self.component_payloads(),
+            ):
+                with self.assertRaisesRegex(ValueError, "project-ref"):
+                    component_builder.build_packages(
+                        root / "dist",
+                        root / "output",
+                        ownership_output=root / "ownership.json",
+                    )
+
+    def test_generic_component_package_bytes_do_not_depend_on_ownership_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generic = self.build_component_packages(root / "generic")
+            ownership = self.build_component_packages_with_ownership(
+                root / "ownership", root / "ownership.json",
+            )
+            generic_path = next((root / "generic/output").rglob(str(generic["packages"][0]["filename"])))
+            ownership_path = next((root / "ownership/output").rglob(str(ownership["packages"][0]["filename"])))
+            self.assertEqual(generic_path.read_bytes(), ownership_path.read_bytes())
+
+    def test_modern_installer_builder_emits_project_owned_nested_facts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".installer-ownership-") as temporary:
+            root = Path(temporary)
+            ownership_path = root / "ownership-installer.json"
+            installer_builder.build(root / "packages", "1.0.0", ownership_output=ownership_path)
+            document = release_ownership.load_fragment(ownership_path)
+            entry = document["artifacts"][0]
+            self.assertEqual("project", entry["ownership"])
+            self.assertEqual(
+                "MIT",
+                next(member for member in entry["members"] if member["path"] == "x86qw-installer-1.0.0/x86qw.pyz")["license_concluded"],
+            )
+            self.assertIn(
+                "x86qw_runtime/io/archive.py",
+                {member["source"] for member in next(
+                    member for member in entry["members"] if member["path"] == "x86qw-installer-1.0.0/x86qw.pyz"
+                )["members"]},
+            )
 
     def test_core_package_never_writes_through_an_existing_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -498,6 +602,99 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             payload = target.read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), result["sha256"])
             self.assertEqual(len(payload), result["size"])
+
+    def test_installer_record_uses_immutable_project_license_tag(self) -> None:
+        record = installer_builder.installer_record(
+            {
+                "version": "1.0.0",
+                "filename": "x86qw-installer-1.0.0.zip",
+                "size": 1,
+                "sha256": "a" * 64,
+                "distribution_path": "installer/packages/1.0.0/x86qw-installer-1.0.0.zip",
+            },
+            current=False,
+        )
+        self.assertEqual(
+            "https://github.com/x86dx2/x86qw/blob/x86qw-installer-1.0.0/LICENSE",
+            record["license_url"],
+        )
+
+    def test_installer_record_uses_mit_only_for_new_owned_bundles(self) -> None:
+        modern = installer_builder.installer_record(
+            {
+                "version": "1.0.0",
+                "filename": "x86qw-installer-1.0.0.zip",
+                "size": 1,
+                "sha256": "a" * 64,
+                "distribution_path": "installer/packages/1.0.0/x86qw-installer-1.0.0.zip",
+            },
+            current=False,
+        )
+        historical = installer_builder.installer_record(
+            {
+                "version": "0.7.3",
+                "filename": "x86qw-installer-0.7.3.zip",
+                "size": 1,
+                "sha256": "b" * 64,
+                "distribution_path": "installer/packages/0.7.3/x86qw-installer-0.7.3.zip",
+            },
+            current=False,
+        )
+        self.assertEqual("MIT", modern["license"])
+        self.assertEqual("x86qw-project-terms", historical["license"])
+        self.assertEqual(
+            "https://github.com/x86dx2/x86qw",
+            historical["license_url"],
+        )
+
+    def test_modern_installer_carries_exact_project_notices_in_both_layers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".modern-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            result = installer_builder.build(output, "1.0.0")
+            archive_path = output / "1.0.0" / "x86qw-installer-1.0.0.zip"
+            outer = archive_runtime.validate_installer_bundle(archive_path, "1.0.0")
+            prefix = "x86qw-installer-1.0.0"
+            payloads = archive_runtime.read_archive_members(
+                outer,
+                (
+                    f"{prefix}/LICENSE",
+                    f"{prefix}/NOTICE",
+                    f"{prefix}/x86qw.pyz",
+                ),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), payloads[f"{prefix}/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), payloads[f"{prefix}/NOTICE"])
+            nested = archive_runtime.scan_archive(payloads[f"{prefix}/x86qw.pyz"])
+            nested_payloads = archive_runtime.read_archive_members(
+                nested, ("_x86qw/LICENSE", "_x86qw/NOTICE"),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), nested_payloads["_x86qw/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), nested_payloads["_x86qw/NOTICE"])
+            self.assertEqual(9, len(outer.members))
+            self.assertEqual(hashlib.sha256(archive_path.read_bytes()).hexdigest(), result["sha256"])
+
+    def test_historical_installer_build_keeps_the_seven_member_outer_layout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".legacy-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            installer_builder.build(output, "0.7.3")
+            archive_path = output / "0.7.3" / "x86qw-installer-0.7.3.zip"
+            plan = archive_runtime.validate_installer_bundle(archive_path, "0.7.3")
+            self.assertEqual(7, len(plan.members))
+
+    def test_release_candidate_builder_accepts_private_output_outside_dist(self) -> None:
+        """Candidate preparation must not mutate or require the checkout path."""
+
+        version = installer_builder.VERSION
+        with tempfile.TemporaryDirectory(prefix=".candidate-builder-") as temporary:
+            output = Path(temporary) / "installer-packages"
+            result = installer_builder.build(output, version)
+            self.assertEqual(
+                f"installer/packages/{version}/x86qw-installer-{version}.zip",
+                result["distribution_path"],
+            )
+            self.assertTrue(
+                (output / version / f"x86qw-installer-{version}.zip").is_file(),
+            )
 
 
 if __name__ == "__main__":

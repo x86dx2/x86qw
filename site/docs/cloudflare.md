@@ -8,7 +8,8 @@ caminho normal: HTML, CSS e o catálogo são arquivos estáticos no edge.
 
 ```sh
 cd site
-npx --yes wrangler@4.114.0 deploy --dry-run
+npm ci
+npm run deploy:dry-run
 cd ..
 ./maintenance/manage.py verify --no-tests
 ```
@@ -21,7 +22,9 @@ julho de 2026. Atualizações devem repetir o dry-run antes do deploy.
 1. Confirme que `x86.com.br` é uma zona ativa na conta Cloudflare correta.
 2. Confirme que `x86qw.x86.com.br` não possui um CNAME conflitante.
 3. Autentique o Wrangler com um token restrito à conta e à zona.
-4. Entre em `site/` e execute `npx --yes wrangler@4.114.0 deploy`.
+4. Entre em `site/` e execute `npm ci && npm run deploy:dry-run` para validar o
+bundle; a publicação remota só ocorre após autorização explícita e é executada
+manualmente com o Wrangler local.
 5. Valide `/`, `/api/v1/catalog.json` e uma URL inexistente.
 
 O deploy cria o Custom Domain e seu registro DNS/certificado. Tokens, IDs de

@@ -1,0 +1,13 @@
+{
+  "name": "x86qw-site",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "npm@11.5.2",
+  "scripts": {
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8787"
+  },
+  "devDependencies": {
+    "wrangler": "4.114.0"
+  }
+}

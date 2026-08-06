@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import errno
 import hashlib
+import io
 import importlib
 import json
 import os
@@ -20,6 +21,7 @@ import tempfile
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
@@ -60,6 +62,7 @@ from x86qw_runtime.ui.console import (
     format_bytes,
     format_bytes_compact,
 )
+from x86qw_runtime.ui.json_output import make_json_output, render_json_output
 
 from x86qw_runtime.io.archive import (
     ArchiveError,
@@ -83,7 +86,19 @@ from x86qw_runtime.io.managed_files import (
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
-from x86qw_runtime.migrations import migrate_install_state
+from x86qw_runtime.contracts.schema import (
+    ContractError,
+    ContractVersions,
+    SchemaKind,
+    add_contract_versions,
+    validate_document_versions,
+)
+from x86qw_runtime.migrations import (
+    inspect_pending_migration,
+    migrate_install_state,
+    migrate_installation,
+    recover_migration,
+)
 from x86qw_runtime.state import (
     INSTALLATION_PROFILES,
     StateError,
@@ -123,7 +138,9 @@ from x86qw_runtime.receipts import (
 from x86qw_runtime.versioning import (
     COMPONENT_VERSION,
     NIGHTLY_VERSION,
+    SEMVER_VERSION,
     STABLE_VERSION,
+    parse_semver,
 )
 
 from x86qw_runtime.catalogs import (
@@ -145,6 +162,15 @@ from x86qw_runtime.io.remote import (
     https_url_filename,
     validate_https_url,
 )
+from x86qw_runtime.trust import (
+    MAX_METADATA_BYTES as TRUST_METADATA_MAX_BYTES,
+    TrustError,
+    TrustedVersions,
+    deserialize_trusted_versions,
+    serialize_trusted_versions,
+    verify_release_metadata,
+    verify_release_metadata_roles,
+)
 from x86qw_runtime.catalogs import (
     load_capabilities,
     load_runtimes,
@@ -162,6 +188,18 @@ CATALOG_URLS = (
 )
 CATALOG_TIMEOUT = 10.0
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
+TRUST_METADATA_DIR = Path("maintenance/inventory/trust")
+TRUST_STATE_RELATIVE = Path(".x86qw") / "trust" / "versions.json"
+TRUST_ROLE_NAMES = ("root", "current", "snapshot")
+TRUST_METADATA_URL_ENV = "X86_QW_TRUST_METADATA_URL"
+TRUST_METADATA_REQUIRED_ENV = "X86_QW_TRUST_METADATA_REQUIRED"
+TRUST_METADATA_REQUIRED_ALIASES = ("X86_QW_REQUIRE_TRUST_METADATA",)
+TRUST_REQUIRED_RELEASE = "1.0.0"
+TRUST_ROLE_URL_ENV = {
+    "root": ("X86_QW_TRUST_ROOT_URL", "X86_QW_TRUST_METADATA_ROOT_URL"),
+    "current": ("X86_QW_TRUST_CURRENT_URL", "X86_QW_TRUST_METADATA_CURRENT_URL"),
+    "snapshot": ("X86_QW_TRUST_SNAPSHOT_URL", "X86_QW_TRUST_METADATA_SNAPSHOT_URL"),
+}
 HUB_MAX_BYTES = 1024 * 1024
 PUBLIC_UNIX_BOOTSTRAP_COMMAND = (
     """/bin/bash -c 'umask 077; """
@@ -256,6 +294,12 @@ LEGACY_COMPONENT_REPLACEMENTS = {"nquake-ktx": "ktx"}
 LEGACY_COMPONENT_REMOVALS = {
     "nquake-sounds": "sons de Clan Arena incorporados ao KTX",
 }
+
+
+def trust_now() -> datetime:
+    """Return the UTC clock used for installed-client trust checks."""
+
+    return datetime.now(timezone.utc)
 LEGACY_COMPONENTS = frozenset({
     "clan-arena", *LEGACY_COMPONENT_REPLACEMENTS, *LEGACY_COMPONENT_REMOVALS,
 })
@@ -287,7 +331,7 @@ def application_version() -> str:
             version = location.read_text(encoding="utf-8").strip()
         except OSError as error:
             raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}") from error
-    if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+    if not isinstance(version, str) or not SEMVER_VERSION.fullmatch(version):
         raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}")
     return version
 
@@ -778,12 +822,22 @@ class Installer:
         self.update_ui = False
         self.remote = RemoteClient(console)
         self._public_catalog: dict[str, object] | None = None
+        self._trusted_versions: TrustedVersions | None = None
+        self._pending_trusted_versions: TrustedVersions | None = None
         self._component_source_context: object | None = None
         self.component_source_provider = (
             component_source_provider or _development_component_source_provider
         )
         self.selected_component_profile = "none"
         self.requested_components: list[str] = []
+        # Install-only automation keeps the existing interactive flow as the
+        # default while allowing release smoke jobs to provide every choice
+        # explicitly.  These values are scoped to one install transaction and
+        # are never persisted as user preferences.
+        self._non_interactive_install = False
+        self._requested_channel: str | None = None
+        self._requested_release: str | None = None
+        self._requested_profile: str | None = None
         self._component_catalog: dict[str, object] | None = None
         self._components: dict[str, dict[str, object]] | None = None
         self._content_component_namespaces: set[str] | None = None
@@ -1752,6 +1806,173 @@ class Installer:
             private_fs.ensure_private_directory(metadata)
         except OSError as error:
             raise InstallerError(f"metadata directory is not private: {metadata}") from error
+        pending = self._pending_trusted_versions
+        if pending is not None:
+            self._pending_trusted_versions = None
+            try:
+                self._write_trusted_versions_file(pending)
+            except Exception:
+                self._pending_trusted_versions = pending
+                raise
+
+    def _trust_metadata_required(self) -> bool:
+        # The legacy public line remains compatible with unsigned catalogs,
+        # but a 1.0+ CLI must never silently downgrade to mirror-only trust.
+        # An explicit false value cannot disable this release contract.
+        try:
+            required_by_release = parse_semver(application_version()) >= parse_semver(TRUST_REQUIRED_RELEASE)
+        except (TypeError, ValueError):
+            required_by_release = False
+        names = (TRUST_METADATA_REQUIRED_ENV, *TRUST_METADATA_REQUIRED_ALIASES)
+        values = [os.environ[name].strip().casefold() for name in names if name in os.environ]
+        if not values:
+            return required_by_release
+        if any(value not in {"", "0", "false", "no", "off", "1", "true", "yes", "on"} for value in values):
+            raise InstallerError(
+                "X86_QW_TRUST_METADATA_REQUIRED deve ser um booleano explícito."
+            )
+        normalized = {
+            value in {"1", "true", "yes", "on"}
+            for value in values
+            if value != ""
+        }
+        if len(normalized) > 1:
+            raise InstallerError(
+                "As variáveis de obrigatoriedade de metadados de confiança divergem."
+            )
+        return required_by_release or bool(normalized and next(iter(normalized)))
+
+    def _trust_metadata_urls(self) -> dict[str, str] | None:
+        role_values: dict[str, str] = {}
+        role_configured = False
+        for role, names in TRUST_ROLE_URL_ENV.items():
+            values = [os.environ[name].strip() for name in names if name in os.environ]
+            if values:
+                role_configured = True
+                if any(not value for value in values) or len(set(values)) != 1:
+                    raise InstallerError(f"URL de metadados de confiança ambígua: {role}")
+                role_values[role] = values[0]
+        if role_configured:
+            if set(role_values) != set(TRUST_ROLE_NAMES):
+                raise InstallerError(
+                    "As URLs de confiança devem informar root, current e snapshot."
+                )
+            return role_values
+        if TRUST_METADATA_URL_ENV in os.environ:
+            base = os.environ[TRUST_METADATA_URL_ENV].strip()
+            if not base:
+                raise InstallerError("X86_QW_TRUST_METADATA_URL não pode ser vazio.")
+            prefix = base.rstrip("/")
+            return {role: f"{prefix}/{role}.json" for role in TRUST_ROLE_NAMES}
+        return None
+
+    def _local_trust_metadata_paths(self) -> dict[str, Path] | None:
+        paths = {
+            role: self.project_root / TRUST_METADATA_DIR / f"{role}.json"
+            for role in TRUST_ROLE_NAMES
+        }
+        present = [lexists(path) for path in paths.values()]
+        if not any(present):
+            return None
+        if not all(present):
+            raise InstallerError(
+                "O pacote local contém metadados de confiança incompletos."
+            )
+        for role, path in paths.items():
+            ensure_no_symlink(path, f"metadata de confiança {role}")
+        return paths
+
+    def _trusted_state_path(self) -> Path:
+        return self.target / TRUST_STATE_RELATIVE
+
+    def _trusted_state_present(self) -> bool:
+        return lexists(self._trusted_state_path())
+
+    def _load_trusted_versions(self) -> TrustedVersions:
+        path = self._trusted_state_path()
+        if not lexists(path):
+            return TrustedVersions()
+        ensure_no_symlink(self.target / METADATA_DIR, "metadata directory")
+        ensure_no_symlink(self.target / METADATA_DIR / "trust", "trust metadata directory")
+        try:
+            payload = read_bounded_regular_file(
+                path,
+                maximum_size=TRUST_METADATA_MAX_BYTES,
+            )
+            private_fs.validate_private_file(path)
+            return deserialize_trusted_versions(payload)
+        except (MetadataFileError, OSError, TrustError, ValueError) as error:
+            raise InstallerError(
+                f"O estado persistido de confiança é inválido: {path}"
+            ) from error
+
+    def _write_trusted_versions_file(self, versions: TrustedVersions) -> None:
+        metadata = self.target / METADATA_DIR
+        trust_directory = metadata / "trust"
+        ensure_no_symlink(metadata, "metadata directory")
+        ensure_no_symlink(trust_directory, "trust metadata directory")
+        if lexists(trust_directory) and not trust_directory.is_dir():
+            raise InstallerError(f"trust metadata path is not a directory: {trust_directory}")
+        try:
+            private_fs.ensure_private_directory(trust_directory)
+            payload = serialize_trusted_versions(versions)
+            atomic_write_bytes(trust_directory / "versions.json", payload, mode=0o600)
+        except (OSError, TrustError, ValueError) as error:
+            raise InstallerError(
+                f"Não foi possível persistir o estado de confiança: {trust_directory / 'versions.json'}"
+            ) from error
+
+    def _persist_trusted_versions(self, versions: TrustedVersions) -> None:
+        self._trusted_versions = versions
+        if not lexists(self.target):
+            self._pending_trusted_versions = versions
+            return
+        if self.target.is_symlink() or not self.target.is_dir():
+            raise InstallerError(f"O destino não é um diretório seguro: {self.target}")
+        self.ensure_metadata_directory()
+        self._write_trusted_versions_file(versions)
+
+    def _verify_catalog_trust(
+        self,
+        catalog_payload: bytes,
+        roles: Mapping[str, bytes],
+        *,
+        trusted: TrustedVersions | None = None,
+    ) -> None:
+        try:
+            trusted = self._load_trusted_versions() if trusted is None else trusted
+            verified = verify_release_metadata(
+                roles["root"],
+                roles["current"],
+                roles["snapshot"],
+                catalog_payload,
+                now=trust_now(),
+                trusted=trusted,
+            )
+        except (TrustError, KeyError, TypeError) as error:
+            raise InstallerError(
+                f"Metadados de confiança recusaram o catálogo; operação interrompida ({error})."
+            ) from error
+        self._persist_trusted_versions(verified.versions)
+
+    def _preflight_catalog_trust(self, roles: Mapping[str, bytes]) -> TrustedVersions:
+        """Verify role signatures/freshness before requesting a catalog."""
+
+        trusted = self._load_trusted_versions()
+        try:
+            verify_release_metadata_roles(
+                roles["root"],
+                roles["current"],
+                roles["snapshot"],
+                now=trust_now(),
+                trusted=trusted,
+            )
+        except (TrustError, KeyError, TypeError) as error:
+            raise InstallerError(
+                f"Metadados de confiança recusaram o catálogo; operação interrompida ({error})."
+            ) from error
+        return trusted
+
 
     def select_platform(self, requested: str | None = None) -> PlatformSpec:
         host = host_platform.system() or "desconhecido"
@@ -1917,7 +2138,15 @@ class Installer:
             raise InstallerError("Nenhuma versão foi selecionada.")
         return next(record for record in catalog if record[0] == selected)
 
-    def choose_channel(self) -> str:
+    def choose_channel(self, requested: str | None = None) -> str:
+        if requested is not None:
+            if requested not in {"stable", "nightly"}:
+                raise InstallerError(
+                    f"Canal de instalação inválido: {requested}. Use stable ou nightly."
+                )
+            self.channel = requested
+            console.success(f"Canal selecionado: {requested}")
+            return requested
         channel = navigation.select_one(
             "Qual canal deseja instalar?",
             (
@@ -1938,6 +2167,14 @@ class Installer:
         return channel
 
     def confirm_components(self) -> bool:
+        if self._non_interactive_install:
+            # The profile is mandatory in non-interactive mode, so accepting
+            # this phase is deterministic and never falls back to a prompt.
+            if self._requested_profile not in {"essential", "recommended", "complete"}:
+                raise InstallerError(
+                    "Instalação não interativa exige --profile essential, recommended ou complete."
+                )
+            return True
         return navigation.confirm(
             "Instalar também os componentes x86QW?",
             breadcrumb="x86QW › Instalação › Conteúdo",
@@ -2042,10 +2279,21 @@ class Installer:
             self.spec.architecture,
         )
 
-    def choose_release(self) -> None:
+    def choose_release(self, requested: str | None = None) -> None:
         assert self.spec is not None
         catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
-        self.configure_release(self.prompt_catalog(self.channel, catalog))
+        if requested is None:
+            selected = self.prompt_catalog(self.channel, catalog)
+        elif requested == "latest":
+            selected = catalog[0]
+        else:
+            matches = [record for record in catalog if record[0] == requested]
+            if len(matches) != 1:
+                raise InstallerError(
+                    f"A versão {requested} não está disponível no canal {self.channel}."
+                )
+            selected = matches[0]
+        self.configure_release(selected)
         console.success(f"Versão selecionada: {self.selected_version}")
 
     def configure_release(self, selected: ReleaseRecord) -> None:
@@ -3805,11 +4053,23 @@ class Installer:
     def _parse_install_state(self, state: object):
         path = self.target / INSTALL_STATE
         try:
+            if isinstance(state, Mapping):
+                validate_document_versions(
+                    state,
+                    kind=SchemaKind.STATE,
+                    current_cli_version=application_version(),
+                    allow_legacy=True,
+                )
             return parse_install_state(
                 state,
                 allowed_profiles=self._install_state_profiles(),
                 allowed_capabilities=INSTALLATION_CAPABILITIES,
             )
+        except ContractError as error:
+            raise InstallerError(
+                f"Estado da instalação incompatível com a CLI atual: {path}",
+                exit_code=ExitCode.USAGE,
+            ) from error
         except StateError as error:
             raise self._install_state_error(error, path) from error
 
@@ -3827,7 +4087,7 @@ class Installer:
     ) -> dict[str, object]:
         self.ensure_metadata_directory()
         recorded = self.installed_components()
-        state = self.validate_install_state({
+        state_document = add_contract_versions({
             "format": 2,
             "project": "x86qw",
             "profile": profile,
@@ -3836,7 +4096,8 @@ class Installer:
             "known_components": list(self.components) if known is None else list(known),
             "capabilities": [] if capabilities is None else list(capabilities),
             "component_fingerprint": profile_fingerprint(recorded),
-        })
+        }, ContractVersions(), kind=SchemaKind.STATE)
+        state = self.validate_install_state(state_document)
         destination = self.target / INSTALL_STATE
         payload = serialize_install_state(self._parse_install_state(state))
         if mutation_results is not None:
@@ -3971,11 +4232,23 @@ class Installer:
 
     def read_install_state_document(self, path: Path) -> dict[str, object]:
         try:
-            return read_install_state(
+            document = read_install_state(
                 path,
                 allowed_profiles=self._install_state_profiles(),
                 allowed_capabilities=INSTALLATION_CAPABILITIES,
             ).to_document()
+            validate_document_versions(
+                document,
+                kind=SchemaKind.STATE,
+                current_cli_version=application_version(),
+                allow_legacy=True,
+            )
+            return document
+        except ContractError as error:
+            raise InstallerError(
+                f"Estado da instalação incompatível com a CLI atual: {path}",
+                exit_code=ExitCode.USAGE,
+            ) from error
         except StateError as error:
             raise self._install_state_error(error, path) from error
 
@@ -4016,24 +4289,31 @@ class Installer:
                 console.detail(f"Novidades: {safe_url_for_log(package['release_url'])}")
 
     def choose_components(self) -> list[str]:
-        profile = navigation.select_one(
-            "Qual conjunto de componentes deseja preparar?",
-            (
-                navigation.MenuOption(
-                    "recommended", "Recomendado", "experiência nQuake sem addons grandes",
+        if self._non_interactive_install:
+            profile = self._requested_profile
+            if profile not in {"essential", "recommended", "complete"}:
+                raise InstallerError(
+                    "Instalação não interativa exige --profile essential, recommended ou complete."
+                )
+        else:
+            profile = navigation.select_one(
+                "Qual conjunto de componentes deseja preparar?",
+                (
+                    navigation.MenuOption(
+                        "recommended", "Recomendado", "experiência nQuake sem addons grandes",
+                    ),
+                    navigation.MenuOption(
+                        "essential", "Essencial", "configuração, interface principal e KTX",
+                    ),
+                    navigation.MenuOption(
+                        "complete", "Completo", f"todos os {len(self.components)} componentes atuais",
+                    ),
+                    navigation.MenuOption(
+                        "custom", "Personalizado", "escolha componentes individualmente",
+                    ),
                 ),
-                navigation.MenuOption(
-                    "essential", "Essencial", "configuração, interface principal e KTX",
-                ),
-                navigation.MenuOption(
-                    "complete", "Completo", f"todos os {len(self.components)} componentes atuais",
-                ),
-                navigation.MenuOption(
-                    "custom", "Personalizado", "escolha componentes individualmente",
-                ),
-            ),
-            breadcrumb="x86QW › Instalação › Perfil",
-        )
+                breadcrumb="x86QW › Instalação › Perfil",
+            )
         if profile is None:
             raise InstallerError("Nenhum perfil foi selecionado.")
         if profile != "custom":
@@ -4174,7 +4454,7 @@ class Installer:
         package = matches[0]
         version = package.get("version")
         filename = package.get("filename")
-        if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+        if not isinstance(version, str) or not SEMVER_VERSION.fullmatch(version):
             raise InstallerError("Versão inválida do bundle x86QW.")
         if filename != f"x86qw-installer-{version}.zip":
             raise InstallerError("Identidade inconsistente do bundle x86QW.")
@@ -4270,7 +4550,7 @@ class Installer:
             identity.get("format") != 1
             or identity.get("project") != "x86qw"
             or not isinstance(version, str)
-            or not STABLE_VERSION.fullmatch(version)
+            or not SEMVER_VERSION.fullmatch(version)
         ):
             raise InstallerError(f"Identidade do bundle público inválida: {location}")
         return identity
@@ -4379,22 +4659,96 @@ class Installer:
             local_catalog = self.project_root / PUBLIC_CATALOG
             catalog_payload: bytes | None = None
             catalog_status = "Loaded"
+            trust_required = self._trust_metadata_required()
+            trust_urls = self._trust_metadata_urls()
+            state_present = self._trusted_state_present()
+            if state_present:
+                # A previously established trust state cannot silently fall
+                # back to an unauthenticated catalog when role metadata is
+                # temporarily unavailable.
+                self._load_trusted_versions()
             try:
                 if catalog_url:
+                    if (trust_required or state_present) and trust_urls is None:
+                        raise InstallerError(
+                            "Metadados de confiança são obrigatórios, mas nenhuma URL foi configurada."
+                        )
+                    roles = (
+                        self.remote.get_metadata_roles(
+                            trust_urls,
+                            maximum_size=TRUST_METADATA_MAX_BYTES,
+                            timeout=CATALOG_TIMEOUT,
+                            attempts=2,
+                        )
+                        if trust_urls is not None else None
+                    )
+                    trusted = None
+                    if roles is not None:
+                        trusted = self._preflight_catalog_trust(roles)
                     catalog_payload = self.remote.get(
                         catalog_url,
                         maximum_size=CATALOG_MAX_BYTES,
                         timeout=CATALOG_TIMEOUT,
                         attempts=2,
                     )
-                    catalog = json.loads(catalog_payload)
+                    if roles is not None:
+                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
                     catalog_status = "Baixado"
                     console.detail(f"Catálogo remoto explícito: {safe_url_for_log(catalog_url)}")
                 elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
-                    catalog_payload = local_catalog.read_bytes()
-                    catalog = json.loads(catalog_payload)
+                    local_roles = self._local_trust_metadata_paths()
+                    if local_roles is not None:
+                        roles = {
+                            role: read_bounded_regular_file(
+                                path,
+                                maximum_size=TRUST_METADATA_MAX_BYTES,
+                            )
+                            for role, path in local_roles.items()
+                        }
+                    elif trust_urls is not None:
+                        roles = self.remote.get_metadata_roles(
+                            trust_urls,
+                            maximum_size=TRUST_METADATA_MAX_BYTES,
+                            timeout=CATALOG_TIMEOUT,
+                            attempts=2,
+                        )
+                    else:
+                        roles = None
+                    trusted = None
+                    if roles is None and (trust_required or state_present):
+                        raise InstallerError(
+                            "Metadados de confiança são obrigatórios para este catálogo local."
+                        )
+                    if roles is not None:
+                        trusted = self._preflight_catalog_trust(roles)
+                    catalog_payload = read_bounded_regular_file(
+                        local_catalog,
+                        maximum_size=CATALOG_MAX_BYTES,
+                    )
+                    if roles is not None:
+                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
+                    if trust_required and trust_urls is None:
+                        raise InstallerError(
+                            "Metadados de confiança são obrigatórios, mas nenhuma URL foi configurada."
+                        )
+                    roles = (
+                        self.remote.get_metadata_roles(
+                            trust_urls,
+                            maximum_size=TRUST_METADATA_MAX_BYTES,
+                            timeout=CATALOG_TIMEOUT,
+                            attempts=2,
+                        )
+                        if trust_urls is not None else None
+                    )
+                    trusted = None
+                    if roles is None and state_present:
+                        raise InstallerError(
+                            "O estado de confiança persistido exige metadados atualizados."
+                        )
+                    if roles is not None:
+                        trusted = self._preflight_catalog_trust(roles)
                     catalog_payload, selected_url = self.remote.get_mirrors(
                         CATALOG_URLS,
                         maximum_size=CATALOG_MAX_BYTES,
@@ -4402,15 +4756,33 @@ class Installer:
                         attempts=1,
                         mirror_label="Catálogo",
                     )
-                    catalog = json.loads(catalog_payload)
+                    if roles is not None:
+                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
                     catalog_status = "Baixado"
                     console.detail(f"Catálogo público: {safe_url_for_log(selected_url)}")
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+            except (MetadataFileError, OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+                raise InstallerError("O catálogo x86QW recebido é inválido.") from error
+            assert catalog_payload is not None
+            try:
+                catalog = json.loads(catalog_payload)
+            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):
                 raise InstallerError("O catálogo x86QW recebido é inválido.")
             if catalog.get("format") != 1 or catalog.get("project") != "x86qw":
                 raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
+            try:
+                validate_document_versions(
+                    catalog,
+                    kind=SchemaKind.CATALOG,
+                    current_cli_version=application_version(),
+                    allow_legacy=True,
+                )
+            except ContractError as error:
+                raise InstallerError(
+                    "O catálogo x86QW usa uma versão de contrato incompatível.",
+                    exit_code=ExitCode.USAGE,
+                ) from error
             if not isinstance(catalog.get("packages"), list):
                 raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
             if self.update_ui and catalog_payload is not None:
@@ -6804,13 +7176,42 @@ class Installer:
         self,
         *,
         platform: str | None = None,
+        channel: str | None = None,
+        release: str | None = None,
+        profile: str | None = None,
+        non_interactive: bool = False,
         before_mutation: Callable[[], None] | None = None,
         mutation_results: list[MutationResult] | None = None,
     ) -> None:
+        if non_interactive:
+            missing = [
+                name for name, value in (
+                    ("--platform", platform),
+                    ("--channel", channel),
+                    ("--release", release),
+                    ("--profile", profile),
+                ) if value is None
+            ]
+            if missing:
+                raise InstallerError(
+                    "Instalação não interativa exige as opções: " + ", ".join(missing)
+                )
+        self._non_interactive_install = non_interactive
+        self._requested_channel = channel
+        self._requested_release = release
+        self._requested_profile = profile
         console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
-        self.choose_channel()
-        self.choose_release()
+        if non_interactive:
+            self.choose_channel(channel)
+            self.choose_release(release)
+        else:
+            # Keep the historical zero-argument interactive seam.  Apart
+            # from preserving subclasses and test doubles, this ensures
+            # that ordinary installs do not accidentally enter the
+            # non-interactive selection contract.
+            self.choose_channel()
+            self.choose_release()
         if before_mutation is not None:
             before_mutation()
         reset_macos_game_directory = self.macos_game_directory_reset_required()
@@ -6887,7 +7288,7 @@ class Installer:
     @staticmethod
     def release_is_newer(candidate: str, installed: str, channel: str) -> bool:
         if channel == "stable":
-            return tuple(map(int, candidate.split("."))) > tuple(map(int, installed.split(".")))
+            return parse_semver(candidate) > parse_semver(installed)
         return candidate > installed
 
     def update_runtime(
@@ -7595,6 +7996,22 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="instala um cliente para macos, linux ou windows em vez do SO detectado",
     )
     parser.add_argument(
+        "--non-interactive", action="store_true",
+        help="no install, exige todas as seleções por argumento e nunca abre prompts",
+    )
+    parser.add_argument(
+        "--channel", choices=("stable", "nightly"),
+        help="no install não interativo, seleciona o canal do cliente",
+    )
+    parser.add_argument(
+        "--release",
+        help="no install não interativo, usa latest ou uma versão exata do cliente",
+    )
+    parser.add_argument(
+        "--profile", choices=("essential", "recommended", "complete"),
+        help="no install não interativo, seleciona o perfil de componentes",
+    )
+    parser.add_argument(
         "--online-only", action="store_true",
         help=argparse.SUPPRESS,
     )
@@ -7608,7 +8025,11 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="simula update, upgrade ou repair sem alterar arquivos",
+        help="simula update, upgrade, repair ou migrate sem alterar arquivos",
+    )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="emite uma resposta JSON estável (sem prompts ou ANSI)",
     )
     parser.add_argument(
         "--yes", action="store_true",
@@ -7629,7 +8050,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "action", nargs="?", default="install",
         help=(
-            "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, components, presets, hub, "
+            "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
             "verify, uninstall ou cleanup"
         ),
     )
@@ -7639,13 +8060,36 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     valid_actions = (
-        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "components",
+        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "migrate", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
         parser.error("--downloads e --personal-data só podem ser usados com cleanup")
+    selection_flags = (
+        namespace.non_interactive, namespace.channel, namespace.release, namespace.profile,
+    )
+    if namespace.action != "install" and any(value is not None and value is not False for value in selection_flags):
+        parser.error("--non-interactive, --channel, --release e --profile só podem ser usados com install")
+    if namespace.action != "install" and namespace.non_interactive:
+        parser.error("--non-interactive só pode ser usado com install")
+    explicit_target = namespace.target is not None
+    if namespace.non_interactive:
+        missing = [
+            name for name, value in (
+                ("--platform", namespace.platform),
+                ("--channel", namespace.channel),
+                ("--release", namespace.release),
+                ("--profile", namespace.profile),
+            ) if value is None
+        ]
+        if not explicit_target:
+            missing.append("target")
+        if missing:
+            parser.error(
+                "install não interativo exige: " + ", ".join(missing)
+            )
     if namespace.purge and namespace.action != "uninstall":
         parser.error("--purge só pode ser usado com uninstall")
     if namespace.installed_cli and namespace.action in {"install", "components", "presets"}:
@@ -7654,8 +8098,16 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         )
     if namespace.skip_cli_update and not (namespace.installed_cli and namespace.action in {"update", "upgrade"}):
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
-    if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair"}:
-        parser.error("--dry-run só pode ser usado com update, upgrade ou repair")
+    if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair", "migrate"}:
+        parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
+    if namespace.json and namespace.action not in {
+        "version", "status", "hub", "verify", "repair", "update", "upgrade",
+    }:
+        parser.error(
+            "--json só pode ser usado com version, status, hub, verify, repair, update ou upgrade"
+        )
+    if namespace.json and namespace.action in {"repair", "update", "upgrade"} and not namespace.dry_run:
+        parser.error(f"{namespace.action} --json exige --dry-run para não ocultar mutações")
     if namespace.yes and namespace.action not in {"update", "upgrade"}:
         parser.error("--yes só pode ser usado com update ou upgrade")
     if namespace.platform is not None and namespace.action != "install":
@@ -7946,7 +8398,224 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 return 0
 
 
-def execute_manager_action(options: argparse.Namespace, project_root: Path) -> int:
+def _json_status_data(target: Path) -> dict[str, object]:
+    """Return a read-only installation/status snapshot without loading catalogs."""
+
+    state_path = target / INSTALL_STATE
+    sessions_path = target / ".x86qw" / "sessions"
+    sessions: list[dict[str, object]] = []
+    if sessions_path.is_dir() and not sessions_path.is_symlink():
+        for directory in sorted(sessions_path.iterdir()):
+            if not directory.is_dir() or directory.is_symlink():
+                continue
+            journal = directory / "session.json"
+            if not journal.is_file() or journal.is_symlink():
+                continue
+            try:
+                document = json.loads(journal.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(document, dict):
+                continue
+            # Keep the public status surface deliberately small and redactable.
+            sessions.append({
+                "session_id": str(document.get("session_id", directory.name)),
+                "status": str(document.get("status", "unknown")),
+                "command": str(document.get("command", "unknown")),
+            })
+    return {
+        "project": "x86qw",
+        "target": str(target),
+        "installation": "present" if target.exists() else "missing",
+        "state": "present" if state_path.is_file() else "missing",
+        "sessions": sessions,
+    }
+
+
+def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
+    """Project one maintenance row into the stable dry-run wire shape."""
+
+    return {
+        "kind": row.kind,
+        "item": row.item,
+        "installed": row.installed,
+        "available": row.available,
+        "action": row.action,
+        "size": row.size,
+    }
+
+
+def _json_hub_servers(servers: object) -> list[dict[str, object]]:
+    """Project the mutable Hub response into the closed public JSON shape.
+
+    The Hub response is intentionally kept out of the public contract: it may
+    contain nested settings, player records, or QTV metadata that are useful to
+    the terminal UI but are not stable API.  Normalize it here so the JSON
+    command remains deterministic and cannot leak arbitrary fields.
+    """
+
+    if not isinstance(servers, list):
+        raise InstallerError("O Hub retornou um catálogo de servidores inválido.")
+    projected: list[dict[str, object]] = []
+    seen_addresses: set[str] = set()
+    address_pattern = re.compile(r"^[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$")
+    qtv_pattern = re.compile(r"^[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$")
+    for server in servers:
+        if not isinstance(server, dict):
+            continue
+        address = server.get("address")
+        if not isinstance(address, str) or not address_pattern.fullmatch(address):
+            continue
+        if address in seen_addresses:
+            continue
+        port = int(address.rsplit(":", 1)[1])
+        if not 1 <= port <= 65535:
+            continue
+        settings = server.get("settings")
+        settings = settings if isinstance(settings, dict) else {}
+
+        def text_value(*values: object, fallback: str) -> str:
+            for value in values:
+                if isinstance(value, str):
+                    cleaned = "".join(
+                        character if character.isprintable() and character != "\ufffd" else "?"
+                        for character in value
+                    ).strip()
+                    if cleaned:
+                        return cleaned[:4096]
+            return fallback
+
+        raw_players = server.get("players")
+        humans = bots = 0
+        if isinstance(raw_players, list):
+            for player in raw_players:
+                if isinstance(player, dict) and player.get("is_bot"):
+                    bots += 1
+                elif isinstance(player, dict):
+                    humans += 1
+        elif isinstance(raw_players, dict):
+            raw_humans = raw_players.get("humans")
+            raw_bots = raw_players.get("bots")
+            if type(raw_humans) is int and raw_humans >= 0:
+                humans = raw_humans
+            if type(raw_bots) is int and raw_bots >= 0:
+                bots = raw_bots
+
+        qtv_stream: str | None = None
+        raw_qtv = server.get("qtv_stream")
+        if isinstance(raw_qtv, dict):
+            raw_qtv = raw_qtv.get("url") or raw_qtv.get("stream")
+        if isinstance(raw_qtv, str) and qtv_pattern.fullmatch(raw_qtv):
+            qtv_stream = raw_qtv
+
+        projected.append({
+            "address": address,
+            "title": text_value(
+                settings.get("hostname"), server.get("title"), server.get("name"),
+                fallback=address,
+            ),
+            "mode": text_value(server.get("mode"), settings.get("mode"), fallback="-"),
+            "map": text_value(settings.get("map"), server.get("map"), fallback="-"),
+            "players": {"humans": humans, "bots": bots},
+            "qtv_stream": qtv_stream,
+        })
+        seen_addresses.add(address)
+    if not projected:
+        raise InstallerError("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
+    return sorted(projected, key=lambda item: str(item["address"]))
+
+
+def execute_json_action(options: argparse.Namespace, project_root: Path) -> int:
+    """Execute a read-only public command and emit exactly one JSON document."""
+
+    command = str(options.action)
+    target = options.target.expanduser().resolve() if options.target is not None else None
+    captured = io.StringIO()
+    try:
+        with redirect_stdout(captured), redirect_stderr(captured):
+            if command == "version":
+                data: object = {
+                    "project": "x86qw",
+                    "version": application_version(),
+                }
+            elif command == "status":
+                assert target is not None
+                data = _json_status_data(target)
+            elif command == "hub":
+                assert target is not None
+                installer = Installer(project_root, target, online_only=options.online_only)
+                installer.validate_target("verify", purge=False)
+                data = {
+                    "servers": _json_hub_servers(installer.hub_servers()),
+                    "target": str(target),
+                }
+            elif command == "verify":
+                assert target is not None
+                installer = Installer(project_root, target, online_only=options.online_only)
+                installer.validate_target("verify", purge=False)
+                installer.reject_target_symlinks()
+                installer.verify_installation()
+                data = {"target": str(target), "verified": True}
+            else:
+                # Dry-run maintenance goes through the same lock/plan path as
+                # the human CLI, but rows are projected directly from the
+                # operation model.  Human terminal rendering remains captured
+                # and is never part of the JSON contract.
+                plan_rows: list[dict[str, object]] = []
+                execute_manager_action(options, project_root, plan_sink=plan_rows)
+                data = {
+                    "target": str(target) if target is not None else "",
+                    "status": "planned" if plan_rows else "noop",
+                    "operations": plan_rows,
+                }
+        output = make_json_output(
+            command,
+            data=data,
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(ExitCode.SUCCESS)
+    except KeyboardInterrupt as error:
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=ExitCode.INTERRUPTED,
+            errors=({"code": "interrupted", "message": "Operação cancelada."},),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(ExitCode.INTERRUPTED)
+    except (InstallerError, session_control.SessionControlError) as error:
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=getattr(error, "exit_code", ExitCode.FAILURE),
+            errors=({
+                "code": getattr(error, "code", "operation"),
+                "message": str(error),
+            },),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(getattr(error, "exit_code", ExitCode.FAILURE))
+    except Exception as error:  # pragma: no cover - defensive JSON boundary
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=ExitCode.FAILURE,
+            errors=({"code": "unexpected", "message": str(error)},),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(ExitCode.FAILURE)
+
+
+def execute_manager_action(
+    options: argparse.Namespace,
+    project_root: Path,
+    *,
+    plan_sink: list[dict[str, object]] | None = None,
+) -> int:
     """Execute a parsed manager action under the installation operation contract."""
     action_labels = {
         "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
@@ -7954,6 +8623,7 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
         "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
         "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
         "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
+        "migrate": "migrar metadados para o contrato 1.0",
     }
     action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
     console.banner(action_label, options.target)
@@ -8012,7 +8682,48 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
         console.detail(f"Destino normalizado: {installer.target}")
         if not options.purge:
             installer.reject_target_symlinks()
-        if options.action == "verify":
+        if options.action == "migrate":
+            # Planning is intentionally read-only.  Unlike mutating maintenance
+            # actions, dry-run must not create the operation lock or recover
+            # sessions; the planner snapshots the target before any write.
+            if not options.dry_run:
+                acquire_operation_lock()
+                # A previous process may have crashed after publishing a
+                # migration journal.  Recovery is a mutation and therefore
+                # belongs only to the non-dry-run path, under the exclusive
+                # installation lock, before the preview is rebuilt.
+                if inspect_pending_migration(installer.target) is not None:
+                    recover_migration(installer.target)
+            console.section("Migração da instalação")
+            migration = migrate_installation(
+                installer.target, target_version="1.0.0", dry_run=True,
+            )
+            if migration.conflicts:
+                details = "; ".join(
+                    f"{item.path}: {item.detail}" for item in migration.conflicts
+                )
+                raise InstallerError(
+                    "A migração foi bloqueada por conflitos preservados: " + details
+                )
+            for component in migration.retired_components:
+                console.info(
+                    f"Componente aposentado preservado para diagnóstico: {component}"
+                )
+            if not migration.operations:
+                console.success("Nenhuma migração é necessária; os metadados já estão convergentes.")
+            else:
+                for operation in migration.operations:
+                    console.info(
+                        f"{operation.phase.value}: {operation.source} → {operation.destination}"
+                    )
+                if options.dry_run:
+                    console.heading("Simulação concluída; nenhum arquivo foi alterado")
+                else:
+                    migrate_installation(
+                        installer.target, target_version="1.0.0", dry_run=False,
+                    )
+                    console.success("Migração concluída e validada.")
+        elif options.action == "verify":
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
@@ -8020,6 +8731,8 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []
             needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
+            if plan_sink is not None:
+                plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not needs_repair:
                 console.success("Nenhum reparo é necessário; a instalação está íntegra.")
             else:
@@ -8072,6 +8785,8 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             content_changed = operation(
                 dry_run=True, preview=not options.dry_run, plan_rows=plan_rows,
             )
+            if plan_sink is not None:
+                plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not plan_rows:
                 message = (
                     "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
@@ -8098,10 +8813,20 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
         else:
             if options.action == "install":
                 with installer.component_state_transaction() as operation_results:
+                    install_kwargs: dict[str, object] = {
+                        "platform": options.platform,
+                        "before_mutation": acquire_operation_lock,
+                        "mutation_results": operation_results,
+                    }
+                    if options.non_interactive:
+                        install_kwargs.update({
+                            "channel": options.channel,
+                            "release": options.release,
+                            "profile": options.profile,
+                            "non_interactive": True,
+                        })
                     installer.install(
-                        platform=options.platform,
-                        before_mutation=acquire_operation_lock,
-                        mutation_results=operation_results,
+                        **install_kwargs,
                     )
                     installer.install_online_cli(mutation_results=operation_results)
             else:
@@ -8163,12 +8888,18 @@ def main(arguments: list[str] | None = None) -> int:
         if raw_arguments[:1] == ["play"]:
             gameplay = load_gameplay_module()
             return gameplay.main(raw_arguments[1:])
-        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv", "status"}:
+        if (
+            raw_arguments[:1]
+            and raw_arguments[0] in {"host", "proxy", "qtv", "status"}
+            and "--json" not in raw_arguments
+        ):
             services = load_services_module()
             return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         navigation.configure(no_color=options.no_color)
+        if options.json:
+            return execute_json_action(options, project_root)
         if options.action == "version":
             print(f"x86QW {application_version()}")
             return 0

@@ -74,6 +74,18 @@ class SiteTests(unittest.TestCase):
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
 
+    def test_release_documentation_keeps_mac_local_boundary(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        cloudflare = (PROJECT_ROOT / "site/docs/cloudflare.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("até os smokes nativos", home)
+        self.assertIn("condicionais por essa limitação", home)
+        self.assertIn("smokes nativos não são requisito do fluxo Mac/local", home)
+        self.assertNotIn("workflow protegido", cloudflare)
+        self.assertIn("publicação remota só ocorre após autorização explícita", cloudflare)
+        self.assertIn("npm ci && npm run deploy:dry-run", cloudflare)
+        self.assertIn("manualmente com o Wrangler local", cloudflare)
+
     def test_public_product_facts_match_the_canonical_catalogs_and_documentation(self):
         product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
         packages = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))

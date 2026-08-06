@@ -6,5 +6,6 @@ __pycache__/
 .artifacts/
 maintenance/build/
 .wrangler/
+site/node_modules/
 quake-world/
 id1/

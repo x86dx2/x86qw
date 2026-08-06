@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from x86qw_runtime.io.archive import ArchiveError, read_archive_members, scan_archive
+from maintenance.tools import release_ownership
 
 VERSION = "0.1.0"
 PACKAGE = "x86qw-core-id1"
@@ -35,7 +36,12 @@ PAKS = ("pak0.pak", "pak1.pak")
 MAX_CORE_PAK_BYTES = 128 * 1024 * 1024
 
 
-def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
+def build_core_package(
+    distribution: Path,
+    output: Path,
+    *,
+    ownership_output: Path | None = None,
+) -> dict[str, object]:
     id1 = distribution / "game-data/id1"
     sources = [id1 / name for name in PAKS]
     source_payloads = [
@@ -55,7 +61,8 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
     release_root = output / f"core-{VERSION}"
     filename = f"{PACKAGE}-{VERSION}.zip"
     artifact = release_root / filename
-    members: list[dict[str, str]] = []
+    members: list[dict[str, object]] = []
+    ownership_members: list[dict[str, object]] = []
     with staged_artifact(artifact, root=output, prefix=".core-") as staged:
         with zipfile.ZipFile(staged.stream, "w", allowZip64=True) as archive:
             for (source, payload), (_, digest) in zip(
@@ -66,6 +73,24 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
                     "path": member,
                     "sha256": digest,
                     "source": f"dist/game-data/id1/{source.name}",
+                    "ownership": "upstream",
+                    "ownership_basis": "registered-game-data",
+                    "license_concluded": "NOASSERTION",
+                    "license_url": None,
+                    "copyright_text": "NOASSERTION",
+                })
+                ownership_members.append({
+                    "path": member,
+                    "size": len(payload),
+                    "sha256": digest,
+                    "kind": "registered-game-data",
+                    "ownership": "upstream",
+                    "ownership_basis": "registered-game-data",
+                    "source": f"dist/game-data/id1/{source.name}",
+                    "license_concluded": "NOASSERTION",
+                    "license_url": None,
+                    "copyright_text": "NOASSERTION",
+                    "members": [],
                 })
                 info = zipfile.ZipInfo(member, FIXED_ZIP_TIME)
                 info.compress_type = zipfile.ZIP_DEFLATED
@@ -115,6 +140,40 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
         f"https://gitlab.com/api/v4/projects/{GITLAB_PROJECT_ID}/packages/generic/"
         f"{PACKAGE}/{VERSION}/{filename}"
     )
+    ownership = release_ownership.validate_document({
+        "format": 1,
+        "project": "x86qw",
+        "artifacts": [{
+            "path": f"content/{artifact.relative_to(output).as_posix()}",
+            "size": artifact.stat().st_size,
+            "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            "kind": "archive",
+            "ownership": "mixed",
+            "ownership_basis": "composed-archive",
+            "source": "build-core-package",
+            "license_concluded": "NOASSERTION",
+            "license_url": None,
+            "copyright_text": "NOASSERTION",
+            "members": [
+                *ownership_members,
+                {
+                    "path": "_x86qw/component.json",
+                    "size": len(metadata),
+                    "sha256": hashlib.sha256(metadata).hexdigest(),
+                    "kind": "metadata",
+                    "ownership": "project",
+                    "ownership_basis": "generated-project-metadata",
+                    "source": "generated:component-metadata",
+                    "license_concluded": "MIT",
+                    "license_url": f"https://github.com/x86dx2/x86qw/blob/{RELEASE_TAG}/LICENSE",
+                    "copyright_text": release_ownership.PROJECT_COPYRIGHT,
+                    "members": [],
+                },
+            ],
+        }],
+    })
+    if ownership_output is not None:
+        release_ownership.write_document(Path(ownership_output), ownership)
     return {
         "component": "core",
         "package": PACKAGE,
@@ -127,7 +186,11 @@ def build_core_package(distribution: Path, output: Path) -> dict[str, object]:
         "sha256": plan.source_sha256,
         "origin_url": mirror,
         "license": "id-software-registered-game-data",
-        "license_url": "https://github.com/x86dx2/x86qw",
+        # The project-owned license must resolve to the immutable content
+        # release tag, never to a mutable branch or repository root.
+        "license_url": (
+            f"https://github.com/x86dx2/x86qw/blob/{RELEASE_TAG}/LICENSE"
+        ),
         "source_urls": ["https://github.com/x86dx2/x86qw/tree/main/dist/game-data/id1"],
         "redistribution_reviewed": True,
         "urls": [mirror, gitlab],

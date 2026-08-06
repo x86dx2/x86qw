@@ -6,6 +6,7 @@ import hashlib
 import os
 import platform
 import re
+import shutil
 import stat
 import struct
 import subprocess
@@ -408,11 +409,11 @@ def bound_launch_target(
         suffix = target.executable.suffix
         snapshot_directory: Path | None = None
         snapshot_path: Path | None = None
+        snapshot_bundle: Path | None = None
         snapshot = -1
         snapshot_identity: tuple[int, int] | None = None
         try:
             snapshot_directory = Path(tempfile.mkdtemp(prefix="x86qw-launch-"))
-            snapshot_path = snapshot_directory / f"executable{suffix}"
             directory_metadata = snapshot_directory.lstat()
             if (
                 not stat.S_ISDIR(directory_metadata.st_mode)
@@ -426,7 +427,26 @@ def bound_launch_target(
                 raise HostPlatformError(
                     "O diretório privado do snapshot de execução é inseguro."
                 )
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            # macOS resolves resources relative to the application bundle. A
+            # detached executable snapshot is valid for portable binaries but
+            # makes an .app client exit before it can read its configuration.
+            bundle = next(
+                (
+                    item.path for item in target.paths
+                    if item.directory and item.path.suffix.casefold() == ".app"
+                ),
+                None,
+            )
+            if bundle is not None:
+                relative_executable = target.executable.relative_to(bundle)
+                snapshot_bundle = snapshot_directory / bundle.name
+                shutil.copytree(bundle, snapshot_bundle, symlinks=True)
+                snapshot_path = snapshot_bundle / relative_executable
+            else:
+                snapshot_path = snapshot_directory / f"executable{suffix}"
+            flags = os.O_WRONLY
+            if snapshot_bundle is None:
+                flags |= os.O_CREAT | os.O_EXCL
             flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
             snapshot = os.open(snapshot_path, flags, 0o700)
             created = os.fstat(snapshot)
@@ -434,6 +454,7 @@ def bound_launch_target(
             _copy_validated_executable(descriptor, snapshot, target)
             os.close(snapshot)
             snapshot = -1
+            revalidate_launch_target(target)
             metadata = snapshot_path.lstat()
             if (
                 not stat.S_ISREG(metadata.st_mode)
@@ -449,6 +470,11 @@ def bound_launch_target(
                 os.close(snapshot)
             if snapshot_identity is not None and snapshot_path is not None:
                 _unlink_bound_posix_snapshot(snapshot_path, snapshot_identity)
+            if snapshot_bundle is not None:
+                try:
+                    shutil.rmtree(snapshot_bundle)
+                except OSError:
+                    pass
             if snapshot_directory is not None:
                 try:
                     snapshot_directory.rmdir()

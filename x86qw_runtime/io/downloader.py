@@ -57,6 +57,7 @@ HTTP_HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 SAFE_CROSS_ORIGIN_HEADERS = frozenset({"accept", "accept-encoding", "user-agent"})
 DNS_MAX_CANDIDATES = 64
 DNS_MAX_OUTPUT_BYTES = 64 * 1024
+RESOLVER_REAP_TIMEOUT_SECONDS = 0.25
 DNS_RESOLVER_SCRIPT = r"""
 import json
 import socket
@@ -405,6 +406,35 @@ class _TransportController:
                 pass
 
 
+def _reap_resolver(process: object) -> None:
+    """Collect a killed resolver without allowing cleanup to extend a deadline."""
+
+    deadline = time.monotonic() + RESOLVER_REAP_TIMEOUT_SECONDS
+
+    def remaining() -> float:
+        return max(0.0, deadline - time.monotonic())
+
+    communicate = getattr(process, "communicate", None)
+    if callable(communicate):
+        timeout = remaining()
+        if timeout <= 0:
+            return
+        try:
+            communicate(timeout=timeout)
+            return
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+    wait = getattr(process, "wait", None)
+    if callable(wait):
+        timeout = remaining()
+        if timeout <= 0:
+            return
+        try:
+            wait(timeout=timeout)
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+
+
 def _resolve_addresses(
     host: str,
     port: int,
@@ -427,7 +457,7 @@ def _resolve_addresses(
         creationflags=creationflags,
     )
     if transport_controller is not None and not transport_controller.attach_resolver(process):
-        process.communicate()
+        _reap_resolver(process)
         raise TimeoutError(f"Tempo esgotado ao resolver {host}.")
     try:
         try:
@@ -440,17 +470,14 @@ def _resolve_addresses(
                 process.kill()
             except OSError:
                 pass
-            process.communicate()
+            _reap_resolver(process)
             raise TimeoutError(f"Tempo esgotado ao resolver {host}.") from error
         except BaseException:
             try:
                 process.kill()
             except OSError:
                 pass
-            try:
-                process.communicate()
-            except BaseException:
-                pass
+            _reap_resolver(process)
             raise
     finally:
         if transport_controller is not None:

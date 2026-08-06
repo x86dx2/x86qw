@@ -1,3 +1,4 @@
+import hashlib
 import unittest
 
 try:
@@ -51,6 +52,54 @@ class RemoteClientTests(unittest.TestCase):
         rendered = "\n".join(reporter.details + reporter.warnings)
         self.assertNotIn("top-secret", rendered)
         self.assertIn("https://example.invalid/<redigido>", rendered)
+
+    def test_trust_roles_are_fetched_in_dependency_order_with_a_bound(self):
+        """Role composition must fetch root, current, then snapshot as bounded metadata."""
+
+        self.assertIsNotNone(remote, "the canonical remote client is missing")
+        assert remote is not None and downloader is not None
+        reporter = RecordingReporter()
+        payloads = {
+            "https://trust.example/root.json": b"root",
+            "https://trust.example/current.json": b"current",
+            "https://trust.example/snapshot.json": b"snapshot",
+        }
+        seen = []
+
+        def fetch(contract, **_callbacks):
+            seen.append((contract.url, contract.maximum_size))
+            payload = payloads[contract.url]
+            return downloader.DownloadResult(
+                url=contract.url,
+                size=len(payload),
+                sha256=hashlib.sha256(payload).hexdigest(),
+                attempts=1,
+                headers={},
+                data=payload,
+            )
+
+        client = remote.RemoteClient(reporter, download_one=fetch)
+        roles = client.get_metadata_roles(
+            {name: url for name, url in (
+                ("root", "https://trust.example/root.json"),
+                ("current", "https://trust.example/current.json"),
+                ("snapshot", "https://trust.example/snapshot.json"),
+            )},
+            maximum_size=1024,
+            attempts=1,
+        )
+        self.assertEqual(
+            [
+                ("https://trust.example/root.json", 1024),
+                ("https://trust.example/current.json", 1024),
+                ("https://trust.example/snapshot.json", 1024),
+            ],
+            seen,
+        )
+        self.assertEqual(
+            {"root": b"root", "current": b"current", "snapshot": b"snapshot"},
+            roles,
+        )
 
 
 if __name__ == "__main__":

@@ -5,8 +5,15 @@ from __future__ import annotations
 import json
 import re
 import struct
+import sys
 import tarfile
 from pathlib import Path, PurePosixPath
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
 
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -407,6 +414,20 @@ def validate_inventory(
     project_root: Path | None = None,
     public_catalog: dict[str, object] | None = None,
 ) -> None:
+    for document, kind in (
+        (capabilities, SchemaKind.CATALOG),
+        (runtimes, SchemaKind.CATALOG),
+        (games, SchemaKind.CATALOG),
+        (compatibility, SchemaKind.CATALOG),
+    ):
+        try:
+            # Repository inventories are the canonical source for the next
+            # release line.  They must carry explicit schema and CLI bounds;
+            # installed 0.x zipapps still use the legacy-tolerant runtime
+            # loaders above.
+            validate_document_versions(document, kind=kind, allow_legacy=False)
+        except ContractError as error:
+            raise ValueError(f"invalid {kind} contract in runtime inventory") from error
     if component_catalog is not None and project_root is not None:
         validate_ktx_mode_catalog(project_root, component_catalog)
     for document, key in ((runtimes, "runtimes"), (games, "games"), (compatibility, "compatibility")):
@@ -681,10 +702,10 @@ def load_inventory(
     public_catalog: dict[str, object] | None = None,
 ) -> dict[str, dict[str, object]]:
     documents = {
-        "capabilities": load_capabilities(directory / "capabilities.json"),
-        "runtimes": load_runtimes(directory / "runtimes.json"),
-        "games": load_games(directory / "games.json"),
-        "compatibility": load_compatibility(directory / "compatibility.json"),
+        "capabilities": load_capabilities(directory / "capabilities.json", allow_legacy=False),
+        "runtimes": load_runtimes(directory / "runtimes.json", allow_legacy=False),
+        "games": load_games(directory / "games.json", allow_legacy=False),
+        "compatibility": load_compatibility(directory / "compatibility.json", allow_legacy=False),
     }
     validate_inventory(
         documents["capabilities"], documents["runtimes"], documents["games"],

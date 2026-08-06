@@ -32,10 +32,10 @@ Faça uma mudança por contexto. Antes de enviar:
 ./maintenance/manage.py verify
 ./dist/installer/bin/manager.py --help
 ./dist/installer/bin/manager.py play --help
-cd site && npx --yes wrangler@4.114.0 deploy --dry-run
+cd site && npm ci && npm run deploy:dry-run
 ```
 
-O primeiro comando valida distribuição, inventários, receitas, catálogos, instalador e testes. A CI repete contratos portáveis em macOS, Linux e Windows com Python 3.10 e 3.13.
+O primeiro comando valida distribuição, inventários, receitas, catálogos, instalador e testes. A validação operacional é executada pelo mantenedor diretamente no Mac; Linux e Windows permanecem apenas nos contratos de compatibilidade.
 
 ## Onde alterar
 
@@ -57,7 +57,7 @@ Uma proposta de conteúdo precisa responder:
 - qual licença ou termo permite o uso pretendido;
 - qual componente consome cada arquivo;
 - como a atualização futura será detectada;
-- quais plataformas e smokes cobrem o resultado;
+- quais verificações locais foram executadas e quais plataformas permanecem apenas como compatibilidade;
 - se há conflito com conteúdo já preservado.
 
 Veja [manutenção da distribuição](../maintenance/README.md), [proveniência](../maintenance/docs/provenance.md) e [arquitetura](../docs/architecture.md).
@@ -73,7 +73,7 @@ Um bom PR contém:
 - capturas quando houver mudança visual;
 - notas de compatibilidade ou migração quando aplicável.
 
-Mantenedores podem pedir que uma mudança seja dividida se misturar produto, atualização de upstream e publicação. A etapa de release é protegida e separada da revisão do código.
+Mantenedores podem pedir que uma mudança seja dividida se misturar produto, atualização de upstream e publicação. A promoção local é separada da publicação remota opcional e da revisão do código.
 
 ## Commits
 

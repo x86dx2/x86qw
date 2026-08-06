@@ -11,7 +11,6 @@
   Cliente, jogos, servidor dedicado, relay e proxy — instalados por uma única CLI verificável.
 
   [![Release](https://img.shields.io/github/v/release/x86dx2/x86qw?display_name=tag&sort=semver&style=for-the-badge&label=release&color=ef6a57)](https://github.com/x86dx2/x86qw/releases/latest)
-  [![Quality gate](https://img.shields.io/github/actions/workflow/status/x86dx2/x86qw/validate.yml?branch=main&style=for-the-badge&label=quality%20gate&color=4767ff)](https://github.com/x86dx2/x86qw/actions/workflows/validate.yml)
   [![Portal](https://img.shields.io/website?url=https%3A%2F%2Fx86qw.x86.com.br%2F&style=for-the-badge&label=portal&up_message=online&down_message=offline&color=28a890)](https://x86qw.x86.com.br/)
   [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-catalogued-181b2a?style=for-the-badge)](#compatibilidade)
 
@@ -66,7 +65,7 @@ a 262145 bytes em diretório temporário privado. O tamanho e o status do pipeli
 são conferidos antes de chamar Bash, que nunca executa um prefixo produzido por
 pipeline com falha nem uma resposta sem `Content-Length` que exceda o limite.
 
-O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.1`,
+O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.3`,
 o Windows testa, nessa ordem, `py -3`, `python3` e `python`; o atalho da
 Microsoft Store só é aceito quando realmente executa uma versão compatível. Se
 nenhuma instalação compatível for encontrada:
@@ -78,11 +77,13 @@ winget install --id Python.Python.3.13 -e
 Depois da instalação, abra um novo PowerShell e execute novamente o comando do
 x86QW.
 
-Na versão `0.7.1`, o mesmo teste por `sys.version_info` acontece antes do
+Na versão `0.7.3`, o mesmo teste por `sys.version_info` acontece antes do
 download em todos os sistemas. O launcher grava o executável Python que
 concluiu a instalação e repete a resolução segura se esse runtime desaparecer.
-O contrato passou nos sete jobs obrigatórios de Ubuntu, macOS e Windows, com
-Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
+O contrato foi validado historicamente na matriz de Ubuntu, macOS e Windows com
+Python 3.10 e 3.13. Neste checkout, a validação ativa usa somente o Mac; a
+contagem atual de testes e os skips ficam registrados nos checks e na nota de
+estabilização, sem duplicação manual aqui.
 
 O bootstrap público `0.7.3` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
@@ -228,24 +229,23 @@ x86qw hub                     x86qw qtv                     x86qw verify
 
 Serviços usam loopback por padrão e só são expostos com `--bind` explícito. Senhas podem vir de prompt oculto ou arquivo privado; a CLI evita colocá-las no comando filho e na saída. Locks e journals impedem manutenção concorrente, coordenam o encerramento e permitem recuperação conservadora após crash. Veja o [guia de hosting](docs/HOSTING.md).
 
-O runtime publicado na `0.7.2` centraliza a inspeção de ZIP, PK3 e PYZ antes de
+O runtime publicado na `0.7.3` centraliza a inspeção de ZIP, PK3 e PYZ antes de
 qualquer write de extração ou payload visível, com snapshot privado limitado,
-modos canônicos e promoção atômica. A regressão local em Python 3.14 e Python
-3.10 reporta `Ran 695 tests` e `OK (skipped=15)` na manutenção, além de
-`Ran 5 tests` e `OK` no site; quatorze skips exigem o runner Windows e um é o
-smoke de rede opt-in. A
+modos canônicos e promoção atômica. A validação operacional deste checkout é
+Mac/local: não executa smokes nativos e não depende de runners Linux ou
+Windows. Os nomes e contratos das plataformas continuam preservados para
+catálogo e compatibilidade. A
 [matriz da PR 3](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
-passou em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo
-os casos nativos Windows de identidade e reparse point. Isso não substitui os
-smokes nativos dos runtimes. O contrato publicado está no
+é evidência histórica do baseline, não um requisito da promoção atual. O
+contrato publicado está no
 [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
 
 O código corretivo da PR 4 também faz objetos privados gerenciados nascerem no
 Windows com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`.
 Arquivos de senha externos são somente validados e nunca reescritos. A
-matriz nativa Windows com Python 3.10 e 3.13 validou esse contrato. Isso não
-equivale ao smoke de runtime sob uma conta padrão sem elevação, reservado à
-evidência de release. A mudança faz parte da release pública `0.7.2`.
+matriz nativa Windows com Python 3.10 e 3.13 validou esse contrato histórico.
+Isso não é executado como smoke no fluxo Mac/local atual. A mudança faz parte
+da release pública `0.7.3`.
 Consulte o
 [ADR 0003](docs/adr/0003-dacl-privada-windows.md).
 
@@ -261,7 +261,7 @@ Consulte o
 
 O repositório é a fonte canônica. `dist/` preserva os inputs; inventários declaram consumidores e dependências; o catálogo projeta pacotes públicos; o instalador materializa apenas o perfil e a plataforma escolhidos. GitHub Releases é o canal principal de artefatos e GitLab Generic Packages mantém o mirror de contingência.
 
-Na release `0.7.2`, contratos reutilizáveis foram
+Na release `0.7.3`, contratos reutilizáveis foram
 movidos incrementalmente para `x86qw_runtime`: downloader, archive,
 persistência e filesystem privado, catálogos, estado e recibos, migrações,
 transações, UI, gameplay, adapters de plataforma, lock da instalação e
@@ -273,8 +273,9 @@ Mutações duráveis de instalação, atualização, repair, cleanup e uninstall
 retêm inversos até o resultado lógico final. Logs produzidos durante execução
 continuam append-only e não são apresentados como transacionais. Os entrypoints
 ainda concentram a composição da CLI, mas console, parser e navegação já são
-canônicos no runtime. A validação local integral foi concluída; a matriz da PR
-e os smokes reais do candidato permanecem separados. Consulte o
+canônicos no runtime. A validação do checkout corretivo é executada antes de
+cada promoção no Mac/local; smokes nativos não fazem parte do fluxo atual.
+Consulte o
 [ADR 0005](docs/adr/0005-fronteiras-incrementais-x86qw-runtime.md) e a
 [evidência da implementação](docs/implementation/runtime-boundaries-pr6.md).
 
@@ -298,14 +299,18 @@ docs/           arquitetura, hosting, decisões e roadmaps
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+> A validação ativa do checkout é executada localmente no Mac com Python 3.10
+> e 3.13 para catálogos, schemas, caminhos e CLI. Linux e Windows permanecem
+> nos contratos e catálogos de compatibilidade, sem execução nativa neste
+> fluxo; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
 
-Na release `0.7.2`, o stable macOS preserva o bundle
+Na release `0.7.3`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso
 remove a re-assinatura ad hoc feita pelo x86QW, mas não torna o artefato
 Developer ID ou notarizado. Stable e nightly macOS permanecem condicionais até
-os smokes nativos do candidato exato. A release pública `0.7.1` continua
-imutável; consulte o [ADR 0004](docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
+o upstream/signing correspondente estar resolvido; smokes nativos não são um
+requisito deste checkout. As releases públicas anteriores continuam imutáveis;
+consulte o [ADR 0004](docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
 
 ## Desenvolvendo
 
@@ -323,14 +328,15 @@ A validação integral não instala dependências Python adicionais:
 ./maintenance/manage.py verify
 ./dist/installer/bin/manager.py --help
 ./dist/installer/bin/manager.py play --help
-cd site && npx --yes wrangler@4.114.0 deploy --dry-run
+cd site && npm ci && npm run deploy:dry-run
 ```
 
 Para visualizar o portal localmente:
 
 ```sh
 cd site
-npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
+npm ci
+npm run dev
 ```
 
 Abra `http://127.0.0.1:8787`. O fluxo completo de manutenção está em [maintenance/README.md](maintenance/README.md) e a operação do site em [site/README.md](site/README.md).
