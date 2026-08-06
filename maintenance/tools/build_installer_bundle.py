@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import hashlib
 import io
 import json
 import os
@@ -62,8 +61,6 @@ LEGAL_FILES = (
     ("NOTICE", "NOTICE", 0o644),
 )
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
-RUNTIME_DEPENDENCY_MANIFEST = ROOT / "maintenance/inventory/runtime-dependencies.json"
-RUNTIME_DEPENDENCY_WHEELS = ROOT / "maintenance/vendor/wheels"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
 RUNTIME_DEPENDENCY_FIELDS = frozenset({
     "name", "version", "filename", "sha256", "upstream_sha256", "transformation",
@@ -80,7 +77,6 @@ GENERATED_RUNTIME_SOURCES = frozenset({
     "generated:games",
     "generated:identity",
     "generated:component-catalog",
-    "generated:runtime-dependencies",
 })
 STATIC_RUNTIME_SOURCE_PREFIXES = (
     "dist/installer/bin/",
