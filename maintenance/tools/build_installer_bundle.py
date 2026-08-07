@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import io
 import json
 import os
@@ -42,7 +43,8 @@ from x86qw_runtime.io.archive import (
 )
 from x86qw_runtime.io import atomic as atomic_io
 from x86qw_runtime.versioning import (
-    STABLE_VERSION as VERSION_PATTERN,
+    SEMVER_VERSION as VERSION_PATTERN,
+    parse_semver,
     version_key,
 )
 
@@ -60,6 +62,8 @@ LEGAL_FILES = (
     ("NOTICE", "NOTICE", 0o644),
 )
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
+RUNTIME_DEPENDENCY_MANIFEST = ROOT / "maintenance/inventory/runtime-dependencies.json"
+RUNTIME_DEPENDENCY_WHEELS = ROOT / "maintenance/vendor/wheels"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
 RUNTIME_DEPENDENCY_FIELDS = frozenset({
     "name", "version", "filename", "sha256", "upstream_sha256", "transformation",
@@ -76,6 +80,7 @@ GENERATED_RUNTIME_SOURCES = frozenset({
     "generated:games",
     "generated:identity",
     "generated:component-catalog",
+    "generated:runtime-dependencies",
 })
 STATIC_RUNTIME_SOURCE_PREFIXES = (
     "dist/installer/bin/",
@@ -436,7 +441,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"unexpected installer package entry: {directory}")
         version = directory.name
-        version_key(version)
+        parse_semver(version)
         filename = f"x86qw-installer-{version}.zip"
         archive = directory / filename
         if not archive.is_file() or archive.is_symlink():
@@ -457,7 +462,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
-    return sorted(results, key=lambda item: version_key(str(item["version"])))
+    return sorted(results, key=lambda item: parse_semver(str(item["version"])))
 
 
 def distribution_path_for(archive: Path, package_root: Path) -> str:
@@ -468,6 +473,8 @@ def distribution_path_for(archive: Path, package_root: Path) -> str:
     try:
         return archive.relative_to(ROOT / "dist").as_posix()
     except ValueError:
+        if package_root.name == "packages":
+            return PurePosixPath("installer", "packages", *rehearsal_path.parts).as_posix()
         return rehearsal_path.as_posix()
 
 
