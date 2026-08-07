@@ -86,6 +86,7 @@ from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_fi
 from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
 from x86qw_runtime.contracts.schema import (
+    ContractError,
     ContractVersions,
     SchemaKind,
     add_contract_versions,
@@ -4250,11 +4251,17 @@ class Installer:
         self, receipt: Path, metadata: dict[str, object],
     ) -> None:
         try:
-            metadata = add_contract_versions(
-                metadata,
-                ContractVersions(),
-                kind=SchemaKind.RECEIPT,
-            )
+            version = metadata.get("version")
+            if (
+                isinstance(version, str)
+                and SEMVER_VERSION.fullmatch(version)
+                and parse_semver(version).major >= 1
+            ):
+                metadata = add_contract_versions(
+                    metadata,
+                    ContractVersions(),
+                    kind=SchemaKind.RECEIPT,
+                )
             model = parse_cli_receipt(
                 json.dumps(metadata, ensure_ascii=False).encode("utf-8")
             )
@@ -7572,7 +7579,11 @@ class Installer:
                     "Não foi possível publicar a CLI, o recibo e os launchers como uma geração única."
                 ) from error
             try:
-                if self.validate_cli_receipt(cli_root / "receipt") != identity:
+                receipt_identity = self.validate_cli_receipt(cli_root / "receipt")
+                if {
+                    key: receipt_identity.get(key)
+                    for key in ("format", "project", "version")
+                } != identity:
                     raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
                 if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
                     raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
