@@ -18,6 +18,7 @@ from maintenance.tools.native_handoff import (
 )
 from maintenance.tools.native_macos_harness import (
     HardwareObservation,
+    _stage_entrypoint,
     detect_m3_hardware,
     execute_cases,
     select_platform,
@@ -31,6 +32,28 @@ ENTRYPOINT_PATH = "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
 
 
 class NativeMacosHarnessTests(unittest.TestCase):
+    def test_staging_preserves_entrypoint_bytes_with_newlines(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "entrypoint"
+            destination = root / "runtime" / "entrypoint"
+            payload = b"#!/usr/bin/env python3\r\nprint('literal')\n\x00"
+            source.write_bytes(payload)
+            destination.parent.mkdir()
+
+            runtime = _stage_entrypoint(
+                source=source,
+                destination=destination,
+                expected_size=len(payload),
+                expected_digest=hashlib.sha256(payload).hexdigest(),
+            )
+
+            self.assertEqual(payload, destination.read_bytes())
+            self.assertEqual(len(payload), runtime["size"])
+            self.assertEqual(hashlib.sha256(payload).hexdigest(), runtime["sha256"])
+            if os.name != "nt":
+                self.assertTrue(os.access(destination, os.X_OK))
+
     def test_platform_selection_requires_an_explicit_apple_m3_observation(self) -> None:
         self.assertEqual(
             ("execute", "macOS-ARM64"),

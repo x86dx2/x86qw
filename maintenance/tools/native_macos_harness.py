@@ -121,13 +121,17 @@ def _stage_entrypoint(
     destination_descriptor = -1
     created = False
     try:
-        source_descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        binary_flag = getattr(os, "O_BINARY", 0)
+        source_descriptor = os.open(
+            source,
+            os.O_RDONLY | binary_flag | getattr(os, "O_NOFOLLOW", 0),
+        )
         before = os.fstat(source_descriptor)
         if not stat.S_ISREG(before.st_mode):
             raise NativeHandoffError(f"entrypoint não é arquivo regular: {source}")
         destination_descriptor = os.open(
             destination,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | binary_flag,
             0o600,
         )
         created = True
@@ -157,7 +161,8 @@ def _stage_entrypoint(
         if not unchanged or size != expected_size or digest.hexdigest() != expected_digest:
             raise NativeHandoffError("bytes do entrypoint divergiram durante staging")
         os.fsync(destination_descriptor)
-        os.fchmod(destination_descriptor, 0o700)
+        if os.name != "nt" and hasattr(os, "fchmod"):
+            os.fchmod(destination_descriptor, 0o700)
     except OSError as error:
         raise NativeHandoffError(f"não foi possível preparar entrypoint privado: {source}") from error
     finally:
