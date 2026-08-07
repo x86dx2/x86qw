@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-04T21:49:05Z",
+  "generated_at": "2026-08-07T13:19:13Z",
   "packages": [
     {
       "component": "core",
@@ -1234,7 +1234,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.3",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1258,6 +1258,36 @@
       "release_notes": "# x86QW 0.7.3\n\nCorreção de manutenção para instalações macOS que atualizam o cliente stable\nupstream.\n\n## macOS stable\n\n- aceita bundles upstream sem entitlements declarados, como o ezQuake stable\n  3.6.9 preservado pela distribuição;\n- continua tratando o stable como não sandboxed quando `codesign` retorna\n  somente diagnóstico e nenhum plist de entitlements;\n- mantém a rejeição de plist de entitlements realmente inválido;\n- não altera assinatura, `Info.plist`, sandbox ou conteúdo do bundle stable.\n\n## Validação\n\n- regressão específica para bundle sem entitlements;\n- suíte de manutenção: 1.198 testes aprovados, 37 skips explícitos;\n- smoke local no bundle instalado `ezQuake Stable.app` confirmou\n  `app_is_sandboxed=False`.\n\n> Estado: **publicada e verificada**. A `0.7.3` é a versão `current`; a `0.7.2`\n> e todas as versões anteriores permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.3.zip` · 286137 bytes · SHA-256\n`41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6`.",
       "mirror_title": "x86QW Installer 0.7.3",
       "mirror_notes": "# x86QW 0.7.3\n\nCorreção de manutenção para instalações macOS que atualizam o cliente stable\nupstream.\n\n## macOS stable\n\n- aceita bundles upstream sem entitlements declarados, como o ezQuake stable\n  3.6.9 preservado pela distribuição;\n- continua tratando o stable como não sandboxed quando `codesign` retorna\n  somente diagnóstico e nenhum plist de entitlements;\n- mantém a rejeição de plist de entitlements realmente inválido;\n- não altera assinatura, `Info.plist`, sandbox ou conteúdo do bundle stable.\n\n## Validação\n\n- regressão específica para bundle sem entitlements;\n- suíte de manutenção: 1.198 testes aprovados, 37 skips explícitos;\n- smoke local no bundle instalado `ezQuake Stable.app` confirmou\n  `app_is_sandboxed=False`.\n\n> Estado: **publicada e verificada**. A `0.7.3` é a versão `current`; a `0.7.2`\n> e todas as versões anteriores permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.3.zip` · 286137 bytes · SHA-256\n`41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6`.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.4",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.4.zip",
+      "size": 286223,
+      "sha256": "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.4/x86qw-installer-0.7.4.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.4/x86qw-installer-0.7.4.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.4",
+      "release_title": "x86QW Installer 0.7.4",
+      "release_notes": "# x86QW 0.7.4\n\nRelease corretiva da verdade de plataforma e da matriz de validação do x86QW.\n\n> Estado: candidata preparada em uma PR de release separada. A tag e a\n> publicação pública serão criadas somente após o merge e a etapa remota de\n> publicação autorizada.\n\n## Verdade de plataforma\n\n- separa presença de artefato, suporte declarado e validação executada;\n- conserva o cliente macOS universal como suporte condicional;\n- classifica Linux, Windows, serviços macOS e variantes ainda não submetidas a\n  smoke nativo como preview quando essa é a evidência disponível;\n- registra `portable-contract` para a validação de catálogo, contratos,\n  caminhos e CLI, sem apresentar isso como smoke nativo de runtime;\n- não declara evidência M3, assinatura Developer ID, notarização ou confiança\n  operacional de produção.\n\n## Evidência de entrada\n\n- a correção de plataforma foi integrada pela PR #66 em `db5f7088`;\n- os sete contextos protegidos passaram no head final da PR A;\n- esta PR acrescenta a identidade 0.7.4, os artefatos derivados e a regressão\n  da publicação corretiva.\n\n## Integridade\n\nO bundle 0.7.3 permanece histórico e imutável. O pacote 0.7.4 somente será\nconsiderado público depois que a tag, o asset, os mirrors, o catálogo e os\nbootstraps forem verificados após a publicação.\n\nIdentidade candidata: `x86qw-installer-0.7.4.zip`, 286223 bytes,\nSHA-256 `37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f`.",
+      "mirror_title": "x86QW Installer 0.7.4",
+      "mirror_notes": "# x86QW 0.7.4\n\nRelease corretiva da verdade de plataforma e da matriz de validação do x86QW.\n\n> Estado: candidata preparada em uma PR de release separada. A tag e a\n> publicação pública serão criadas somente após o merge e a etapa remota de\n> publicação autorizada.\n\n## Verdade de plataforma\n\n- separa presença de artefato, suporte declarado e validação executada;\n- conserva o cliente macOS universal como suporte condicional;\n- classifica Linux, Windows, serviços macOS e variantes ainda não submetidas a\n  smoke nativo como preview quando essa é a evidência disponível;\n- registra `portable-contract` para a validação de catálogo, contratos,\n  caminhos e CLI, sem apresentar isso como smoke nativo de runtime;\n- não declara evidência M3, assinatura Developer ID, notarização ou confiança\n  operacional de produção.\n\n## Evidência de entrada\n\n- a correção de plataforma foi integrada pela PR #66 em `db5f7088`;\n- os sete contextos protegidos passaram no head final da PR A;\n- esta PR acrescenta a identidade 0.7.4, os artefatos derivados e a regressão\n  da publicação corretiva.\n\n## Integridade\n\nO bundle 0.7.3 permanece histórico e imutável. O pacote 0.7.4 somente será\nconsiderado público depois que a tag, o asset, os mirrors, o catálogo e os\nbootstraps forem verificados após a publicação.\n\nIdentidade candidata: `x86qw-installer-0.7.4.zip`, 286223 bytes,\nSHA-256 `37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f`.",
       "mirror_latest": true
     },
     {
