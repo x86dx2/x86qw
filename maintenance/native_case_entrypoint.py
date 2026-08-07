@@ -8,17 +8,15 @@ driver never downloads, checks out, or invokes a shell command.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
-import argparse
 import os
-import platform
 import re
 import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 import zipfile
 from dataclasses import dataclass
 from collections.abc import Mapping
@@ -61,6 +59,7 @@ class CandidateCaseError(RuntimeError):
 
 @dataclass(frozen=True)
 class CandidateArtifact:
+    name: str
     path: Path
     size: int
     sha256: str
@@ -81,6 +80,7 @@ class PreparedCase:
     executable: Path
     argv: tuple[str, ...]
     cwd: Path
+    artifact: CandidateArtifact
     shell: bool = False
 
 
@@ -108,6 +108,10 @@ _INSTALLER_CASES = {
     "lifecycle-cleanup": ("cleanup",),
     "lifecycle-uninstall": ("uninstall",),
 }
+_INSTALLATION_TARGET = "instalação espaço"
+_STATE_FILENAME = "lifecycle-state.json"
+_STATE_FORMAT = 1
+_STATES = frozenset({"clean", "installed", "uninstalled"})
 
 
 def validate_case_name(value: object) -> str:
@@ -201,7 +205,7 @@ def load_candidate(root: Path) -> Candidate:
         actual_size, actual_sha256 = _digest(path)
         if (actual_size, actual_sha256) != (size, sha256):
             raise CandidateCaseError(f"bytes do artifact divergem: {name}")
-        artifacts[name] = CandidateArtifact(path, size, sha256)
+        artifacts[name] = CandidateArtifact(name, path, size, sha256)
 
     registered = set(artifacts)
     actual = {
@@ -284,21 +288,24 @@ def _extract_zip_member(archive: CandidateArtifact, suffix: str, scratch: Path, 
     return output
 
 
-def _installer_command(candidate: Candidate, arguments: tuple[str, ...], scratch: Path) -> PreparedCase:
+def _installer_command(
+    candidate: Candidate,
+    arguments: tuple[str, ...],
+    scratch: Path,
+    state_root: Path,
+) -> PreparedCase:
     archive = _artifact_matching(
         candidate,
         lambda name: name.startswith("installer/") and name.endswith(".zip"),
         "installer",
     )
     pyz = _extract_zip_member(archive, "/x86qw.pyz", scratch, "installer")
-    target = Path(scratch) / "installation space"
-    target.mkdir(parents=True, exist_ok=True)
-    # The target is deliberately outside the immutable candidate and contains
-    # a space plus Unicode in the two install cases below.
-    if arguments and arguments[0] == "install":
-        target = Path(scratch) / "instalação espaço"
+    # The target is deliberately shared by all installer cases and contains a
+    # space plus Unicode. The first install owns creation of the target.
+    target = Path(state_root) / _INSTALLATION_TARGET
+    Path(state_root).mkdir(parents=True, exist_ok=True)
     argv = (sys.executable, str(pyz), *arguments, str(target))
-    return PreparedCase(executable=pyz, argv=argv, cwd=Path(scratch))
+    return PreparedCase(executable=pyz, argv=argv, cwd=Path(scratch), artifact=archive)
 
 
 def _client_command(candidate: Candidate, channel: str, game: str | None, scratch: Path) -> PreparedCase:
@@ -316,7 +323,9 @@ def _client_command(candidate: Candidate, channel: str, game: str | None, scratc
     if game is not None:
         args += ("-game", game)
     args += ("+map", "dm6", "+quit")
-    return PreparedCase(executable=binary, argv=(str(binary), *args), cwd=Path(scratch))
+    return PreparedCase(
+        executable=binary, argv=(str(binary), *args), cwd=Path(scratch), artifact=archive,
+    )
 
 
 def _service_command(candidate: Candidate, case: str, scratch: Path) -> PreparedCase:
@@ -332,16 +341,26 @@ def _service_command(candidate: Candidate, case: str, scratch: Path) -> Prepared
     staged.parent.mkdir(parents=True, exist_ok=True)
     _snapshot_artifact(artifact, staged)
     os.chmod(staged, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-    return PreparedCase(executable=artifact.path, argv=(str(staged), "-version"), cwd=Path(scratch))
+    return PreparedCase(
+        executable=artifact.path,
+        argv=(str(staged), "-version"),
+        cwd=Path(scratch),
+        artifact=artifact,
+    )
 
 
-def build_case_command(*, candidate: Candidate, case: str, scratch: Path) -> PreparedCase:
+def build_case_command(
+    *, candidate: Candidate, case: str, scratch: Path, state_root: Path | None = None,
+) -> PreparedCase:
     """Resolve one canonical case without guessing an executable by pathname."""
 
     validate_case_name(case)
     scratch = Path(scratch).absolute()
+    state_root = scratch if state_root is None else Path(state_root).absolute()
     if scratch == candidate.root or candidate.root in scratch.parents:
         raise CandidateCaseError("scratch nativo precisa ficar fora do candidato")
+    if state_root == candidate.root or candidate.root in state_root.parents:
+        raise CandidateCaseError("estado nativo precisa ficar fora do candidato")
     scratch.mkdir(parents=True, exist_ok=True)
     if case in _SERVICE_SUFFIXES:
         return _service_command(candidate, case, scratch)
@@ -350,23 +369,114 @@ def build_case_command(*, candidate: Candidate, case: str, scratch: Path) -> Pre
         return _client_command(candidate, channel, game, scratch)
     if case in _INSTALLER_CASES:
         arguments = _INSTALLER_CASES[case]
-        return _installer_command(candidate, arguments, scratch)
+        return _installer_command(candidate, arguments, scratch, state_root)
     raise CandidateCaseError(f"caso nativo sem dispatch fechado: {case}")
 
 
-def _run_case(candidate: Candidate, case: str, scratch: Path) -> int:
-    system = platform.system()
-    machine = platform.machine().casefold()
-    if system != "Darwin" or machine != "arm64":
-        print(f"[NOT-RUN] host {system}/{machine} não é macOS arm64", file=sys.stderr)
-        return 2
-    prepared = build_case_command(candidate=candidate, case=case, scratch=scratch)
+def _state_path(state_root: Path) -> Path:
+    return Path(state_root) / _STATE_FILENAME
+
+
+def _read_state(state_root: Path) -> str | None:
+    path = _state_path(state_root)
+    if not path.exists():
+        if path.is_symlink():
+            raise CandidateCaseError("estado do lifecycle usa symlink")
+        return None
+    if path.is_symlink() or not path.is_file():
+        raise CandidateCaseError("estado do lifecycle é inseguro")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicates)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CandidateCaseError("estado do lifecycle é inválido") from error
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"format", "status", "last_case"}
+        or value.get("format") != _STATE_FORMAT
+        or value.get("status") not in _STATES
+        or not isinstance(value.get("last_case"), str)
+    ):
+        raise CandidateCaseError("estado do lifecycle é inválido")
+    return str(value["status"])
+
+
+def _prepare_state(case: str, state_root: Path) -> str:
+    state_root = Path(state_root).absolute()
+    state_root.mkdir(parents=True, exist_ok=True)
+    status = _read_state(state_root)
+    target = state_root / _INSTALLATION_TARGET
+    if case == CANONICAL_CASES[0]:
+        if status is not None or os.path.lexists(target):
+            raise CandidateCaseError("install-clean exige scratch sem instalação anterior")
+        return "clean"
+    if status != "installed" or target.is_symlink() or not target.is_dir():
+        raise CandidateCaseError(f"{case} exige a instalação compartilhada já instalada")
+    return "installed"
+
+
+def _write_state(state_root: Path, *, status: str, case: str) -> None:
+    if status not in _STATES:
+        raise CandidateCaseError(f"estado de lifecycle desconhecido: {status}")
+    path = _state_path(state_root)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    payload = {
+        "format": _STATE_FORMAT,
+        "status": status,
+        "last_case": case,
+    }
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except OSError as error:
+        temporary.unlink(missing_ok=True)
+        raise CandidateCaseError("não foi possível persistir estado do lifecycle") from error
+
+
+def _write_receipt(path: Path, value: Mapping[str, object], *, candidate: Candidate) -> None:
+    path = Path(path).absolute()
+    if path == candidate.root or candidate.root in path.parents:
+        raise CandidateCaseError("recibo nativo precisa ficar fora do candidato")
+    if path.exists() or path.is_symlink():
+        raise CandidateCaseError(f"recibo nativo já existe: {path}")
+    if path.parent.is_symlink():
+        raise CandidateCaseError("diretório do recibo nativo usa symlink")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise CandidateCaseError("não foi possível escrever recibo nativo") from error
+
+
+def _run_case(
+    candidate: Candidate,
+    case: str,
+    scratch: Path,
+    *,
+    state_root: Path,
+    receipt: Path,
+) -> int:
+    state_before = _prepare_state(case, state_root)
+    prepared = build_case_command(
+        candidate=candidate,
+        case=case,
+        scratch=scratch,
+        state_root=state_root,
+    )
     environment = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(scratch),
         "TMPDIR": str(scratch),
         "X86QW_CANDIDATE_ROOT": str(candidate.root),
         "X86QW_CANDIDATE_COMMIT": candidate.commit,
+        "X86QW_NATIVE_STATE_ROOT": str(state_root),
     }
     try:
         result = subprocess.run(
@@ -380,22 +490,61 @@ def _run_case(candidate: Candidate, case: str, scratch: Path) -> int:
             timeout=300,
             check=False,
         )
+        exit_code = int(result.returncode)
     except (OSError, subprocess.SubprocessError) as error:
-        raise CandidateCaseError(f"execução nativa falhou: {case}") from error
+        print(f"[ERRO] execução nativa falhou: {case}: {error}", file=sys.stderr)
+        exit_code = 127
+        result = subprocess.CompletedProcess(prepared.argv, exit_code, b"", str(error).encode())
     sys.stdout.buffer.write(result.stdout)
     sys.stderr.buffer.write(result.stderr)
-    return int(result.returncode)
+    passed = exit_code == 0
+    state_after = "uninstalled" if case == CANONICAL_CASES[-1] and passed else "installed"
+    if passed:
+        _write_state(state_root, status=state_after, case=case)
+    _write_receipt(
+        receipt,
+        {
+            "format": 1,
+            "project": PROJECT,
+            "protocol": "x86qw-native-case-v1",
+            "case": case,
+            "artifact": {
+                "name": prepared.artifact.name,
+                "size": prepared.artifact.size,
+                "sha256": prepared.artifact.sha256,
+            },
+            "execution": {
+                "status": "passed" if passed else "failed",
+                "exit_code": exit_code,
+            },
+            "state": {"before": state_before, "after": state_after if passed else state_before},
+        },
+        candidate=candidate,
+    )
+    return exit_code
 
 
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="executor nativo candidato-owned x86QW")
     parser.add_argument("--candidate-root", type=Path, required=True)
     parser.add_argument("--case", required=True)
+    parser.add_argument("--scratch-root", type=Path, required=True)
+    parser.add_argument("--receipt", type=Path, required=True)
     options = parser.parse_args(arguments)
     try:
         candidate = load_candidate(options.candidate_root)
-        with tempfile.TemporaryDirectory(prefix="x86qw-native-case-") as temporary:
-            return _run_case(candidate, options.case, Path(temporary))
+        validate_case_name(options.case)
+        scratch_root = Path(options.scratch_root).absolute()
+        if scratch_root == candidate.root or candidate.root in scratch_root.parents:
+            raise CandidateCaseError("scratch nativo precisa ficar fora do candidato")
+        case_scratch = scratch_root / "cases" / options.case
+        return _run_case(
+            candidate,
+            options.case,
+            case_scratch,
+            state_root=scratch_root,
+            receipt=options.receipt,
+        )
     except CandidateCaseError as error:
         print(f"[ERRO] {error}", file=sys.stderr)
         return 1

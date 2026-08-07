@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from maintenance.tools.native_case_entrypoint import (
+from maintenance.native_case_entrypoint import (
     CANONICAL_CASES,
     CandidateCaseError,
     build_case_command,
