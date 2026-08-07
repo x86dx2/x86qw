@@ -143,6 +143,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          merge-multiple: true
           path: downloaded-candidate
       - name: Verify downloaded bytes without rebuild
         shell: bash
@@ -167,6 +168,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          merge-multiple: true
           path: candidate
       - name: Rehearse immutable copy without M3 claim
         run: python3 maintenance/tools/release_candidate.py rehearse candidate "$RUNNER_TEMP/x86qw-rehearsal"
@@ -199,6 +201,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          merge-multiple: true
           path: candidate
       - name: Require PR G M3 evidence before any mirror or metadata operation
         run: |
