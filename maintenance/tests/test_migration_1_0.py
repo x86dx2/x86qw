@@ -1573,6 +1573,30 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                 self.assertFalse(plan.executable)
                 self.assertTrue(any(item.code == conflict_code for item in plan.conflicts))
 
+    def test_windows_cleanup_identity_uses_the_native_path_handle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "transaction"
+            path.mkdir()
+            identity = (123, 456)
+            with (
+                mock.patch.object(migrations.os, "name", "nt"),
+                mock.patch.object(
+                    migrations,
+                    "persistent_path_identity",
+                    return_value=identity,
+                ) as native_identity,
+                mock.patch.object(
+                    migrations.os,
+                    "open",
+                    side_effect=AssertionError("Windows cleanup must not use os.open"),
+                ),
+            ):
+                self.assertEqual(
+                    identity,
+                    migrations._private_path_identity(path, directory=True),
+                )
+            native_identity.assert_called_once_with(path, directory=True)
+
     def test_hard_crash_leaves_a_recoverable_journal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

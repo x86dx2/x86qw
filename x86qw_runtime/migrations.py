@@ -15,13 +15,17 @@ from pathlib import Path, PurePosixPath
 
 from .catalogs import profile_fingerprint, validate_portable_relative_path
 from .contracts.schema import ContractVersions, SchemaKind, add_contract_versions
+from .errors import InstallerError
 from .io import private_fs
 from .io.atomic import (
     atomic_create_bytes,
     atomic_write_bytes,
     atomic_write_json,
 )
-from .io.managed_files import remove_persistent_identity_bound_path
+from .io.managed_files import (
+    persistent_path_identity,
+    remove_persistent_identity_bound_path,
+)
 from .io.metadata import MetadataFileError, read_bounded_regular_file
 from .receipts import (
     ComponentReceipt,
@@ -470,13 +474,22 @@ def _remove_private_tree(path: Path) -> None:
         if stat.S_ISDIR(child_metadata.st_mode):
             _remove_private_tree(child)
         elif stat.S_ISREG(child_metadata.st_mode):
-            private_fs.unlink_private_file(
-                child,
-                expected_identity=(int(child_metadata.st_dev), int(child_metadata.st_ino)),
-            )
+            identity = _private_path_identity(child, directory=False)
+            try:
+                private_fs.unlink_private_file(child, expected_identity=identity)
+            except OSError as error:
+                raise MigrationError(
+                    f"migration journal child changed identity: {child}"
+                ) from error
         else:
             raise MigrationError(f"migration journal child has an unsafe type: {child}")
-    path.rmdir()
+    try:
+        private_fs.validate_private_directory(path)
+    except OSError as error:
+        raise MigrationError(f"migration journal path is not private: {path}") from error
+    identity = _private_path_identity(path, directory=True)
+    if not remove_persistent_identity_bound_path(path, identity, directory=True):
+        raise MigrationError(f"migration journal path changed identity: {path}")
 
 
 def _persist_migration_journal(path: Path, document: dict[str, object]) -> None:
@@ -860,6 +873,11 @@ def _private_path_identity(path: Path, *, directory: bool) -> tuple[int, int]:
         or stat.S_ISREG(metadata.st_mode) == directory
     ):
         raise MigrationError(f"migration cleanup path has an unsafe type: {path}")
+    if os.name == "nt":
+        try:
+            return persistent_path_identity(path, directory=directory)
+        except (OSError, InstallerError) as error:
+            raise MigrationError(f"migration cleanup path cannot be opened: {path}") from error
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     if directory:

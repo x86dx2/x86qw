@@ -255,6 +255,25 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("dist/servers/**/x86qw/runtime/** filter=lfs", attributes)
         self.assertIn("dist/services/**/x86qw/runtime/** filter=lfs", attributes)
 
+    def test_migration_fixtures_are_not_checkout_translated(self):
+        paths = [
+            "maintenance/tests/fixtures/migrations/0.7.3/VERSION",
+            "maintenance/tests/fixtures/migrations/0.7.3/.x86qw/ktx.inventory",
+            "maintenance/tests/fixtures/migrations/0.7.3/.x86qw/state.json",
+            "maintenance/tests/fixtures/migrations/0.7.3/archive/x86qw-installer-0.7.3.zip",
+        ]
+        result = subprocess.run(
+            ["git", "check-attr", "text", "--", *paths],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(
+            [f"{path}: text: unset" for path in paths],
+            result.stdout.splitlines(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
