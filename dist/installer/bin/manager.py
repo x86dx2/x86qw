@@ -92,7 +92,12 @@ from x86qw_runtime.contracts.schema import (
     add_contract_versions,
     validate_document_versions,
 )
-from x86qw_runtime.migrations import migrate_install_state
+from x86qw_runtime.migrations import (
+    inspect_pending_migration,
+    migrate_install_state,
+    migrate_installation,
+    recover_migration,
+)
 from x86qw_runtime.state import (
     INSTALLATION_PROFILES,
     StateError,
@@ -7659,7 +7664,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="simula update, upgrade ou repair sem alterar arquivos",
+        help="simula update, upgrade, repair ou migrate sem alterar arquivos",
     )
     parser.add_argument(
         "--json", action="store_true",
@@ -7684,7 +7689,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "action", nargs="?", default="install",
         help=(
-            "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, components, presets, hub, "
+            "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
             "verify, uninstall ou cleanup"
         ),
     )
@@ -7694,7 +7699,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_intermixed_args(arguments)
     valid_actions = (
-        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "components",
+        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "migrate", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
@@ -7709,8 +7714,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         )
     if namespace.skip_cli_update and not (namespace.installed_cli and namespace.action in {"update", "upgrade"}):
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
-    if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair"}:
-        parser.error("--dry-run só pode ser usado com update, upgrade ou repair")
+    if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair", "migrate"}:
+        parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
     if namespace.json and namespace.action not in {
         "version", "status", "hub", "verify", "repair", "update", "upgrade",
     }:
@@ -8179,6 +8184,7 @@ def execute_manager_action(
         "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
         "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
         "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
+        "migrate": "migrar metadados para o contrato 1.0",
     }
     action_label = "desinstalar e remover todos os dados" if options.purge else action_labels[options.action]
     console.banner(action_label, options.target)
@@ -8237,7 +8243,43 @@ def execute_manager_action(
         console.detail(f"Destino normalizado: {installer.target}")
         if not options.purge:
             installer.reject_target_symlinks()
-        if options.action == "verify":
+        if options.action == "migrate":
+            # Planning is intentionally read-only. Dry-run does not acquire
+            # the maintenance lock or recover a pending journal.
+            if not options.dry_run:
+                acquire_operation_lock()
+                if inspect_pending_migration(installer.target) is not None:
+                    recover_migration(installer.target)
+            console.section("Migração da instalação")
+            migration = migrate_installation(
+                installer.target, target_version="1.0.0", dry_run=True,
+            )
+            if migration.conflicts:
+                details = "; ".join(
+                    f"{item.path}: {item.detail}" for item in migration.conflicts
+                )
+                raise InstallerError(
+                    "A migração foi bloqueada por conflitos preservados: " + details
+                )
+            for component in migration.retired_components:
+                console.info(
+                    f"Componente aposentado preservado para diagnóstico: {component}"
+                )
+            if not migration.operations:
+                console.success("Nenhuma migração é necessária; os metadados já estão convergentes.")
+            else:
+                for operation in migration.operations:
+                    console.info(
+                        f"{operation.phase.value}: {operation.source} → {operation.destination}"
+                    )
+                if options.dry_run:
+                    console.heading("Simulação concluída; nenhum arquivo foi alterado")
+                else:
+                    migrate_installation(
+                        installer.target, target_version="1.0.0", dry_run=False,
+                    )
+                    console.success("Migração concluída e validada.")
+        elif options.action == "verify":
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")

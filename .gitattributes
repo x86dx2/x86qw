@@ -34,3 +34,6 @@ site/public/api/v1/*.json text eol=lf
 site/public/install.sh text eol=lf
 site/public/install.ps1 text eol=lf
 x86qw_runtime/io/archive.py text eol=lf
+
+# Historical migration fixtures are byte-exact release evidence, not checkout text.
+maintenance/tests/fixtures/migrations/** -text

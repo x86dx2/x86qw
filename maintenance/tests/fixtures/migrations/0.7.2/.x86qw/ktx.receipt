@@ -1,0 +1,5 @@
+format	1
+component	ktx
+selection	0.7.2
+source	https://example.invalid/x86qw-0.7.2-ktx.zip
+inventory_sha256	515de7c5b1323bbef5964b335964dc00e78c44bcb1c31a694fadcc8fc7df079b
