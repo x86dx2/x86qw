@@ -69,7 +69,7 @@ def detect_m3_hardware(
         if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict):
             return None
         record = records[0]
-        chip = record.get("chip")
+        chip = record.get("chip") if "chip" in record else record.get("chip_type")
         model = record.get("machine_model") or record.get("machine_name")
         if (
             not isinstance(chip, str)

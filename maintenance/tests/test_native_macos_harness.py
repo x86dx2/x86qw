@@ -108,6 +108,50 @@ class NativeMacosHarnessTests(unittest.TestCase):
         self.assertNotIn("DO-NOT-STORE", repr(observation))
         self.assertEqual(2, calls[0][1]["timeout"])
 
+    def test_m3_detector_accepts_chip_type_system_profiler_field(self) -> None:
+        def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({
+                    "SPHardwareDataType": [{
+                        "chip_type": "Apple M3 Pro",
+                        "machine_model": "Mac15,6",
+                    }],
+                }),
+                stderr="",
+            )
+
+        self.assertEqual(
+            HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+            detect_m3_hardware(system="Darwin", machine="arm64", runner=runner),
+        )
+
+    def test_m3_detector_fails_closed_for_invalid_or_contradictory_chip_fields(self) -> None:
+        records = (
+            {"machine_model": "Mac15,6"},
+            {"chip_type": "", "machine_model": "Mac15,6"},
+            {"chip_type": 3, "machine_model": "Mac15,6"},
+            {
+                "chip": "Apple M2 Pro",
+                "chip_type": "Apple M3 Pro",
+                "machine_model": "Mac15,6",
+            },
+        )
+        for record in records:
+            with self.subTest(record=record):
+                def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=json.dumps({"SPHardwareDataType": [record]}),
+                        stderr="",
+                    )
+
+                self.assertIsNone(
+                    detect_m3_hardware(system="Darwin", machine="arm64", runner=runner),
+                )
+
     def _candidate(self, root: Path) -> tuple[Path, dict[str, str]]:
         candidate = root / "candidate"
         candidate.mkdir()
