@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from maintenance.tools.native_handoff import (
@@ -15,7 +16,14 @@ from maintenance.tools.native_handoff import (
     candidate_identity,
     validate_evidence_file,
 )
-from maintenance.tools.native_macos_harness import execute_cases, select_platform
+from maintenance.tools.native_macos_harness import (
+    HardwareObservation,
+    detect_m3_hardware,
+    execute_cases,
+    select_platform,
+)
+from maintenance.tools.native_plan_adapter import generate_native_plan
+from maintenance.tools.release_candidate import prepare_candidate
 
 
 CONTRACT_PATH = "runtime/native-smoke/macos-arm64/entrypoint.json"
@@ -23,21 +31,119 @@ ENTRYPOINT_PATH = "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
 
 
 class NativeMacosHarnessTests(unittest.TestCase):
+    def test_platform_selection_requires_an_explicit_apple_m3_observation(self) -> None:
+        self.assertEqual(
+            ("execute", "macOS-ARM64"),
+            select_platform(
+                system="Darwin",
+                machine="arm64",
+                chip="Apple M3 Pro",
+                candidate_available=True,
+            )[:2],
+        )
+        for chip in (None, "Apple M1 Pro", "Apple M2 Pro", "Apple M4 Pro", "unknown"):
+            with self.subTest(chip=chip):
+                mode, platform, reason = select_platform(
+                    system="Darwin",
+                    machine="arm64",
+                    chip=chip,
+                    candidate_available=True,
+                )
+                self.assertEqual("not-run", mode)
+                self.assertIsNone(platform)
+                self.assertIn("M3", reason)
+
+    def test_m3_detector_uses_private_json_system_profiler_and_redacts_sensitive_fields(self) -> None:
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({
+                    "SPHardwareDataType": [{
+                        "chip": "Apple M3 Pro",
+                        "machine_model": "Mac15,6",
+                        "machine_name": "MacBook Pro",
+                        "serial_number": "DO-NOT-STORE",
+                    }],
+                }),
+                stderr="",
+            )
+
+        observation = detect_m3_hardware(
+            system="Darwin", machine="arm64", runner=runner,
+        )
+
+        self.assertEqual(
+            HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+            observation,
+        )
+        self.assertEqual([["/usr/sbin/system_profiler", "SPHardwareDataType", "-json"]], [call[0] for call in calls])
+        self.assertNotIn("DO-NOT-STORE", repr(observation))
+        self.assertEqual(2, calls[0][1]["timeout"])
+
     def _candidate(self, root: Path) -> tuple[Path, dict[str, str]]:
         candidate = root / "candidate"
         candidate.mkdir()
         entrypoint = candidate / ENTRYPOINT_PATH
         entrypoint.parent.mkdir(parents=True)
         entrypoint.write_text(
-            """#!/bin/sh
-test "$1" = "--candidate-root" || exit 64
-test "$3" = "--case" || exit 64
-printf '%s\\n' "$4" >> "$TMPDIR/execucoes.txt"
-printf 'executed %s\\n' "$4"
+            """from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+def argument(name: str) -> str:
+    index = sys.argv.index(name)
+    return sys.argv[index + 1]
+
+
+candidate = Path(argument("--candidate-root"))
+case = argument("--case")
+scratch = Path(argument("--scratch-root"))
+receipt = Path(argument("--receipt"))
+artifact_name = "runtime/test/native-runtime"
+artifact = candidate / artifact_name
+target = scratch / "installation target"
+state = scratch / "lifecycle-state.json"
+if case == "install-clean-space-unicode":
+    if target.exists() or state.exists():
+        raise SystemExit(81)
+    target.mkdir(parents=True)
+    state.write_text("installed\\n", encoding="utf-8")
+elif not target.is_dir() or not state.is_file():
+    raise SystemExit(82)
+(scratch / "execucoes.txt").open("a", encoding="utf-8").write(case + "\\n")
+receipt.parent.mkdir(parents=True, exist_ok=True)
+receipt.write_text(json.dumps({
+    "format": 1,
+    "project": "x86qw",
+    "protocol": "x86qw-native-case-v1",
+    "case": case,
+    "artifact": {
+        "name": artifact_name,
+        "size": artifact.stat().st_size,
+        "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+    },
+    "execution": {"status": "passed", "exit_code": 0},
+    "state": {
+        "before": "clean" if case == "install-clean-space-unicode" else "installed",
+        "after": "uninstalled" if case == "lifecycle-uninstall" else "installed",
+    },
+}, sort_keys=True) + "\\n", encoding="utf-8")
+print(f"executed {case}")
 """,
             encoding="utf-8",
         )
         entrypoint.chmod(0o644)
+        artifact = candidate / "runtime/test/native-runtime"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(b"candidate-owned runtime")
         contract = candidate / CONTRACT_PATH
         contract.write_text(
             json.dumps(
@@ -69,6 +175,10 @@ printf 'executed %s\\n' "$4"
                     "size": len(entrypoint_bytes),
                     "sha256": hashlib.sha256(entrypoint_bytes).hexdigest(),
                 },
+                "runtime/test/native-runtime": {
+                    "size": artifact.stat().st_size,
+                    "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                },
             },
         }
         manifest_path = candidate / "candidate.json"
@@ -98,7 +208,10 @@ printf 'executed %s\\n' "$4"
             "cases": [
                 {
                     "name": name,
-                    "arguments": ["--candidate-root", "{candidate}", "--case", name],
+                    "arguments": [
+                        "--candidate-root", "{candidate}", "--case", name,
+                        "--scratch-root", "{scratch}", "--receipt", "{receipt}",
+                    ],
                     "timeout_seconds": 10,
                 }
                 for name in CANONICAL_CASES
@@ -108,7 +221,12 @@ printf 'executed %s\\n' "$4"
     def test_platform_selection_runs_only_on_real_macos_arm64_with_candidate(self) -> None:
         self.assertEqual(
             ("execute", "macOS-ARM64"),
-            select_platform(system="Darwin", machine="arm64", candidate_available=True)[:2],
+            select_platform(
+                system="Darwin",
+                machine="arm64",
+                chip="Apple M3 Pro",
+                candidate_available=True,
+            )[:2],
         )
         for system, machine, available in (
             ("Darwin", "x86_64", True),
@@ -129,6 +247,7 @@ printf 'executed %s\\n' "$4"
         mode, platform, reason = select_platform(
             system="Darwin",
             machine="arm64",
+            chip="Apple M3 Pro",
             candidate_available=True,
             plan_available=False,
         )
@@ -147,7 +266,7 @@ printf 'executed %s\\n' "$4"
                 output_dir=output,
             )
 
-            journal = output / "execucoes.txt"
+            journal = output / "scratch" / "execucoes.txt"
             self.assertEqual(list(CANONICAL_CASES), journal.read_text(encoding="utf-8").splitlines())
             self.assertEqual(list(CANONICAL_CASES), [result["name"] for result in results])
             self.assertTrue(all(result["status"] == "passed" for result in results))
@@ -163,7 +282,12 @@ printf 'executed %s\\n' "$4"
                 "status": "passed",
                 "platform": "macOS-ARM64",
                 "candidate": identity,
-                "environment": {"system": "Darwin", "machine": "arm64"},
+                "environment": {
+                    "system": "Darwin",
+                    "machine": "arm64",
+                    "chip": "Apple M3 Pro",
+                    "model": "Mac15,6",
+                },
                 "runtime_executed": True,
                 "cases": results,
                 "reason": None,
@@ -175,6 +299,108 @@ printf 'executed %s\\n' "$4"
             handoff_path.write_text(json.dumps(handoff) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
                 validate_evidence_file(handoff_path, candidate=candidate)
+
+    def test_real_f_candidate_and_python_entrypoint_share_lifecycle_state_and_receipts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "input"
+            source.mkdir()
+            installer = source / "installer/x86qw-installer-1.0.0.zip"
+            installer.parent.mkdir(parents=True)
+            installer_code = b"""from pathlib import Path
+import sys
+
+action = next((item for item in sys.argv[1:] if item in {
+    'install', 'update', 'upgrade', 'verify', 'repair', 'cleanup', 'uninstall',
+}), None)
+target = Path(sys.argv[-1])
+if action == 'install':
+    target.mkdir(parents=True, exist_ok=True)
+    (target / 'managed-state').write_text('installed\\n', encoding='utf-8')
+elif action in {'update', 'upgrade', 'verify', 'repair', 'cleanup', 'uninstall'}:
+    if not target.is_dir() or not (target / 'managed-state').is_file():
+        raise SystemExit(41)
+else:
+    raise SystemExit(42)
+"""
+            with zipfile.ZipFile(installer, "w") as archive:
+                archive.writestr("bin/x86qw.pyz", installer_code)
+
+            def client_archive(channel: str) -> None:
+                archive_path = source / f"runtime/clients/ezquake/{channel}/fixture/macos-universal/{channel}.zip"
+                archive_path.parent.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(archive_path, "w") as archive:
+                    archive.writestr(
+                        "ezQuake.app/Contents/MacOS/ezQuake",
+                        b"#!/bin/sh\nexit 0\n",
+                    )
+
+            client_archive("stable")
+            client_archive("nightly")
+            for relative in (
+                "runtime/servers/mvdsv/fixture/x86qw/runtime/macos-arm64/mvdsv",
+                "runtime/services/qtv/fixture/x86qw/runtime/macos-arm64/qtv",
+                "runtime/services/qwfwd/fixture/x86qw/runtime/macos-arm64/qwfwd",
+            ):
+                service = source / relative
+                service.parent.mkdir(parents=True, exist_ok=True)
+                service.write_bytes(b"#!/bin/sh\nexit 0\n")
+
+            entrypoint = source / ENTRYPOINT_PATH
+            entrypoint.parent.mkdir(parents=True, exist_ok=True)
+            entrypoint.write_bytes(
+                (Path(__file__).resolve().parents[2] / "maintenance/native_case_entrypoint.py").read_bytes()
+            )
+            contract = source / CONTRACT_PATH
+            contract.write_text(
+                json.dumps({
+                    "format": 1,
+                    "project": "x86qw",
+                    "platform": "macOS-ARM64",
+                    "protocol": "x86qw-native-case-v1",
+                    "entrypoint_artifact": ENTRYPOINT_PATH,
+                }, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            candidate = root / "candidate"
+            prepare_candidate(
+                source=source,
+                output=candidate,
+                version="1.0.0",
+                commit="a" * 40,
+                generated_at="2026-08-07T00:00:00Z",
+            )
+            candidate_sha256 = hashlib.sha256(
+                (candidate / "candidate.json").read_bytes()
+            ).hexdigest()
+            plan_path = root / "native-plan.json"
+            plan = generate_native_plan(
+                candidate=candidate,
+                expected_candidate_sha256=candidate_sha256,
+                entrypoint_contract=CONTRACT_PATH,
+                output=plan_path,
+            )
+            before = {
+                path.relative_to(candidate).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in candidate.rglob("*") if path.is_file()
+            }
+
+            results = execute_cases(
+                candidate=candidate,
+                plan=plan,
+                output_dir=root / "handoff",
+            )
+
+            self.assertEqual(list(CANONICAL_CASES), [item["name"] for item in results])
+            self.assertTrue(all(item["status"] == "passed" for item in results))
+            self.assertNotEqual(ENTRYPOINT_PATH, results[0]["candidate_artifact"])
+            self.assertTrue(all((root / "handoff" / item["receipt"]).is_file() for item in results))
+            after = {
+                path.relative_to(candidate).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in candidate.rglob("*") if path.is_file()
+            }
+            self.assertEqual(before, after)
 
     def test_candidate_mismatch_is_rejected_before_any_command_runs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -266,7 +492,12 @@ printf 'executed %s\\n' "$4"
                 "status": "passed",
                 "platform": "macOS-ARM64",
                 "candidate": {**identity, "commit": "d" * 40},
-                "environment": {"system": "Darwin", "machine": "arm64"},
+                "environment": {
+                    "system": "Darwin",
+                    "machine": "arm64",
+                    "chip": "Apple M3 Pro",
+                    "model": "Mac15,6",
+                },
                 "runtime_executed": True,
                 "cases": [],
                 "reason": None,

@@ -140,7 +140,10 @@ def generate_native_plan(
         "cases": [
             {
                 "name": name,
-                "arguments": ["--candidate-root", "{candidate}", "--case", name],
+                "arguments": [
+                    "--candidate-root", "{candidate}", "--case", name,
+                    "--scratch-root", "{scratch}", "--receipt", "{receipt}",
+                ],
                 "timeout_seconds": 300,
             }
             for name in CANONICAL_CASES

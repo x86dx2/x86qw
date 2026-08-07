@@ -20,6 +20,7 @@ PLATFORM = "macOS-ARM64"
 MAX_JSON_BYTES = 1024 * 1024
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
 
 CANONICAL_CASES = (
     "install-clean-space-unicode",
@@ -61,9 +62,17 @@ HANDOFF_FIELDS = frozenset({
 })
 RESULT_FIELDS = frozenset({
     "name", "status", "exit_code", "duration_ms", "candidate_artifact",
-    "candidate_artifact_sha256", "runtime", "stdout", "stdout_sha256", "stderr",
-    "stderr_sha256",
+    "candidate_artifact_size", "candidate_artifact_sha256", "entrypoint", "runtime",
+    "receipt", "receipt_sha256", "stdout", "stdout_sha256", "stderr", "stderr_sha256",
 })
+ENTRYPOINT_RESULT_FIELDS = frozenset({"artifact", "size", "sha256"})
+RECEIPT_FIELDS = frozenset({
+    "format", "project", "protocol", "case", "artifact", "execution", "state",
+})
+RECEIPT_ARTIFACT_FIELDS = frozenset({"name", "size", "sha256"})
+RECEIPT_EXECUTION_FIELDS = frozenset({"status", "exit_code"})
+RECEIPT_STATE_FIELDS = frozenset({"before", "after"})
+NATIVE_STATES = frozenset({"clean", "installed", "uninstalled"})
 
 
 class NativeHandoffError(RuntimeError):
@@ -259,21 +268,98 @@ def validate_plan(value: object, *, candidate: Path) -> list[dict[str, object]]:
         if raw_case.get("name") != expected_name:
             raise NativeHandoffError(f"caso ausente ou fora de ordem: {expected_name}")
         arguments = raw_case.get("arguments")
-        if arguments != ["--candidate-root", "{candidate}", "--case", expected_name]:
+        if arguments != [
+            "--candidate-root", "{candidate}", "--case", expected_name,
+            "--scratch-root", "{scratch}", "--receipt", "{receipt}",
+        ]:
             raise NativeHandoffError(f"argumentos fora do protocolo fechado: {expected_name}")
         timeout = raw_case.get("timeout_seconds")
         if type(timeout) is not int or not 1 <= timeout <= 900:
             raise NativeHandoffError(f"timeout inválido: {expected_name}")
         validated.append({
             "name": expected_name,
-            "candidate_artifact": artifact,
-            "candidate_artifact_path": artifact_path,
-            "candidate_artifact_sha256": artifact_digest,
-            "runtime_size": artifact_size,
+            "entrypoint_artifact": artifact,
+            "entrypoint_artifact_path": artifact_path,
+            "entrypoint_artifact_size": artifact_size,
+            "entrypoint_artifact_sha256": artifact_digest,
             "arguments": list(arguments),
             "timeout_seconds": timeout,
         })
     return validated
+
+
+def _expected_state(case: str) -> tuple[str, str]:
+    if case == CANONICAL_CASES[0]:
+        return "clean", "installed"
+    if case == CANONICAL_CASES[1]:
+        return "installed", "installed"
+    if case == CANONICAL_CASES[-1]:
+        return "installed", "uninstalled"
+    return "installed", "installed"
+
+
+def validate_case_receipt(
+    path: Path,
+    *,
+    candidate: Path,
+    expected_case: str,
+    require_passed: bool = True,
+) -> dict[str, object]:
+    """Validate the candidate-owned receipt for one executed case."""
+
+    value = read_json(path, label="recibo nativo")
+    if set(value) != RECEIPT_FIELDS:
+        raise NativeHandoffError("recibo nativo possui campos desconhecidos ou ausentes")
+    if (
+        value.get("format") != FORMAT
+        or value.get("project") != PROJECT
+        or value.get("protocol") != NATIVE_CASE_PROTOCOL
+        or value.get("case") != expected_case
+    ):
+        raise NativeHandoffError(f"recibo nativo não corresponde ao caso: {expected_case}")
+    artifact = value.get("artifact")
+    if not isinstance(artifact, Mapping) or set(artifact) != RECEIPT_ARTIFACT_FIELDS:
+        raise NativeHandoffError(f"recibo sem identidade do artefato: {expected_case}")
+    name = _relative_path(artifact.get("name"), label="recibo.artifact.name")
+    artifact_path, artifact_size, artifact_digest = candidate_artifact(candidate, name)
+    if (
+        artifact.get("size") != artifact_size
+        or artifact.get("sha256") != artifact_digest
+    ):
+        raise NativeHandoffError(f"recibo diverge dos bytes do candidato: {expected_case}")
+    execution = value.get("execution")
+    if not isinstance(execution, Mapping) or set(execution) != RECEIPT_EXECUTION_FIELDS:
+        raise NativeHandoffError(f"recibo sem resultado de execução: {expected_case}")
+    status = execution.get("status")
+    exit_code = execution.get("exit_code")
+    if status not in {"passed", "failed"} or type(exit_code) is not int:
+        raise NativeHandoffError(f"resultado de execução inválido: {expected_case}")
+    if require_passed and (status != "passed" or exit_code != 0):
+        raise NativeHandoffError(f"caso nativo não aprovado no recibo: {expected_case}")
+    state = value.get("state")
+    if not isinstance(state, Mapping) or set(state) != RECEIPT_STATE_FIELDS:
+        raise NativeHandoffError(f"recibo sem pré-condição de lifecycle: {expected_case}")
+    expected_before, expected_after = _expected_state(expected_case)
+    if (
+        state.get("before") != expected_before
+        or state.get("after") != expected_after
+        or state.get("before") not in NATIVE_STATES
+        or state.get("after") not in NATIVE_STATES
+    ):
+        raise NativeHandoffError(f"pré-condição de lifecycle inválida: {expected_case}")
+    return {
+        "format": FORMAT,
+        "project": PROJECT,
+        "protocol": NATIVE_CASE_PROTOCOL,
+        "case": expected_case,
+        "artifact": {
+            "name": name,
+            "size": artifact_size,
+            "sha256": artifact_digest,
+        },
+        "execution": {"status": status, "exit_code": exit_code},
+        "state": {"before": state["before"], "after": state["after"]},
+    }
 
 
 def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
@@ -289,7 +375,16 @@ def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
     if not isinstance(identity, Mapping) or set(identity) != IDENTITY_FIELDS or dict(identity) != expected_identity:
         raise NativeHandoffError("handoff não corresponde ao candidato exato")
     environment = value.get("environment")
-    if environment != {"system": "Darwin", "machine": "arm64"}:
+    if (
+        not isinstance(environment, Mapping)
+        or set(environment) != {"system", "machine", "chip", "model"}
+        or environment.get("system") != "Darwin"
+        or environment.get("machine") != "arm64"
+        or not isinstance(environment.get("chip"), str)
+        or M3_CHIP.fullmatch(environment["chip"]) is None
+        or not isinstance(environment.get("model"), str)
+        or not environment["model"]
+    ):
         raise NativeHandoffError("handoff não corresponde a macOS arm64 nativo")
     if value.get("reason") is not None:
         raise NativeHandoffError("handoff aprovado não pode conter razão de not-run")
@@ -303,9 +398,24 @@ def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
         if case.get("name") != expected_name or case.get("status") != "passed" or case.get("exit_code") != 0:
             raise NativeHandoffError(f"caso nativo não aprovado: {expected_name}")
         artifact = _relative_path(case.get("candidate_artifact"), label="candidate_artifact")
-        _artifact_path, _artifact_size, artifact_digest = candidate_artifact(candidate, artifact)
-        if case.get("candidate_artifact_sha256") != artifact_digest:
+        _artifact_path, artifact_size, artifact_digest = candidate_artifact(candidate, artifact)
+        if (
+            case.get("candidate_artifact_size") != artifact_size
+            or case.get("candidate_artifact_sha256") != artifact_digest
+        ):
             raise NativeHandoffError(f"resultado diverge dos bytes do candidato: {expected_name}")
+        entrypoint = case.get("entrypoint")
+        if not isinstance(entrypoint, Mapping) or set(entrypoint) != ENTRYPOINT_RESULT_FIELDS:
+            raise NativeHandoffError(f"entrypoint do caso inválido: {expected_name}")
+        entrypoint_name = _relative_path(entrypoint.get("artifact"), label="entrypoint.artifact")
+        _entrypoint_path, entrypoint_size, entrypoint_digest = candidate_artifact(
+            candidate, entrypoint_name,
+        )
+        if (
+            entrypoint.get("size") != entrypoint_size
+            or entrypoint.get("sha256") != entrypoint_digest
+        ):
+            raise NativeHandoffError(f"entrypoint do caso diverge: {expected_name}")
         duration = case.get("duration_ms")
         if type(duration) is not int or duration < 0:
             raise NativeHandoffError(f"duração inválida: {expected_name}")
@@ -313,6 +423,32 @@ def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
         validated_runtime = validate_runtime(runtime)
         if not isinstance(runtime, Mapping) or dict(runtime) != validated_runtime:
             raise NativeHandoffError(f"runtime exato diverge do handoff: {expected_name}")
+        runtime_path = Path(validated_runtime["path"])
+        candidate_root = _candidate_root(candidate)
+        if runtime_path == candidate_root or candidate_root in runtime_path.parents:
+            raise NativeHandoffError(f"runtime do caso está dentro do candidato: {expected_name}")
+        if (
+            validated_runtime["size"] != entrypoint_size
+            or validated_runtime["sha256"] != entrypoint_digest
+        ):
+            raise NativeHandoffError(f"runtime não está vinculado ao entrypoint: {expected_name}")
+        receipt_relative = _relative_path(case.get("receipt"), label="recibo do caso")
+        receipt_path = evidence_root.joinpath(*PurePosixPath(receipt_relative).parts)
+        if receipt_path.is_symlink() or not receipt_path.is_file():
+            raise NativeHandoffError(f"recibo ausente: {expected_name}")
+        receipt_digest = case.get("receipt_sha256")
+        if not isinstance(receipt_digest, str) or _digest(receipt_path)[1] != receipt_digest:
+            raise NativeHandoffError(f"recibo diverge: {expected_name}")
+        receipt = validate_case_receipt(
+            receipt_path, candidate=candidate, expected_case=expected_name,
+        )
+        if (
+            receipt["artifact"]["name"] != artifact
+            or receipt["artifact"]["size"] != artifact_size
+            or receipt["artifact"]["sha256"] != artifact_digest
+        ):
+            raise NativeHandoffError(f"recibo não corresponde ao resultado: {expected_name}")
+        case["_receipt_data"] = receipt
         for stream_name in ("stdout", "stderr"):
             relative = _relative_path(case.get(stream_name), label=f"{stream_name} do caso")
             stream = evidence_root.joinpath(*PurePosixPath(relative).parts)

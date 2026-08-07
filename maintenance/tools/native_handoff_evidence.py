@@ -28,16 +28,23 @@ from maintenance.tools.native_handoff import (
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
 AGGREGATE_FIELDS = frozenset({
     "format", "project", "status", "signed", "promotable", "candidate",
     "platforms", "redaction",
 })
 PLATFORM_FIELDS = frozenset({"status", "runtime_executed", "environment", "cases"})
 CASE_FIELDS = frozenset({
-    "name", "status", "exit_code", "duration_ms", "candidate_artifact_sha256",
-    "runtime", "stdout_sha256", "stderr_sha256",
+    "name", "status", "exit_code", "duration_ms", "candidate_artifact",
+    "candidate_artifact_size", "candidate_artifact_sha256", "entrypoint", "runtime",
+    "receipt", "stdout_sha256", "stderr_sha256",
 })
 RUNTIME_FIELDS = frozenset({"size", "sha256"})
+ENTRYPOINT_FIELDS = frozenset({"artifact", "size", "sha256"})
+REDACTED_RECEIPT_FIELDS = frozenset({"case", "artifact", "execution", "state"})
+RECEIPT_ARTIFACT_FIELDS = frozenset({"name", "size", "sha256"})
+RECEIPT_EXECUTION_FIELDS = frozenset({"status", "exit_code"})
+RECEIPT_STATE_FIELDS = frozenset({"before", "after"})
 REDACTION = {
     "commands": "removed",
     "environment_variables": "removed",
@@ -84,15 +91,26 @@ def _preflight_output(candidate: Path, output: Path) -> None:
 
 def _project_case(case: Mapping[str, object]) -> dict[str, object]:
     runtime = case["runtime"]
-    if not isinstance(runtime, Mapping):
+    entrypoint = case["entrypoint"]
+    receipt = case.get("_receipt_data")
+    if not isinstance(runtime, Mapping) or not isinstance(entrypoint, Mapping) or not isinstance(receipt, Mapping):
         raise NativeHandoffError("handoff validado perdeu a identidade do runtime")
     return {
         "name": case["name"],
         "status": case["status"],
         "exit_code": case["exit_code"],
         "duration_ms": case["duration_ms"],
+        "candidate_artifact": case["candidate_artifact"],
+        "candidate_artifact_size": case["candidate_artifact_size"],
         "candidate_artifact_sha256": case["candidate_artifact_sha256"],
+        "entrypoint": dict(entrypoint),
         "runtime": {"size": runtime["size"], "sha256": runtime["sha256"]},
+        "receipt": {
+            "case": receipt["case"],
+            "artifact": dict(receipt["artifact"]),
+            "execution": dict(receipt["execution"]),
+            "state": dict(receipt["state"]),
+        },
         "stdout_sha256": case["stdout_sha256"],
         "stderr_sha256": case["stderr_sha256"],
     }
@@ -120,9 +138,20 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
     if (
         platform.get("status") != "passed"
         or platform.get("runtime_executed") is not True
-        or platform.get("environment") != {"system": "Darwin", "machine": "arm64"}
     ):
         raise NativeHandoffError("registro macOS-ARM64 não prova execução nativa")
+    environment = platform.get("environment")
+    if (
+        not isinstance(environment, Mapping)
+        or set(environment) != {"system", "machine", "chip", "model"}
+        or environment.get("system") != "Darwin"
+        or environment.get("machine") != "arm64"
+        or not isinstance(environment.get("chip"), str)
+        or M3_CHIP.fullmatch(environment["chip"]) is None
+        or not isinstance(environment.get("model"), str)
+        or not environment["model"]
+    ):
+        raise NativeHandoffError("registro macOS-ARM64 não prova Apple M3 observável")
     cases = platform.get("cases")
     if not isinstance(cases, list) or len(cases) != len(CANONICAL_CASES):
         raise NativeHandoffError("agregado pending não contém o lifecycle completo")
@@ -137,12 +166,53 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
             raise NativeHandoffError(f"caso redigido não aprovado: {expected_name}")
         duration = case.get("duration_ms")
         runtime = case.get("runtime")
+        entrypoint = case.get("entrypoint")
+        receipt = case.get("receipt")
         if type(duration) is not int or duration < 0:
             raise NativeHandoffError(f"duração redigida inválida: {expected_name}")
         if not isinstance(runtime, Mapping) or set(runtime) != RUNTIME_FIELDS:
             raise NativeHandoffError(f"runtime redigido inválido: {expected_name}")
+        if not isinstance(entrypoint, Mapping) or set(entrypoint) != ENTRYPOINT_FIELDS:
+            raise NativeHandoffError(f"entrypoint redigido inválido: {expected_name}")
+        if not isinstance(receipt, Mapping) or set(receipt) != REDACTED_RECEIPT_FIELDS:
+            raise NativeHandoffError(f"recibo redigido inválido: {expected_name}")
         if type(runtime.get("size")) is not int or runtime["size"] < 0:
             raise NativeHandoffError(f"runtime redigido inválido: {expected_name}")
+        if (
+            not isinstance(case.get("candidate_artifact"), str)
+            or type(case.get("candidate_artifact_size")) is not int
+            or case["candidate_artifact_size"] < 0
+        ):
+            raise NativeHandoffError(f"artifact redigido inválido: {expected_name}")
+        if (
+            not isinstance(entrypoint.get("artifact"), str)
+            or type(entrypoint.get("size")) is not int
+            or entrypoint["size"] < 0
+        ):
+            raise NativeHandoffError(f"entrypoint redigido inválido: {expected_name}")
+        receipt_artifact = receipt.get("artifact")
+        execution = receipt.get("execution")
+        state = receipt.get("state")
+        if (
+            not isinstance(receipt_artifact, Mapping)
+            or set(receipt_artifact) != RECEIPT_ARTIFACT_FIELDS
+            or not isinstance(execution, Mapping)
+            or set(execution) != RECEIPT_EXECUTION_FIELDS
+            or not isinstance(state, Mapping)
+            or set(state) != RECEIPT_STATE_FIELDS
+            or receipt.get("case") != expected_name
+            or receipt_artifact != {
+                "name": case["candidate_artifact"],
+                "size": case["candidate_artifact_size"],
+                "sha256": case["candidate_artifact_sha256"],
+            }
+            or execution != {"status": "passed", "exit_code": 0}
+        ):
+            raise NativeHandoffError(f"recibo redigido não prova o caso: {expected_name}")
+        expected_before = "clean" if expected_name == CANONICAL_CASES[0] else "installed"
+        expected_after = "uninstalled" if expected_name == CANONICAL_CASES[-1] else "installed"
+        if state != {"before": expected_before, "after": expected_after}:
+            raise NativeHandoffError(f"estado redigido inválido: {expected_name}")
         for field in (
             "candidate_artifact_sha256", "stdout_sha256", "stderr_sha256",
         ):
@@ -152,6 +222,10 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
         runtime_digest = runtime.get("sha256")
         if not isinstance(runtime_digest, str) or SHA256.fullmatch(runtime_digest) is None:
             raise NativeHandoffError(f"digest de runtime inválido: {expected_name}")
+        for field in ("entrypoint",):
+            digest = entrypoint.get("sha256")
+            if not isinstance(digest, str) or SHA256.fullmatch(digest) is None:
+                raise NativeHandoffError(f"digest redigido inválido: {expected_name}.{field}")
     return dict(value)
 
 
@@ -198,7 +272,10 @@ def aggregate_pending_evidence(
         raise NativeHandoffError("expected candidate-sha256 diverge do candidate.json exato")
     validated = validate_evidence_file(handoff, candidate=candidate)
     cases = validated["cases"]
+    environment = validated["environment"]
     assert isinstance(cases, list)
+    if not isinstance(environment, Mapping):
+        raise NativeHandoffError("handoff validado perdeu o ambiente nativo")
     aggregate = {
         "format": FORMAT,
         "project": PROJECT,
@@ -210,7 +287,7 @@ def aggregate_pending_evidence(
             PLATFORM: {
                 "status": "passed",
                 "runtime_executed": True,
-                "environment": {"system": "Darwin", "machine": "arm64"},
+                "environment": dict(environment),
                 "cases": [_project_case(case) for case in cases],
             }
         },

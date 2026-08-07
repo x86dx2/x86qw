@@ -20,6 +20,9 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
         artifact = candidate / "artifact.zip"
         artifact.write_bytes(b"immutable candidate bytes")
         artifact_digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        entrypoint = candidate / "entrypoint.py"
+        entrypoint.write_bytes(b"candidate entrypoint bytes")
+        entrypoint_digest = hashlib.sha256(entrypoint.read_bytes()).hexdigest()
         manifest = {
             "format": 1,
             "project": "x86qw",
@@ -30,9 +33,13 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
                 "artifact.zip": {
                     "size": artifact.stat().st_size,
                     "sha256": artifact_digest,
-                }
+                },
+                "entrypoint.py": {
+                    "size": entrypoint.stat().st_size,
+                    "sha256": entrypoint_digest,
+                },
             },
-            "artifact_count": 1,
+            "artifact_count": 2,
             "metadata": {
                 name: {"size": 1, "sha256": "a" * 64}
                 for name in (
@@ -66,7 +73,7 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
         runtime_dir = root / "Users" / "usuario-secreto" / "bin"
         runtime_dir.mkdir(parents=True)
         runtime = runtime_dir / "runtime-secret"
-        runtime.write_bytes(b"runtime exact bytes")
+        runtime.write_bytes((root / "candidate" / "entrypoint.py").read_bytes())
         runtime_identity = {
             "path": str(runtime),
             "size": runtime.stat().st_size,
@@ -81,16 +88,47 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
                 encoding="utf-8",
             )
             stderr.write_text("PASSWORD=never-copy-this\n", encoding="utf-8")
+            receipt = evidence / f"receipts/{index:02d}-{name}.json"
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            receipt.write_text(
+                json.dumps({
+                    "format": 1,
+                    "project": "x86qw",
+                    "protocol": "x86qw-native-case-v1",
+                    "case": name,
+                    "artifact": {
+                        "name": "artifact.zip",
+                        "size": len(b"immutable candidate bytes"),
+                        "sha256": hashlib.sha256(b"immutable candidate bytes").hexdigest(),
+                    },
+                    "execution": {"status": "passed", "exit_code": 0},
+                    "state": {
+                        "before": "clean" if index == 1 else "installed",
+                        "after": "uninstalled" if index == len(CANONICAL_CASES) else "installed",
+                    },
+                }, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             cases.append({
                 "name": name,
                 "status": status if index == 1 else "passed",
                 "exit_code": 0,
                 "duration_ms": index,
                 "candidate_artifact": "artifact.zip",
+                "candidate_artifact_size": len(b"immutable candidate bytes"),
                 "candidate_artifact_sha256": hashlib.sha256(
                     b"immutable candidate bytes"
                 ).hexdigest(),
+                "entrypoint": {
+                    "artifact": "entrypoint.py",
+                    "size": (root / "candidate" / "entrypoint.py").stat().st_size,
+                    "sha256": hashlib.sha256(
+                        (root / "candidate" / "entrypoint.py").read_bytes()
+                    ).hexdigest(),
+                },
                 "runtime": runtime_identity,
+                "receipt": f"receipts/{index:02d}-{name}.json",
+                "receipt_sha256": hashlib.sha256(receipt.read_bytes()).hexdigest(),
                 "stdout": stdout.name,
                 "stdout_sha256": hashlib.sha256(stdout.read_bytes()).hexdigest(),
                 "stderr": stderr.name,
@@ -103,7 +141,12 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
             "platform": "macOS-ARM64" if status != "not-run" else None,
             "candidate": identity if status != "not-run" else None,
             "environment": (
-                {"system": "Darwin", "machine": "arm64"}
+                {
+                    "system": "Darwin",
+                    "machine": "arm64",
+                    "chip": "Apple M3 Pro",
+                    "model": "Mac15,6",
+                }
                 if status != "not-run"
                 else {"system": "Linux", "machine": "x86_64"}
             ),

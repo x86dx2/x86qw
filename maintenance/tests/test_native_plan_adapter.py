@@ -123,7 +123,10 @@ class NativePlanAdapterTests(unittest.TestCase):
             self.assertEqual(list(EXPECTED_CASES), [case["name"] for case in plan["cases"]])
             self.assertEqual(
                 [
-                    ["--candidate-root", "{candidate}", "--case", name]
+                    [
+                        "--candidate-root", "{candidate}", "--case", name,
+                        "--scratch-root", "{scratch}", "--receipt", "{receipt}",
+                    ]
                     for name in EXPECTED_CASES
                 ],
                 [case["arguments"] for case in plan["cases"]],
