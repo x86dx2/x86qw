@@ -228,6 +228,25 @@ def _artifact_matching(candidate: Candidate, predicate: object, label: str) -> C
     return matches[0]
 
 
+def _stable_macos_release(candidate: Candidate) -> str:
+    matches = []
+    for artifact in candidate.artifacts.values():
+        parts = PurePosixPath(artifact.name).parts
+        if (
+            len(parts) == 7
+            and parts[:4] == ("runtime", "clients", "ezquake", "stable")
+            and parts[5] == "macos-universal"
+            and parts[6] == "ezQuake-macOS-universal.zip"
+        ):
+            matches.append(parts[4])
+    if len(matches) != 1:
+        raise CandidateCaseError(
+            "artefato nativo ausente ou ambíguo (ezQuake stable macOS universal): "
+            f"{len(matches)} encontrados",
+        )
+    return matches[0]
+
+
 def _snapshot_artifact(artifact: CandidateArtifact, destination: Path) -> Path:
     """Copy one candidate artifact into scratch without losing its identity."""
 
@@ -300,6 +319,14 @@ def _installer_command(
         "installer",
     )
     pyz = _extract_zip_member(archive, "/x86qw.pyz", scratch, "installer")
+    if arguments == ("install",):
+        arguments = (
+            "--platform", "macos",
+            "--channel", "stable",
+            "--release", _stable_macos_release(candidate),
+            "--without-components",
+            "install",
+        )
     # The target is deliberately shared by all installer cases and contains a
     # space plus Unicode. The first install owns creation of the target.
     target = Path(state_root) / _INSTALLATION_TARGET

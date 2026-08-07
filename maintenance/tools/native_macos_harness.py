@@ -204,7 +204,7 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
     candidate = Path(candidate).absolute()
     cases = validate_plan(plan, candidate=candidate)
     initial_identity = candidate_identity(candidate)
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir).absolute()
     try:
         output_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError as error:

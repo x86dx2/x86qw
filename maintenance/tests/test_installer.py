@@ -2674,6 +2674,49 @@ class InstallerTests(unittest.TestCase):
                 install_qw.parse_arguments(["verify", "--platform", "linux"], ROOT)
         self.assertEqual(2, raised.exception.code)
 
+    def test_noninteractive_install_selection_requires_a_complete_explicit_pair(self):
+        parsed = install_qw.parse_arguments(
+            [
+                "install", "/tmp/x86qw", "--platform", "macos",
+                "--channel", "stable", "--release", "3.6.9",
+                "--without-components",
+            ],
+            ROOT,
+        )
+        self.assertEqual("macos", parsed.platform)
+        self.assertEqual("stable", parsed.channel)
+        self.assertEqual("3.6.9", parsed.release)
+        self.assertTrue(parsed.without_components)
+
+        for arguments in (
+            ["install", "--channel", "stable"],
+            ["install", "--release", "3.6.9"],
+            ["verify", "--channel", "stable", "--release", "3.6.9"],
+        ):
+            with self.subTest(arguments=arguments), self.assertRaises(SystemExit) as raised:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    install_qw.parse_arguments(arguments, ROOT)
+            self.assertEqual(2, raised.exception.code)
+
+    def test_explicit_install_selection_does_not_open_channel_or_release_menus(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["macos"]
+            record = (
+                "3.6.9",
+                ("https://example.test/ezQuake-macOS-universal.zip",),
+                "a" * 64,
+            )
+            with mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=AssertionError("menu aberto durante seleção explícita"),
+            ), mock.patch.object(installer, "stable_catalog", return_value=[record]):
+                self.assertEqual("stable", installer.choose_channel("stable"))
+                installer.choose_release("3.6.9")
+
+            self.assertEqual("stable", installer.channel)
+            self.assertEqual("3.6.9", installer.selected_version)
+
     def test_main_passes_platform_override_to_installation(self):
         target = Path("/tmp/x86qw-platform-test")
         installer = mock.MagicMock()
@@ -2688,6 +2731,36 @@ class InstallerTests(unittest.TestCase):
         installer.install.assert_called_once()
         self.assertEqual("linux", installer.install.call_args.kwargs["platform"])
         self.assertTrue(callable(installer.install.call_args.kwargs["before_mutation"]))
+
+    def test_main_forwards_deterministic_install_selection_without_prompting(self):
+        target = Path("/tmp/x86qw-deterministic-install")
+        installer = mock.MagicMock()
+        installer.target = target
+        installer.component_state_transaction.return_value.__enter__.return_value = []
+        with mock.patch.object(install_qw, "Installer", return_value=installer), \
+                mock.patch("builtins.input", side_effect=AssertionError("prompt aberto")):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    0,
+                    install_qw.main([
+                        "install", str(target), "--platform", "macos",
+                        "--channel", "stable", "--release", "3.6.9",
+                        "--without-components",
+                    ]),
+                )
+        installer.install.assert_called_once()
+        self.assertEqual(
+            {
+                "platform": "macos",
+                "channel": "stable",
+                "release": "3.6.9",
+                "without_components": True,
+            },
+            {
+                key: installer.install.call_args.kwargs[key]
+                for key in ("platform", "channel", "release", "without_components")
+            },
+        )
 
     def test_active_service_lock_blocks_every_mutating_manager_action(self):
         cases = (

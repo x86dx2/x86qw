@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from maintenance.native_case_entrypoint import (
@@ -104,6 +106,52 @@ class NativeCaseEntrypointTests(unittest.TestCase):
             self.assertEqual("-version", prepared.argv[1])
             self.assertNotIn(candidate.as_posix(), prepared.argv[0])
             self.assertIs(prepared.shell, False)
+
+    def test_install_case_dispatches_stable_release_from_candidate_without_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            archive = candidate / "installer/x86qw-installer-1.0.0.zip"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("x86qw-installer-1.0.0/x86qw.pyz", b"installer")
+            stable = candidate / (
+                "runtime/clients/ezquake/stable/3.6.9/"
+                "macos-universal/ezQuake-macOS-universal.zip"
+            )
+            stable.parent.mkdir(parents=True, exist_ok=True)
+            stable.write_bytes(b"stable runtime")
+            manifest_path = candidate / "candidate.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for path in (archive, stable):
+                relative = path.relative_to(candidate).as_posix()
+                manifest["artifacts"][relative] = {
+                    "size": path.stat().st_size,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8",
+            )
+
+            prepared = build_case_command(
+                candidate=load_candidate(candidate),
+                case="install-clean-space-unicode",
+                scratch=root / "scratch",
+            )
+
+            self.assertEqual(
+                (
+                    sys.executable,
+                    str(root / "scratch/extracted/installer/x86qw.pyz"),
+                    "--platform", "macos",
+                    "--channel", "stable",
+                    "--release", "3.6.9",
+                    "--without-components",
+                    "install",
+                    str(root / "scratch/instalação espaço"),
+                ),
+                prepared.argv,
+            )
 
 
 if __name__ == "__main__":

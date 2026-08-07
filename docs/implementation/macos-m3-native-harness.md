@@ -46,6 +46,15 @@ O plano formato 2 é determinístico e fechado. Ele:
   --scratch-root {scratch} --receipt {receipt}`;
 - não incorpora caminhos absolutos, timestamps ou comandos inferidos.
 
+Os dois casos de instalação continuam usando esse mesmo protocolo fechado, mas
+o entrypoint candidato-owned deriva a versão stable macOS do próprio candidato
+e passa ao instalador as seleções explícitas de plataforma, canal, release e
+ausência de componentes. A CLI mantém os menus quando essas opções não são
+fornecidas; no harness, `stdin` permanece fechado (`DEVNULL`) e nenhum prompt
+humano é reaberto. O `output-dir` também é normalizado para absoluto antes de
+criar scratch, logs e recibos, evitando caminhos duplicados quando o chamador
+usa um caminho relativo.
+
 Contrato ausente resulta em exit code 2 e `not-run`, sem plano. Contrato
 malformado, artifact não registrado ou bytes divergentes resultam em erro,
 também sem plano. O adaptador nunca altera o candidato.
