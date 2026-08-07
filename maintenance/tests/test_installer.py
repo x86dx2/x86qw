@@ -45,6 +45,15 @@ class InstallerTests(unittest.TestCase):
         return install_qw.Installer(project, target, cache), target, cache
 
     @contextlib.contextmanager
+    def trusted_public_catalog(self, catalog):
+        with mock.patch.object(
+            install_qw, "trusted_root_bytes", return_value=b"test root",
+        ), mock.patch.object(
+            install_qw, "load_trusted_catalog", return_value=catalog,
+        ) as load:
+            yield load
+
+    @contextlib.contextmanager
     def component_catalog_unavailable(self):
         with mock.patch.object(
             install_qw, "load_component_catalog",
@@ -2160,11 +2169,7 @@ class InstallerTests(unittest.TestCase):
             }
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
-                ):
+                with self.trusted_public_catalog(catalog):
                     self.assertEqual(
                         [("3.6.9", tuple(package["urls"]), "a" * 64)],
                         installer.stable_catalog(),
@@ -2172,11 +2177,7 @@ class InstallerTests(unittest.TestCase):
             package["redistribution_reviewed"] = False
             installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
-                ):
+                with self.trusted_public_catalog(catalog):
                     with self.assertRaises(install_qw.InstallerError):
                         installer.stable_catalog()
 
@@ -2188,20 +2189,36 @@ class InstallerTests(unittest.TestCase):
                 (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
             )
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
-                ) as get:
+                with self.trusted_public_catalog(catalog) as load:
                     installer.stable_catalog()
                     installer.component_package_record("nquake-bootstrap")
-            get.assert_called_once_with(
-                install_qw.CATALOG_URLS,
-                maximum_size=install_qw.CATALOG_MAX_BYTES,
-                timeout=install_qw.CATALOG_TIMEOUT,
-                attempts=1,
-                mirror_label="Catálogo",
-            )
+            load.assert_called_once()
+
+    def test_online_catalog_requires_a_tuf_root_before_network(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.online_only = True
+            with mock.patch.object(
+                installer.remote,
+                "get_mirrors",
+                side_effect=AssertionError("unsigned catalog network path was used"),
+            ), self.assertRaisesRegex(install_qw.InstallerError, "root TUF|trust"):
+                installer.public_catalog("remote")
+
+    def test_legacy_catalog_url_override_cannot_bypass_tuf(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            installer.online_only = True
+            attacker = {"format": 1, "project": "x86qw", "packages": []}
+            with mock.patch.dict(
+                os.environ,
+                {"X86_QW_CATALOG_URL": "https://attacker.invalid/catalog.json"},
+            ), mock.patch.object(
+                installer.remote,
+                "get",
+                return_value=json.dumps(attacker).encode(),
+            ), self.assertRaisesRegex(install_qw.InstallerError, "root TUF|trust|não (?:é )?autorizado"):
+                installer.public_catalog("remote")
 
     def test_online_mode_asks_for_a_target_and_ignores_local_distribution(self):
         online = install_qw.parse_arguments(["--online-only"], ROOT)
@@ -2234,22 +2251,14 @@ class InstallerTests(unittest.TestCase):
             artifact = project / "dist/test/file.zip"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(b"local")
-            installer = install_qw.Installer(project, target, online_only=True)
+            installer = install_qw.Installer(
+                project, target, root / "cache/x86qw", online_only=True,
+            )
             remote = {"format": 1, "project": "x86qw", "packages": []}
             with contextlib.redirect_stdout(io.StringIO()):
-                with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(remote).encode(), install_qw.CATALOG_URL),
-                ) as get:
+                with self.trusted_public_catalog(remote) as load:
                     self.assertEqual(remote, installer.public_catalog("remote"))
-            get.assert_called_once_with(
-                install_qw.CATALOG_URLS,
-                maximum_size=install_qw.CATALOG_MAX_BYTES,
-                timeout=install_qw.CATALOG_TIMEOUT,
-                attempts=1,
-                mirror_label="Catálogo",
-            )
+            load.assert_called_once()
             self.assertIsNone(installer.distribution_artifact(
                 "test/file.zip", "file.zip", expected_size=5,
                 expected_sha256=install_qw.hashlib.sha256(b"local").hexdigest(),
@@ -4728,26 +4737,18 @@ class InstallerTests(unittest.TestCase):
                 )
         self.assertLess(time.monotonic() - started, 0.5)
 
-    def test_public_catalog_falls_back_to_the_next_mirror(self):
+    def test_public_catalog_does_not_fall_back_to_unsigned_mirrors(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.online_only = True
-            catalog = {"format": 1, "project": "x86qw", "packages": []}
-            payload = json.dumps(catalog).encode()
-
-            def fallback(contracts, **options):
-                self.assertEqual(install_qw.CATALOG_URLS, tuple(item.url for item in contracts))
-                options["on_mirror_failure"](
-                    1, contracts[0], install_qw.DownloadError("timeout"),
-                )
-                return mock.Mock(data=payload)
-
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote, "download_many", side_effect=fallback,
+                    installer.remote, "get_mirrors",
+                    side_effect=AssertionError("unsigned mirror path was used"),
                 ) as get:
-                    self.assertEqual(catalog, installer.public_catalog("remote"))
-            get.assert_called_once()
+                    with self.assertRaisesRegex(install_qw.InstallerError, "root TUF"):
+                        installer.public_catalog("remote")
+            get.assert_not_called()
 
     def test_http_get_preserves_the_github_rate_limit_diagnostic(self):
         with tempfile.TemporaryDirectory() as temporary:

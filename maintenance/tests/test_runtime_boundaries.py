@@ -96,7 +96,12 @@ class RuntimeMemberContractTests(unittest.TestCase):
             f"_x86qw/{member}"
             for _source, member, _mode in installer_builder.LEGAL_FILES
         }
-        self.assertEqual(set(installed_members), set(declared_members) | legal_members)
+        dependency_members = {
+            name for name, _payload in installer_builder.runtime_dependency_members()
+        }
+        self.assertEqual(
+            set(installed_members), set(declared_members) | legal_members | dependency_members,
+        )
         self.assertFalse(
             any(
                 member == "maintenance" or member.startswith("maintenance/")
@@ -139,6 +144,7 @@ class RuntimeMemberContractTests(unittest.TestCase):
                 "generated:games": "_x86qw/games.json",
                 "generated:identity": "_x86qw/installer.json",
                 "generated:component-catalog": "_x86qw/components.json",
+                "generated:runtime-dependencies": "_x86qw/runtime-dependencies.json",
             },
         )
 

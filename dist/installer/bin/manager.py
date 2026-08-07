@@ -141,6 +141,11 @@ from x86qw_runtime.versioning import (
     STABLE_VERSION,
     parse_semver,
 )
+from x86qw_runtime.trust import (
+    BoundedTufFetcher,
+    TrustError,
+    load_trusted_catalog,
+)
 
 from x86qw_runtime.catalogs import (
     components_by_id,
@@ -176,6 +181,10 @@ CATALOG_URLS = (
     "https://raw.githubusercontent.com/x86dx2/x86qw/main/site/public/api/v1/catalog.json",
     "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
 )
+TRUST_METADATA_URL = "https://x86qw.x86.com.br/api/v1/trust/metadata/"
+TRUST_TARGET_URL = "https://x86qw.x86.com.br/api/v1/trust/targets/"
+TRUST_ROOT_MEMBER = "_x86qw/trust/root.json"
+TRUST_ROOT_MAX_BYTES = 512 * 1024
 CATALOG_TIMEOUT = 10.0
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
 HUB_MAX_BYTES = 1024 * 1024
@@ -288,6 +297,28 @@ def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object
     if not isinstance(value, dict):
         raise InstallerError(f"{label} inválido em {archive}")
     return value
+
+
+def trusted_root_bytes() -> bytes:
+    """Load only an embedded production root or an explicit development root."""
+
+    if ZIPAPP_PATH is not None:
+        try:
+            plan = scan_archive(ZIPAPP_PATH, required_members=(TRUST_ROOT_MEMBER,))
+            return read_archive_member(plan, TRUST_ROOT_MEMBER)
+        except (ArchiveError, OSError, KeyError) as error:
+            raise InstallerError("A root TUF de produção não está incorporada na CLI.") from error
+    configured = os.environ.get("X86_QW_TRUST_ROOT")
+    if not configured:
+        raise InstallerError(
+            "A root TUF de desenvolvimento não foi informada; catálogo remoto bloqueado."
+        )
+    try:
+        return read_bounded_regular_file(
+            Path(configured), maximum_size=TRUST_ROOT_MAX_BYTES,
+        )
+    except OSError as error:
+        raise InstallerError("A root TUF de desenvolvimento é inválida.") from error
 
 
 def application_version() -> str:
@@ -4433,30 +4464,35 @@ class Installer:
             catalog_status = "Loaded"
             try:
                 if catalog_url:
-                    catalog_payload = self.remote.get(
-                        catalog_url,
-                        maximum_size=CATALOG_MAX_BYTES,
-                        timeout=CATALOG_TIMEOUT,
-                        attempts=2,
+                    raise InstallerError(
+                        "X86_QW_CATALOG_URL não é autorizado a contornar a cadeia TUF."
                     )
-                    catalog = json.loads(catalog_payload)
-                    catalog_status = "Baixado"
-                    console.detail(f"Catálogo remoto explícito: {safe_url_for_log(catalog_url)}")
-                elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
+                if not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
                     catalog_payload = local_catalog.read_bytes()
                     catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    catalog_payload, selected_url = self.remote.get_mirrors(
-                        CATALOG_URLS,
-                        maximum_size=CATALOG_MAX_BYTES,
-                        timeout=CATALOG_TIMEOUT,
-                        attempts=1,
-                        mirror_label="Catálogo",
+                    self.prepare_cache()
+                    assert self.cache_root is not None
+                    trust_root = self.cache_root / "trust"
+                    private_fs.ensure_private_directories(
+                        trust_root, stop=self.cache_root,
                     )
-                    catalog = json.loads(catalog_payload)
+                    catalog = load_trusted_catalog(
+                        bootstrap_root=trusted_root_bytes(),
+                        metadata_dir=trust_root / "metadata",
+                        target_dir=trust_root / "targets",
+                        metadata_base_url=TRUST_METADATA_URL,
+                        target_base_url=TRUST_TARGET_URL,
+                        fetcher=BoundedTufFetcher(self.remote.get),
+                    )
+                    catalog_payload = json.dumps(
+                        catalog, ensure_ascii=False, separators=(",", ":"),
+                    ).encode("utf-8")
                     catalog_status = "Baixado"
-                    console.detail(f"Catálogo público: {safe_url_for_log(selected_url)}")
+                    console.detail(f"Catálogo TUF: {TRUST_METADATA_URL}")
+            except TrustError as error:
+                raise InstallerError(f"Falha de trust do catálogo x86QW: {error}") from error
             except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):
