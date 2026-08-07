@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -42,7 +43,7 @@ jobs:
         run: npx --yes wrangler@4.114.0 deploy --dry-run
 
   portable:
-    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -90,3 +91,24 @@ jobs:
           python dist/installer/bin/manager.py host --help >/dev/null
           python dist/installer/bin/manager.py proxy --help >/dev/null
           python dist/installer/bin/manager.py qtv --help >/dev/null
+
+  # Keep the protected contexts from the pre-1.0 matrix while the public job
+  # names make the portable/native boundary explicit.
+  portable-legacy-context:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    needs: portable
+    if: ${{ always() }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - name: Mirror the portable contract result
+        shell: bash
+        run: test "${{ needs.portable.result }}" = success
+
+# Keep the pull_request gate visible when the branch is synchronized. The
+# legacy names remain protected contexts until branch protection is migrated;
+# each mirrors the aggregate portable contract result.

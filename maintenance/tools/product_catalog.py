@@ -56,7 +56,18 @@ def build_product_catalog(project_root: Path) -> dict[str, object]:
                     "format": platform["format"],
                     "origin": platform["origin"],
                     "support": platform["support"],
+                    "validation": platform["validation"],
                     "test_required": platform["test_required"],
+                    **({
+                        "support_targets": [
+                            {
+                                "variant": target["variant"],
+                                "support": target["support"],
+                                "validation": target["validation"],
+                            }
+                            for target in platform["support_targets"]
+                        ]
+                    } if platform.get("support_targets") else {}),
                 }
                 for platform in runtime["platforms"]
             ],

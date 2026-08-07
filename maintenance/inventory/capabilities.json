@@ -47,6 +47,7 @@
   "platform_labels": {
     "macos-universal": "macOS",
     "macos-arm64": "macOS arm64",
+    "macos-x64": "macOS Intel",
     "linux-x86_64": "Linux x86_64",
     "linux-amd64": "Linux amd64",
     "windows-x64": "Windows x64"

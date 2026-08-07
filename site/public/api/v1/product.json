@@ -124,26 +124,41 @@
           "format": "macho-universal",
           "origin": "official",
           "support": "conditional",
+          "support_targets": [
+            {
+              "support": "conditional",
+              "validation": "portable-contract",
+              "variant": "macos-arm64"
+            },
+            {
+              "support": "preview",
+              "validation": "portable-contract",
+              "variant": "macos-x64"
+            }
+          ],
           "system": "macos",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "macos-universal"
         },
         {
           "architecture": "x86_64",
           "format": "elf-amd64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "linux",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "linux-x86_64"
         },
         {
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "windows",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "windows-x64"
         }
       ],
@@ -168,27 +183,42 @@
           "architecture": "universal",
           "format": "macho-universal",
           "origin": "official",
-          "support": "conditional",
+          "support": "preview",
+          "support_targets": [
+            {
+              "support": "preview",
+              "validation": "portable-contract",
+              "variant": "macos-arm64"
+            },
+            {
+              "support": "preview",
+              "validation": "portable-contract",
+              "variant": "macos-x64"
+            }
+          ],
           "system": "macos",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "macos-universal"
         },
         {
           "architecture": "x86_64",
           "format": "elf-amd64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "linux",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "linux-x86_64"
         },
         {
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "windows",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "windows-x64"
         }
       ],
@@ -211,27 +241,30 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
-          "support": "supported",
+          "support": "preview",
           "system": "macos",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "macos-arm64"
         },
         {
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "linux",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "linux-amd64"
         },
         {
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "windows",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "windows-x64"
         }
       ],
@@ -253,27 +286,30 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
-          "support": "supported",
+          "support": "preview",
           "system": "macos",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "macos-arm64"
         },
         {
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "x86qw-build",
-          "support": "supported",
+          "support": "preview",
           "system": "linux",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "linux-amd64"
         },
         {
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "x86qw-build",
-          "support": "supported",
+          "support": "preview",
           "system": "windows",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "windows-x64"
         }
       ],
@@ -295,27 +331,30 @@
           "architecture": "arm64",
           "format": "macho-arm64",
           "origin": "x86qw-build",
-          "support": "supported",
+          "support": "preview",
           "system": "macos",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "macos-arm64"
         },
         {
           "architecture": "amd64",
           "format": "elf-amd64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "linux",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "linux-amd64"
         },
         {
           "architecture": "x64",
           "format": "pe-x64",
           "origin": "official",
-          "support": "supported",
+          "support": "preview",
           "system": "windows",
           "test_required": true,
+          "validation": "portable-contract",
           "variant": "windows-x64"
         }
       ],
