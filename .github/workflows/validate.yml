@@ -109,4 +109,6 @@ jobs:
         shell: bash
         run: test "${{ needs.portable.result }}" = success
 
-# Keep the pull_request gate visible when the branch is synchronized.
+# Keep the pull_request gate visible when the branch is synchronized. The
+# legacy names remain protected contexts until branch protection is migrated;
+# each mirrors the aggregate portable contract result.
