@@ -27,17 +27,17 @@ só.
 1. **PR A — verdade de plataforma:** separar artefato, suporte e validação;
    classificar estados de plataforma e preservar a CI portável. Publicar a
    `0.7.4` somente em uma PR de release posterior.
-2. **PR B — governança (`#55`):** consolidar licença, avisos, ownership,
+2. **PR B — governança (PR `#55`):** consolidar licença, avisos, ownership,
    Dependabot, lockfile, threat model e runbooks.
-3. **PR C — contratos (`#53`):** congelar SemVer, schemas, envelopes JSON,
+3. **PR C — contratos (PR `#53`):** congelar SemVer, schemas, envelopes JSON,
    redaction e códigos; alvo sugerido `0.8.0`.
-4. **PR D — migração (`#46`):** migrar somente estados publicados de
+4. **PR D — migração (PR `#46`):** migrar somente estados publicados de
    `0.7.0–0.7.3`; alvo sugerido `0.8.1`/`0.8.2`.
-5. **PRs E1/E2 — trust (`#48`):** aprovar a arquitetura e só depois
-   implementar a cadeia de confiança; alvo sugerido `0.9.0`.
-6. **PR F — candidato imutável (`#51`):** construir uma vez, fixar Actions,
+5. **PRs E1/E2 — trust:** aprovar a arquitetura na E1 (PR `#48`) e só depois
+   implementar a cadeia de confiança em uma PR E2 futura; alvo sugerido `0.9.0`.
+6. **PR F — candidato imutável (PR `#51`):** construir uma vez, fixar Actions,
    conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
-7. **PR G — Mac M3/arm64 (`#54`):** executar o candidato exato e abrir uma PR
+7. **PR G — Mac M3/arm64 (PR `#54`):** executar o candidato exato e abrir uma PR
    de release separada para `1.0.0-rc.1`.
 8. **PR H — `1.0.0`:** promover somente após o período de uso do RC, com trust,
    evidência M3, bytes idênticos e mirrors convergentes.

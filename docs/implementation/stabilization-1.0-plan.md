@@ -142,8 +142,10 @@ issue da fase correspondente e revisão separada.
 
 ## 5. Sequência A–H
 
-Cada fase começa com uma issue, cria sua branch somente depois da issue, fecha
-seu gate de contrato e só então desbloqueia a fase seguinte. Os alvos de versão
+Cada fase começa com uma issue de acompanhamento, cria sua branch somente depois
+da issue, fecha seu gate de contrato e só então desbloqueia a fase seguinte. As
+refs `#46`, `#48`, `#51`, `#53`, `#54` e `#55` atualmente identificam PRs abertas;
+elas não substituem a issue de acompanhamento nem provam aprovação. Os alvos de versão
 são sugestões de publicação, não versões preparadas nesta entrega.
 
 ### PR A — verdade de plataforma
@@ -159,7 +161,7 @@ macOS M3 não é promovido antes de G. Depois de A, publicar obrigatoriamente a
 com execução; CI portável permanece intacta; a issue de release da `0.7.4` é
 separada da implementação.
 
-### PR B — governança (`issue #55`)
+### PR B — governança (PR `#55`)
 
 Extrair licença, avisos, ownership, Dependabot, lockfile do site, threat model
 e runbooks. Não remover workflows e não misturar trust, promoção ou publicação.
@@ -167,7 +169,7 @@ e runbooks. Não remover workflows e não misturar trust, promoção ou publica�
 **Gate:** cada novo arquivo tem owner e licença; avisos carregam para a
 distribuição moderna; runbooks apontam para uma autoridade única.
 
-### PR C — contratos (`issue #53`, alvo `0.8.0`)
+### PR C — contratos (PR `#53`, alvo `0.8.0`)
 
 Extrair SemVer, schemas de estado/receipt, envelopes JSON, redaction e códigos
 por símbolo/hunk. Os writers reais devem emitir as versões congeladas. Antes de
@@ -177,7 +179,7 @@ devem aceitar `1.0.0-rc.1`.
 **Gate:** schemas, writers e consumidores concordam; fixtures negativas cobrem
 redaction e códigos; nenhum bootstrap 0.7.x é quebrado.
 
-### PR D — migração (`issue #46`, alvo `0.8.1` ou `0.8.2`)
+### PR D — migração (PR `#46`, alvo `0.8.1` ou `0.8.2`)
 
 Atualizar a issue para suportar somente versões realmente publicadas. Usar
 fixtures reais `0.7.0–0.7.3`; remover claims sintéticos `0.8.x/0.9.x`; garantir
@@ -187,7 +189,7 @@ ownership continuam diagnosticáveis.
 **Gate:** migração unilateral, preservação de arquivos pessoais, recibos
 coerentes e ausência de versão futura inventada.
 
-### PRs E1/E2 — trust (`issue #48`, alvo `0.9.0`)
+### PRs E1/E2 — trust (E1 é a PR `#48`; E2 será uma PR futura, alvo `0.9.0`)
 
 Manter a issue aberta nas duas PRs. E1 aprova ADR, biblioteca, algoritmo,
 thresholds, custódia, endpoints, expiração, rotação e cerimônia. E2 só
@@ -200,7 +202,7 @@ checkpoint que expira em `2026-08-08`.
 independente foi registrada e o verificador falha fechado para rollback,
 freeze, equivocation, expiração e root não ancorado.
 
-### PR F — candidato imutável (`issue #51`)
+### PR F — candidato imutável (PR `#51`)
 
 Preservar e redesenhar `validate.yml` e `release.yml`. Desacoplar preparação de
 candidato de trust/evidência por imports opcionais: rehearsal pode existir sem
@@ -214,7 +216,7 @@ por digest imutável.
 preparação e promoção; nenhum destino é sobrescrito; trust não é importado
 implicitamente.
 
-### PR G — Mac M3/arm64 e RC (`issue #54`)
+### PR G — Mac M3/arm64 e RC (PR `#54`)
 
 Reescrever a issue para um executor real. O checkpoint contém schemas e
 validadores de handoff, não evidência nativa. No candidato exato, executar o

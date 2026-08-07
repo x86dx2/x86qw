@@ -21,8 +21,9 @@ Depois do merge, a release corretiva `0.7.4` deverá ser aberta em uma PR separa
 
 ## Issue ativa
 
-[Issue #66](https://github.com/x86dx2/x86qw/issues/66), que precedeu a criação
-da branch da PR A.
+Nenhuma issue independente está registrada como ativa; o work item corrente é a
+[PR #66](https://github.com/x86dx2/x86qw/pull/66). A issue de acompanhamento
+da fase A ainda precisa ser vinculada antes de declarar o gate encerrado.
 
 ## Gates
 
@@ -41,5 +42,5 @@ uso ainda não existem como gates concluídos.
 
 ## Próxima ação
 
-Revisar e aprovar a PR A; após o merge, abrir a PR de release `0.7.4` separada
-da implementação antes de desbloquear a PR B.
+Obter revisão independente da PR A; após o merge, abrir a PR de release `0.7.4`
+separada da implementação antes de desbloquear a PR B.
