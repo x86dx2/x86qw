@@ -1577,6 +1577,10 @@ class MigrationOnePointZeroTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "transaction"
             path.mkdir()
+            file_path = path / "payload"
+            file_path.write_bytes(b"payload")
+            destination = path / "destination"
+            root = path.parent
             identity = (123, 456)
             with (
                 mock.patch.object(migrations.os, "name", "nt"),
@@ -1590,12 +1594,32 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                     "open",
                     side_effect=AssertionError("Windows cleanup must not use os.open"),
                 ),
+                mock.patch.object(
+                    migrations,
+                    "_safe_payload",
+                    return_value=b"payload",
+                ),
             ):
                 self.assertEqual(
                     identity,
                     migrations._private_path_identity(path, directory=True),
                 )
-            native_identity.assert_called_once_with(path, directory=True)
+                payload, payload_identity = migrations._optional_payload(
+                    root, file_path,
+                )
+                self.assertEqual(b"payload", payload)
+                self.assertEqual(identity, payload_identity)
+                operation = migrations._operation(
+                    root,
+                    key="payload",
+                    source=file_path,
+                    destination=destination,
+                    kind="move-receipt",
+                    payload=b"payload",
+                )
+                self.assertEqual(identity, operation.source_identity)
+            native_identity.assert_any_call(path, directory=True)
+            native_identity.assert_any_call(file_path, directory=False)
 
     def test_hard_crash_leaves_a_recoverable_journal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

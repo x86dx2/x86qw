@@ -455,8 +455,7 @@ def _optional_payload(root: Path, path: Path) -> tuple[bytes | None, tuple[int, 
     if not path.exists() and not path.is_symlink():
         return None, None
     payload = _safe_payload(root, path)
-    metadata = path.lstat()
-    return payload, (int(metadata.st_dev), int(metadata.st_ino))
+    return payload, _private_path_identity(path, directory=False)
 
 
 def _remove_private_tree(path: Path) -> None:
@@ -812,12 +811,9 @@ def inspect_pending_migration(
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
             return PendingMigration(root, directory, journal, directory.name, None, str(error))
         try:
-            journal_metadata = journal.lstat()
-        except OSError as error:
+            journal_identity = _private_path_identity(journal, directory=False)
+        except MigrationError as error:
             return PendingMigration(root, directory, journal, directory.name, None, str(error))
-        journal_identity = (
-            int(journal_metadata.st_dev), int(journal_metadata.st_ino),
-        )
         journal_sha256 = _digest(payload)
         validated, detail = _validate_pending_document(root, directory, journal, document)
         if detail:
@@ -852,10 +848,7 @@ def _remove_if_owned(root: Path, path: Path, expected_sha256: str) -> None:
         return
     if _digest(payload) != expected_sha256 or identity is None:
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
-    metadata = path.lstat()
-    if stat.S_ISLNK(metadata.st_mode) or (
-        int(metadata.st_dev), int(metadata.st_ino)
-    ) != identity:
+    if _private_path_identity(path, directory=False) != identity:
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
     if not remove_persistent_identity_bound_path(path, identity, directory=False):
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
@@ -1034,12 +1027,9 @@ def _validate_cleanup_tree(root: Path, pending: PendingMigration) -> _CleanupPla
         required=True,
     )
     assert journal_entry is not None
-    journal_metadata = journal.lstat()
     if (
         pending.journal_identity is not None
-        and (
-            int(journal_metadata.st_dev), int(journal_metadata.st_ino)
-        ) != pending.journal_identity
+        and journal_entry.identity != pending.journal_identity
     ):
         raise MigrationError("migration cleanup journal changed identity")
 
@@ -1336,9 +1326,7 @@ def _operation(
         expected_sha256=_digest(payload),
         source_sha256=_digest(payload if source_payload is None else source_payload),
         payload=payload,
-        source_identity=(
-            int(source.lstat().st_dev), int(source.lstat().st_ino)
-        ),
+        source_identity=_private_path_identity(source, directory=False),
     )
 
 
@@ -2200,9 +2188,7 @@ def _rollback_records(root: Path, records: list[_RollbackRecord]) -> None:
                 metadata = destination.lstat()
                 if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
                     raise OSError(f"migration destination changed identity: {record.destination}")
-                if (
-                    int(metadata.st_dev), int(metadata.st_ino)
-                ) != record.destination_identity:
+                if _private_path_identity(destination, directory=False) != record.destination_identity:
                     raise OSError(f"migration destination changed identity: {record.destination}")
                 if _digest(_safe_payload(root, destination)) != record.destination_sha256:
                     raise OSError(f"migration destination bytes changed: {record.destination}")
@@ -2264,10 +2250,7 @@ def execute_migration(
             source = root / operation.source
             source_payload = _safe_payload(root, source)
             if operation.source_identity is not None:
-                source_metadata = source.lstat()
-                if (
-                    int(source_metadata.st_dev), int(source_metadata.st_ino)
-                ) != operation.source_identity:
+                if _private_path_identity(source, directory=False) != operation.source_identity:
                     raise MigrationError(f"source identity changed during staging: {operation.source}")
             if _digest(source_payload) != operation.source_sha256:
                 raise MigrationError(f"source changed during staging: {operation.source}")
@@ -2319,15 +2302,12 @@ def execute_migration(
                         raise MigrationError(f"destination changed during commit: {operation.destination}")
                 else:
                     atomic_create_bytes(destination, payload)
-            destination_metadata = destination.lstat()
             records.append(_RollbackRecord(
                 operation.source,
                 operation.destination,
                 previous_source,
                 previous_destination,
-                (
-                    int(destination_metadata.st_dev), int(destination_metadata.st_ino)
-                ),
+                _private_path_identity(destination, directory=False),
                 _digest(_safe_payload(root, destination)),
                 operation.kind,
             ))
@@ -2337,7 +2317,7 @@ def execute_migration(
             ):
                 raise MigrationError("migration journal operation checkpoint is invalid")
             journal_operations[index]["destination_after_identity"] = [
-                int(destination_metadata.st_dev), int(destination_metadata.st_ino),
+                *_private_path_identity(destination, directory=False),
             ]
             applied.append(operation.key)
             _journal_checkpoint(
@@ -2358,9 +2338,8 @@ def execute_migration(
                     current_payload = _safe_payload(root, source)
                     if (
                         operation.source_identity is not None
-                        and (
-                            int(source.lstat().st_dev), int(source.lstat().st_ino)
-                        ) != operation.source_identity
+                        and _private_path_identity(source, directory=False)
+                        != operation.source_identity
                     ):
                         raise MigrationError(
                             f"source identity changed before finalize: {operation.source}"
