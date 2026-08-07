@@ -1,112 +1,71 @@
-# Roadmaps do x86QW
+# Roadmap do x86QW
 
-Este arquivo é o índice e o roadmap do núcleo de distribuição. O planejamento
-detalhado do ecossistema está em
-[ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md).
+Este é o índice estratégico da jornada da baseline pública `0.7.3` até
+`1.0.0`. O estado operacional presente está em
+[PROJECT-STATUS.md](PROJECT-STATUS.md); a execução detalhada, a auditoria das
+branches e os gates estão em
+[implementation/stabilization-1.0-plan.md](implementation/stabilization-1.0-plan.md).
+As notas de release históricas e o rascunho de `1.0.0` ficam em
+[releases/](releases/).
 
-## Baseline atual
+## Autoridade e baseline
 
-Baseline publicada: tag `x86qw-installer-0.7.2`. O estado funcional é descrito
-pela própria tag imutável, publicada em 4 de agosto de 2026. A `0.7.1`
-permanece inalterada no histórico.
+`origin/main@3bbc7a01faf8d472c5ccbab9233e05e9abadc379` é a linha canônica e a
+tag `x86qw-installer-0.7.3` é a versão pública atual. A baseline preserva os
+bundles anteriores, os cinco jogos, os runtimes declarados e a distinção entre
+contratos portáveis e execução nativa. O checkpoint
+`codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
+aprovação nem release.
 
-Baseline inicial da issue #45: merge
-`afb4f666095e37fe262b87b49339e18d25738522`.
-A correção `0.7.1` passou em 7/7 jobs, 393 testes de manutenção e quatro testes
-do site. A `0.7.0` permanece imutável no histórico.
+O roadmap principal responde “em que ordem e sob quais gates”. O status
+responde “o que é verdade agora”. O plano detalhado responde “como cada fase
+será extraída, testada e aprovada”. Nenhum documento autoriza publicação por si
+só.
 
-Baseline corretiva consolidada após a PR 4: merge
-`206adc46df6aced49eee7ac1fcae3cf331f07a63`. Downloader limitado, fronteira
-única ZIP/PK3/PYZ e DACL privada Windows estão integrados, mas não foram
-publicados nem promovidos no catálogo. O candidato da PR 5 parte desse commit,
-preserva o stable macOS upstream e também permanece não publicado.
+## Jornada até 1.0
 
-Baseline inicial da PR 6: merge
-`00098330e5833ba2c83c7121272d644c2a204a7b`. O HEAD documental atual da PR 6 é
-`29d76a48721190aad1203d0986a31d839d62070e`. Downloader, archive, filesystem
-privado, catálogos, estado/recibos/migração, transações compostas, UI,
-gameplay, plataforma e supervisor possuem ownership canônico no runtime. O
-zipapp tem 56 membros e sua projeção é derivada de um manifesto declarativo,
-também conferido contra o arquivo produzido. A regressão local integral passou;
-a issue #52 permanece como trilha auditável pausada. Esse código foi integrado
-à linha `0.7.2` pela PR 64.
+1. **PR A — verdade de plataforma:** separar artefato, suporte e validação;
+   classificar estados de plataforma e preservar a CI portável. Publicar a
+   `0.7.4` somente em uma PR de release posterior.
+2. **PR B — governança (PR `#55`):** consolidar licença, avisos, ownership,
+   Dependabot, lockfile, threat model e runbooks.
+3. **PR C — contratos (PR `#53`):** congelar SemVer, schemas, envelopes JSON,
+   redaction e códigos; alvo sugerido `0.8.0`.
+4. **PR D — migração (PR `#46`):** migrar somente estados publicados de
+   `0.7.0–0.7.3`; alvo sugerido `0.8.1`/`0.8.2`.
+5. **PRs E1/E2 — trust:** aprovar a arquitetura na E1 (PR `#48`) e só depois
+   implementar a cadeia de confiança em uma PR E2 futura; alvo sugerido `0.9.0`.
+6. **PR F — candidato imutável (PR `#51`):** construir uma vez, fixar Actions,
+   conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
+7. **PR G — Mac M3/arm64 (PR `#54`):** executar o candidato exato e abrir uma PR
+   de release separada para `1.0.0-rc.1`.
+8. **PR H — `1.0.0`:** promover somente após o período de uso do RC, com trust,
+   evidência M3, bytes idênticos e mirrors convergentes.
 
-- instalador público `0.7.2`; as linhas anteriores permanecem imutáveis no histórico;
-- 62 pacotes e 21 componentes;
-- cinco jogos: KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2;
-- ezQuake stable e nightly para macOS universal, Linux x86-64 e Windows x64;
-- MVDSV, QTV e QWFWD para macOS arm64, Linux amd64 e Windows x64;
-- comandos públicos `play`, `host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`,
-  `verify`, `repair`, `cleanup`, `uninstall` e `version`;
-- navegador de terminal por tarefas, com busca, teclado, multisseleção, linhas
-  alinhadas e coloridas e fallback numerado;
-- catálogos declarativos de capacidades, runtimes, jogos e compatibilidade;
-- CI de qualidade multiplataforma e publicação separada por gate.
+Cada item exige issue antes da branch, uma frente estrutural por vez e release
+separada da implementação. O plano é a autoridade para dependências, extração
+seletiva e limites de aprovação.
 
-## Estado do núcleo
+## Gates comuns
 
-| Frente | Entrega funcional | Validação |
-|---|---|---|
-| Distribuição e instalador | completa para o escopo atual; clientes macOS condicionais | unitária; CI portável macOS/Linux/Windows concluída; smokes nativos pendentes |
-| KTX e modos | completa para o catálogo atual | unitária; os 24 modos exercitados no macOS em janela |
-| Frogbots | MVP entregue | unitária; os 22 modos compatíveis exercitados no macOS |
-| Jogos legados atuais | MVP entregue | unitária; smoke gráfico manual permanece |
-| MVDSV e `host` | MVP entregue | unitária; smoke macOS existente |
-| QTV HTTP/upstream | MVP entregue | unitária; smoke macOS existente |
-| QWFWD | MVP entregue | unitária; forwarding de rede separado |
-| Catálogo declarativo | completa para runtimes e jogos atuais | unitária e validação estrutural |
-| Lifecycle e recuperação | completa para exclusão entre stack e manutenção por instalação | unitária em lock concorrente, journal sem lock, PID reutilizado, árvore órfã, temporário sensível, sinais, crash e rollback; smokes nativos ainda parciais |
-| Site e documentação | completa para o baseline atual | unitária, dry-run e deploy público do Worker para a `0.7.2` |
-| Layout de instalação | bootstrap limpo com plano de controle `.x86qw/` e serviços contextuais | unitária; bootstrap completo macOS arm64; contrato nativo Windows validado no CI; bootstrap completo sob conta padrão e runtimes reais pendentes no PR 11 |
-| Downloads remotos | completa e publicada na `0.7.2` | evidência da PR 2: 565 testes de manutenção e cinco do site aprovados; oito skips explícitos (sete Windows e um smoke de rede); matriz concluída em Ubuntu, macOS e Windows com Python 3.10 e 3.13 |
-| Arquivos ZIP/PK3/PYZ | completa e publicada na `0.7.2` | regressão local em Python 3.14 e 3.10: `Ran 695 tests` e `OK (skipped=15)` na manutenção, mais `Ran 5 tests` e `OK` no site; matriz da PR 3 concluída em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo identidade e reparse point nativos Windows; smokes nativos dos runtimes separados |
-| DACL privada Windows | implementada e publicada na `0.7.2` | 745 testes de manutenção e cinco do site na matriz; DACL validada nativamente no runner Windows com Python 3.10 e 3.13; smoke de runtime sob conta padrão pendente |
-| Confiança do stable macOS | preservação upstream publicada na `0.7.2` | matriz 7/7 no [run 30871046055](https://github.com/x86dx2/x86qw/actions/runs/30871046055); assinatura, sandbox e hashes auditados; primeira/segunda abertura, Gatekeeper, arm64 e Intel pendentes no PR 11 |
-| Fronteiras `x86qw_runtime` | integradas e publicadas na `0.7.2`: ownership canônico de I/O, filesystem privado, catálogos, estado/recibos/migração, transações, UI, gameplay, plataforma, sessão e supervisor | 1.197 testes de manutenção aprovados localmente, com 37 skips explícitos, e 5 testes do site; matriz integrada da PR 64 em 7/7 jobs; smokes nativos reservados ao PR 11 |
+- suporte `supported`/`conditional` só com evidência nativa do candidato exato;
+  `preview` não significa smoke executado;
+- Linux, Windows, macOS Intel e nightly começam como `preview`; o stable
+  macOS pode permanecer `conditional` por assinatura/notarização;
+- workflows são preservados e jobs portáveis não são smokes nativos;
+- trust de produção, evidência M3, hashes, SBOM, provenance e mirrors são
+  gates independentes e falham fechados;
+- nenhuma promoção ou publicação `1.0` ocorre antes dos gates; releases
+  corretivas permanecem separadas das PRs de implementação.
 
-“MVP entregue” não significa que o runtime foi executado em todas as
-plataformas. A coluna de validação é sempre a autoridade para essa distinção.
+## Depois de 1.0
 
-## Próximos marcos do núcleo
+Central de demos, validação formal de MVD/QWD, treinamento como comando,
+clientes ou engines novos, mods/mapas externos, serviços persistentes do
+sistema e perfis operacionais adicionais exigem propostas próprias, artefatos,
+contratos, migração, testes, evidência de plataforma e aprovação de release.
+Eles não entram como efeito colateral de `play`, `host`, `update` ou `upgrade`.
 
-1. Manter a PR 6 pausada como trilha auditável; as fronteiras validadas foram
-   integradas pela PR 64 e publicadas na `0.7.2`.
-2. Manter o stable macOS upstream sem mutação e executar os smokes nativos do
-   candidato exato; a disponibilidade segue condicional até o PR 11.
-3. Executar e registrar smokes nativos dos clientes e serviços em Linux amd64 e
-   Windows x64, além do cliente em macOS Intel.
-4. Formalizar o smoke de MVD gerado pelo MVDSV e o teste de encaminhamento do
-   QWFWD em suíte de rede isolada.
-5. Transformar a validação de release em evidência publicada somente após
-   aprovação humana dos checks das três plataformas.
-6. Reduzir hardcodings residuais de apresentação da CLI sem alterar contratos
-   ou gameplay.
-7. Manter bundles publicados imutáveis e preparar uma versão nova somente em
-   etapa de release separada.
-8. Autenticar e versionar metadados contra rollback e freeze na issue #48, sem
-   confundir esse contrato com os limites de transporte já implementados.
-
-## Decisões históricas superadas
-
-- A decisão antiga de não expor modos KTX foi superada: os modos são
-  declarativos em `modes.json` e aparecem em `play` e `host`.
-- A decisão antiga de adiar runtimes de servidor foi superada: MVDSV, QTV e
-  QWFWD já são componentes independentes e verificáveis.
-- A contagem histórica de 18 componentes foi superada pelo catálogo atual de
-  21 componentes.
-- A dependência rígida MVDSV → KTX foi superada: o jogo escolhido define o
-  gamecode necessário.
-- A dependência rígida QTV → MVDSV local foi superada: QTV pode usar upstream
-  remoto.
-- A materialização de `play-support` durante gameplay foi superada: instalação,
-  atualização, upgrade ou reparo preparam o conteúdo; execução apenas valida.
-
-Os detalhes históricos anteriores continuam recuperáveis pelo histórico Git.
-Este documento mantém somente decisões ainda úteis para orientar a implementação.
-
-## Fora deste ciclo
-
-Novos runtimes, novos jogos, novos mods, novos mapas externos, central de demos,
-treinamento como comando próprio e serviços persistentes permanecem fora da
-consolidação atual. Qualquer expansão depende primeiro dos gates, smokes e
-contratos acima e precisa de uma proposta separada.
+Para a visão de longo prazo do ecossistema, consulte
+[ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md). Para o estado de hoje,
+consulte [PROJECT-STATUS.md](PROJECT-STATUS.md).

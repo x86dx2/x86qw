@@ -285,7 +285,16 @@ site/           portal, API pública do catálogo e deploy Cloudflare
 docs/           arquitetura, hosting, decisões e roadmaps
 ```
 
-[Arquitetura detalhada](docs/architecture.md) · [Diagrama interativo](docs/diagrams/x86qw-platform.html) · [Proveniência](maintenance/docs/provenance.md) · [Roadmap](docs/ROADMAP.md)
+[Arquitetura detalhada](docs/architecture.md) · [Diagrama interativo](docs/diagrams/x86qw-platform.html) · [Proveniência](maintenance/docs/provenance.md) · [Roadmap](docs/ROADMAP.md) · [Status](docs/PROJECT-STATUS.md)
+
+## Estado do projeto
+
+A versão pública continua em `0.7.3`; a referência histórica à `0.7.2` permanece
+legítima e imutável; a `1.0.0` ainda é uma jornada planejada, não uma release
+preparada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
+o [roadmap estratégico](docs/ROADMAP.md) e o
+[plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
+para distinguir baseline, sequência, evidência e gates de aprovação.
 
 ## Compatibilidade
 
