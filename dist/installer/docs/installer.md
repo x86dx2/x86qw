@@ -4,14 +4,15 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle público corrente é `0.7.3`, com 63 pacotes e 21 componentes
+O bundle público corrente é `0.7.4`, com 64 pacotes e 21 componentes
 registrados no catálogo. Essa versão confere o requisito Python por
 `sys.version_info` antes de qualquer download ou mutação: macOS/Linux testam
 `python3` e `python`, nessa ordem; Windows testa `py -3`, `python3` e `python`.
 A instalação grava no launcher o executável validado e o launcher repete a
 resolução caso esse caminho desapareça ou fique incompatível. O contrato
-passou nos sete jobs obrigatórios de Ubuntu, macOS e Windows. O bundle `0.7.0`
-permanece imutável no histórico.
+`portable-contract` passou nos sete jobs obrigatórios de Ubuntu, macOS e
+Windows; isso não é smoke nativo de runtime. O bundle `0.7.3` permanece
+imutável no histórico.
 
 O instalador usa apenas a biblioteca padrão do Python.
 Esses fatos públicos são validados contra os inventários canônicos.
