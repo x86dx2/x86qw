@@ -482,6 +482,8 @@ class InstallerTests(unittest.TestCase):
         members = {
             "x86qw.pyz": zipapp_bytes(version),
             "VERSION": f"{version}\n",
+            "LICENSE": (ROOT / "LICENSE").read_bytes(),
+            "NOTICE": (ROOT / "NOTICE").read_bytes(),
             "x86qw.sh": "#!/bin/sh\n",
             "x86qw.cmd": "@echo off\r\n",
             "installer.json": identity,

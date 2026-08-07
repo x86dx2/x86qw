@@ -216,6 +216,46 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(payload).hexdigest(), record["sha256"])
             self.assertEqual(len(payload), record["size"])
 
+    def test_modern_installer_carries_exact_project_notices_in_both_layers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".modern-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            with mock.patch.object(installer_builder, "validate_bootstrap_archive_source"):
+                result = installer_builder.build(output, "1.0.0")
+            self.assertEqual(
+                "installer/packages/1.0.0/x86qw-installer-1.0.0.zip",
+                result["distribution_path"],
+            )
+            archive_path = output / "1.0.0" / "x86qw-installer-1.0.0.zip"
+            outer = archive_runtime.validate_installer_bundle(archive_path, "1.0.0")
+            prefix = "x86qw-installer-1.0.0"
+            payloads = archive_runtime.read_archive_members(
+                outer,
+                (
+                    f"{prefix}/LICENSE",
+                    f"{prefix}/NOTICE",
+                    f"{prefix}/x86qw.pyz",
+                ),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), payloads[f"{prefix}/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), payloads[f"{prefix}/NOTICE"])
+            nested = archive_runtime.scan_archive(payloads[f"{prefix}/x86qw.pyz"])
+            nested_payloads = archive_runtime.read_archive_members(
+                nested, ("_x86qw/LICENSE", "_x86qw/NOTICE"),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), nested_payloads["_x86qw/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), nested_payloads["_x86qw/NOTICE"])
+            self.assertEqual(9, len(outer.members))
+            self.assertEqual(hashlib.sha256(archive_path.read_bytes()).hexdigest(), result["sha256"])
+
+    def test_historical_installer_build_keeps_the_seven_member_outer_layout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".legacy-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            with mock.patch.object(installer_builder, "validate_bootstrap_archive_source"):
+                installer_builder.build(output, "0.7.3")
+            archive_path = output / "0.7.3" / "x86qw-installer-0.7.3.zip"
+            plan = archive_runtime.validate_installer_bundle(archive_path, "0.7.3")
+            self.assertEqual(7, len(plan.members))
+
     def test_component_package_rejects_source_replaced_after_scan(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

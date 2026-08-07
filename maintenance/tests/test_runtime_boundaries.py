@@ -92,7 +92,11 @@ class RuntimeMemberContractTests(unittest.TestCase):
 
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             installed_members = application.namelist()
-        self.assertEqual(set(installed_members), set(declared_members))
+        legal_members = {
+            f"_x86qw/{member}"
+            for _source, member, _mode in installer_builder.LEGAL_FILES
+        }
+        self.assertEqual(set(installed_members), set(declared_members) | legal_members)
         self.assertFalse(
             any(
                 member == "maintenance" or member.startswith("maintenance/")
