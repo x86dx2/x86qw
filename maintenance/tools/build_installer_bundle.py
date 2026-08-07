@@ -42,8 +42,7 @@ from x86qw_runtime.io.archive import (
 )
 from x86qw_runtime.io import atomic as atomic_io
 from x86qw_runtime.versioning import (
-    SEMVER_VERSION as VERSION_PATTERN,
-    parse_semver,
+    STABLE_VERSION as VERSION_PATTERN,
     version_key,
 )
 
@@ -437,7 +436,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"unexpected installer package entry: {directory}")
         version = directory.name
-        parse_semver(version)
+        version_key(version)
         filename = f"x86qw-installer-{version}.zip"
         archive = directory / filename
         if not archive.is_file() or archive.is_symlink():
@@ -458,7 +457,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
-    return sorted(results, key=lambda item: parse_semver(str(item["version"])))
+    return sorted(results, key=lambda item: version_key(str(item["version"])))
 
 
 def distribution_path_for(archive: Path, package_root: Path) -> str:
