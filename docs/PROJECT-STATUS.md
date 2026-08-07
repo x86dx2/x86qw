@@ -21,9 +21,8 @@ Depois do merge, a release corretiva `0.7.4` deverá ser aberta em uma PR separa
 
 ## Issue ativa
 
-Nenhuma issue independente está registrada como ativa; o work item corrente é a
-[PR #66](https://github.com/x86dx2/x86qw/pull/66). A issue de acompanhamento
-da fase A ainda precisa ser vinculada antes de declarar o gate encerrado.
+[Issue #68](https://github.com/x86dx2/x86qw/issues/68) acompanha a fase A; o
+work item de implementação corrente é a [PR #66](https://github.com/x86dx2/x86qw/pull/66).
 
 ## Gates
 
