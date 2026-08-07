@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import subprocess
@@ -62,6 +63,38 @@ class RuntimeDependencyTests(unittest.TestCase):
 
         with mock.patch.object(builder, "read_regular_file", side_effect=tamper):
             with self.assertRaisesRegex(ValueError, "SHA-256|hash|diverge"):
+                builder.runtime_dependency_members()
+
+    def test_builder_rejects_colliding_projected_license_names(self) -> None:
+        wheel_stream = io.BytesIO()
+        with zipfile.ZipFile(wheel_stream, "w") as archive:
+            archive.writestr("demo/__init__.py", b"__version__ = '1.0.0'\n")
+            archive.writestr(
+                "demo-1.0.0.dist-info/licenses/LICENSE", b"first license\n",
+            )
+            archive.writestr(
+                "demo-1.0.0.dist-info/licenses/docs/LICENSE", b"second license\n",
+            )
+        wheel = wheel_stream.getvalue()
+        lock = {
+            "format": 1,
+            "project": "x86qw",
+            "dependencies": [{
+                "name": "demo",
+                "version": "1.0.0",
+                "filename": "demo-1.0.0-py3-none-any.whl",
+                "sha256": hashlib.sha256(wheel).hexdigest(),
+                "license": "MIT",
+                "source": "https://pypi.org/project/demo/",
+                "package_prefixes": ["demo/"],
+            }],
+        }
+        with mock.patch.object(builder, "runtime_dependency_lock", return_value=lock), \
+             mock.patch.object(builder, "read_regular_file", return_value=wheel):
+            with self.assertRaisesRegex(
+                ValueError,
+                r"membro runtime duplicado: _x86qw/licenses/dependencies/demo/LICENSE",
+            ):
                 builder.runtime_dependency_members()
 
 

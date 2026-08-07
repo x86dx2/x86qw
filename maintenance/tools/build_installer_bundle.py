@@ -257,6 +257,7 @@ def runtime_dependency_members() -> tuple[tuple[str, bytes], ...]:
 
     document = runtime_dependency_lock()
     members: dict[str, bytes] = {}
+    claimed_output_names: set[str] = set()
     for dependency in document["dependencies"]:
         assert isinstance(dependency, dict)
         wheel_path = RUNTIME_DEPENDENCY_WHEELS / str(dependency["filename"])
@@ -264,41 +265,48 @@ def runtime_dependency_members() -> tuple[tuple[str, bytes], ...]:
         if hashlib.sha256(wheel).hexdigest() != dependency["sha256"]:
             raise ValueError(f"SHA-256 do wheel diverge do lock: {dependency['name']}")
         try:
-            archive = zipfile.ZipFile(io.BytesIO(wheel))
-        except zipfile.BadZipFile as error:
+            plan = scan_archive(wheel)
+        except ArchiveError as error:
             raise ValueError(f"wheel runtime inválido: {dependency['name']}") from error
-        with archive:
-            license_prefix = f"{dependency['name']}-{dependency['version']}.dist-info/licenses/"
-            selected = 0
-            for info in archive.infolist():
-                name = info.filename
-                package_member = any(
-                    name.startswith(prefix) for prefix in dependency["package_prefixes"]
-                )
-                license_member = name.startswith(license_prefix)
-                if not package_member and not license_member:
-                    continue
-                if info.is_dir() or name.endswith(".pyc"):
-                    continue
-                parts = PurePosixPath(name).parts
-                if "test_data" in parts or PurePosixPath(name).name.startswith("test_"):
-                    continue
-                if package_member and not (name.endswith(".py") or name.endswith("py.typed")):
-                    continue
-                if info.flag_bits & 0x1 or info.file_size > MAX_TEXT_INPUT_BYTES:
-                    raise ValueError(f"membro inseguro no wheel runtime: {name}")
-                _portable_relative_path(name, "membro do wheel")
-                output_name = (
-                    name
-                    if package_member
-                    else f"_x86qw/licenses/dependencies/{dependency['name']}/{PurePosixPath(name).name}"
-                )
-                if output_name in members:
-                    raise ValueError(f"membro runtime duplicado: {output_name}")
-                members[output_name] = archive.read(info)
-                selected += 1
-            if selected == 0:
-                raise ValueError(f"wheel runtime não contém pacote consumível: {dependency['name']}")
+        license_prefix = f"{dependency['name']}-{dependency['version']}.dist-info/licenses/"
+        selected_names: list[str] = []
+        output_names: dict[str, str] = {}
+        for member in plan.members:
+            name = member.name
+            package_member = any(
+                name.startswith(prefix) for prefix in dependency["package_prefixes"]
+            )
+            license_member = name.startswith(license_prefix)
+            if not package_member and not license_member:
+                continue
+            if member.is_dir or name.endswith(".pyc"):
+                continue
+            parts = PurePosixPath(name).parts
+            if "test_data" in parts or PurePosixPath(name).name.startswith("test_"):
+                continue
+            if package_member and not (name.endswith(".py") or name.endswith("py.typed")):
+                continue
+            if member.size > MAX_TEXT_INPUT_BYTES:
+                raise ValueError(f"membro inseguro no wheel runtime: {name}")
+            _portable_relative_path(name, "membro do wheel")
+            output_name = (
+                name
+                if package_member
+                else f"_x86qw/licenses/dependencies/{dependency['name']}/{PurePosixPath(name).name}"
+            )
+            if output_name in claimed_output_names:
+                raise ValueError(f"membro runtime duplicado: {output_name}")
+            claimed_output_names.add(output_name)
+            selected_names.append(name)
+            output_names[name] = output_name
+        if not selected_names:
+            raise ValueError(f"wheel runtime não contém pacote consumível: {dependency['name']}")
+        try:
+            payloads = read_archive_members(plan, selected_names)
+        except ArchiveError as error:
+            raise ValueError(f"wheel runtime inválido: {dependency['name']}") from error
+        for name in selected_names:
+            members[output_names[name]] = payloads[name]
     return tuple(sorted(members.items()))
 
 

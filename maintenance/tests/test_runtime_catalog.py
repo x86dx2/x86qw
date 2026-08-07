@@ -19,6 +19,7 @@ from maintenance.tools.runtime_catalog import (
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "maintenance/inventory"
+AUDIT_METADATA_MEMBERS = frozenset({"_x86qw/runtime-dependencies.json"})
 
 
 def runtime_projection_leaks(payload: bytes) -> tuple[str, ...]:
@@ -26,6 +27,8 @@ def runtime_projection_leaks(payload: bytes) -> tuple[str, ...]:
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         for name in archive.namelist():
             if not name.startswith("_x86qw/") or not name.endswith(".json"):
+                continue
+            if name in AUDIT_METADATA_MEMBERS:
                 continue
             serialized = json.dumps(json.loads(archive.read(name))).casefold()
             if "https://" in serialized:
