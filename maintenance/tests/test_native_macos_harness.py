@@ -295,8 +295,9 @@ print(f"executed {case}")
             self.assertTrue(all(result["status"] == "passed" for result in results))
             self.assertTrue(all(result["exit_code"] == 0 for result in results))
             self.assertTrue(all((root / "logs" / result["stdout"]).is_file() for result in results))
-            self.assertFalse(os.access(candidate / ENTRYPOINT_PATH, os.X_OK))
-            self.assertTrue(all(os.access(result["runtime"]["path"], os.X_OK) for result in results))
+            if os.name != "nt":
+                self.assertFalse(os.access(candidate / ENTRYPOINT_PATH, os.X_OK))
+                self.assertTrue(all(os.access(result["runtime"]["path"], os.X_OK) for result in results))
 
             handoff_path = root / "logs" / "handoff.json"
             handoff = {
@@ -323,6 +324,7 @@ print(f"executed {case}")
             with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
                 validate_evidence_file(handoff_path, candidate=candidate)
 
+    @unittest.skipIf(os.name == "nt", "artefatos macOS/POSIX não executáveis no Windows")
     def test_real_f_candidate_and_python_entrypoint_share_lifecycle_state_and_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
