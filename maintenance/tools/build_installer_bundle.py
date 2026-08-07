@@ -52,6 +52,10 @@ BUNDLE_FILES = (
     ("dist/installer/bin/x86qw.sh", "x86qw.sh", 0o755),
     ("dist/installer/bin/x86qw.cmd", "x86qw.cmd", 0o644),
 )
+LEGAL_FILES = (
+    ("LICENSE", "LICENSE", 0o644),
+    ("NOTICE", "NOTICE", 0o644),
+)
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
 GENERATED_RUNTIME_SOURCES = frozenset({
@@ -192,11 +196,15 @@ def runtime_member_files() -> tuple[tuple[str, str], ...]:
 
 
 def bundle_files() -> tuple[str, ...]:
-    return tuple(source for source, _, _ in BUNDLE_FILES) + tuple(
+    return tuple(source for source, _, _ in (*BUNDLE_FILES, *LEGAL_FILES)) + tuple(
         source for source, _ in runtime_member_files()
     ) + tuple(source for _, source in RUNTIME_CONTRACT_SOURCES) + (
         RUNTIME_MEMBER_MANIFEST.relative_to(ROOT).as_posix(),
     )
+
+
+def includes_project_legal_files(version: str) -> bool:
+    return version_key(version) >= (1, 0, 0)
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -239,9 +247,16 @@ def zipapp_bytes(version: str) -> bytes:
         "generated:identity": json_bytes(identity),
         "generated:component-catalog": runtime_catalog_bytes(),
     }
+    entries: list[tuple[str, str, int]] = [
+        (entry["source"], entry["member"], 0o644) for entry in contracts
+    ]
+    if includes_project_legal_files(version):
+        entries.extend(
+            (source, f"_x86qw/{member}", mode)
+            for source, member, mode in LEGAL_FILES
+        )
     with zipfile.ZipFile(output, "w", allowZip64=True) as application:
-        for entry in contracts:
-            source_name = entry["source"]
+        for source_name, member_name, mode in entries:
             payload = (
                 generated_payloads[source_name]
                 if source_name.startswith("generated:")
@@ -250,9 +265,9 @@ def zipapp_bytes(version: str) -> bytes:
                     maximum_size=MAX_BUILD_INPUT_BYTES,
                 )
             )
-            write_member(application, entry["member"], payload)
+            write_member(application, member_name, payload, mode)
     payload = output.getvalue()
-    required = tuple(entry["member"] for entry in contracts)
+    required = tuple(member for _source, member, _mode in entries)
     try:
         plan = scan_archive(payload, required_members=required)
     except ArchiveError as error:
@@ -289,11 +304,18 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         results.append({
             "version": version,
             "filename": filename,
-            "distribution_path": archive.relative_to(ROOT / "dist").as_posix(),
+            "distribution_path": distribution_path_for(archive, version, filename),
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
     return sorted(results, key=lambda item: version_key(str(item["version"])))
+
+
+def distribution_path_for(archive: Path, version: str, filename: str) -> str:
+    try:
+        return archive.relative_to(ROOT / "dist").as_posix()
+    except ValueError:
+        return PurePosixPath("installer", "packages", version, filename).as_posix()
 
 
 def update_latest_link(package_root: Path) -> str:
@@ -485,19 +507,33 @@ def reset_history(package_root: Path) -> None:
 def build(output: Path, version: str = VERSION) -> dict[str, object]:
     validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
+    zipapp_payload = zipapp_bytes(version)
     target = output / version / filename
     with staged_artifact(target, root=output, prefix=".installer-") as staged:
         with zipfile.ZipFile(staged.stream, "w", allowZip64=True) as bundle:
             prefix = f"x86qw-installer-{version}"
-            write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_bytes(version))
+            write_member(bundle, f"{prefix}/x86qw.pyz", zipapp_payload)
             for source_name, member, mode in BUNDLE_FILES:
                 source = ROOT / source_name
+                payload = read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES)
+                if source_name == "dist/installer/VERSION":
+                    payload = f"{version}\n".encode("ascii")
                 write_member(
                     bundle,
                     f"{prefix}/{member}",
-                    read_regular_file(source, maximum_size=MAX_BUILD_INPUT_BYTES),
+                    payload,
                     mode,
                 )
+            if includes_project_legal_files(version):
+                for source_name, member, mode in LEGAL_FILES:
+                    write_member(
+                        bundle,
+                        f"{prefix}/{member}",
+                        read_regular_file(
+                            ROOT / source_name, maximum_size=MAX_BUILD_INPUT_BYTES,
+                        ),
+                        mode,
+                    )
             write_member(
                 bundle,
                 f"{prefix}/installer.json",
@@ -536,7 +572,7 @@ def build(output: Path, version: str = VERSION) -> dict[str, object]:
     result = {
         "version": version,
         "filename": filename,
-        "distribution_path": target.relative_to(ROOT / "dist").as_posix(),
+        "distribution_path": distribution_path_for(target, version, filename),
         "size": accepted_plan.source_size,
         "sha256": accepted_plan.source_sha256,
     }

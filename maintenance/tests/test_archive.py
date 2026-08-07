@@ -75,10 +75,14 @@ class ArchiveTests(unittest.TestCase):
         application = self.archive_bytes([
             ("__main__.py", b"print('x86QW')\n"),
             ("_x86qw/installer.json", identity),
+            ("_x86qw/LICENSE", (ROOT / "LICENSE").read_bytes()),
+            ("_x86qw/NOTICE", (ROOT / "NOTICE").read_bytes()),
         ])
         return self.archive_bytes([
             (f"{prefix}/x86qw.pyz", application),
             (f"{prefix}/VERSION", f"{version}\n".encode("ascii")),
+            (f"{prefix}/LICENSE", (ROOT / "LICENSE").read_bytes()),
+            (f"{prefix}/NOTICE", (ROOT / "NOTICE").read_bytes()),
             (f"{prefix}/x86qw.sh", b"#!/bin/sh\n"),
             (f"{prefix}/x86qw.cmd", b"@echo off\r\n"),
             (f"{prefix}/installer.json", identity),
@@ -1112,13 +1116,26 @@ class ArchiveTests(unittest.TestCase):
 
     def test_installer_bundle_contract_validates_exact_layout_and_identities(self) -> None:
         plan = validate_installer_bundle(self.installer_bundle(), "1.2.3")
-        self.assertEqual(7, len(plan.members))
+        self.assertEqual(9, len(plan.members))
         self.assertEqual(
             {"x86qw-installer-1.2.3/x86qw.sh", "x86qw-installer-1.2.3/dist/installer/bin/manager.py"},
             plan.executable_members,
         )
         with self.assertRaises(ArchiveError):
             validate_installer_bundle(self.installer_bundle() + b"unexpected", "1.2.3")
+
+    def test_installer_bundle_rejects_legal_notice_drift_between_layers(self) -> None:
+        version = "1.2.3"
+        prefix = f"x86qw-installer-{version}"
+        members = []
+        with zipfile.ZipFile(io.BytesIO(self.installer_bundle(version))) as source:
+            for info in source.infolist():
+                payload = source.read(info)
+                if info.filename == f"{prefix}/LICENSE":
+                    payload = b"different license\n"
+                members.append((info.filename, payload))
+        with self.assertRaisesRegex(ArchiveError, "legal notice"):
+            validate_installer_bundle(self.archive_bytes(members), version)
 
     def test_installer_history_contract_preserves_the_six_member_legacy_layout(self) -> None:
         legacy = self.historical_installer_bundle()

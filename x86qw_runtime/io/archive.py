@@ -1605,6 +1605,10 @@ def _identity_document(payload: bytes, label: str) -> dict[str, object]:
     return value
 
 
+def _includes_project_legal_files(version: str) -> bool:
+    return tuple(int(part) for part in version.split(".")) >= (1, 0, 0)
+
+
 def _validate_installer_bundle_layout(
     source: Path | bytes,
     version: str,
@@ -1624,14 +1628,17 @@ def _validate_installer_bundle_layout(
     ]
     if includes_version_member:
         names.insert(1, f"{prefix}/VERSION")
+    if _includes_project_legal_files(version):
+        names.extend((f"{prefix}/LICENSE", f"{prefix}/NOTICE"))
     executables = (
         f"{prefix}/x86qw.sh",
         f"{prefix}/dist/installer/bin/manager.py",
     )
     plan = scan_archive(source, required_members=names, executable_members=executables)
     if len(plan.members) != len(names) or set(plan.member_names) != set(names):
-        count = "seven" if includes_version_member else "six"
-        raise ArchiveError(f"installer bundle does not contain the exact {count}-member layout")
+        raise ArchiveError(
+            "installer bundle does not contain the exact member layout"
+        )
     identity_names = (
         f"{prefix}/installer.json",
         f"{prefix}/_x86qw/installer.json",
@@ -1642,6 +1649,8 @@ def _validate_installer_bundle_layout(
         if includes_version_member
         else identity_names
     )
+    if _includes_project_legal_files(version):
+        requested += (f"{prefix}/LICENSE", f"{prefix}/NOTICE")
     payloads = read_archive_members(plan, requested)
     if (
         includes_version_member
@@ -1656,9 +1665,12 @@ def _validate_installer_bundle_layout(
     for name in (f"{prefix}/installer.json", f"{prefix}/_x86qw/installer.json"):
         if _identity_document(payloads[name], name) != expected_identity:
             raise ArchiveError(f"installer identity does not match the bundle: {name}")
+    nested_required = ["_x86qw/installer.json"]
+    if _includes_project_legal_files(version):
+        nested_required.extend(("_x86qw/LICENSE", "_x86qw/NOTICE"))
     nested = scan_archive(
         payloads[f"{prefix}/x86qw.pyz"],
-        required_members=("_x86qw/installer.json",),
+        required_members=tuple(nested_required),
     )
     nested_identity = _identity_document(
         read_archive_member(nested, "_x86qw/installer.json"),
@@ -1666,6 +1678,18 @@ def _validate_installer_bundle_layout(
     )
     if nested_identity != expected_identity:
         raise ArchiveError("x86qw.pyz identity does not match the installer bundle")
+    if _includes_project_legal_files(version):
+        nested_legal = read_archive_members(
+            nested, ("_x86qw/LICENSE", "_x86qw/NOTICE"),
+        )
+        for outer_name, nested_name in (
+            (f"{prefix}/LICENSE", "_x86qw/LICENSE"),
+            (f"{prefix}/NOTICE", "_x86qw/NOTICE"),
+        ):
+            if payloads[outer_name] != nested_legal[nested_name]:
+                raise ArchiveError(
+                    f"installer legal notice differs between layers: {outer_name}"
+                )
     return plan
 
 

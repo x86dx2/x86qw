@@ -520,10 +520,14 @@ class ArchiveBootstrapTests(unittest.TestCase):
         with zipfile.ZipFile(zipapp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("__main__.py", application)
             archive.writestr("_x86qw/installer.json", encoded_identity)
+            archive.writestr("_x86qw/LICENSE", (ROOT / "LICENSE").read_bytes())
+            archive.writestr("_x86qw/NOTICE", (ROOT / "NOTICE").read_bytes())
         with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(f"{prefix}/installer.json", encoded_identity)
             archive.writestr(f"{prefix}/x86qw.pyz", zipapp.getvalue())
             archive.writestr(f"{prefix}/VERSION", version + "\n")
+            archive.writestr(f"{prefix}/LICENSE", (ROOT / "LICENSE").read_bytes())
+            archive.writestr(f"{prefix}/NOTICE", (ROOT / "NOTICE").read_bytes())
             archive.writestr(f"{prefix}/x86qw.sh", "#!/bin/sh\n")
             archive.writestr(f"{prefix}/x86qw.cmd", "@echo off\r\n")
             archive.writestr(
