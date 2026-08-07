@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -538,6 +540,55 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             payload = target.read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), result["sha256"])
             self.assertEqual(len(payload), result["size"])
+            self.assertEqual(
+                target.relative_to(ROOT / "dist").as_posix(),
+                result["distribution_path"],
+            )
+
+    def test_workflow_candidate_build_uses_external_output_and_explicit_identity(self) -> None:
+        candidate_version = "1.0.0"
+        public_version = installer_builder.VERSION_FILE.read_bytes()
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "release-work/installer-build"
+            completed = subprocess.run(
+                (
+                    sys.executable,
+                    str(ROOT / "maintenance/tools/build_installer_bundle.py"),
+                    "--output",
+                    str(output),
+                    "--version",
+                    candidate_version,
+                ),
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            result = json.loads(completed.stdout)
+            filename = f"x86qw-installer-{candidate_version}.zip"
+            self.assertEqual(f"{candidate_version}/{filename}", result["distribution_path"])
+
+            archive = output / candidate_version / filename
+            plan = archive_runtime.validate_installer_bundle(archive, candidate_version)
+            prefix = f"x86qw-installer-{candidate_version}"
+            members = archive_runtime.read_archive_members(
+                plan,
+                (
+                    f"{prefix}/VERSION",
+                    f"{prefix}/installer.json",
+                    f"{prefix}/_x86qw/installer.json",
+                ),
+            )
+            self.assertEqual(
+                f"{candidate_version}\n".encode("ascii"),
+                members[f"{prefix}/VERSION"],
+            )
+            for name in ("installer.json", "_x86qw/installer.json"):
+                identity = json.loads(members[f"{prefix}/{name}"])
+                self.assertEqual(candidate_version, identity["version"])
+
+        self.assertEqual(public_version, installer_builder.VERSION_FILE.read_bytes())
 
 
 if __name__ == "__main__":

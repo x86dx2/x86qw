@@ -1,0 +1,7 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "platform": "macOS-ARM64",
+  "protocol": "x86qw-native-case-v1",
+  "entrypoint_artifact": "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
+}
