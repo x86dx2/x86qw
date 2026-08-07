@@ -8,6 +8,8 @@ import re
 import unicodedata
 from pathlib import Path, PurePosixPath
 
+from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
+
 try:
     from .runtime_catalog import load_inventory as load_runtime_inventory
 except ImportError:
@@ -109,6 +111,8 @@ def runtime_catalog(catalog: dict[str, object]) -> dict[str, object]:
     return {
         "format": 1,
         "project": "x86qw-runtime",
+        "catalog_version": 1,
+        "min_cli_version": "0.7.0",
         "content_namespaces": list(catalog["content_namespaces"]),
         "profiles": catalog["profiles"],
         "profile_history": catalog["profile_history"],
@@ -155,6 +159,10 @@ def validate_runtime_catalog(catalog: object) -> None:
         or catalog.get("project") != "x86qw-runtime"
     ):
         raise ValueError("invalid runtime component catalog identity")
+    try:
+        validate_document_versions(catalog, kind=SchemaKind.CATALOG, allow_legacy=True)  # type: ignore[arg-type]
+    except ContractError as error:
+        raise ValueError("invalid runtime component catalog contract") from error
     components = catalog.get("components")
     if not isinstance(components, list) or not components:
         raise ValueError("runtime component catalog is empty")
@@ -247,6 +255,10 @@ def validate_runtime_catalog(catalog: object) -> None:
 def validate_catalog(catalog: object) -> None:
     if not isinstance(catalog, dict) or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
         raise ValueError("invalid component catalog identity")
+    try:
+        validate_document_versions(catalog, kind=SchemaKind.CATALOG, allow_legacy=False)
+    except ContractError as error:
+        raise ValueError("invalid component catalog contract") from error
     client = catalog.get("client")
     if not isinstance(client, dict) or client.get("id") != "ezquake" or client.get("channels") != ["stable", "nightly"]:
         raise ValueError("the active x86QW client must be ezQuake stable and nightly")

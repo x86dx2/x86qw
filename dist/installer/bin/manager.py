@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import errno
 import hashlib
+import io
 import importlib
 import json
 import os
@@ -60,6 +61,7 @@ from x86qw_runtime.ui.console import (
     format_bytes,
     format_bytes_compact,
 )
+from x86qw_runtime.ui.json_output import make_json_output, render_json_output
 
 from x86qw_runtime.io.archive import (
     ArchiveError,
@@ -83,6 +85,13 @@ from x86qw_runtime.io.managed_files import (
 from x86qw_runtime.io.metadata import MetadataFileError, read_bounded_regular_file
 from x86qw_runtime.io.paths import lexists, remove_path
 from x86qw_runtime.errors import ExitCode, InstallerError, PersistenceError
+from x86qw_runtime.contracts.schema import (
+    ContractError,
+    ContractVersions,
+    SchemaKind,
+    add_contract_versions,
+    validate_document_versions,
+)
 from x86qw_runtime.migrations import migrate_install_state
 from x86qw_runtime.state import (
     INSTALLATION_PROFILES,
@@ -123,7 +132,9 @@ from x86qw_runtime.receipts import (
 from x86qw_runtime.versioning import (
     COMPONENT_VERSION,
     NIGHTLY_VERSION,
+    SEMVER_VERSION,
     STABLE_VERSION,
+    parse_semver,
 )
 
 from x86qw_runtime.catalogs import (
@@ -287,7 +298,7 @@ def application_version() -> str:
             version = location.read_text(encoding="utf-8").strip()
         except OSError as error:
             raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}") from error
-    if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+    if not isinstance(version, str) or not SEMVER_VERSION.fullmatch(version):
         raise InstallerError(f"Versão da CLI x86QW ausente ou inválida: {location}")
     return version
 
@@ -3805,11 +3816,23 @@ class Installer:
     def _parse_install_state(self, state: object):
         path = self.target / INSTALL_STATE
         try:
+            if isinstance(state, Mapping):
+                validate_document_versions(
+                    state,
+                    kind=SchemaKind.STATE,
+                    current_cli_version=application_version(),
+                    allow_legacy=True,
+                )
             return parse_install_state(
                 state,
                 allowed_profiles=self._install_state_profiles(),
                 allowed_capabilities=INSTALLATION_CAPABILITIES,
             )
+        except ContractError as error:
+            raise InstallerError(
+                f"Estado da instalação incompatível com a CLI atual: {path}",
+                exit_code=ExitCode.USAGE,
+            ) from error
         except StateError as error:
             raise self._install_state_error(error, path) from error
 
@@ -3827,7 +3850,7 @@ class Installer:
     ) -> dict[str, object]:
         self.ensure_metadata_directory()
         recorded = self.installed_components()
-        state = self.validate_install_state({
+        state_document = add_contract_versions({
             "format": 2,
             "project": "x86qw",
             "profile": profile,
@@ -3836,7 +3859,8 @@ class Installer:
             "known_components": list(self.components) if known is None else list(known),
             "capabilities": [] if capabilities is None else list(capabilities),
             "component_fingerprint": profile_fingerprint(recorded),
-        })
+        }, ContractVersions(), kind=SchemaKind.STATE)
+        state = self.validate_install_state(state_document)
         destination = self.target / INSTALL_STATE
         payload = serialize_install_state(self._parse_install_state(state))
         if mutation_results is not None:
@@ -3971,11 +3995,23 @@ class Installer:
 
     def read_install_state_document(self, path: Path) -> dict[str, object]:
         try:
-            return read_install_state(
+            document = read_install_state(
                 path,
                 allowed_profiles=self._install_state_profiles(),
                 allowed_capabilities=INSTALLATION_CAPABILITIES,
             ).to_document()
+            validate_document_versions(
+                document,
+                kind=SchemaKind.STATE,
+                current_cli_version=application_version(),
+                allow_legacy=True,
+            )
+            return document
+        except ContractError as error:
+            raise InstallerError(
+                f"Estado da instalação incompatível com a CLI atual: {path}",
+                exit_code=ExitCode.USAGE,
+            ) from error
         except StateError as error:
             raise self._install_state_error(error, path) from error
 
@@ -4215,6 +4251,17 @@ class Installer:
         self, receipt: Path, metadata: dict[str, object],
     ) -> None:
         try:
+            version = metadata.get("version")
+            if (
+                isinstance(version, str)
+                and SEMVER_VERSION.fullmatch(version)
+                and parse_semver(version).major >= 1
+            ):
+                metadata = add_contract_versions(
+                    metadata,
+                    ContractVersions(),
+                    kind=SchemaKind.RECEIPT,
+                )
             model = parse_cli_receipt(
                 json.dumps(metadata, ensure_ascii=False).encode("utf-8")
             )
@@ -6887,7 +6934,7 @@ class Installer:
     @staticmethod
     def release_is_newer(candidate: str, installed: str, channel: str) -> bool:
         if channel == "stable":
-            return tuple(map(int, candidate.split("."))) > tuple(map(int, installed.split(".")))
+            return parse_semver(candidate) > parse_semver(installed)
         return candidate > installed
 
     def update_runtime(
@@ -7532,7 +7579,11 @@ class Installer:
                     "Não foi possível publicar a CLI, o recibo e os launchers como uma geração única."
                 ) from error
             try:
-                if self.validate_cli_receipt(cli_root / "receipt") != identity:
+                receipt_identity = self.validate_cli_receipt(cli_root / "receipt")
+                if {
+                    key: receipt_identity.get(key)
+                    for key in ("format", "project", "version")
+                } != identity:
                     raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
                 if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
                     raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
@@ -7611,6 +7662,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="simula update, upgrade ou repair sem alterar arquivos",
     )
     parser.add_argument(
+        "--json", action="store_true",
+        help="emite o envelope JSON estável para comandos suportados",
+    )
+    parser.add_argument(
         "--yes", action="store_true",
         help="confirma automaticamente o plano de update ou upgrade",
     )
@@ -7637,7 +7692,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
-    namespace = parser.parse_args(arguments)
+    namespace = parser.parse_intermixed_args(arguments)
     valid_actions = (
         "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
@@ -7656,6 +7711,14 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
     if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair"}:
         parser.error("--dry-run só pode ser usado com update, upgrade ou repair")
+    if namespace.json and namespace.action not in {
+        "version", "status", "hub", "verify", "repair", "update", "upgrade",
+    }:
+        parser.error(
+            "--json só pode ser usado com version, status, hub, verify, repair, update ou upgrade"
+        )
+    if namespace.json and namespace.action in {"repair", "update", "upgrade"} and not namespace.dry_run:
+        parser.error(f"{namespace.action} --json exige --dry-run")
     if namespace.yes and namespace.action not in {"update", "upgrade"}:
         parser.error("--yes só pode ser usado com update ou upgrade")
     if namespace.platform is not None and namespace.action != "install":
@@ -7946,7 +8009,169 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                 return 0
 
 
-def execute_manager_action(options: argparse.Namespace, project_root: Path) -> int:
+def _json_status_data(target: Path) -> dict[str, object]:
+    """Project a read-only installation snapshot into the public shape."""
+
+    state_path = target / INSTALL_STATE
+    sessions_path = target / ".x86qw" / "sessions"
+    sessions: list[dict[str, str]] = []
+    if sessions_path.is_dir() and not sessions_path.is_symlink():
+        for directory in sorted(sessions_path.iterdir()):
+            if not directory.is_dir() or directory.is_symlink():
+                continue
+            journal = directory / "session.json"
+            if not journal.is_file() or journal.is_symlink():
+                continue
+            try:
+                document = json.loads(journal.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if isinstance(document, dict):
+                sessions.append({
+                    "session_id": str(document.get("session_id", directory.name)),
+                    "status": str(document.get("status", "unknown")),
+                    "command": str(document.get("command", "unknown")),
+                })
+    return {
+        "project": "x86qw",
+        "target": str(target),
+        "installation": "present" if target.exists() else "missing",
+        "state": "present" if state_path.is_file() else "missing",
+        "sessions": sessions,
+    }
+
+
+def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
+    return {
+        "kind": row.kind,
+        "item": row.item,
+        "installed": row.installed,
+        "available": row.available,
+        "action": row.action,
+        "size": row.size,
+    }
+
+
+def _json_hub_servers(servers: object) -> list[dict[str, object]]:
+    """Project mutable Hub rows without crossing raw fields into JSON."""
+
+    if not isinstance(servers, list):
+        raise InstallerError("O Hub retornou um catálogo de servidores inválido.")
+    projected: list[dict[str, object]] = []
+    for server in servers:
+        if not isinstance(server, dict):
+            continue
+        settings = server.get("settings")
+        settings = settings if isinstance(settings, dict) else {}
+        address = server.get("address")
+        if not isinstance(address, str):
+            continue
+        raw_players = server.get("players")
+        humans = bots = 0
+        if isinstance(raw_players, list):
+            for player in raw_players:
+                if isinstance(player, dict) and player.get("is_bot"):
+                    bots += 1
+                elif isinstance(player, dict):
+                    humans += 1
+        elif isinstance(raw_players, dict):
+            if type(raw_players.get("humans")) is int:
+                humans = raw_players["humans"]
+            if type(raw_players.get("bots")) is int:
+                bots = raw_players["bots"]
+        qtv = server.get("qtv_stream")
+        if isinstance(qtv, dict):
+            qtv = qtv.get("url") or qtv.get("stream")
+        projected.append({
+            "address": address,
+            "title": settings.get("hostname") or server.get("title") or server.get("name") or address,
+            "mode": server.get("mode") or settings.get("mode") or "-",
+            "map": settings.get("map") or server.get("map") or "-",
+            "players": {"humans": humans, "bots": bots},
+            "qtv_stream": qtv if isinstance(qtv, str) else None,
+        })
+    if not projected:
+        raise InstallerError("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
+    return sorted(projected, key=lambda item: str(item["address"]))
+
+
+def execute_json_action(
+    options: argparse.Namespace,
+    project_root: Path,
+) -> int:
+    """Emit exactly one validated JSON document for a supported command."""
+
+    command = str(options.action)
+    target = options.target.expanduser().resolve() if options.target is not None else None
+    captured = io.StringIO()
+    try:
+        with redirect_stdout(captured), redirect_stderr(captured):
+            if command == "version":
+                data: object = {"project": "x86qw", "version": application_version()}
+            elif command == "status":
+                assert target is not None
+                data = _json_status_data(target)
+            elif command == "hub":
+                assert target is not None
+                installer = Installer(project_root, target, online_only=options.online_only)
+                installer.validate_target("verify", purge=False)
+                data = {"target": str(target), "servers": _json_hub_servers(installer.hub_servers())}
+            elif command == "verify":
+                assert target is not None
+                installer = Installer(project_root, target, online_only=options.online_only)
+                installer.validate_target("verify", purge=False)
+                installer.reject_target_symlinks()
+                installer.verify_installation()
+                data = {"target": str(target), "verified": True}
+            else:
+                plan_rows: list[dict[str, object]] = []
+                execute_manager_action(options, project_root, plan_sink=plan_rows)
+                data = {
+                    "target": str(target) if target is not None else "",
+                    "status": "planned" if plan_rows else "noop",
+                    "operations": plan_rows,
+                }
+        output = make_json_output(command, data=data, dry_run=bool(options.dry_run))
+        print(render_json_output(output), end="")
+        return int(ExitCode.SUCCESS)
+    except KeyboardInterrupt:
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=ExitCode.INTERRUPTED,
+            errors=({"code": "interrupted", "message": "Operação cancelada."},),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(ExitCode.INTERRUPTED)
+    except (InstallerError, session_control.SessionControlError) as error:
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=getattr(error, "exit_code", ExitCode.FAILURE),
+            errors=({"code": getattr(error, "code", "operation"), "message": str(error)},),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(getattr(error, "exit_code", ExitCode.FAILURE))
+    except Exception as error:  # pragma: no cover - defensive boundary
+        output = make_json_output(
+            command,
+            ok=False,
+            exit_code=ExitCode.FAILURE,
+            errors=({"code": "unexpected", "message": str(error)},),
+            dry_run=bool(options.dry_run),
+        )
+        print(render_json_output(output), end="")
+        return int(ExitCode.FAILURE)
+
+
+def execute_manager_action(
+    options: argparse.Namespace,
+    project_root: Path,
+    *,
+    plan_sink: list[dict[str, object]] | None = None,
+) -> int:
     """Execute a parsed manager action under the installation operation contract."""
     action_labels = {
         "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
@@ -8020,6 +8245,8 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []
             needs_repair = installer.repair(dry_run=True, plan_rows=plan_rows)
+            if plan_sink is not None:
+                plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not needs_repair:
                 console.success("Nenhum reparo é necessário; a instalação está íntegra.")
             else:
@@ -8072,6 +8299,8 @@ def execute_manager_action(options: argparse.Namespace, project_root: Path) -> i
             content_changed = operation(
                 dry_run=True, preview=not options.dry_run, plan_rows=plan_rows,
             )
+            if plan_sink is not None:
+                plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not plan_rows:
                 message = (
                     "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
@@ -8163,12 +8392,18 @@ def main(arguments: list[str] | None = None) -> int:
         if raw_arguments[:1] == ["play"]:
             gameplay = load_gameplay_module()
             return gameplay.main(raw_arguments[1:])
-        if raw_arguments[:1] and raw_arguments[0] in {"host", "proxy", "qtv", "status"}:
+        if (
+            raw_arguments[:1]
+            and raw_arguments[0] in {"host", "proxy", "qtv", "status"}
+            and "--json" not in raw_arguments
+        ):
             services = load_services_module()
             return services.main(raw_arguments)
         options = parse_arguments(raw_arguments, project_root)
         console.configure(verbose=options.verbose, no_color=options.no_color)
         navigation.configure(no_color=options.no_color)
+        if options.json:
+            return execute_json_action(options, project_root)
         if options.action == "version":
             print(f"x86QW {application_version()}")
             return 0

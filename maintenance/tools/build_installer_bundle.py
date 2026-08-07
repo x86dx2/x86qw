@@ -41,7 +41,11 @@ from x86qw_runtime.io.archive import (
     validate_installer_history_bundle,
 )
 from x86qw_runtime.io import atomic as atomic_io
-from x86qw_runtime.versioning import STABLE_VERSION as VERSION_PATTERN, version_key
+from x86qw_runtime.versioning import (
+    SEMVER_VERSION as VERSION_PATTERN,
+    parse_semver,
+    version_key,
+)
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
 MAX_BUILD_INPUT_BYTES = 128 * 1024 * 1024
@@ -287,7 +291,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"unexpected installer package entry: {directory}")
         version = directory.name
-        version_key(version)
+        parse_semver(version)
         filename = f"x86qw-installer-{version}.zip"
         archive = directory / filename
         if not archive.is_file() or archive.is_symlink():
@@ -308,7 +312,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
-    return sorted(results, key=lambda item: version_key(str(item["version"])))
+    return sorted(results, key=lambda item: parse_semver(str(item["version"])))
 
 
 def distribution_path_for(archive: Path, version: str, filename: str) -> str:
@@ -505,6 +509,9 @@ def reset_history(package_root: Path) -> None:
 
 
 def build(output: Path, version: str = VERSION) -> dict[str, object]:
+    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
+        raise ValueError(f"invalid installer version: {version!r}")
+    parse_semver(version)
     validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
     zipapp_payload = zipapp_bytes(version)

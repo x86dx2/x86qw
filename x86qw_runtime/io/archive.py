@@ -51,7 +51,12 @@ _WINDOWS_RESERVED_NAMES = frozenset({
     *(f"COM{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")),
     *(f"LPT{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")),
 })
-_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_VERSION_PATTERN = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 _LOCAL_FILE_HEADER = b"PK\x03\x04"
 _CENTRAL_DIRECTORY_HEADER = b"PK\x01\x02"
 _END_OF_CENTRAL_DIRECTORY = b"PK\x05\x06"
@@ -1704,7 +1709,7 @@ def validate_installer_history_bundle(source: Path | bytes, version: str) -> Arc
     """Validate the exact layout used by every immutable published bundle."""
     if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
         raise ArchiveError(f"invalid installer bundle version: {version!r}")
-    numeric_version = tuple(int(part) for part in version.split("."))
+    numeric_version = tuple(int(part) for part in version.split("-", 1)[0].split("."))
     return _validate_installer_bundle_layout(
         source,
         version,

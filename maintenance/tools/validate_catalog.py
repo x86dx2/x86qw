@@ -15,6 +15,8 @@ except ImportError:  # Execucao direta
     from downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 from urllib.parse import unquote, urlsplit
 
+from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
+
 try:
     from .component_policy import load_component_policy, require_component
 except ImportError:  # Execucao direta: python3 maintenance/tools/validate_catalog.py
@@ -171,8 +173,16 @@ def validate_package(
 def validate_catalog(catalog: object) -> int:
     if not isinstance(catalog, dict):
         raise ValueError("catalog must be a JSON object")
-    if catalog.get("format") != 1 or catalog.get("project") != "x86qw":
+    if type(catalog.get("format")) is not int or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
         raise ValueError("unsupported catalog identity or format")
+    try:
+        validate_document_versions(
+            catalog,
+            kind=SchemaKind.CATALOG,
+            allow_legacy=True,
+        )
+    except ContractError as error:
+        raise ValueError("unsupported catalog schema contract") from error
     packages = catalog.get("packages")
     if not isinstance(packages, list):
         raise ValueError("packages must be a list")
