@@ -66,7 +66,12 @@ RUNTIME_DEPENDENCY_MANIFEST = ROOT / "maintenance/inventory/runtime-dependencies
 RUNTIME_DEPENDENCY_WHEELS = ROOT / "maintenance/vendor/wheels"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
 RUNTIME_DEPENDENCY_FIELDS = frozenset({
-    "name", "version", "filename", "sha256", "license", "source", "package_prefixes",
+    "name", "version", "filename", "sha256", "upstream_sha256", "transformation",
+    "license", "source", "package_prefixes",
+})
+RUNTIME_DEPENDENCY_TRANSFORMATIONS = frozenset({
+    "none",
+    "add-empty-package-marker:securesystemslib/_internal/__init__.py",
 })
 GENERATED_RUNTIME_SOURCES = frozenset({
     "generated:entrypoint",
@@ -239,12 +244,27 @@ def runtime_dependency_lock() -> dict[str, object]:
         name = dependency["name"]
         filename = dependency["filename"]
         digest = dependency["sha256"]
+        upstream_digest = dependency["upstream_sha256"]
+        transformation = dependency["transformation"]
         if name in names or filename in filenames:
             raise ValueError("dependência runtime duplicada")
         if Path(filename).name != filename or not filename.endswith("-py3-none-any.whl"):
             raise ValueError(f"wheel runtime inválido: {filename}")
-        if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        if any(
+            len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+            for value in (digest, upstream_digest)
+        ):
             raise ValueError(f"SHA-256 runtime inválido: {name}")
+        if transformation not in RUNTIME_DEPENDENCY_TRANSFORMATIONS:
+            raise ValueError(f"transformação runtime inválida: {name}")
+        if transformation == "none" and digest != upstream_digest:
+            raise ValueError(f"wheel runtime sem transformação diverge da origem: {name}")
+        if (
+            transformation == "add-empty-package-marker:securesystemslib/_internal/__init__.py"
+            and name != "securesystemslib"
+        ):
+            raise ValueError(f"transformação runtime incompatível: {name}")
         if not dependency["source"].startswith("https://pypi.org/project/"):
             raise ValueError(f"origem runtime inválida: {name}")
         names.add(name)
@@ -268,6 +288,13 @@ def runtime_dependency_members() -> tuple[tuple[str, bytes], ...]:
             plan = scan_archive(wheel)
         except ArchiveError as error:
             raise ValueError(f"wheel runtime inválido: {dependency['name']}") from error
+        transformation = str(dependency["transformation"])
+        if transformation != "none":
+            marker = transformation.split(":", 1)[1]
+            if not any(member.name == marker for member in plan.members):
+                raise ValueError(
+                    f"wheel runtime não contém marcador da transformação: {dependency['name']}"
+                )
         license_prefix = f"{dependency['name']}-{dependency['version']}.dist-info/licenses/"
         selected_names: list[str] = []
         output_names: dict[str, str] = {}

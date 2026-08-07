@@ -25,11 +25,32 @@ class RuntimeDependencyTests(unittest.TestCase):
             names = set(archive.namelist())
             self.assertIn("tuf/ngclient/updater.py", names)
             self.assertIn("securesystemslib/signer/_key.py", names)
+            self.assertIn("securesystemslib/_internal/__init__.py", names)
             self.assertIn("urllib3/__init__.py", names)
             self.assertIn("_x86qw/runtime-dependencies.json", names)
             self.assertNotIn("_x86qw/trust/root.json", names)
             lock = json.loads(archive.read("_x86qw/runtime-dependencies.json"))
         self.assertEqual(json.loads(LOCK.read_text(encoding="utf-8")), lock)
+
+        wheel_path = (
+            ROOT / "maintenance/vendor/wheels/securesystemslib-1.4.0-py3-none-any.whl"
+        )
+        with zipfile.ZipFile(wheel_path) as wheel:
+            record = next(
+                wheel.read(name).decode("utf-8")
+                for name in wheel.namelist()
+                if name.endswith(".dist-info/RECORD")
+            )
+        self.assertIn("securesystemslib/_internal/__init__.py,,0", record.splitlines())
+        lock_entry = next(
+            dependency
+            for dependency in lock["dependencies"]
+            if dependency["name"] == "securesystemslib"
+        )
+        self.assertEqual(
+            "add-empty-package-marker:securesystemslib/_internal/__init__.py",
+            lock_entry["transformation"],
+        )
 
         with tempfile.TemporaryDirectory() as temporary:
             application = Path(temporary) / "x86qw.pyz"
@@ -39,6 +60,8 @@ class RuntimeDependencyTests(unittest.TestCase):
                     sys.executable,
                     "-c",
                     "import sys; sys.path.insert(0, sys.argv[1]); "
+                    "from tuf.ngclient import Updater; "
+                    "from securesystemslib.dsse import Envelope; "
                     "import tuf, securesystemslib, urllib3; "
                     "print(tuf.__version__, securesystemslib.__version__, urllib3.__version__)",
                     str(application),
@@ -84,6 +107,8 @@ class RuntimeDependencyTests(unittest.TestCase):
                 "version": "1.0.0",
                 "filename": "demo-1.0.0-py3-none-any.whl",
                 "sha256": hashlib.sha256(wheel).hexdigest(),
+                "upstream_sha256": hashlib.sha256(wheel).hexdigest(),
+                "transformation": "none",
                 "license": "MIT",
                 "source": "https://pypi.org/project/demo/",
                 "package_prefixes": ["demo/"],
