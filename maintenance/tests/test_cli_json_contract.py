@@ -41,6 +41,21 @@ class CliJsonContractTests(unittest.TestCase):
             result = manager.main(arguments)
         return result, parse_json_output(output.getvalue()), errors.getvalue()
 
+    def test_parse_arguments_accepts_interspersed_target_and_options(self) -> None:
+        target = str(Path("/tmp/x86qw-parser-target"))
+        cases = (
+            (["status", "--json", target], "status", False),
+            (["status", target, "--json"], "status", False),
+            (["repair", "--dry-run", "--json", target], "repair", True),
+        )
+        for arguments, action, dry_run in cases:
+            with self.subTest(arguments=arguments):
+                namespace = manager.parse_arguments(arguments, ROOT)
+                self.assertEqual(action, namespace.action)
+                self.assertEqual(Path(target), namespace.target)
+                self.assertTrue(namespace.json)
+                self.assertEqual(dry_run, namespace.dry_run)
+
     @staticmethod
     def status_data() -> dict[str, object]:
         return {

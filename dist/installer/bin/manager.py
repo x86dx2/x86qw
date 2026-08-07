@@ -7692,7 +7692,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
-    namespace = parser.parse_args(arguments)
+    namespace = parser.parse_intermixed_args(arguments)
     valid_actions = (
         "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "components",
         "presets", "hub", "verify", "uninstall", "cleanup",
