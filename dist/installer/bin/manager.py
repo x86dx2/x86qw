@@ -1964,22 +1964,26 @@ class Installer:
             raise InstallerError("Nenhuma versão foi selecionada.")
         return next(record for record in catalog if record[0] == selected)
 
-    def choose_channel(self) -> str:
-        channel = navigation.select_one(
-            "Qual canal deseja instalar?",
-            (
-                navigation.MenuOption(
-                    "stable", "Stable", "releases oficiais", aliases=("s",),
+    def choose_channel(self, selected: str | None = None) -> str:
+        channel = selected
+        if channel is None:
+            channel = navigation.select_one(
+                "Qual canal deseja instalar?",
+                (
+                    navigation.MenuOption(
+                        "stable", "Stable", "releases oficiais", aliases=("s",),
+                    ),
+                    navigation.MenuOption(
+                        "nightly", "Nightly", "snapshots de desenvolvimento", aliases=("n",),
+                    ),
                 ),
-                navigation.MenuOption(
-                    "nightly", "Nightly", "snapshots de desenvolvimento", aliases=("n",),
-                ),
-            ),
-            breadcrumb="x86QW › Instalação › Canal",
-            invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
-        )
+                breadcrumb="x86QW › Instalação › Canal",
+                invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
+            )
         if channel is None:
             raise InstallerError("Nenhum canal foi selecionado.")
+        if channel not in {"stable", "nightly"}:
+            raise InstallerError(f"Canal de instalação inválido: {channel}.")
         self.channel = channel
         console.success(f"Canal selecionado: {channel}")
         return channel
@@ -2089,10 +2093,19 @@ class Installer:
             self.spec.architecture,
         )
 
-    def choose_release(self) -> None:
+    def choose_release(self, selected: str | None = None) -> None:
         assert self.spec is not None
         catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
-        self.configure_release(self.prompt_catalog(self.channel, catalog))
+        if selected is None:
+            release = self.prompt_catalog(self.channel, catalog)
+        else:
+            matches = [record for record in catalog if record[0] == selected]
+            if len(matches) != 1:
+                raise InstallerError(
+                    f"A versão {selected} não está disponível no canal {self.channel}."
+                )
+            release = matches[0]
+        self.configure_release(release)
         console.success(f"Versão selecionada: {self.selected_version}")
 
     def configure_release(self, selected: ReleaseRecord) -> None:
@@ -6892,13 +6905,22 @@ class Installer:
         self,
         *,
         platform: str | None = None,
+        channel: str | None = None,
+        release: str | None = None,
+        without_components: bool = False,
         before_mutation: Callable[[], None] | None = None,
         mutation_results: list[MutationResult] | None = None,
     ) -> None:
         console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
-        self.choose_channel()
-        self.choose_release()
+        if channel is None:
+            self.choose_channel()
+        else:
+            self.choose_channel(channel)
+        if release is None:
+            self.choose_release()
+        else:
+            self.choose_release(release)
         if before_mutation is not None:
             before_mutation()
         reset_macos_game_directory = self.macos_game_directory_reset_required()
@@ -6938,10 +6960,14 @@ class Installer:
             console.success("ezQuake instalado e recibo registrado.")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
-            if self.confirm_components():
+            if not without_components and self.confirm_components():
                 installation_results.extend(self.install_component_phase())
             else:
-                console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+                console.info(
+                    "Dados nQuake não solicitados; esta etapa foi ignorada."
+                    if not without_components
+                    else "Componentes desativados para esta execução; esta etapa foi ignorada."
+                )
                 self.write_install_state(
                     "none", [], mutation_results=installation_results,
                 )
@@ -7687,6 +7713,18 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="instala um cliente para macos, linux ou windows em vez do SO detectado",
     )
     parser.add_argument(
+        "--channel", choices=("stable", "nightly"), metavar="CANAL",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--release", metavar="VERSÃO",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--without-components", action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--online-only", action="store_true",
         help=argparse.SUPPRESS,
     )
@@ -7744,6 +7782,16 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--downloads e --personal-data só podem ser usados com cleanup")
     if namespace.purge and namespace.action != "uninstall":
         parser.error("--purge só pode ser usado com uninstall")
+    if namespace.action != "install" and (
+        namespace.channel is not None
+        or namespace.release is not None
+        or namespace.without_components
+    ):
+        parser.error(
+            "--channel, --release e --without-components só podem ser usados com install"
+        )
+    if (namespace.channel is None) != (namespace.release is None):
+        parser.error("--channel e --release precisam ser fornecidos juntos")
     if namespace.installed_cli and namespace.action in {"install", "components", "presets"}:
         parser.error(
             f"{namespace.action} não está disponível na CLI instalada; use install.sh para instalar ou adicionar conteúdo"
@@ -8405,11 +8453,18 @@ def execute_manager_action(
         else:
             if options.action == "install":
                 with installer.component_state_transaction() as operation_results:
-                    installer.install(
-                        platform=options.platform,
-                        before_mutation=acquire_operation_lock,
-                        mutation_results=operation_results,
-                    )
+                    install_arguments = {
+                        "platform": options.platform,
+                        "before_mutation": acquire_operation_lock,
+                        "mutation_results": operation_results,
+                    }
+                    if options.channel is not None:
+                        install_arguments["channel"] = options.channel
+                    if options.release is not None:
+                        install_arguments["release"] = options.release
+                    if options.without_components:
+                        install_arguments["without_components"] = True
+                    installer.install(**install_arguments)
                     installer.install_online_cli(mutation_results=operation_results)
             else:
                 acquire_operation_lock()

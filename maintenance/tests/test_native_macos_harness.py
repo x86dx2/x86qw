@@ -372,6 +372,25 @@ print(f"executed {case}")
             with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
                 validate_evidence_file(handoff_path, candidate=candidate)
 
+    def test_relative_output_dir_is_absolutized_before_child_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            previous = Path.cwd()
+            os.chdir(root)
+            try:
+                results = execute_cases(
+                    candidate=candidate,
+                    plan=self._plan(candidate, identity),
+                    output_dir=Path("logs"),
+                )
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(list(CANONICAL_CASES), [result["name"] for result in results])
+            self.assertTrue((root / "logs/receipts/01-install-clean-space-unicode.json").is_file())
+            self.assertFalse((root / "logs/logs").exists())
+
     def test_missing_receipt_reports_child_exit_and_stderr_tail(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -430,7 +449,12 @@ else:
                 archive.writestr("bin/x86qw.pyz", installer_code)
 
             def client_archive(channel: str) -> None:
-                archive_path = source / f"runtime/clients/ezquake/{channel}/fixture/macos-universal/{channel}.zip"
+                version = "3.6.9" if channel == "stable" else "fixture"
+                filename = "ezQuake-macOS-universal.zip" if channel == "stable" else f"{channel}.zip"
+                archive_path = source / (
+                    f"runtime/clients/ezquake/{channel}/{version}/"
+                    f"macos-universal/{filename}"
+                )
                 archive_path.parent.mkdir(parents=True, exist_ok=True)
                 with zipfile.ZipFile(archive_path, "w") as archive:
                     archive.writestr(
