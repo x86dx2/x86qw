@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from maintenance.tools.native_handoff import (
     CANONICAL_CASES,
@@ -117,6 +118,7 @@ class NativeMacosHarnessTests(unittest.TestCase):
 
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -130,6 +132,8 @@ candidate = Path(argument("--candidate-root"))
 case = argument("--case")
 scratch = Path(argument("--scratch-root"))
 receipt = Path(argument("--receipt"))
+if os.name == "nt" and not os.environ.get("SystemRoot"):
+    raise SystemExit(83)
 artifact_name = "runtime/test/native-runtime"
 artifact = candidate / artifact_name
 target = scratch / "installation target"
@@ -323,6 +327,36 @@ print(f"executed {case}")
             handoff_path.write_text(json.dumps(handoff) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
                 validate_evidence_file(handoff_path, candidate=candidate)
+
+    def test_missing_receipt_reports_child_exit_and_stderr_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+
+            def child_without_receipt(command: list[str], **kwargs: object) -> object:
+                stderr = kwargs["stderr"]
+                assert hasattr(stderr, "write")
+                stderr.write(b"child failed before receipt\n")
+
+                class Process:
+                    def wait(self, *, timeout: int) -> int:
+                        return 23
+
+                return Process()
+
+            with mock.patch(
+                "maintenance.tools.native_macos_harness.subprocess.Popen",
+                side_effect=child_without_receipt,
+            ):
+                with self.assertRaisesRegex(
+                    NativeHandoffError,
+                    r"caso: install-clean-space-unicode.*exit_code=23.*timed_out=False.*child failed before receipt",
+                ):
+                    execute_cases(
+                        candidate=candidate,
+                        plan=self._plan(candidate, identity),
+                        output_dir=root / "logs",
+                    )
 
     @unittest.skipIf(os.name == "nt", "artefatos macOS/POSIX não executáveis no Windows")
     def test_real_f_candidate_and_python_entrypoint_share_lifecycle_state_and_receipts(self) -> None:

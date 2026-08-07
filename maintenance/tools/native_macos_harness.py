@@ -33,6 +33,7 @@ from maintenance.tools.native_handoff import (
 )
 
 M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
+_STDERR_TAIL_BYTES = 2048
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,19 @@ def _sha256(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _stderr_tail(path: Path) -> str:
+    """Return a bounded, redaction-safe diagnostic from a child stderr log."""
+
+    try:
+        with Path(path).open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, stream.tell() - _STDERR_TAIL_BYTES))
+            value = stream.read().decode("utf-8", errors="replace").strip()
+    except OSError:
+        return "<indisponível>"
+    return value or "<vazio>"
 
 
 def _stage_entrypoint(
@@ -218,6 +232,11 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
         "X86QW_CANDIDATE_MANIFEST_SHA256": initial_identity["manifest_sha256"],
         "X86QW_NATIVE_SCRATCH_ROOT": str(scratch_root),
     }
+    if os.name == "nt":
+        system_root = os.environ.get("SystemRoot")
+        if not system_root:
+            raise NativeHandoffError("SystemRoot ausente no ambiente Windows do harness")
+        environment["SystemRoot"] = system_root
     results: list[dict[str, object]] = []
     for index, case in enumerate(cases, start=1):
         name = str(case["name"])
@@ -258,7 +277,11 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
         validate_runtime(runtime)
         validate_plan(plan, candidate=candidate)
         if not receipt_path.is_file() or receipt_path.is_symlink():
-            raise NativeHandoffError(f"recibo nativo ausente após o caso: {name}")
+            raise NativeHandoffError(
+                f"recibo nativo ausente após o caso: {name} "
+                f"(exit_code={exit_code}, timed_out={timed_out}, "
+                f"stderr={_stderr_tail(stderr_path)!r})",
+            )
         receipt = validate_case_receipt(
             receipt_path,
             candidate=candidate,
