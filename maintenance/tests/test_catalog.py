@@ -188,6 +188,21 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
         self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
+        release_metadata: dict[str, set[tuple[str, str, bool]]] = {}
+        for package in catalog["packages"]:
+            github_url = str(package["urls"][0])
+            marker = "/releases/download/"
+            if marker not in github_url:
+                continue
+            release_tag = github_url.split(marker, 1)[1].split("/", 1)[0]
+            release_metadata.setdefault(release_tag, set()).add((
+                str(package["mirror_title"]),
+                str(package["mirror_notes"]),
+                bool(package["mirror_latest"]),
+            ))
+        self.assertTrue(all(
+            len(metadata) == 1 for metadata in release_metadata.values()
+        ))
         clients = [package for package in catalog["packages"] if package["component"] == "ezquake"]
         content = [package for package in catalog["packages"] if package["channel"] == "content"]
         self.assertTrue(all(package.get("distribution_path") for package in clients))
@@ -217,10 +232,9 @@ class CatalogTests(unittest.TestCase):
         ]
         self.assertEqual(1, len(product_bootstraps))
         self.assertEqual("x86qw", product_bootstraps[0]["component"])
-        self.assertTrue(
-            product_bootstraps[0]["mirror_title"].startswith(
-                "x86QW Content · Base e inicialização do cliente x86QW ",
-            ),
+        self.assertEqual(
+            "x86QW Content · nQuake e4cb23d40aa2",
+            product_bootstraps[0]["mirror_title"],
         )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22+x86qw.5", td2["version"])
