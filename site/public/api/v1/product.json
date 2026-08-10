@@ -103,7 +103,7 @@
       "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.12/x86qw-installer-0.7.12.zip"
     ]
   },
-  "package_count": 72,
+  "package_count": 73,
   "project": "x86qw",
   "runtimes": [
     {

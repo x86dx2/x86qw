@@ -299,7 +299,10 @@ _CLIENT_RECEIPT = re.compile(r"^ezquake-([A-Za-z0-9_.+-]+)-(stable|nightly)\.rec
 _SAFE_MIGRATION_BYTES = 16 * 1024 * 1024
 # Historical identifiers are part of the runtime migration contract.  Keep
 # this small table here instead of importing the maintenance manager.
-LEGACY_COMPONENT_REPLACEMENTS = {"nquake-ktx": "ktx"}
+LEGACY_COMPONENT_REPLACEMENTS = {
+    "nquake-bootstrap": "x86qw-client-bootstrap",
+    "nquake-ktx": "ktx",
+}
 LEGACY_COMPONENT_REMOVALS = frozenset({"nquake-sounds"})
 FIXTURE_BACKED_MIGRATION_SOURCES = frozenset({"0.7.0", "0.7.1", "0.7.2", "0.7.3"})
 _JOURNAL_FORMAT = 1

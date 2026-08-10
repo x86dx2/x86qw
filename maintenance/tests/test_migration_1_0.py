@@ -621,6 +621,30 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             self.assertEqual((), rerun.operations)
             self.assertFalse(rerun.conflicts, rerun.conflicts)
 
+    def test_nquake_bootstrap_pair_is_migrated_to_the_product_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_state(root)
+            _write_component(root, "nquake-bootstrap")
+
+            plan = migrations.plan_migration(root, source_version="0.7.3")
+
+            self.assertTrue(plan.executable, plan.conflicts)
+            self.assertIn(
+                "component:x86qw-client-bootstrap:receipt",
+                {operation.key for operation in plan.operations},
+            )
+            result = migrations.execute_migration(plan)
+
+            self.assertEqual("committed", result.status)
+            canonical = root / ".x86qw/components/x86qw-client-bootstrap/receipt"
+            self.assertEqual(
+                "x86qw-client-bootstrap",
+                receipts.inspect_receipt(canonical.read_bytes()).subject,
+            )
+            self.assertFalse((root / ".x86qw/nquake-bootstrap.receipt").exists())
+            self.assertFalse((root / ".x86qw/nquake-bootstrap.inventory").exists())
+
     def test_retired_nquake_sounds_is_removed_from_state_but_preserved_for_diagnosis(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -106,8 +106,8 @@ class Release0712Tests(unittest.TestCase):
         digest = hashlib.sha256(catalog).hexdigest()
         expected = {
             "metadata/1.root.json",
-            "metadata/8.targets.json",
-            "metadata/8.snapshot.json",
+            "metadata/9.targets.json",
+            "metadata/9.snapshot.json",
             "metadata/timestamp.json",
             f"targets/catalog/{digest}.catalog.json",
         }
@@ -128,7 +128,7 @@ class Release0712Tests(unittest.TestCase):
         self.assertIn("symlink", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertIn("Distribuição 0.7.12 pública e verificável", index)
-        self.assertIn("versão 0.7.12, 72 pacotes", index)
+        self.assertIn("versão 0.7.12, 73 pacotes", index)
 
 
 if __name__ == "__main__":

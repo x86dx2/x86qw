@@ -441,7 +441,7 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
             ROOT / "maintenance/inventory/component-releases.json",
         )
-        _, _, payloads = resolve_component_payloads(context, "nquake-bootstrap")
+        _, _, payloads = resolve_component_payloads(context, "x86qw-client-bootstrap")
         members = {member: payload for _, member, payload, _ in payloads}
         packaged = members["payload/qw/nquake_default.cfg"]
         preserved = (
@@ -463,7 +463,7 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/components.json",
             ROOT / "maintenance/inventory/component-releases.json",
         )
-        _, _, payloads = resolve_component_payloads(context, "nquake-bootstrap")
+        _, _, payloads = resolve_component_payloads(context, "x86qw-client-bootstrap")
         members = {member: payload for _, member, payload, _ in payloads}
         self.assertIn("payload/qw/autoexec.cfg", members)
         self.assertIn("defaults/qw/x86qw-user.cfg", members)
@@ -489,6 +489,59 @@ class ComponentReleaseTests(unittest.TestCase):
         ]
         self.assertNotIn("_startup_message", executable_lines)
         self.assertEqual("exec x86qw-user.cfg", executable_lines[-1])
+
+    def test_bootstrap_applies_x86qw_defaults_after_nquake_on_first_run(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        _, _, payloads = resolve_component_payloads(context, "x86qw-client-bootstrap")
+        members = {member: payload for _, member, payload, _ in payloads}
+
+        self.assertIn("payload/qw/x86qw-default.cfg", members)
+        defaults = members["payload/qw/x86qw-default.cfg"].decode("utf-8")
+        self.assertTrue(defaults.strip())
+        self.assertNotIn("_nquake_first_startup", defaults)
+
+        autoexec = members["payload/qw/autoexec.cfg"].decode("utf-8")
+        executable_lines = [
+            line.strip() for line in autoexec.splitlines()
+            if line.strip() and not line.lstrip().startswith("//")
+        ]
+        self.assertEqual([
+            'if $_nquake_first_startup == 1 "exec nquake_default.cfg"',
+            'if $_nquake_first_startup == 1 "exec configs/preset.cfg"',
+            'if $_nquake_first_startup == 1 "exec x86qw-default.cfg"',
+            'if $_nquake_first_startup == 1 set _nquake_first_startup 0',
+        ], executable_lines[:4])
+
+    def test_client_bootstrap_package_composes_upstream_and_x86qw_layers(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        self.assertIn("x86qw-client-bootstrap", context.components)
+        release, _, payloads = resolve_component_payloads(
+            context, "x86qw-client-bootstrap",
+        )
+        members = {member for _, member, _, _ in payloads}
+        self.assertTrue({
+            "payload/qw/nquake_default.cfg",
+            "payload/qw/x86qw-default.cfg",
+            "payload/qw/x86qw-ruleset.cfg",
+            "defaults/qw/x86qw-user.cfg",
+        } <= members)
+
+        catalog = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8"),
+        )
+        published = next(
+            package for package in catalog["packages"]
+            if package.get("package") == "nquake-bootstrap"
+        )
+        self.assertNotEqual(published["version"], release["version"])
 
     def test_td2_runtime_package_excludes_reference_material(self) -> None:
         context = load_source_context(

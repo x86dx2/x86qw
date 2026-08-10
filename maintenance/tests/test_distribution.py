@@ -505,7 +505,7 @@ class DistributionTests(unittest.TestCase):
         ), mock.patch(
             "sync_distribution.github_recursive_tree", return_value=("a" * 40, [entry]),
         ), mock.patch(
-            "sync_distribution.component_for_source", return_value="nquake-bootstrap",
+            "sync_distribution.component_for_source", return_value="x86qw-client-bootstrap",
         ):
             assets = discover_nquake()
 
