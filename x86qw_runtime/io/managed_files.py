@@ -406,6 +406,13 @@ class _WindowsFileApi:
             raise OSError("tipo de arquivo incompatível")
         return self.identity(handle)
 
+    def checked_reparse_identity(self, handle: int) -> tuple[int, int]:
+        """Return the identity of a reparse point without following its target."""
+
+        if not self.attributes(handle) & self.FILE_ATTRIBUTE_REPARSE_POINT:
+            raise OSError("ponto de nova análise esperado")
+        return self.identity(handle)
+
     def write(self, handle: int, payload: bytes) -> None:
         from ctypes import wintypes
 
@@ -958,20 +965,50 @@ def unlink_identity_bound_regular(
 
 def unlink_identity_bound_symlink(
     path: Path,
-    expected_identity: tuple[int, int],
+    expected_identity: tuple[int, ...],
 ) -> bool:
-    """Atomically quarantine and unlink only the expected POSIX symlink."""
+    """Unlink only the expected symlink without following its target."""
 
     if (
         not isinstance(expected_identity, tuple)
-        or len(expected_identity) != 2
+        or len(expected_identity) != 3
         or not all(type(value) is int and value >= 0 for value in expected_identity)
     ):
-        raise ValueError("expected_identity must be a device/inode pair")
+        raise ValueError("expected_identity must include device, inode and type")
+    if expected_identity[2] != stat.S_IFLNK:
+        return False
+    path = Path(path)
+    windows_api = _get_windows_file_api()
+    if windows_api is not None:
+        try:
+            handle = windows_api.open_handle(
+                path,
+                access=windows_api.FILE_READ_ATTRIBUTES | windows_api.DELETE,
+                creation=windows_api.OPEN_EXISTING,
+                directory=True,
+            )
+        except (FileNotFoundError, OSError):
+            return False
+        try:
+            windows_api.checked_reparse_identity(handle)
+            metadata = path.lstat()
+            actual = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+            )
+            if actual != expected_identity:
+                return False
+            windows_api.mark_delete(handle)
+            return True
+        except OSError:
+            return False
+        finally:
+            _close_windows_handle(windows_api, handle)
     rename_api = _get_posix_rename_api()
     if rename_api is None:
         return False
-    path = Path(path)
+    posix_identity = expected_identity[:2]
     parent_descriptor = -1
     quarantine_name: str | None = None
     quarantined_identity = (-1, -1)
@@ -984,7 +1021,7 @@ def unlink_identity_bound_symlink(
         )
         if (
             not stat.S_ISLNK(metadata.st_mode)
-            or _file_identity(metadata) != expected_identity
+            or _file_identity(metadata) != posix_identity
         ):
             return False
         for _ in range(128):
@@ -1010,7 +1047,7 @@ def unlink_identity_bound_symlink(
         quarantined_identity = _file_identity(quarantined)
         if (
             not stat.S_ISLNK(quarantined.st_mode)
-            or quarantined_identity != expected_identity
+            or quarantined_identity != posix_identity
         ):
             if _restore_posix_quarantine(
                 rename_api,
