@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .io import private_fs
+from .io.downloader import DownloadHTTPError as RuntimeDownloadHTTPError
 from .io.metadata import read_bounded_regular_file
 
 
@@ -60,6 +61,11 @@ class BoundedTufFetcher:
         except exceptions.DownloadHTTPError:
             raise
         except Exception as error:
+            http_error = error if isinstance(error, RuntimeDownloadHTTPError) else error.__cause__
+            if isinstance(http_error, RuntimeDownloadHTTPError):
+                raise exceptions.DownloadHTTPError(
+                    str(http_error), http_error.status,
+                ) from error
             raise exceptions.DownloadError(f"bounded TUF download failed: {url}") from error
         if len(payload) > max_length:
             raise exceptions.DownloadLengthMismatchError(
