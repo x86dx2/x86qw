@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T13:38:10Z",
+  "generated_at": "2026-08-10T15:31:25Z",
   "packages": [
     {
       "component": "core",
@@ -1384,7 +1384,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.8",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1408,6 +1408,36 @@
       "release_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
       "mirror_title": "x86QW Installer 0.7.8",
       "mirror_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.9",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.9.zip",
+      "size": 581134,
+      "sha256": "fb08bc987641d4bea84c463d8f58b9c93b62595ff42ea0f764d4123814be7e33",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.9/x86qw-installer-0.7.9.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.9/x86qw-installer-0.7.9.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.9",
+      "release_title": "x86QW Installer 0.7.9",
+      "release_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
+      "mirror_title": "x86QW Installer 0.7.9",
+      "mirror_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
       "mirror_latest": true
     },
     {
