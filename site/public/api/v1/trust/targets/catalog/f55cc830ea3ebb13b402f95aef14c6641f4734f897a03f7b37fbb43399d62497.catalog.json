@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T17:40:31Z",
+  "generated_at": "2026-08-10T19:16:08Z",
   "packages": [
     {
       "component": "core",
@@ -1234,7 +1234,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.11",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1258,6 +1258,36 @@
       "release_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
       "mirror_title": "x86QW Installer 0.7.11",
       "mirror_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.12",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.12.zip",
+      "size": 581623,
+      "sha256": "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.12/x86qw-installer-0.7.12.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.12/x86qw-installer-0.7.12.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.12",
+      "release_title": "x86QW Installer 0.7.12",
+      "release_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_title": "x86QW Installer 0.7.12",
+      "mirror_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
       "mirror_latest": true
     },
     {
