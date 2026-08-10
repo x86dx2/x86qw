@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T10:45:27Z",
+  "generated_at": "2026-08-10T11:28:09Z",
   "packages": [
     {
       "component": "core",
@@ -1294,7 +1294,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.5",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1318,6 +1318,36 @@
       "release_notes": "# x86QW 0.7.5\n\nHotfix do canal autenticado de atualização do x86QW.\n\n## TUF\n\n- incorpora ao instalador a root pública Ed25519 de produção;\n- exige thresholds `2-de-3` para root e targets e `1-de-2` para snapshot e\n  timestamp;\n- autentica o catálogo pelo fluxo root → timestamp → snapshot → targets;\n- publica consistent snapshots em `/api/v1/trust/`;\n- falha de forma fechada quando a cadeia, o catálogo ou as versões divergem.\n\nAs dez chaves privadas não fazem parte do Git, do bundle, dos artefatos de CI\nou do site. A release 0.7.4 permanece histórica e imutável.\n\n## Validação\n\n- testes de threshold, expiração, rollback, equivocation e rotação de root;\n- refresh real com `python-tuf` 7.0.0 sobre a metadata assinada;\n- verificação do hash fixado da root incorporada;\n- inspeção do ZIP para impedir material privado.",
       "mirror_title": "x86QW Installer 0.7.5",
       "mirror_notes": "# x86QW 0.7.5\n\nHotfix do canal autenticado de atualização do x86QW.\n\n## TUF\n\n- incorpora ao instalador a root pública Ed25519 de produção;\n- exige thresholds `2-de-3` para root e targets e `1-de-2` para snapshot e\n  timestamp;\n- autentica o catálogo pelo fluxo root → timestamp → snapshot → targets;\n- publica consistent snapshots em `/api/v1/trust/`;\n- falha de forma fechada quando a cadeia, o catálogo ou as versões divergem.\n\nAs dez chaves privadas não fazem parte do Git, do bundle, dos artefatos de CI\nou do site. A release 0.7.4 permanece histórica e imutável.\n\n## Validação\n\n- testes de threshold, expiração, rollback, equivocation e rotação de root;\n- refresh real com `python-tuf` 7.0.0 sobre a metadata assinada;\n- verificação do hash fixado da root incorporada;\n- inspeção do ZIP para impedir material privado.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.6",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.6.zip",
+      "size": 577554,
+      "sha256": "ee3ce227fd1e6b604d56cf1c7559b57fe843fd5377fa592c075ba7210ed740c0",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.6/x86qw-installer-0.7.6.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.6/x86qw-installer-0.7.6.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.6",
+      "release_title": "x86QW Installer 0.7.6",
+      "release_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_title": "x86QW Installer 0.7.6",
+      "mirror_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
       "mirror_latest": true
     },
     {

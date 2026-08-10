@@ -156,6 +156,22 @@ class TrustMetadataTests(unittest.TestCase):
         self.assertEqual(64 * 1024, calls[0][1]["maximum_size"])
         self.assertEqual(1, calls[0][1]["attempts"])
 
+    def test_tuf_fetcher_preserves_wrapped_http_404_for_root_rotation(self) -> None:
+        from tuf.api import exceptions
+        from x86qw_runtime.errors import InstallerError
+        from x86qw_runtime.io.downloader import DownloadHTTPError
+
+        def get(_url: str, **_options: object) -> bytes:
+            try:
+                raise DownloadHTTPError(404, "O servidor respondeu HTTP 404.", {})
+            except DownloadHTTPError as error:
+                raise InstallerError("Não foi possível baixar metadata TUF.") from error
+
+        fetcher = self.runtime().BoundedTufFetcher(get)
+        with self.assertRaises(exceptions.DownloadHTTPError) as raised:
+            fetcher.download_bytes(f"{METADATA_URL}2.root.json", 512 * 1024)
+        self.assertEqual(404, raised.exception.status_code)
+
 
 if __name__ == "__main__":
     unittest.main()
