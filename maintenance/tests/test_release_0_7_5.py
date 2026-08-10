@@ -25,9 +25,11 @@ EXPECTED_0710_SHA256 = "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a6
 EXPECTED_0710_SIZE = 581288
 EXPECTED_0711_SHA256 = "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53"
 EXPECTED_0711_SIZE = 581352
+EXPECTED_0712_SHA256 = "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7"
+EXPECTED_0712_SIZE = 581623
 
 
-class Release0712Tests(unittest.TestCase):
+class Release0713Tests(unittest.TestCase):
     def test_release_identity_root_and_previous_bundle_are_consistent(self) -> None:
         catalog = json.loads(
             (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
@@ -40,10 +42,10 @@ class Release0712Tests(unittest.TestCase):
             if package.get("package") == "x86qw-installer"
         ]
         current = [package for package in installers if package.get("current") is True]
-        self.assertEqual("0.7.12", (ROOT / "dist/installer/VERSION").read_text().strip())
-        self.assertEqual("0.7.12", (ROOT / "dist/installer/packages/latest").resolve().name)
-        self.assertEqual(["0.7.12"], [package["version"] for package in current])
-        self.assertEqual("0.7.12", product["version"])
+        self.assertEqual("0.7.13", (ROOT / "dist/installer/VERSION").read_text().strip())
+        self.assertEqual("0.7.13", (ROOT / "dist/installer/packages/latest").resolve().name)
+        self.assertEqual(["0.7.13"], [package["version"] for package in current])
+        self.assertEqual("0.7.13", product["version"])
 
         previous = next(package for package in installers if package["version"] == "0.7.4")
         self.assertFalse(previous["current"])
@@ -85,11 +87,16 @@ class Release0712Tests(unittest.TestCase):
         self.assertEqual(EXPECTED_0711_SHA256, previous["sha256"])
         self.assertEqual(EXPECTED_0711_SIZE, previous["size"])
 
-        bundle = ROOT / "dist/installer/packages/0.7.12/x86qw-installer-0.7.12.zip"
+        previous = next(package for package in installers if package["version"] == "0.7.12")
+        self.assertFalse(previous["current"])
+        self.assertEqual(EXPECTED_0712_SHA256, previous["sha256"])
+        self.assertEqual(EXPECTED_0712_SIZE, previous["size"])
+
+        bundle = ROOT / "dist/installer/packages/0.7.13/x86qw-installer-0.7.13.zip"
         self.assertEqual(current[0]["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
         self.assertEqual(current[0]["size"], bundle.stat().st_size)
         with zipfile.ZipFile(bundle) as outer:
-            application = outer.read("x86qw-installer-0.7.12/x86qw.pyz")
+            application = outer.read("x86qw-installer-0.7.13/x86qw.pyz")
         with zipfile.ZipFile(io.BytesIO(application)) as inner:
             self.assertEqual(
                 (ROOT / "maintenance/trust/root.json").read_bytes(),
@@ -97,8 +104,8 @@ class Release0712Tests(unittest.TestCase):
             )
             self.assertFalse(any(name.endswith((".pem", ".key")) for name in inner.namelist()))
 
-        self.assertIn('INSTALLER_VERSION="0.7.12"', (ROOT / "site/public/install.sh").read_text())
-        self.assertIn('$InstallerVersion = "0.7.12"', (ROOT / "site/public/install.ps1").read_text())
+        self.assertIn('INSTALLER_VERSION="0.7.13"', (ROOT / "site/public/install.sh").read_text())
+        self.assertIn('$InstallerVersion = "0.7.13"', (ROOT / "site/public/install.ps1").read_text())
 
     def test_public_trust_repository_authenticates_the_final_catalog(self) -> None:
         trust = ROOT / "site/public/api/v1/trust"
@@ -106,8 +113,8 @@ class Release0712Tests(unittest.TestCase):
         digest = hashlib.sha256(catalog).hexdigest()
         expected = {
             "metadata/1.root.json",
-            "metadata/9.targets.json",
-            "metadata/9.snapshot.json",
+            "metadata/10.targets.json",
+            "metadata/10.snapshot.json",
             "metadata/timestamp.json",
             f"targets/catalog/{digest}.catalog.json",
         }
@@ -122,13 +129,13 @@ class Release0712Tests(unittest.TestCase):
         self.assertEqual(catalog, (trust / f"targets/catalog/{digest}.catalog.json").read_bytes())
 
     def test_public_text_identifies_the_installation_baseline_hotfix(self) -> None:
-        notes = (ROOT / "docs/releases/0.7.12.md").read_text(encoding="utf-8")
-        self.assertIn("# x86QW 0.7.12", notes)
-        self.assertIn("uninstall --purge", notes)
-        self.assertIn("symlink", notes)
+        notes = (ROOT / "docs/releases/0.7.13.md").read_text(encoding="utf-8")
+        self.assertIn("# x86QW 0.7.13", notes)
+        self.assertIn("directory-preferences", notes)
+        self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
-        self.assertIn("Distribuição 0.7.12 pública e verificável", index)
-        self.assertIn("versão 0.7.12, 73 pacotes", index)
+        self.assertIn("Distribuição 0.7.13 pública e verificável", index)
+        self.assertIn("versão 0.7.13, 74 pacotes", index)
 
 
 if __name__ == "__main__":
