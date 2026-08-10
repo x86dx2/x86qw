@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T12:13:52Z",
+  "generated_at": "2026-08-10T13:38:10Z",
   "packages": [
     {
       "component": "core",
@@ -1354,7 +1354,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.7",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1378,6 +1378,36 @@
       "release_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
       "mirror_title": "x86QW Installer 0.7.7",
       "mirror_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.8",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.8.zip",
+      "size": 577617,
+      "sha256": "a594700b634be563c941d99272e017d8da2434417fa82c412666ac1e45db818c",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.8/x86qw-installer-0.7.8.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.8/x86qw-installer-0.7.8.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.8",
+      "release_title": "x86QW Installer 0.7.8",
+      "release_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
+      "mirror_title": "x86QW Installer 0.7.8",
+      "mirror_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
       "mirror_latest": true
     },
     {
