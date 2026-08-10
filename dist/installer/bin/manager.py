@@ -166,6 +166,12 @@ from x86qw_runtime.io.remote import (
     https_url_filename,
     validate_https_url,
 )
+from x86qw_runtime.installation_changes import (
+    InstallationChange,
+    ManagedInstallationFile,
+    inspect_installation_changes,
+    render_installation_gitignore,
+)
 from x86qw_runtime.catalogs import (
     load_capabilities,
     load_runtimes,
@@ -214,6 +220,8 @@ PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
 METADATA_DIR = ".x86qw"
 COMPONENT_METADATA_DIR = ".x86qw/components"
 EZQUAKE_METADATA_DIR = ".x86qw/clients/ezquake"
+PERSONAL_BASELINE_DIR = ".x86qw/personal"
+PERSONAL_BASELINE_COMPONENT = "personal"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".x86qw/nquake.receipt"
 NQUAKE_INVENTORY = ".x86qw/nquake.inventory"
@@ -2650,12 +2658,35 @@ class Installer:
             ) from durability_errors[0]
         return result
 
-    def validate_managed_path(self, value: str) -> None:
+    @staticmethod
+    def validate_safe_inventory_path(value: str) -> PurePosixPath:
         if not value or "\\" in value or ":" in value:
             raise InstallerError(f"unsafe path in managed inventory: {value}")
         path = PurePosixPath(value)
         if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
             raise InstallerError(f"unsafe path in managed inventory: {value}")
+        return path
+
+    def validate_personal_baseline_path(self, value: str) -> None:
+        path = self.validate_safe_inventory_path(value)
+        exact = {
+            "ezquake/configs/config.cfg",
+            "ezquake/configs/preset.cfg",
+            "qtv/qtv.cfg",
+            "qwfwd/qwfwd.cfg",
+        }
+        profile_roots = {"arena", "fortress", "prox", "qw", "td2"}
+        is_profile = (
+            len(path.parts) == 2
+            and path.parts[0] in profile_roots
+            and path.name.startswith("x86qw-")
+            and path.suffix in {".cfg", ".json"}
+        )
+        if value not in exact and not is_profile:
+            raise InstallerError(f"unexpected path in personal baseline: {value}")
+
+    def validate_managed_path(self, value: str) -> None:
+        path = self.validate_safe_inventory_path(value)
         if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
             raise InstallerError(f"personal configuration must not be managed: {value}")
         if path.parts[0] == "id1":
@@ -2681,7 +2712,12 @@ class Installer:
         _, entries = self._read_inventory(path)
         return entries
 
-    def _read_inventory(self, path: Path) -> tuple[bytes, list[tuple[str, str]]]:
+    def _read_inventory(
+        self,
+        path: Path,
+        *,
+        path_validator: Callable[[str], None] | None = None,
+    ) -> tuple[bytes, list[tuple[str, str]]]:
         try:
             payload = read_bounded_regular_file(
                 path, maximum_size=MAX_INVENTORY_BYTES,
@@ -2700,8 +2736,9 @@ class Installer:
                 message = f"Inventário gerenciado inválido: {path}"
             raise InstallerError(message) from error
         entries: list[tuple[str, str]] = []
+        validate_path = path_validator or self.validate_managed_path
         for entry in parsed:
-            self.validate_managed_path(entry.path)
+            validate_path(entry.path)
             entries.append((entry.path, entry.sha256))
         return payload, entries
 
@@ -2717,7 +2754,11 @@ class Installer:
         return entries
 
     def write_inventory_record(
-        self, destination: Path, entries: Iterable[tuple[str, str]],
+        self,
+        destination: Path,
+        entries: Iterable[tuple[str, str]],
+        *,
+        path_validator: Callable[[str], None] | None = None,
     ) -> None:
         try:
             atomic_write_bytes(
@@ -2728,7 +2769,7 @@ class Installer:
             )
         except AtomicWriteError as error:
             raise InstallerError(f"Inventário não pôde ser gravado: {destination}") from error
-        self.validate_inventory(destination)
+        self._read_inventory(destination, path_validator=path_validator)
 
     def component_metadata(self, component: str) -> tuple[str, str]:
         if not COMPONENT_VERSION.fullmatch(component):
@@ -2759,7 +2800,12 @@ class Installer:
         return tuple(self.metadata_path(metadata, path) for path in relative)  # type: ignore[return-value]
 
     def validate_component_paths(
-        self, component: str, receipt_path: Path, inventory_path: Path,
+        self,
+        component: str,
+        receipt_path: Path,
+        inventory_path: Path,
+        *,
+        path_validator: Callable[[str], None] | None = None,
     ) -> tuple[list[tuple[str, str]], dict[str, str]]:
         try:
             receipt = parse_component_receipt(
@@ -2782,7 +2828,9 @@ class Installer:
             else:
                 message = f"invalid recibo do componente {component}: {receipt_path}"
             raise InstallerError(message) from error
-        inventory_payload, entries = self._read_inventory(inventory_path)
+        inventory_payload, entries = self._read_inventory(
+            inventory_path, path_validator=path_validator,
+        )
         if hashlib.sha256(inventory_payload).hexdigest() != receipt["inventory_sha256"]:
             raise InstallerError(f"O inventário do componente {component} diverge do recibo.")
         return entries, receipt
@@ -2966,10 +3014,33 @@ class Installer:
     def commit_component_metadata(
         self, component: str, inventory: Path, receipt: Path,
     ) -> ComponentMetadataRollback:
+        metadata = self.target / METADATA_DIR
+        destination = self.metadata_path(
+            metadata, self.component_metadata(component)[0],
+        ).parent
+        return self._commit_metadata_pair(
+            component,
+            inventory,
+            receipt,
+            destination,
+            legacy_paths=self.component_pair_paths(
+                component, metadata, legacy=True,
+            ),
+        )
+
+    def _commit_metadata_pair(
+        self,
+        component: str,
+        inventory: Path,
+        receipt: Path,
+        destination: Path,
+        *,
+        legacy_paths: tuple[Path, ...] = (),
+        path_validator: Callable[[str], None] | None = None,
+    ) -> ComponentMetadataRollback:
         assert self.stage is not None
         self.ensure_metadata_directory()
         metadata = self.target / METADATA_DIR
-        destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
         if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
             raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
         prepared = Path(tempfile.mkdtemp(
@@ -2981,7 +3052,12 @@ class Installer:
         previous.rmdir()
         shutil.copy2(receipt, prepared / "receipt")
         shutil.copy2(inventory, prepared / "inventory")
-        self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
+        self.validate_component_paths(
+            component,
+            prepared / "receipt",
+            prepared / "inventory",
+            path_validator=path_validator,
+        )
         created_directories = self._create_private_directory_chain(
             destination.parent,
             root=metadata,
@@ -3001,9 +3077,7 @@ class Installer:
                 token.previous_identity = self._directory_identity(previous)
             prepared.replace(destination)
             token.installed_identity = self._directory_identity(destination)
-            for index, legacy in enumerate(
-                self.component_pair_paths(component, metadata, legacy=True), 1,
-            ):
+            for index, legacy in enumerate(legacy_paths, 1):
                 if lexists(legacy):
                     backup_root = Path(tempfile.mkdtemp(
                         prefix=f".{component}-legacy-{index}.", dir=self.stage,
@@ -3023,6 +3097,78 @@ class Installer:
             except BaseException as rollback_error:
                 raise InstallerError(f"Rollback dos metadados falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
             raise InstallerError(f"Não foi possível registrar o componente {component}.") from error
+
+    def personal_baseline_paths(
+        self, metadata: Path | None = None,
+    ) -> tuple[Path, Path]:
+        root = metadata or self.target / METADATA_DIR
+        directory = self.metadata_path(root, PERSONAL_BASELINE_DIR)
+        return directory / "receipt", directory / "inventory"
+
+    def validate_personal_baseline(
+        self, metadata: Path | None = None,
+    ) -> tuple[bool, list[tuple[str, str]]]:
+        receipt, inventory = self.personal_baseline_paths(metadata)
+        present = (lexists(receipt), lexists(inventory))
+        if not any(present):
+            return False, []
+        if not all(present):
+            raise InstallerError("Baseline pessoal incompleto.")
+        entries, _ = self.validate_component_paths(
+            PERSONAL_BASELINE_COMPONENT,
+            receipt,
+            inventory,
+            path_validator=self.validate_personal_baseline_path,
+        )
+        return True, entries
+
+    def _personal_baseline_observation(
+        self,
+    ) -> tuple[tuple[str, tuple[object, ...]], ...]:
+        return tuple(
+            (str(path), self._mutation_path_observation(path))
+            for path in self.personal_baseline_paths()
+        )
+
+    def _stage_personal_baseline_entry(
+        self, destination: Path, digest: str,
+    ) -> tuple[Path, Path]:
+        assert self.stage is not None
+        relative = destination.relative_to(self.target).as_posix()
+        self.validate_personal_baseline_path(relative)
+        present, existing = self.validate_personal_baseline()
+        entries = dict(existing) if present else {}
+        entries[relative] = digest
+        staged = private_fs.private_mkdtemp(
+            directory=self.stage, prefix=".personal-baseline-next.",
+        )
+        inventory = staged / "inventory"
+        receipt = staged / "receipt"
+        self.write_inventory_record(
+            inventory,
+            sorted(entries.items()),
+            path_validator=self.validate_personal_baseline_path,
+        )
+        self.write_component_receipt(
+            PERSONAL_BASELINE_COMPONENT,
+            "1",
+            "x86QW personal defaults",
+            inventory,
+            receipt,
+        )
+        return receipt, inventory
+
+    def _commit_personal_baseline(
+        self, receipt: Path, inventory: Path,
+    ) -> ComponentMetadataRollback:
+        destination = self.personal_baseline_paths()[0].parent
+        return self._commit_metadata_pair(
+            PERSONAL_BASELINE_COMPONENT,
+            inventory,
+            receipt,
+            destination,
+            path_validator=self.validate_personal_baseline_path,
+        )
 
     @staticmethod
     def _mutation_path_observation(path: Path) -> tuple[object, ...]:
@@ -5159,23 +5305,64 @@ class Installer:
     def install_component_default_transaction(
         self, source: Path, destination: Path,
     ) -> MutationResult | None:
-        if lexists(destination):
-            return None
         digest = file_hash(source)
+        destination_exists = lexists(destination)
+        if destination_exists:
+            if (
+                not destination.is_file()
+                or destination.is_symlink()
+                or file_hash(destination) != digest
+            ):
+                return None
+            present, entries = self.validate_personal_baseline()
+            relative = destination.relative_to(self.target).as_posix()
+            if present and relative in dict(entries):
+                return None
+        if self.stage is None:
+            self._create_stage(".component-default.")
+        baseline_receipt, baseline_inventory = (
+            self._stage_personal_baseline_entry(destination, digest)
+        )
+        baseline_step = MutationStep(
+            key="personal-baseline",
+            description=f"Registrar configuração pessoal {destination.name}",
+            observe=lambda: (
+                self._mutation_path_observation(baseline_receipt),
+                self._mutation_path_observation(baseline_inventory),
+                self._personal_baseline_observation(),
+            ),
+            apply=lambda: self._commit_personal_baseline(
+                baseline_receipt, baseline_inventory,
+            ),
+            rollback=self._rollback_component_metadata,
+        )
+        if destination_exists:
+            plan = MutationPlan(
+                identifier=(
+                    "component-default-baseline:"
+                    f"{destination.relative_to(self.target).as_posix()}"
+                ),
+                summary=f"Registrar configuração inicial existente {destination}",
+                steps=(baseline_step,),
+            )
+            return execute_mutation(prepare_mutation(plan))
         plan = MutationPlan(
             identifier=f"component-default:{destination.relative_to(self.target).as_posix()}",
             summary=f"Criar configuração inicial {destination}",
-            steps=(MutationStep(
-                key="default",
-                description=f"Criar configuração inicial {destination.name}",
-                observe=lambda: (
-                    self._mutation_path_observation(source),
-                    file_hash(source),
-                    self._mutation_path_observation(destination),
+            steps=(
+                MutationStep(
+                    key="default",
+                    description=f"Criar configuração inicial {destination.name}",
+                    observe=lambda: (
+                        self._mutation_path_observation(source),
+                        file_hash(source),
+                        self._mutation_path_observation(destination),
+                    ),
+                    apply=lambda: self._apply_created_default(source, destination, digest),
+                    rollback=self._rollback_created_default,
                 ),
-                apply=lambda: self._apply_created_default(source, destination, digest),
-                rollback=self._rollback_created_default,
-            ),),
+                baseline_step,
+            ),
         )
         return execute_mutation(prepare_mutation(plan))
 
@@ -5204,26 +5391,38 @@ class Installer:
                 )
                 results.append(result)
                 for staged, destination in defaults:
+                    existed_before = lexists(destination)
                     default_result = self.install_component_default_transaction(
                         staged, destination,
                     )
                     if default_result is not None:
                         results.append(default_result)
-                        console.info(f"Configuração inicial criada: {destination}")
+                        if existed_before:
+                            console.info(
+                                f"Configuração inicial existente registrada: {destination}"
+                            )
+                        else:
+                            console.info(f"Configuração inicial criada: {destination}")
                 if identifier == "nquake-bootstrap":
                     self.migrate_nquake_texture_limit(results)
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
             if "nquake-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
-                if not preset.is_file():
-                    assert self.stage is not None
-                    staged_preset = self.stage / "nquake-default-preset.cfg"
-                    staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
-                    preset_result = self.install_component_default_transaction(
-                        staged_preset, preset,
-                    )
-                    if preset_result is not None:
-                        results.append(preset_result)
+                preset_existed = lexists(preset)
+                assert self.stage is not None
+                staged_preset = self.stage / "nquake-default-preset.cfg"
+                staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+                preset_result = self.install_component_default_transaction(
+                    staged_preset, preset,
+                )
+                if preset_result is not None:
+                    results.append(preset_result)
+                    if preset_existed:
+                        console.info(
+                            f"Configuração inicial existente registrada: {preset}"
+                        )
+                    else:
+                        console.info(f"Configuração inicial criada: {preset}")
             self.migrate_saved_configs(results)
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
@@ -5923,6 +6122,91 @@ class Installer:
         player.verify_local_play_support(player.available_local_games())
         self.verify_qw_package_order()
         self.report_nquake_startup_state(installed)
+
+    def installation_change_ignored_paths(self) -> tuple[str, ...]:
+        paths = {
+            ".DS_Store",
+            ".gitignore",
+            ".x86qw",
+            "LICENSE",
+            "README-X86QW.txt",
+            "ezquake/qconsole.log",
+            "ezquake/temp",
+            "id1/pak0.pak",
+            "id1/pak1.pak",
+            "qw/demos",
+            "qw/screenshots",
+            "x86qw.cmd",
+            "x86qw.sh",
+        }
+        for spec in PLATFORMS.values():
+            paths.update((spec.runtime("stable"), spec.runtime("nightly")))
+        return tuple(sorted(paths))
+
+    def installation_change_baseline(self) -> dict[str, ManagedInstallationFile]:
+        managed: dict[str, ManagedInstallationFile] = {}
+        for component in self.metadata_component_ids():
+            present, entries, _ = self.validate_component_pair(component)
+            if not present:
+                continue
+            for name, digest in entries:
+                record = ManagedInstallationFile(component, digest)
+                previous = managed.get(name)
+                if previous is not None and previous != record:
+                    raise InstallerError(
+                        f"Inventários de componentes divergem sobre o arquivo: {name}"
+                    )
+                managed[name] = record
+        personal_present, personal_entries = self.validate_personal_baseline()
+        if personal_present:
+            for name, digest in personal_entries:
+                record = ManagedInstallationFile(
+                    PERSONAL_BASELINE_COMPONENT, digest,
+                )
+                previous = managed.get(name)
+                if previous is not None and previous != record:
+                    raise InstallerError(
+                        "Inventários gerenciado e pessoal divergem sobre o arquivo: "
+                        f"{name}"
+                    )
+                managed[name] = record
+        return managed
+
+    def report_installation_changes(
+        self, *, sync_gitignore: bool = False,
+    ) -> tuple[InstallationChange, ...]:
+        managed = self.installation_change_baseline()
+        ignored = self.installation_change_ignored_paths()
+        if sync_gitignore:
+            payload = render_installation_gitignore(
+                managed,
+                ignored_paths=ignored,
+            ).encode("utf-8")
+            destination = self.target / ".gitignore"
+            try:
+                atomic_write_bytes(destination, payload, mode=0o644)
+            except AtomicWriteError as error:
+                raise InstallerError(
+                    f"Não foi possível atualizar o filtro Git da instalação: {destination}"
+                ) from error
+            console.info(f"Filtro Git seletivo atualizado: {destination}")
+
+        changes = inspect_installation_changes(
+            self.target,
+            managed,
+            ignored_paths=ignored,
+        )
+        console.heading("Mudanças locais da instalação")
+        for change in changes:
+            component = f"  [{change.component}]" if change.component else ""
+            print(f"{change.status}  {change.path}{component}")
+        if changes:
+            console.info(
+                f"{len(changes)} diferença(s): A novo, M alterado, D removido."
+            )
+        else:
+            console.success("Nenhuma diferença local em relação à instalação-base.")
+        return changes
 
     def component_metadata_assessment(self) -> tuple[list[str], list[str]]:
         valid: list[str] = []
@@ -7761,10 +8045,14 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="com uninstall, remove a instalação inteira, dados pessoais e caches x86QW",
     )
     parser.add_argument(
+        "--sync-gitignore", action="store_true",
+        help="com changes, atualiza o .gitignore seletivo usando os inventories instalados",
+    )
+    parser.add_argument(
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, uninstall ou cleanup"
+            "verify, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
@@ -7774,7 +8062,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     namespace = parser.parse_intermixed_args(arguments)
     valid_actions = (
         "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "migrate", "components",
-        "presets", "hub", "verify", "uninstall", "cleanup",
+        "presets", "hub", "verify", "changes", "uninstall", "cleanup",
     )
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
@@ -7782,6 +8070,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--downloads e --personal-data só podem ser usados com cleanup")
     if namespace.purge and namespace.action != "uninstall":
         parser.error("--purge só pode ser usado com uninstall")
+    if namespace.sync_gitignore and namespace.action != "changes":
+        parser.error("--sync-gitignore só pode ser usado com changes")
     if namespace.action != "install" and (
         namespace.channel is not None
         or namespace.release is not None
@@ -8265,7 +8555,8 @@ def execute_manager_action(
     action_labels = {
         "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
         "presets": "gerenciar presets",
-        "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
+        "hub": "navegar servidores", "verify": "verificar", "changes": "comparar instalação",
+        "uninstall": "desinstalar",
         "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
         "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
         "migrate": "migrar metadados para o contrato 1.0",
@@ -8367,6 +8658,10 @@ def execute_manager_action(
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
+        elif options.action == "changes":
+            installer.report_installation_changes(
+                sync_gitignore=options.sync_gitignore,
+            )
         elif options.action == "repair":
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []

@@ -48,6 +48,7 @@
     {"member": "x86qw_runtime/io/archive.py", "source": "x86qw_runtime/io/archive.py", "consumer": "manager.py", "contract": "scan e extração segura de arquivos"},
     {"member": "x86qw_runtime/io/metadata.py", "source": "x86qw_runtime/io/metadata.py", "consumer": "manager.py", "contract": "leitura limitada de metadados"},
     {"member": "x86qw_runtime/io/managed_files.py", "source": "x86qw_runtime/io/managed_files.py", "consumer": "supervisor.sessions", "contract": "identidade e limpeza de arquivos gerenciados"},
+    {"member": "x86qw_runtime/installation_changes.py", "source": "x86qw_runtime/installation_changes.py", "consumer": "manager.py", "contract": "comparação seletiva da instalação e geração do gitignore"},
     {"member": "x86qw_runtime/io/personal_files.py", "source": "x86qw_runtime/io/personal_files.py", "consumer": "gameplay.py", "contract": "substituição, remoção e rollback de configurações pessoais"},
     {"member": "x86qw_runtime/io/paths.py", "source": "x86qw_runtime/io/paths.py", "consumer": "supervisor e entrypoints", "contract": "primitivas portáveis de caminhos"},
     {"member": "x86qw_runtime/io/private_fs.py", "source": "x86qw_runtime/io/private_fs.py", "consumer": "manager, downloader e sessions", "contract": "objetos privados sem janela insegura"},
