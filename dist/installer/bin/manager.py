@@ -6178,18 +6178,7 @@ class Installer:
         managed = self.installation_change_baseline()
         ignored = self.installation_change_ignored_paths()
         if sync_gitignore:
-            payload = render_installation_gitignore(
-                managed,
-                ignored_paths=ignored,
-            ).encode("utf-8")
-            destination = self.target / ".gitignore"
-            try:
-                atomic_write_bytes(destination, payload, mode=0o644)
-            except AtomicWriteError as error:
-                raise InstallerError(
-                    f"Não foi possível atualizar o filtro Git da instalação: {destination}"
-                ) from error
-            console.info(f"Filtro Git seletivo atualizado: {destination}")
+            self.sync_installation_gitignore(managed=managed, ignored=ignored)
 
         changes = inspect_installation_changes(
             self.target,
@@ -6207,6 +6196,29 @@ class Installer:
         else:
             console.success("Nenhuma diferença local em relação à instalação-base.")
         return changes
+
+    def sync_installation_gitignore(
+        self,
+        *,
+        managed: Mapping[str, ManagedInstallationFile] | None = None,
+        ignored: Iterable[str] | None = None,
+    ) -> None:
+        baseline = self.installation_change_baseline() if managed is None else managed
+        ignored_paths = (
+            self.installation_change_ignored_paths() if ignored is None else ignored
+        )
+        payload = render_installation_gitignore(
+            baseline,
+            ignored_paths=ignored_paths,
+        ).encode("utf-8")
+        destination = self.target / ".gitignore"
+        try:
+            atomic_write_bytes(destination, payload, mode=0o644)
+        except AtomicWriteError as error:
+            raise InstallerError(
+                f"Não foi possível atualizar o filtro Git da instalação: {destination}"
+            ) from error
+        console.info(f"Filtro Git seletivo atualizado: {destination}")
 
     def component_metadata_assessment(self) -> tuple[list[str], list[str]]:
         valid: list[str] = []
@@ -7265,6 +7277,7 @@ class Installer:
                 )
             console.section("Verificação final")
             self.verify_installation()
+            self.sync_installation_gitignore()
         except BaseException as error:
             if (
                 mutation_results is None
@@ -8723,6 +8736,8 @@ def execute_manager_action(
             if plan_sink is not None:
                 plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not plan_rows:
+                if not options.dry_run:
+                    installer.sync_installation_gitignore()
                 message = (
                     "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
                     if options.action == "upgrade"
@@ -8745,6 +8760,7 @@ def execute_manager_action(
                     operation(dry_run=False, mutation_results=operation_results)
                 if options.skip_cli_update:
                     installer.install_online_cli(mutation_results=operation_results)
+            installer.sync_installation_gitignore()
         else:
             if options.action == "install":
                 with installer.component_state_transaction() as operation_results:

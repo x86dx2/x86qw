@@ -2712,6 +2712,76 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("/qw/default.cfg\n", generated)
             self.assertNotIn("/qw/personal.cfg\n", generated)
 
+    def test_successful_install_generates_selective_gitignore_automatically(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            for name in ("pak0.pak", "pak1.pak"):
+                pak = target / "id1" / name
+                pak.parent.mkdir(parents=True, exist_ok=True)
+                pak.write_bytes(name.encode("ascii"))
+            managed = target / "qw/default.cfg"
+            managed.parent.mkdir()
+            managed.write_text("original\n", encoding="utf-8")
+            metadata = target / ".x86qw/components/ktx"
+            metadata.mkdir(parents=True)
+            inventory = metadata / "inventory"
+            receipt = metadata / "receipt"
+            installer.write_inventory_record(inventory, ((
+                "qw/default.cfg",
+                "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+            ),))
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+
+            def select_platform(_requested=None):
+                installer.spec = install_qw.PLATFORMS["linux"]
+                return installer.spec
+
+            def choose_channel(_requested=None):
+                installer.channel = "stable"
+
+            def choose_release(_requested=None):
+                installer.selected_version = "3.6.9"
+
+            patches = (
+                mock.patch.object(installer, "select_platform", side_effect=select_platform),
+                mock.patch.object(installer, "choose_channel", side_effect=choose_channel),
+                mock.patch.object(installer, "choose_release", side_effect=choose_release),
+                mock.patch.object(
+                    installer, "macos_game_directory_reset_required", return_value=False,
+                ),
+                mock.patch.object(installer, "ensure_macos_ezquake_closed"),
+                mock.patch.object(installer, "check_runtime_destination_ownership"),
+                mock.patch.object(installer, "prepare_install_target", return_value=None),
+                mock.patch.object(installer, "reject_target_symlinks"),
+                mock.patch.object(installer, "provision_install_target", return_value=None),
+                mock.patch.object(installer, "check_paks"),
+                mock.patch.object(installer, "prepare_cache"),
+                mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
+                mock.patch.object(installer, "prepare_runtime", return_value=target / "runtime"),
+                mock.patch.object(installer, "write_ezquake_receipt"),
+                mock.patch.object(installer, "ensure_metadata_directory"),
+                mock.patch.object(installer, "commit_runtime", return_value=mock.Mock()),
+                mock.patch.object(installer, "write_install_state"),
+                mock.patch.object(installer, "verify_installation"),
+                mock.patch.object(installer, "installed_components", return_value=[]),
+            )
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                for patcher in patches:
+                    stack.enter_context(patcher)
+                installer.install(
+                    platform="linux", channel="stable", release="3.6.9",
+                    without_components=True,
+                )
+
+            gitignore = target / ".gitignore"
+            self.assertTrue(gitignore.is_file())
+            generated = gitignore.read_text(encoding="utf-8")
+            self.assertIn("/qw/default.cfg\n", generated)
+            self.assertNotIn("/qw/personal.cfg\n", generated)
+
     def test_created_personal_default_is_a_separate_changes_baseline(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
@@ -3231,6 +3301,83 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(1, installer.update.call_count)
         self.assertIn("Nenhuma atualização disponível", output.getvalue())
         self.assertNotIn("Aplicação do plano", output.getvalue())
+
+    def test_update_without_content_changes_restores_missing_gitignore(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.update = mock.Mock(return_value=False)
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire", return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main(["update", str(target)]))
+
+            gitignore = target / ".gitignore"
+            self.assertTrue(gitignore.is_file())
+            self.assertIn("/.x86qw\n", gitignore.read_text(encoding="utf-8"))
+
+    def test_content_update_refreshes_gitignore_after_applying_the_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            managed = target / "qw/default.cfg"
+            managed.parent.mkdir()
+            managed.write_text("original\n", encoding="utf-8")
+            metadata = target / ".x86qw/components/ktx"
+            metadata.mkdir(parents=True)
+            inventory = metadata / "inventory"
+            receipt = metadata / "receipt"
+            installer.write_inventory_record(inventory, ((
+                "qw/default.cfg",
+                "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+            ),))
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+
+            def update(*, dry_run, plan_rows=None, **_options):
+                if dry_run:
+                    assert plan_rows is not None
+                    plan_rows.append(install_qw.UpdatePlanRow(
+                        "Componente", "KTX", "old", "new", "Atualizar",
+                    ))
+                return True
+
+            @contextlib.contextmanager
+            def transaction():
+                yield []
+
+            installer.update = mock.Mock(side_effect=update)
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.component_state_transaction = mock.Mock(
+                side_effect=transaction,
+            )
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire", return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main([
+                    "update", str(target), "--yes",
+                ]))
+
+            gitignore = target / ".gitignore"
+            self.assertTrue(gitignore.is_file())
+            self.assertIn("/qw/default.cfg\n", gitignore.read_text(encoding="utf-8"))
 
     def test_upgrade_without_changes_exits_before_confirmation_and_application(self):
         target = Path("/tmp/x86qw-no-upgrade-test")
