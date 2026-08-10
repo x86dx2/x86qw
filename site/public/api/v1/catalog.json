@@ -2120,7 +2120,7 @@
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_latest": false,
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW e4cb23d40aa2+x86qw.4",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip",
       "package": "x86qw-client-bootstrap",
       "platform": "any",

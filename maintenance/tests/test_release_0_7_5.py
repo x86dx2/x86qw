@@ -113,8 +113,8 @@ class Release0713Tests(unittest.TestCase):
         digest = hashlib.sha256(catalog).hexdigest()
         expected = {
             "metadata/1.root.json",
-            "metadata/10.targets.json",
-            "metadata/10.snapshot.json",
+            "metadata/11.targets.json",
+            "metadata/11.snapshot.json",
             "metadata/timestamp.json",
             f"targets/catalog/{digest}.catalog.json",
         }

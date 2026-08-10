@@ -156,7 +156,7 @@ def build_packages(
         )
         mirror_title = (
             f"x86QW Content · nQuake {commit[:12]}"
-            if distribution_tag == reference_release and distribution_component == "nquake"
+            if distribution_tag == reference_release
             else f"x86QW Content · {components[identifier]['label']} {version}"
         )
         uses_reference = strategy not in {"upstream-package", "upstream-composed"} or bool(
