@@ -2666,6 +2666,153 @@ class InstallerTests(unittest.TestCase):
                 install_qw.parse_arguments(["verify", "--yes"], ROOT)
         self.assertEqual(2, raised.exception.code)
 
+    def test_changes_accepts_gitignore_sync_only_for_that_action(self):
+        target = Path("/tmp/x86qw-changes")
+        parsed = install_qw.parse_arguments([
+            "changes", str(target), "--sync-gitignore",
+        ], ROOT)
+        self.assertEqual("changes", parsed.action)
+        self.assertEqual(target, parsed.target)
+        self.assertTrue(parsed.sync_gitignore)
+
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(io.StringIO()):
+                install_qw.parse_arguments(["verify", "--sync-gitignore"], ROOT)
+        self.assertEqual(2, raised.exception.code)
+
+    def test_changes_reports_inventory_delta_and_generates_selective_gitignore(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            managed = target / "qw/default.cfg"
+            managed.parent.mkdir()
+            managed.write_text("original\n", encoding="utf-8")
+            personal = target / "qw/personal.cfg"
+            personal.write_text("personal\n", encoding="utf-8")
+            metadata = target / ".x86qw/components/ktx"
+            metadata.mkdir(parents=True)
+            inventory = metadata / "inventory"
+            receipt = metadata / "receipt"
+            installer.write_inventory_record(inventory, ((
+                "qw/default.cfg",
+                "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+            ),))
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+            managed.write_text("changed\n", encoding="utf-8")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                changes = installer.report_installation_changes(sync_gitignore=True)
+
+            self.assertEqual(2, len(changes))
+            self.assertIn("M  qw/default.cfg", output.getvalue())
+            self.assertIn("A  qw/personal.cfg", output.getvalue())
+            generated = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("/qw/default.cfg\n", generated)
+            self.assertNotIn("/qw/personal.cfg\n", generated)
+
+    def test_created_personal_default_is_a_separate_changes_baseline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-test.")
+            assert installer.stage is not None
+            source = installer.stage / "x86qw-user.cfg"
+            source.write_text("set name clean-install\n", encoding="utf-8")
+            destination = target / "qw/x86qw-user.cfg"
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+            self.assertIsNotNone(result)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual((), installer.report_installation_changes(
+                    sync_gitignore=True,
+                ))
+            generated = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("/qw/x86qw-user.cfg\n", generated)
+
+            destination.write_text("set name personalized\n", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                changes = installer.report_installation_changes()
+            self.assertEqual(
+                (install_qw.InstallationChange(
+                    "M", "qw/x86qw-user.cfg", "personal",
+                ),),
+                changes,
+            )
+
+            self.assertIsNone(installer.install_component_default_transaction(
+                source, destination,
+            ))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(changes, installer.report_installation_changes())
+
+    def test_personal_baseline_rolls_back_with_the_created_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-rollback-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("clean\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+            self.assertIsNotNone(result)
+            assert result is not None
+            install_qw.rollback_mutation(result)
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(installer.personal_baseline_paths()[0].exists())
+            self.assertFalse(installer.personal_baseline_paths()[1].exists())
+
+    def test_matching_legacy_personal_default_is_adopted_without_rewriting_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-adoption-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("clean\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("clean\n", encoding="utf-8")
+            identity = destination.stat().st_ino
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+
+            self.assertIsNotNone(result)
+            self.assertEqual(identity, destination.stat().st_ino)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual((), installer.report_installation_changes())
+
+    def test_modified_legacy_personal_default_is_not_adopted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-rejection-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("official\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("personalized\n", encoding="utf-8")
+
+            self.assertIsNone(installer.install_component_default_transaction(
+                source, destination,
+            ))
+            with contextlib.redirect_stdout(io.StringIO()):
+                changes = installer.report_installation_changes()
+            self.assertEqual(
+                (install_qw.InstallationChange(
+                    "A", "ezquake/configs/config.cfg", None,
+                ),),
+                changes,
+            )
+
     def test_platform_override_is_available_only_during_installation(self):
         parsed = install_qw.parse_arguments(["install", "--platform", "windows"], ROOT)
         self.assertEqual("windows", parsed.platform)
