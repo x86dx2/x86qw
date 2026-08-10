@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T20:49:29Z",
+  "generated_at": "2026-08-10T22:45:45Z",
   "packages": [
     {
       "component": "core",
@@ -1264,7 +1264,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.12",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1288,6 +1288,36 @@
       "release_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
       "mirror_title": "x86QW Installer 0.7.12",
       "mirror_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.13",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.13.zip",
+      "size": 581883,
+      "sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.13/x86qw-installer-0.7.13.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.13/x86qw-installer-0.7.13.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.13",
+      "release_title": "x86QW Installer 0.7.13",
+      "release_notes": "# x86QW 0.7.13\n\nHotfix da preparação do ezQuake no macOS.\n\n## Correção\n\n- remove individualmente as preferências antigas `basedir`, `version` e\n  `NSOSPLastRootDirectory` do domínio `com.ezquake.ezQuake`;\n- evita a importação do domínio inteiro, que podia retornar sucesso sem vencer\n  o cache ativo do CFPreferences;\n- confirma que cada chave realmente desapareceu antes de continuar a instalação;\n- restaura o snapshot original se qualquer remoção parcial falhar.\n\nNa 0.7.12, uma instalação limpa podia chegar ao ezQuake stable 3.6.9 e falhar na\netapa `directory-preferences`, mesmo depois de validar o ZIP e os PAKs. A 0.7.13\nfaz a limpeza pela operação nativa por chave e mantém o rollback transacional.\n\nA release 0.7.12 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.13 e para a metadata TUF v10.\n\n## Validação\n\n- regressão RED reproduzindo o sucesso falso da importação com cache CFPreferences;\n- remoção e restauração reais das três preferências em macOS;\n- 1.422 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_title": "x86QW Installer 0.7.13",
+      "mirror_notes": "# x86QW 0.7.13\n\nHotfix da preparação do ezQuake no macOS.\n\n## Correção\n\n- remove individualmente as preferências antigas `basedir`, `version` e\n  `NSOSPLastRootDirectory` do domínio `com.ezquake.ezQuake`;\n- evita a importação do domínio inteiro, que podia retornar sucesso sem vencer\n  o cache ativo do CFPreferences;\n- confirma que cada chave realmente desapareceu antes de continuar a instalação;\n- restaura o snapshot original se qualquer remoção parcial falhar.\n\nNa 0.7.12, uma instalação limpa podia chegar ao ezQuake stable 3.6.9 e falhar na\netapa `directory-preferences`, mesmo depois de validar o ZIP e os PAKs. A 0.7.13\nfaz a limpeza pela operação nativa por chave e mantém o rollback transacional.\n\nA release 0.7.12 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.13 e para a metadata TUF v10.\n\n## Validação\n\n- regressão RED reproduzindo o sucesso falso da importação com cache CFPreferences;\n- remoção e restauração reais das três preferências em macOS;\n- 1.422 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
       "mirror_latest": true
     },
     {
