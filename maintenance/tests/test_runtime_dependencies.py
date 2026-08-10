@@ -28,7 +28,12 @@ class RuntimeDependencyTests(unittest.TestCase):
             self.assertIn("securesystemslib/_internal/__init__.py", names)
             self.assertIn("urllib3/__init__.py", names)
             self.assertIn("_x86qw/runtime-dependencies.json", names)
-            self.assertNotIn("_x86qw/trust/root.json", names)
+            self.assertIn("_x86qw/trust/root.json", names)
+            self.assertEqual(
+                (ROOT / "maintenance/trust/root.json").read_bytes(),
+                archive.read("_x86qw/trust/root.json"),
+            )
+            self.assertFalse(any(name.endswith((".pem", ".key")) for name in names))
             lock = json.loads(archive.read("_x86qw/runtime-dependencies.json"))
         self.assertEqual(json.loads(LOCK.read_text(encoding="utf-8")), lock)
 
@@ -72,6 +77,20 @@ class RuntimeDependencyTests(unittest.TestCase):
             )
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual("7.0.0 1.4.0 2.7.0", completed.stdout.strip())
+
+    def test_builder_rejects_a_valid_root_with_unpinned_bytes(self) -> None:
+        original_read = builder.read_regular_file
+        root_path = ROOT / "maintenance/trust/root.json"
+        changed_root = root_path.read_bytes().rstrip() + b" \n"
+
+        def substitute(path: Path, *args: object, **kwargs: object) -> bytes:
+            if path == root_path:
+                return changed_root
+            return original_read(path, *args, **kwargs)
+
+        with mock.patch.object(builder, "read_regular_file", side_effect=substitute):
+            with self.assertRaisesRegex(ValueError, "root TUF|SHA-256|pin"):
+                builder.zipapp_bytes("9.9.9")
 
     def test_builder_rejects_a_wheel_that_differs_from_its_lock(self) -> None:
         if not hasattr(builder, "runtime_dependency_members"):

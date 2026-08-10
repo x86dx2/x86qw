@@ -181,6 +181,9 @@ class ContinuousIntegrationTests(unittest.TestCase):
 
     def test_pull_request_workflow_is_read_only_and_multiplatform(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        trust_requirements_path = ROOT / "maintenance/requirements-trust.txt"
+        self.assertTrue(trust_requirements_path.is_file())
+        trust_requirements = trust_requirements_path.read_text(encoding="utf-8")
         self.assertIn("pull_request:", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("ubuntu-latest", workflow)
@@ -194,6 +197,13 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("maintenance/tools/check_committed_diff.py", workflow)
         self.assertIn("npm ci", workflow)
         self.assertIn("npm run deploy:dry-run", workflow)
+        self.assertEqual("cryptography==50.0.0\n", trust_requirements)
+        self.assertEqual(
+            2,
+            workflow.count(
+                "python -m pip install --requirement maintenance/requirements-trust.txt"
+            ),
+        )
         self.assertNotIn("npx --yes", workflow)
         self.assertNotIn("secrets.", workflow)
 
@@ -275,6 +285,35 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             [f"{path}: text: unset" for path in paths],
+            result.stdout.splitlines(),
+        )
+
+    def test_signed_trust_bytes_are_pinned_to_lf_on_every_checkout(self):
+        paths = [
+            "maintenance/trust/root.json",
+            "site/public/api/v1/trust/metadata/1.root.json",
+            "site/public/api/v1/trust/metadata/1.targets.json",
+            "site/public/api/v1/trust/metadata/1.snapshot.json",
+            "site/public/api/v1/trust/metadata/timestamp.json",
+            (
+                "site/public/api/v1/trust/targets/catalog/"
+                "7370b2f6e2e35f19476aecdfb7c3156d94be2b33db942af30b78e87976bd0479."
+                "catalog.json"
+            ),
+        ]
+        result = subprocess.run(
+            ["git", "check-attr", "text", "eol", "--", *paths],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(
+            [
+                value
+                for path in paths
+                for value in (f"{path}: text: set", f"{path}: eol: lf")
+            ],
             result.stdout.splitlines(),
         )
 

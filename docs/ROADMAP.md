@@ -1,6 +1,6 @@
 # Roadmap do x86QW
 
-Este é o índice estratégico da jornada da release pública `0.7.4` até
+Este é o índice estratégico da jornada da release pública `0.7.5` até
 `1.0.0`. O estado factual está em
 [PROJECT-STATUS.md](PROJECT-STATUS.md); os contratos, dependências e gates
 detalhados estão em
@@ -10,8 +10,9 @@ Nenhum documento autoriza publicação por si só.
 ## Autoridade e baseline
 
 O `main` remoto inclui atualmente o merge da PR #74,
-`adf6f158b24a3f576884013a2a12b20cafeb94c0`. A release pública atual é
-`0.7.4`; seus bundles e o histórico `0.7.3` permanecem imutáveis.
+`adf6f158b24a3f576884013a2a12b20cafeb94c0`. A release `0.7.4` permanece
+pública até o corte do hotfix `0.7.5`; seus bundles e o histórico `0.7.3`
+permanecem imutáveis.
 
 O candidato local `1.0.0` foi preparado e verificado, mas não é uma release
 nem um RC publicado. A seleção de plataforma e a execução nativa devem
@@ -28,8 +29,8 @@ continuar separadas da matriz `portable-contract`.
 4. **D — migração:** PR #46 mesclada; somente estados publicados são fontes de
    migração.
 5. **E1/E2 — trust:** PR #48 registrou a arquitetura e PR #69 materializou as
-   dependências/runtime fail-closed. A cadeia produtiva, a cerimônia, a root,
-   a metadata assinada e o publisher ainda não existem.
+   dependências/runtime fail-closed. O hotfix `0.7.5` acrescenta a root e a
+   cadeia produtiva; publicação e verificação pública permanecem como corte.
 6. **F — candidato imutável:** PR #51 mesclada; preparação e promoção continuam
    separadas e falham fechado sem evidência.
 7. **G — Mac M3/arm64:** PR #54 mesclada; PR #73 corrigiu a detecção do Apple
@@ -41,9 +42,7 @@ continuar separadas da matriz `portable-contract`.
 
 ## Gates restantes
 
-- gerar chaves de produção fora do workspace e registrar fingerprints conforme
-  o ADR 0006/runbook;
-- gerar e publicar root, targets, snapshot e timestamp TUF assinados, sem
+- publicar e verificar root, targets, snapshot e timestamp TUF assinados, sem
   transportar chaves privadas para Git, CI ou bundle;
 - construir o RC a partir do candidato exato, preservar seus hashes e iniciar
   o período de uso sem alegar `1.0.0`;

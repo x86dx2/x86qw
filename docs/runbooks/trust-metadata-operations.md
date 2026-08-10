@@ -1,13 +1,42 @@
 # Runbook — Operações de trust metadata
 
-- **Estado:** proposta operacional; nenhuma chave ou metadata existe nesta PR
+- **Estado:** implementado para o hotfix `0.7.5`; publicação é uma etapa separada
 - **Autoridade técnica:** [ADR 0006](../adr/0006-tuf-trust-metadata.md)
 - **Issue:** [#48](https://github.com/x86dx2/x86qw/issues/48)
 
 Este runbook governa a cerimônia inicial, renovação, rotação, revogação e
-resposta a comprometimento. Ele não autoriza publicação. Comandos concretos,
-provedores e identificadores só podem ser acrescentados em E2 depois da revisão
-criptográfica independente.
+resposta a comprometimento. Ele não autoriza publicação.
+
+## Implementação operacional 0.7.5
+
+A root pública fica em `maintenance/trust/root.json`. As chaves privadas ficam
+somente em `.tuf-production/keys/`, diretório local ignorado pelo Git, com modo
+`0700`; cada PEM usa `0600`. O bundle e o site recebem apenas material público.
+O waiver solo-maintainer do ADR 0007 preserva os thresholds criptográficos, mas
+não deve ser descrito como independência humana entre as chaves.
+
+A inicialização é executada uma única vez:
+
+```sh
+python3 maintenance/tools/generate_trust_metadata.py init-root \
+  --key-dir .tuf-production/keys \
+  --root maintenance/trust/root.json
+```
+
+Depois de congelar o catálogo, gere a cadeia para uma saída nova:
+
+```sh
+python3 maintenance/tools/generate_trust_metadata.py generate \
+  --key-dir .tuf-production/keys \
+  --root maintenance/trust/root.json \
+  --catalog site/public/api/v1/catalog.json \
+  --output .tuf-production/repository/<ceremony-id> \
+  --version 1
+```
+
+Renovações usam uma saída nova e `--version N+1`. Targets vence em até 90 dias,
+snapshot em 7 dias, timestamp em 24 horas e root em 365 dias. Nunca reutilize
+uma versão para bytes diferentes.
 
 ## Papéis humanos
 

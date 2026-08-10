@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_073_SHA256 = "41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6"
 EXPECTED_073_SIZE = 286137
+EXPECTED_074_SHA256 = "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f"
+EXPECTED_074_SIZE = 286223
 
 
 class Release074Tests(unittest.TestCase):
@@ -24,35 +26,24 @@ class Release074Tests(unittest.TestCase):
             for runtime in cls.product["runtimes"]
         }
 
-    def test_release_identity_is_consistent_and_previous_bundle_is_immutable(self):
-        self.assertEqual("0.7.4", (ROOT / "dist/installer/VERSION").read_text().strip())
-        self.assertEqual("0.7.4", (ROOT / "dist/installer/packages/latest").resolve().name)
+    def test_historical_release_identity_and_previous_bundles_are_immutable(self):
         installers = [
             package for package in self.catalog["packages"]
             if package.get("package") == "x86qw-installer"
         ]
-        current = [package for package in installers if package.get("current") is True]
-        self.assertEqual(1, len(current))
-        self.assertEqual("0.7.4", current[0]["version"])
-        self.assertEqual("0.7.4", self.product["version"])
-        self.assertEqual(current[0]["sha256"], self.product["installer"]["sha256"])
-        self.assertEqual(current[0]["size"], self.product["installer"]["size"])
-        self.assertEqual(64, len(current[0]["sha256"]))
-        self.assertRegex(current[0]["sha256"], r"^[0-9a-f]{64}$")
+        release = next(package for package in installers if package["version"] == "0.7.4")
+        self.assertFalse(release["current"])
+        self.assertEqual(EXPECTED_074_SHA256, release["sha256"])
+        self.assertEqual(EXPECTED_074_SIZE, release["size"])
         previous = next(package for package in installers if package["version"] == "0.7.3")
         self.assertFalse(previous["current"])
         self.assertEqual(EXPECTED_073_SHA256, previous["sha256"])
         self.assertEqual(EXPECTED_073_SIZE, previous["size"])
-        self.assertIn('INSTALLER_VERSION="0.7.4"', (ROOT / "dist/installer/bin/install.sh").read_text())
-        self.assertIn('$InstallerVersion = "0.7.4"', (ROOT / "dist/installer/bin/install.ps1").read_text())
 
     def test_public_release_notes_and_site_identify_the_corrective_contract(self):
         notes = (ROOT / "docs/releases/0.7.4.md").read_text(encoding="utf-8")
         self.assertIn("# x86QW 0.7.4", notes)
         self.assertIn("portable-contract", notes)
-        index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
-        self.assertIn("Distribuição 0.7.4 pública e verificável", index)
-        self.assertIn("versão 0.7.4", index)
 
     def test_platform_truth_does_not_claim_native_support(self):
         stable = {

@@ -7,11 +7,13 @@ autoriza limpar nem sobrescrever aquela árvore.
 
 ## Versão pública
 
-`0.7.4` é a release corretiva pública (PR #71, merge
+`0.7.4` é a release pública corrente (PR #71, merge
 `b2b18f0341ef7f7b56faa79ebdbb9fe2ea396c8b`). O bundle público tem 286223
 bytes e SHA-256
 `37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f`.
-`0.7.3` permanece imutável. Nenhuma release `1.0.0` foi publicada.
+`0.7.3` permanece imutável. O hotfix `0.7.5` está preparado para incorporar a
+root TUF e publicar a cadeia assinada; ele só se torna público após release,
+mirror e deploy verificados. Nenhuma release `1.0.0` foi publicada.
 
 ## Estado da jornada
 
@@ -35,15 +37,15 @@ bytes e SHA-256
   seleção explícita de plataforma/canal/release, mas o primeiro caso falhou
   fechado antes da instalação porque a ZIPAPP não contém
   `_x86qw/trust/root.json`. Não há recibo nativo de instalação aprovado.
-- Os endpoints públicos canônicos para a root e o timestamp TUF respondem
-  `404`; o catálogo legado continua respondendo, mas não é autoridade TUF.
+- A branch do hotfix contém root pública, catálogo 0.7.5 e cadeia assinada; os
+  endpoints de produção continuam `404` até o deploy do hotfix.
 
 ## Gates pendentes
 
 | Gate | Estado atual |
 |---|---|
-| trust de produção | pendente: não há root, metadata assinada nem publisher público |
-| E2 operacional | pendente: faltam cerimônia, fingerprints, metadata e mirrors |
+| trust de produção | candidato pronto; falta release, mirrors e deploy público |
+| E2 operacional | root e metadata prontas; falta verificar os endpoints públicos |
 | evidência nativa M3 | pendente; H falhou antes do lifecycle por ausência da root |
 | `1.0.0-rc.1` | não criada/publicada; período de uso não iniciado |
 | H / promoção `1.0.0` | não aberta; bloqueada pelos gates acima |
@@ -54,8 +56,6 @@ metadata assinada, evidência M3, RC, período de uso ou mirrors convergentes.
 
 ## Próxima ação
 
-Executar a cerimônia E2 fora do workspace, registrar fingerprints e gerar a
-cadeia TUF assinada com bytes aprovados. Depois disso, preparar o RC exato,
-executar novamente o H no host M3, validar mirrors e só então abrir a promoção
-`1.0.0`. Não usar catálogo legado, root de teste ou evidência sintética como
-atalho.
+Publicar o hotfix `0.7.5`, verificar GitHub, GitLab e Cloudflare e executar um
+refresh TUF com cache vazio. Depois disso, preparar o RC exato, executar
+novamente o H no host M3, validar mirrors e só então abrir a promoção `1.0.0`.

@@ -57,6 +57,8 @@ class BoundedTufFetcher:
                 timeout=10.0,
                 attempts=1,
             )
+        except exceptions.DownloadHTTPError:
+            raise
         except Exception as error:
             raise exceptions.DownloadError(f"bounded TUF download failed: {url}") from error
         if len(payload) > max_length:
@@ -143,6 +145,7 @@ def validate_bootstrap_policy(bootstrap_root: bytes) -> None:
         raise TrustError("root TUF declara roles fora da política aprovada")
 
     used_keyids: set[str] = set()
+    used_public_material: set[tuple[str, str, str]] = set()
     for role_name, (key_count, threshold) in EXPECTED_ROLE_POLICY.items():
         role = root.roles[role_name]
         if len(role.keyids) != key_count or role.threshold != threshold:
@@ -161,6 +164,14 @@ def validate_bootstrap_policy(bootstrap_root: bytes) -> None:
                 raise TrustError(f"role {role_name} referencia chave ausente") from error
             if key.keytype != "ed25519" or key.scheme != "ed25519":
                 raise TrustError("todas as chaves TUF devem usar Ed25519")
+            material = (
+                key.keytype,
+                key.scheme,
+                json.dumps(key.keyval, sort_keys=True, separators=(",", ":")),
+            )
+            if material in used_public_material:
+                raise TrustError("material público de chave TUF duplicado")
+            used_public_material.add(material)
     if set(root.keys) != used_keyids:
         raise TrustError("root TUF contém chaves sem role aprovada")
     try:

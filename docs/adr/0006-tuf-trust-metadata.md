@@ -1,11 +1,11 @@
 # ADR 0006 — Autenticação do catálogo com TUF
 
-- **Estado:** proposta para aprovação; não implementada
+- **Estado:** aprovada e implementada no candidato do hotfix `0.7.5`
 - **Data:** 2026-08-06
 - **Issue:** [#48](https://github.com/x86dx2/x86qw/issues/48)
 - **Baseline analisada:** `3bbc7a01faf8d472c5ccbab9233e05e9abadc379`
-- **Implementação prevista:** E2, somente após aprovação deste ADR e revisão
-  criptográfica independente
+- **Implementação:** E2 mesclada na PR #69; root e metadata de produção entram
+  pelo hotfix `0.7.5`, sob o waiver solo-maintainer do ADR 0007
 
 ## Contexto
 

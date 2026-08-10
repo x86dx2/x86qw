@@ -123,6 +123,13 @@ class TrustMetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(self.runtime().TrustError, "Ed25519"):
             self.runtime().validate_bootstrap_policy(json.dumps(root).encode())
 
+    def test_bootstrap_policy_rejects_duplicate_public_key_material(self) -> None:
+        root = json.loads(signed_root(new_keyset(), version=1))
+        keyids = list(root["signed"]["keys"])
+        root["signed"]["keys"][keyids[-1]] = dict(root["signed"]["keys"][keyids[0]])
+        with self.assertRaisesRegex(self.runtime().TrustError, "material público|duplicad"):
+            self.runtime().validate_bootstrap_policy(json.dumps(root).encode())
+
     def test_metadata_directories_are_private(self) -> None:
         repository = build_repository(new_keyset(), version=1)
         with tempfile.TemporaryDirectory() as temporary:
