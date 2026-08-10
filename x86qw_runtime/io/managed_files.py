@@ -27,7 +27,7 @@ from x86qw_runtime.io.paths import lexists
 
 
 _HASH_CHUNK_SIZE = 1024 * 1024
-MAX_MANAGED_FILE_SIZE = DEFAULT_ARCHIVE_LIMITS.max_member_size
+MAX_MANAGED_FILE_SIZE = DEFAULT_ARCHIVE_LIMITS.max_source_size
 
 
 @dataclass(frozen=True)
