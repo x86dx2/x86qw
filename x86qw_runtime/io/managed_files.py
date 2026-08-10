@@ -406,6 +406,13 @@ class _WindowsFileApi:
             raise OSError("tipo de arquivo incompatível")
         return self.identity(handle)
 
+    def checked_reparse_identity(self, handle: int) -> tuple[int, int]:
+        """Return the identity of a reparse point without following its target."""
+
+        if not self.attributes(handle) & self.FILE_ATTRIBUTE_REPARSE_POINT:
+            raise OSError("ponto de nova análise esperado")
+        return self.identity(handle)
+
     def write(self, handle: int, payload: bytes) -> None:
         from ctypes import wintypes
 
@@ -952,6 +959,120 @@ def unlink_identity_bound_regular(
             )
         if descriptor >= 0:
             os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+
+def unlink_identity_bound_symlink(
+    path: Path,
+    expected_identity: tuple[int, ...],
+) -> bool:
+    """Unlink only the expected symlink without following its target."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) != 3
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+    ):
+        raise ValueError("expected_identity must include device, inode and type")
+    if expected_identity[2] != stat.S_IFLNK:
+        return False
+    path = Path(path)
+    windows_api = _get_windows_file_api()
+    if windows_api is not None:
+        try:
+            handle = windows_api.open_handle(
+                path,
+                access=windows_api.FILE_READ_ATTRIBUTES | windows_api.DELETE,
+                creation=windows_api.OPEN_EXISTING,
+                directory=True,
+            )
+        except (FileNotFoundError, OSError):
+            return False
+        try:
+            windows_api.checked_reparse_identity(handle)
+            metadata = path.lstat()
+            actual = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+            )
+            if actual != expected_identity:
+                return False
+            windows_api.mark_delete(handle)
+            return True
+        except OSError:
+            return False
+        finally:
+            _close_windows_handle(windows_api, handle)
+    rename_api = _get_posix_rename_api()
+    if rename_api is None:
+        return False
+    posix_identity = expected_identity[:2]
+    parent_descriptor = -1
+    quarantine_name: str | None = None
+    quarantined_identity = (-1, -1)
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        metadata = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISLNK(metadata.st_mode)
+            or _file_identity(metadata) != posix_identity
+        ):
+            return False
+        for _ in range(128):
+            candidate = f".x86qw-unlink-{secrets.token_hex(12)}"
+            try:
+                rename_api.move_no_replace(
+                    parent_descriptor,
+                    path.name,
+                    parent_descriptor,
+                    candidate,
+                )
+            except FileExistsError:
+                continue
+            quarantine_name = candidate
+            break
+        if quarantine_name is None:
+            return False
+        quarantined = os.stat(
+            quarantine_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        quarantined_identity = _file_identity(quarantined)
+        if (
+            not stat.S_ISLNK(quarantined.st_mode)
+            or quarantined_identity != posix_identity
+        ):
+            if _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            ):
+                quarantine_name = None
+            return False
+        os.unlink(quarantine_name, dir_fd=parent_descriptor)
+        quarantine_name = None
+        os.fsync(parent_descriptor)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+    finally:
+        if quarantine_name is not None and parent_descriptor >= 0:
+            _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            )
         if parent_descriptor >= 0:
             os.close(parent_descriptor)
 

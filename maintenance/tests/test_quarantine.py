@@ -230,8 +230,8 @@ class QuarantineTests(unittest.TestCase):
             )
             self.assertTrue(token.previous.is_dir())
 
-    def test_symlink_is_preserved_in_quarantine_instead_of_path_unlink(self) -> None:
-        """Finalization must not unlink a non-regular node by pathname."""
+    def test_finalization_unlinks_a_symlink_without_touching_its_target(self) -> None:
+        """A committed purge removes the link itself without following it."""
 
         quarantine = self.runtime()
         with tempfile.TemporaryDirectory() as temporary:
@@ -247,12 +247,11 @@ class QuarantineTests(unittest.TestCase):
                 self.skipTest(f"symlink indisponível: {error}")
 
             token = quarantine.apply_quarantine_removal(link)
-            with self.assertRaises(quarantine.QuarantineError):
-                quarantine.finalize_quarantine(token)
+            quarantine.finalize_quarantine(token)
 
             self.assertEqual(secret.read_bytes(), b"keep")
             self.assertFalse(link.exists())
-            self.assertTrue(token.previous.is_symlink())
+            self.assertFalse(token.quarantine.exists())
 
     def test_finalization_preserves_directory_swapped_at_private_move(self) -> None:
         """An empty replacement must not be removed after directory validation."""
