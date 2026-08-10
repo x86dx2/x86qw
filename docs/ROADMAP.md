@@ -1,6 +1,6 @@
 # Roadmap do x86QW
 
-Este é o índice estratégico da jornada da release pública `0.7.5` até
+Este é o índice estratégico da jornada da release pública `0.7.6` até
 `1.0.0`. O estado factual está em
 [PROJECT-STATUS.md](PROJECT-STATUS.md); os contratos, dependências e gates
 detalhados estão em
@@ -9,10 +9,9 @@ Nenhum documento autoriza publicação por si só.
 
 ## Autoridade e baseline
 
-O `main` remoto inclui atualmente o merge da PR #74,
-`adf6f158b24a3f576884013a2a12b20cafeb94c0`. A release `0.7.4` permanece
-pública até o corte do hotfix `0.7.5`; seus bundles e o histórico `0.7.3`
-permanecem imutáveis.
+O `main` remoto inclui o hotfix 0.7.6 da PR #78,
+`a9680e9cc5d0eb728d3d84203d0966f0d1167592`. A release `0.7.6` é pública;
+os bundles 0.7.5, 0.7.4 e 0.7.3 permanecem históricos e imutáveis.
 
 O candidato local `1.0.0` foi preparado e verificado, mas não é uma release
 nem um RC publicado. A seleção de plataforma e a execução nativa devem
@@ -28,9 +27,9 @@ continuar separadas da matriz `portable-contract`.
    congelados para a linha 1.0.
 4. **D — migração:** PR #46 mesclada; somente estados publicados são fontes de
    migração.
-5. **E1/E2 — trust:** PR #48 registrou a arquitetura e PR #69 materializou as
-   dependências/runtime fail-closed. O hotfix `0.7.5` acrescenta a root e a
-   cadeia produtiva; publicação e verificação pública permanecem como corte.
+5. **E1/E2 — trust:** PR #48 registrou a arquitetura, PR #69 materializou as
+   dependências/runtime fail-closed e PRs #77/#78 publicaram e verificaram a
+   root e a cadeia produtiva. O 0.7.6 corrigiu o fim da rotação por HTTP 404.
 6. **F — candidato imutável:** PR #51 mesclada; preparação e promoção continuam
    separadas e falham fechado sem evidência.
 7. **G — Mac M3/arm64:** PR #54 mesclada; PR #73 corrigiu a detecção do Apple
@@ -42,8 +41,6 @@ continuar separadas da matriz `portable-contract`.
 
 ## Gates restantes
 
-- publicar e verificar root, targets, snapshot e timestamp TUF assinados, sem
-  transportar chaves privadas para Git, CI ou bundle;
 - construir o RC a partir do candidato exato, preservar seus hashes e iniciar
   o período de uso sem alegar `1.0.0`;
 - executar o lifecycle nativo no host M3 e produzir `release-evidence.json`
@@ -58,15 +55,13 @@ de custódia, metadata, evidência, RC e mirrors.
 
 ## Próxima sequência
 
-1. Concluir a cerimônia E2 e preservar a ata/fingerprints sem segredos.
-2. Publicar a cadeia TUF e incorporar somente a root de produção aprovada no
-   candidato correspondente.
-3. Preparar e testar `1.0.0-rc.1`; iniciar e observar o período de uso.
-4. Reexecutar H no Mac M3, verificar bytes, evidência e mirrors.
-5. Abrir, revisar e promover H para `1.0.0`; publicar metadata por último.
+1. Preparar um candidato novo a partir do baseline 0.7.6 e congelar seus hashes.
+2. Publicar e testar `1.0.0-rc.1`; iniciar e observar o período de uso.
+3. Reexecutar H no Mac M3, verificar bytes, evidência e mirrors.
+4. Abrir, revisar e promover H para `1.0.0`; publicar metadata por último.
 
-Até que essa sequência seja comprovada, o catálogo legado pode continuar
-servindo o portal, mas não é uma autoridade de atualização autenticada da CLI.
+O catálogo TUF 0.7.6 é a autoridade autenticada da CLI. Ele não antecipa nem
+substitui os gates próprios dos futuros bytes de RC e 1.0.
 
 ## Depois de 1.0
 
