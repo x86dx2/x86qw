@@ -2328,6 +2328,12 @@ class InstallerTests(unittest.TestCase):
                     )
                     self.assertEqual(0, version.returncode, version.stderr)
                     self.assertEqual("x86QW 1.0.6\n", version.stdout)
+            changes = subprocess.run(
+                [*command, "changes", "--help"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
+            )
+            self.assertEqual(0, changes.returncode, changes.stderr)
+            self.assertIn("--sync-gitignore", changes.stdout)
             rejected = subprocess.run(
                 [*command, "install"], text=True, encoding="utf-8",
                 capture_output=True, check=False, env=environment,

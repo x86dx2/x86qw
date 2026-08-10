@@ -13,7 +13,7 @@ if /I "%~1"=="--help" goto help
 if /I "%~1"=="version" goto version
 if /I "%~1"=="-V" goto version
 if /I "%~1"=="--version" goto version
-if /I "%~1"=="play" goto play
+if /I "%~1"=="play" goto service
 if /I "%~1"=="host" goto service
 if /I "%~1"=="proxy" goto service
 if /I "%~1"=="qtv" goto service
@@ -22,15 +22,12 @@ if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
 if /I "%~1"=="verify" goto maintenance
+if /I "%~1"=="changes" goto maintenance
 if /I "%~1"=="repair" goto maintenance
 if /I "%~1"=="cleanup" goto maintenance
 if /I "%~1"=="uninstall" goto maintenance
 echo x86qw: comando desconhecido: %~1 1>&2
 goto help_error
-
-:play
-"%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" %* --target "%X86QW_ROOT%"
-exit /b %ERRORLEVEL%
 
 :menu
 "%X86QW_PYTHON%" %X86QW_PYTHON_ARGS% "%X86QW_APP%" menu "%X86QW_ROOT%"
@@ -69,6 +66,7 @@ echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
+echo   changes              compara mudancas locais com a instalacao registrada
 echo   repair [--dry-run]   diagnostica e repara conteudo gerenciado
 echo   cleanup              limpa o cache x86QW
 echo   uninstall            preserva PAKs e dados pessoais

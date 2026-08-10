@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T16:31:40Z",
+  "generated_at": "2026-08-10T17:40:31Z",
   "packages": [
     {
       "component": "core",
@@ -1204,7 +1204,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.10",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1228,6 +1228,36 @@
       "release_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
       "mirror_title": "x86QW Installer 0.7.10",
       "mirror_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.11",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.11.zip",
+      "size": 581352,
+      "sha256": "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.11/x86qw-installer-0.7.11.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.11/x86qw-installer-0.7.11.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.11",
+      "release_title": "x86QW Installer 0.7.11",
+      "release_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
+      "mirror_title": "x86QW Installer 0.7.11",
+      "mirror_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
       "mirror_latest": true
     },
     {
