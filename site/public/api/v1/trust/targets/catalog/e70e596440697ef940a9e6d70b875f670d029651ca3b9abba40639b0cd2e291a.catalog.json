@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T15:31:25Z",
+  "generated_at": "2026-08-10T16:31:40Z",
   "packages": [
     {
       "component": "core",
@@ -1203,6 +1203,36 @@
     {
       "component": "installer",
       "package": "x86qw-installer",
+      "version": "0.7.10",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.10.zip",
+      "size": 581288,
+      "sha256": "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a627837b61",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.10/x86qw-installer-0.7.10.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.10/x86qw-installer-0.7.10.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.10",
+      "release_title": "x86QW Installer 0.7.10",
+      "release_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
+      "mirror_title": "x86QW Installer 0.7.10",
+      "mirror_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
+      "mirror_latest": true
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
       "version": "0.7.2",
       "current": false,
       "channel": "content",
@@ -1414,7 +1444,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.9",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1438,7 +1468,7 @@
       "release_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
       "mirror_title": "x86QW Installer 0.7.9",
       "mirror_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
-      "mirror_latest": true
+      "mirror_latest": false
     },
     {
       "component": "ktx",
