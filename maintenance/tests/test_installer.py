@@ -982,6 +982,9 @@ class InstallerTests(unittest.TestCase):
                 state.clear()
                 state.update(values)
 
+            def delete(_domain, key):
+                state.pop(key, None)
+
             output = io.StringIO()
             with mock.patch.object(
                 install_qw.host_platform, "system", return_value="Darwin",
@@ -991,6 +994,8 @@ class InstallerTests(unittest.TestCase):
                 install_qw.macos, "_export_preference_domain", side_effect=export,
             ), mock.patch.object(
                 install_qw.macos, "_publish_preference_domain", side_effect=publish,
+            ), mock.patch.object(
+                install_qw.macos, "_delete_preference_key", side_effect=delete,
             ), contextlib.redirect_stdout(output):
                 result = installer.reset_macos_game_directory()
 
