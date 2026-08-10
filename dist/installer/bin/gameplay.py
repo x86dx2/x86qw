@@ -2016,24 +2016,32 @@ class GameplayPlayerMixin:
                 or len(setup_body) > KTX_INLINE_SETUP_LIMIT
             ):
                 # Keep the long, frame-separated addbot sequence outside the
-                # engine's bounded startup command line. The ephemeral file is
-                # read before the map and removed immediately after startup.
-                setup_definitions, setup_invocation = (
-                    ktx_chunked_setup_alias_plan(setup_commands)
-                )
-                if ktx_mode.entry_config is None:
-                    event_body = f"exec x86qw-ktx.cfg;{setup_invocation}"
-                    compatibility_entry = ()
-                else:
-                    compatibility_entry = (
-                        "tempalias x86qw_ktx_launch_setup "
-                        f"{quote_console_command(setup_invocation)}",
+                # engine's bounded startup command line. Frogbot management
+                # aliases must stay at the top level: nesting them inside the
+                # on_enter chain makes ezQuake skip the post-map bot commands.
+                if ktx_bot_options_requested(launch_options):
+                    ktx_startup_commands = (
+                        *key_alias_commands,
+                        *ktx_chunked_setup_alias_commands(post_map_commands),
+                        f"tempalias {event} {quote_console_command(event_body)}",
                     )
-                ktx_startup_commands = (
-                    *setup_definitions,
-                    *compatibility_entry,
-                    f"tempalias {event} {quote_console_command(event_body)}",
-                )
+                else:
+                    setup_definitions, setup_invocation = (
+                        ktx_chunked_setup_alias_plan(setup_commands)
+                    )
+                    if ktx_mode.entry_config is None:
+                        event_body = f"exec x86qw-ktx.cfg;{setup_invocation}"
+                        compatibility_entry = ()
+                    else:
+                        compatibility_entry = (
+                            "tempalias x86qw_ktx_launch_setup "
+                            f"{quote_console_command(setup_invocation)}",
+                        )
+                    ktx_startup_commands = (
+                        *setup_definitions,
+                        *compatibility_entry,
+                        f"tempalias {event} {quote_console_command(event_body)}",
+                    )
                 arguments.extend([
                     "+exec", KTX_RUNTIME_CONFIG_PLACEHOLDER,
                 ])
