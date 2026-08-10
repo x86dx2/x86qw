@@ -151,9 +151,12 @@ def build_packages(
             f"https://gitlab.com/api/v4/projects/{GITLAB_PROJECT_ID}/packages/generic/"
             f"{identifier}/{version}/{filename}"
         )
+        distribution_component = str(
+            release_metadata.get("distribution_component", "nquake")
+        )
         mirror_title = (
             f"x86QW Content · nQuake {commit[:12]}"
-            if distribution_tag == reference_release
+            if distribution_tag == reference_release and distribution_component == "nquake"
             else f"x86QW Content · {components[identifier]['label']} {version}"
         )
         uses_reference = strategy not in {"upstream-package", "upstream-composed"} or bool(
@@ -167,7 +170,7 @@ def build_packages(
             source_urls.extend(str(url) for url in (source_url, release_url) if isinstance(url, str))
         source_urls.extend(str(url) for url in release_metadata.get("source_mirrors", []))
         package_record = {
-            "component": str(release_metadata.get("distribution_component", "nquake")),
+            "component": distribution_component,
             "package": identifier,
             "version": version,
             "channel": "content",

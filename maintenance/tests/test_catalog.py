@@ -211,6 +211,17 @@ class CatalogTests(unittest.TestCase):
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
             },
         )
+        product_bootstraps = [
+            package for package in catalog["packages"]
+            if package.get("package") == "x86qw-client-bootstrap"
+        ]
+        self.assertEqual(1, len(product_bootstraps))
+        self.assertEqual("x86qw", product_bootstraps[0]["component"])
+        self.assertTrue(
+            product_bootstraps[0]["mirror_title"].startswith(
+                "x86QW Content · Base e inicialização do cliente x86QW ",
+            ),
+        )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("td2", td2["component"])
@@ -282,7 +293,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
         metadata = component_package_metadata(
-            "nquake-bootstrap",
+            "x86qw-client-bootstrap",
             "e4cb23d40aa2+x86qw.1",
             "reference-snapshot",
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",

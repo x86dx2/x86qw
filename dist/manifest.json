@@ -282,7 +282,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/config.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "30925267d22c9744a268b9e5f5cc6e4a04f46c377ea89527c858fd5f7f7145d0",
       "size": 1424,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/config.cfg"
@@ -290,7 +290,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/blooddog.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "1eecbfb3fc8e7f2b76f53cb745ee2c5f484357906661db3090249dfed2dcd8d4",
       "size": 105497,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/blooddog.cfg"
@@ -298,7 +298,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/bps.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "a968704f4903f6d921a0845f10c1ac1f70b7af5e3514a12e7076889706325829",
       "size": 127061,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/bps.cfg"
@@ -306,7 +306,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/dirtbox.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "61d9fa0253ef1c6e61d0571216f2d394315887c2060fc827d4144598ec1c42c7",
       "size": 107371,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/dirtbox.cfg"
@@ -314,7 +314,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/gt.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "887ff4506b7637a1d7416e9335a2125cb0c10fe0f699891857e4dc357d932ffe",
       "size": 176079,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/gt.cfg"
@@ -322,7 +322,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locktar.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "6e2cbea9435cffe9190a5cc2ddaced8e11c982e0d935d00a96e934e986df8a89",
       "size": 113337,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locktar.cfg"
@@ -330,7 +330,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locust.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "681a4dee0fdd2f70a7f507c427ec35a04fc06d370cdd72679472e13b82fffe57",
       "size": 134631,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locust.cfg"
@@ -338,7 +338,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/milton.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "4e993b614de0ca4be0eedcf542c2061198ceab832f09fb315eb8735de570b91b",
       "size": 10819,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/milton.cfg"
@@ -346,7 +346,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/rikoll.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "992871ce813b0252092deaf36afa2e057cd7c3f4c0a2508dc55b9ea11b6de064",
       "size": 131436,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/rikoll.cfg"
@@ -378,7 +378,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/autoexec.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "61ea93a02ef08b03d078c33f8d0e16c6aec4846aaa90c1e4d2b009d548684fe4",
       "size": 20325,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/autoexec.cfg"
@@ -890,7 +890,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/fragfile.dat": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "199dbda082be8672cb76d41a8be8a8201e85c91d62265455abb32ceaf2b3155e",
       "size": 38950,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/fragfile.dat"
@@ -2538,7 +2538,7 @@
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
-      "package": "nquake-bootstrap",
+      "package": "x86qw-client-bootstrap",
       "sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
       "size": 80565,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg"

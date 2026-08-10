@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T19:16:08Z",
+  "generated_at": "2026-08-10T20:49:29Z",
   "packages": [
     {
       "component": "core",
@@ -2080,6 +2080,32 @@
       "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "release_notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW e a ajuda aparece somente sob demanda.",
       "upstream_version": "2.9"
+    },
+    {
+      "architecture": "any",
+      "channel": "content",
+      "component": "x86qw",
+      "filename": "x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "mirror_latest": false,
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW e4cb23d40aa2+x86qw.4",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip",
+      "package": "x86qw-client-bootstrap",
+      "platform": "any",
+      "redistribution_reviewed": true,
+      "sha256": "faf466dd54403ec690dc03652bf2ad5dfb88c6fdf3a635d17c102451873c72db",
+      "size": 28721,
+      "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "source_urls": [
+        "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+      ],
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-client-bootstrap/e4cb23d40aa2+x86qw.4/x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip"
+      ],
+      "version": "e4cb23d40aa2+x86qw.4"
     }
   ]
 }

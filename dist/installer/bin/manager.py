@@ -285,7 +285,10 @@ QW_PACKAGE_PRIORITY = (
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
-LEGACY_COMPONENT_REPLACEMENTS = {"nquake-ktx": "ktx"}
+LEGACY_COMPONENT_REPLACEMENTS = {
+    "nquake-bootstrap": "x86qw-client-bootstrap",
+    "nquake-ktx": "ktx",
+}
 LEGACY_COMPONENT_REMOVALS = {
     "nquake-sounds": "sons de Clan Arena incorporados ao KTX",
 }
@@ -5403,10 +5406,10 @@ class Installer:
                             )
                         else:
                             console.info(f"Configuração inicial criada: {destination}")
-                if identifier == "nquake-bootstrap":
+                if identifier == "x86qw-client-bootstrap":
                     self.migrate_nquake_texture_limit(results)
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
-            if "nquake-bootstrap" in selected:
+            if "x86qw-client-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
                 preset_existed = lexists(preset)
                 assert self.stage is not None
@@ -6611,7 +6614,7 @@ class Installer:
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
         installed = self.installed_components() if installed is None else installed
-        if "nquake-bootstrap" not in installed:
+        if "x86qw-client-bootstrap" not in installed:
             return
         config = self.target / "ezquake/configs/config.cfg"
         if not config.is_file():

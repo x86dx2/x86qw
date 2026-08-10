@@ -954,7 +954,7 @@ class ModernComponentTests(unittest.TestCase):
         )
         bootstrap = next(
             component for component in inventory["components"]
-            if component["id"] == "nquake-bootstrap"
+            if component["id"] == "x86qw-client-bootstrap"
         )
         self.assertIn({
             "path": "dist/mods/x86qw/core/bootstrap/ruleset.cfg",
@@ -2649,7 +2649,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue({"mvdsv", "qwfwd", "qtv"}.isdisjoint(compatibility["covered_components"]))
             self.assertEqual(
                 {
-                    "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
+                    "x86qw", "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
                     "mvdsv", "qwfwd", "qtv",
                 },
                 installer.content_component_namespaces,
@@ -3153,7 +3153,7 @@ class ModernComponentTests(unittest.TestCase):
             installer, target, _ = self.make_installer(Path(temporary))
             installer.stage = target / ".stage"
             installer.stage.mkdir()
-            package = installer.component_package_record("nquake-bootstrap")
+            package = installer.component_package_record("x86qw-client-bootstrap")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer.remote, "get_mirrors", side_effect=AssertionError("network used"),
@@ -3164,7 +3164,7 @@ class ModernComponentTests(unittest.TestCase):
             managed, defaults, source = prepared
             self.assertTrue((managed / "qw/autoexec.cfg").is_file())
             self.assertTrue(any(destination == target / "ezquake/configs/config.cfg" for _, destination in defaults))
-            self.assertTrue(source.startswith("x86qw:dist/nquake-bootstrap@"))
+            self.assertTrue(source.startswith("x86qw:dist/x86qw-client-bootstrap@"))
 
     def test_component_install_prefers_canonical_sources_over_remote_packages(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3175,12 +3175,12 @@ class ModernComponentTests(unittest.TestCase):
                 with mock.patch.object(
                     installer, "download_component_package", side_effect=AssertionError("remote package used"),
                 ):
-                    installer.install_components(["nquake-bootstrap"])
+                    installer.install_components(["x86qw-client-bootstrap"])
             self.assertTrue((target / "qw/autoexec.cfg").is_file())
             self.assertTrue((target / "ezquake/configs/config.cfg").is_file())
-            self.assertGreater(installer.verify_component("nquake-bootstrap"), 0)
-            receipt = (target / ".x86qw/components/nquake-bootstrap/receipt").read_text(encoding="utf-8")
-            self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
+            self.assertGreater(installer.verify_component("x86qw-client-bootstrap"), 0)
+            receipt = (target / ".x86qw/components/x86qw-client-bootstrap/receipt").read_text(encoding="utf-8")
+            self.assertIn("source\tx86qw:dist/x86qw-client-bootstrap@", receipt)
             self.assertFalse(cache.exists())
 
     def test_bootstrap_migrates_only_the_obsolete_nquake_texture_default(self):

@@ -7,7 +7,7 @@
     "id": "ezquake",
     "channels": ["stable", "nightly"]
   },
-  "content_namespaces": ["nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2", "mvdsv", "qwfwd", "qtv"],
+  "content_namespaces": ["x86qw", "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2", "mvdsv", "qwfwd", "qtv"],
   "reference_source": {
     "repository": "https://github.com/nQuake/distfiles.git",
     "ref": "master"
@@ -20,7 +20,7 @@
       "nightly": "20260616-101233_a86996a"
     },
     "covered_components": [
-      "nquake-bootstrap",
+      "x86qw-client-bootstrap",
       "nquake-visual-core",
       "ktx",
       "nquake-player-skins",
@@ -49,12 +49,12 @@
   },
   "profiles": {
     "essential": [
-      "nquake-bootstrap",
+      "x86qw-client-bootstrap",
       "nquake-visual-core",
       "ktx"
     ],
     "recommended": [
-      "nquake-bootstrap",
+      "x86qw-client-bootstrap",
       "nquake-visual-core",
       "ktx",
       "nquake-player-skins",
@@ -68,7 +68,7 @@
       "nquake-documentation"
     ],
     "complete": [
-      "nquake-bootstrap",
+      "x86qw-client-bootstrap",
       "nquake-visual-core",
       "ktx",
       "nquake-player-skins",
@@ -94,26 +94,30 @@
   "profile_history": {
     "essential": [
       "2e2011fa531d9651c833984c994861212b3ff7e72dc95643bbbb55e391a729c2",
-      "05c4455e3e34e62b088277915fef5ae0f0106191c1a964fca6fb0a23dee06b6e"
+      "05c4455e3e34e62b088277915fef5ae0f0106191c1a964fca6fb0a23dee06b6e",
+      "1ea2699230c7d47bc499d34280884e80d577c3a3a6e8253e04e038f17de730b1"
     ],
     "recommended": [
       "95e1262410aa595cec380f7ec1ad160ffe2c0d42b74ad13364105b5c3de51288",
       "edf1a6c1aec45e490d333b7ca9e916e82151ff5a39aaef6f341ec7c053ccb4ac",
-      "542fa6f2c66d43aa6a88ac2ad2577fa661d4bc3349bd811d1f8888969253d438"
+      "542fa6f2c66d43aa6a88ac2ad2577fa661d4bc3349bd811d1f8888969253d438",
+      "9eb9703734f82fc67d0a4ced0b3b37dce10b22ab8c5ae15edcfdaf3145e9de31"
     ],
     "complete": [
       "66a60d4cf678e67d132ca9cd17d7ab343b9fccd587adb5a37eb07e298095dd36",
       "f29290d2b77f98eb1380d1c6dc7ee2894793539f1fc5c8fdf2e9219e410ad325",
       "c95442f034bd5d4b904fe94baab829e76a5fc3a6cd253aa110da323806ae3e4e",
-      "d3e6e671dd94a4f157fc83728716e5dfcbc84352b3ad5c862dc1b3a55c9a27fc"
+      "d3e6e671dd94a4f157fc83728716e5dfcbc84352b3ad5c862dc1b3a55c9a27fc",
+      "4c29cf1d0057acd090cb7b1dd04ce4f9e31d9bf6569fd4dbea1dc0d69cd5115b",
+      "650b3596a35ae601f6931a82bab2c86ff09eae15116a8a72fe4956867f73c561"
     ]
   },
   "components": [
     {
-      "id": "nquake-bootstrap",
-      "label": "Configuração base nQuake",
+      "id": "x86qw-client-bootstrap",
+      "label": "Base e inicialização do cliente x86QW",
       "kind": "core",
-      "description": "Inicialização x86QW, configuração padrão preservável, camada pessoal global e fragfile.",
+      "description": "Compõe a base nQuake com a inicialização, os defaults e as camadas globais do cliente x86QW.",
       "requires": [],
       "sources": [
         {"path": "gpl/ezquake/configs", "destination": "ezquake/configs", "mode": "overlay", "exclude": ["gpl/ezquake/configs/config.cfg", "gpl/ezquake/configs/samples"]},
@@ -127,6 +131,7 @@
         {"path": "dist/mods/x86qw/core/bootstrap/autoexec.cfg", "target": "non-gpl/qw/autoexec.cfg"}
       ],
       "project_sources": [
+        {"path": "dist/mods/x86qw/core/bootstrap/default.cfg", "destination": "qw/x86qw-default.cfg", "mode": "overlay"},
         {"path": "dist/mods/x86qw/core/bootstrap/ruleset.cfg", "destination": "qw/x86qw-ruleset.cfg", "mode": "overlay"},
         {"path": "dist/mods/x86qw/core/bootstrap/user.cfg.example", "destination": "qw/x86qw-user.cfg", "mode": "default"}
       ]
@@ -136,7 +141,7 @@
       "label": "Interface e recursos visuais nQuake",
       "kind": "core",
       "description": "Pacotes principais do ezQuake e da identidade visual nQuake.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "gpl/ezquake/ezquake.pk3", "destination": "ezquake/ezquake.pk3", "mode": "overlay"},
         {"path": "non-gpl/qw/nquake.pk3", "destination": "qw/nquake.pk3", "mode": "overlay"}
@@ -147,7 +152,7 @@
       "label": "KTX x86QW",
       "kind": "gameplay",
       "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com diversão assistida por padrão e regras competitivas opcionais.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "archive-base"},
         {"path": "ktx-1.47/resources/example-configs/ktx", "destination": "qw/ktx.pk3", "mode": "archive", "origin": "release"},
@@ -266,7 +271,7 @@
       "label": "Mapas selecionados nQuake",
       "kind": "content",
       "description": "Somente os mapas, ENT e textos que fazem parte da distribuição nQuake.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/maps", "destination": "qw/maps", "mode": "overlay"}
       ]
@@ -276,7 +281,7 @@
       "label": "Informações de partidas",
       "kind": "content",
       "description": "Demos históricas e de treinamento mantidas pelo nQuake; conteúdo opcional, não necessário para jogar.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/matchinfo", "destination": "qw/matchinfo", "mode": "overlay"}
       ]
@@ -318,7 +323,7 @@
       "label": "Final Arena",
       "kind": "addon",
       "description": "Final Arena 1.20, com duelos individuais em fila e perfil próprio x86QW.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"}
       ],
@@ -337,7 +342,7 @@
       "label": "Pro-X",
       "kind": "addon",
       "description": "Pro-X QW 1.1, com rounds, equipes, votações e perfil próprio x86QW.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {
           "path": "addon-clanarena/prox",
@@ -368,7 +373,7 @@
       "label": "Team Fortress",
       "kind": "addon",
       "description": "Team Fortress 2.9 com assets e mapas nQuake harmonizados pelo x86QW.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"},
         {"path": "qwprogs.dat", "destination": "fortress/qwprogs.dat", "mode": "overlay", "origin": "release"}
@@ -393,7 +398,7 @@
       "label": "Total Destruction 2",
       "kind": "addon",
       "description": "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode; fontes e manuais permanecem preservados no dist.",
-      "requires": ["nquake-bootstrap"],
+      "requires": ["x86qw-client-bootstrap"],
       "project_overrides": [
         {"path": "dist/mods/td2/2.22/x86qw/runtime/qwprogs.dat", "target": "td2/qwprogs.dat"}
       ],

@@ -1566,7 +1566,7 @@ class DistributionManagerTests(unittest.TestCase):
             f"https://raw.githubusercontent.com/nQuake/distfiles/{revision}/non-gpl/qw/autoexec.cfg",
             path,
             12,
-            "nquake-bootstrap",
+            "x86qw-client-bootstrap",
             None,
             "b" * 40,
         )]
@@ -1612,7 +1612,7 @@ class DistributionManagerTests(unittest.TestCase):
             f"https://raw.githubusercontent.com/nQuake/distfiles/{new_revision}/non-gpl/qw/autoexec.cfg",
             path,
             12,
-            "nquake-bootstrap",
+            "x86qw-client-bootstrap",
             None,
             "c" * 40,
         )]
@@ -1667,7 +1667,7 @@ class DistributionManagerTests(unittest.TestCase):
                 "https://example.invalid/current.cfg",
                 f"distributions/nquake/{revision}/qw/current.cfg",
                 1,
-                "nquake-bootstrap",
+                "x86qw-client-bootstrap",
                 "a" * 64,
             ),
             Asset(
@@ -1764,11 +1764,11 @@ class DistributionManagerTests(unittest.TestCase):
                 "url": "https://example.invalid/old",
                 "size": len(payload),
                 "sha256": hashlib.sha256(payload).hexdigest(),
-                "package": "nquake-bootstrap",
+                "package": "x86qw-client-bootstrap",
             }}}
             assets = [Asset(
                 "nquake", "https://example.invalid/new", f"distributions/nquake/{'b' * 40}/non-gpl/qw/autoexec.cfg",
-                None, "nquake-bootstrap", None, digest,
+                None, "x86qw-client-bootstrap", None, digest,
             )]
 
             self.assertFalse(reference_content_changed(assets, manifest, root=root))

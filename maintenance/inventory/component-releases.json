@@ -7,11 +7,12 @@
     "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
   },
   "components": {
-    "nquake-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.3",
+    "x86qw-client-bootstrap": {
+      "version": "e4cb23d40aa2+x86qw.4",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
-      "notes": "Preserva a base nQuake e acrescenta o x86QW Ruleset, uma experiência assistida sobre o ruleset default do ezQuake com iDrive, smart jump, movimento moderno, feedback visual e camada pessoal carregada por último. Mantém aliases temporários, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes suportados.",
+      "distribution_component": "x86qw",
+      "notes": "Preserva a base nQuake e acrescenta uma camada inicial x86QW aplicada uma vez depois dos defaults upstream, além do x86QW Ruleset, uma experiência assistida sobre o ruleset default do ezQuake com iDrive, smart jump, movimento moderno, feedback visual e camada pessoal carregada por último. Mantém aliases temporários, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes suportados.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",

@@ -2127,7 +2127,7 @@ class InstallerTests(unittest.TestCase):
                     config.write_text(f'set _nquake_first_startup "{marker}"\n', encoding="utf-8")
                     output = io.StringIO()
                     with contextlib.redirect_stdout(output):
-                        installer.report_nquake_startup_state(["nquake-bootstrap"])
+                        installer.report_nquake_startup_state(["x86qw-client-bootstrap"])
                     self.assertIn(expected, output.getvalue())
 
     def test_nightly_catalog_can_expand_without_overwhelming_initial_output(self):
@@ -2191,7 +2191,7 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 with self.trusted_public_catalog(catalog) as load:
                     installer.stable_catalog()
-                    installer.component_package_record("nquake-bootstrap")
+                    installer.component_package_record("x86qw-client-bootstrap")
             load.assert_called_once()
 
     def test_online_catalog_requires_a_tuf_root_before_network(self):
@@ -3668,7 +3668,7 @@ class InstallerTests(unittest.TestCase):
     def test_nonstandard_existing_installation_becomes_a_safe_custom_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            installed = ["nquake-bootstrap", "total-destruction-2"]
+            installed = ["x86qw-client-bootstrap", "total-destruction-2"]
             with mock.patch.object(installer, "installed_components", return_value=installed):
                 state = installer.infer_install_state()
             self.assertEqual("custom", state["profile"])
