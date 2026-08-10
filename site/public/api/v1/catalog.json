@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T11:28:09Z",
+  "generated_at": "2026-08-10T12:13:52Z",
   "packages": [
     {
       "component": "core",
@@ -1324,7 +1324,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.6",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1348,6 +1348,36 @@
       "release_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
       "mirror_title": "x86QW Installer 0.7.6",
       "mirror_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.7",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.7.zip",
+      "size": 577558,
+      "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.7/x86qw-installer-0.7.7.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.7/x86qw-installer-0.7.7.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.7",
+      "release_title": "x86QW Installer 0.7.7",
+      "release_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_title": "x86QW Installer 0.7.7",
+      "mirror_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
       "mirror_latest": true
     },
     {

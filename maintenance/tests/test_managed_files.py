@@ -44,6 +44,17 @@ class ManagedFileHashTests(unittest.TestCase):
                 )
             )
 
+    def test_hashes_an_archive_larger_than_one_extracted_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "component.zip"
+            archive_size = 128 * 1024 * 1024 + 1
+            with path.open("wb") as archive:
+                archive.truncate(archive_size)
+
+            digest = file_sha256(path, expected_size=archive_size)
+
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+
     def test_rejects_a_size_that_exceeds_the_managed_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "conteudo.bin"
