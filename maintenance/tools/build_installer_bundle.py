@@ -64,6 +64,8 @@ LEGAL_FILES = (
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
 RUNTIME_DEPENDENCY_MANIFEST = ROOT / "maintenance/inventory/runtime-dependencies.json"
 RUNTIME_DEPENDENCY_WHEELS = ROOT / "maintenance/vendor/wheels"
+TRUST_ROOT_SOURCE = "maintenance/trust/root.json"
+TRUST_ROOT_SHA256 = "660af63e52a033290adf8899d2078a779c04e04cf5d1fac465b4aa2e04937201"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
 RUNTIME_DEPENDENCY_FIELDS = frozenset({
     "name", "version", "filename", "sha256", "upstream_sha256", "transformation",
@@ -85,6 +87,7 @@ GENERATED_RUNTIME_SOURCES = frozenset({
 STATIC_RUNTIME_SOURCE_PREFIXES = (
     "dist/installer/bin/",
     "dist/mods/ktx/",
+    "maintenance/trust/",
     "x86qw_runtime/",
 )
 RUNTIME_CONTRACT_SOURCES = (
@@ -415,6 +418,11 @@ def zipapp_bytes(version: str) -> bytes:
                     maximum_size=MAX_BUILD_INPUT_BYTES,
                 )
             )
+            if (
+                source_name == TRUST_ROOT_SOURCE
+                and hashlib.sha256(payload).hexdigest() != TRUST_ROOT_SHA256
+            ):
+                raise ValueError("root TUF diverge do pin SHA-256 aprovado")
             write_member(application, member_name, payload, mode)
         for name, payload in dependency_members:
             write_member(application, name, payload)
