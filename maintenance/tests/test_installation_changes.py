@@ -18,9 +18,9 @@ class InstallationChangesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "quake-world"
             (target / "qw").mkdir(parents=True)
-            (target / "qw/default.cfg").write_text("original\n", encoding="utf-8")
-            (target / "qw/changed.cfg").write_text("changed\n", encoding="utf-8")
-            (target / "qw/personal.cfg").write_text("personal\n", encoding="utf-8")
+            (target / "qw/default.cfg").write_bytes(b"original\n")
+            (target / "qw/changed.cfg").write_bytes(b"changed\n")
+            (target / "qw/personal.cfg").write_bytes(b"personal\n")
             (target / ".x86qw").mkdir()
             (target / ".x86qw/state.json").write_text("{}\n", encoding="utf-8")
             (target / "ezQuake Stable.app").mkdir()
