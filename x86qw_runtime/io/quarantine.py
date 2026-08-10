@@ -133,6 +133,12 @@ def _unlink_leaf(path: Path, expected_identity: tuple[int, ...]) -> None:
 
     from . import managed_files
 
+    if stat.S_ISLNK(expected_identity[2]):
+        if managed_files.unlink_identity_bound_symlink(
+            path, expected_identity[:2],
+        ):
+            return
+        raise QuarantineError(f"Nó de quarantine mudou: {path}")
     if not stat.S_ISREG(expected_identity[2]):
         raise QuarantineError(
             f"Nó não regular preservado no quarantine: {path}"

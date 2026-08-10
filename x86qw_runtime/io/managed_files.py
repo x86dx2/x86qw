@@ -956,6 +956,90 @@ def unlink_identity_bound_regular(
             os.close(parent_descriptor)
 
 
+def unlink_identity_bound_symlink(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> bool:
+    """Atomically quarantine and unlink only the expected POSIX symlink."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) != 2
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+    ):
+        raise ValueError("expected_identity must be a device/inode pair")
+    rename_api = _get_posix_rename_api()
+    if rename_api is None:
+        return False
+    path = Path(path)
+    parent_descriptor = -1
+    quarantine_name: str | None = None
+    quarantined_identity = (-1, -1)
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        metadata = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISLNK(metadata.st_mode)
+            or _file_identity(metadata) != expected_identity
+        ):
+            return False
+        for _ in range(128):
+            candidate = f".x86qw-unlink-{secrets.token_hex(12)}"
+            try:
+                rename_api.move_no_replace(
+                    parent_descriptor,
+                    path.name,
+                    parent_descriptor,
+                    candidate,
+                )
+            except FileExistsError:
+                continue
+            quarantine_name = candidate
+            break
+        if quarantine_name is None:
+            return False
+        quarantined = os.stat(
+            quarantine_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        quarantined_identity = _file_identity(quarantined)
+        if (
+            not stat.S_ISLNK(quarantined.st_mode)
+            or quarantined_identity != expected_identity
+        ):
+            if _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            ):
+                quarantine_name = None
+            return False
+        os.unlink(quarantine_name, dir_fd=parent_descriptor)
+        quarantine_name = None
+        os.fsync(parent_descriptor)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+    finally:
+        if quarantine_name is not None and parent_descriptor >= 0:
+            _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            )
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+
 def _rmdir_identity_bound_directory(
     path: Path,
     expected_identity: tuple[int, int],
