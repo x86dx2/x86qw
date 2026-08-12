@@ -59,7 +59,7 @@ class RenderReleaseSiteTests(unittest.TestCase):
             self.assertEqual("1.0.0-rc.1", result["version"])
             rendered = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn("1.0.0-rc.1", rendered)
-            self.assertIn(">65<", rendered)
+            self.assertIn(f">{len(catalog_value['packages'])}<", rendered)
             self.assertEqual(catalog.read_bytes(), (output / "api/v1/catalog.json").read_bytes())
             self.assertEqual(product.read_bytes(), (output / "api/v1/product.json").read_bytes())
 

@@ -159,6 +159,14 @@ class _LocalTufFetcher:
             if path.is_file() and not path.is_symlink()
         ]
         if len(matches) != 1:
+            if not matches:
+                # python-tuf probes the next root version until the local
+                # repository answers 404.  Raising the runtime trust error
+                # here would turn a completed rotation into a false failure.
+                from x86qw_runtime.trust import _tuf_api
+
+                exceptions, *_ = _tuf_api()
+                raise exceptions.DownloadHTTPError(f"metadata ausente: {name}", 404)
             raise TrustError(f"projeção local de TUF não possui {name}")
         payload = matches[0].read_bytes()
         if len(payload) > max_length:

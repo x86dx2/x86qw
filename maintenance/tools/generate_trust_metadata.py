@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import os
 import shutil
@@ -18,7 +19,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 for wheel in sorted((PROJECT_ROOT / "maintenance/vendor/wheels").glob("*.whl")):
     sys.path.insert(0, str(wheel))
 
-from securesystemslib.signer import CryptoSigner  # noqa: E402
+from securesystemslib._vendor.ed25519.ed25519 import (  # noqa: E402
+    publickey_unsafe,
+    signature_unsafe,
+)
+from securesystemslib.signer import Key, Signature, Signer, SSlibKey  # noqa: E402
+from securesystemslib.signer._utils import compute_default_keyid  # noqa: E402
 from tuf.api.metadata import (  # noqa: E402
     MetaFile,
     Metadata,
@@ -37,6 +43,82 @@ from x86qw_runtime.trust import (  # noqa: E402
 
 
 ROLE_EXPIRY_DAYS = {"root": 365, "targets": 90, "snapshot": 7, "timestamp": 1}
+ED25519_PRIVATE_DER_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
+
+
+class Ed25519FileSigner(Signer):
+    """Small Ed25519 signer backed by the vendored reference implementation.
+
+    The PEM envelope is the standard PKCS#8 Ed25519 envelope, so an operator
+    can later hand the generated files to normal TUF tooling.  Keeping the
+    signing operation on the already vendored implementation avoids making
+    metadata generation depend on an optional binary ``cryptography`` wheel.
+    """
+
+    def __init__(self, seed: bytes, public_key: SSlibKey) -> None:
+        if len(seed) != 32:
+            raise ValueError("chave privada Ed25519 precisa de 32 bytes")
+        self._seed = seed
+        self._public_key = public_key
+
+    @property
+    def public_key(self) -> Key:
+        return self._public_key
+
+    @property
+    def private_bytes(self) -> bytes:
+        encoded = base64.b64encode(ED25519_PRIVATE_DER_PREFIX + self._seed).decode("ascii")
+        lines = [encoded[index:index + 64] for index in range(0, len(encoded), 64)]
+        return (
+            "-----BEGIN PRIVATE KEY-----\n"
+            + "\n".join(lines)
+            + "\n-----END PRIVATE KEY-----\n"
+        ).encode("ascii")
+
+    def sign(self, payload: bytes) -> Signature:
+        public = bytes.fromhex(self._public_key.keyval["public"])
+        signature = signature_unsafe(payload, self._seed, public)
+        return Signature(self._public_key.keyid, signature.hex())
+
+    @classmethod
+    def generate(cls) -> "Ed25519FileSigner":
+        seed = os.urandom(32)
+        public = publickey_unsafe(seed)
+        keyval = {"public": public.hex()}
+        keyid = compute_default_keyid("ed25519", "ed25519", keyval)
+        return cls(seed, SSlibKey(keyid, "ed25519", "ed25519", keyval))
+
+    @classmethod
+    def from_priv_key_uri(
+        cls,
+        priv_key_uri: str,
+        public_key: Key,
+        secrets_handler=None,
+    ) -> "Ed25519FileSigner":
+        del secrets_handler
+        scheme, _, raw_path = priv_key_uri.partition(":")
+        if scheme != "file2" or not raw_path:
+            raise ValueError("URI de chave privada incompatível")
+        if not isinstance(public_key, SSlibKey):
+            raise ValueError("chave pública incompatível")
+        path = Path(raw_path)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"chave privada ausente ou insegura: {path}")
+        text = path.read_text(encoding="ascii")
+        lines = text.strip().splitlines()
+        if lines[0] != "-----BEGIN PRIVATE KEY-----" or lines[-1] != "-----END PRIVATE KEY-----":
+            raise ValueError(f"formato PEM inválido: {path}")
+        try:
+            der = base64.b64decode("".join(lines[1:-1]), validate=True)
+        except (ValueError, base64.binascii.Error) as error:
+            raise ValueError(f"chave privada PEM inválida: {path}") from error
+        if not der.startswith(ED25519_PRIVATE_DER_PREFIX) or len(der) != len(ED25519_PRIVATE_DER_PREFIX) + 32:
+            raise ValueError(f"chave privada Ed25519 inválida: {path}")
+        signer = cls(der[len(ED25519_PRIVATE_DER_PREFIX):], public_key)
+        expected_public = publickey_unsafe(signer._seed).hex()
+        if expected_public != public_key.keyval["public"]:
+            raise ValueError(f"chave privada não corresponde à pública: {path}")
+        return signer
 
 
 def _regular_bytes(path: Path, label: str, maximum: int = 2 * 1024 * 1024) -> bytes:
@@ -71,11 +153,11 @@ def initialize_root(key_dir: Path, root_path: Path) -> None:
     if os.name != "nt":
         key_dir.chmod(0o700)
 
-    signers: dict[str, list[CryptoSigner]] = {}
+    signers: dict[str, list[Ed25519FileSigner]] = {}
     for role, (count, _threshold) in EXPECTED_ROLE_POLICY.items():
         role_signers = []
         for index in range(1, count + 1):
-            signer = CryptoSigner.generate_ed25519()
+            signer = Ed25519FileSigner.generate()
             _write_new(key_dir / f"{role}-{index}.pem", signer.private_bytes, 0o600)
             role_signers.append(signer)
         signers[role] = role_signers
@@ -97,7 +179,7 @@ def initialize_root(key_dir: Path, root_path: Path) -> None:
     _write_new(root_path, payload, 0o644)
 
 
-def _load_signers(key_dir: Path, root: Root, role: str) -> list[CryptoSigner]:
+def _load_signers(key_dir: Path, root: Root, role: str) -> list[Ed25519FileSigner]:
     if key_dir.is_symlink() or not key_dir.is_dir():
         raise ValueError(f"diretório de chaves inválido: {key_dir}")
     canonical_dir = key_dir.resolve(strict=True)
@@ -109,14 +191,14 @@ def _load_signers(key_dir: Path, root: Root, role: str) -> list[CryptoSigner]:
         canonical = path.resolve(strict=True)
         if canonical.parent != canonical_dir:
             raise ValueError(f"chave privada fora do diretório aprovado: {path}")
-        signer = CryptoSigner.from_priv_key_uri(f"file2:{canonical}", root.keys[keyid])
+        signer = Ed25519FileSigner.from_priv_key_uri(f"file2:{canonical}", root.keys[keyid])
         probe = signer.sign(b"x86qw signer identity")
         root.keys[keyid].verify_signature(probe, b"x86qw signer identity")
         signers.append(signer)
     return signers
 
 
-def _sign(metadata: Metadata, signers: list[CryptoSigner], threshold: int) -> bytes:
+def _sign(metadata: Metadata, signers: list[Ed25519FileSigner], threshold: int) -> bytes:
     for index, signer in enumerate(signers[:threshold]):
         metadata.sign(signer, append=index > 0)
     return metadata.to_bytes()

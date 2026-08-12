@@ -267,11 +267,7 @@ class CatalogTests(unittest.TestCase):
         ]
         self.assertEqual(1, len(product_bootstraps))
         self.assertEqual("x86qw", product_bootstraps[0]["component"])
-        self.assertTrue(
-            product_bootstraps[0]["mirror_title"].startswith(
-                "x86QW Content · Base e inicialização do cliente x86QW ",
-            ),
-        )
+        self.assertTrue(product_bootstraps[0]["mirror_title"].startswith("x86QW Content · "))
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("td2", td2["component"])

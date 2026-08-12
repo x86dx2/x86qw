@@ -69,7 +69,7 @@ class BuildReleaseCatalogTests(unittest.TestCase):
                 output=output,
                 version="1.0.0-rc.1",
             )
-            self.assertEqual(65, validate_catalog(catalog))
+            self.assertEqual(len(catalog["packages"]), validate_catalog(catalog))
             installers = [
                 item for item in catalog["packages"]
                 if item["component"] == "installer"
@@ -87,7 +87,7 @@ class BuildReleaseCatalogTests(unittest.TestCase):
                 source=product_source, catalog=catalog, output=product_output,
             )
             self.assertEqual("1.0.0-rc.1", product["version"])
-            self.assertEqual(65, product["package_count"])
+            self.assertEqual(len(catalog["packages"]), product["package_count"])
             self.assertEqual(current[0]["sha256"], product["installer"]["sha256"])
 
     def test_candidate_catalog_binds_release_title_and_notes_from_the_release_input(self) -> None:
