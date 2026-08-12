@@ -217,6 +217,55 @@ class NativeM3HarnessTests(unittest.TestCase):
                 "--output-dir", str(root / "output"),
             ])
 
+    def test_legacy_run_native_removes_shared_scratch_when_case_setup_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate"
+            candidate.mkdir()
+            output = root / "output"
+            identity = {
+                "version": "1.0.0-rc.1",
+                "commit": "c" * 40,
+                "manifest_sha256": "d" * 64,
+            }
+            environment = {
+                "os": "macOS",
+                "architecture": "arm64",
+                "standard_user": True,
+                "elevated": False,
+                "distro": None,
+                "distro_version": None,
+                "glibc_version": None,
+                "chip": "Apple M3 Pro",
+                "model": "Mac15,6",
+            }
+            plan = [{
+                "name": CANONICAL_CASES[0],
+                "command": ["x86qw.sh", "version"],
+                "assertions": [],
+                "artifacts": [],
+                "timeout_seconds": 10,
+            }]
+
+            with (
+                mock.patch.object(native_m3_harness, "_m3_environment", return_value=environment),
+                mock.patch.object(native_m3_harness, "_identity", return_value=identity),
+                mock.patch.object(native_m3_harness, "_plan", return_value=plan),
+                mock.patch.object(
+                    native_m3_harness,
+                    "_expand_command",
+                    side_effect=native_m3_harness.NativeM3Error("falha de preparação simulada"),
+                ),
+            ):
+                with self.assertRaisesRegex(native_m3_harness.NativeM3Error, "falha de preparação simulada"):
+                    native_m3_harness.run_native(
+                        candidate=candidate,
+                        plan_path=root / "plan.json",
+                        output_dir=output,
+                    )
+
+            self.assertFalse((output / "scratch").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
