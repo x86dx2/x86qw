@@ -72,6 +72,21 @@ class NativeWorkflowTests(unittest.TestCase):
                 self.assertIn(fragment, source)
         self.assertNotIn("AGENT_TOOLSDIRECTORY", source)
 
+    def test_m3_workflow_removes_large_candidate_workspace_after_handoff(self):
+        source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertIn("name: Remove native M3 temporary workspace", source)
+        self.assertIn("if: always()", source)
+        for path in (
+            '"$GITHUB_WORKSPACE/candidate"',
+            '"$RUNNER_TEMP/x86qw-python"',
+            '"$RUNNER_TEMP/candidate-artifact.json"',
+            '"$RUNNER_TEMP/native-plan.json"',
+            '"$RUNNER_TEMP/native-m3"',
+            '"$RUNNER_TEMP/native-evidence-input"',
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, source)
+
 
 if __name__ == "__main__":
     unittest.main()
