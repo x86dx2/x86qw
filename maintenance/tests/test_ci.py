@@ -257,6 +257,14 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("Reserved mirror gate", release)
         self.assertNotIn("No metadata publisher", release)
 
+    def test_windows_preview_job_does_not_claim_posix_or_native_suite(self):
+        workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("if: matrix.os != 'windows-latest'", workflow)
+        self.assertIn("if: matrix.os == 'windows-latest'", workflow)
+        self.assertIn("Windows preview contract", workflow)
+        self.assertIn("windows_preview_excluded", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+
     def test_release_catalog_timestamp_is_bound_to_the_candidate_commit(self):
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn('git show -s --format=%cI "$CANDIDATE_COMMIT"', release)

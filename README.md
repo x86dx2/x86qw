@@ -81,8 +81,9 @@ x86QW.
 Na versão `0.7.1`, o mesmo teste por `sys.version_info` acontece antes do
 download em todos os sistemas. O launcher grava o executável Python que
 concluiu a instalação e repete a resolução segura se esse runtime desaparecer.
-O contrato passou nos sete jobs obrigatórios de Ubuntu, macOS e Windows, com
-Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
+Na validação atual, Ubuntu e macOS executam a suíte integral; Windows executa
+o contrato de preview sem alegação de suporte nativo, porque os casos que
+dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
 O bootstrap público `0.7.13` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
@@ -316,7 +317,7 @@ para distinguir baseline, sequência, evidência e gates de aprovação.
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`; no Windows, o job é explicitamente preview e exclui casos POSIX/macOS ou nativos. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso

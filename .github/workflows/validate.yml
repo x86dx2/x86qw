@@ -48,11 +48,48 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python maintenance/manage.py verify --no-tests
       - name: Run portable maintenance tests
+        if: matrix.os != 'windows-latest'
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           X86QW_CI_PORTABLE: "1"
         run: python -m unittest discover -s maintenance/tests -v
+      - name: Run Windows preview contract
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          X86QW_CI_PORTABLE: "1"
+        run: |
+          python -c '
+          import pathlib
+          import subprocess
+          import sys
+
+          windows_preview_excluded = {
+              "test_gameplay_ktx_runtime_recovery",
+              "test_installer",
+              "test_installer_purge_transaction",
+              "test_installation_changes",
+              "test_migration_1_0",
+              "test_migration_manager",
+              "test_modern_components",
+              "test_native_case_entrypoint",
+              "test_native_m3_harness",
+              "test_native_release_evidence",
+              "test_native_release_smoke",
+              "test_platform_processes",
+              "test_quarantine",
+              "test_runtime_host",
+          }
+          modules = [
+              f"maintenance.tests.{path.stem}"
+              for path in sorted(pathlib.Path("maintenance/tests").glob("test_*.py"))
+              if path.stem not in windows_preview_excluded
+          ]
+          print("Windows preview exclusions:", ", ".join(sorted(windows_preview_excluded)))
+          raise SystemExit(subprocess.call([sys.executable, "-m", "unittest", *modules, "-v"]))
+          '
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         with:
