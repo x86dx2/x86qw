@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -17,12 +18,39 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 from add_package import register_package  # noqa: E402
 from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
-from publish_gitlab_packages import artifact_url, upload  # noqa: E402
+from publish_gitlab_packages import artifact_url, main as publish_gitlab_main, upload  # noqa: E402
 from build_component_packages import component_package_metadata, register_packages  # noqa: E402
 from build_core_package import build_core_package  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
+    def test_gitlab_publish_verifies_existing_remote_without_local_build(self) -> None:
+        package = copy.deepcopy(json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )["packages"][0])
+        package.update({
+            "package": "x86qw-core-id1",
+            "version": "0.1.0",
+            "filename": "x86qw-core-id1-0.1.0.zip",
+            "size": 1,
+            "sha256": "a" * 64,
+            "urls": ["https://example.invalid/x86qw-core-id1-0.1.0.zip"],
+            "origin_url": "https://example.invalid/x86qw-core-id1-0.1.0.zip",
+            "source_urls": ["https://example.invalid/source"],
+        })
+        catalog = {"format": 1, "project": "x86qw", "generated_at": "2026-08-04T00:00:00Z", "packages": [package]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            catalog_path = root / "catalog.json"
+            catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+            with patch("publish_gitlab_packages.remote_sha256", return_value=(1, "a" * 64)), patch(
+                "publish_gitlab_packages.local_artifact", side_effect=AssertionError("local build required"),
+            ), patch.object(sys, "argv", [
+                "publish_gitlab_packages.py", "--catalog", str(catalog_path),
+                "--dist", str(root / "missing-dist"), "--builds", str(root / "missing-builds"),
+            ]):
+                self.assertEqual(0, publish_gitlab_main())
+
     @patch("publish_gitlab_packages.subprocess.run")
     def test_gitlab_upload_uses_documented_file_put_without_token_in_argv(self, run) -> None:
         run.return_value.returncode = 0
@@ -233,6 +261,17 @@ class CatalogTests(unittest.TestCase):
                 "nquake-matchinfo", "nquake-documentation", "qrp-hires",
             },
         )
+        product_bootstraps = [
+            package for package in catalog["packages"]
+            if package.get("package") == "x86qw-client-bootstrap"
+        ]
+        self.assertEqual(1, len(product_bootstraps))
+        self.assertEqual("x86qw", product_bootstraps[0]["component"])
+        self.assertTrue(
+            product_bootstraps[0]["mirror_title"].startswith(
+                "x86QW Content · Base e inicialização do cliente x86QW ",
+            ),
+        )
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("td2", td2["component"])
@@ -304,7 +343,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_internal_component_metadata_carries_customized_catalog_version(self) -> None:
         metadata = component_package_metadata(
-            "nquake-bootstrap",
+            "x86qw-client-bootstrap",
             "e4cb23d40aa2+x86qw.1",
             "reference-snapshot",
             "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",

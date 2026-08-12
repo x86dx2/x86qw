@@ -13,20 +13,20 @@ import shutil
 import sys
 import tempfile
 import unicodedata
-from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from x86qw_runtime.trust import TrustError, verify_release_evidence
+from maintenance.tools.release_trust import TrustError, verify_release_evidence
 from x86qw_runtime.contracts.native_evidence import (
     NATIVE_EVIDENCE_FORMAT,
     NativeEvidenceError,
     REQUIRED_NATIVE_PLATFORMS,
     validate_cases,
     validate_environment,
+    validate_hardware,
 )
 from maintenance.tools import release_ownership
 
@@ -66,6 +66,11 @@ BOUND_METADATA_NAMES = (
     "ownership.json",
     "sbom.spdx.json",
     "provenance.json",
+)
+# Compatibility name used by the publisher boundary.
+BOUND_METADATA = BOUND_METADATA_NAMES
+FORBIDDEN_CANDIDATE_PREFIXES = (
+    "site/public/api/v1/trust/",
 )
 EVIDENCE_FIELDS = frozenset({
     "format", "project", "version", "commit", "status", "candidate", "platforms",
@@ -243,6 +248,18 @@ def _validate_artifact_name(value: object) -> str:
     return path.as_posix()
 
 
+def _validate_candidate_payload_path(value: str) -> str:
+    """Reject release-generated metadata that is supplied only at publish time."""
+
+    for prefix in FORBIDDEN_CANDIDATE_PREFIXES:
+        if value.startswith(prefix):
+            raise CandidateError(
+                "metadata TUF pública não pode entrar no candidato antes do metadata-last: "
+                + value
+            )
+    return value
+
+
 def _portable_name_key(value: str) -> str:
     return unicodedata.normalize("NFC", value).casefold()
 
@@ -283,7 +300,7 @@ def _manifest_for(root: Path, *, version: str, commit: str, generated_at: str) -
     portable_names: set[str] = set()
     checksum_lines: list[str] = []
     for path in _artifact_files(root):
-        relative = _relative_file(path, root)
+        relative = _validate_candidate_payload_path(_relative_file(path, root))
         portable_name = _portable_name_key(relative)
         if portable_name in portable_names:
             raise CandidateError(f"colisão de caminho portátil no candidato: {relative}")
@@ -396,7 +413,9 @@ def prepare_candidate(
     if output.exists() or output.is_symlink():
         raise CandidateError(f"destino do candidato já existe: {output}")
     if generated_at is None:
-        generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        raise CandidateError(
+            "generated_at é obrigatório e deve ser ligado ao commit candidato"
+        )
     if not isinstance(generated_at, str) or UTC_TIMESTAMP.fullmatch(generated_at) is None:
         raise CandidateError("generated_at precisa ser timestamp UTC canônico")
     parent = output.parent
@@ -686,10 +705,13 @@ def _validate_platforms(
             raise CandidateError("evidência possui plataforma inválida")
         if not isinstance(report, dict):
             raise CandidateError(f"evidência da plataforma {platform_name} inválida")
-        if set(report) != {
+        expected_fields = {
             "format", "project", "status", "platform", "recorded_at", "candidate",
             "environment", "runtime_executed", "cases", "secrets", "signature",
-        }:
+        }
+        if platform_name == "macOS-ARM64":
+            expected_fields.add("hardware")
+        if set(report) != expected_fields:
             raise CandidateError(f"evidência da plataforma {platform_name} possui campos inválidos")
         if (
             type(report.get("format")) is not int
@@ -706,6 +728,7 @@ def _validate_platforms(
             raise CandidateError(f"evidência da plataforma {platform_name} não corresponde ao candidato")
         try:
             validate_environment(report.get("environment"), platform=platform_name)
+            validate_hardware(report.get("hardware"), platform=platform_name)
             validate_cases(report.get("cases"))
         except NativeEvidenceError as error:
             raise CandidateError(str(error)) from error
@@ -806,6 +829,7 @@ def verify_candidate(
     normalized_artifacts: dict[str, dict[str, object]] = {}
     for raw_name, expected in artifacts.items():
         name = _validate_artifact_name(raw_name)
+        _validate_candidate_payload_path(name)
         if raw_name != name:
             raise CandidateError(f"caminho de artefato não canônico: {raw_name!r}")
         portable_name = _portable_name_key(name)
@@ -999,7 +1023,7 @@ def _parser() -> argparse.ArgumentParser:
     prepare.add_argument("--output", type=Path, required=True)
     prepare.add_argument("--version", required=True)
     prepare.add_argument("--commit", required=True)
-    prepare.add_argument("--generated-at")
+    prepare.add_argument("--generated-at", required=True)
     prepare.add_argument(
         "--ownership-fragment",
         action="append",
@@ -1027,6 +1051,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="root público opcional para autenticar evidência legada explícita",
     )
+    rehearse = commands.add_parser(
+        "rehearse",
+        help="copiar um candidato verificado para uma árvore local sem publicar",
+    )
+    rehearse.add_argument("candidate", type=Path)
+    rehearse.add_argument("destination", type=Path)
     return parser
 
 
@@ -1048,6 +1078,8 @@ def main(arguments: list[str] | None = None) -> int:
                 allow_pending_evidence=options.allow_pending_evidence,
                 trust_root=options.trust_root,
             )
+        elif options.command == "rehearse":
+            promote_candidate(options.candidate, options.destination)
         else:
             promote_candidate(
                 options.candidate,

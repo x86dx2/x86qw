@@ -5,9 +5,19 @@ Obrigado por ajudar a manter QuakeWorld jogável, verificável e compreensível.
 ## Antes de começar
 
 - procure uma [issue existente](https://github.com/x86dx2/x86qw/issues);
-- para correções pequenas, abra o pull request diretamente;
+- vincule a branch à issue antes de começar a implementação;
 - para novos runtimes, jogos, mods ou mudanças de arquitetura, abra primeiro uma proposta;
 - vulnerabilidades seguem a [política de segurança](SECURITY.md), nunca uma issue pública.
+
+## Limites de trabalho
+
+- mantenha no máximo uma frente estrutural em andamento por vez;
+- mantenha o WIP limitado: uma branch deve ter uma intenção verificável e um
+  gate explícito, não uma coleção de correções incidentais;
+- separe a PR de implementação da PR de release, promoção ou publicação;
+- atualize [PROJECT-STATUS.md](../docs/PROJECT-STATUS.md) e
+  [ROADMAP.md](../docs/ROADMAP.md) somente quando o estado evidenciado mudar;
+- não use a presença de um artefato no catálogo como prova de smoke nativo.
 
 ## Princípios do repositório
 
@@ -23,6 +33,7 @@ Obrigado por ajudar a manter QuakeWorld jogável, verificável e compreensível.
 git clone https://github.com/x86dx2/x86qw.git
 cd x86qw
 git lfs pull
+# crie a branch somente depois de existir uma issue vinculada
 git switch -c tipo/descricao-curta
 ```
 
@@ -32,10 +43,12 @@ Faça uma mudança por contexto. Antes de enviar:
 ./maintenance/manage.py verify
 ./dist/installer/bin/manager.py --help
 ./dist/installer/bin/manager.py play --help
-cd site && npm ci && npm run deploy:dry-run
+cd site && npx --yes wrangler@4.114.0 deploy --dry-run
 ```
 
-O primeiro comando valida distribuição, inventários, receitas, catálogos, instalador e testes. A validação operacional é executada pelo mantenedor diretamente no Mac; Linux e Windows permanecem apenas nos contratos de compatibilidade.
+O primeiro comando valida distribuição, inventários, receitas, catálogos, instalador e testes. A CI repete contratos portáveis em macOS, Linux e Windows com Python 3.10 e 3.13.
+
+A validação operacional da implementação é registrada diretamente no Mac; Linux e Windows permanecem nos contratos de compatibilidade até haver evidência nativa do candidato.
 
 ## Onde alterar
 
@@ -57,7 +70,7 @@ Uma proposta de conteúdo precisa responder:
 - qual licença ou termo permite o uso pretendido;
 - qual componente consome cada arquivo;
 - como a atualização futura será detectada;
-- quais verificações locais foram executadas e quais plataformas permanecem apenas como compatibilidade;
+- quais plataformas e smokes cobrem o resultado;
 - se há conflito com conteúdo já preservado.
 
 Veja [manutenção da distribuição](../maintenance/README.md), [proveniência](../maintenance/docs/provenance.md) e [arquitetura](../docs/architecture.md).
@@ -73,7 +86,13 @@ Um bom PR contém:
 - capturas quando houver mudança visual;
 - notas de compatibilidade ou migração quando aplicável.
 
-Mantenedores podem pedir que uma mudança seja dividida se misturar produto, atualização de upstream e publicação. A promoção local é separada da publicação remota opcional e da revisão do código.
+Toda PR deve declarar o baseline, a issue concluída, a próxima issue
+desbloqueada e as plataformas não executadas no bloco obrigatório do template.
+Uma mudança de release, promoção ou publicação abre uma PR separada depois que
+a implementação tiver seu gate aprovado. O mantenedor pode pedir que o WIP
+seja dividido quando houver mais de uma frente estrutural.
+
+Mantenedores podem pedir que uma mudança seja dividida se misturar produto, atualização de upstream e publicação. A etapa de release é protegida e separada da revisão do código.
 
 ## Commits
 

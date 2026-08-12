@@ -20,6 +20,9 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PublishedReleaseTests(unittest.TestCase):
+    def test_public_identity_accepts_semver_release_candidates(self):
+        MODULE._validate_identity("example/project", "1.0.0-rc.1", "a" * 40)
+
     def test_public_release_metadata_excludes_optional_native_evidence(self):
         self.assertNotIn("release-evidence.json", MODULE.PUBLIC_METADATA_NAMES)
         self.assertEqual(5, len(MODULE.PUBLIC_METADATA_NAMES))

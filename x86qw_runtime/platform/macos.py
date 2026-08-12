@@ -502,6 +502,13 @@ def clear_preference_keys(snapshot: PreferenceSnapshot) -> PreferenceSnapshot:
         raise MacOSAdapterError(
             "As preferências do ezQuake mudaram depois da confirmação."
         )
+    # A primeira instalação normalmente has no ezQuake domain yet (or only
+    # unrelated preferences).  Clearing an already-empty managed subset must
+    # be a true no-op: importing an empty plist can fail on macOS when the
+    # domain has not been materialized, even though there is nothing to reset.
+    present, _saved = _snapshot_values(snapshot)
+    if not present:
+        return snapshot
     cleared = dict(current)
     for key in snapshot.keys:
         cleared.pop(key, None)

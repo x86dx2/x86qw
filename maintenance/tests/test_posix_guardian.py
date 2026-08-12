@@ -18,6 +18,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @unittest.skipIf(os.name == "nt", "o Windows usa Job Object com CREATE_SUSPENDED")
 class PosixGuardianTests(unittest.TestCase):
+    @staticmethod
+    def shell_fixture(path: Path, body: str) -> None:
+        path.write_text(f"#!/bin/sh\nset -eu\n{body}", encoding="utf-8")
+        path.chmod(0o700)
+
     def guardian(self):
         name = "x86qw_runtime.supervisor.posix_guardian"
         self.assertIsNotNone(
@@ -29,8 +34,9 @@ class PosixGuardianTests(unittest.TestCase):
     def wait_for(self, predicate, *, timeout=5):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if predicate():
-                return
+            result = predicate()
+            if result:
+                return result
             time.sleep(0.02)
         self.fail("condição de processo não foi observada antes do timeout")
 
@@ -169,7 +175,7 @@ raise SystemExit(37)
             directory = Path(temporary)
             executable = directory / "service"
             marker = directory / "executed"
-            os.link(Path(sys.executable).resolve(), executable)
+            self.shell_fixture(executable, 'printf bad > "$1"\n')
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -178,8 +184,6 @@ raise SystemExit(37)
             handle = guardian.spawn_guardian(
                 (
                     str(executable),
-                    "-c",
-                    "from pathlib import Path; Path(__import__('sys').argv[1]).write_text('bad')",
                     str(marker),
                 ),
                 launch_target=target,
@@ -207,7 +211,7 @@ raise SystemExit(37)
             directory = Path(temporary)
             executable = directory / "service"
             marker = directory / "executed"
-            os.link(Path(sys.executable).resolve(), executable)
+            self.shell_fixture(executable, 'printf ok > "$1"\n')
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -216,8 +220,6 @@ raise SystemExit(37)
             handle = guardian.spawn_guardian(
                 (
                     str(executable),
-                    "-c",
-                    "from pathlib import Path; Path(__import__('sys').argv[1]).write_text('ok')",
                     str(marker),
                 ),
                 launch_target=target,
@@ -238,7 +240,11 @@ raise SystemExit(37)
             directory = Path(temporary)
             executable = directory / "client"
             result = directory / "result.json"
-            os.link(Path(sys.executable).resolve(), executable)
+            self.shell_fixture(
+                executable,
+                "printf '{\"argv\":[\"%s\",\"%s\"],\"cwd\":\"%s\",\"env\":\"%s\"}\\n' "
+                '"$2" "$3" "$(pwd -P)" "$X86QW_QUIET_CONTRACT" > "$1"\n',
+            )
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -246,20 +252,6 @@ raise SystemExit(37)
             )
             environment = dict(os.environ)
             environment["X86QW_QUIET_CONTRACT"] = "preservado"
-            code = """
-import json
-import os
-import sys
-from pathlib import Path
-
-Path(sys.argv[1]).write_text(json.dumps({
-    "argv": sys.argv[2:],
-    "cwd": os.getcwd(),
-    "env": os.environ["X86QW_QUIET_CONTRACT"],
-}), encoding="utf-8")
-print("stdout deve ser descartado")
-print("stderr deve ser descartado", file=sys.stderr)
-"""
             with mock.patch.object(
                 guardian.subprocess,
                 "Popen",
@@ -268,8 +260,6 @@ print("stderr deve ser descartado", file=sys.stderr)
                 handle = guardian.spawn_guardian(
                     (
                         str(executable),
-                        "-c",
-                        code,
                         str(result),
                         "argumento com espaço",
                         "unicøde",
@@ -322,11 +312,14 @@ time.sleep(60)
                 cwd=directory,
             )
             ack = handle.release(timeout=5)
-            self.wait_for(
-                lambda: child_pid_path.is_file()
-                and child_pid_path.read_text(encoding="ascii").strip().isdigit()
-            )
-            child_pid = int(child_pid_path.read_text(encoding="ascii"))
+            def read_child_pid():
+                try:
+                    value = child_pid_path.read_text(encoding="ascii").strip()
+                except (OSError, UnicodeDecodeError):
+                    return None
+                return int(value) if value.isdigit() else None
+
+            child_pid = self.wait_for(read_child_pid)
 
             self.assertEqual(handle.pid, os.getpgid(handle.pid))
             self.assertEqual(handle.pid, os.getpgid(ack.pid))
@@ -381,11 +374,14 @@ while not Path(sys.argv[4]).exists():
                 cwd=directory,
             )
             handle.release(timeout=5)
-            self.wait_for(
-                lambda: child_pid_path.is_file()
-                and bool(child_pid_path.read_text(encoding="ascii").strip())
-            )
-            child_pid = int(child_pid_path.read_text(encoding="ascii"))
+            def read_child_pid():
+                try:
+                    value = child_pid_path.read_text(encoding="ascii").strip()
+                except (OSError, UnicodeDecodeError):
+                    return None
+                return int(value) if value.isdigit() else None
+
+            child_pid = self.wait_for(read_child_pid)
             self.assertEqual(0, handle.wait(timeout=5))
             self.assertTrue(self.process_exists(child_pid))
 

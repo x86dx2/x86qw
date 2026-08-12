@@ -34,6 +34,7 @@ from x86qw_runtime.io.downloader import (
     download,
     validate_https_url,
 )
+from x86qw_runtime.versioning import VersionError, parse_semver
 
 
 DEFAULT_API = "https://api.github.com"
@@ -42,7 +43,6 @@ DEADLINE_SECONDS = 30.0
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-VERSION_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 ASSET_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 # Native evidence is an optional compatibility artifact in this Mac-only
 # checkout; it is not part of the public asset set or the release contract.
@@ -73,8 +73,10 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
 def _validate_identity(repository: str, version: str, commit: str) -> None:
     if REPOSITORY_RE.fullmatch(repository) is None:
         raise PublishedReleaseError("repositório GitHub inválido")
-    if VERSION_RE.fullmatch(version) is None:
-        raise PublishedReleaseError("versão pública inválida")
+    try:
+        parse_semver(version)
+    except (TypeError, VersionError) as error:
+        raise PublishedReleaseError("versão pública inválida") from error
     if HEX40.fullmatch(commit) is None:
         raise PublishedReleaseError("commit público inválido")
 
@@ -216,11 +218,12 @@ def _load_release(
     *,
     tag: str,
     expected_assets: Mapping[str, Mapping[str, object]],
+    expected_prerelease: bool,
 ) -> None:
     if (
         release.get("tag_name") != tag
         or release.get("draft") is not False
-        or release.get("prerelease") is not False
+        or release.get("prerelease") is not expected_prerelease
     ):
         raise PublishedReleaseError("release pública é draft, prerelease ou usa tag divergente")
     raw_assets = release.get("assets")
@@ -333,7 +336,12 @@ def classify_published_release(
     if ref is None or release is None:
         raise PublishedReleaseError("estado público assimétrico: tag ou release ausente")
     _load_ref(ref, expected_ref=f"refs/tags/{tag}", commit=commit)
-    _load_release(release, tag=tag, expected_assets=expected_assets)
+    _load_release(
+        release,
+        tag=tag,
+        expected_assets=expected_assets,
+        expected_prerelease=parse_semver(version).is_prerelease,
+    )
     return "exact"
 
 

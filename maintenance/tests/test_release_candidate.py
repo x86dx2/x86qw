@@ -62,6 +62,11 @@ class ReleaseCandidateTests(unittest.TestCase):
             }
         raise AssertionError(f"fixture de plataforma inesperada: {platform}")
 
+    def _native_hardware(self, platform: str) -> dict[str, str] | None:
+        if platform == "macOS-ARM64":
+            return {"chip": "Apple M3 Pro", "model": "Mac15,6"}
+        return None
+
     def _native_cases(self) -> list[dict[str, object]]:
         payload = b"native evidence fixture\n"
         digest = hashlib.sha256(payload).hexdigest()
@@ -107,6 +112,25 @@ class ReleaseCandidateTests(unittest.TestCase):
             artifact_path = candidate.parent / artifact["path"]
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
             artifact_path.write_bytes(b"native evidence fixture\n")
+        platforms: dict[str, dict[str, object]] = {}
+        for platform in sorted(REQUIRED_NATIVE_PLATFORMS):
+            report = {
+                "format": NATIVE_EVIDENCE_FORMAT,
+                "project": "x86qw",
+                "status": "complete",
+                "platform": platform,
+                "recorded_at": "2026-08-04T00:00:00Z",
+                "candidate": dict(identity),
+                "environment": self._native_environment(platform),
+                "runtime_executed": True,
+                "cases": cases,
+                "secrets": "redacted",
+                "signature": None,
+            }
+            hardware = self._native_hardware(platform)
+            if hardware is not None:
+                report["hardware"] = hardware
+            platforms[platform] = report
         evidence = {
             "format": 1,
             "project": "x86qw",
@@ -114,22 +138,7 @@ class ReleaseCandidateTests(unittest.TestCase):
             "commit": manifest["commit"],
             "status": "complete",
             "candidate": identity,
-            "platforms": {
-                platform: {
-                    "format": NATIVE_EVIDENCE_FORMAT,
-                    "project": "x86qw",
-                    "status": "complete",
-                    "platform": platform,
-                    "recorded_at": "2026-08-04T00:00:00Z",
-                    "candidate": dict(identity),
-                    "environment": self._native_environment(platform),
-                    "runtime_executed": True,
-                    "cases": cases,
-                    "secrets": "redacted",
-                    "signature": None,
-                }
-                for platform in sorted(REQUIRED_NATIVE_PLATFORMS)
-            },
+            "platforms": platforms,
             "signature": signature,
         }
         (candidate / "release-evidence.json").write_text(
@@ -137,6 +146,37 @@ class ReleaseCandidateTests(unittest.TestCase):
             encoding="utf-8",
         )
         return evidence
+
+    def test_prepare_requires_an_explicit_deterministic_timestamp(self):
+        module = self._candidate_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "build"
+            source.mkdir()
+            (source / "artifact.zip").write_bytes(b"candidate")
+            with self.assertRaises(module.CandidateError):
+                module.prepare_candidate(
+                    source=source,
+                    output=root / "candidate",
+                    version="1.0.0",
+                    commit="a" * 40,
+                )
+
+    def test_prepare_rejects_staged_public_tuf_metadata(self):
+        module = self._candidate_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "build/site/public/api/v1/trust/metadata"
+            source.mkdir(parents=True)
+            (source / "timestamp.json").write_text("stale metadata\n", encoding="utf-8")
+            with self.assertRaises(module.CandidateError):
+                module.prepare_candidate(
+                    source=root / "build",
+                    output=root / "candidate",
+                    version="1.0.0",
+                    commit="a" * 40,
+                    generated_at="2026-08-04T00:00:00Z",
+                )
 
     def test_prepare_writes_manifest_sbom_and_provenance_for_exact_inputs(self):
         module = self._candidate_module()
@@ -209,6 +249,27 @@ class ReleaseCandidateTests(unittest.TestCase):
                 module.promote_candidate(candidate, root / "promoted")
                 verify_evidence.assert_not_called()
             self.assertEqual(b"candidate", (root / "promoted" / "artifact.zip").read_bytes())
+
+    def test_rehearse_cli_copies_an_exact_candidate_without_signing(self):
+        module = self._candidate_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "build"
+            source.mkdir()
+            (source / "artifact.zip").write_bytes(b"candidate")
+            candidate = root / "candidate"
+            destination = root / "rehearsed"
+            module.prepare_candidate(
+                source=source,
+                output=candidate,
+                version="1.0.0-rc.1",
+                commit="e" * 40,
+                generated_at="2026-08-04T00:00:00Z",
+            )
+
+            self.assertEqual(0, module.main(["rehearse", str(candidate), str(destination)]))
+            module.verify_candidate(destination)
+            self.assertEqual(b"candidate", (destination / "artifact.zip").read_bytes())
 
     def test_workflow_shaped_candidate_binds_explicit_ownership_to_sbom(self):
         module = self._candidate_module()
@@ -716,11 +777,11 @@ class ReleaseCandidateTests(unittest.TestCase):
                 generated_at="2026-08-04T00:00:00Z",
             )
             evidence = self._write_complete_evidence(missing)
-            evidence["platforms"].pop("Windows-X64")
+            evidence["platforms"].pop("macOS-ARM64")
             (missing / "release-evidence.json").write_text(
                 json.dumps(evidence) + "\n", encoding="utf-8",
             )
-            with self.assertRaisesRegex(module.CandidateError, "plataformas nativas"):
+            with self.assertRaisesRegex(module.CandidateError, "plataformas"):
                 module.verify_candidate(missing)
             with self.assertRaises(module.CandidateError):
                 module.promote_candidate(
@@ -742,7 +803,7 @@ class ReleaseCandidateTests(unittest.TestCase):
             (extra / "release-evidence.json").write_text(
                 json.dumps(evidence) + "\n", encoding="utf-8",
             )
-            with self.assertRaisesRegex(module.CandidateError, "plataformas nativas"):
+            with self.assertRaisesRegex(module.CandidateError, "plataformas"):
                 module.verify_candidate(extra)
 
     def test_verify_requires_bound_candidate_identity_and_signature(self):
@@ -768,7 +829,7 @@ class ReleaseCandidateTests(unittest.TestCase):
                 )
                 evidence = self._write_complete_evidence(candidate)
                 evidence["candidate"][field] = value
-                evidence["platforms"]["Linux-X64"]["candidate"][field] = value
+                evidence["platforms"]["macOS-ARM64"]["candidate"][field] = value
                 (candidate / "release-evidence.json").write_text(
                     json.dumps(evidence) + "\n", encoding="utf-8",
                 )

@@ -28,6 +28,7 @@ from x86qw_runtime.io.paths import lexists
 
 _HASH_CHUNK_SIZE = 1024 * 1024
 MAX_MANAGED_FILE_SIZE = DEFAULT_ARCHIVE_LIMITS.max_member_size
+MAX_HASHABLE_FILE_SIZE = DEFAULT_ARCHIVE_LIMITS.max_source_size
 
 
 @dataclass(frozen=True)
@@ -56,19 +57,39 @@ class MaterializedArchive:
     root: Path
 
 
-def _bounded_hash_limit(expected_size: int | None) -> int:
+def _validate_hash_limit(maximum_size: int) -> int:
+    if (
+        type(maximum_size) is not int
+        or maximum_size < 1
+        or maximum_size > MAX_HASHABLE_FILE_SIZE
+    ):
+        raise ValueError("limite inválido para hashing gerenciado")
+    return maximum_size
+
+
+def _bounded_hash_limit(
+    expected_size: int | None,
+    *,
+    maximum_size: int = MAX_MANAGED_FILE_SIZE,
+) -> int:
+    maximum_size = _validate_hash_limit(maximum_size)
     if expected_size is None:
-        return MAX_MANAGED_FILE_SIZE
+        return maximum_size
     if (
         type(expected_size) is not int
-        or not 0 <= expected_size <= MAX_MANAGED_FILE_SIZE
+        or not 0 <= expected_size <= maximum_size
     ):
         raise ValueError("tamanho esperado inválido para hashing gerenciado")
     return expected_size
 
 
-def _assert_hashable_size(actual_size: int, expected_size: int | None) -> int:
-    limit = _bounded_hash_limit(expected_size)
+def _assert_hashable_size(
+    actual_size: int,
+    expected_size: int | None,
+    *,
+    maximum_size: int = MAX_MANAGED_FILE_SIZE,
+) -> int:
+    limit = _bounded_hash_limit(expected_size, maximum_size=maximum_size)
     if actual_size > limit:
         raise OSError(errno.EFBIG, "arquivo excede o limite de hashing gerenciado")
     if expected_size is not None and actual_size != expected_size:
@@ -76,15 +97,24 @@ def _assert_hashable_size(actual_size: int, expected_size: int | None) -> int:
     return limit
 
 
-def file_sha256(path: Path, *, expected_size: int | None = None) -> str:
-    """Hash one regular file without ever reading beyond its managed bound."""
+def file_sha256(
+    path: Path,
+    *,
+    expected_size: int | None = None,
+    maximum_size: int = MAX_MANAGED_FILE_SIZE,
+) -> str:
+    """Hash one regular file without ever reading beyond its explicit bound."""
 
     digest = hashlib.sha256()
     with path.open("rb") as source:
         metadata = os.fstat(source.fileno())
         if not stat.S_ISREG(metadata.st_mode):
             raise OSError(errno.EINVAL, "hashing exige arquivo regular")
-        limit = _assert_hashable_size(metadata.st_size, expected_size)
+        limit = _assert_hashable_size(
+            metadata.st_size,
+            expected_size,
+            maximum_size=maximum_size,
+        )
         total = 0
         while True:
             block = source.read(min(_HASH_CHUNK_SIZE, limit - total + 1))
@@ -99,11 +129,24 @@ def file_sha256(path: Path, *, expected_size: int | None = None) -> str:
     return digest.hexdigest()
 
 
-def file_matches_sha256(path: Path, expected_hash: str, expected_size: int) -> bool:
+def file_matches_sha256(
+    path: Path,
+    expected_hash: str,
+    expected_size: int,
+    *,
+    maximum_size: int = MAX_MANAGED_FILE_SIZE,
+) -> bool:
     """Return false, without an unbounded retry, for changed or unreadable files."""
 
     try:
-        return file_sha256(path, expected_size=expected_size) == expected_hash
+        return (
+            file_sha256(
+                path,
+                expected_size=expected_size,
+                maximum_size=maximum_size,
+            )
+            == expected_hash
+        )
     except (OSError, ValueError):
         return False
 
@@ -1129,6 +1172,114 @@ def unlink_identity_bound_regular(
             )
         if descriptor >= 0:
             os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+
+def unlink_identity_bound_node(
+    path: Path,
+    expected_identity: tuple[int, int, int],
+) -> bool:
+    """Unlink one non-directory node without following or replacing it."""
+
+    if (
+        not isinstance(expected_identity, tuple)
+        or len(expected_identity) != 3
+        or not all(type(value) is int and value >= 0 for value in expected_identity)
+        or expected_identity[2] == stat.S_IFDIR
+    ):
+        raise ValueError("expected_identity must describe one non-directory node")
+    path = Path(path)
+    windows_api = _get_windows_file_api()
+    if windows_api is not None:
+        try:
+            handle = windows_api.open_handle(
+                path,
+                access=windows_api.FILE_READ_ATTRIBUTES | windows_api.DELETE,
+                creation=windows_api.OPEN_EXISTING,
+                directory=False,
+            )
+        except (FileNotFoundError, OSError):
+            return False
+        try:
+            metadata = path.lstat()
+            actual = (
+                int(metadata.st_dev),
+                int(metadata.st_ino),
+                int(stat.S_IFMT(metadata.st_mode)),
+            )
+            if actual != expected_identity:
+                return False
+            windows_api.mark_delete(handle)
+            return True
+        except (FileNotFoundError, OSError):
+            return False
+        finally:
+            _close_windows_handle(windows_api, handle)
+
+    rename_api = _get_posix_rename_api()
+    if rename_api is None:
+        return False
+    parent_descriptor = -1
+    quarantine_name: str | None = None
+    quarantined_identity = expected_identity[:2]
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        metadata = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        actual = (
+            int(metadata.st_dev),
+            int(metadata.st_ino),
+            int(stat.S_IFMT(metadata.st_mode)),
+        )
+        if actual != expected_identity:
+            return False
+        for _ in range(128):
+            candidate = f".x86qw-unlink-{secrets.token_hex(12)}"
+            try:
+                rename_api.move_no_replace(
+                    parent_descriptor,
+                    path.name,
+                    parent_descriptor,
+                    candidate,
+                )
+            except FileExistsError:
+                continue
+            quarantine_name = candidate
+            break
+        if quarantine_name is None:
+            return False
+        moved = os.stat(
+            quarantine_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        quarantined_identity = _file_identity(moved)
+        moved_identity = (
+            int(moved.st_dev),
+            int(moved.st_ino),
+            int(stat.S_IFMT(moved.st_mode)),
+        )
+        if moved_identity != expected_identity:
+            return False
+        os.unlink(quarantine_name, dir_fd=parent_descriptor)
+        quarantine_name = None
+        os.fsync(parent_descriptor)
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+    finally:
+        if quarantine_name is not None and parent_descriptor >= 0:
+            _restore_posix_quarantine(
+                rename_api,
+                parent_descriptor,
+                quarantine_name,
+                path.name,
+                quarantined_identity,
+            )
         if parent_descriptor >= 0:
             os.close(parent_descriptor)
 
@@ -2293,6 +2444,7 @@ _cleanup_materialized_directory = cleanup_materialized_directory
 
 
 __all__ = (
+    "MAX_HASHABLE_FILE_SIZE",
     "MAX_MANAGED_FILE_SIZE",
     "MaterializedArchive",
     "MaterializedDirectory",
@@ -2310,4 +2462,5 @@ __all__ = (
     "remove_identity_bound_path",
     "remove_persistent_identity_bound_path",
     "unlink_sensitive_temporary",
+    "unlink_identity_bound_node",
 )

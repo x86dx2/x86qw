@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 sys.dont_write_bytecode = True
 
@@ -162,14 +162,16 @@ from x86qw_runtime.io.remote import (
     https_url_filename,
     validate_https_url,
 )
+from x86qw_runtime.installation_changes import (
+    InstallationChange,
+    ManagedInstallationFile,
+    inspect_installation_changes,
+    render_installation_gitignore,
+)
 from x86qw_runtime.trust import (
-    MAX_METADATA_BYTES as TRUST_METADATA_MAX_BYTES,
+    BoundedTufFetcher,
     TrustError,
-    TrustedVersions,
-    deserialize_trusted_versions,
-    serialize_trusted_versions,
-    verify_release_metadata,
-    verify_release_metadata_roles,
+    load_trusted_catalog,
 )
 from x86qw_runtime.catalogs import (
     load_capabilities,
@@ -186,20 +188,12 @@ CATALOG_URLS = (
     "https://raw.githubusercontent.com/x86dx2/x86qw/main/site/public/api/v1/catalog.json",
     "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
 )
+TRUST_METADATA_URL = "https://x86qw.x86.com.br/api/v1/trust/metadata/"
+TRUST_TARGET_URL = "https://x86qw.x86.com.br/api/v1/trust/targets/"
+TRUST_ROOT_MEMBER = "_x86qw/trust/root.json"
+TRUST_ROOT_MAX_BYTES = 512 * 1024
 CATALOG_TIMEOUT = 10.0
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
-TRUST_METADATA_DIR = Path("maintenance/inventory/trust")
-TRUST_STATE_RELATIVE = Path(".x86qw") / "trust" / "versions.json"
-TRUST_ROLE_NAMES = ("root", "current", "snapshot")
-TRUST_METADATA_URL_ENV = "X86_QW_TRUST_METADATA_URL"
-TRUST_METADATA_REQUIRED_ENV = "X86_QW_TRUST_METADATA_REQUIRED"
-TRUST_METADATA_REQUIRED_ALIASES = ("X86_QW_REQUIRE_TRUST_METADATA",)
-TRUST_REQUIRED_RELEASE = "1.0.0"
-TRUST_ROLE_URL_ENV = {
-    "root": ("X86_QW_TRUST_ROOT_URL", "X86_QW_TRUST_METADATA_ROOT_URL"),
-    "current": ("X86_QW_TRUST_CURRENT_URL", "X86_QW_TRUST_METADATA_CURRENT_URL"),
-    "snapshot": ("X86_QW_TRUST_SNAPSHOT_URL", "X86_QW_TRUST_METADATA_SNAPSHOT_URL"),
-}
 HUB_MAX_BYTES = 1024 * 1024
 PUBLIC_UNIX_BOOTSTRAP_COMMAND = (
     """/bin/bash -c 'umask 077; """
@@ -227,6 +221,8 @@ PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
 METADATA_DIR = ".x86qw"
 COMPONENT_METADATA_DIR = ".x86qw/components"
 EZQUAKE_METADATA_DIR = ".x86qw/clients/ezquake"
+PERSONAL_BASELINE_DIR = ".x86qw/personal"
+PERSONAL_BASELINE_COMPONENT = "personal"
 # Legacy aggregate receipt names kept only for one-way migration and uninstall.
 NQUAKE_RECEIPT = ".x86qw/nquake.receipt"
 NQUAKE_INVENTORY = ".x86qw/nquake.inventory"
@@ -275,6 +271,8 @@ INSTALL_STATE = ".x86qw/state.json"
 INSTALLATION_CAPABILITIES: frozenset[str] = frozenset()
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
+NATIVE_CANDIDATE_ROOT_ENV = "X86QW_NATIVE_CANDIDATE_ROOT"
+NATIVE_CANDIDATE_ARTIFACT_KEY = "_native_candidate_artifact"
 QW_PACKAGE_PRIORITY = (
     "ktx.pk3",
     "models.pk3",
@@ -290,7 +288,10 @@ QW_PACKAGE_PRIORITY = (
 MUTABLE_COMPONENT_DEFAULTS = {
     "clan-arena": ("prox/configs/config.cfg",),
 }
-LEGACY_COMPONENT_REPLACEMENTS = {"nquake-ktx": "ktx"}
+LEGACY_COMPONENT_REPLACEMENTS = {
+    "nquake-bootstrap": "x86qw-client-bootstrap",
+    "nquake-ktx": "ktx",
+}
 LEGACY_COMPONENT_REMOVALS = {
     "nquake-sounds": "sons de Clan Arena incorporados ao KTX",
 }
@@ -316,6 +317,28 @@ def read_zipapp_json(archive: Path, member: str, label: str) -> dict[str, object
     if not isinstance(value, dict):
         raise InstallerError(f"{label} inválido em {archive}")
     return value
+
+
+def trusted_root_bytes() -> bytes:
+    """Load only an embedded production root or an explicit development root."""
+
+    if ZIPAPP_PATH is not None:
+        try:
+            plan = scan_archive(ZIPAPP_PATH, required_members=(TRUST_ROOT_MEMBER,))
+            return read_archive_member(plan, TRUST_ROOT_MEMBER)
+        except (ArchiveError, OSError, KeyError) as error:
+            raise InstallerError("A root TUF de produção não está incorporada na CLI.") from error
+    configured = os.environ.get("X86_QW_TRUST_ROOT")
+    if not configured:
+        raise InstallerError(
+            "A root TUF de desenvolvimento não foi informada; catálogo remoto bloqueado."
+        )
+    try:
+        return read_bounded_regular_file(
+            Path(configured), maximum_size=TRUST_ROOT_MAX_BYTES,
+        )
+    except OSError as error:
+        raise InstallerError("A root TUF de desenvolvimento é inválida.") from error
 
 
 def application_version() -> str:
@@ -445,6 +468,20 @@ class LazyMapping(Mapping[str, object]):
 
 CAPABILITY_CATALOG = LazyMapping(lambda: load_launcher_contracts()[0])
 RUNTIME_CATALOG = LazyMapping(lambda: load_launcher_contracts()[1])
+
+
+def public_command_names() -> tuple[str, ...]:
+    """Return the public command contract from the bundled catalog."""
+
+    commands = load_launcher_contracts()[0].get("commands")
+    if (
+        not isinstance(commands, list)
+        or not commands
+        or any(not isinstance(command, str) or not command for command in commands)
+        or len(commands) != len(set(commands))
+    ):
+        raise InstallerError("Catálogo de capacidades sem uma lista de comandos pública válida.")
+    return tuple(commands)
 
 
 @lru_cache(maxsize=1)
@@ -822,8 +859,6 @@ class Installer:
         self.update_ui = False
         self.remote = RemoteClient(console)
         self._public_catalog: dict[str, object] | None = None
-        self._trusted_versions: TrustedVersions | None = None
-        self._pending_trusted_versions: TrustedVersions | None = None
         self._component_source_context: object | None = None
         self.component_source_provider = (
             component_source_provider or _development_component_source_provider
@@ -842,6 +877,7 @@ class Installer:
         self._components: dict[str, dict[str, object]] | None = None
         self._content_component_namespaces: set[str] | None = None
         self._runtime_launch_hashes: dict[Path, str] = {}
+        self._native_candidate_manifest_data: dict[str, object] | None = None
 
     @property
     def component_catalog(self) -> dict[str, object]:
@@ -1292,7 +1328,7 @@ class Installer:
         if (
             result.bytes_written != expected_size
             or destination.stat().st_size != expected_size
-            or file_hash(destination) != expected_sha256
+            or file_hash(destination, maximum_size=MAX_ARTIFACT_BYTES) != expected_sha256
         ):
             raise InstallerError(f"{label.capitalize()} falhou na verificação após a cópia.")
         return destination
@@ -1806,173 +1842,6 @@ class Installer:
             private_fs.ensure_private_directory(metadata)
         except OSError as error:
             raise InstallerError(f"metadata directory is not private: {metadata}") from error
-        pending = self._pending_trusted_versions
-        if pending is not None:
-            self._pending_trusted_versions = None
-            try:
-                self._write_trusted_versions_file(pending)
-            except Exception:
-                self._pending_trusted_versions = pending
-                raise
-
-    def _trust_metadata_required(self) -> bool:
-        # The legacy public line remains compatible with unsigned catalogs,
-        # but a 1.0+ CLI must never silently downgrade to mirror-only trust.
-        # An explicit false value cannot disable this release contract.
-        try:
-            required_by_release = parse_semver(application_version()) >= parse_semver(TRUST_REQUIRED_RELEASE)
-        except (TypeError, ValueError):
-            required_by_release = False
-        names = (TRUST_METADATA_REQUIRED_ENV, *TRUST_METADATA_REQUIRED_ALIASES)
-        values = [os.environ[name].strip().casefold() for name in names if name in os.environ]
-        if not values:
-            return required_by_release
-        if any(value not in {"", "0", "false", "no", "off", "1", "true", "yes", "on"} for value in values):
-            raise InstallerError(
-                "X86_QW_TRUST_METADATA_REQUIRED deve ser um booleano explícito."
-            )
-        normalized = {
-            value in {"1", "true", "yes", "on"}
-            for value in values
-            if value != ""
-        }
-        if len(normalized) > 1:
-            raise InstallerError(
-                "As variáveis de obrigatoriedade de metadados de confiança divergem."
-            )
-        return required_by_release or bool(normalized and next(iter(normalized)))
-
-    def _trust_metadata_urls(self) -> dict[str, str] | None:
-        role_values: dict[str, str] = {}
-        role_configured = False
-        for role, names in TRUST_ROLE_URL_ENV.items():
-            values = [os.environ[name].strip() for name in names if name in os.environ]
-            if values:
-                role_configured = True
-                if any(not value for value in values) or len(set(values)) != 1:
-                    raise InstallerError(f"URL de metadados de confiança ambígua: {role}")
-                role_values[role] = values[0]
-        if role_configured:
-            if set(role_values) != set(TRUST_ROLE_NAMES):
-                raise InstallerError(
-                    "As URLs de confiança devem informar root, current e snapshot."
-                )
-            return role_values
-        if TRUST_METADATA_URL_ENV in os.environ:
-            base = os.environ[TRUST_METADATA_URL_ENV].strip()
-            if not base:
-                raise InstallerError("X86_QW_TRUST_METADATA_URL não pode ser vazio.")
-            prefix = base.rstrip("/")
-            return {role: f"{prefix}/{role}.json" for role in TRUST_ROLE_NAMES}
-        return None
-
-    def _local_trust_metadata_paths(self) -> dict[str, Path] | None:
-        paths = {
-            role: self.project_root / TRUST_METADATA_DIR / f"{role}.json"
-            for role in TRUST_ROLE_NAMES
-        }
-        present = [lexists(path) for path in paths.values()]
-        if not any(present):
-            return None
-        if not all(present):
-            raise InstallerError(
-                "O pacote local contém metadados de confiança incompletos."
-            )
-        for role, path in paths.items():
-            ensure_no_symlink(path, f"metadata de confiança {role}")
-        return paths
-
-    def _trusted_state_path(self) -> Path:
-        return self.target / TRUST_STATE_RELATIVE
-
-    def _trusted_state_present(self) -> bool:
-        return lexists(self._trusted_state_path())
-
-    def _load_trusted_versions(self) -> TrustedVersions:
-        path = self._trusted_state_path()
-        if not lexists(path):
-            return TrustedVersions()
-        ensure_no_symlink(self.target / METADATA_DIR, "metadata directory")
-        ensure_no_symlink(self.target / METADATA_DIR / "trust", "trust metadata directory")
-        try:
-            payload = read_bounded_regular_file(
-                path,
-                maximum_size=TRUST_METADATA_MAX_BYTES,
-            )
-            private_fs.validate_private_file(path)
-            return deserialize_trusted_versions(payload)
-        except (MetadataFileError, OSError, TrustError, ValueError) as error:
-            raise InstallerError(
-                f"O estado persistido de confiança é inválido: {path}"
-            ) from error
-
-    def _write_trusted_versions_file(self, versions: TrustedVersions) -> None:
-        metadata = self.target / METADATA_DIR
-        trust_directory = metadata / "trust"
-        ensure_no_symlink(metadata, "metadata directory")
-        ensure_no_symlink(trust_directory, "trust metadata directory")
-        if lexists(trust_directory) and not trust_directory.is_dir():
-            raise InstallerError(f"trust metadata path is not a directory: {trust_directory}")
-        try:
-            private_fs.ensure_private_directory(trust_directory)
-            payload = serialize_trusted_versions(versions)
-            atomic_write_bytes(trust_directory / "versions.json", payload, mode=0o600)
-        except (OSError, TrustError, ValueError) as error:
-            raise InstallerError(
-                f"Não foi possível persistir o estado de confiança: {trust_directory / 'versions.json'}"
-            ) from error
-
-    def _persist_trusted_versions(self, versions: TrustedVersions) -> None:
-        self._trusted_versions = versions
-        if not lexists(self.target):
-            self._pending_trusted_versions = versions
-            return
-        if self.target.is_symlink() or not self.target.is_dir():
-            raise InstallerError(f"O destino não é um diretório seguro: {self.target}")
-        self.ensure_metadata_directory()
-        self._write_trusted_versions_file(versions)
-
-    def _verify_catalog_trust(
-        self,
-        catalog_payload: bytes,
-        roles: Mapping[str, bytes],
-        *,
-        trusted: TrustedVersions | None = None,
-    ) -> None:
-        try:
-            trusted = self._load_trusted_versions() if trusted is None else trusted
-            verified = verify_release_metadata(
-                roles["root"],
-                roles["current"],
-                roles["snapshot"],
-                catalog_payload,
-                now=trust_now(),
-                trusted=trusted,
-            )
-        except (TrustError, KeyError, TypeError) as error:
-            raise InstallerError(
-                f"Metadados de confiança recusaram o catálogo; operação interrompida ({error})."
-            ) from error
-        self._persist_trusted_versions(verified.versions)
-
-    def _preflight_catalog_trust(self, roles: Mapping[str, bytes]) -> TrustedVersions:
-        """Verify role signatures/freshness before requesting a catalog."""
-
-        trusted = self._load_trusted_versions()
-        try:
-            verify_release_metadata_roles(
-                roles["root"],
-                roles["current"],
-                roles["snapshot"],
-                now=trust_now(),
-                trusted=trusted,
-            )
-        except (TrustError, KeyError, TypeError) as error:
-            raise InstallerError(
-                f"Metadados de confiança recusaram o catálogo; operação interrompida ({error})."
-            ) from error
-        return trusted
-
 
     def select_platform(self, requested: str | None = None) -> PlatformSpec:
         host = host_platform.system() or "desconhecido"
@@ -2192,6 +2061,41 @@ class Installer:
         architecture: str,
     ) -> list[ReleaseRecord]:
         assert self.spec is not None
+        native_root = self._native_candidate_root()
+        if native_root is not None:
+            if component != "ezquake":
+                raise InstallerError(f"O candidato nativo não declara o runtime {component}.")
+            prefix = f"runtime/clients/ezquake/{channel}/"
+            records: list[ReleaseRecord] = []
+            artifacts = self._native_candidate_manifest()["artifacts"]
+            assert isinstance(artifacts, dict)
+            for raw_name in artifacts:
+                if not isinstance(raw_name, str) or not raw_name.startswith(prefix):
+                    continue
+                parts = PurePosixPath(raw_name).parts
+                if len(parts) != 7 or parts[5] != "macos-universal":
+                    continue
+                version, filename = parts[4], parts[6]
+                if not version_pattern.fullmatch(version) or filename != expected_filename(version):
+                    continue
+                _, _, digest = self._native_candidate_artifact(raw_name)
+                records.append((version, (f"https://candidate.invalid/{filename}",), digest))
+            if not records:
+                raise InstallerError(
+                    f"Nenhuma versão {channel} de {component} foi encontrada no candidato nativo."
+                )
+            if len(records) != len({record[0] for record in records}):
+                raise InstallerError(f"O candidato nativo contém versões duplicadas de {component}.")
+            if channel == "nightly":
+                records.sort(key=lambda record: record[0], reverse=True)
+            else:
+                records.sort(
+                    key=lambda record: tuple(
+                        int(part) for part in record[0].removeprefix("v").split(".")
+                    ),
+                    reverse=True,
+                )
+            return records
         catalog = self.public_catalog("Consultando o catálogo oficial x86QW...")
         packages = catalog["packages"]
 
@@ -2315,6 +2219,15 @@ class Installer:
                 raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
             self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
             self.app_expected_size = int(selected_packages[0]["size"])
+        elif self._native_candidate_root() is not None:
+            _, _, size, _ = self._native_candidate_matching(
+                lambda name: name == (
+                    f"runtime/clients/ezquake/{self.channel}/{self.selected_version}/"
+                    f"macos-universal/{self.app_archive_name}"
+                ),
+                "runtime ezQuake nativo",
+            )
+            self.app_expected_size = size
         console.detail(f"Artefato: {safe_url_for_log(self.app_url)}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
@@ -2346,7 +2259,7 @@ class Installer:
         archive = self.cache_bin / cache_name
         ensure_no_symlink(archive, "cached archive")
         if archive.is_file():
-            if file_hash(archive) != self.app_expected_checksum:
+            if file_hash(archive, maximum_size=MAX_ARTIFACT_BYTES) != self.app_expected_checksum:
                 raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
             if self.update_ui:
                 console.download_result(
@@ -2356,6 +2269,24 @@ class Installer:
                 console.info(f"Usando arquivo já disponível no cache: {self.app_archive_name}")
                 console.success("Arquivo do cache validado.")
         else:
+            if self._native_candidate_root() is not None:
+                _, source, expected_size, expected_sha256 = self._native_candidate_matching(
+                    lambda name: name == (
+                        f"runtime/clients/ezquake/{self.channel}/{self.selected_version}/"
+                        f"macos-universal/{self.app_archive_name}"
+                    ),
+                    "runtime ezQuake nativo",
+                )
+                self.publish_cache_artifact(
+                    source,
+                    archive,
+                    expected_size=expected_size,
+                    expected_sha256=expected_sha256,
+                    label="o artefato ezQuake do candidato",
+                )
+                self.app_archive_sha256 = file_hash(archive)
+                console.success(f"Artefato candidato validado: {self.app_archive_name}")
+                return archive
             local = self.distribution_artifact(
                 self.app_distribution_path, self.app_archive_name,
                 expected_size=self.app_expected_size or None, expected_sha256=self.app_expected_checksum,
@@ -2374,7 +2305,9 @@ class Installer:
                     )
                 else:
                     console.success(f"Artefato carregado da distribuição local: {self.app_distribution_path}")
-                self.app_archive_sha256 = file_hash(archive)
+                self.app_archive_sha256 = file_hash(
+                    archive, maximum_size=MAX_ARTIFACT_BYTES,
+                )
                 return archive
             download = self.stage / f"{self.app_archive_name}.download"
             if not self.update_ui:
@@ -2386,7 +2319,7 @@ class Installer:
                 expected_sha256=self.app_expected_checksum,
                 maximum_size=MAX_ARTIFACT_BYTES,
             )
-            if file_hash(download) != self.app_expected_checksum:
+            if file_hash(download, maximum_size=MAX_ARTIFACT_BYTES) != self.app_expected_checksum:
                 raise InstallerError(
                     "O arquivo baixado falhou na verificação: "
                     f"{safe_url_for_log(self.app_url)}"
@@ -2404,7 +2337,9 @@ class Installer:
                 )
             else:
                 console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
-        self.app_archive_sha256 = file_hash(archive)
+        self.app_archive_sha256 = file_hash(
+            archive, maximum_size=MAX_ARTIFACT_BYTES,
+        )
         console.detail(f"SHA-256 local: {self.app_archive_sha256}")
         return archive
 
@@ -2838,12 +2773,35 @@ class Installer:
             ) from durability_errors[0]
         return result
 
-    def validate_managed_path(self, value: str) -> None:
+    @staticmethod
+    def validate_safe_inventory_path(value: str) -> PurePosixPath:
         if not value or "\\" in value or ":" in value:
             raise InstallerError(f"unsafe path in managed inventory: {value}")
         path = PurePosixPath(value)
         if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
             raise InstallerError(f"unsafe path in managed inventory: {value}")
+        return path
+
+    def validate_personal_baseline_path(self, value: str) -> None:
+        path = self.validate_safe_inventory_path(value)
+        exact = {
+            "ezquake/configs/config.cfg",
+            "ezquake/configs/preset.cfg",
+            "qtv/qtv.cfg",
+            "qwfwd/qwfwd.cfg",
+        }
+        profile_roots = {"arena", "fortress", "prox", "qw", "td2"}
+        is_profile = (
+            len(path.parts) == 2
+            and path.parts[0] in profile_roots
+            and path.name.startswith("x86qw-")
+            and path.suffix in {".cfg", ".json"}
+        )
+        if value not in exact and not is_profile:
+            raise InstallerError(f"unexpected path in personal baseline: {value}")
+
+    def validate_managed_path(self, value: str) -> None:
+        path = self.validate_safe_inventory_path(value)
         if value in ("ezquake/configs/config.cfg", "ezquake/configs/preset.cfg"):
             raise InstallerError(f"personal configuration must not be managed: {value}")
         if path.parts[0] == "id1":
@@ -2869,7 +2827,12 @@ class Installer:
         _, entries = self._read_inventory(path)
         return entries
 
-    def _read_inventory(self, path: Path) -> tuple[bytes, list[tuple[str, str]]]:
+    def _read_inventory(
+        self,
+        path: Path,
+        *,
+        path_validator: Callable[[str], None] | None = None,
+    ) -> tuple[bytes, list[tuple[str, str]]]:
         try:
             payload = read_bounded_regular_file(
                 path, maximum_size=MAX_INVENTORY_BYTES,
@@ -2888,8 +2851,9 @@ class Installer:
                 message = f"Inventário gerenciado inválido: {path}"
             raise InstallerError(message) from error
         entries: list[tuple[str, str]] = []
+        validate_path = path_validator or self.validate_managed_path
         for entry in parsed:
-            self.validate_managed_path(entry.path)
+            validate_path(entry.path)
             entries.append((entry.path, entry.sha256))
         return payload, entries
 
@@ -2905,7 +2869,11 @@ class Installer:
         return entries
 
     def write_inventory_record(
-        self, destination: Path, entries: Iterable[tuple[str, str]],
+        self,
+        destination: Path,
+        entries: Iterable[tuple[str, str]],
+        *,
+        path_validator: Callable[[str], None] | None = None,
     ) -> None:
         try:
             atomic_write_bytes(
@@ -2916,7 +2884,7 @@ class Installer:
             )
         except AtomicWriteError as error:
             raise InstallerError(f"Inventário não pôde ser gravado: {destination}") from error
-        self.validate_inventory(destination)
+        self._read_inventory(destination, path_validator=path_validator)
 
     def component_metadata(self, component: str) -> tuple[str, str]:
         if not COMPONENT_VERSION.fullmatch(component):
@@ -2947,7 +2915,12 @@ class Installer:
         return tuple(self.metadata_path(metadata, path) for path in relative)  # type: ignore[return-value]
 
     def validate_component_paths(
-        self, component: str, receipt_path: Path, inventory_path: Path,
+        self,
+        component: str,
+        receipt_path: Path,
+        inventory_path: Path,
+        *,
+        path_validator: Callable[[str], None] | None = None,
     ) -> tuple[list[tuple[str, str]], dict[str, str]]:
         try:
             receipt = parse_component_receipt(
@@ -2970,7 +2943,9 @@ class Installer:
             else:
                 message = f"invalid recibo do componente {component}: {receipt_path}"
             raise InstallerError(message) from error
-        inventory_payload, entries = self._read_inventory(inventory_path)
+        inventory_payload, entries = self._read_inventory(
+            inventory_path, path_validator=path_validator,
+        )
         if hashlib.sha256(inventory_payload).hexdigest() != receipt["inventory_sha256"]:
             raise InstallerError(f"O inventário do componente {component} diverge do recibo.")
         return entries, receipt
@@ -3154,10 +3129,33 @@ class Installer:
     def commit_component_metadata(
         self, component: str, inventory: Path, receipt: Path,
     ) -> ComponentMetadataRollback:
+        metadata = self.target / METADATA_DIR
+        destination = self.metadata_path(
+            metadata, self.component_metadata(component)[0],
+        ).parent
+        return self._commit_metadata_pair(
+            component,
+            inventory,
+            receipt,
+            destination,
+            legacy_paths=self.component_pair_paths(
+                component, metadata, legacy=True,
+            ),
+        )
+
+    def _commit_metadata_pair(
+        self,
+        component: str,
+        inventory: Path,
+        receipt: Path,
+        destination: Path,
+        *,
+        legacy_paths: tuple[Path, ...] = (),
+        path_validator: Callable[[str], None] | None = None,
+    ) -> ComponentMetadataRollback:
         assert self.stage is not None
         self.ensure_metadata_directory()
         metadata = self.target / METADATA_DIR
-        destination = self.metadata_path(metadata, self.component_metadata(component)[0]).parent
         if lexists(destination) and (not destination.is_dir() or destination.is_symlink()):
             raise InstallerError(f"Diretório de metadados inválido para {component}: {destination}")
         prepared = Path(tempfile.mkdtemp(
@@ -3169,7 +3167,12 @@ class Installer:
         previous.rmdir()
         shutil.copy2(receipt, prepared / "receipt")
         shutil.copy2(inventory, prepared / "inventory")
-        self.validate_component_paths(component, prepared / "receipt", prepared / "inventory")
+        self.validate_component_paths(
+            component,
+            prepared / "receipt",
+            prepared / "inventory",
+            path_validator=path_validator,
+        )
         created_directories = self._create_private_directory_chain(
             destination.parent,
             root=metadata,
@@ -3189,9 +3192,7 @@ class Installer:
                 token.previous_identity = self._directory_identity(previous)
             prepared.replace(destination)
             token.installed_identity = self._directory_identity(destination)
-            for index, legacy in enumerate(
-                self.component_pair_paths(component, metadata, legacy=True), 1,
-            ):
+            for index, legacy in enumerate(legacy_paths, 1):
                 if lexists(legacy):
                     backup_root = Path(tempfile.mkdtemp(
                         prefix=f".{component}-legacy-{index}.", dir=self.stage,
@@ -3211,6 +3212,78 @@ class Installer:
             except BaseException as rollback_error:
                 raise InstallerError(f"Rollback dos metadados falhou; recuperação mantida em {self.stage}: {rollback_error}") from error
             raise InstallerError(f"Não foi possível registrar o componente {component}.") from error
+
+    def personal_baseline_paths(
+        self, metadata: Path | None = None,
+    ) -> tuple[Path, Path]:
+        root = metadata or self.target / METADATA_DIR
+        directory = self.metadata_path(root, PERSONAL_BASELINE_DIR)
+        return directory / "receipt", directory / "inventory"
+
+    def validate_personal_baseline(
+        self, metadata: Path | None = None,
+    ) -> tuple[bool, list[tuple[str, str]]]:
+        receipt, inventory = self.personal_baseline_paths(metadata)
+        present = (lexists(receipt), lexists(inventory))
+        if not any(present):
+            return False, []
+        if not all(present):
+            raise InstallerError("Baseline pessoal incompleto.")
+        entries, _ = self.validate_component_paths(
+            PERSONAL_BASELINE_COMPONENT,
+            receipt,
+            inventory,
+            path_validator=self.validate_personal_baseline_path,
+        )
+        return True, entries
+
+    def _personal_baseline_observation(
+        self,
+    ) -> tuple[tuple[str, tuple[object, ...]], ...]:
+        return tuple(
+            (str(path), self._mutation_path_observation(path))
+            for path in self.personal_baseline_paths()
+        )
+
+    def _stage_personal_baseline_entry(
+        self, destination: Path, digest: str,
+    ) -> tuple[Path, Path]:
+        assert self.stage is not None
+        relative = destination.relative_to(self.target).as_posix()
+        self.validate_personal_baseline_path(relative)
+        present, existing = self.validate_personal_baseline()
+        entries = dict(existing) if present else {}
+        entries[relative] = digest
+        staged = private_fs.private_mkdtemp(
+            directory=self.stage, prefix=".personal-baseline-next.",
+        )
+        inventory = staged / "inventory"
+        receipt = staged / "receipt"
+        self.write_inventory_record(
+            inventory,
+            sorted(entries.items()),
+            path_validator=self.validate_personal_baseline_path,
+        )
+        self.write_component_receipt(
+            PERSONAL_BASELINE_COMPONENT,
+            "1",
+            "x86QW personal defaults",
+            inventory,
+            receipt,
+        )
+        return receipt, inventory
+
+    def _commit_personal_baseline(
+        self, receipt: Path, inventory: Path,
+    ) -> ComponentMetadataRollback:
+        destination = self.personal_baseline_paths()[0].parent
+        return self._commit_metadata_pair(
+            PERSONAL_BASELINE_COMPONENT,
+            inventory,
+            receipt,
+            destination,
+            path_validator=self.validate_personal_baseline_path,
+        )
 
     @staticmethod
     def _mutation_path_observation(path: Path) -> tuple[object, ...]:
@@ -4362,8 +4435,157 @@ class Installer:
                 print(f"    novidades: {safe_url_for_log(package['release_url'])}")
         return selected
 
+    def select_components_profile(self, profile: str) -> list[str]:
+        if profile not in {"recommended", "essential", "complete"}:
+            raise InstallerError(f"Perfil nativo inválido: {profile}")
+        try:
+            selected = resolve_dependencies(
+                self.component_catalog,
+                list(self.component_catalog["profiles"][profile]),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise InstallerError(f"Perfil nativo inválido: {profile}") from error
+        self.selected_component_profile = profile
+        self.requested_components = []
+        console.success(f"{len(selected)} componente(s) selecionado(s).")
+        print("\nVersões que serão instaladas ou atualizadas:")
+        for identifier in selected:
+            package = self.component_package_record(identifier)
+            print(f"  - {self.components[identifier]['label']}: {package['version']}")
+            if package.get("release_url"):
+                print(f"    novidades: {safe_url_for_log(package['release_url'])}")
+        return selected
+
+    def _native_candidate_root(self) -> Path | None:
+        value = os.environ.get(NATIVE_CANDIDATE_ROOT_ENV)
+        if value is None:
+            return None
+        root = Path(value).absolute()
+        if root.is_symlink() or not root.is_dir():
+            raise InstallerError("O candidato nativo é ausente ou inseguro.")
+        return root
+
+    def _native_candidate_manifest(self) -> dict[str, object]:
+        if self._native_candidate_manifest_data is not None:
+            return self._native_candidate_manifest_data
+        root = self._native_candidate_root()
+        if root is None:
+            raise InstallerError("O candidato nativo não foi informado.")
+        path = root / "candidate.json"
+        try:
+            document = json.loads(
+                read_bounded_regular_file(path, maximum_size=CATALOG_MAX_BYTES),
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+            raise InstallerError("O manifest do candidato nativo é inválido.") from error
+        if (
+            not isinstance(document, dict)
+            or document.get("project") != "x86qw"
+            or not isinstance(document.get("artifacts"), dict)
+        ):
+            raise InstallerError("O manifest do candidato nativo é inválido.")
+        self._native_candidate_manifest_data = document
+        return document
+
+    def _native_candidate_artifact(self, relative: str) -> tuple[Path, int, str]:
+        root = self._native_candidate_root()
+        if root is None:
+            raise InstallerError("O candidato nativo não foi informado.")
+        relative_path = PurePosixPath(relative)
+        if (
+            relative_path.is_absolute()
+            or "\\" in relative
+            or any(part in {"", ".", ".."} for part in relative_path.parts)
+        ):
+            raise InstallerError("O caminho do artifact nativo é inseguro.")
+        artifacts = self._native_candidate_manifest()["artifacts"]
+        identity = artifacts.get(relative) if isinstance(artifacts, dict) else None
+        if (
+            not isinstance(identity, dict)
+            or type(identity.get("size")) is not int
+            or identity["size"] <= 0
+            or not isinstance(identity.get("sha256"), str)
+            or HEX64.fullmatch(identity["sha256"]) is None
+        ):
+            raise InstallerError(f"Identidade ausente do artifact nativo: {relative}")
+        path = root.joinpath(*relative_path.parts)
+        current = path
+        while current != root:
+            if current.is_symlink():
+                raise InstallerError(f"Artifact nativo usa symlink: {relative}")
+            current = current.parent
+        if not path.is_file() or path.is_symlink():
+            raise InstallerError(f"Artifact nativo ausente: {relative}")
+        expected_size = int(identity["size"])
+        expected_sha256 = str(identity["sha256"])
+        if (
+            path.stat().st_size != expected_size
+            or file_hash(
+                path,
+                expected_size=expected_size,
+                maximum_size=MAX_ARTIFACT_BYTES,
+            ) != expected_sha256
+        ):
+            raise InstallerError(f"Bytes do artifact nativo divergem: {relative}")
+        return path, expected_size, expected_sha256
+
+    def _native_candidate_matching(
+        self, predicate: Callable[[str], bool], label: str,
+    ) -> tuple[str, Path, int, str]:
+        artifacts = self._native_candidate_manifest()["artifacts"]
+        assert isinstance(artifacts, dict)
+        matches = [str(name) for name in artifacts if isinstance(name, str) and predicate(name)]
+        if len(matches) != 1:
+            raise InstallerError(
+                f"Artifact nativo ausente ou ambíguo ({label}): {len(matches)} encontrados."
+            )
+        path, size, digest = self._native_candidate_artifact(matches[0])
+        return matches[0], path, size, digest
+
+    def _native_component_package(self, identifier: str) -> dict[str, object]:
+        manifest_name, manifest_path, _, _ = self._native_candidate_matching(
+            lambda name: (
+                name.startswith("content/components-") and name.endswith("/manifest.json")
+            ),
+            "manifesto de componentes",
+        )
+        try:
+            manifest = json.loads(
+                read_bounded_regular_file(manifest_path, maximum_size=CATALOG_MAX_BYTES),
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+            raise InstallerError(f"Manifesto de componentes nativo inválido: {manifest_name}") from error
+        packages = manifest.get("packages") if isinstance(manifest, dict) else None
+        if not isinstance(packages, list):
+            raise InstallerError("Manifesto de componentes nativo sem packages.")
+        matches = [
+            package for package in packages
+            if isinstance(package, dict)
+            and package.get("package") == identifier
+            and package.get("channel") == "content"
+            and package.get("platform") == "any"
+            and package.get("architecture") == "any"
+        ]
+        if len(matches) != 1:
+            raise InstallerError(
+                f"O candidato nativo deve publicar exatamente um pacote para {identifier}."
+            )
+        package = dict(matches[0])
+        filename = package.get("filename")
+        if not isinstance(filename, str):
+            raise InstallerError(f"Nome ausente do pacote nativo {identifier}.")
+        relative = PurePosixPath(manifest_name).parent / filename
+        package[NATIVE_CANDIDATE_ARTIFACT_KEY] = relative.as_posix()
+        self._native_candidate_artifact(package[NATIVE_CANDIDATE_ARTIFACT_KEY])
+        return package
+
     def component_package_record(self, identifier: str) -> dict[str, object]:
-        catalog = self.public_catalog("Consultando o catálogo atual de componentes x86QW...")
+        native_root = self._native_candidate_root()
+        catalog = (
+            {"packages": [self._native_component_package(identifier)]}
+            if native_root is not None
+            else self.public_catalog("Consultando o catálogo atual de componentes x86QW...")
+        )
         packages = catalog["packages"]
         matches = [package for package in packages if isinstance(package, dict) and (
             package.get("package"), package.get("channel"),
@@ -4408,6 +4630,37 @@ class Installer:
         return package
 
     def core_id1_package_record(self) -> dict[str, object]:
+        native_root = self._native_candidate_root()
+        if native_root is not None:
+            name, artifact, size, digest = self._native_candidate_matching(
+                lambda value: (
+                    value.startswith("content/core-")
+                    and value.endswith("/x86qw-core-id1-0.1.0.zip")
+                ),
+                "pacote de dados base",
+            )
+            try:
+                plan = scan_archive(artifact, required_members=("_x86qw/component.json",))
+                metadata = json.loads(read_archive_member(plan, "_x86qw/component.json"))
+            except (ArchiveError, OSError, KeyError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+                raise InstallerError(f"Metadados inválidos do pacote de dados base nativo: {name}") from error
+            if not isinstance(metadata, dict):
+                raise InstallerError("Metadados inválidos do pacote de dados base nativo.")
+            return {
+                "component": "core",
+                "package": CORE_ID1_PACKAGE,
+                "channel": "content",
+                "platform": "any",
+                "architecture": "any",
+                "version": metadata.get("version"),
+                "filename": Path(name).name,
+                "source_revision": metadata.get("source_revision"),
+                "sha256": digest,
+                "size": size,
+                "urls": [f"https://candidate.invalid/{Path(name).name}"],
+                "redistribution_reviewed": True,
+                NATIVE_CANDIDATE_ARTIFACT_KEY: name,
+            }
         catalog = self.public_catalog("Consultando o pacote de dados base x86QW...")
         matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
             package.get("component"), package.get("package"), package.get("channel"),
@@ -4495,6 +4748,9 @@ class Installer:
         self, receipt: Path, metadata: dict[str, object],
     ) -> None:
         try:
+            metadata = add_contract_versions(
+                dict(metadata), ContractVersions(), kind=SchemaKind.RECEIPT,
+            )
             model = parse_cli_receipt(
                 json.dumps(metadata, ensure_ascii=False).encode("utf-8")
             )
@@ -4659,130 +4915,43 @@ class Installer:
             local_catalog = self.project_root / PUBLIC_CATALOG
             catalog_payload: bytes | None = None
             catalog_status = "Loaded"
-            trust_required = self._trust_metadata_required()
-            trust_urls = self._trust_metadata_urls()
-            state_present = self._trusted_state_present()
-            if state_present:
-                # A previously established trust state cannot silently fall
-                # back to an unauthenticated catalog when role metadata is
-                # temporarily unavailable.
-                self._load_trusted_versions()
             try:
                 if catalog_url:
-                    if (trust_required or state_present) and trust_urls is None:
-                        raise InstallerError(
-                            "Metadados de confiança são obrigatórios, mas nenhuma URL foi configurada."
-                        )
-                    roles = (
-                        self.remote.get_metadata_roles(
-                            trust_urls,
-                            maximum_size=TRUST_METADATA_MAX_BYTES,
-                            timeout=CATALOG_TIMEOUT,
-                            attempts=2,
-                        )
-                        if trust_urls is not None else None
+                    raise InstallerError(
+                        "X86_QW_CATALOG_URL não é autorizado a contornar a cadeia TUF."
                     )
-                    trusted = None
-                    if roles is not None:
-                        trusted = self._preflight_catalog_trust(roles)
-                    catalog_payload = self.remote.get(
-                        catalog_url,
-                        maximum_size=CATALOG_MAX_BYTES,
-                        timeout=CATALOG_TIMEOUT,
-                        attempts=2,
-                    )
-                    if roles is not None:
-                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
-                    catalog_status = "Baixado"
-                    console.detail(f"Catálogo remoto explícito: {safe_url_for_log(catalog_url)}")
-                elif not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
-                    local_roles = self._local_trust_metadata_paths()
-                    if local_roles is not None:
-                        roles = {
-                            role: read_bounded_regular_file(
-                                path,
-                                maximum_size=TRUST_METADATA_MAX_BYTES,
-                            )
-                            for role, path in local_roles.items()
-                        }
-                    elif trust_urls is not None:
-                        roles = self.remote.get_metadata_roles(
-                            trust_urls,
-                            maximum_size=TRUST_METADATA_MAX_BYTES,
-                            timeout=CATALOG_TIMEOUT,
-                            attempts=2,
-                        )
-                    else:
-                        roles = None
-                    trusted = None
-                    if roles is None and (trust_required or state_present):
-                        raise InstallerError(
-                            "Metadados de confiança são obrigatórios para este catálogo local."
-                        )
-                    if roles is not None:
-                        trusted = self._preflight_catalog_trust(roles)
-                    catalog_payload = read_bounded_regular_file(
-                        local_catalog,
-                        maximum_size=CATALOG_MAX_BYTES,
-                    )
-                    if roles is not None:
-                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
+                if not self.online_only and local_catalog.is_file() and not local_catalog.is_symlink():
+                    catalog_payload = local_catalog.read_bytes()
+                    catalog = json.loads(catalog_payload)
                     console.detail(f"Catálogo da distribuição local: {local_catalog}")
                 else:
-                    if trust_required and trust_urls is None:
-                        raise InstallerError(
-                            "Metadados de confiança são obrigatórios, mas nenhuma URL foi configurada."
-                        )
-                    roles = (
-                        self.remote.get_metadata_roles(
-                            trust_urls,
-                            maximum_size=TRUST_METADATA_MAX_BYTES,
-                            timeout=CATALOG_TIMEOUT,
-                            attempts=2,
-                        )
-                        if trust_urls is not None else None
+                    self.prepare_cache()
+                    assert self.cache_root is not None
+                    trust_root = self.cache_root / "trust"
+                    private_fs.ensure_private_directories(
+                        trust_root, stop=self.cache_root,
                     )
-                    trusted = None
-                    if roles is None and state_present:
-                        raise InstallerError(
-                            "O estado de confiança persistido exige metadados atualizados."
-                        )
-                    if roles is not None:
-                        trusted = self._preflight_catalog_trust(roles)
-                    catalog_payload, selected_url = self.remote.get_mirrors(
-                        CATALOG_URLS,
-                        maximum_size=CATALOG_MAX_BYTES,
-                        timeout=CATALOG_TIMEOUT,
-                        attempts=1,
-                        mirror_label="Catálogo",
+                    catalog = load_trusted_catalog(
+                        bootstrap_root=trusted_root_bytes(),
+                        metadata_dir=trust_root / "metadata",
+                        target_dir=trust_root / "targets",
+                        metadata_base_url=TRUST_METADATA_URL,
+                        target_base_url=TRUST_TARGET_URL,
+                        fetcher=BoundedTufFetcher(self.remote.get),
                     )
-                    if roles is not None:
-                        self._verify_catalog_trust(catalog_payload, roles, trusted=trusted)
+                    catalog_payload = json.dumps(
+                        catalog, ensure_ascii=False, separators=(",", ":"),
+                    ).encode("utf-8")
                     catalog_status = "Baixado"
-                    console.detail(f"Catálogo público: {safe_url_for_log(selected_url)}")
-            except (MetadataFileError, OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
-                raise InstallerError("O catálogo x86QW recebido é inválido.") from error
-            assert catalog_payload is not None
-            try:
-                catalog = json.loads(catalog_payload)
-            except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+                    console.detail(f"Catálogo TUF: {TRUST_METADATA_URL}")
+            except TrustError as error:
+                raise InstallerError(f"Falha de trust do catálogo x86QW: {error}") from error
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
                 raise InstallerError("O catálogo x86QW recebido é inválido.") from error
             if not isinstance(catalog, dict):
                 raise InstallerError("O catálogo x86QW recebido é inválido.")
             if catalog.get("format") != 1 or catalog.get("project") != "x86qw":
                 raise InstallerError("O catálogo x86QW usa uma identidade ou formato incompatível.")
-            try:
-                validate_document_versions(
-                    catalog,
-                    kind=SchemaKind.CATALOG,
-                    current_cli_version=application_version(),
-                    allow_legacy=True,
-                )
-            except ContractError as error:
-                raise InstallerError(
-                    "O catálogo x86QW usa uma versão de contrato incompatível.",
-                    exit_code=ExitCode.USAGE,
-                ) from error
             if not isinstance(catalog.get("packages"), list):
                 raise InstallerError("A lista de pacotes do catálogo x86QW é inválida.")
             if self.update_ui and catalog_payload is not None:
@@ -4823,7 +4992,7 @@ class Installer:
             raise InstallerError(
                 f"Artefato incompleto na distribuição: {candidate}. Execute git lfs pull e tente novamente."
             )
-        if file_hash(candidate) != expected_sha256:
+        if file_hash(candidate, maximum_size=MAX_ARTIFACT_BYTES) != expected_sha256:
             raise InstallerError(
                 f"Artefato adulterado na distribuição: {candidate}. Execute git lfs pull e tente novamente."
             )
@@ -4841,7 +5010,10 @@ class Installer:
         artifact = cache / filename
         ensure_no_symlink(artifact, "pacote de componente em cache")
         if artifact.is_file():
-            if artifact.stat().st_size != package["size"] or file_hash(artifact) != digest:
+            if (
+                artifact.stat().st_size != package["size"]
+                or file_hash(artifact, maximum_size=MAX_ARTIFACT_BYTES) != digest
+            ):
                 raise InstallerError(f"O pacote {identifier} em cache é inválido. Execute cleanup e tente novamente.")
             if self.update_ui:
                 console.download_result(
@@ -4849,6 +5021,20 @@ class Installer:
                 )
             else:
                 console.detail(f"Pacote validado no cache: {artifact}")
+            return artifact
+        native_relative = package.get(NATIVE_CANDIDATE_ARTIFACT_KEY)
+        if isinstance(native_relative, str):
+            source, expected_size, expected_sha256 = self._native_candidate_artifact(native_relative)
+            if expected_size != int(package["size"]) or expected_sha256 != str(package["sha256"]):
+                raise InstallerError(f"Identidade do pacote nativo diverge: {identifier}")
+            self.publish_cache_artifact(
+                source,
+                artifact,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+                label=f"o pacote nativo {identifier}",
+            )
+            console.success(f"Pacote candidato validado: {filename}")
             return artifact
         distribution_path = package.get("distribution_path")
         if isinstance(distribution_path, str) and distribution_path:
@@ -4879,7 +5065,10 @@ class Installer:
             expected_sha256=digest,
             maximum_size=MAX_ARTIFACT_BYTES,
         )
-        if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
+        if (
+            temporary.stat().st_size != package["size"]
+            or file_hash(temporary, maximum_size=MAX_ARTIFACT_BYTES) != digest
+        ):
             raise InstallerError(f"Um mirror entregou um pacote inválido: {identifier}")
         self.publish_cache_artifact(
             temporary,
@@ -5430,23 +5619,64 @@ class Installer:
     def install_component_default_transaction(
         self, source: Path, destination: Path,
     ) -> MutationResult | None:
-        if lexists(destination):
-            return None
         digest = file_hash(source)
+        destination_exists = lexists(destination)
+        if destination_exists:
+            if (
+                not destination.is_file()
+                or destination.is_symlink()
+                or file_hash(destination) != digest
+            ):
+                return None
+            present, entries = self.validate_personal_baseline()
+            relative = destination.relative_to(self.target).as_posix()
+            if present and relative in dict(entries):
+                return None
+        if self.stage is None:
+            self._create_stage(".component-default.")
+        baseline_receipt, baseline_inventory = (
+            self._stage_personal_baseline_entry(destination, digest)
+        )
+        baseline_step = MutationStep(
+            key="personal-baseline",
+            description=f"Registrar configuração pessoal {destination.name}",
+            observe=lambda: (
+                self._mutation_path_observation(baseline_receipt),
+                self._mutation_path_observation(baseline_inventory),
+                self._personal_baseline_observation(),
+            ),
+            apply=lambda: self._commit_personal_baseline(
+                baseline_receipt, baseline_inventory,
+            ),
+            rollback=self._rollback_component_metadata,
+        )
+        if destination_exists:
+            plan = MutationPlan(
+                identifier=(
+                    "component-default-baseline:"
+                    f"{destination.relative_to(self.target).as_posix()}"
+                ),
+                summary=f"Registrar configuração inicial existente {destination}",
+                steps=(baseline_step,),
+            )
+            return execute_mutation(prepare_mutation(plan))
         plan = MutationPlan(
             identifier=f"component-default:{destination.relative_to(self.target).as_posix()}",
             summary=f"Criar configuração inicial {destination}",
-            steps=(MutationStep(
-                key="default",
-                description=f"Criar configuração inicial {destination.name}",
-                observe=lambda: (
-                    self._mutation_path_observation(source),
-                    file_hash(source),
-                    self._mutation_path_observation(destination),
+            steps=(
+                MutationStep(
+                    key="default",
+                    description=f"Criar configuração inicial {destination.name}",
+                    observe=lambda: (
+                        self._mutation_path_observation(source),
+                        file_hash(source),
+                        self._mutation_path_observation(destination),
+                    ),
+                    apply=lambda: self._apply_created_default(source, destination, digest),
+                    rollback=self._rollback_created_default,
                 ),
-                apply=lambda: self._apply_created_default(source, destination, digest),
-                rollback=self._rollback_created_default,
-            ),),
+                baseline_step,
+            ),
         )
         return execute_mutation(prepare_mutation(plan))
 
@@ -5475,16 +5705,22 @@ class Installer:
                 )
                 results.append(result)
                 for staged, destination in defaults:
+                    existed_before = lexists(destination)
                     default_result = self.install_component_default_transaction(
                         staged, destination,
                     )
                     if default_result is not None:
                         results.append(default_result)
-                        console.info(f"Configuração inicial criada: {destination}")
-                if identifier == "nquake-bootstrap":
+                        if existed_before:
+                            console.info(
+                                f"Configuração inicial existente registrada: {destination}"
+                            )
+                        else:
+                            console.info(f"Configuração inicial criada: {destination}")
+                if identifier == "x86qw-client-bootstrap":
                     self.migrate_nquake_texture_limit(results)
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
-            if "nquake-bootstrap" in selected:
+            if "x86qw-client-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
                 if not preset.is_file():
                     assert self.stage is not None
@@ -5861,10 +6097,12 @@ class Installer:
                 mutation_results=results,
             )
 
-    def install_component_phase(self) -> tuple[MutationResult, ...]:
+    def install_component_phase(
+        self, *, selected: list[str] | None = None,
+    ) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
-        selected = self.choose_components()
+        selected = self.choose_components() if selected is None else selected
         results = list(self.install_components(selected))
         try:
             self.write_install_state(
@@ -6194,6 +6432,91 @@ class Installer:
         player.verify_local_play_support(player.available_local_games())
         self.verify_qw_package_order()
         self.report_nquake_startup_state(installed)
+
+    def installation_change_ignored_paths(self) -> tuple[str, ...]:
+        paths = {
+            ".DS_Store",
+            ".gitignore",
+            ".x86qw",
+            "LICENSE",
+            "README-X86QW.txt",
+            "ezquake/qconsole.log",
+            "ezquake/temp",
+            "id1/pak0.pak",
+            "id1/pak1.pak",
+            "qw/demos",
+            "qw/screenshots",
+            "x86qw.cmd",
+            "x86qw.sh",
+        }
+        for spec in PLATFORMS.values():
+            paths.update((spec.runtime("stable"), spec.runtime("nightly")))
+        return tuple(sorted(paths))
+
+    def installation_change_baseline(self) -> dict[str, ManagedInstallationFile]:
+        managed: dict[str, ManagedInstallationFile] = {}
+        for component in self.metadata_component_ids():
+            present, entries, _ = self.validate_component_pair(component)
+            if not present:
+                continue
+            for name, digest in entries:
+                record = ManagedInstallationFile(component, digest)
+                previous = managed.get(name)
+                if previous is not None and previous != record:
+                    raise InstallerError(
+                        f"Inventários de componentes divergem sobre o arquivo: {name}"
+                    )
+                managed[name] = record
+        personal_present, personal_entries = self.validate_personal_baseline()
+        if personal_present:
+            for name, digest in personal_entries:
+                record = ManagedInstallationFile(
+                    PERSONAL_BASELINE_COMPONENT, digest,
+                )
+                previous = managed.get(name)
+                if previous is not None and previous != record:
+                    raise InstallerError(
+                        "Inventários gerenciado e pessoal divergem sobre o arquivo: "
+                        f"{name}"
+                    )
+                managed[name] = record
+        return managed
+
+    def report_installation_changes(
+        self, *, sync_gitignore: bool = False,
+    ) -> tuple[InstallationChange, ...]:
+        managed = self.installation_change_baseline()
+        ignored = self.installation_change_ignored_paths()
+        if sync_gitignore:
+            payload = render_installation_gitignore(
+                managed,
+                ignored_paths=ignored,
+            ).encode("utf-8")
+            destination = self.target / ".gitignore"
+            try:
+                atomic_write_bytes(destination, payload, mode=0o644)
+            except AtomicWriteError as error:
+                raise InstallerError(
+                    f"Não foi possível atualizar o filtro Git da instalação: {destination}"
+                ) from error
+            console.info(f"Filtro Git seletivo atualizado: {destination}")
+
+        changes = inspect_installation_changes(
+            self.target,
+            managed,
+            ignored_paths=ignored,
+        )
+        console.heading("Mudanças locais da instalação")
+        for change in changes:
+            component = f"  [{change.component}]" if change.component else ""
+            print(f"{change.status}  {change.path}{component}")
+        if changes:
+            console.info(
+                f"{len(changes)} diferença(s): A novo, M alterado, D removido."
+            )
+        else:
+            console.success("Nenhuma diferença local em relação à instalação-base.")
+        return changes
 
     def component_metadata_assessment(self) -> tuple[list[str], list[str]]:
         valid: list[str] = []
@@ -6586,7 +6909,7 @@ class Installer:
 
     def report_nquake_startup_state(self, installed: list[str] | None = None) -> None:
         installed = self.installed_components() if installed is None else installed
-        if "nquake-bootstrap" not in installed:
+        if "x86qw-client-bootstrap" not in installed:
             return
         config = self.target / "ezquake/configs/config.cfg"
         if not config.is_file():
@@ -7139,6 +7462,7 @@ class Installer:
                         apply=lambda path=path, expected=observations.get(path): (
                             quarantine.apply_quarantine_removal(
                                 path, expected_observation=expected,
+                                allow_non_regular=True,
                             )
                         ),
                         rollback=quarantine.rollback_quarantine,
@@ -7180,16 +7504,17 @@ class Installer:
         release: str | None = None,
         profile: str | None = None,
         non_interactive: bool = False,
+        native_profile: str | None = None,
         before_mutation: Callable[[], None] | None = None,
         mutation_results: list[MutationResult] | None = None,
     ) -> None:
         if non_interactive:
             missing = [
                 name for name, value in (
-                    ("--platform", platform),
-                    ("--channel", channel),
-                    ("--release", release),
-                    ("--profile", profile),
+                ("--platform", platform),
+                ("--channel", channel),
+                ("--release", release),
+                ("--profile", profile if profile is not None else native_profile),
                 ) if value is None
             ]
             if missing:
@@ -7251,7 +7576,14 @@ class Installer:
             console.success("ezQuake instalado e recibo registrado.")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
-            if self.confirm_components():
+            if native_profile is not None:
+                if native_profile != "complete" or self._native_candidate_root() is None:
+                    raise InstallerError(
+                        "--native-profile exige o perfil complete em um candidato nativo explícito."
+                    )
+                selected = self.select_components_profile(native_profile)
+                installation_results.extend(self.install_component_phase(selected=selected))
+            elif self.confirm_components():
                 installation_results.extend(self.install_component_phase())
             else:
                 console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
@@ -7933,7 +8265,11 @@ class Installer:
                     "Não foi possível publicar a CLI, o recibo e os launchers como uma geração única."
                 ) from error
             try:
-                if self.validate_cli_receipt(cli_root / "receipt") != identity:
+                installed_identity = self.validate_cli_receipt(cli_root / "receipt")
+                if any(
+                    installed_identity.get(field) != identity.get(field)
+                    for field in ("format", "project", "version")
+                ):
                     raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
                 if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
                     raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
@@ -8012,6 +8348,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="no install não interativo, seleciona o perfil de componentes",
     )
     parser.add_argument(
+        "--native-profile", choices=("complete",),
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--online-only", action="store_true",
         help=argparse.SUPPRESS,
     )
@@ -8048,21 +8388,36 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="com uninstall, remove a instalação inteira, dados pessoais e caches x86QW",
     )
     parser.add_argument(
+        "--sync-gitignore", action="store_true",
+        help="com changes, atualiza o .gitignore seletivo usando os inventories instalados",
+    )
+    parser.add_argument(
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, uninstall ou cleanup"
+            "verify, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
-    namespace = parser.parse_args(arguments)
-    valid_actions = (
-        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "migrate", "components",
-        "presets", "hub", "verify", "uninstall", "cleanup",
+    # Python 3.10/3.11 do not accept the installation target after an option
+    # with the regular parser.  The public CLI documents both orders, so use
+    # the stdlib intermixed parser when available and retain the older fallback
+    # for runtimes that do not expose it.
+    parse_intermixed = getattr(parser, "parse_intermixed_args", None)
+    namespace = (
+        parse_intermixed(arguments)
+        if callable(parse_intermixed)
+        else parser.parse_args(arguments)
     )
+    # version is intentionally usable before any bundled catalog is opened;
+    # this is the bootstrap diagnostic path for a damaged or partial bundle.
+    if namespace.action == "version":
+        return namespace
+    internal_actions = ("install", "menu", "components", "presets")
+    valid_actions = (*internal_actions, *public_command_names())
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
@@ -8072,6 +8427,16 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     if namespace.action != "install" and any(value is not None and value is not False for value in selection_flags):
         parser.error("--non-interactive, --channel, --release e --profile só podem ser usados com install")
+    if namespace.action != "install" and namespace.native_profile is not None:
+        parser.error("--native-profile só pode ser usado com install")
+    if namespace.native_profile is not None and not os.environ.get(NATIVE_CANDIDATE_ROOT_ENV):
+        parser.error("--native-profile é reservado a um candidato nativo explícito")
+    if namespace.native_profile is not None and namespace.profile is not None:
+        parser.error("--native-profile não pode ser combinado com --profile")
+    if namespace.native_profile is not None and (
+        namespace.channel is None or namespace.release is None
+    ):
+        parser.error("--native-profile exige --channel e --release")
     if namespace.action != "install" and namespace.non_interactive:
         parser.error("--non-interactive só pode ser usado com install")
     explicit_target = namespace.target is not None
@@ -8081,7 +8446,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
                 ("--platform", namespace.platform),
                 ("--channel", namespace.channel),
                 ("--release", namespace.release),
-                ("--profile", namespace.profile),
+                (
+                    "--profile",
+                    namespace.profile if namespace.profile is not None else namespace.native_profile,
+                ),
             ) if value is None
         ]
         if not explicit_target:
@@ -8092,6 +8460,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
             )
     if namespace.purge and namespace.action != "uninstall":
         parser.error("--purge só pode ser usado com uninstall")
+    if namespace.sync_gitignore and namespace.action != "changes":
+        parser.error("--sync-gitignore só pode ser usado com changes")
     if namespace.installed_cli and namespace.action in {"install", "components", "presets"}:
         parser.error(
             f"{namespace.action} não está disponível na CLI instalada; use install.sh para instalar ou adicionar conteúdo"
@@ -8175,7 +8545,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8278,6 +8648,8 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("update", "Atualizar", "atualizar somente o que já está instalado"),
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
+                    navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
+                    navigation.MenuOption("migrate", "Migrar metadados", "converter o estado legado para o contrato 1.0"),
                     navigation.MenuOption("repair", "Diagnosticar e reparar", "preserva arquivos pessoais"),
                     navigation.MenuOption("cleanup", "Limpar dados locais", "cache e dados regeneráveis"),
                     navigation.MenuOption("uninstall", "Desinstalar", "preservar ou remover todos os dados"),
@@ -8388,7 +8760,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -8620,7 +8992,8 @@ def execute_manager_action(
     action_labels = {
         "install": "instalar ezQuake + componentes x86QW", "components": "gerenciar componentes x86QW",
         "presets": "gerenciar presets",
-        "hub": "navegar servidores", "verify": "verificar", "uninstall": "desinstalar",
+        "hub": "navegar servidores", "verify": "verificar", "changes": "comparar instalação",
+        "uninstall": "desinstalar",
         "cleanup": "limpar caches e dados locais", "update": "atualizar o conteúdo instalado",
         "upgrade": "incorporar novidades da distribuição", "repair": "reparar conteúdo gerenciado",
         "migrate": "migrar metadados para o contrato 1.0",
@@ -8723,6 +9096,10 @@ def execute_manager_action(
                         installer.target, target_version="1.0.0", dry_run=False,
                     )
                     console.success("Migração concluída e validada.")
+        elif options.action == "changes":
+            installer.report_installation_changes(
+                sync_gitignore=options.sync_gitignore,
+            )
         elif options.action == "verify":
             console.section("Verificação da instalação")
             installer.verify_installation()
@@ -8823,6 +9200,13 @@ def execute_manager_action(
                             "channel": options.channel,
                             "release": options.release,
                             "profile": options.profile,
+                            "non_interactive": True,
+                        })
+                    if options.native_profile is not None:
+                        install_kwargs.update({
+                            "channel": options.channel,
+                            "release": options.release,
+                            "native_profile": options.native_profile,
                             "non_interactive": True,
                         })
                     installer.install(

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from maintenance.tools.release_candidate import CandidateError, verify_candidate
-from x86qw_runtime.trust import (
+from maintenance.tools.release_trust import (
     MAX_METADATA_BYTES,
     TrustError,
     parse_json_bytes,
@@ -76,6 +77,7 @@ def verify_candidate_metadata(
     snapshot: Path,
     catalog: Path,
     expected_release: str | None = None,
+    now: datetime | None = None,
 ) -> dict[str, object]:
     """Verify trust chain, release identity and installer digest read-only."""
 
@@ -95,6 +97,7 @@ def verify_candidate_metadata(
             _read_regular(current),
             _read_regular(snapshot),
             catalog_bytes,
+            now=now,
         )
     except TrustError as error:
         raise ReleaseMetadataError(f"cadeia de trust rejeitada: {error}") from error

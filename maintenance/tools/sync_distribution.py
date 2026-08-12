@@ -658,7 +658,10 @@ def verify_distribution(
     actual = {
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
-        if path.is_file() and path.name != "manifest.json"
+        if path.is_file()
+        and path.name != "manifest.json"
+        and "__pycache__" not in path.parts
+        and path.suffix not in {".pyc", ".pyo"}
     }
     if not expected <= actual:
         missing = sorted(expected - actual)

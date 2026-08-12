@@ -11,6 +11,18 @@
 - Incluído:
 - Fora de escopo:
 
+## Estado após esta PR
+
+Baseline:
+Issue concluída:
+Contrato introduzido:
+Testes portáveis:
+Teste nativo Mac M3:
+Plataformas não executadas:
+Riscos restantes:
+Próxima issue desbloqueada:
+Branches que podem ser apagadas:
+
 ## Validação
 
 - [ ] `./maintenance/manage.py verify`
@@ -18,7 +30,9 @@
 - [ ] `cd site && npm ci && npm run deploy:dry-run` quando aplicável
 - [ ] Validação executada diretamente no Mac local, com comandos e resultados registrados
 - [ ] Limitações de Linux, Windows e macOS Intel declaradas sem alegar execução
-- [ ] Nenhum runner, workflow ou gate externo é necessário
+- [ ] Gates externos necessários estão identificados, executáveis e fail-closed; nenhum teste portátil é apresentado como evidência nativa
+- [ ] Links Markdown locais resolvidos a partir do diretório de cada documento
+- [ ] `PROJECT-STATUS.md`, `ROADMAP.md` e README continuam coerentes
 
 ## Distribuição e proveniência
 

@@ -1,9 +1,9 @@
 """Verify provenance of protected external GitHub Actions handoffs.
 
 This gate is intentionally read-only.  It binds a supplied run ID to this
-repository and candidate commit, and checks that the exact artifact names to be
-downloaded were published by that successful run.  The artifact contents are
-validated by the native handoff normalizer afterwards.
+repository and candidate commit, and checks that the exact artifact names and
+IDs to be downloaded were published by that successful run.  The artifact
+contents are validated by the native handoff normalizer afterwards.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from x86qw_runtime.io.remote import RemoteClient
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID = re.compile(r"^[1-9][0-9]{0,19}$")
 ARTIFACT_ID = re.compile(r"^[1-9][0-9]{0,19}$")
+ARTIFACT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 WORKFLOW_PATH = re.compile(r"^\.github/workflows/[A-Za-z0-9._/-]+\.ya?ml$")
 EVENT = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -77,6 +78,7 @@ def verify_external_run(
     run_id: str,
     commit: str,
     artifacts: tuple[str, ...],
+    artifact_ids: dict[str, int] | None = None,
     token: str,
     workflow: str,
     event: str = "workflow_dispatch",
@@ -103,6 +105,14 @@ def verify_external_run(
         raise CandidateError("ref do workflow externo inválida")
     if not artifacts or len(set(artifacts)) != len(artifacts):
         raise CandidateError("artefatos externos devem ser únicos e não vazios")
+    if any(ARTIFACT_NAME.fullmatch(name) is None for name in artifacts):
+        raise CandidateError("nome do artefato externo inválido")
+    if artifact_ids is not None:
+        if set(artifact_ids) != set(artifacts):
+            raise CandidateError("IDs de artefatos externos não correspondem aos nomes")
+        for name, artifact_id in artifact_ids.items():
+            if isinstance(artifact_id, bool) or not isinstance(artifact_id, int) or artifact_id <= 0:
+                raise CandidateError(f"ID do artefato externo inválido: {name}")
     encoded_repo = urllib.parse.quote(repository, safe="/")
     base = f"https://api.github.com/repos/{encoded_repo}/actions/runs/{run_id}"
     run = _get_json(base, token=token)
@@ -143,6 +153,8 @@ def verify_external_run(
     for name, entry in by_name.items():
         if ARTIFACT_ID.fullmatch(str(entry.get("id", ""))) is None:
             raise CandidateError(f"artefato externo sem ID imutável: {name}")
+        if artifact_ids is not None and name in artifact_ids and int(str(entry["id"])) != artifact_ids[name]:
+            raise CandidateError(f"ID do artefato externo diverge do nome verificado: {name}")
         digest = entry.get("digest")
         if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
             raise CandidateError(f"artefato externo sem digest SHA-256: {name}")
@@ -171,6 +183,13 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--artifact", action="append", dest="artifacts", required=True)
+    parser.add_argument(
+        "--artifact-id",
+        action="append",
+        dest="artifact_ids",
+        type=int,
+        help="ID imutável correspondente a cada --artifact, na mesma ordem",
+    )
     parser.add_argument("--workflow", required=True)
     parser.add_argument("--event", default="workflow_dispatch")
     parser.add_argument("--head-branch")
@@ -181,11 +200,17 @@ def main(arguments: list[str] | None = None) -> int:
     )
     options = parser.parse_args(arguments)
     try:
+        artifact_ids = None
+        if options.artifact_ids is not None:
+            if len(options.artifact_ids) != len(options.artifacts):
+                raise CandidateError("cada --artifact precisa de um --artifact-id correspondente")
+            artifact_ids = dict(zip(options.artifacts, options.artifact_ids, strict=True))
         result = verify_external_run(
             repository=options.repository,
             run_id=options.run_id,
             commit=options.commit,
             artifacts=tuple(options.artifacts),
+            artifact_ids=artifact_ids,
             token=os.environ.get("GITHUB_TOKEN", ""),
             workflow=options.workflow,
             event=options.event,

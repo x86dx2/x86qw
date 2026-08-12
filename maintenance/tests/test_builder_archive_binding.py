@@ -565,6 +565,25 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             {str(package["version"]) for package in packages},
         )
 
+    def test_installer_history_orders_rc_before_the_matching_stable_release(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".semver-history-", dir=ROOT / "dist") as temporary:
+            package_root = Path(temporary)
+            for version in ("1.0.0-rc.1", "1.0.0"):
+                version_root = package_root / version
+                version_root.mkdir()
+                (version_root / f"x86qw-installer-{version}.zip").write_bytes(version.encode())
+
+            plan = SimpleNamespace(source_size=1, source_sha256="a" * 64)
+            with mock.patch.object(
+                installer_builder, "validate_installer_history_bundle", return_value=plan,
+            ), mock.patch.object(installer_builder, "read_archive_members"):
+                packages = installer_builder.package_results(package_root)
+
+            self.assertEqual(
+                ["1.0.0-rc.1", "1.0.0"],
+                [str(package["version"]) for package in packages],
+            )
+
     def test_installer_history_rejects_a_bundle_changed_after_its_scan(self) -> None:
         version = installer_builder.VERSION
         with tempfile.TemporaryDirectory(

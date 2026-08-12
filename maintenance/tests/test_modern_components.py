@@ -573,7 +573,7 @@ class ModernComponentTests(unittest.TestCase):
             )
             pause.assert_called_once_with("\nPressione Enter para retornar ao menu de serviços...")
 
-        for action in ("update", "upgrade", "verify", "repair", "cleanup"):
+        for action in ("update", "upgrade", "verify", "changes", "migrate", "repair", "cleanup"):
             selections = (
                 ("manage", "cleanup", "cache", "exit")
                 if action == "cleanup" else ("manage", action, "exit")
@@ -610,6 +610,30 @@ class ModernComponentTests(unittest.TestCase):
         content = next(option for option in management if option.key == "content")
         self.assertEqual("Alterar conteúdo pelo bootstrap", content.label)
         self.assertIn("adicionar ou remover", content.description)
+
+    def test_root_menu_has_unique_entries_and_fallback_lists_all_public_commands(self):
+        target = ROOT / "custom-quake"
+        calls = []
+
+        def cancel_after_capture(title, options, **kwargs):
+            calls.append((title, tuple(options)))
+            raise install_qw.navigation.MenuCancelled(title)
+
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        output = io.StringIO()
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=cancel_after_capture,
+        ), mock.patch.object(install_qw.sys, "stdin", stdin), contextlib.redirect_stdout(output):
+            self.assertEqual(0, install_qw.run_main_menu(target))
+
+        self.assertEqual(1, len(calls))
+        root_keys = [option.key for option in calls[0][1]]
+        self.assertEqual(len(root_keys), len(set(root_keys)))
+        self.assertEqual(1, root_keys.count("manage"))
+        fallback = output.getvalue()
+        self.assertIn("changes", fallback)
+        self.assertIn("migrate", fallback)
 
     def test_information_content_and_exit_render_the_promised_result(self):
         target = ROOT / "custom-quake"
@@ -978,7 +1002,7 @@ class ModernComponentTests(unittest.TestCase):
         )
         bootstrap = next(
             component for component in inventory["components"]
-            if component["id"] == "nquake-bootstrap"
+            if component["id"] == "x86qw-client-bootstrap"
         )
         self.assertIn({
             "path": "dist/mods/x86qw/core/bootstrap/ruleset.cfg",
@@ -1142,10 +1166,10 @@ class ModernComponentTests(unittest.TestCase):
             )
             self.assertNotIn("+tempalias", arguments)
             config = str(captured["config"])
-            self.assertRegex(
+            self.assertIn(
+                'tempalias on_enter_ffa "exec x86qw-ktx.cfg;'
+                'x86qw_ktx_launch_setup"',
                 config,
-                r'tempalias on_enter_ffa "exec x86qw-ktx\.cfg;'
-                r'x86qw_ktx_launch_(?:setup|group)_\d',
             )
             self.assertIn("cmd botcmd addbot 5", config)
 
@@ -2673,7 +2697,7 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue({"mvdsv", "qwfwd", "qtv"}.isdisjoint(compatibility["covered_components"]))
             self.assertEqual(
                 {
-                    "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
+                    "x86qw", "nquake", "ktx", "final-arena", "pro-x", "team-fortress", "td2",
                     "mvdsv", "qwfwd", "qtv",
                 },
                 installer.content_component_namespaces,
@@ -3177,7 +3201,7 @@ class ModernComponentTests(unittest.TestCase):
             installer, target, _ = self.make_installer(Path(temporary))
             installer.stage = target / ".stage"
             installer.stage.mkdir()
-            package = installer.component_package_record("nquake-bootstrap")
+            package = installer.component_package_record("x86qw-client-bootstrap")
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer.remote, "get_mirrors", side_effect=AssertionError("network used"),
@@ -3188,7 +3212,7 @@ class ModernComponentTests(unittest.TestCase):
             managed, defaults, source = prepared
             self.assertTrue((managed / "qw/autoexec.cfg").is_file())
             self.assertTrue(any(destination == target / "ezquake/configs/config.cfg" for _, destination in defaults))
-            self.assertTrue(source.startswith("x86qw:dist/nquake-bootstrap@"))
+            self.assertTrue(source.startswith("x86qw:dist/x86qw-client-bootstrap@"))
 
     def test_component_install_prefers_canonical_sources_over_remote_packages(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3199,12 +3223,12 @@ class ModernComponentTests(unittest.TestCase):
                 with mock.patch.object(
                     installer, "download_component_package", side_effect=AssertionError("remote package used"),
                 ):
-                    installer.install_components(["nquake-bootstrap"])
+                    installer.install_components(["x86qw-client-bootstrap"])
             self.assertTrue((target / "qw/autoexec.cfg").is_file())
             self.assertTrue((target / "ezquake/configs/config.cfg").is_file())
-            self.assertGreater(installer.verify_component("nquake-bootstrap"), 0)
-            receipt = (target / ".x86qw/components/nquake-bootstrap/receipt").read_text(encoding="utf-8")
-            self.assertIn("source\tx86qw:dist/nquake-bootstrap@", receipt)
+            self.assertGreater(installer.verify_component("x86qw-client-bootstrap"), 0)
+            receipt = (target / ".x86qw/components/x86qw-client-bootstrap/receipt").read_text(encoding="utf-8")
+            self.assertIn("source\tx86qw:dist/x86qw-client-bootstrap@", receipt)
             self.assertFalse(cache.exists())
 
     def test_bootstrap_migrates_only_the_obsolete_nquake_texture_default(self):
@@ -4020,8 +4044,8 @@ class ModernComponentTests(unittest.TestCase):
             self.assertTrue(play_qw.release_runtime_config(target, transferred["ownership"]))
             self.assertFalse(Path(captured["config_path"]).exists())
 
-    def test_exact_x86qw_ruleset_duel_command_keeps_ktx_session_owned_by_process(self):
-        """The menu command reported by users must build a complete KTX launch."""
+    def test_exact_x86qw_ruleset_3on3on3_command_uses_one_post_map_entry_alias(self):
+        """The reported launch must use the ezQuake-compatible Frogbot entry alias."""
 
         with tempfile.TemporaryDirectory() as temporary:
             player, target, _ = self.make_player(Path(temporary))
@@ -4029,8 +4053,23 @@ class ModernComponentTests(unittest.TestCase):
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             options = play_qw.KtxLaunchOptions(
-                bots=1, bot_skill=5, bot_names_profile="x86qw",
+                bots=8, bot_skill=20, bot_names_profile="x86qw",
             )
+            process = mock.Mock(pid=4320, returncode=None)
+            captured: dict[str, str] = {}
+
+            def capture_launch(_runtime, arguments):
+                config_name = next(
+                    arguments[index + 1]
+                    for index, argument in enumerate(arguments[:-1])
+                    if argument == "+exec"
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
+                )
+                captured["config"] = (target / "qw" / config_name).read_text(
+                    encoding="ascii",
+                )
+                return process
+
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(player, "check_paks"):
                     with mock.patch.object(player, "available_local_games", return_value=[game]):
@@ -4049,6 +4088,7 @@ class ModernComponentTests(unittest.TestCase):
                                         ):
                                             with mock.patch.object(
                                                 player, "launch_runtime",
+                                                side_effect=capture_launch,
                                             ) as launch, mock.patch.object(
                                                 play_qw, "transfer_runtime_config_controller",
                                                 side_effect=lambda target, ownership, process: ownership,
@@ -4058,7 +4098,7 @@ class ModernComponentTests(unittest.TestCase):
                                             ):
                                                 with mock.patch.object(player, "verify_local_play_support"):
                                                     player.play_local(
-                                                        "ktx", "duel", "aerowalk", options,
+                                                        "ktx", "3on3on3", "aerowalk", options,
                                                         ruleset="x86qw",
                                                     )
             arguments = launch.call_args.args[1]
@@ -4071,12 +4111,24 @@ class ModernComponentTests(unittest.TestCase):
                 for index in range(len(arguments) - 1)
             ])
             self.assertIn("x86qw-ktx-session-", " ".join(arguments))
-            self.assertIn(["+set", "k_defmode", "1on1"], [
+            self.assertIn(["+set", "k_defmode", "3on3on3"], [
                 arguments[index:index + 3]
                 for index in range(len(arguments) - 2)
             ])
+            config = captured["config"]
+            self.assertRegex(
+                config,
+                r'(?m)^tempalias x86qw_ktx_launch_setup "x86qw_ktx_launch_',
+            )
+            self.assertIn(
+                'tempalias on_enter "exec x86qw-ktx.cfg;'
+                'x86qw_ktx_launch_setup"',
+                config,
+            )
+            # Eight launch additions plus the reusable INS management alias.
+            self.assertEqual(9, config.count("cmd botcmd addbot 20"))
             transfer.assert_called_once()
-            self.assertIs(launch.return_value, transfer.call_args.args[2])
+            self.assertIs(process, transfer.call_args.args[2])
 
     def test_ktx_early_exit_reports_return_code_and_removes_ephemeral_config(self):
         with tempfile.TemporaryDirectory() as temporary:

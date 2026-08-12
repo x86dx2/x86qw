@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from maintenance.tools.release_candidate import CandidateError, prepare_candidate
@@ -12,6 +13,7 @@ from maintenance.tools.verify_release_metadata import (
     verify_candidate_metadata,
 )
 from x86qw_runtime.trust import MAX_METADATA_BYTES
+from maintenance.tests.trust_fixture import catalog_0_7_3_bytes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,11 @@ TRUST = ROOT / "maintenance/inventory/trust"
 
 
 class ReleaseMetadataGateTests(unittest.TestCase):
+    def _catalog(self, root: Path) -> Path:
+        path = root / "catalog-0.7.3.json"
+        path.write_bytes(catalog_0_7_3_bytes())
+        return path
+
     def _candidate(self, root: Path, version: str = "0.7.3") -> Path:
         source = root / "source"
         (source / "installer").mkdir(parents=True)
@@ -44,8 +51,9 @@ class ReleaseMetadataGateTests(unittest.TestCase):
                 root=TRUST / "root.json",
                 current=TRUST / "current.json",
                 snapshot=TRUST / "snapshot.json",
-                catalog=ROOT / "site/public/api/v1/catalog.json",
+                catalog=self._catalog(root),
                 expected_release="0.7.3",
+                now=datetime(2026, 8, 4, 12, tzinfo=timezone.utc),
             )
             self.assertEqual("verified", result["status"])
             self.assertEqual("0.7.3", result["release"])
@@ -59,7 +67,7 @@ class ReleaseMetadataGateTests(unittest.TestCase):
                     root=TRUST / "root.json",
                     current=TRUST / "current.json",
                     snapshot=TRUST / "snapshot.json",
-                    catalog=ROOT / "site/public/api/v1/catalog.json",
+                    catalog=self._catalog(Path(temporary)),
                     expected_release="1.0.0",
                 )
 
@@ -77,7 +85,7 @@ class ReleaseMetadataGateTests(unittest.TestCase):
                     root=TRUST / "root.json",
                     current=TRUST / "current.json",
                     snapshot=TRUST / "snapshot.json",
-                    catalog=ROOT / "site/public/api/v1/catalog.json",
+                    catalog=self._catalog(root),
                 )
 
     def test_oversized_metadata_is_rejected_before_json_processing(self) -> None:

@@ -1,11 +1,11 @@
+# quake-world/ mantém um .gitignore local gerado pelos inventories instalados.
+.artifacts/
+.cache/
 .DS_Store
 .env
-__pycache__/
-*.py[cod]
-.cache/
-.artifacts/
-maintenance/build/
 .wrangler/
+.tuf-production/
+*.py[cod]
+__pycache__/
+maintenance/build/
 site/node_modules/
-quake-world/
-id1/

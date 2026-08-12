@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -20,6 +20,17 @@ from x86qw_runtime.supervisor.core import spawn_detached_client
 @unittest.skipIf(os.name == "nt", "o executável adversarial usa shebang POSIX")
 class LaunchTargetBindingTests(unittest.TestCase):
     @staticmethod
+    def _portable_executable(destination: Path) -> None:
+        """Use a self-contained POSIX binary, not a relocatable Python runtime."""
+
+        source_name = shutil.which("sh")
+        if source_name is None:
+            raise unittest.SkipTest("um shell POSIX não está disponível")
+        source = Path(source_name).resolve()
+        shutil.copyfile(source, destination)
+        shutil.copymode(source, destination)
+
+    @staticmethod
     def _tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes], ...]:
         return tuple(
             (
@@ -35,7 +46,11 @@ class LaunchTargetBindingTests(unittest.TestCase):
             root = Path(temporary)
             executable = root / "client"
             marker = root / "executed.txt"
-            os.link(Path(sys.executable).resolve(), executable)
+            executable.write_text(
+                '#!/bin/sh\nprintf original > "$1"\n',
+                encoding="utf-8",
+            )
+            executable.chmod(0o700)
             original = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -51,9 +66,7 @@ class LaunchTargetBindingTests(unittest.TestCase):
             process = spawn_detached_client(
                 (
                     str(executable),
-                    "-c",
-                    "from pathlib import Path; "
-                    f"Path({str(marker)!r}).write_text('original', encoding='utf-8')",
+                    str(marker),
                 ),
                 root,
                 launch_target=target,
@@ -99,7 +112,7 @@ class LaunchTargetBindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             executable = root / "client"
-            os.link(Path(sys.executable).resolve(), executable)
+            self._portable_executable(executable)
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -123,7 +136,7 @@ class LaunchTargetBindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             executable = root / "client"
-            os.link(Path(sys.executable).resolve(), executable)
+            self._portable_executable(executable)
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,
@@ -165,7 +178,7 @@ class LaunchTargetBindingTests(unittest.TestCase):
             moved = parent / "moved-runtime"
             root.mkdir()
             executable = root / "client"
-            os.link(Path(sys.executable).resolve(), executable)
+            self._portable_executable(executable)
             payload = executable.read_bytes()
             target = executable_launch_target(
                 executable,

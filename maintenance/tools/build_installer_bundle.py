@@ -21,11 +21,13 @@ from pathlib import Path, PurePosixPath
 try:
     from .build_artifacts import publish_verified_file, read_regular_file, staged_artifact
     from .components import load_catalog as load_component_catalog, runtime_catalog
+    from .launcher_contract import validate_public_launcher_contract
     from .runtime_catalog import load_inventory as load_runtime_inventory
     from .validate_catalog import validate_catalog
 except ImportError:
     from build_artifacts import publish_verified_file, read_regular_file, staged_artifact
     from components import load_catalog as load_component_catalog, runtime_catalog
+    from launcher_contract import validate_public_launcher_contract
     from runtime_catalog import load_inventory as load_runtime_inventory
     from validate_catalog import validate_catalog
 
@@ -42,7 +44,11 @@ from x86qw_runtime.io.archive import (
     validate_installer_history_bundle,
 )
 from x86qw_runtime.io import atomic as atomic_io
-from x86qw_runtime.versioning import STABLE_VERSION as VERSION_PATTERN, version_key
+from x86qw_runtime.versioning import (
+    SEMVER as VERSION_PATTERN,
+    parse_semver,
+    version_key,
+)
 from maintenance.tools import release_ownership
 
 VERSION_FILE = ROOT / "dist/installer/VERSION"
@@ -62,7 +68,19 @@ LEGAL_FILES = (
     ("NOTICE", "NOTICE", 0o644),
 )
 RUNTIME_MEMBER_MANIFEST = ROOT / "maintenance/inventory/installer-runtime-members.json"
+RUNTIME_DEPENDENCY_MANIFEST = ROOT / "maintenance/inventory/runtime-dependencies.json"
+RUNTIME_DEPENDENCY_WHEELS = ROOT / "maintenance/vendor/wheels"
+TRUST_ROOT_SOURCE = "maintenance/trust/root.json"
+TRUST_ROOT_SHA256 = "660af63e52a033290adf8899d2078a779c04e04cf5d1fac465b4aa2e04937201"
 RUNTIME_MEMBER_FIELDS = frozenset({"member", "source", "consumer", "contract"})
+RUNTIME_DEPENDENCY_FIELDS = frozenset({
+    "name", "version", "filename", "sha256", "upstream_sha256", "transformation",
+    "license", "source", "package_prefixes",
+})
+RUNTIME_DEPENDENCY_TRANSFORMATIONS = frozenset({
+    "none",
+    "add-empty-package-marker:securesystemslib/_internal/__init__.py",
+})
 GENERATED_RUNTIME_SOURCES = frozenset({
     "generated:entrypoint",
     "generated:capabilities",
@@ -70,10 +88,12 @@ GENERATED_RUNTIME_SOURCES = frozenset({
     "generated:games",
     "generated:identity",
     "generated:component-catalog",
+    "generated:runtime-dependencies",
 })
 STATIC_RUNTIME_SOURCE_PREFIXES = (
     "dist/installer/bin/",
     "dist/mods/ktx/",
+    "maintenance/trust/",
     "x86qw_runtime/",
 )
 RUNTIME_CONTRACT_SOURCES = (
@@ -200,16 +220,167 @@ def runtime_member_files() -> tuple[tuple[str, str], ...]:
     )
 
 
+def runtime_dependency_lock() -> dict[str, object]:
+    try:
+        document = json.loads(read_regular_file(
+            RUNTIME_DEPENDENCY_MANIFEST, maximum_size=MAX_TEXT_INPUT_BYTES,
+        ))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("manifesto de dependências runtime ausente ou inválido") from error
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"format", "project", "dependencies"}
+        or document.get("format") != 1
+        or document.get("project") != "x86qw"
+        or not isinstance(document.get("dependencies"), list)
+        or not document["dependencies"]
+    ):
+        raise ValueError("identidade ou campos inválidos das dependências runtime")
+    names: set[str] = set()
+    filenames: set[str] = set()
+    for index, dependency in enumerate(document["dependencies"]):
+        if not isinstance(dependency, dict) or set(dependency) != RUNTIME_DEPENDENCY_FIELDS:
+            raise ValueError(f"dependência runtime inválida em dependencies[{index}]")
+        if not all(isinstance(dependency[field], str) for field in RUNTIME_DEPENDENCY_FIELDS - {"package_prefixes"}):
+            raise ValueError(f"campos inválidos em dependencies[{index}]")
+        prefixes = dependency["package_prefixes"]
+        if (
+            not isinstance(prefixes, list)
+            or not prefixes
+            or not all(isinstance(prefix, str) and prefix.endswith("/") for prefix in prefixes)
+        ):
+            raise ValueError(f"prefixos inválidos em dependencies[{index}]")
+        name = dependency["name"]
+        filename = dependency["filename"]
+        digest = dependency["sha256"]
+        upstream_digest = dependency["upstream_sha256"]
+        transformation = dependency["transformation"]
+        if name in names or filename in filenames:
+            raise ValueError("dependência runtime duplicada")
+        if Path(filename).name != filename or not filename.endswith("-py3-none-any.whl"):
+            raise ValueError(f"wheel runtime inválido: {filename}")
+        if any(
+            len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+            for value in (digest, upstream_digest)
+        ):
+            raise ValueError(f"SHA-256 runtime inválido: {name}")
+        if transformation not in RUNTIME_DEPENDENCY_TRANSFORMATIONS:
+            raise ValueError(f"transformação runtime inválida: {name}")
+        if transformation == "none" and digest != upstream_digest:
+            raise ValueError(f"wheel runtime sem transformação diverge da origem: {name}")
+        if (
+            transformation == "add-empty-package-marker:securesystemslib/_internal/__init__.py"
+            and name != "securesystemslib"
+        ):
+            raise ValueError(f"transformação runtime incompatível: {name}")
+        if not dependency["source"].startswith("https://pypi.org/project/"):
+            raise ValueError(f"origem runtime inválida: {name}")
+        names.add(name)
+        filenames.add(filename)
+    return document
+
+
+def runtime_dependency_projection() -> dict[str, object]:
+    """Expose only the dependency facts needed by the installed runtime.
+
+    Repository URLs and package-prefix rules are build-time provenance, not
+    runtime configuration.  Keeping them in the maintenance lock while
+    projecting the minimal digest/license record prevents the installer from
+    carrying an accidental network or source-policy surface.
+    """
+
+    document = runtime_dependency_lock()
+    runtime_fields = (
+        "name", "version", "filename", "sha256", "transformation", "license",
+    )
+    return {
+        "format": document["format"],
+        "project": document["project"],
+        "dependencies": [
+            {field: dependency[field] for field in runtime_fields}
+            for dependency in document["dependencies"]
+        ],
+    }
+
+
+def runtime_dependency_members() -> tuple[tuple[str, bytes], ...]:
+    """Verify pinned pure-Python wheels and return their shipped package members."""
+
+    document = runtime_dependency_lock()
+    members: dict[str, bytes] = {}
+    claimed_output_names: set[str] = set()
+    for dependency in document["dependencies"]:
+        assert isinstance(dependency, dict)
+        wheel_path = RUNTIME_DEPENDENCY_WHEELS / str(dependency["filename"])
+        wheel = read_regular_file(wheel_path, maximum_size=MAX_BUILD_INPUT_BYTES)
+        if hashlib.sha256(wheel).hexdigest() != dependency["sha256"]:
+            raise ValueError(f"SHA-256 do wheel diverge do lock: {dependency['name']}")
+        try:
+            plan = scan_archive(wheel)
+        except ArchiveError as error:
+            raise ValueError(f"wheel runtime inválido: {dependency['name']}") from error
+        transformation = str(dependency["transformation"])
+        if transformation != "none":
+            marker = transformation.split(":", 1)[1]
+            if not any(member.name == marker for member in plan.members):
+                raise ValueError(
+                    f"wheel runtime não contém marcador da transformação: {dependency['name']}"
+                )
+        license_prefix = f"{dependency['name']}-{dependency['version']}.dist-info/licenses/"
+        selected_names: list[str] = []
+        output_names: dict[str, str] = {}
+        for member in plan.members:
+            name = member.name
+            package_member = any(
+                name.startswith(prefix) for prefix in dependency["package_prefixes"]
+            )
+            license_member = name.startswith(license_prefix)
+            if not package_member and not license_member:
+                continue
+            if member.is_dir or name.endswith(".pyc"):
+                continue
+            parts = PurePosixPath(name).parts
+            if "test_data" in parts or PurePosixPath(name).name.startswith("test_"):
+                continue
+            if package_member and not (name.endswith(".py") or name.endswith("py.typed")):
+                continue
+            if member.size > MAX_TEXT_INPUT_BYTES:
+                raise ValueError(f"membro inseguro no wheel runtime: {name}")
+            _portable_relative_path(name, "membro do wheel")
+            output_name = (
+                name
+                if package_member
+                else f"_x86qw/licenses/dependencies/{dependency['name']}/{PurePosixPath(name).name}"
+            )
+            if output_name in claimed_output_names:
+                raise ValueError(f"membro runtime duplicado: {output_name}")
+            claimed_output_names.add(output_name)
+            selected_names.append(name)
+            output_names[name] = output_name
+        if not selected_names:
+            raise ValueError(f"wheel runtime não contém pacote consumível: {dependency['name']}")
+        try:
+            payloads = read_archive_members(plan, selected_names)
+        except ArchiveError as error:
+            raise ValueError(f"wheel runtime inválido: {dependency['name']}") from error
+        for name in selected_names:
+            members[output_names[name]] = payloads[name]
+    return tuple(sorted(members.items()))
+
+
 def bundle_files() -> tuple[str, ...]:
     return tuple(source for source, _, _ in (*BUNDLE_FILES, *LEGAL_FILES)) + tuple(
         source for source, _ in runtime_member_files()
     ) + tuple(source for _, source in RUNTIME_CONTRACT_SOURCES) + (
         RUNTIME_MEMBER_MANIFEST.relative_to(ROOT).as_posix(),
+        RUNTIME_DEPENDENCY_MANIFEST.relative_to(ROOT).as_posix(),
+        *(path.relative_to(ROOT).as_posix() for path in sorted(RUNTIME_DEPENDENCY_WHEELS.glob("*.whl"))),
     )
 
 
 def includes_project_legal_files(version: str) -> bool:
-    return version_key(version) >= (1, 0, 0)
+    return parse_semver(version).major >= 1
 
 
 def runtime_catalog_bytes() -> bytes:
@@ -251,6 +422,7 @@ def zipapp_bytes(version: str) -> bytes:
         "generated:games": json_bytes(runtime_inventory["games"]),
         "generated:identity": json_bytes(identity),
         "generated:component-catalog": runtime_catalog_bytes(),
+        "generated:runtime-dependencies": json_bytes(runtime_dependency_projection()),
     }
     entries: list[tuple[str, str, int]] = [
         (entry["source"], entry["member"], 0o644) for entry in contracts
@@ -260,6 +432,11 @@ def zipapp_bytes(version: str) -> bytes:
             (source, f"_x86qw/{member}", mode)
             for source, member, mode in LEGAL_FILES
         )
+    dependency_members = runtime_dependency_members()
+    declared_names = {member_name for _source, member_name, _mode in entries}
+    for name, _payload in dependency_members:
+        if name in declared_names:
+            raise ValueError(f"dependência sobrescreve membro do zipapp: {name}")
     with zipfile.ZipFile(output, "w", allowZip64=True) as application:
         for source_name, member_name, mode in entries:
             payload = (
@@ -270,9 +447,18 @@ def zipapp_bytes(version: str) -> bytes:
                     maximum_size=MAX_BUILD_INPUT_BYTES,
                 )
             )
+            if (
+                source_name == TRUST_ROOT_SOURCE
+                and hashlib.sha256(payload).hexdigest() != TRUST_ROOT_SHA256
+            ):
+                raise ValueError("root TUF diverge do pin SHA-256 aprovado")
             write_member(application, member_name, payload, mode)
+        for name, payload in dependency_members:
+            write_member(application, name, payload)
     payload = output.getvalue()
-    required = tuple(member for _source, member, _mode in entries)
+    required = tuple(member for _source, member, _mode in entries) + tuple(
+        name for name, _payload in dependency_members
+    )
     try:
         plan = scan_archive(payload, required_members=required)
     except ArchiveError as error:
@@ -391,7 +577,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         if not directory.is_dir() or directory.is_symlink():
             raise ValueError(f"unexpected installer package entry: {directory}")
         version = directory.name
-        version_key(version)
+        parse_semver(version)
         filename = f"x86qw-installer-{version}.zip"
         archive = directory / filename
         if not archive.is_file() or archive.is_symlink():
@@ -421,7 +607,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
             "size": plan.source_size,
             "sha256": plan.source_sha256,
         })
-    return sorted(results, key=lambda item: version_key(str(item["version"])))
+    return sorted(results, key=lambda item: parse_semver(str(item["version"])))
 
 
 def update_latest_link(package_root: Path) -> str:
@@ -577,7 +763,13 @@ def reset_history(package_root: Path) -> None:
         for entry in package_root.iterdir():
             if entry.name == "latest" and entry.is_symlink():
                 entry.unlink()
-            elif entry.is_dir() and VERSION_PATTERN.fullmatch(entry.name):
+            elif entry.is_dir():
+                try:
+                    parse_semver(entry.name)
+                except ValueError:
+                    raise ValueError(
+                        f"unexpected entry blocks installer history reset: {entry}"
+                    ) from None
                 shutil.rmtree(entry)
             else:
                 raise ValueError(f"unexpected entry blocks installer history reset: {entry}")
@@ -616,6 +808,7 @@ def build(
     *,
     ownership_output: Path | None = None,
 ) -> dict[str, object]:
+    validate_public_launcher_contract(ROOT)
     validate_bootstrap_archive_source()
     filename = f"x86qw-installer-{version}.zip"
     zipapp_payload = zipapp_bytes(version)

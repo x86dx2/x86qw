@@ -25,6 +25,7 @@ from x86qw_runtime.contracts.native_evidence import (
     NativeEvidenceError,
     validate_cases,
     validate_environment,
+    validate_hardware,
 )
 
 
@@ -42,6 +43,10 @@ NATIVE_EVIDENCE_FIELDS = frozenset({
 SIGNED_EVIDENCE_BASE_FIELDS = frozenset({
     "format", "project", "version", "commit", "status", "candidate", "platforms",
 })
+
+
+def _fields_for_platform(base: frozenset[str], platform: str) -> frozenset[str]:
+    return base | {"hardware"} if platform == "macOS-ARM64" else base
 
 
 def _no_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -98,7 +103,7 @@ def _load_smoke_report(
         raise CandidateError("relatório nativo inválido") from error
     if (
         not isinstance(report, dict)
-        or set(report) != SMOKE_REPORT_FIELDS
+        or set(report) != _fields_for_platform(SMOKE_REPORT_FIELDS, platform)
         or type(report.get("format")) is not int
         or report.get("format") != NATIVE_EVIDENCE_FORMAT
         or report.get("status") != "passed"
@@ -128,6 +133,7 @@ def _load_smoke_report(
         raise CandidateError("identidade do relatório nativo diverge do candidato")
     try:
         validate_environment(report.get("environment"), platform=platform)
+        validate_hardware(report.get("hardware"), platform=platform)
         validate_cases(report.get("cases"))
         _validate_artifact_files(
             report.get("cases"),
@@ -165,6 +171,21 @@ def _identity(manifest: dict[str, object], manifest_digest: str) -> dict[str, ob
     }
 
 
+def _redacted_cases(value: object) -> list[dict[str, object]]:
+    """Keep case proof while removing runner-specific command paths."""
+
+    if not isinstance(value, list):
+        raise CandidateError("casos nativos inválidos para registro redigido")
+    result: list[dict[str, object]] = []
+    for raw_case in value:
+        if not isinstance(raw_case, dict) or not isinstance(raw_case.get("name"), str):
+            raise CandidateError("caso nativo inválido para registro redigido")
+        case = dict(raw_case)
+        case["command"] = ["x86qw-native-case-v1", raw_case["name"]]
+        result.append(case)
+    return result
+
+
 def _expected_platforms(values: Iterable[str]) -> tuple[str, ...]:
     raw = tuple(values)
     if any(not isinstance(value, str) for value in raw):
@@ -184,7 +205,7 @@ def _validate_native_record(
     identity: dict[str, object],
     require_unsigned: bool,
 ) -> None:
-    if set(report) != NATIVE_EVIDENCE_FIELDS:
+    if set(report) != _fields_for_platform(NATIVE_EVIDENCE_FIELDS, platform):
         raise CandidateError(f"evidência nativa da plataforma {platform} possui campos inválidos")
     if (
         type(report.get("format")) is not int
@@ -201,6 +222,7 @@ def _validate_native_record(
         raise CandidateError(f"evidência nativa da plataforma {platform} não corresponde ao candidato")
     try:
         validate_environment(report.get("environment"), platform=platform)
+        validate_hardware(report.get("hardware"), platform=platform)
         validate_cases(report.get("cases"))
     except NativeEvidenceError as error:
         raise CandidateError(str(error)) from error
@@ -228,6 +250,7 @@ def validate_native_evidence(
     candidate: Path,
     evidence_dir: Path,
     expected_platforms: Iterable[str],
+    artifact_root: Path | None = None,
 ) -> tuple[dict[str, object], ...]:
     """Validate exact native coverage for one immutable candidate.
 
@@ -273,6 +296,13 @@ def validate_native_evidence(
             identity=identity,
             require_unsigned=True,
         )
+        if artifact_root is not None:
+            try:
+                _validate_artifact_files(report.get("cases"), root=Path(artifact_root))
+            except (CandidateError, OSError) as error:
+                raise CandidateError(
+                    f"artefatos da evidência nativa não correspondem ao relatório: {platform}"
+                ) from error
         seen[platform] = report
     if set(seen) != set(expected):
         missing = sorted(set(expected) - set(seen))
@@ -387,10 +417,12 @@ def write_native_evidence(
         "candidate": _identity(manifest, candidate_digest),
         "environment": smoke["environment"],
         "runtime_executed": True,
-        "cases": smoke["cases"],
+        "cases": _redacted_cases(smoke["cases"]),
         "secrets": "redacted",
         "signature": None,
     }
+    if "hardware" in smoke:
+        evidence["hardware"] = smoke["hardware"]
     _validate_native_record(
         evidence,
         platform=platform,
@@ -438,7 +470,6 @@ def main(arguments: list[str] | None = None) -> int:
                 options.platform is not None
                 or options.report is not None
                 or options.output is not None
-                or options.artifact_root is not None
                 or options.recorded_at is not None
             ):
                 raise CandidateError("opções de validação não podem ser combinadas com produção de evidência")
@@ -447,6 +478,7 @@ def main(arguments: list[str] | None = None) -> int:
                     candidate=options.candidate,
                     evidence_dir=options.validate_evidence_dir,
                     expected_platforms=expected,
+                    artifact_root=options.artifact_root,
                 )
             if options.validate_signed_evidence is not None:
                 if options.compare_evidence_dir is not None and options.validate_evidence_dir is None:

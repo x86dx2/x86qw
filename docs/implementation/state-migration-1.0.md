@@ -6,7 +6,7 @@ não publica uma versão nem autoriza a alteração de conteúdo do jogo.
 ## Caminho suportado
 
 O destino canônico é `1.0.0`. A fronteira aceita a família `0.7.x`; os
-fixtures `0.7.0`, `0.7.1`, `0.7.2` e `0.7.3` são respaldados pelos ZIPs
+fixtures públicos `0.7.0` até `0.7.13` são respaldados pelos ZIPs
 exatos das releases públicas correspondentes e trazem a origem da tag, do
 commit, do arquivo, do tamanho e do SHA-256 no `manifest.json`. Cada fixture
 mantém o arquivo ZIP e uma árvore `bundle/` extraída pela fronteira canônica

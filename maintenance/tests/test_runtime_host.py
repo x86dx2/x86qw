@@ -221,7 +221,10 @@ class HostPlatformAdapterTests(unittest.TestCase):
                 executable.parent.symlink_to(original, target_is_directory=True)
             except OSError as error:
                 self.skipTest(f"symlinks indisponíveis neste runner: {error}")
-            with self.assertRaisesRegex(host.HostPlatformError, "mudou"):
+            with self.assertRaisesRegex(
+                host.HostPlatformError,
+                "Alvo de execução|ausente ou inseguro",
+            ):
                 host.revalidate_launch_target(target)
 
     def test_macos_launch_snapshot_preserves_the_application_bundle(self):

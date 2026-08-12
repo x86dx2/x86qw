@@ -30,6 +30,7 @@ from x86qw_runtime.contracts.native_evidence import (
     NativeEvidenceError,
     validate_cases,
     validate_environment,
+    validate_hardware,
 )
 from x86qw_runtime.io.managed_files import read_regular_file_beneath
 
@@ -47,6 +48,10 @@ SMOKE_REPORT_FIELDS = frozenset({
 })
 MAX_NATIVE_ARTIFACT_SIZE = 64 * 1024 * 1024
 MAX_NATIVE_ARTIFACT_TOTAL_SIZE = 256 * 1024 * 1024
+
+
+def _fields_for_platform(base: frozenset[str], platform: str) -> frozenset[str]:
+    return base | {"hardware"} if platform == "macOS-ARM64" else base
 
 
 def _no_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -173,8 +178,13 @@ def normalize_native_smoke(
     manifest = verify_candidate(Path(candidate), allow_pending_evidence=True)
     identity = _identity(manifest, _manifest_digest(Path(candidate)))
     value = _read_json(Path(handoff), label="handoff nativo")
-    if set(value) != HANDOFF_FIELDS:
-        raise CandidateError("handoff nativo contém campos desconhecidos ou ausentes")
+    expected_fields = _fields_for_platform(HANDOFF_FIELDS, platform)
+    if set(value) != expected_fields:
+        missing = sorted(expected_fields - set(value))
+        suffix = f"; campos ausentes: {', '.join(missing)}" if missing else ""
+        raise CandidateError(
+            "handoff nativo contém campos desconhecidos ou ausentes" + suffix
+        )
     if (
         type(value.get("format")) is not int
         or value.get("format") != FORMAT
@@ -190,6 +200,7 @@ def normalize_native_smoke(
         raise CandidateError("handoff nativo não corresponde ao candidato/plataforma")
     try:
         environment = validate_environment(value.get("environment"), platform=platform)
+        hardware = validate_hardware(value.get("hardware"), platform=platform)
         cases = validate_cases(value.get("cases"))
         _validate_artifact_files(value.get("cases"), root=Path(handoff).parent)
     except NativeEvidenceError as error:
@@ -205,7 +216,9 @@ def normalize_native_smoke(
         "secrets": "redacted",
         "runtime_executed": True,
     }
-    if set(report) != SMOKE_REPORT_FIELDS:
+    if hardware is not None:
+        report["hardware"] = hardware
+    if set(report) != _fields_for_platform(SMOKE_REPORT_FIELDS, platform):
         raise CandidateError("relatório de smoke normalizado possui campos inválidos")
     return report
 

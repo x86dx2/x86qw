@@ -28,6 +28,15 @@
         "clients/ezquake/"
       ]
     },
+    "x86qw": {
+      "consumers": [
+        "install:x86qw-client-bootstrap",
+        "development:x86qw-client"
+      ],
+      "distribution_prefixes": [
+        "mods/x86qw/"
+      ]
+    },
     "nquake": {
       "consumers": [
         "install:nquake-reference",

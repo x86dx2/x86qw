@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 
+
 _CHUNK_SIZE = 1024 * 1024
 _ALLOWED_COMPRESSION_METHODS = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _ALLOWED_GENERAL_PURPOSE_FLAGS = 0x080E
@@ -51,7 +52,11 @@ _WINDOWS_RESERVED_NAMES = frozenset({
     *(f"COM{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")),
     *(f"LPT{suffix}" for suffix in (*range(1, 10), "¹", "²", "³")),
 })
-_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_VERSION_PATTERN = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 _LOCAL_FILE_HEADER = b"PK\x03\x04"
 _CENTRAL_DIRECTORY_HEADER = b"PK\x01\x02"
 _END_OF_CENTRAL_DIRECTORY = b"PK\x05\x06"
@@ -61,6 +66,21 @@ _ZIP64_END_LOCATOR = b"PK\x06\x07"
 
 class ArchiveError(ValueError):
     """An archive failed the canonical safety or integrity contract."""
+
+
+def _bundle_version_numbers(version: object) -> tuple[int, int, int]:
+    if not isinstance(version, str):
+        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    match = _VERSION_PATTERN.fullmatch(version)
+    if match is None:
+        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    return tuple(int(match.group(index)) for index in range(1, 4))
+
+
+def _includes_project_legal_files(version: str) -> bool:
+    """Return whether a bundle version carries project-owned legal files."""
+
+    return _bundle_version_numbers(version)[0] >= 1
 
 
 def _private_filesystem_boundary():
@@ -1612,8 +1632,7 @@ def _validate_installer_bundle_layout(
     includes_version_member: bool,
     includes_legal_members: bool,
 ) -> ArchivePlan:
-    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
-        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    _bundle_version_numbers(version)
     prefix = f"x86qw-installer-{version}"
     names = [
         f"{prefix}/x86qw.pyz",
@@ -1698,27 +1717,23 @@ def _validate_installer_bundle_layout(
 
 def validate_installer_bundle(source: Path | bytes, version: str) -> ArchivePlan:
     """Validate the immutable versioned public installer bundle contract."""
-    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
-        raise ArchiveError(f"invalid installer bundle version: {version!r}")
-    numeric_version = tuple(int(part) for part in version.split("."))
+    version_value = _bundle_version_numbers(version)
     return _validate_installer_bundle_layout(
         source,
         version,
         includes_version_member=True,
-        includes_legal_members=numeric_version >= (1, 0, 0),
+        includes_legal_members=version_value[0] >= 1,
     )
 
 
 def validate_installer_history_bundle(source: Path | bytes, version: str) -> ArchivePlan:
     """Validate the exact layout used by every immutable published bundle."""
-    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
-        raise ArchiveError(f"invalid installer bundle version: {version!r}")
-    numeric_version = tuple(int(part) for part in version.split("."))
+    version_value = _bundle_version_numbers(version)
     return _validate_installer_bundle_layout(
         source,
         version,
-        includes_version_member=numeric_version >= (0, 1, 20),
-        includes_legal_members=numeric_version >= (1, 0, 0),
+        includes_version_member=version_value >= (0, 1, 20),
+        includes_legal_members=version_value[0] >= 1,
     )
 
 

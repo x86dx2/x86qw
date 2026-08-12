@@ -151,7 +151,11 @@ class SiteTests(unittest.TestCase):
         for document in (home, readme, manual):
             self.assertIn(version, document)
             self.assertIn(f"{product['component_count']} componentes", document)
-        self.assertIn(f"{product['package_count']} pacotes", home)
+        # The home page keeps the numeric value in a data marker so the live
+        # catalog script can refresh it; compare the rendered text rather than
+        # relying on the number and noun being adjacent in raw HTML.
+        visible_home = re.sub(r"<[^>]+>", "", home)
+        self.assertIn(f"{product['package_count']} pacotes", visible_home)
         for command in product["commands"]:
             self.assertIn(f"`{command}`", readme)
         cli_help = subprocess.run(

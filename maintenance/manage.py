@@ -18,6 +18,7 @@ import unicodedata
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -77,7 +78,7 @@ from maintenance.tools.sync_distribution import (
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
 from maintenance.tools.upstreams import load_upstreams, source_owner, verify_preserved_sources
-from x86qw_runtime.trust import TrustError, verify_release_metadata
+from x86qw_runtime.trust import TrustError, load_trusted_catalog, validate_bootstrap_policy
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -91,7 +92,8 @@ RECIPES = MAINTENANCE / "recipes"
 BUILDS = MAINTENANCE / "build/packages"
 CATALOG = PROJECT_ROOT / "site/public/api/v1/catalog.json"
 PRODUCT_CATALOG = PROJECT_ROOT / "site/public/api/v1/product.json"
-TRUST_METADATA = INVENTORY / "trust"
+PUBLIC_TRUST_METADATA = PROJECT_ROOT / "site/public/api/v1/trust/metadata"
+PUBLIC_TRUST_TARGETS = PROJECT_ROOT / "site/public/api/v1/trust/targets"
 PRIMARY_GITHUB_REPOSITORY = "x86dx2/x86qw"
 GITHUB_API_MAX_BYTES = 4 * 1024 * 1024
 GITHUB_API_DEADLINE_SECONDS = 60
@@ -137,6 +139,81 @@ def write_json(path: Path, value: object) -> None:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+class _LocalTufFetcher:
+    """Serve a checked-out public TUF projection through the runtime boundary."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root)
+
+    def download_bytes(self, url: str, max_length: int) -> bytes:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or parsed.query or parsed.fragment:
+            raise TrustError("projeção local de TUF recebeu URL inválida")
+        name = PurePosixPath(parsed.path).name
+        if not name or name in {".", ".."}:
+            raise TrustError("projeção local de TUF recebeu caminho inválido")
+        matches = [
+            path for path in self.root.rglob(name)
+            if path.is_file() and not path.is_symlink()
+        ]
+        if len(matches) != 1:
+            raise TrustError(f"projeção local de TUF não possui {name}")
+        payload = matches[0].read_bytes()
+        if len(payload) > max_length:
+            raise TrustError(f"metadata TUF local excede o limite: {name}")
+        return payload
+
+
+def verify_local_tuf_catalog() -> str:
+    """Validate the embedded root and an optional checked-out TUF projection.
+
+    A source checkout may be ahead of the public site, so absence of the
+    generated public metadata is reported as pending rather than being
+    confused with an expired legacy signing format.
+    """
+
+    root_path = MAINTENANCE / "trust/root.json"
+    try:
+        root_bytes = root_path.read_bytes()
+        validate_bootstrap_policy(root_bytes)
+    except (OSError, TrustError) as error:
+        raise TrustError(f"root TUF incorporada inválida: {error}") from error
+
+    metadata_files = tuple(PUBLIC_TRUST_METADATA.rglob("*.json")) if PUBLIC_TRUST_METADATA.is_dir() else ()
+    target_files = tuple(PUBLIC_TRUST_TARGETS.rglob("*.json")) if PUBLIC_TRUST_TARGETS.is_dir() else ()
+    if not metadata_files and not target_files:
+        return "root validada; metadata pública aguardando publicação"
+    if not PUBLIC_TRUST_METADATA.is_dir() or not PUBLIC_TRUST_TARGETS.is_dir():
+        raise TrustError("projeção pública de TUF incompleta")
+    required_metadata = {
+        "timestamp.json",
+        "1.root.json",
+    }
+    names = {path.name for path in metadata_files if not path.is_symlink()}
+    if not required_metadata <= names or not any(
+        path.name.endswith(".snapshot.json") for path in metadata_files
+    ) or not any(path.name.endswith(".targets.json") for path in metadata_files):
+        raise TrustError("projeção pública de TUF não contém root/timestamp/snapshot/targets")
+
+    with tempfile.TemporaryDirectory(prefix="x86qw-verify-tuf-") as temporary:
+        cache = Path(temporary)
+        authenticated = load_trusted_catalog(
+            bootstrap_root=root_bytes,
+            metadata_dir=cache / "metadata",
+            target_dir=cache / "targets",
+            metadata_base_url="https://local.x86qw.invalid/trust/metadata/",
+            target_base_url="https://local.x86qw.invalid/trust/targets/",
+            fetcher=_LocalTufFetcher(PROJECT_ROOT / "site/public/api/v1/trust"),
+        )
+    try:
+        local_catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise TrustError("catálogo local não pôde ser lido para comparação TUF") from error
+    if local_catalog != authenticated:
+        raise TrustError("catálogo local diverge do target TUF autenticado")
+    return "autenticada localmente"
 
 
 def run(command: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -1034,27 +1111,11 @@ def command_check(options: argparse.Namespace) -> int:
 def command_verify(options: argparse.Namespace) -> int:
     catalog = load_json(CATALOG)
     package_count = validate_catalog(catalog)
-    trust_paths = {
-        name: TRUST_METADATA / f"{name}.json"
-        for name in ("root", "current", "snapshot")
-    }
     try:
-        trust_payloads = {
-            name: path.read_bytes()
-            for name, path in trust_paths.items()
-            if path.is_file() and not path.is_symlink()
-        }
-        if set(trust_payloads) != set(trust_paths):
-            raise TrustError("projeção de trust metadata incompleta")
-        verify_release_metadata(
-            trust_payloads["root"],
-            trust_payloads["current"],
-            trust_payloads["snapshot"],
-            CATALOG.read_bytes(),
-        )
-    except (OSError, TrustError) as error:
+        trust_status = verify_local_tuf_catalog()
+    except TrustError as error:
         raise ManagerError(
-            f"trust metadata não autentica o catálogo público: {error}"
+            f"TUF não autentica o catálogo local: {error}"
         ) from error
     component_catalog = load_component_catalog(COMPONENTS)
     runtime_inventory = load_runtime_inventory(
@@ -1088,7 +1149,7 @@ def command_verify(options: argparse.Namespace) -> int:
         f"runtimes: {len(runtime_inventory['runtimes']['runtimes'])}; "
         f"jogos: {len(runtime_inventory['games']['games'])}; "
         f"receitas: {recipe_count}; arquivos upstream: {upstream_count}; fontes: {source_count}; "
-        f"nQuake: {revision[:12]}; trust metadata: autenticada."
+        f"nQuake: {revision[:12]}; TUF: {trust_status}."
     )
     misplaced = [
         path for path in (
@@ -2168,7 +2229,7 @@ def github_latest_release_tag(repository: str) -> str | None:
 def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
     packages = catalog["packages"]
     assert isinstance(packages, list)
-    releases: dict[tuple[str, str], list[tuple[dict[str, object], Path, str]]] = {}
+    releases: dict[tuple[str, str], list[tuple[dict[str, object], str]]] = {}
     for package in packages:
         assert isinstance(package, dict)
         urls = package["urls"]
@@ -2185,7 +2246,7 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
             raise ManagerError(f"pacote sem mirror GitHub: {package['filename']}")
         repository, tag, primary = github_mirror
         releases.setdefault((repository, tag), []).append(
-            (package, local_artifact(package, DIST, BUILDS), primary)
+            (package, primary)
         )
     latest_by_repository = {
         repository: github_latest_release_tag(repository)
@@ -2194,18 +2255,18 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
     for (repository, tag), artifacts in releases.items():
         titles = {
             str(package.get("mirror_title", package.get("release_title", f"x86QW Content · {tag}")))
-            for package, _, _ in artifacts
+            for package, _ in artifacts
         }
         notes = {
             str(package.get("mirror_notes", "Pacotes versionados da distribuição x86QW."))
-            for package, _, _ in artifacts
+            for package, _ in artifacts
         }
         latest_values = {
             bool(package.get(
                 "mirror_latest",
                 package.get("component") == "installer" and package.get("current") is True,
             ))
-            for package, _, _ in artifacts
+            for package, _ in artifacts
         }
         if len(titles) != 1 or len(notes) != 1 or len(latest_values) != 1:
             raise ManagerError(f"release {tag} possui metadados de espelho conflitantes")
@@ -2241,10 +2302,12 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
                     latest_by_repository[repository] = tag if make_latest else (
                         None if is_latest else latest_by_repository[repository]
                     )
+        if release is None and not dry_run:
+            raise ManagerError(f"release GitHub {tag} nao ficou disponivel apos a criacao")
         remote_assets = {
             item.get("name"): item for item in (release or {}).get("assets", []) if isinstance(item, dict)
         }
-        for package, path, primary in artifacts:
+        for package, primary in artifacts:
             remote = remote_assets.get(package["filename"])
             if remote is not None:
                 digest = remote.get("digest")
@@ -2260,16 +2323,38 @@ def publish_github(catalog: dict[str, object], *, dry_run: bool) -> None:
                 print(f"[GITHUB {repository}] verificado {package['filename']}")
                 continue
             print(f"[GITHUB {repository}] enviar {package['filename']}")
-            if not dry_run:
-                run(["gh", "release", "upload", tag, str(path), "--repo", repository])
+            if dry_run:
+                continue
+            path = local_artifact(package, DIST, BUILDS)
+            run(["gh", "release", "upload", tag, str(path), "--repo", repository])
+            release = github_release(repository, tag)
+            if release is None:
+                raise ManagerError(f"release GitHub {tag} desapareceu apos o upload")
+            remote_assets = {
+                item.get("name"): item
+                for item in release.get("assets", [])
+                if isinstance(item, dict)
+            }
+            remote = remote_assets.get(package["filename"])
+            if remote is None:
+                raise ManagerError(f"asset GitHub nao apareceu apos o upload: {package['filename']}")
+            digest = remote.get("digest")
+            fingerprint = (
+                (remote.get("size"), str(digest).removeprefix("sha256:"))
+                if isinstance(digest, str)
+                else remote_sha256(primary, int(package["size"]), str(package["sha256"]))
+            )
+            if fingerprint != (package["size"], package["sha256"]):
+                raise ManagerError(f"asset GitHub enviado difere do catalogo: {package['filename']}")
 
 
 def command_publish(options: argparse.Namespace) -> int:
     catalog = load_json(CATALOG)
     validate_catalog(catalog)
-    if not BUILDS.exists():
-        print("[INFO] Builds de componentes ausentes; gerando agora.")
-        command_build(argparse.Namespace(register=False, project_ref=None))
+    # Publication consumes bytes that were built and approved elsewhere.  A
+    # missing local build directory is not permission to create a new one:
+    # doing so would make the bytes published depend on the publisher's
+    # checkout and would violate the candidate's build-once contract.
     if not options.gitlab_only:
         publish_github(catalog, dry_run=options.dry_run)
     if not options.github_only:

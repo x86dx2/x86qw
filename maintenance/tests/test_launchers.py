@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from maintenance.tools import launcher_contract
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CAPABILITIES = ROOT / "maintenance/inventory/capabilities.json"
@@ -262,6 +264,8 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
         commands = json.loads(CAPABILITIES.read_text(encoding="utf-8"))["commands"]
         product_commands = json.loads(PRODUCT.read_text(encoding="utf-8"))["commands"]
         self.assertEqual(commands, product_commands)
+        self.assertIn("changes", commands)
+        self.assertIn("migrate", commands)
         help_result = subprocess.run(
             [sys.executable, str(ROOT / "dist/installer/bin/manager.py"), "--help"],
             check=True, capture_output=True, text=True,
@@ -273,6 +277,16 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 self.assertIn(command, help_result.stdout)
                 self.assertIn(command, shell)
                 self.assertIn(command, batch)
+
+    def test_launcher_dispatch_sets_match_the_canonical_command_contract(self):
+        launcher_contract.validate_public_launcher_contract(ROOT)
+
+    def test_launchers_document_non_mutating_maintenance_options(self):
+        shell = (ROOT / "dist/installer/bin/x86qw.sh").read_text(encoding="utf-8")
+        batch = (ROOT / "dist/installer/bin/x86qw.cmd").read_text(encoding="utf-8")
+        for source in (shell, batch):
+            self.assertIn("changes [--sync-gitignore]", source)
+            self.assertIn("migrate [--dry-run]", source)
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
     def test_unix_launcher_forwards_repair_and_long_play_arguments_exactly(self):

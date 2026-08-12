@@ -1,0 +1,81 @@
+name: Monitor public TUF lease
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: tuf-monitor
+  cancel-in-progress: true
+
+jobs:
+  public-tuf:
+    name: Authenticate public TUF and check lease
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 1
+          lfs: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Check authenticated public lease
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python maintenance/tools/monitor_public_tuf.py --root maintenance/trust/root.json --warning-hours 72
+      - name: Record one actionable TUF lease alert
+        if: failure()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const marker = '<!-- x86qw-tuf-lease-alert -->';
+            const title = 'TUF public lease requires attention';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              'The scheduled public TUF monitor failed or found a lease inside the warning window.',
+              '',
+              `Workflow run: ${runUrl}`,
+              `Commit: ${context.sha}`,
+              '',
+              'Inspect the authenticated metadata and follow the TUF renewal/recovery runbook. Do not renew or publish from this alert automatically.',
+            ].join('\n');
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = openIssues.find((issue) => (
+              !issue.pull_request
+              && typeof issue.body === 'string'
+              && issue.body.includes(marker)
+            ));
+            if (existing) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                title,
+                body,
+              });
+              core.info(`Updated TUF lease alert issue #${existing.number}`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+              });
+              core.info(`Created TUF lease alert issue #${created.number}`);
+            }

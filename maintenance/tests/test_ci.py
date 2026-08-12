@@ -178,19 +178,27 @@ class ContinuousIntegrationTests(unittest.TestCase):
         pull_request = (ROOT / ".github/PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
         stabilization = (ROOT / "docs/implementation/stabilization-1.0.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "docs/ROADMAP-QUAKE-ECOSYSTEM.md").read_text(encoding="utf-8")
+        draft = (ROOT / "docs/releases/1.0.0-draft.md").read_text(encoding="utf-8")
         self.assertIn("./maintenance/manage.py verify", runbook)
         self.assertIn("release_candidate.py prepare", runbook)
+        self.assertIn("git show -s --format=%cI", runbook)
+        self.assertIn("--generated-at", runbook)
         self.assertIn("release_candidate.py verify", runbook)
         self.assertIn("release_candidate.py promote", runbook)
         self.assertIn("mktemp", runbook)
         self.assertIn("Mac", contributing)
         self.assertIn("Mac", pull_request)
-        self.assertIn("nenhum runner", pull_request.casefold())
+        self.assertIn("gates externos", pull_request.casefold())
+        self.assertIn("fail-closed", pull_request.casefold())
         self.assertNotIn("Smoke nativo executado", pull_request)
         self.assertNotIn("sete checks", stabilization)
         self.assertNotIn("os workflows de candidato rejeitam prereleases", stabilization)
         self.assertNotIn("publicação da `1.0.0` sem os gates nativos", roadmap)
         self.assertIn("sem gates nativos", roadmap)
+        self.assertIn("versão pública continua sendo `0.7.13`", draft)
+        self.assertIn("smoke nativo M3", draft)
+        self.assertNotIn("versão pública continua sendo `0.7.3`", draft)
+        self.assertNotIn("sem smokes nativos ou runners externos", draft)
 
     def test_committed_diff_gate_uses_event_shas_and_rejects_committed_whitespace(self):
         script = ROOT / "maintenance/tools/check_committed_diff.py"
@@ -222,33 +230,108 @@ class ContinuousIntegrationTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertIn("trailing whitespace", result.stdout + result.stderr)
 
-    def test_local_candidate_path_has_no_external_gate(self):
+    def test_release_candidate_path_has_real_transport_and_publish_gates(self):
         candidate = (ROOT / "maintenance/tools/release_candidate.py").read_text(encoding="utf-8")
-        runbook = (ROOT / "docs/runbooks/release.md").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertNotIn("verify_external_handoff", candidate)
-        self.assertNotIn("check_release_blockers", candidate)
-        self.assertNotIn("GITHUB_TOKEN", candidate)
-        self.assertNotIn("GLAB_TOKEN", candidate)
-        self.assertNotIn("release-approval", runbook)
-        self.assertNotIn("release-metadata", runbook)
-        self.assertIn("publicação remota", runbook)
-        self.assertIn("opcional", runbook)
+        self.assertIn("build-once", release)
+        self.assertIn("portable-verify", release)
+        self.assertIn("native-m3", release)
+        self.assertIn("approval-preview", release)
+        self.assertIn("environment: release", release)
+        self.assertIn("publish-assets", release)
+        self.assertIn("publish-gitlab", release)
+        self.assertIn("verify-mirrors", release)
+        self.assertIn("metadata-last", release)
+        self.assertIn("verify_public_tuf.py", release)
+        self.assertIn("verify_public_bootstraps.py", release)
+        self.assertIn("--site-source candidate/site/public", release)
+        self.assertNotIn("--bootstrap-source candidate/site/public", release)
+        self.assertIn("release-blockers", release)
+        self.assertIn("check_release_blockers.py", release)
+        self.assertIn("release_evidence_binding.py", release)
+        self.assertIn(".github/workflows/native-m3.yml", release)
+        self.assertIn("issues: read", release)
+        self.assertNotIn("needs: [release-blockers, build-once, native-m3]", release)
+        self.assertIn("retention-days: 90", release)
+        self.assertNotIn("Reserved mirror gate", release)
+        self.assertNotIn("No metadata publisher", release)
 
-    def test_no_external_workflows_remain_active(self):
+    def test_release_catalog_timestamp_is_bound_to_the_candidate_commit(self):
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn('git show -s --format=%cI "$CANDIDATE_COMMIT"', release)
+        self.assertIn("astimezone(timezone.utc)", release)
+        self.assertIn('replace("+00:00", "Z")', release)
+        self.assertEqual(
+            2,
+            release.count("--generated-at \"$CANDIDATE_GENERATED_AT\""),
+            "catalog and candidate manifest must share the commit-bound timestamp",
+        )
+
+    def test_approval_preview_passes_each_evidence_root_once(self):
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        preview = release.split("  approval-preview:\n", 1)[1].split("\n  approval:\n", 1)[0]
+        self.assertEqual(
+            1,
+            preview.count("--artifact-root m3-evidence"),
+            "approval verification must not duplicate the evidence root argument",
+        )
+
+    def test_external_workflows_are_explicit_and_pinned(self):
         workflow_dir = ROOT / ".github/workflows"
         workflow_files = sorted(
             path for path in workflow_dir.glob("*")
             if path.suffix in {".yml", ".yaml"}
         )
-        self.assertEqual([], workflow_files)
+        self.assertEqual(
+            {
+                "native-m3.yml", "release.yml", "sign-native-evidence.yml",
+                "tuf-monitor.yml", "validate.yml",
+            },
+            {path.name for path in workflow_files},
+        )
+        for path in workflow_files:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", source)
+            self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
+        monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
+        self.assertIn('cron: "17 * * * *"', monitor)
+        self.assertIn("monitor_public_tuf.py", monitor)
+        self.assertIn("--warning-hours 72", monitor)
 
-    def test_native_platform_contracts_remain_compatibility_only(self):
+    def test_tuf_monitor_persists_one_actionable_alert_on_failure(self):
+        monitor = (ROOT / ".github/workflows/tuf-monitor.yml").read_text(encoding="utf-8")
+        self.assertIn("issues: write", monitor)
+        self.assertIn("if: failure()", monitor)
+        self.assertIn("actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd", monitor)
+        self.assertIn("x86qw-tuf-lease-alert", monitor)
+        self.assertIn("issues.listForRepo", monitor)
+        self.assertIn("issues.create", monitor)
+        self.assertIn("issues.update", monitor)
+
+    def test_migration_plan_names_the_complete_public_0_7_fixture_range(self):
+        roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
+        plan = (ROOT / "docs/implementation/stabilization-1.0-plan.md").read_text(encoding="utf-8")
+        self.assertIn("0.7.0–0.7.13", roadmap)
+        self.assertIn("0.7.0–0.7.13", plan)
+        self.assertNotIn("0.7.0–0.7.3` e `0.7.13", roadmap)
+        self.assertNotIn("0.7.0–0.7.3` e `0.7.13", plan)
+
+    def test_native_platform_contracts_have_an_explicit_m3_executor(self):
         contract = (ROOT / "x86qw_runtime/contracts/native_evidence.py").read_text(encoding="utf-8")
         for platform in ("Linux-X64", "Windows-X64", "macOS-ARM64", "macOS-X64"):
             self.assertIn(platform, contract)
         self.assertIn("REQUIRED_NATIVE_PLATFORMS", contract)
         self.assertTrue((ROOT / "maintenance/tools/native_release_smoke.py").is_file())
         self.assertTrue((ROOT / "maintenance/tools/native_release_evidence.py").is_file())
+        self.assertTrue((ROOT / "maintenance/tools/release_evidence_binding.py").is_file())
+        self.assertTrue((ROOT / "maintenance/tools/assemble_release_evidence.py").is_file())
+        self.assertTrue((ROOT / "maintenance/tools/native_m3_harness.py").is_file())
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        native_workflow = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertIn("self-hosted, macOS, arm64, M3", native_workflow)
+        self.assertIn("native-m3.yml", release)
+        self.assertIn('REQUIRED_NATIVE_PLATFORMS = frozenset({"macOS-ARM64"})', contract)
 
     def test_site_uses_lockfile(self):
         self.assertTrue((ROOT / "site/package.json").is_file())

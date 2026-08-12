@@ -46,6 +46,17 @@ class PlatformProcessBoundaryTests(unittest.TestCase):
         self.assertTrue(probe.identity.creation_token)
         self.assertTrue(probe.identity.executable)
 
+    @unittest.skipUnless(sys.platform == "darwin", "libproc é específico do macOS")
+    def test_macos_identity_uses_libproc_when_ps_is_unavailable(self) -> None:
+        """A sandbox denying the ps subprocess must not disable installation locks."""
+
+        processes = importlib.import_module("x86qw_runtime.platform.processes")
+        with mock.patch.object(processes.subprocess, "run", side_effect=PermissionError(1, "ps")):
+            probe = processes._macos_process_identity(os.getpid())
+
+        self.assertEqual("alive", probe.status, probe.detail)
+        self.assertIsNotNone(probe.identity)
+
     def test_expected_process_rejects_pid_reuse_by_token_or_executable(self) -> None:
         """A matching PID alone never authorizes termination or recovery."""
 
@@ -61,6 +72,18 @@ class PlatformProcessBoundaryTests(unittest.TestCase):
 
         self.assertEqual("identity_mismatch", probe.status)
         self.assertIs(probe.identity, actual.identity)
+
+    def test_macos_framework_exec_paths_share_one_owner_identity(self) -> None:
+        """A framework launcher may exec without changing its live PID owner."""
+
+        processes = importlib.import_module("x86qw_runtime.platform.processes")
+        first = "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14"
+        second = "/Library/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+        with mock.patch.object(processes.sys, "platform", "darwin"):
+            self.assertEqual(
+                processes._comparable_executable(first),
+                processes._comparable_executable(second),
+            )
 
     def test_session_control_contains_no_process_probe_implementation(self) -> None:
         """The compatibility facade must not become a second platform backend."""

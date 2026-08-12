@@ -254,7 +254,7 @@ quake-world/.x86qw/
 │           ├── stable.receipt
 │           └── nightly.receipt
 └── components/
-    ├── nquake-bootstrap/
+    ├── x86qw-client-bootstrap/
     │   ├── receipt
     │   └── inventory
     ├── total-destruction-2/
@@ -330,6 +330,11 @@ O builder também recompõe `sound/weapons/saw_down.wav`, omitido pela distribui
 do mesmo artefato e conferindo tamanho e SHA-256 declarados no inventário.
 Configurações pessoais nunca entram nos inventários. O `config.cfg` original do
 nQuake é usado apenas quando ainda não existe configuração no destino.
+Na primeira execução, `qw/x86qw-default.cfg` é aplicado uma vez depois de
+`nquake_default.cfg` e `ezquake/configs/preset.cfg`; o resultado combinado é
+salvo pelo ezQuake no `config.cfg` pessoal. Essa camada inicial é gerenciada
+pelo produto, mas não é reaplicada depois que `_nquake_first_startup` muda para
+`0`, permitindo que o jogador altere os valores normalmente.
 Customizações globais devem ficar em `qw/x86qw-user.cfg`, criado uma única vez
 e executado ao final do bootstrap. Os aliases fornecidos pelo x86QW são
 temporários e, durante uma atualização, cópias antigas desses aliases são
@@ -919,6 +924,12 @@ sem metadata e estados ambíguos são diagnosticados sem exclusão ou inferênci
 destrutiva. Quando o plano exige payload, a CLI instalada orienta a reexecução
 do bootstrap para obtê-lo pelo fluxo público validado. Arquivos pessoais e
 arquivos gerenciados modificados são preservados.
+
+Para converter os metadados de uma instalação legada para o contrato 1.0, use
+`./x86qw.sh migrate --dry-run` para apenas visualizar o plano ou
+`./x86qw.sh migrate` para executá-lo. A migração reorganiza recibos e estado
+com hashes, journal e rollback; não baixa pacotes nem altera PAKs,
+configurações pessoais, demos ou logs.
 
 Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
 mostram somente as mudanças reais no formato do Homebrew: manifesto baixado,

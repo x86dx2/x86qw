@@ -1,0 +1,31 @@
+{
+  "filename": "nquake-bootstrap-e4cb23d40aa2+x86qw.3.zip",
+  "members": {
+    "defaults/ezquake/configs/config.cfg": {
+      "sha256": "30925267d22c9744a268b9e5f5cc6e4a04f46c377ea89527c858fd5f7f7145d0",
+      "size": 1424
+    },
+    "defaults/qw/x86qw-user.cfg": {
+      "sha256": "c66298bd2ed59b69318795052cc66fd2099cbfe209f8559ab9260d999d212997",
+      "size": 233
+    },
+    "payload/qw/autoexec.cfg": {
+      "sha256": "9b9aadc29c2784be60d7da7b19b59eccf099c0d7f795d42c352a1f3df918b705",
+      "size": 20697
+    },
+    "payload/qw/fragfile.dat": {
+      "sha256": "199dbda082be8672cb76d41a8be8a8201e85c91d62265455abb32ceaf2b3155e",
+      "size": 38950
+    },
+    "payload/qw/nquake_default.cfg": {
+      "sha256": "688aab8f94dc33419d7b7c55c1e572deb0a77d728051cd5e3833837041b23e26",
+      "size": 80646
+    },
+    "payload/qw/x86qw-ruleset.cfg": {
+      "sha256": "ffe72ad7b13b66aee74188e4404f601e311596c2e12f5cb03a879aa8efc278f3",
+      "size": 673
+    }
+  },
+  "sha256": "24c6836670679615b4af4899e84b14a3ee74d1b61d00b2db11e805ea257b4f9c",
+  "size": 28334
+}

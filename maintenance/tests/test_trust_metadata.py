@@ -12,8 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-import x86qw_runtime.trust as trust
-from x86qw_runtime.trust import (
+import maintenance.tools.release_trust as trust
+from maintenance.tests.trust_fixture import catalog_0_7_3_bytes
+from maintenance.tools.release_trust import (
     DigestError,
     ExpiryError,
     FreezeError,
@@ -39,7 +40,7 @@ TRUST_FIXTURES = ROOT / "maintenance/tests/fixtures/trust"
 
 def fixture(name: str) -> bytes:
     if name == "catalog.json":
-        return (ROOT / "site/public/api/v1/catalog.json").read_bytes()
+        return catalog_0_7_3_bytes()
     return (TRUST_FIXTURES / name).read_bytes()
 
 

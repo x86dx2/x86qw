@@ -37,12 +37,14 @@
     {"member": "x86qw_runtime/supervisor/readiness.py", "source": "x86qw_runtime/supervisor/readiness.py", "consumer": "services.py", "contract": "readiness MVDSV, QTV e QWFWD"},
     {"member": "x86qw_runtime/supervisor/sessions.py", "source": "x86qw_runtime/supervisor/sessions.py", "consumer": "manager e services", "contract": "journal e recuperação após crash"},
     {"member": "x86qw_runtime/errors.py", "source": "x86qw_runtime/errors.py", "consumer": "manager, gameplay e services", "contract": "erros tipados e códigos de saída"},
+    {"member": "x86qw_runtime/installation_changes.py", "source": "x86qw_runtime/installation_changes.py", "consumer": "manager.py", "contract": "comparação A/M/D e filtro Git seletivo da instalação"},
     {"member": "x86qw_runtime/migrations.py", "source": "x86qw_runtime/migrations.py", "consumer": "manager.py", "contract": "migração tipada do estado"},
     {"member": "x86qw_runtime/receipts.py", "source": "x86qw_runtime/receipts.py", "consumer": "manager.py", "contract": "codecs de recibos e inventários"},
     {"member": "x86qw_runtime/state.py", "source": "x86qw_runtime/state.py", "consumer": "manager.py", "contract": "codec do estado instalado"},
     {"member": "x86qw_runtime/transaction.py", "source": "x86qw_runtime/transaction.py", "consumer": "manager.py", "contract": "plano, aplicação e rollback"},
     {"member": "x86qw_runtime/versioning.py", "source": "x86qw_runtime/versioning.py", "consumer": "manager e builder", "contract": "validação e ordenação de versões"},
-    {"member": "x86qw_runtime/trust.py", "source": "x86qw_runtime/trust.py", "consumer": "trust metadata", "contract": "verificação bounded de snapshots e ponteiros assinados"},
+    {"member": "x86qw_runtime/trust.py", "source": "x86qw_runtime/trust.py", "consumer": "manager.py", "contract": "verificação TUF bounded do catálogo público"},
+    {"member": "_x86qw/trust/root.json", "source": "maintenance/trust/root.json", "consumer": "manager.py", "contract": "âncora root TUF pública do catálogo autenticado"},
     {"member": "x86qw_runtime/io/__init__.py", "source": "x86qw_runtime/io/__init__.py", "consumer": "importador Python", "contract": "pacote de I/O canônico"},
     {"member": "x86qw_runtime/io/atomic.py", "source": "x86qw_runtime/io/atomic.py", "consumer": "manager, state, receipts e sessions", "contract": "escrita e promoção atômica"},
     {"member": "x86qw_runtime/io/archive.py", "source": "x86qw_runtime/io/archive.py", "consumer": "manager.py", "contract": "scan e extração segura de arquivos"},
@@ -64,6 +66,7 @@
     {"member": "_x86qw/runtimes.json", "source": "generated:runtimes", "consumer": "manager, gameplay e services", "contract": "runtimes e plataformas disponíveis"},
     {"member": "_x86qw/games.json", "source": "generated:games", "consumer": "gameplay.py", "contract": "jogos e compatibilidade"},
     {"member": "_x86qw/installer.json", "source": "generated:identity", "consumer": "manager.py", "contract": "identidade interna do bundle"},
-    {"member": "_x86qw/components.json", "source": "generated:component-catalog", "consumer": "manager.py", "contract": "catálogo mínimo de componentes"}
+    {"member": "_x86qw/components.json", "source": "generated:component-catalog", "consumer": "manager.py", "contract": "catálogo mínimo de componentes"},
+    {"member": "_x86qw/runtime-dependencies.json", "source": "generated:runtime-dependencies", "consumer": "auditoria do zipapp", "contract": "versões, hashes e licenças das dependências TUF"}
   ]
 }

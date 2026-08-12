@@ -23,6 +23,7 @@ class QuarantineToken:
     previous: Path
     identity: tuple[int, ...]
     device: int
+    allow_non_regular: bool = False
 
 
 def lexists(path: Path) -> bool:
@@ -128,18 +129,27 @@ def _validate_tree(path: Path, device: int) -> None:
         _validate_tree(child, device)
 
 
-def _unlink_leaf(path: Path, expected_identity: tuple[int, ...]) -> None:
+def _unlink_leaf(
+    path: Path,
+    expected_identity: tuple[int, ...],
+    *,
+    allow_non_regular: bool,
+) -> None:
     """Remove only the leaf identity observed by the recursive plan."""
 
     from . import managed_files
 
-    if not stat.S_ISREG(expected_identity[2]):
+    if stat.S_ISREG(expected_identity[2]):
+        if managed_files.remove_identity_bound_path(
+            path, expected_identity, directory=False,
+        ):
+            return
+        raise QuarantineError(f"Nó de quarantine mudou: {path}")
+    if not allow_non_regular:
         raise QuarantineError(
             f"Nó não regular preservado no quarantine: {path}"
         )
-    if managed_files.remove_identity_bound_path(
-        path, expected_identity, directory=False,
-    ):
+    if managed_files.unlink_identity_bound_node(path, expected_identity[:3]):
         return
     raise QuarantineError(f"Nó de quarantine mudou: {path}")
 
@@ -149,6 +159,7 @@ def _remove_tree(
     device: int,
     *,
     expected_identity: tuple[int, ...] | None = None,
+    allow_non_regular: bool = False,
 ) -> None:
     metadata = path.lstat()
     if int(metadata.st_dev) != device:
@@ -159,7 +170,11 @@ def _remove_tree(
     if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
         if _identity(path) != current_identity:
             raise QuarantineError(f"Nó de quarantine mudou: {path}")
-        _unlink_leaf(path, current_identity)
+        _unlink_leaf(
+            path,
+            current_identity,
+            allow_non_regular=allow_non_regular,
+        )
         return
     with os.scandir(path) as entries:
         children = tuple(
@@ -170,11 +185,8 @@ def _remove_tree(
             for entry in entries
         )
     for child, child_identity in children:
-        _remove_tree(
-            child,
-            device,
-            expected_identity=child_identity,
-        )
+        child_options = {"allow_non_regular": True} if allow_non_regular else {}
+        _remove_tree(child, device, expected_identity=child_identity, **child_options)
     from . import managed_files
 
     if not managed_files.remove_identity_bound_path(
@@ -187,6 +199,7 @@ def apply_quarantine_removal(
     destination: Path,
     *,
     expected_observation: tuple[object, ...] | None = None,
+    allow_non_regular: bool = False,
 ) -> QuarantineToken:
     """Atomically move one existing node into a private sibling quarantine."""
 
@@ -222,7 +235,14 @@ def apply_quarantine_removal(
     except OSError as error:
         raise QuarantineError(f"Não foi possível criar quarantine ao lado de {destination}") from error
     previous = root / "node"
-    token = QuarantineToken(destination, root, previous, identity, identity[0])
+    token = QuarantineToken(
+        destination,
+        root,
+        previous,
+        identity,
+        identity[0],
+        allow_non_regular,
+    )
     try:
         destination.replace(previous)
         if _identity(previous) != identity:
@@ -285,10 +305,12 @@ def finalize_quarantine(token: QuarantineToken) -> None:
         raise QuarantineError(f"Backup de quarantine mudou: {token.previous}")
     _validate_tree(token.previous, token.device)
     try:
+        options = {"allow_non_regular": True} if token.allow_non_regular else {}
         _remove_tree(
             token.previous,
             token.device,
             expected_identity=token.identity,
+            **options,
         )
         token.quarantine.rmdir()
     except OSError as error:

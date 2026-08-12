@@ -70,6 +70,11 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
             "glibc_version": None,
         }
 
+    def _hardware(self, platform: str) -> dict[str, str] | None:
+        if platform == "macOS-ARM64":
+            return {"chip": "Apple M3 Pro", "model": "Mac15,6"}
+        return None
+
     def _cases(self) -> list[dict[str, object]]:
         return [
             {
@@ -103,31 +108,33 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
             artifact_path.write_bytes(payload)
             artifact["size"] = len(payload)
             artifact["sha256"] = hashlib.sha256(payload).hexdigest()
+        report = {
+            "format": NATIVE_EVIDENCE_FORMAT,
+            "status": "passed",
+            "platform": platform,
+            "completed_at": "2026-08-04T12:00:00Z",
+            "secrets": "redacted",
+            "candidate": {
+                "version": "1.0.0-rc.1",
+                "commit": "c" * 40,
+                "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+            },
+            "environment": self._environment(platform),
+            "cases": cases,
+            "runtime_executed": True,
+        }
+        hardware = self._hardware(platform)
+        if hardware is not None:
+            report["hardware"] = hardware
         path.write_text(
-            json.dumps(
-                {
-                    "format": NATIVE_EVIDENCE_FORMAT,
-                    "status": "passed",
-                    "platform": platform,
-                    "completed_at": "2026-08-04T12:00:00Z",
-                    "secrets": "redacted",
-                    "candidate": {
-                        "version": "1.0.0-rc.1",
-                        "commit": "c" * 40,
-                        "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
-                    },
-                    "environment": self._environment(platform),
-                    "cases": cases,
-                    "runtime_executed": True,
-                }
-            ),
+            json.dumps(report),
             encoding="utf-8",
         )
         return path
 
     def _native_record(self, candidate: Path, platform: str) -> dict[str, object]:
         manifest = candidate / "candidate.json"
-        return {
+        record = {
             "format": NATIVE_EVIDENCE_FORMAT,
             "project": "x86qw",
             "status": "complete",
@@ -144,6 +151,10 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
             "secrets": "redacted",
             "signature": None,
         }
+        hardware = self._hardware(platform)
+        if hardware is not None:
+            record["hardware"] = hardware
+        return record
 
     def test_native_evidence_requires_explicit_handoff_execution_attestation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -267,6 +278,33 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
                     recorded_at="2026-08-04T12:34:56Z",
                 )
 
+    def test_native_evidence_redacts_runner_command_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            report = self._report(candidate, root / "smoke.json")
+            payload = json.loads(report.read_text(encoding="utf-8"))
+            payload["cases"][0]["command"] = [
+                "/private/runner/candidate/python",
+                "/private/runner/candidate/entrypoint.py",
+                "--case",
+                CANONICAL_CASES[0],
+            ]
+            report.write_text(json.dumps(payload), encoding="utf-8")
+
+            evidence = native_release_evidence.write_native_evidence(
+                candidate=candidate,
+                platform="Linux-X64",
+                report=report,
+                output=root / "native.json",
+            )
+
+            self.assertEqual(
+                ["x86qw-native-case-v1", CANONICAL_CASES[0]],
+                evidence["cases"][0]["command"],
+            )
+            self.assertNotIn("/private/runner", json.dumps(evidence))
+
     def test_native_evidence_reads_artifacts_from_explicit_handoff_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -338,7 +376,7 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-            (evidence_dir / "Windows-X64.json").unlink()
+            (evidence_dir / "macOS-ARM64.json").unlink()
             with self.assertRaises(release_candidate.CandidateError):
                 native_release_evidence.validate_native_evidence(
                     candidate=candidate,
@@ -346,8 +384,8 @@ class NativeReleaseEvidenceTests(unittest.TestCase):
                     expected_platforms=expected,
                 )
 
-            (evidence_dir / "Windows-X64.json").write_text(
-                json.dumps(self._native_record(candidate, "Windows-X64")) + "\n",
+            (evidence_dir / "macOS-ARM64.json").write_text(
+                json.dumps(self._native_record(candidate, "macOS-ARM64")) + "\n",
                 encoding="utf-8",
             )
             (evidence_dir / "macOS-X64.json").write_text(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import os
 import subprocess
 import sys
@@ -22,6 +23,33 @@ class ProcessProbe:
     status: str
     identity: ProcessIdentity | None = None
     detail: str = ""
+
+
+class _MacProcBsdInfo(ctypes.Structure):
+    _fields_ = [
+        ("flags", ctypes.c_uint32),
+        ("status", ctypes.c_uint32),
+        ("xstatus", ctypes.c_uint32),
+        ("pid", ctypes.c_uint32),
+        ("ppid", ctypes.c_uint32),
+        ("uid", ctypes.c_uint32),
+        ("gid", ctypes.c_uint32),
+        ("ruid", ctypes.c_uint32),
+        ("rgid", ctypes.c_uint32),
+        ("svuid", ctypes.c_uint32),
+        ("svgid", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("comm", ctypes.c_char * 16),
+        ("name", ctypes.c_char * 32),
+        ("nfiles", ctypes.c_uint32),
+        ("pgid", ctypes.c_uint32),
+        ("pjobc", ctypes.c_uint32),
+        ("tdev", ctypes.c_uint32),
+        ("tpgid", ctypes.c_uint32),
+        ("nice", ctypes.c_int32),
+        ("start_sec", ctypes.c_uint64),
+        ("start_usec", ctypes.c_uint64),
+    ]
 
 
 def _linux_process_identity(pid: int) -> ProcessProbe:
@@ -77,6 +105,46 @@ def _macos_process_identity(pid: int) -> ProcessProbe:
         )
         return ProcessProbe("alive", identity)
     except (OSError, subprocess.SubprocessError) as error:
+        fallback = _macos_libproc_identity(pid)
+        if fallback.status != "inconclusive":
+            return fallback
+        detail = str(error)
+        if fallback.detail:
+            detail += f"; libproc: {fallback.detail}"
+        return ProcessProbe("inconclusive", detail=detail)
+
+
+def _macos_libproc_identity(pid: int) -> ProcessProbe:
+    """Read macOS process identity without a subprocess permission."""
+
+    try:
+        libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+        pidinfo = libproc.proc_pidinfo
+        pidinfo.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_uint64,
+            ctypes.c_void_p, ctypes.c_int,
+        ]
+        pidinfo.restype = ctypes.c_int
+        info = _MacProcBsdInfo()
+        returned = pidinfo(pid, 3, 0, ctypes.byref(info), ctypes.sizeof(info))
+        if returned <= 0:
+            error_number = ctypes.get_errno()
+            if error_number == errno.ESRCH:
+                return ProcessProbe("dead")
+            return ProcessProbe("inconclusive", detail=f"proc_pidinfo falhou ({error_number})")
+        if returned != ctypes.sizeof(info) or info.pid != pid:
+            return ProcessProbe("inconclusive", detail="proc_pidinfo retornou uma estrutura incompleta")
+        path_buffer = ctypes.create_string_buffer(4096)
+        pidpath = libproc.proc_pidpath
+        pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        pidpath.restype = ctypes.c_int
+        path_length = pidpath(pid, path_buffer, len(path_buffer))
+        if path_length <= 0:
+            return ProcessProbe("inconclusive", detail="proc_pidpath não confirmou o executável")
+        executable = os.path.realpath(os.fsdecode(path_buffer.value))
+        token = f"macos:{info.start_sec}:{info.start_usec}"
+        return ProcessProbe("alive", ProcessIdentity(pid, token, executable))
+    except (OSError, AttributeError, ctypes.ArgumentError, ValueError) as error:
         return ProcessProbe("inconclusive", detail=str(error))
 
 
@@ -161,14 +229,37 @@ def process_identity(pid: int) -> ProcessProbe:
     )
 
 
+def _comparable_executable(path: str) -> str:
+    """Return the stable executable identity used for PID ownership checks.
+
+    macOS framework launchers can exec from ``Versions/<n>/bin`` into the
+    framework's bundled executable after the child is created.  The PID and
+    creation token remain stable, but comparing the transient leaf path would
+    incorrectly reclaim a live owner.  The framework version is the stable
+    boundary; ordinary paths retain their exact canonical identity.
+    """
+
+    canonical = os.path.normcase(os.path.realpath(path))
+    if sys.platform == "darwin":
+        parts = Path(canonical).parts
+        try:
+            versions_index = parts.index("Versions")
+            version_index = versions_index + 1
+            if version_index < len(parts) and parts[version_index]:
+                return os.path.join(*parts[:version_index + 1])
+        except ValueError:
+            pass
+    return canonical
+
+
 def probe_expected_process(
     pid: int, creation_token: str, executable: str,
 ) -> ProcessProbe:
     actual = process_identity(pid)
     if actual.status != "alive" or actual.identity is None:
         return actual
-    actual_executable = os.path.normcase(os.path.realpath(actual.identity.executable))
-    expected_executable = os.path.normcase(os.path.realpath(executable))
+    actual_executable = _comparable_executable(actual.identity.executable)
+    expected_executable = _comparable_executable(executable)
     if (
         actual.identity.creation_token != creation_token
         or actual_executable != expected_executable

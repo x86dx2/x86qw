@@ -39,6 +39,74 @@ PUBLIC_ARCHIVES = {
         "size": 286137,
         "sha256": "41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6",
     },
+    "0.7.4": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+        "size": 286223,
+        "sha256": "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f",
+    },
+    "0.7.5": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.5/x86qw-installer-0.7.5.zip",
+        "size": 577437,
+        "sha256": "2af9a14729f0aa4dfd3ae8397fa025bc92c7b354ad5df8f1b741406e69414cf6",
+    },
+    "0.7.6": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+        "size": 577554,
+        "sha256": "ee3ce227fd1e6b604d56cf1c7559b57fe843fd5377fa592c075ba7210ed740c0",
+    },
+    "0.7.7": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+        "size": 577558,
+        "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+    },
+    "0.7.8": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+        "size": 577617,
+        "sha256": "a594700b634be563c941d99272e017d8da2434417fa82c412666ac1e45db818c",
+    },
+    "0.7.9": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+        "size": 581134,
+        "sha256": "fb08bc987641d4bea84c463d8f58b9c93b62595ff42ea0f764d4123814be7e33",
+    },
+    "0.7.10": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+        "size": 581288,
+        "sha256": "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a627837b61",
+    },
+    "0.7.11": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+        "size": 581352,
+        "sha256": "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53",
+    },
+    "0.7.12": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+        "size": 581623,
+        "sha256": "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7",
+    },
+    "0.7.13": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+        "size": 581883,
+        "sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+    },
+}
+PUBLIC_RELEASE_REFS = {
+    "0.7.0": "x86qw-installer-0.7.0",
+    "0.7.1": "x86qw-installer-0.7.1",
+    "0.7.2": "x86qw-installer-0.7.2",
+    "0.7.3": "x86qw-installer-0.7.3",
+    "0.7.4": "x86qw-installer-0.7.4",
+    "0.7.5": "x86qw-installer-0.7.5",
+    "0.7.6": "x86qw-installer-0.7.6",
+    "0.7.7": "x86qw-installer-0.7.7",
+    "0.7.8": "x86qw-installer-0.7.8",
+    "0.7.9": "x86qw-installer-0.7.9",
+    "0.7.10": "x86qw-installer-0.7.10",
+    "0.7.11": "x86qw-installer-0.7.11",
+    "0.7.12": "x86qw-installer-0.7.12",
+    # The public 0.7.13 tag is not present in this audit branch; the release
+    # commit is retained by origin/main and is the immutable source identity.
+    "0.7.13": "04a55aed8711ec5466dc70f0e33a591d92e07ccb",
 }
 
 
@@ -85,7 +153,11 @@ def _write_state(root: Path, *, format: int = 1) -> None:
 
 class MigrationOnePointZeroTests(unittest.TestCase):
     def test_migration_fixture_manifests_use_one_explicit_schema(self) -> None:
-        expected_public = {"0.7.0", "0.7.1", "0.7.2", "0.7.3"}
+        expected_public = {
+            "0.7.0", "0.7.1", "0.7.2", "0.7.3", "0.7.4", "0.7.5",
+            "0.7.6", "0.7.7", "0.7.8", "0.7.9", "0.7.10", "0.7.11",
+            "0.7.12", "0.7.13",
+        }
         expected_prospective = {"0.8.x", "0.9.x"}
         self.assertEqual(
             expected_public | expected_prospective,
@@ -629,6 +701,31 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             self.assertEqual((), rerun.operations)
             self.assertFalse(rerun.conflicts, rerun.conflicts)
 
+    def test_nquake_bootstrap_pair_is_migrated_to_the_product_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_state(root)
+            _write_component(root, "nquake-bootstrap")
+
+            plan = migrations.plan_migration(root, source_version="0.7.3")
+
+            self.assertTrue(plan.executable, plan.conflicts)
+            operation_keys = {operation.key for operation in plan.operations}
+            self.assertIn(
+                "component:x86qw-client-bootstrap:receipt",
+                operation_keys,
+            )
+            result = migrations.execute_migration(plan)
+
+            self.assertEqual("committed", result.status)
+            canonical = root / ".x86qw/components/x86qw-client-bootstrap/receipt"
+            self.assertEqual(
+                "x86qw-client-bootstrap",
+                receipts.inspect_receipt(canonical.read_bytes()).subject,
+            )
+            self.assertFalse((root / ".x86qw/nquake-bootstrap.receipt").exists())
+            self.assertFalse((root / ".x86qw/nquake-bootstrap.inventory").exists())
+
     def test_retired_nquake_sounds_is_removed_from_state_but_preserved_for_diagnosis(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -782,21 +879,21 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             receipts.validate_receipt_inventory(receipt, inventory + b"tamper", component="ktx")
 
     def test_public_0_7_fixtures_match_tagged_metadata_contract(self) -> None:
-        for version in ("0.7.0", "0.7.1", "0.7.2", "0.7.3"):
+        for version in PUBLIC_ARCHIVES:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 fixture = FIXTURES / version
                 root = Path(directory) / "quake world"
                 shutil.copytree(fixture, root)
                 manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
                 tagged_commit = subprocess.run(
-                    ["git", "rev-parse", manifest["source_tag"]],
+                    ["git", "rev-parse", PUBLIC_RELEASE_REFS[version]],
                     cwd=ROOT,
                     check=True,
                     capture_output=True,
                     text=True,
                 ).stdout.strip()
                 tagged_version = subprocess.run(
-                    ["git", "show", f"{manifest['source_tag']}:{manifest['source_path']}"],
+                    ["git", "show", f"{PUBLIC_RELEASE_REFS[version]}:{manifest['source_path']}"],
                     cwd=ROOT,
                     check=True,
                     capture_output=True,
@@ -824,7 +921,7 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                 self.assertGreaterEqual(len(plan.operations), 3)
 
     def test_public_0_7_fixtures_execute_and_converge_without_touching_payloads(self) -> None:
-        for version in ("0.7.0", "0.7.1", "0.7.2", "0.7.3"):
+        for version in PUBLIC_ARCHIVES:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 fixture = FIXTURES / version
                 root = Path(directory) / "quake world"

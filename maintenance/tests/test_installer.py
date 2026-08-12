@@ -58,6 +58,34 @@ class InstallerTests(unittest.TestCase):
         ):
             yield
 
+    def test_parser_derives_public_actions_from_the_capabilities_catalog(self):
+        with mock.patch.object(
+            install_qw,
+            "load_launcher_contracts",
+            return_value=({"commands": ["audit"]}, {"runtimes": []}),
+        ):
+            parsed = install_qw.parse_arguments(["audit", "/tmp/x86qw-audit-target"], ROOT)
+
+        self.assertEqual("audit", parsed.action)
+
+    def test_parser_accepts_native_profile_as_noninteractive_profile(self):
+        with mock.patch.dict(
+            os.environ,
+            {install_qw.NATIVE_CANDIDATE_ROOT_ENV: "/private/tmp/x86qw-candidate"},
+            clear=False,
+        ):
+            parsed = install_qw.parse_arguments([
+                "--platform", "macos",
+                "--channel", "stable",
+                "--release", "3.6.9",
+                "--native-profile", "complete",
+                "--non-interactive",
+                "install",
+                "/private/tmp/x86qw-target",
+            ], ROOT)
+
+        self.assertEqual("complete", parsed.native_profile)
+
     def test_hub_does_not_load_the_component_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.component_catalog_unavailable():
@@ -2131,7 +2159,7 @@ class InstallerTests(unittest.TestCase):
                     config.write_text(f'set _nquake_first_startup "{marker}"\n', encoding="utf-8")
                     output = io.StringIO()
                     with contextlib.redirect_stdout(output):
-                        installer.report_nquake_startup_state(["nquake-bootstrap"])
+                        installer.report_nquake_startup_state(["x86qw-client-bootstrap"])
                     self.assertIn(expected, output.getvalue())
 
     def test_nightly_catalog_can_expand_without_overwhelming_initial_output(self):
@@ -2174,9 +2202,9 @@ class InstallerTests(unittest.TestCase):
             catalog = {"format": 1, "project": "x86qw", "packages": [package]}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
+                    install_qw, "load_trusted_catalog", return_value=catalog,
+                ), mock.patch.object(
+                    install_qw, "trusted_root_bytes", return_value=b"root",
                 ):
                     self.assertEqual(
                         [("3.6.9", tuple(package["urls"]), "a" * 64)],
@@ -2186,9 +2214,9 @@ class InstallerTests(unittest.TestCase):
             installer._public_catalog = None
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
+                    install_qw, "load_trusted_catalog", return_value=catalog,
+                ), mock.patch.object(
+                    install_qw, "trusted_root_bytes", return_value=b"root",
                 ):
                     with self.assertRaises(install_qw.InstallerError):
                         installer.stable_catalog()
@@ -2202,19 +2230,13 @@ class InstallerTests(unittest.TestCase):
             )
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(catalog).encode(), install_qw.CATALOG_URL),
-                ) as get:
+                    install_qw, "load_trusted_catalog", return_value=catalog,
+                ) as get, mock.patch.object(
+                    install_qw, "trusted_root_bytes", return_value=b"root",
+                ):
                     installer.stable_catalog()
-                    installer.component_package_record("nquake-bootstrap")
-            get.assert_called_once_with(
-                install_qw.CATALOG_URLS,
-                maximum_size=install_qw.CATALOG_MAX_BYTES,
-                timeout=install_qw.CATALOG_TIMEOUT,
-                attempts=1,
-                mirror_label="Catálogo",
-            )
+                    installer.component_package_record("x86qw-client-bootstrap")
+            get.assert_called_once()
 
     def test_online_mode_asks_for_a_target_and_ignores_local_distribution(self):
         online = install_qw.parse_arguments(["--online-only"], ROOT)
@@ -2247,22 +2269,18 @@ class InstallerTests(unittest.TestCase):
             artifact = project / "dist/test/file.zip"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(b"local")
-            installer = install_qw.Installer(project, target, online_only=True)
+            installer = install_qw.Installer(
+                project, target, online_only=True, cache_root=root / "cache" / "x86qw",
+            )
             remote = {"format": 1, "project": "x86qw", "packages": []}
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote,
-                    "get_mirrors",
-                    return_value=(json.dumps(remote).encode(), install_qw.CATALOG_URL),
-                ) as get:
+                    install_qw, "load_trusted_catalog", return_value=remote,
+                ) as get, mock.patch.object(
+                    install_qw, "trusted_root_bytes", return_value=b"root",
+                ):
                     self.assertEqual(remote, installer.public_catalog("remote"))
-            get.assert_called_once_with(
-                install_qw.CATALOG_URLS,
-                maximum_size=install_qw.CATALOG_MAX_BYTES,
-                timeout=install_qw.CATALOG_TIMEOUT,
-                attempts=1,
-                mirror_label="Catálogo",
-            )
+            get.assert_called_once()
             self.assertIsNone(installer.distribution_artifact(
                 "test/file.zip", "file.zip", expected_size=5,
                 expected_sha256=install_qw.hashlib.sha256(b"local").hexdigest(),
@@ -2669,6 +2687,154 @@ class InstallerTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()):
                 install_qw.parse_arguments(["verify", "--yes"], ROOT)
         self.assertEqual(2, raised.exception.code)
+
+    def test_changes_accepts_gitignore_sync_only_for_that_action(self):
+        target = Path("/tmp/x86qw-changes")
+        parsed = install_qw.parse_arguments([
+            "changes", str(target), "--sync-gitignore",
+        ], ROOT)
+        self.assertEqual("changes", parsed.action)
+        self.assertEqual(target, parsed.target)
+        self.assertTrue(parsed.sync_gitignore)
+
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(io.StringIO()):
+                install_qw.parse_arguments(["verify", "--sync-gitignore"], ROOT)
+        self.assertEqual(2, raised.exception.code)
+
+    def test_changes_reports_inventory_delta_and_generates_selective_gitignore(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            managed = target / "qw/default.cfg"
+            managed.parent.mkdir()
+            managed.write_text("original\n", encoding="utf-8")
+            personal = target / "qw/personal.cfg"
+            personal.write_text("personal\n", encoding="utf-8")
+            metadata = target / ".x86qw/components/ktx"
+            metadata.mkdir(parents=True)
+            inventory = metadata / "inventory"
+            receipt = metadata / "receipt"
+            installer.write_inventory_record(inventory, ((
+                "qw/default.cfg",
+                "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+            ),))
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+            managed.write_text("changed\n", encoding="utf-8")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                changes = installer.report_installation_changes(sync_gitignore=True)
+
+            self.assertEqual(2, len(changes))
+            self.assertIn("M  qw/default.cfg", output.getvalue())
+            self.assertIn("A  qw/personal.cfg", output.getvalue())
+            generated = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("/qw/default.cfg\n", generated)
+            self.assertNotIn("/qw/personal.cfg\n", generated)
+
+    def test_created_personal_default_is_a_separate_changes_baseline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-test.")
+            assert installer.stage is not None
+            source = installer.stage / "x86qw-user.cfg"
+            source.write_text("set name clean-install\n", encoding="utf-8")
+            destination = target / "qw/x86qw-user.cfg"
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+            self.assertIsNotNone(result)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual((), installer.report_installation_changes(
+                    sync_gitignore=True,
+                ))
+            generated = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("/qw/x86qw-user.cfg\n", generated)
+
+            destination.write_text("set name personalized\n", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                changes = installer.report_installation_changes()
+            self.assertEqual(
+                (install_qw.InstallationChange(
+                    "M", "qw/x86qw-user.cfg", "personal",
+                ),),
+                changes,
+            )
+
+            self.assertIsNone(installer.install_component_default_transaction(
+                source, destination,
+            ))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(changes, installer.report_installation_changes())
+
+    def test_personal_baseline_rolls_back_with_the_created_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-rollback-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("clean\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+            self.assertIsNotNone(result)
+            assert result is not None
+            rollback_mutation = install_qw.rollback_mutation
+            rollback_mutation(result)
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(installer.personal_baseline_paths()[0].exists())
+            self.assertFalse(installer.personal_baseline_paths()[1].exists())
+
+    def test_matching_legacy_personal_default_is_adopted_without_rewriting_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-adoption-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("clean\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("clean\n", encoding="utf-8")
+            identity = destination.stat().st_ino
+
+            result = installer.install_component_default_transaction(
+                source, destination,
+            )
+
+            self.assertIsNotNone(result)
+            self.assertEqual(identity, destination.stat().st_ino)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual((), installer.report_installation_changes())
+
+    def test_modified_legacy_personal_default_is_not_adopted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._create_stage(".personal-baseline-rejection-test.")
+            assert installer.stage is not None
+            source = installer.stage / "config.cfg"
+            source.write_text("official\n", encoding="utf-8")
+            destination = target / "ezquake/configs/config.cfg"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("personalized\n", encoding="utf-8")
+
+            self.assertIsNone(installer.install_component_default_transaction(
+                source, destination,
+            ))
+            with contextlib.redirect_stdout(io.StringIO()):
+                changes = installer.report_installation_changes()
+            self.assertEqual(
+                (install_qw.InstallationChange(
+                    "A", "ezquake/configs/config.cfg", None,
+                ),),
+                changes,
+            )
 
     def test_platform_override_is_available_only_during_installation(self):
         parsed = install_qw.parse_arguments(["install", "--platform", "windows"], ROOT)
@@ -3349,7 +3515,7 @@ class InstallerTests(unittest.TestCase):
     def test_nonstandard_existing_installation_becomes_a_safe_custom_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            installed = ["nquake-bootstrap", "total-destruction-2"]
+            installed = ["x86qw-client-bootstrap", "total-destruction-2"]
             with mock.patch.object(installer, "installed_components", return_value=installed):
                 state = installer.infer_install_state()
             self.assertEqual("custom", state["profile"])
@@ -3655,7 +3821,8 @@ class InstallerTests(unittest.TestCase):
                 "version": "0.7.1",
             })
             canonical = (
-                b'{\n  "format": 1,\n  "project": "x86qw",\n'
+                b'{\n  "format": 1,\n  "min_cli_version": "0.7.0",\n'
+                b'  "project": "x86qw",\n  "receipt_version": 1,\n'
                 b'  "version": "0.7.1"\n}\n'
             )
             self.assertEqual(receipt.read_bytes(), canonical)
@@ -4796,19 +4963,13 @@ class InstallerTests(unittest.TestCase):
             installer, _, _ = self.make_installer(Path(temporary))
             installer.online_only = True
             catalog = {"format": 1, "project": "x86qw", "packages": []}
-            payload = json.dumps(catalog).encode()
-
-            def fallback(contracts, **options):
-                self.assertEqual(install_qw.CATALOG_URLS, tuple(item.url for item in contracts))
-                options["on_mirror_failure"](
-                    1, contracts[0], install_qw.DownloadError("timeout"),
-                )
-                return mock.Mock(data=payload)
 
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
-                    installer.remote, "download_many", side_effect=fallback,
-                ) as get:
+                    install_qw, "load_trusted_catalog", return_value=catalog,
+                ) as get, mock.patch.object(
+                    install_qw, "trusted_root_bytes", return_value=b"root",
+                ):
                     self.assertEqual(catalog, installer.public_catalog("remote"))
             get.assert_called_once()
 

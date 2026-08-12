@@ -173,6 +173,9 @@ ALLOWED_NETWORK_EXECUTABLE_SCOPES = {
     ROOT / "maintenance/tools/publish_gitlab_packages.py": {
         "curl": frozenset({"upload"}),
     },
+    ROOT / "maintenance/tools/publish_github_candidate.py": {
+        "gh": frozenset({"_execute_gh"}),
+    },
     **{
         path: {"socket": frozenset({"resolve_addresses"})}
         for path in POWERSHELL_BOOTSTRAP_PATHS
@@ -198,6 +201,9 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),
+    }),
+    ROOT / "maintenance/tools/native_m3_harness.py": frozenset({
+        ("subprocess.Popen", "run_native", "command"),
     }),
 }
 # Audited argv-forwarding helpers. Their subprocess call is suppressed above,
@@ -245,6 +251,9 @@ ALLOWED_NETWORK_PROCESS_CALLS = {
     }),
     ROOT / "maintenance/tools/publish_gitlab_packages.py": frozenset({
         ("curl", "subprocess.run", "upload", "subprocess.run(['curl', '--disable', '--fail', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15', '--max-time', '900', '--max-redirs', '0', '--output', os.devnull, '--write-out', '%{http_code}', '--request', 'PUT', '--header', '@-', '--upload-file', str(path), artifact_url(package)], input=f'PRIVATE-TOKEN: {token}\\n', text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)"),
+    }),
+    ROOT / "maintenance/tools/publish_github_candidate.py": frozenset({
+        ("gh", "subprocess.run", "_execute_gh", "subprocess.run(['gh', *arguments], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300, check=False)"),
     }),
 }
 ALLOWED_OPENER_OPEN_CALLS = {

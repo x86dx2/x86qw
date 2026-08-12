@@ -115,6 +115,48 @@ class NativeReleaseSmokeTests(unittest.TestCase):
                     handoff=handoff,
                 )
 
+    def test_macos_arm64_handoff_requires_m3_hardware_attestation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            handoff = self._handoff(candidate, root / "handoff.json")
+            payload = json.loads(handoff.read_text(encoding="utf-8"))
+            payload["platform"] = "macOS-ARM64"
+            payload["environment"] = {
+                "os": "macOS",
+                "architecture": "arm64",
+                "standard_user": True,
+                "elevated": False,
+                "distro": None,
+                "distro_version": None,
+                "glibc_version": None,
+            }
+            payload["hardware"] = {"chip": "Apple M3 Pro", "model": "Mac15,6"}
+            handoff.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            native_release_smoke.normalize_native_smoke(
+                candidate=candidate,
+                platform="macOS-ARM64",
+                handoff=handoff,
+            )
+
+            payload.pop("hardware")
+            handoff.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(release_candidate.CandidateError, "hardware"):
+                native_release_smoke.normalize_native_smoke(
+                    candidate=candidate,
+                    platform="macOS-ARM64",
+                    handoff=handoff,
+                )
+
+            payload["hardware"] = {"chip": "Apple M2 Pro", "model": "Mac14,9"}
+            handoff.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(release_candidate.CandidateError, "Apple M3"):
+                native_release_smoke.normalize_native_smoke(
+                    candidate=candidate,
+                    platform="macOS-ARM64",
+                    handoff=handoff,
+                )
+
             payload["cases"][0]["status"] = "passed"
             payload["cases"][0]["command"] = ["x86qw", "--help"]
             payload["candidate"]["commit"] = "e" * 40

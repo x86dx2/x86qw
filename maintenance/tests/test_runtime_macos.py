@@ -417,6 +417,24 @@ class MacOSAdapterTests(unittest.TestCase):
 
         self.assertEqual({"basedir": "/Games/new-choice", "volume": 0.5}, state)
 
+    def test_clearing_absent_managed_preferences_is_a_noop(self):
+        """A clean first install must not import an empty defaults domain."""
+
+        self.assertIsNotNone(macos, "the canonical macOS adapter is missing")
+        assert macos is not None
+        domain = "io.ezQuake"
+        keys = ("basedir", "version", "NSOSPLastRootDirectory")
+
+        with mock.patch.object(
+            macos, "_export_preference_domain", return_value={},
+        ), mock.patch.object(
+            macos, "_publish_preference_domain",
+        ) as publish:
+            snapshot = macos.snapshot_preference_keys(domain, keys)
+            self.assertEqual(snapshot, macos.clear_preference_keys(snapshot))
+
+        publish.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

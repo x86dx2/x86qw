@@ -12,7 +12,7 @@ from dataclasses import dataclass, fields
 from pathlib import PurePosixPath
 
 from .io.downloader import DownloadPolicyError, validate_https_url
-from .versioning import NIGHTLY_VERSION, STABLE_VERSION
+from .versioning import NIGHTLY_VERSION, SEMVER, STABLE_VERSION
 
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -292,7 +292,7 @@ def parse_cli_receipt(payload: bytes) -> CliReceipt:
         or not isinstance(version, str)
     ):
         raise ReceiptError("invalid CLI receipt identity", code="cli_identity")
-    if not STABLE_VERSION.fullmatch(version):
+    if not SEMVER.fullmatch(version):
         raise ReceiptError(
             "invalid CLI receipt version", code="cli_version", value=version,
         )
