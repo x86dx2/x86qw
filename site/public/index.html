@@ -46,7 +46,7 @@
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="launch-note"><span aria-hidden="true"></span> Distribuição <span data-product-version>0.7.3</span> pública e verificável</p>
+          <p class="launch-note"><span aria-hidden="true"></span> Distribuição 0.7.13 pública e verificável</p>
           <h1 id="hero-title">QuakeWorld,<br><strong>pronto para rodar.</strong></h1>
           <p class="hero-lead">O x86QW está reunindo o ezQuake mais recente, as customizações que fizeram o nQuake essencial e uma instalação verificável para três sistemas — sem esconder de onde cada arquivo veio.</p>
 
@@ -221,7 +221,7 @@
 
         <dl class="trust-ledger">
           <div><dt>Origem</dt><dd>Projeto, autor e URL imutável</dd></div>
-          <div><dt>Proveniência</dt><dd>Licença e origem declaradas por camada</dd></div>
+          <div><dt>Permissão</dt><dd>Licença e redistribuição revisadas</dd></div>
           <div><dt>Identidade</dt><dd>Versão, tamanho e SHA-256</dd></div>
           <div><dt>Redundância</dt><dd>Mirrors ordenados com failover</dd></div>
           <div><dt>Base</dt><dd>PAKs registrados validados por SHA-256</dd></div>
@@ -246,9 +246,9 @@
         <noscript><p class="noscript-note">JavaScript está desativado. Consulte o <a href="/api/v1/catalog.json">catálogo JSON</a> diretamente.</p></noscript>
 
         <div class="readiness">
-          <p><strong>Já funciona:</strong> versão <span data-product-version>0.7.3</span>, <span data-package-count>64</span> pacotes, <span data-component-count>21</span> componentes, cinco jogos, KTX com 24 modos, Frogbots, ruleset assistido e Coach de Quad opt-in, MVDSV, QTV e QWFWD. A CLI oferece <code>play</code>, <code>host</code>, <code>proxy</code>, <code>qtv</code>, <code>status</code>, <code>hub</code>, <code>update</code>, <code>upgrade</code>, <code>verify</code>, <code>changes</code>, <code>migrate</code>, <code>repair</code>, <code>cleanup</code>, <code>uninstall</code> e <code>version</code>.</p>
-          <p><strong>Runtime previsível:</strong> a <span data-product-version>0.7.3</span> centraliza downloads, arquivos, transações, UI, gameplay, plataforma e supervisor em fronteiras reutilizáveis. O baseline passou nos gates portáveis; smokes gráficos, de rede e de runtime nativo continuam separados e não são inferidos pela matriz.</p>
-          <p><strong>Confiança macOS explícita:</strong> o stable preserva o bundle upstream sem re-assinatura local. O artefato continua ad hoc, sem Developer ID ou notarização comprovada; stable e nightly permanecem condicionais por essa limitação, e smokes nativos não são requisito do fluxo Mac/local.</p>
+          <p><strong>Já funciona:</strong> versão 0.7.13, 74 pacotes, 21 componentes, cinco jogos, KTX com 24 modos, Frogbots, ruleset assistido e Coach de Quad opt-in, MVDSV, QTV e QWFWD. A CLI oferece <code>play</code>, <code>host</code>, <code>proxy</code>, <code>qtv</code>, <code>status</code>, <code>hub</code>, <code>changes</code>, <code>update</code>, <code>upgrade</code>, <code>verify</code>, <code>repair</code>, <code>cleanup</code>, <code>uninstall</code> e <code>version</code>.</p>
+          <p><strong>Runtime previsível:</strong> a 0.7.13 autentica o catálogo com TUF e mantém downloads, arquivos, transações, UI, gameplay, plataforma e supervisor em fronteiras reutilizáveis. O contrato <code>portable-contract</code> passou nos sete checks protegidos; isso não é smoke nativo de runtime.</p>
+          <p><strong>Confiança macOS explícita:</strong> o stable preserva o bundle upstream sem re-assinatura local. O artefato continua ad hoc, sem Developer ID ou notarização comprovada; stable e nightly permanecem condicionais até os smokes nativos.</p>
           <p><strong>Execução conservadora:</strong> gameplay e serviços não instalam payload permanente. Senhas podem ser lidas sem eco ou por arquivo privado; preflight, readiness e journal protegem primeiro ou segundo plano. A stack ativa pode ser inspecionada e encerrada coordenadamente pelo menu.</p>
           <p><strong>Atualização independente:</strong> KTX 1.47, Pro-X 1.1 e Team Fortress 2.9 avançam sem renomear os outros componentes. Coleções sem release própria continuam fixadas no commit nQuake auditado.</p>
           <p><strong>Dois mirrors:</strong> o catálogo aponta para GitHub Releases e GitLab Generic Packages, sempre com tamanho e SHA-256. Em andamento: novos adaptadores por upstream.</p>

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-08-10T20:23:37Z",
+  "generated_at": "2026-08-10T22:45:45Z",
   "packages": [
     {
       "component": "core",
@@ -2120,13 +2120,13 @@
       "license_url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "mirror_latest": false,
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW e4cb23d40aa2+x86qw.4",
+      "mirror_title": "x86QW Content · nQuake e4cb23d40aa2",
       "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/x86qw-client-bootstrap-e4cb23d40aa2+x86qw.4.zip",
       "package": "x86qw-client-bootstrap",
       "platform": "any",
       "redistribution_reviewed": true,
-      "sha256": "07f9aa795b9749c84167d26da067609971f10fb0786c58a44bc87c5bd724d576",
-      "size": 28783,
+      "sha256": "faf466dd54403ec690dc03652bf2ad5dfb88c6fdf3a635d17c102451873c72db",
+      "size": 28721,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "source_urls": [
         "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
