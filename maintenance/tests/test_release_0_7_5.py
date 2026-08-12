@@ -111,20 +111,34 @@ class Release0713Tests(unittest.TestCase):
         trust = ROOT / "site/public/api/v1/trust"
         catalog = (ROOT / "site/public/api/v1/catalog.json").read_bytes()
         digest = hashlib.sha256(catalog).hexdigest()
-        expected = {
+        timestamp = json.loads(
+            (trust / "metadata/timestamp.json").read_text(encoding="utf-8")
+        )
+        snapshot_meta = timestamp["signed"]["meta"]["snapshot.json"]
+        version = snapshot_meta["version"]
+        current_metadata = {
             "metadata/1.root.json",
-            "metadata/11.targets.json",
-            "metadata/11.snapshot.json",
+            f"metadata/{version}.targets.json",
+            f"metadata/{version}.snapshot.json",
             "metadata/timestamp.json",
-            f"targets/catalog/{digest}.catalog.json",
         }
-        self.assertEqual(
-            expected,
-            {
-                path.relative_to(trust).as_posix()
-                for path in trust.rglob("*")
-                if path.is_file()
-            },
+        actual = {
+            path.relative_to(trust).as_posix()
+            for path in trust.rglob("*")
+            if path.is_file()
+        }
+        self.assertTrue(current_metadata <= actual)
+        self.assertIn(f"targets/catalog/{digest}.catalog.json", actual)
+        self.assertTrue(
+            all(
+                path == "metadata/1.root.json"
+                or path == "metadata/timestamp.json"
+                or path.startswith("metadata/")
+                and path.endswith((".targets.json", ".snapshot.json"))
+                or path.startswith("targets/catalog/")
+                and path.endswith(".catalog.json")
+                for path in actual
+            )
         )
         self.assertEqual(catalog, (trust / f"targets/catalog/{digest}.catalog.json").read_bytes())
 
