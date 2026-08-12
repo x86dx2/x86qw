@@ -59,6 +59,10 @@ class NativeWorkflowTests(unittest.TestCase):
         self.assertNotIn("M3_TRUST_ROOT_B64", source)
         self.assertNotIn("path: ${{ runner.temp }}/native-m3\n", source)
 
+    def test_m3_workflow_uses_writable_toolcache_on_non_runner_user(self):
+        source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertIn("AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/toolcache", source)
+
 
 if __name__ == "__main__":
     unittest.main()

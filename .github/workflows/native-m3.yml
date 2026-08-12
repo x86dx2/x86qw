@@ -44,6 +44,8 @@ jobs:
           lfs: false
           fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/toolcache
         with:
           python-version: "3.13"
       - name: Validate commit and download the immutable candidate
