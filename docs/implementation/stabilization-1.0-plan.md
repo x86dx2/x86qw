@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional; implementação incremental integrada até o PR #100, sem publicação do candidato |
-| Baseline pública | `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8` (`x86qw-installer-0.7.13`) |
+| Estado | plano operacional; implementação incremental integrada, sem publicação do candidato |
+| Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`; rehearsal `31600754928`; M3 `31604145989` pendente |
+| Checkpoint auditável | snapshot `origin/main` registrado pelo comando da auditoria; rehearsal `31600754928`; M3 `31604145989` pendente |
 | Versão alvo | `1.0.0` |
 | Data da auditoria | 2026-08-12 |
 | Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; publicação ainda bloqueada por M3 e operação protegida |
@@ -48,7 +48,7 @@ qualquer ação futura de limpeza, a ancestralidade deve ser revalidada contra
 
 | Ref | Estado observado | Decisão do plano |
 |---|---|---|
-| `origin/main` | `99fcad8` / release `x86qw-installer-0.7.13` | única linha canônica |
+| `origin/main` | resolver com `git rev-parse origin/main` no snapshot | única linha canônica |
 | `codex/stabilize-1.0` | `30e9d5b`, checkpoint com trabalho de preparação | congelada; extrair símbolos/hunks, nunca fazer merge/cherry-pick |
 | `origin/codex/control-maps` | `362f705`, quatro commits à frente e 105 atrás, quatro commits exclusivos | manter até uma decisão própria; não apagar com a limpeza do checkpoint |
 | `agent/bounded-downloader` | `a60a625`; 0 à frente/86 atrás, integrado pela PR #58 (`b833ba4`) | apagar apenas depois de revalidar ancestralidade e com autorização |
@@ -310,7 +310,7 @@ evidência. Isso não é aprovação de RC nem de publicação.
 O gate desta entrega é executado no worktree sem criar estado remoto:
 
 1. confirmar que a base canônica ainda resolve para
-   `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`; se avançar, repetir a
+   `origin/main`; registrar o SHA retornado no relatório da auditoria; se avançar, repetir a
    auditoria antes de editar;
 2. executar `git diff --check` e revisar os links Markdown locais, resolvendo
    cada destino a partir do diretório do documento e ignorando somente URLs

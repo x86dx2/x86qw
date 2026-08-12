@@ -2,13 +2,13 @@
 
 ## Baseline real
 
-A `main` canônica observada neste checkpoint é
-`origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`. O avanço mais recente
-está integrado no PR
-[#100](https://github.com/x86dx2/x86qw/pull/100). A identidade do candidato
-oficial — commit, SHA do `candidate.json` e digest do artifact — é sempre a
-registrada pelo próprio workflow e pelo checkpoint do PR, nunca por uma cópia
-manual neste documento.
+A linha canônica é `origin/main`. A revisão exata de um snapshot deve ser
+obtida com `git rev-parse origin/main` no momento da auditoria; este documento
+não repete um SHA da própria linha que o contém, porque o merge de qualquer
+atualização documental mudaria esse valor. A identidade do candidato oficial —
+commit, SHA do `candidate.json` e digest do artifact — é sempre a registrada
+pelo próprio workflow e pelo checkpoint do PR, nunca por uma cópia manual neste
+documento.
 
 ## Versão pública
 
