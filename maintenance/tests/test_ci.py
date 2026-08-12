@@ -290,7 +290,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         materializer = ROOT / "maintenance/tools/materialize_lfs.py"
         self.assertTrue(materializer.is_file())
         source = materializer.read_text(encoding="utf-8")
-        self.assertIn("raw.githubusercontent.com", source)
+        self.assertIn("media.githubusercontent.com/media", source)
         self.assertIn("PinnedArtifact", source)
         self.assertIn("expected_sha256", source)
         self.assertIn("expected_size", source)

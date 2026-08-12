@@ -57,7 +57,10 @@ class MaterializeLfsTests(unittest.TestCase):
                 (root / ".git/lfs/objects" / digest[:2] / digest[2:4] / digest).read_bytes(),
             )
             self.assertEqual(1, len(calls))
-            self.assertIn("raw.githubusercontent.com/x86dx2/x86qw/" + "f" * 40, calls[0][0])
+            self.assertIn(
+                "media.githubusercontent.com/media/x86dx2/x86qw/" + "f" * 40,
+                calls[0][0],
+            )
 
             module.materialize(root, "x86dx2/x86qw", "f" * 40, fetch=fetch)
             self.assertEqual(1, len(calls))

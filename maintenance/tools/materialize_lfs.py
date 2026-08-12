@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Materialize repository LFS objects from an immutable GitHub raw commit.
+"""Materialize repository LFS objects from an immutable GitHub media commit.
 
 GitHub Actions may have no usable Git LFS quota even though the public commit
-bytes remain available.  This CI-only bridge keeps the LFS object layout and
-the normal ``git lfs checkout`` contract while verifying every object against
-the SHA-256 and size recorded by its committed pointer.
+bytes remain available through GitHub's media endpoint. This CI-only bridge
+keeps the LFS object layout and the normal ``git lfs checkout`` contract while
+verifying every object against the SHA-256 and size recorded by its committed
+pointer.
 """
 
 from __future__ import annotations
@@ -92,12 +93,12 @@ def object_path(root: Path, oid: str) -> Path:
     return root / ".git/lfs/objects" / oid[:2] / oid[2:4] / oid
 
 
-def raw_url(repository: str, commit: str, relative: str) -> str:
+def media_url(repository: str, commit: str, relative: str) -> str:
     if not REPOSITORY.fullmatch(repository):
         raise ValueError("repositório GitHub inválido")
     if not COMMIT.fullmatch(commit):
         raise ValueError("commit candidato inválido")
-    return f"https://raw.githubusercontent.com/{repository}/{commit}/{quote(relative, safe='/')}"
+    return f"https://media.githubusercontent.com/media/{repository}/{commit}/{quote(relative, safe='/')}"
 
 
 def _sha256(path: Path) -> str:
@@ -147,7 +148,7 @@ def materialize(
         if destination.exists() or destination.is_symlink():
             _verify_object(destination, size, oid)
             continue
-        fetch(raw_url(repository, commit, relative), destination, size, oid)
+        fetch(media_url(repository, commit, relative), destination, size, oid)
         _verify_object(destination, size, oid)
         created += 1
     return created
