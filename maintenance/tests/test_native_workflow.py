@@ -49,19 +49,28 @@ class NativeWorkflowTests(unittest.TestCase):
         source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
         for action in (
             "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
-            "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
             "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
             "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
         ):
             self.assertIn(action, source)
+        self.assertNotIn("actions/setup-python@", source)
         self.assertIn("signed: false", source)
         self.assertIn("promotable: false", source)
         self.assertNotIn("M3_TRUST_ROOT_B64", source)
         self.assertNotIn("path: ${{ runner.temp }}/native-m3\n", source)
 
-    def test_m3_workflow_uses_writable_toolcache_on_non_runner_user(self):
+    def test_m3_workflow_uses_runner_owned_python_without_fixed_home(self):
         source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
-        self.assertIn("AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/toolcache", source)
+        for fragment in (
+            "name: Prepare isolated Python on self-hosted M3",
+            'python3_bin="$(command -v python3)"',
+            '"$python3_bin" -m venv "$RUNNER_TEMP/x86qw-python"',
+            "sys.version_info >= (3, 13)",
+            'echo "$RUNNER_TEMP/x86qw-python/bin" >> "$GITHUB_PATH"',
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, source)
+        self.assertNotIn("AGENT_TOOLSDIRECTORY", source)
 
 
 if __name__ == "__main__":

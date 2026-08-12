@@ -301,7 +301,11 @@ class ContinuousIntegrationTests(unittest.TestCase):
         for path in workflow_files:
             source = path.read_text(encoding="utf-8")
             self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", source)
-            self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
+            if path.name == "native-m3.yml":
+                self.assertIn("Prepare isolated Python on self-hosted M3", source)
+                self.assertIn('python3_bin="$(command -v python3)"', source)
+            else:
+                self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "17 * * * *"', monitor)
         self.assertIn("monitor_public_tuf.py", monitor)

@@ -43,11 +43,15 @@ jobs:
           ref: ${{ inputs.candidate_commit }}
           lfs: false
           fetch-depth: 1
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}/toolcache
-        with:
-          python-version: "3.13"
+      - name: Prepare isolated Python on self-hosted M3
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3_bin="$(command -v python3)"
+          "$python3_bin" -c 'import sys; assert sys.version_info >= (3, 13), sys.version'
+          "$python3_bin" -m venv "$RUNNER_TEMP/x86qw-python"
+          echo "$RUNNER_TEMP/x86qw-python/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/x86qw-python/bin/python" --version
       - name: Validate commit and download the immutable candidate
         env:
           EXPECTED_COMMIT: ${{ inputs.candidate_commit }}
