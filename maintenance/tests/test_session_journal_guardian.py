@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import tempfile
 import unittest
 from pathlib import Path
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 from unittest import mock
 
 from x86qw_runtime import session_control
 from x86qw_runtime.errors import InstallerError
+from x86qw_runtime.platform import processes as platform_processes
 from x86qw_runtime.supervisor.models import ProcessSpec
 from x86qw_runtime.supervisor.sessions import (
     SessionJournal,
@@ -89,6 +92,44 @@ class GuardianSessionJournalTests(unittest.TestCase):
                 "pending",
                 json.loads(journal.path.read_text(encoding="utf-8"))["processes"][0]["state"],
             )
+
+    def test_started_runtime_accepts_macos_framework_launcher_path_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            journal = SessionJournal(root)
+            process = self._process(pending=True)
+            first = session_control.ProcessIdentity(
+                process.pid,
+                "macos:token",
+                "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+            )
+            second = session_control.ProcessIdentity(
+                process.pid,
+                "macos:token",
+                "/Library/Frameworks/Python.framework/Versions/3.14/"
+                "Resources/Python.app/Contents/MacOS/Python",
+            )
+            with mock.patch.object(platform_processes.sys, "platform", "darwin"), \
+                mock.patch.object(platform_processes, "Path", PurePosixPath), \
+                mock.patch.object(
+                    platform_processes,
+                    "os",
+                    SimpleNamespace(path=posixpath),
+                ), \
+                mock.patch.object(
+                    session_control,
+                    "process_identity",
+                    side_effect=(
+                        session_control.ProcessProbe("alive", first),
+                        session_control.ProcessProbe("alive", second),
+                    ),
+                ):
+                journal.record_process(self._spec(root), process, process.pid)
+                journal.record_process_started(process, 4242)
+
+            entry = json.loads(journal.path.read_text(encoding="utf-8"))["processes"][0]
+            self.assertEqual(4242, entry["runtime_pid"])
+            self.assertEqual("ready", entry["state"])
 
     def test_started_runtime_rejects_invalid_pid_and_missing_entry(self) -> None:
         for runtime_pid in (True, 0, -1):

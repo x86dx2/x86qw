@@ -3447,6 +3447,21 @@ os.write(2, b'stderr-restored\\n')
             self.assertEqual("starting", json.loads(journal.path.read_text(encoding="utf-8"))["status"])
 
     @unittest.skipIf(os.name == "nt", "grupos de processos POSIX não existem no Windows")
+    def test_stop_processes_retries_transient_group_probe_after_leader_exit(self):
+        process = subprocess.Popen(
+            [sys.executable, "-c", "pass"],
+            start_new_session=True,
+        )
+        process.wait(timeout=5)
+        with mock.patch.object(
+            supervisor_core,
+            "posix_process_group_status",
+            side_effect=("alive", "inconclusive", "dead"),
+        ), mock.patch.object(supervisor_core.os, "killpg") as killpg:
+            services.stop_processes([process])
+        killpg.assert_called_once_with(process.pid, signal.SIGTERM)
+
+    @unittest.skipIf(os.name == "nt", "grupos de processos POSIX não existem no Windows")
     def test_stop_processes_kills_descendant_after_leader_exits(self):
         with tempfile.TemporaryDirectory() as temporary:
             child_pid_path = Path(temporary) / "child.pid"

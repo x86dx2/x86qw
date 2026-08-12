@@ -29,6 +29,7 @@ from x86qw_runtime.io.managed_files import (
     persistent_path_identity,
 )
 from x86qw_runtime.io.paths import lexists
+from x86qw_runtime.platform.processes import _comparable_executable
 
 from .core import posix_process_group_status
 from .models import ProcessSpec
@@ -421,7 +422,9 @@ class SessionJournal:
             if isinstance(entry, dict)
             and entry.get("pid") == pid
             and entry.get("creation_token") == identity.creation_token
-            and entry.get("executable") == identity.executable
+            and isinstance(entry.get("executable"), str)
+            and _comparable_executable(entry["executable"])
+            == _comparable_executable(identity.executable)
             and entry.get("state") == "pending"
             and entry.get("runtime_pid") is None
         ]
