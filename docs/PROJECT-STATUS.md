@@ -4,10 +4,11 @@
 
 A `main` pública observada neste checkpoint é
 `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`. A implementação em
-execução fica na branch `codex/stabilize-1.0`, no commit
-`4256fc4ea8a75f4ca9b717088d88a2e67a4ab32f`; o PR aberto é o
+execução fica no PR
 [#95](https://github.com/x86dx2/x86qw/pull/95). A identidade do candidato
-oficial é sempre a do artifact imutável produzido pelo workflow.
+oficial — commit, SHA do `candidate.json` e digest do artifact — é sempre a
+registrada pelo próprio workflow e pelo checkpoint do PR, nunca por uma cópia
+manual neste documento.
 
 ## Versão pública
 
@@ -47,20 +48,13 @@ substitui a cerimônia TUF do candidato.
 
 ## Candidato oficial
 
-O rehearsal oficial `31570858468` terminou com 20/20 jobs verdes. O artifact
-imutável é `9131490688`, com 648110874 bytes e digest
-`sha256:a206bc54610a9641999669650f89c55da5162be0f6a80e9ac2bf651959931aa2`.
-Seu `candidate.json` tem SHA-256
-`54708415bae4384c644db3dedc8fbcc9f7b49b06a543cbed0f7eacb1b4e0a763`, versão
-`1.0.0-rc.1`, commit `4256fc4ea8a75f4ca9b717088d88a2e67a4ab32f` e 73 artefatos.
-Ubuntu, Windows e macOS verificaram esse artifact sem rebuild.
-
-O smoke M3 local executou os 18 casos contra os mesmos bytes e passou em Apple
-M3 Pro/arm64; a
-evidência redigida está vinculada ao candidato, mas permanece
-`signed=false`/`promotable=false`. O workflow oficial `native-m3.yml` ainda não
-pôde ser dispatchado porque está somente nesta branch; após a integração do PR,
-ele deve ser executado contra o artifact `9131490688`.
+O workflow `Immutable candidate rehearsal` produz o candidato uma única vez,
+verifica os mesmos bytes em Ubuntu, Windows e macOS e registra o manifest do
+candidato junto ao artifact imutável. O smoke M3 local executa o plano
+candidate-owned contra esses mesmos bytes e redige handoff, smoke normalizado e
+registro de evidência. A evidência permanece `signed=false`/`promotable=false`
+até a cerimônia externa; o workflow oficial `native-m3.yml` precisa estar
+disponível na branch padrão para ser dispatchado sobre o artifact fixado.
 
 ## Bloqueios atuais
 
