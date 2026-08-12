@@ -4,7 +4,7 @@
 
 `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` é a main pública
 observada nesta auditoria. O checkout local desta branch é
-`codex/stabilize-1.0@30e9d5bd4f4032772c63d37666ebdedbb33fc292`; ele contém as
+`codex/stabilize-1.0@61421d40661970357d5d5d8c6f2fa35c7ee268fe`; ele contém as
 correções locais ainda não publicadas e não deve ser confundido com `main`.
 
 ## Versão pública
@@ -42,7 +42,7 @@ custódia humana independente ou recuperação após expiração.
 - o harness M3 exige plano e evidência observável, sem fabricar aprovação;
 - o smoke QWFWD aguarda uma resposta encaminhada após o handshake remoto, evitando
   perder o primeiro datagrama por uma corrida de estado;
-- o candidato `live6` executou 18/18 casos no Apple M3, e os gates locais fecharam
+- o candidato `live7` executou 18/18 casos no Apple M3, e os gates locais fecharam
   com 1.642 testes de manutenção (38 skips esperados) e 6 testes do site, tanto
   no Python 3.11 quanto no runtime local mais novo;
 - o candidato e o handoff M3 agora são transportados por IDs de artifact e
@@ -51,7 +51,7 @@ custódia humana independente ou recuperação após expiração.
   checkout e dos bootstraps de `dist`; TUF stale é removido do staging e
   rejeitado pelo `release_candidate` antes do transporte;
 - `dist/installer/VERSION` ainda é `0.7.3` no checkout de desenvolvimento; o
-  `live6` foi gerado explicitamente como `1.0.0-rc.1`, portanto não é uma
+  `live7` foi gerado explicitamente como `1.0.0-rc.1`, portanto não é uma
   promoção implícita da versão-fonte nem pode ser publicado sem um commit de
   release coerente;
 - o workflow M3 agora gera também o registro de plataforma e o corpo canônico;
@@ -70,10 +70,12 @@ custódia humana independente ou recuperação após expiração.
 
 1. o candidato local atual `1.0.0-rc.1` foi reconstruído a partir de `dist` e
    executou 18/18 casos no M3; o manifest SHA é
-   `688cdf2da203d2f00767da98b6cadeaff22dfb730795ff9841ada0660e0bac0b` e o
+   `507f6560d19f42184d580459762fc75688cd2deb4bfd9f1743d40f0543b6b9b4` e o
    instalador tem 600039 bytes e SHA-256
-   `237be02f65451147c7d94ea03fc8eeb5fdcb8e8839ac9aee260e78ad4fafd975`, mas a
-   evidência é `pending`, não assinada e não foi anexada a uma release pública;
+   `237be02f65451147c7d94ea03fc8eeb5fdcb8e8839ac9aee260e78ad4fafd975`.
+   A evidência normalizada tem SHA-256
+   `de53133adaa6c8df9fbb49a394a05415f49f7631b922411e1856119c59ab1922` e o
+   agregado permanece `pending`, não assinado e não anexado a uma release pública;
 2. o timestamp TUF público observado expirou e não há
    signer/custódia/alerta externo de produção demonstrados; o monitor
    versionado falhará fechado enquanto o endpoint estiver indisponível;
