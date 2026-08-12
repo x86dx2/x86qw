@@ -2,110 +2,67 @@
 
 ## Baseline real
 
-`origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` é a main pública
-observada nesta auditoria. O checkout local desta branch é
-`codex/stabilize-1.0@61421d40661970357d5d5d8c6f2fa35c7ee268fe`; ele contém as
-correções locais ainda não publicadas e não deve ser confundido com `main`.
+A `main` pública observada neste checkpoint é
+`origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`. A implementação em
+execução fica na branch `codex/integrate-1.0`; o SHA exato do candidato é
+registrado em seu `candidate.json` e deve ser tratado como a identidade dos
+artefatos.
 
 ## Versão pública
 
-O último release público confirmado no GitHub continua sendo `0.7.13`: instalador
-SHA-256 `114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32`,
-581883 bytes. O catálogo público não pôde ser revalidado: os seis endpoints do
-portal expiraram por timeout HTTPS no checkpoint atual. O checkout local ainda
-projeta o histórico `0.7.3` e não altera esses bytes públicos.
+O último release público confirmado no GitHub é `0.7.13`: instalador de
+581883 bytes, SHA-256
+`114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32`.
+A versão-fonte de `dist/installer/VERSION` acompanha essa geração pública.
+O candidato local `1.0.0-rc.1` é uma geração separada e não promove a versão
+pública por si só.
 
-## Trust
+## Estado de confiança
 
-O runtime local usa TUF padrão com root Ed25519 incorporada. Na última coleta
-pública, a cadeia observada estava em root v1 e targets/snapshot/timestamp v11;
-o timestamp observado expirava em `2026-08-11T23:10:15Z` e a root em 2027-08-10
-UTC. Esse timestamp já está expirado no checkpoint atual, e a revalidação não
-pôde ser concluída porque o endpoint não aceita conexão. Isso prova apenas a
-validação técnica daquele snapshot histórico, não renovação operacional,
-custódia humana independente ou recuperação após expiração.
+A root Ed25519 incorporada é validada localmente. A última cadeia pública
+observada tinha root v1 e targets/snapshot/timestamp v11; o timestamp expirou em
+`2026-08-11T23:10:15Z`. Os endpoints do portal não responderam no checkpoint
+atual. Portanto a confiança técnica do snapshot histórico não é evidência de
+renovação operacional, custódia humana independente ou recuperação após
+expiração.
 
-## Implementado neste checkpoint
+## Estado local
 
 - downloader, archives, SemVer, launchers, `changes` e `migrate` compartilham
-  contratos runtime;
-- fixtures reais dos instaladores públicos `0.7.0`–`0.7.13` foram adicionadas à
-  migração;
-- `verify` autentica TUF padrão localmente e permanece pendente quando a
-  projeção pública não está no checkout;
-- publisher não reconstrói artefatos ausentes;
-- workflows de validação e release têm build-once, transporte por artifact,
-  approval, mirrors e metadata-last fail-closed; o workflow separado
-  `.github/workflows/native-m3.yml` executa o candidato em runner Apple M3;
-- o monitor público TUF autenticado e agendado foi adicionado, sem fingir que
-  ele é um signer ou uma cerimônia de renovação;
-- o harness M3 exige plano e evidência observável, sem fabricar aprovação;
-- o smoke QWFWD aguarda uma resposta encaminhada após o handshake remoto, evitando
-  perder o primeiro datagrama por uma corrida de estado;
-- o candidato `live7` executou 18/18 casos no Apple M3, e os gates locais fecharam
-  com 1.642 testes de manutenção (38 skips esperados) e 6 testes do site, tanto
-  no Python 3.11 quanto no runtime local mais novo;
-- o candidato e o handoff M3 agora são transportados por IDs de artifact e
-  revalidados por um binding de hashes antes da aprovação/publicação;
-- o candidato agora contém o site público renderizado a partir dos bytes do
-  checkout e dos bootstraps de `dist`; TUF stale é removido do staging e
-  rejeitado pelo `release_candidate` antes do transporte;
-- `dist/installer/VERSION` ainda é `0.7.3` no checkout de desenvolvimento; o
-  `live7` foi gerado explicitamente como `1.0.0-rc.1`, portanto não é uma
-  promoção implícita da versão-fonte nem pode ser publicado sem um commit de
-  release coerente;
-- o workflow M3 agora gera também o registro de plataforma e o corpo canônico;
-  o workflow protegido `sign-native-evidence.yml` recebe somente assinaturas
-  públicas externas, autentica a root e monta `release-evidence.json` sem
-  manipular chave privada;
-- o hashing de artefatos grandes usa o limite de arquivo-fonte do archive,
-  sem ampliar o limite menor aplicado a membros gerenciados;
-- a instalação limpa no macOS não tenta importar um domínio de preferências
-  vazio, e o `uninstall --purge` remove nós não regulares somente sob uma
-  transação explícita e vinculada por identidade;
-- os launchers agora têm um gate exato contra `capabilities.json` e anunciam
-  `changes --sync-gitignore` e `migrate --dry-run` no help;
+  contratos de runtime;
+- fixtures de migração cobrem os instaladores públicos `0.7.0`–`0.7.13`;
+- o publisher é build-once e falha fechado para bytes ausentes, mirrors
+  divergentes e metadata TUF fora de ordem;
+- o candidato carrega o site renderizado e os binários de `dist`, sem depender
+  de uma instalação pessoal em `quake-world/`;
+- o harness Mac M3 executa plano candidato-owned e registra handoff, smoke
+  normalizado e agregado unsigned pendente;
+- o catálogo separa `supported`, `conditional` e `preview`: stable macOS
+  permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
+  quando não há evidência nativa do candidato exato;
+- a instalação pessoal temporária não é usada pelos testes de release.
 
 ## Bloqueios atuais
 
-1. o candidato local atual `1.0.0-rc.1` foi reconstruído a partir de `dist` e
-   executou 18/18 casos no M3; o manifest SHA é
-   `507f6560d19f42184d580459762fc75688cd2deb4bfd9f1743d40f0543b6b9b4` e o
-   instalador tem 600039 bytes e SHA-256
-   `237be02f65451147c7d94ea03fc8eeb5fdcb8e8839ac9aee260e78ad4fafd975`.
-   A evidência normalizada tem SHA-256
-   `de53133adaa6c8df9fbb49a394a05415f49f7631b922411e1856119c59ab1922` e o
-   agregado permanece `pending`, não assinado e não anexado a uma release pública;
-2. o timestamp TUF público observado expirou e não há
-   signer/custódia/alerta externo de produção demonstrados; o monitor
-   versionado falhará fechado enquanto o endpoint estiver indisponível;
-3. o token GitHub local está inválido, então o gate protegido não pode consultar
-   issues, anexar evidência ou publicar;
-4. o catálogo local e os bytes públicos estão em gerações diferentes;
-5. a promoção exige configurar o plano M3 e a custódia de metadata no ambiente
-   protegido; nenhuma dessas entradas é inferida.
+1. o candidato precisa ser reconstruído após o último alinhamento de contratos e
+   passar novamente pelos gates portáteis e pelos 18 casos nativos no M3;
+2. a evidência nativa é unsigned/pending até uma cerimônia externa de assinatura;
+3. o timestamp TUF público está expirado e o portal está indisponível; não há
+   signer/custódia de produção demonstrados neste ambiente;
+4. a publicação final, mirrors e metadata-last permanecem bloqueados até o
+   candidato exato, a evidência assinada e a operação TUF estarem disponíveis;
+5. Linux, Windows e macOS Intel continuam preview; nenhum resultado portátil é
+   apresentado como smoke nativo dessas plataformas.
 
-O último `Validate` público da `main` (run
-`31442335177`, job `93629452223`, em 2026-08-10) também falhou no job
-Windows/Python 3.10
-(`test_macos_launch_target_binds_every_bundle_directory`): o runner recebeu a
-falha segura `Alvo ... ausente ou inseguro` ao revalidar o bundle substituído,
-enquanto o teste aceitava somente `mudou`. O checkpoint local ampliou a
-asserção para aceitar as duas formas de rejeição segura e a suíte local passou;
-isso ainda não corrige a `main` até ser publicado.
+## Veredito
 
-As correções acima são verificadas somente no checkout local desta branch. Elas
-não alteram retroativamente o instalador público `0.7.13` nem seus mirrors.
-
-Portanto: nova `0.7.x` somente para regressão crítica da versão pública; RC e
-`1.0.0` permanecem NO-GO até fechar os bloqueios acima. Linux, Windows e macOS
-Intel continuam preview, sem alegação de execução nativa.
+A implementação local pode avançar para um `1.0.0-rc.1` candidato, mas não há
+autorização técnica para declarar RC publicado ou promover `1.0.0`. O release
+público `0.7.13` não foi alterado por este checkpoint.
 
 ## Próxima ação
 
-Restaurar primeiro a disponibilidade de `x86qw.x86.com.br` e a operação da
-metadata TUF; depois autenticar o GitHub, executar o par
-`.github/workflows/native-m3.yml` → `.github/workflows/sign-native-evidence.yml`
-sobre o artifact exato, com envelope assinado pelo custodiante e root pública
-operacional. Só então iniciar o workflow de promoção e registrar a cerimônia
-TUF.
+Reconstruir o candidato a partir do commit integrado, executar novamente os gates
+portáteis e o harness M3 sobre os mesmos bytes, anexar o agregado unsigned ao PR
+e manter a promoção bloqueada até a disponibilidade do portal TUF e da
+custódia de assinatura.

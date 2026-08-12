@@ -135,7 +135,8 @@ class Release0713Tests(unittest.TestCase):
         self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertIn("Distribuição 0.7.13 pública e verificável", index)
-        self.assertIn("versão 0.7.13, 74 pacotes", index)
+        self.assertIn('data-product-version>0.7.13</span>', index)
+        self.assertIn('data-package-count>74</span>', index)
 
 
 if __name__ == "__main__":

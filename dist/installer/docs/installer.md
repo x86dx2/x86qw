@@ -987,7 +987,7 @@ mas não apresenta Team ID nem ticket stapled e é rejeitado por `spctl`. Preser
 o bundle evita degradá-lo, mas não prova Developer ID, notarização ou autoria.
 Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e
 Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem
-contorna as proteções do macOS. O suporte dos dois canais macOS é condicional
+contorna as proteções do macOS. O stable macOS é condicional e o nightly permanece preview
 até os smokes nativos descritos no
 [ADR 0004](../../../docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
 

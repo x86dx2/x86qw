@@ -5,20 +5,20 @@ from __future__ import annotations
 import json
 import re
 import struct
-import sys
 import tarfile
 from pathlib import Path, PurePosixPath
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
 
 
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VARIANT = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
-PLATFORM_SUPPORT_STATES = frozenset({"supported", "conditional"})
+PLATFORM_SUPPORT_STATES = frozenset({
+    "supported", "conditional", "preview", "deprecated", "unavailable",
+})
+PLATFORM_VALIDATION_STATES = frozenset({
+    "portable-contract", "native-evidence", "not-run",
+})
 REQUIRED_RUNTIME_FIELDS = frozenset({
     "id", "label", "kind", "protocols", "capabilities", "component", "channels",
     "platforms", "architectures", "executable", "runtime_path", "configuration",
@@ -27,8 +27,9 @@ REQUIRED_RUNTIME_FIELDS = frozenset({
 })
 REQUIRED_PLATFORM_FIELDS = frozenset({
     "system", "architecture", "variant", "executable", "runtime_path", "format",
-    "permissions", "support", "origin", "test_required",
+    "permissions", "support", "validation", "origin", "test_required",
 })
+SUPPORT_TARGET_FIELDS = frozenset({"variant", "support", "validation"})
 REQUIRED_GAME_FIELDS = frozenset({
     "id", "label", "protocol", "component", "gamedir", "profile", "marker",
     "gamecode", "gamecode_type", "default_map", "suggested_maps", "client_runtimes",
@@ -414,20 +415,15 @@ def validate_inventory(
     project_root: Path | None = None,
     public_catalog: dict[str, object] | None = None,
 ) -> None:
-    for document, kind in (
-        (capabilities, SchemaKind.CATALOG),
-        (runtimes, SchemaKind.CATALOG),
-        (games, SchemaKind.CATALOG),
-        (compatibility, SchemaKind.CATALOG),
-    ):
+    for document in (capabilities, runtimes, games, compatibility):
         try:
-            # Repository inventories are the canonical source for the next
-            # release line.  They must carry explicit schema and CLI bounds;
-            # installed 0.x zipapps still use the legacy-tolerant runtime
-            # loaders above.
-            validate_document_versions(document, kind=kind, allow_legacy=False)
+            validate_document_versions(
+                document,
+                kind=SchemaKind.CATALOG,
+                allow_legacy=False,
+            )
         except ContractError as error:
-            raise ValueError(f"invalid {kind} contract in runtime inventory") from error
+            raise ValueError("invalid runtime inventory contract") from error
     if component_catalog is not None and project_root is not None:
         validate_ktx_mode_catalog(project_root, component_catalog)
     for document, key in ((runtimes, "runtimes"), (games, "games"), (compatibility, "compatibility")):
@@ -511,6 +507,7 @@ def validate_inventory(
             declared_architectures.add(str(architecture))
             if (
                 platform.get("support") not in PLATFORM_SUPPORT_STATES
+                or platform.get("validation") not in PLATFORM_VALIDATION_STATES
                 or not isinstance(platform.get("test_required"), bool)
             ):
                 raise ValueError(f"runtime platform support is not explicit: {identifier}/{variant}")
@@ -518,6 +515,25 @@ def validate_inventory(
                 _safe_path(platform.get(field), f"runtime {field}")
             if variant not in platform_labels:
                 raise ValueError(f"runtime platform lacks a public label: {identifier}/{variant}")
+            support_targets = platform.get("support_targets", [])
+            if not isinstance(support_targets, list):
+                raise ValueError(f"runtime support targets are invalid: {identifier}/{variant}")
+            target_variants: set[str] = set()
+            for target in support_targets:
+                if not isinstance(target, dict) or not SUPPORT_TARGET_FIELDS <= target.keys():
+                    raise ValueError(f"runtime support target is invalid: {identifier}/{variant}")
+                target_variant = target.get("variant")
+                if (
+                    not isinstance(target_variant, str)
+                    or not VARIANT.fullmatch(target_variant)
+                    or target_variant in target_variants
+                    or target_variant == variant
+                    or target_variant not in platform_labels
+                    or target.get("support") not in PLATFORM_SUPPORT_STATES
+                    or target.get("validation") not in PLATFORM_VALIDATION_STATES
+                ):
+                    raise ValueError(f"runtime support target is invalid: {identifier}/{variant}")
+                target_variants.add(target_variant)
         executable = runtime.get("executable")
         runtime_path = runtime.get("runtime_path")
         if not isinstance(executable, dict) or not isinstance(runtime_path, dict) or set(executable) != variants or set(runtime_path) != variants:

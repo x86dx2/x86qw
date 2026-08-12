@@ -129,7 +129,7 @@ class SiteTests(unittest.TestCase):
             "conditional", public_support[("ezquake-stable", "macos-universal")],
         )
         self.assertEqual(
-            "conditional", public_support[("ezquake-nightly", "macos-universal")],
+            "preview", public_support[("ezquake-nightly", "macos-universal")],
         )
         self.assertEqual(
             {entry["id"] for entry in games["games"]},
