@@ -5,7 +5,7 @@
 A `main` pública observada neste checkpoint é
 `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`. A implementação em
 execução fica na branch `codex/stabilize-1.0`, no commit
-`20a5135cce9ac227457c6b10977c82a57013b0de`; o PR aberto é o
+`4256fc4ea8a75f4ca9b717088d88a2e67a4ab32f`; o PR aberto é o
 [#95](https://github.com/x86dx2/x86qw/pull/95). A identidade do candidato
 oficial é sempre a do artifact imutável produzido pelo workflow.
 
@@ -47,19 +47,20 @@ substitui a cerimônia TUF do candidato.
 
 ## Candidato oficial
 
-O rehearsal oficial `31568840428` terminou com 20/20 jobs verdes. O artifact
-imutável é `9130680724`, com 648110869 bytes e digest
-`sha256:cfd629e1c1d28b9192757d9a0eece94dd3b968465c8a7e882ef9c76a7ceffb59`.
+O rehearsal oficial `31570858468` terminou com 20/20 jobs verdes. O artifact
+imutável é `9131490688`, com 648110874 bytes e digest
+`sha256:a206bc54610a9641999669650f89c55da5162be0f6a80e9ac2bf651959931aa2`.
 Seu `candidate.json` tem SHA-256
-`9beeaafbe3ddf0a48edd576c3d0e409b7d181628ae54dce0ecb566bee9cea070`, versão
-`1.0.0-rc.1`, commit `20a5135cce9ac227457c6b10977c82a57013b0de` e 73 artefatos.
+`54708415bae4384c644db3dedc8fbcc9f7b49b06a543cbed0f7eacb1b4e0a763`, versão
+`1.0.0-rc.1`, commit `4256fc4ea8a75f4ca9b717088d88a2e67a4ab32f` e 73 artefatos.
 Ubuntu, Windows e macOS verificaram esse artifact sem rebuild.
 
-O smoke M3 local executou os 18 casos contra os mesmos bytes e passou; a
+O smoke M3 local executou os 18 casos contra os mesmos bytes e passou em Apple
+M3 Pro/arm64; a
 evidência redigida está vinculada ao candidato, mas permanece
 `signed=false`/`promotable=false`. O workflow oficial `native-m3.yml` ainda não
 pôde ser dispatchado porque está somente nesta branch; após a integração do PR,
-ele deve ser executado contra o artifact `9130680724`.
+ele deve ser executado contra o artifact `9131490688`.
 
 ## Bloqueios atuais
 
