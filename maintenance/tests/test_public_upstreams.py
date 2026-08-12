@@ -21,6 +21,7 @@ from public_upstreams import (  # noqa: E402
     github_recursive_tree,
     github_ref_revision,
     remote_content_length,
+    _remaining_deadline,
 )
 
 
@@ -70,6 +71,13 @@ def tree_document(
 
 
 class PublicUpstreamTests(unittest.TestCase):
+    def test_remaining_deadline_caps_monotonic_rounding_above_budget(self) -> None:
+        with mock.patch(
+            "public_upstreams.time.monotonic",
+            return_value=100.0 - 6e-14,
+        ):
+            self.assertEqual(60.0, _remaining_deadline(160.0))
+
     def test_github_ref_uses_bounded_metadata_on_the_official_api(self) -> None:
         with mock.patch(
             "public_upstreams.download",

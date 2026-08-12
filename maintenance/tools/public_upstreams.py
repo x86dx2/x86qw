@@ -121,7 +121,7 @@ def _remaining_deadline(deadline: float) -> float:
     remaining = deadline - time.monotonic()
     if not math.isfinite(remaining) or remaining <= 0:
         raise ValueError("o prazo total da consulta ao GitHub foi excedido")
-    return remaining
+    return min(remaining, GITHUB_API_DEADLINE_SECONDS)
 
 
 def _github_api_document(

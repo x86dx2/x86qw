@@ -92,6 +92,8 @@ class NativeWorkflowTests(unittest.TestCase):
         self.assertIn("name: Preflight online M3 runner", source)
         self.assertIn("actions: read", source)
         self.assertIn("/actions/runners?per_page=100", source)
+        self.assertIn('if ! runners="$(curl -fsSL', source)
+        self.assertIn("Self-hosted runner inventory unavailable", source)
         self.assertIn('select(.status == "online")', source)
         self.assertIn('select(.labels | map(.name) | index("M3"))', source)
         self.assertIn('select(.labels | map(.name) | index("macOS"))', source)
