@@ -51,7 +51,8 @@ jobs:
         id: lfs-cache
         with:
           path: .git/lfs/objects
-          key: x86qw-lfs-v1-${{ hashFiles('dist/**', '.gitattributes') }}
+          key: x86qw-lfs-v2-${{ hashFiles('dist/**', '.gitattributes') }}
+          enableCrossOsArchive: true
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}

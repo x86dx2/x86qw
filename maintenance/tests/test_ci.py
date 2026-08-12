@@ -277,9 +277,10 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertIn("path: .git/lfs/objects", workflow)
         self.assertIn(
-            "key: x86qw-lfs-v1-${{ hashFiles('dist/**', '.gitattributes') }}",
+            "key: x86qw-lfs-v2-${{ hashFiles('dist/**', '.gitattributes') }}",
             workflow,
         )
+        self.assertIn("enableCrossOsArchive: true", workflow)
         self.assertIn("cache-hit", workflow)
         self.assertIn("git lfs checkout", workflow)
         self.assertIn("materialize_lfs.py", workflow)
