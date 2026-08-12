@@ -24,6 +24,8 @@ from maintenance.tools.native_macos_harness import (
     build_release_smoke_report,
     detect_m3_hardware,
     execute_cases,
+    _cleanup_run_scratch,
+    run_native,
     select_platform,
 )
 
@@ -33,6 +35,80 @@ ENTRYPOINT_PATH = "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
 
 
 class NativeMacosHarnessTests(unittest.TestCase):
+    def test_run_scratch_cleanup_removes_shared_installation_after_the_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            scratch = Path(temporary) / "output" / "scratch"
+            (scratch / "instalação espaço").mkdir(parents=True)
+            (scratch / "instalação espaço" / "large-runtime.bin").write_bytes(b"x" * 1024)
+
+            _cleanup_run_scratch(scratch)
+
+            self.assertFalse(scratch.exists())
+
+    def test_run_native_removes_shared_scratch_after_successful_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            plan = self._plan(candidate, identity)
+
+            with (
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.system",
+                    return_value="Darwin",
+                ),
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.machine",
+                    return_value="arm64",
+                ),
+            ):
+                handoff = run_native(
+                    candidate=candidate,
+                    plan=plan,
+                    output_dir=root / "logs",
+                    hardware=HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+                )
+
+            self.assertEqual("passed", handoff["status"])
+            self.assertFalse((root / "logs" / "scratch").exists())
+            self.assertTrue((root / "logs" / ".runtime" / "x86qw-native-smoke").is_file())
+
+    def test_run_native_removes_shared_scratch_after_execution_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            plan = self._plan(candidate, identity)
+            output = root / "logs"
+
+            def failed_execution(**kwargs: object) -> list[dict[str, object]]:
+                scratch = Path(kwargs["output_dir"]) / "scratch"
+                (scratch / "instalação espaço").mkdir(parents=True)
+                (scratch / "instalação espaço" / "partial.bin").write_bytes(b"partial")
+                raise NativeHandoffError("falha nativa simulada")
+
+            with (
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.system",
+                    return_value="Darwin",
+                ),
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.machine",
+                    return_value="arm64",
+                ),
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.execute_cases",
+                    side_effect=failed_execution,
+                ),
+            ):
+                with self.assertRaisesRegex(NativeHandoffError, "falha nativa simulada"):
+                    run_native(
+                        candidate=candidate,
+                        plan=plan,
+                        output_dir=output,
+                        hardware=HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+                    )
+
+            self.assertFalse((output / "scratch").exists())
+
     def test_staging_preserves_entrypoint_bytes_with_newlines(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

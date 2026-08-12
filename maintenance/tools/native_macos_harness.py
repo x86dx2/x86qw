@@ -8,6 +8,7 @@ import json
 import os
 import platform as host_platform
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -137,6 +138,19 @@ def _stderr_tail(path: Path) -> str:
     except OSError:
         return "<indisponível>"
     return value or "<vazio>"
+
+
+def _cleanup_run_scratch(scratch_root: Path) -> None:
+    """Remove the shared per-run scratch tree after native execution."""
+
+    scratch_root = Path(scratch_root).absolute()
+    if scratch_root.is_symlink():
+        raise NativeHandoffError("scratch compartilhado usa symlink")
+    if not scratch_root.exists():
+        return
+    if not scratch_root.is_dir():
+        raise NativeHandoffError("scratch compartilhado não é diretório")
+    shutil.rmtree(scratch_root)
 
 
 def _stage_entrypoint(
@@ -507,12 +521,15 @@ def run_native(
         _write_json(output_dir / "handoff.json", handoff)
         return handoff
     release_metadata: list[dict[str, object]] = []
-    results = execute_cases(
-        candidate=candidate,
-        plan=plan,
-        output_dir=output_dir,
-        release_metadata=release_metadata,
-    )
+    try:
+        results = execute_cases(
+            candidate=candidate,
+            plan=plan,
+            output_dir=output_dir,
+            release_metadata=release_metadata,
+        )
+    finally:
+        _cleanup_run_scratch(output_dir.absolute() / "scratch")
     passed = len(results) == len(plan["cases"]) and all(case["status"] == "passed" for case in results)
     if passed:
         _write_json(
