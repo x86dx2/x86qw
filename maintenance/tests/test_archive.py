@@ -72,17 +72,21 @@ class ArchiveTests(unittest.TestCase):
     def installer_bundle(self, version: str = "1.2.3") -> bytes:
         prefix = f"x86qw-installer-{version}"
         identity = self.identity_bytes(version)
+        legal = {
+            name: (ROOT / name).read_bytes()
+            for name in ("LICENSE", "NOTICE")
+        }
         application = self.archive_bytes([
             ("__main__.py", b"print('x86QW')\n"),
             ("_x86qw/installer.json", identity),
-            ("_x86qw/LICENSE", (ROOT / "LICENSE").read_bytes()),
-            ("_x86qw/NOTICE", (ROOT / "NOTICE").read_bytes()),
+            ("_x86qw/LICENSE", legal["LICENSE"]),
+            ("_x86qw/NOTICE", legal["NOTICE"]),
         ])
         return self.archive_bytes([
             (f"{prefix}/x86qw.pyz", application),
             (f"{prefix}/VERSION", f"{version}\n".encode("ascii")),
-            (f"{prefix}/LICENSE", (ROOT / "LICENSE").read_bytes()),
-            (f"{prefix}/NOTICE", (ROOT / "NOTICE").read_bytes()),
+            (f"{prefix}/LICENSE", legal["LICENSE"]),
+            (f"{prefix}/NOTICE", legal["NOTICE"]),
             (f"{prefix}/x86qw.sh", b"#!/bin/sh\n"),
             (f"{prefix}/x86qw.cmd", b"@echo off\r\n"),
             (f"{prefix}/installer.json", identity),
@@ -1124,18 +1128,25 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(ArchiveError):
             validate_installer_bundle(self.installer_bundle() + b"unexpected", "1.2.3")
 
-    def test_installer_bundle_rejects_legal_notice_drift_between_layers(self) -> None:
-        version = "1.2.3"
-        prefix = f"x86qw-installer-{version}"
-        members = []
-        with zipfile.ZipFile(io.BytesIO(self.installer_bundle(version))) as source:
-            for info in source.infolist():
-                payload = source.read(info)
-                if info.filename == f"{prefix}/LICENSE":
-                    payload = b"different license\n"
-                members.append((info.filename, payload))
-        with self.assertRaisesRegex(ArchiveError, "legal notice"):
-            validate_installer_bundle(self.archive_bytes(members), version)
+        prefix = "x86qw-installer-1.2.3"
+        with zipfile.ZipFile(io.BytesIO(self.installer_bundle()), "r") as source:
+            members = [(info.filename, source.read(info)) for info in source.infolist()]
+        without_notice = [item for item in members if item[0] != f"{prefix}/NOTICE"]
+        with self.assertRaises(ArchiveError):
+            validate_installer_bundle(self.archive_bytes(without_notice), "1.2.3")
+
+        nested = self.archive_bytes([
+            ("__main__.py", b"print('x86QW')\n"),
+            ("_x86qw/installer.json", self.identity_bytes("1.2.3")),
+        ])
+        without_nested_notice = [
+            (name, nested if name == f"{prefix}/x86qw.pyz" else payload)
+            for name, payload in members
+        ]
+        with self.assertRaises(ArchiveError):
+            validate_installer_bundle(
+                self.archive_bytes(without_nested_notice), "1.2.3",
+            )
 
     def test_installer_history_contract_preserves_the_six_member_legacy_layout(self) -> None:
         legacy = self.historical_installer_bundle()

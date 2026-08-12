@@ -99,8 +99,12 @@ from x86qw_runtime.gameplay.runtime_configs import (
     RuntimeConfigOwnership,
     create_runtime_config,
     release_runtime_config,
+    transfer_runtime_config_controller,
 )
-from x86qw_runtime.supervisor.core import process_remains_alive
+from x86qw_runtime.supervisor.core import (
+    process_remains_alive,
+    stop_processes,
+)
 from x86qw_runtime.gameplay.pak import (
     PakError,
     list_bsp_names,
@@ -238,6 +242,11 @@ DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
 )
 RUNTIME_KTX_BOT_NAME_CATALOG = "_x86qw/ktx-frogbot-names.json"
 KTX_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_KTX_RUNTIME_CONFIG__"
+# ezQuake may spend several seconds loading the large managed configuration and
+# its assets before it reaches the first frame.  This grace period is only a
+# startup-failure bound: after spawn, the journal is transferred to the client
+# process and the file remains available until authenticated recovery.
+KTX_RUNTIME_CONFIG_STARTUP_GRACE_SECONDS = 15.0
 # ezQuake accepts large alias bodies, but a single startup argument close to
 # its command buffer limit can leave initialization incomplete. Larger mode
 # plans are therefore loaded from the same private ephemeral configuration
@@ -2077,6 +2086,8 @@ class GameplayPlayerMixin:
         selection = f"{game.label} · {ktx_mode.label}" if ktx_mode is not None else game.label
         console.info(f"Abrindo {selection} no mapa {map_name}...")
         runtime_config = None
+        runtime_config_handed_off = False
+        runtime_config_preserve = False
         if uses_mode_catalog and ktx_startup_commands:
             runtime_config = write_ktx_runtime_config(
                 self.target, bot_name_settings, ktx_startup_commands,
@@ -2089,16 +2100,55 @@ class GameplayPlayerMixin:
             ]
         try:
             process = self.launch_runtime(runtime, arguments)
-            if (
-                runtime_config is not None
-                and not process_remains_alive(process, duration=3.0)
-            ):
-                raise InstallerError(
-                    "O ezQuake encerrou antes de carregar a configuração KTX."
-                )
+            if runtime_config is not None:
+                # The launcher process exits as soon as the client is opened.
+                # Transfer the journal to the POSIX guardian/Windows child
+                # before observing startup; otherwise a later invocation can
+                # reclaim a configuration that ezQuake has not read yet.
+                try:
+                    runtime_config = replace(
+                        runtime_config,
+                        ownership=transfer_runtime_config_controller(
+                            self.target, runtime_config.ownership, process,
+                        ),
+                    )
+                except BaseException as error:
+                    try:
+                        stop_processes([process])
+                    except BaseException as cleanup_error:
+                        runtime_config_preserve = True
+                        console.warning(
+                            "Não foi possível encerrar o cliente após falha de "
+                            "ownership KTX; o journal foi preservado para recuperação: "
+                            f"{runtime_config.ownership.journal} ({cleanup_error})"
+                        )
+                    raise
+                runtime_config_handed_off = True
+                if not process_remains_alive(
+                    process, duration=KTX_RUNTIME_CONFIG_STARTUP_GRACE_SECONDS,
+                ):
+                    return_code = getattr(process, "returncode", None)
+                    detail = (
+                        f" (código {return_code})"
+                        if isinstance(return_code, int)
+                        else ""
+                    )
+                    if not remove_ktx_runtime_config(runtime_config):
+                        raise InstallerError(
+                            "O ezQuake encerrou antes de carregar a configuração KTX"
+                            f"{detail}, mas o arquivo efêmero não pôde ser removido."
+                        )
+                    runtime_config = None
+                    runtime_config_handed_off = False
+                    raise InstallerError(
+                        "O ezQuake encerrou antes de carregar a configuração KTX"
+                        f"{detail}. Execute novamente com --verbose para obter detalhes técnicos."
+                    )
         finally:
             if (
                 runtime_config is not None
+                and not runtime_config_handed_off
+                and not runtime_config_preserve
                 and not remove_ktx_runtime_config(runtime_config)
             ):
                 console.warning(

@@ -509,12 +509,13 @@ class ComponentReleaseTests(unittest.TestCase):
             line.strip() for line in autoexec.splitlines()
             if line.strip() and not line.lstrip().startswith("//")
         ]
-        self.assertEqual([
+        first_run = [
             'if $_nquake_first_startup == 1 "exec nquake_default.cfg"',
             'if $_nquake_first_startup == 1 "exec configs/preset.cfg"',
             'if $_nquake_first_startup == 1 "exec x86qw-default.cfg"',
             'if $_nquake_first_startup == 1 set _nquake_first_startup 0',
-        ], executable_lines[:4])
+        ]
+        self.assertEqual(first_run, executable_lines[:4])
 
     def test_client_bootstrap_package_composes_upstream_and_x86qw_layers(self) -> None:
         context = load_source_context(
@@ -523,7 +524,7 @@ class ComponentReleaseTests(unittest.TestCase):
             ROOT / "maintenance/inventory/component-releases.json",
         )
         self.assertIn("x86qw-client-bootstrap", context.components)
-        release, _, payloads = resolve_component_payloads(
+        _, _, payloads = resolve_component_payloads(
             context, "x86qw-client-bootstrap",
         )
         members = {member for _, member, _, _ in payloads}
@@ -534,6 +535,15 @@ class ComponentReleaseTests(unittest.TestCase):
             "defaults/qw/x86qw-user.cfg",
         } <= members)
 
+    def test_changed_bootstrap_payload_does_not_reuse_published_version(self) -> None:
+        context = load_source_context(
+            ROOT / "dist",
+            ROOT / "maintenance/inventory/components.json",
+            ROOT / "maintenance/inventory/component-releases.json",
+        )
+        release, _, payloads = resolve_component_payloads(context, "x86qw-client-bootstrap")
+        current_members = {member: payload for _, member, payload, _ in payloads}
+
         catalog = json.loads(
             (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8"),
         )
@@ -541,6 +551,22 @@ class ComponentReleaseTests(unittest.TestCase):
             package for package in catalog["packages"]
             if package.get("package") == "nquake-bootstrap"
         )
+        fixture = json.loads(
+            (ROOT / "maintenance/tests/fixtures/published/nquake-bootstrap-e4cb23d40aa2+x86qw.3.json")
+            .read_text(encoding="utf-8"),
+        )
+        self.assertEqual(published["filename"], fixture["filename"])
+        self.assertEqual(published["size"], fixture["size"])
+        self.assertEqual(published["sha256"], fixture["sha256"])
+        current_hashes = {
+            name: {
+                "size": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+            for name, payload in current_members.items()
+        }
+
+        self.assertNotEqual(fixture["members"], current_hashes)
         self.assertNotEqual(published["version"], release["version"])
 
     def test_td2_runtime_package_excludes_reference_material(self) -> None:

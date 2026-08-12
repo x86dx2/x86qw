@@ -1,17 +1,17 @@
-# Plano de estabilização `0.7.3 → 1.0`
+# Plano de estabilização `0.7.13 → 1.0`
 
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional; esta materialização é exclusivamente documental |
-| Baseline pública | `origin/main@3bbc7a01faf8d472c5ccbab9233e05e9abadc379` (`x86qw-installer-0.7.3`) |
+| Estado | plano operacional; implementação local parcial, sem publicação |
+| Baseline pública | `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` (`x86qw-installer-0.7.13`) |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | `codex/stabilize-1.0@30e9d5bd4f4032772c63d37666ebdedbb33fc292` |
+| Checkpoint auditável | `codex/stabilize-1.0@30e9d5bd4f4032772c63d37666ebdedbb33fc292` + alterações locais não publicadas |
 | Versão alvo | `1.0.0` |
-| Data da auditoria | 2026-08-06 |
-| Escopo desta entrega | sete arquivos documentais; nenhum commit, push, release, publicação ou operação remota |
+| Data da auditoria | 2026-08-11 |
+| Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; nenhum commit, push, release ou publicação |
 
 Este documento registra a sequência aprovada para transformar a baseline pública
-`0.7.3` em uma `1.0` verificável. O estado corrente fica em
+`0.7.13` em uma `1.0` verificável. O estado corrente fica em
 [PROJECT-STATUS.md](../PROJECT-STATUS.md), o índice estratégico em
 [ROADMAP.md](../ROADMAP.md) e o registro de baseline em
 [stabilization-baseline-2026-07-31.md](stabilization-baseline-2026-07-31.md). Este plano não promove o
@@ -19,15 +19,14 @@ checkpoint, não autoriza a publicação e não substitui aprovação humana.
 
 ## 1. Fronteira, autoridade e invariantes
 
-`origin/main` é a única linha canônica. A tag `x86qw-installer-0.7.3` e todos
+`origin/main` é a única linha canônica. A release pública `0.7.13` e todos
 os bundles públicos anteriores permanecem imutáveis. O checkpoint é somente uma
 fonte de consulta para extração seletiva: **checkpoint para extração, nunca
 merge**. Nenhum commit de `codex/stabilize-1.0` será incorporado como unidade.
 
-Durante a materialização deste plano não se alteram código, catálogos,
-inventários, APIs públicas, site publicado, workflows, versões, bundles,
-branches remotas, issues ou pull requests. Não se cria `.specs/`, não se
-inicializa OpenSpec e não se abre um roadmap paralelo.
+Durante este checkpoint não se publica nem se altera estado remoto. As
+correções locais podem alterar código, workflows, fixtures e documentação, mas
+não autorizam tag, release, catálogo público, metadata TUF ou branch remota.
 
 As invariantes para todas as fases são:
 
@@ -49,7 +48,7 @@ qualquer ação futura de limpeza, a ancestralidade deve ser revalidada contra
 
 | Ref | Estado observado | Decisão do plano |
 |---|---|---|
-| `origin/main` | `3bbc7a0` / tag `x86qw-installer-0.7.3` | única linha canônica |
+| `origin/main` | `d4a92c0` / release `x86qw-installer-0.7.13` | única linha canônica |
 | `codex/stabilize-1.0` | `30e9d5b`, checkpoint com trabalho de preparação | congelada; extrair símbolos/hunks, nunca fazer merge/cherry-pick |
 | `origin/codex/control-maps` | `362f705`, quatro commits à frente e 105 atrás, quatro commits exclusivos | manter até uma decisão própria; não apagar com a limpeza do checkpoint |
 | `agent/bounded-downloader` | `a60a625`; 0 à frente/86 atrás, integrado pela PR #58 (`b833ba4`) | apagar apenas depois de revalidar ancestralidade e com autorização |
@@ -95,7 +94,7 @@ issue de destino.
 - governança, avisos, ownership, Dependabot, lockfile do site, threat model e
   runbooks na PR B;
 - SemVer, schemas, envelopes JSON, redaction e códigos estáveis na PR C;
-- migração unilateral de fixtures reais `0.7.0–0.7.3` na PR D;
+- migração unilateral de fixtures reais `0.7.0–0.7.13` na PR D;
 - ADR, biblioteca e cerimônia de trust aprovados na E1/E2;
 - preparação/verificação de candidato, ownership, SBOM, provenance e mirrors
   na PR F;
@@ -106,8 +105,8 @@ issue de destino.
 
 - gameplay, KTX, downloader, host, supervisor ou correções incidentais sem uma
   issue própria;
-- remoção de `.github/workflows/`, testes que exigem ausência de CI ou troca de
-  CI por uma validação local;
+- workflows com etapas reservadas, rebuild após aprovação ou claims nativos
+  sem evidência;
 - fixtures prospectivas `0.8.x`/`0.9.x` tratadas como releases publicadas;
 - chaves privadas, metadata de produção, chaves/roles de fixture ou o trust que
   expira em `2026-08-08`;
@@ -134,18 +133,15 @@ serviços podem tornar-se `supported`; o cliente stable continua `conditional`
 se assinatura/notarização ainda for uma limitação. A matriz portátil não é
 smoke nativo.
 
-Os workflows existentes são preservados. Seus jobs podem ser renomeados para
-`portable-contract / ubuntu`, `portable-contract / macos` e
-`portable-contract / windows`, mas não removidos nem usados para afirmar
-execução gráfica, de rede ou de Gatekeeper. Toda mudança de workflow exige a
-issue da fase correspondente e revisão separada.
+Os workflows agora existem como gates executáveis: a validação portável é
+separada do runner self-hosted M3, e nenhum job portável afirma execução
+gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors e
+metadata-last; ausência de configuração externa falha fechada.
 
 ## 5. Sequência A–H
 
-Cada fase começa com uma issue de acompanhamento, cria sua branch somente depois
-da issue, fecha seu gate de contrato e só então desbloqueia a fase seguinte. As
-refs `#46`, `#48`, `#51`, `#53`, `#54` e `#55` atualmente identificam PRs abertas;
-elas não substituem a issue de acompanhamento nem provam aprovação. Os alvos de versão
+Cada fase começa com uma issue, cria sua branch somente depois da issue, fecha
+seu gate de contrato e só então desbloqueia a fase seguinte. Os alvos de versão
 são sugestões de publicação, não versões preparadas nesta entrega.
 
 ### PR A — verdade de plataforma
@@ -154,14 +150,15 @@ Criar uma issue própria antes da branch. Separar artefato publicado, suporte e
 validação; conservar o macOS universal físico; classificar Linux, Windows,
 macOS Intel e nightly como `preview`; preservar a CI com os nomes
 `portable-contract / ...`; e registrar a regra de evidência do candidato exato.
-macOS M3 não é promovido antes de G. Depois de A, publicar obrigatoriamente a
-`0.7.4` em uma PR de release separada e corretiva.
+macOS M3 não é promovido antes de G. A release pública corrente `0.7.13` não é
+reescrita; qualquer correção futura deve ser uma release nova, separada da PR
+de implementação e justificada por um gap P0/P1.
 
 **Gate:** catálogo e documentação usam os cinco estados sem misturar presença
 com execução; CI portável permanece intacta; a issue de release da `0.7.4` é
 separada da implementação.
 
-### PR B — governança (PR `#55`)
+### PR B — governança (`issue #55`)
 
 Extrair licença, avisos, ownership, Dependabot, lockfile do site, threat model
 e runbooks. Não remover workflows e não misturar trust, promoção ou publicação.
@@ -169,7 +166,7 @@ e runbooks. Não remover workflows e não misturar trust, promoção ou publica�
 **Gate:** cada novo arquivo tem owner e licença; avisos carregam para a
 distribuição moderna; runbooks apontam para uma autoridade única.
 
-### PR C — contratos (PR `#53`, alvo `0.8.0`)
+### PR C — contratos (`issue #53`, alvo `0.8.0`)
 
 Extrair SemVer, schemas de estado/receipt, envelopes JSON, redaction e códigos
 por símbolo/hunk. Os writers reais devem emitir as versões congeladas. Antes de
@@ -179,17 +176,18 @@ devem aceitar `1.0.0-rc.1`.
 **Gate:** schemas, writers e consumidores concordam; fixtures negativas cobrem
 redaction e códigos; nenhum bootstrap 0.7.x é quebrado.
 
-### PR D — migração (PR `#46`, alvo `0.8.1` ou `0.8.2`)
+### PR D — migração (`issue #46`, alvo `0.8.1` ou `0.8.2`)
 
 Atualizar a issue para suportar somente versões realmente publicadas. Usar
-fixtures reais `0.7.0–0.7.3`; remover claims sintéticos `0.8.x/0.9.x`; garantir
+fixtures reais `0.7.0–0.7.13`; remover claims sintéticos
+`0.8.x`/`0.9.x`; garantir
 que o estado migrado satisfaz os schemas congelados em C e que rollback e
 ownership continuam diagnosticáveis.
 
 **Gate:** migração unilateral, preservação de arquivos pessoais, recibos
 coerentes e ausência de versão futura inventada.
 
-### PRs E1/E2 — trust (E1 é a PR `#48`; E2 será uma PR futura, alvo `0.9.0`)
+### PRs E1/E2 — trust (`issue #48`, alvo `0.9.0`)
 
 Manter a issue aberta nas duas PRs. E1 aprova ADR, biblioteca, algoritmo,
 thresholds, custódia, endpoints, expiração, rotação e cerimônia. E2 só
@@ -202,7 +200,7 @@ checkpoint que expira em `2026-08-08`.
 independente foi registrada e o verificador falha fechado para rollback,
 freeze, equivocation, expiração e root não ancorado.
 
-### PR F — candidato imutável (PR `#51`)
+### PR F — candidato imutável (`issue #51`)
 
 Preservar e redesenhar `validate.yml` e `release.yml`. Desacoplar preparação de
 candidato de trust/evidência por imports opcionais: rehearsal pode existir sem
@@ -216,10 +214,12 @@ por digest imutável.
 preparação e promoção; nenhum destino é sobrescrito; trust não é importado
 implicitamente.
 
-### PR G — Mac M3/arm64 e RC (PR `#54`)
+### PR G — Mac M3/arm64 e RC (`issue #54`)
 
-Reescrever a issue para um executor real. O checkpoint contém schemas e
-validadores de handoff, não evidência nativa. No candidato exato, executar o
+O executor `native_macos_harness.py` e o workflow
+`.github/workflows/native-m3.yml` exigem um plano fechado fornecido para o
+candidato exato. O checkpoint não contém evidência assinada de release; no
+candidato exato, executar o
 conjunto completo de clientes, jogos, serviços e lifecycle. Linux, Windows e
 macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
 
@@ -243,10 +243,8 @@ reversão documentada e nenhum claim de plataforma além da evidência existente
 
 | Marco | Dependência mínima | Tipo de release |
 |---|---|---|
-| `0.7.4` | PR A aprovada | corretiva, PR de release separada |
-| `0.8.0` | PR C aprovada | contratos, PR de release separada |
-| `0.8.1`/`0.8.2` | PR D aprovada | migração, PR de release separada |
-| `0.9.0` | E1 e E2 aprovadas | trust, PR de release separada |
+| nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
+| `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
 | `1.0.0-rc.1` | F e G aprovadas; evidência M3 | RC e período de uso |
 | `1.0.0` | H e todos os gates | promoção sem correção funcional |
 
@@ -302,36 +300,28 @@ A jornada só pode ser declarada concluída quando:
   mesmo estado;
 - nenhuma alteração funcional é escondida em uma PR de promoção.
 
-Para esta materialização documental, a conclusão é mais estreita: os sete
-arquivos allowlisted existem ou foram atualizados, `git diff --check` passa, os
-links locais resolvem, os oito campos do status são exatos, `manage.py verify`
-passa e nenhum arquivo fora da allowlist foi alterado.
+Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
+o publisher não recompila, a fixture pública 0.7.13 existe, os workflows não
+possuem placeholders deliberados e o harness M3 falha fechado sem plano ou
+evidência. Isso não é aprovação de RC nem de publicação.
 
 ## 10. Validação desta materialização
 
 O gate desta entrega é executado no worktree sem criar estado remoto:
 
 1. confirmar que a base canônica ainda resolve para
-   `origin/main@3bbc7a01faf8d472c5ccbab9233e05e9abadc379`; se avançar, repetir a
+   `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`; se avançar, repetir a
    auditoria antes de editar;
 2. executar `git diff --check` e revisar os links Markdown locais, resolvendo
    cada destino a partir do diretório do documento e ignorando somente URLs
    externas e âncoras;
-3. confirmar exatamente os oito headings de `PROJECT-STATUS.md`: `Baseline
-   atual`, `Versão pública`, `Próximo marco`, `PR ativo`, `Issue ativa`,
-   `Gates`, `Riscos` e `Próxima ação`;
-4. conferir que o diff não contém arquivos fora de `.github/CONTRIBUTING.md`,
-   `.github/PULL_REQUEST_TEMPLATE.md`, `README.md`,
-   `docs/ROADMAP.md`, `docs/ROADMAP-QUAKE-ECOSYSTEM.md`,
-   `docs/PROJECT-STATUS.md` e
-   `docs/implementation/stabilization-1.0-plan.md`;
-5. verificar, contra o `HEAD` do checkout, que não há alterações não
-   documentais em workflows, inventários, APIs públicas, `site/`, código,
-   fixtures, `VERSION` ou bundles;
-6. executar `PYTHONDONTWRITEBYTECODE=1 ./maintenance/manage.py verify` e
-   confirmar que o verificador não deixa alterações;
-7. revisar o diff documental proposto contra `origin/main`, mantendo separado
-   o diff histórico já commitado do checkpoint `codex/stabilize-1.0`.
+3. confirmar a distinção entre baseline pública, checkout local, TUF técnico e
+   operação TUF;
+4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
+   portáveis e os testes nativos com as permissões apropriadas;
+5. revisar o diff local contra `origin/main`, mantendo separado o trabalho
+   histórico já commitado do checkpoint.
 
 Esse gate não cria tag, branch, issue, label, PR, release ou publicação. A
-validação nativa de Mac M3 e todos os gates A–H pertencem às fases futuras.
+execução nativa M3, a custódia TUF e o catálogo da próxima release continuam
+dependentes de entradas protegidas e não são inferidos localmente.

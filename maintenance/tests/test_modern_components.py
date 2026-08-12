@@ -7,6 +7,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from maintenance.tools import component_sources
+from x86qw_runtime.gameplay import runtime_configs
 
 
 # Um teste que por engano iniciar o runtime real nunca deve capturar a tela.
@@ -109,6 +111,23 @@ class ModernComponentTests(unittest.TestCase):
 
     def setUp(self):
         install_qw.console.configure(verbose=False, no_color=True)
+        # Command-construction tests replace the native ezQuake launch with a
+        # mock.  Keep the production rule strict (every KTX config needs an
+        # authenticated controller handoff), while the dedicated runtime
+        # recovery suite exercises the real Popen/identity path.
+        def release_mock(target, ownership, _process):
+            play_qw.release_runtime_config(target, ownership)
+            return ownership
+
+        self._ktx_transfer_patch = mock.patch.object(
+            play_qw,
+            "transfer_runtime_config_controller",
+            side_effect=release_mock,
+        )
+        self._ktx_transfer_patch.start()
+
+    def tearDown(self):
+        self._ktx_transfer_patch.stop()
 
     def make_installer(self, root):
         target = root / "quake-world"
@@ -157,8 +176,13 @@ class ModernComponentTests(unittest.TestCase):
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
             install_qw.parse_arguments(["--help"], ROOT)
         self.assertIn(f"x86QW {install_qw.application_version()}", output.getvalue())
-        self.assertIn("play, host, proxy, qtv, status, version,", output.getvalue())
-        self.assertIn("update, upgrade, repair", output.getvalue())
+        help_text = output.getvalue()
+        # argparse wraps the action list differently once the explicit
+        # install-selection flags are present; assert the public command
+        # sequence without depending on an incidental line break.
+        self.assertIn("play, host, proxy, qtv, status,", help_text)
+        self.assertIn("version, update, upgrade, repair", help_text)
+        self.assertIn("--non-interactive", help_text)
         self.assertIn("--version", output.getvalue())
 
         version_output = io.StringIO()
@@ -549,7 +573,7 @@ class ModernComponentTests(unittest.TestCase):
             )
             pause.assert_called_once_with("\nPressione Enter para retornar ao menu de serviços...")
 
-        for action in ("update", "upgrade", "verify", "repair", "cleanup"):
+        for action in ("update", "upgrade", "verify", "changes", "migrate", "repair", "cleanup"):
             selections = (
                 ("manage", "cleanup", "cache", "exit")
                 if action == "cleanup" else ("manage", action, "exit")
@@ -586,6 +610,30 @@ class ModernComponentTests(unittest.TestCase):
         content = next(option for option in management if option.key == "content")
         self.assertEqual("Alterar conteúdo pelo bootstrap", content.label)
         self.assertIn("adicionar ou remover", content.description)
+
+    def test_root_menu_has_unique_entries_and_fallback_lists_all_public_commands(self):
+        target = ROOT / "custom-quake"
+        calls = []
+
+        def cancel_after_capture(title, options, **kwargs):
+            calls.append((title, tuple(options)))
+            raise install_qw.navigation.MenuCancelled(title)
+
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        output = io.StringIO()
+        with mock.patch.object(
+            install_qw.navigation, "select_one", side_effect=cancel_after_capture,
+        ), mock.patch.object(install_qw.sys, "stdin", stdin), contextlib.redirect_stdout(output):
+            self.assertEqual(0, install_qw.run_main_menu(target))
+
+        self.assertEqual(1, len(calls))
+        root_keys = [option.key for option in calls[0][1]]
+        self.assertEqual(len(root_keys), len(set(root_keys)))
+        self.assertEqual(1, root_keys.count("manage"))
+        fallback = output.getvalue()
+        self.assertIn("changes", fallback)
+        self.assertIn("migrate", fallback)
 
     def test_information_content_and_exit_render_the_promised_result(self):
         target = ROOT / "custom-quake"
@@ -3906,16 +3954,16 @@ class ModernComponentTests(unittest.TestCase):
                 for index in range(len(arguments) - 1)
             ])
 
-    def test_exact_3on3on3_launch_uses_one_frogbot_entry_alias(self):
+    def test_ktx_bot_options_enable_frogbot_before_map_and_add_after_entry(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
             (target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             options = play_qw.KtxLaunchOptions(
-                bots=8, bot_skill=20, bot_names_profile="x86qw",
+                bots=2, bot_skill=10, bot_team="red",
             )
-            assets = frozenset({"bots/maps/aerowalk.bot"})
+            assets = frozenset({"bots/maps/dm6.bot"})
             captured: dict[str, object] = {}
 
             def capture_launch(selected_runtime, arguments):
@@ -3931,24 +3979,49 @@ class ModernComponentTests(unittest.TestCase):
                 captured["config_path"] = config_path
                 captured["config"] = config_path.read_text(encoding="ascii")
 
+            def observe_startup(_process, *, duration, interval=0.05):
+                del interval
+                self.assertEqual(
+                    play_qw.KTX_RUNTIME_CONFIG_STARTUP_GRACE_SECONDS,
+                    duration,
+                )
+                self.assertTrue(Path(captured["config_path"]).is_file())
+                return True
+
+            transferred: dict[str, object] = {}
+
+            def keep_transfer(_target, ownership, _process):
+                transferred["ownership"] = ownership
+                return ownership
+
             with contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(installer, "check_paks"):
                     with mock.patch.object(installer, "available_local_games", return_value=[game]):
                         with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
                             with mock.patch.object(installer, "verify_component"):
                                 with mock.patch.object(installer, "ktx_archive_members", return_value=assets):
-                                    with mock.patch.object(installer, "local_map_names", return_value=["aerowalk"]):
+                                    with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                         with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                             with mock.patch.object(
                                                 installer, "launch_runtime",
                                                 side_effect=capture_launch,
-                                            ) as launch:
+                                            ) as launch, mock.patch.object(
+                                                play_qw, "transfer_runtime_config_controller",
+                                                side_effect=keep_transfer,
+                                            ), mock.patch.object(
+                                                play_qw, "process_remains_alive",
+                                                side_effect=observe_startup,
+                                            ) as stability:
                                                 with mock.patch.object(installer, "verify_local_play_support"):
                                                     installer.play_local(
-                                                        "ktx", "3on3on3", "aerowalk", options,
-                                                        ruleset="x86qw",
+                                                        "ktx", "2on2", "dm6", options,
                                                     )
             launch.assert_called_once()
+            stability.assert_called_once()
+            self.assertEqual(
+                play_qw.KTX_RUNTIME_CONFIG_STARTUP_GRACE_SECONDS,
+                stability.call_args.kwargs["duration"],
+            )
             arguments = launch.call_args.args[1]
             self.assertEqual(runtime, captured["runtime"])
             self.assertEqual(local_server_baseline("ktx"), arguments[:len(local_server_baseline("ktx"))])
@@ -3956,9 +4029,93 @@ class ModernComponentTests(unittest.TestCase):
             self.assertNotIn("+tempalias", arguments)
             self.assertLess(arguments.index("+exec"), arguments.index("+map"))
             config = str(captured["config"])
-            self.assertIn("set_ex k_fb_name_0", config)
-            self.assertIn("if ($k_maxclients < 9) then k_maxclients 9", config)
-            self.assertIn("if ($maxclients < 9) then maxclients 9", config)
+            self.assertNotIn("unset k_fb_name_0", config)
+            self.assertNotIn("unset_re", config)
+            self.assertIn("if ($k_maxclients < 3) then k_maxclients 3", config)
+            self.assertIn("if ($maxclients < 3) then maxclients 3", config)
+            # The runtime state machine also carries this command in the
+            # managed INS aliases; the launch sequence itself must contain at
+            # least the two requested additions.
+            self.assertGreaterEqual(
+                config.count("cmd botcmd addbot 10 red"), 2,
+            )
+            self.assertGreaterEqual(config.count(";wait"), play_qw.FROGBOT_ADD_WAIT_FRAMES)
+            self.assertIn("ownership", transferred)
+            self.assertTrue(play_qw.release_runtime_config(target, transferred["ownership"]))
+            self.assertFalse(Path(captured["config_path"]).exists())
+
+    def test_exact_x86qw_ruleset_3on3on3_command_uses_one_post_map_entry_alias(self):
+        """The reported launch must use the ezQuake-compatible Frogbot entry alias."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(
+                bots=8, bot_skill=20, bot_names_profile="x86qw",
+            )
+            process = mock.Mock(pid=4320, returncode=None)
+            captured: dict[str, str] = {}
+
+            def capture_launch(_runtime, arguments):
+                config_name = next(
+                    arguments[index + 1]
+                    for index, argument in enumerate(arguments[:-1])
+                    if argument == "+exec"
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
+                )
+                captured["config"] = (target / "qw" / config_name).read_text(
+                    encoding="ascii",
+                )
+                return process
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(player, "check_paks"):
+                    with mock.patch.object(player, "available_local_games", return_value=[game]):
+                        with mock.patch.object(player, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(
+                                    player, "ktx_archive_members",
+                                    return_value=frozenset({"bots/maps/aerowalk.bot"}),
+                                ):
+                                    with mock.patch.object(
+                                        player, "local_map_names", return_value=["aerowalk"],
+                                    ):
+                                        with mock.patch.object(
+                                            player, "choose_host_runtime",
+                                            return_value=("ezQuake stable 3.6.9", runtime),
+                                        ):
+                                            with mock.patch.object(
+                                                player, "launch_runtime",
+                                                side_effect=capture_launch,
+                                            ) as launch, mock.patch.object(
+                                                play_qw, "transfer_runtime_config_controller",
+                                                side_effect=lambda target, ownership, process: ownership,
+                                            ) as transfer, mock.patch.object(
+                                                play_qw, "process_remains_alive",
+                                                return_value=True,
+                                            ):
+                                                with mock.patch.object(player, "verify_local_play_support"):
+                                                    player.play_local(
+                                                        "ktx", "3on3on3", "aerowalk", options,
+                                                        ruleset="x86qw",
+                                                    )
+            arguments = launch.call_args.args[1]
+            self.assertIn(["+exec", "x86qw-ruleset.cfg"], [
+                arguments[index:index + 2]
+                for index in range(len(arguments) - 1)
+            ])
+            self.assertIn(["+map", "aerowalk"], [
+                arguments[index:index + 2]
+                for index in range(len(arguments) - 1)
+            ])
+            self.assertIn("x86qw-ktx-session-", " ".join(arguments))
+            self.assertIn(["+set", "k_defmode", "3on3on3"], [
+                arguments[index:index + 3]
+                for index in range(len(arguments) - 2)
+            ])
+            config = captured["config"]
             self.assertRegex(
                 config,
                 r'(?m)^tempalias x86qw_ktx_launch_setup "x86qw_ktx_launch_',
@@ -3970,8 +4127,191 @@ class ModernComponentTests(unittest.TestCase):
             )
             # Eight launch additions plus the reusable INS management alias.
             self.assertEqual(9, config.count("cmd botcmd addbot 20"))
-            self.assertGreaterEqual(config.count(";wait"), play_qw.FROGBOT_ADD_WAIT_FRAMES)
-            self.assertFalse(Path(captured["config_path"]).exists())
+            transfer.assert_called_once()
+            self.assertIs(process, transfer.call_args.args[2])
+
+    def test_ktx_early_exit_reports_return_code_and_removes_ephemeral_config(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(
+                bots=1, bot_skill=5, bot_names_profile="x86qw",
+            )
+            process = mock.Mock(pid=4321, returncode=23)
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(player, "check_paks"):
+                    with mock.patch.object(player, "available_local_games", return_value=[game]):
+                        with mock.patch.object(player, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(
+                                    player, "ktx_archive_members",
+                                    return_value=frozenset({"bots/maps/aerowalk.bot"}),
+                                ):
+                                    with mock.patch.object(player, "local_map_names", return_value=["aerowalk"]):
+                                        with mock.patch.object(
+                                            player, "choose_host_runtime",
+                                            return_value=("ezQuake stable 3.6.9", runtime),
+                                        ):
+                                            with mock.patch.object(
+                                                player, "launch_runtime", return_value=process,
+                                            ):
+                                                with mock.patch.object(
+                                                    play_qw, "transfer_runtime_config_controller",
+                                                    side_effect=lambda _target, ownership, _process: ownership,
+                                                ):
+                                                    with mock.patch.object(
+                                                        play_qw, "process_remains_alive", return_value=False,
+                                                    ):
+                                                        with mock.patch.object(player, "verify_local_play_support"):
+                                                            with self.assertRaisesRegex(
+                                                                play_qw.InstallerError,
+                                                                r"encerrou antes.*código 23",
+                                                            ):
+                                                                player.play_local(
+                                                                    "ktx", "duel", "aerowalk", options,
+                                                                    ruleset="x86qw",
+                                                                )
+            self.assertEqual((), tuple((target / "qw").glob("x86qw-ktx-session-*.cfg")))
+
+    def test_ktx_transfer_failure_stops_only_new_process_and_cleans_config(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(
+                bots=1, bot_skill=5, bot_names_profile="x86qw",
+            )
+            process = mock.Mock(pid=4322, returncode=None)
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(player, "check_paks"):
+                    with mock.patch.object(player, "available_local_games", return_value=[game]):
+                        with mock.patch.object(player, "installed_component_for_game", return_value="ktx"):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(
+                                    player, "ktx_archive_members",
+                                    return_value=frozenset({"bots/maps/aerowalk.bot"}),
+                                ):
+                                    with mock.patch.object(player, "local_map_names", return_value=["aerowalk"]):
+                                        with mock.patch.object(
+                                            player, "choose_host_runtime",
+                                            return_value=("ezQuake stable 3.6.9", runtime),
+                                        ):
+                                            with mock.patch.object(
+                                                player, "launch_runtime", return_value=process,
+                                            ):
+                                                with mock.patch.object(
+                                                    play_qw,
+                                                    "transfer_runtime_config_controller",
+                                                    side_effect=play_qw.InstallerError("identity mismatch"),
+                                                ):
+                                                    with mock.patch.object(
+                                                        play_qw, "stop_processes",
+                                                    ) as stop:
+                                                        with mock.patch.object(player, "verify_local_play_support"):
+                                                            with self.assertRaisesRegex(
+                                                                play_qw.InstallerError, "identity mismatch",
+                                                            ):
+                                                                player.play_local(
+                                                                    "ktx", "duel", "aerowalk", options,
+                                                                    ruleset="x86qw",
+                                                                )
+            stop.assert_called_once_with([process])
+            self.assertEqual((), tuple((target / "qw").glob("x86qw-ktx-session-*.cfg")))
+
+    def test_ktx_handoff_survives_late_config_consumption(self):
+        """The client may consume the ephemeral exec file after the old grace window."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            options = play_qw.KtxLaunchOptions(
+                bots=1, bot_skill=5, bot_names_profile="x86qw",
+            )
+            marker = target / "late-consumption.txt"
+            child: subprocess.Popen[bytes] | None = None
+
+            def delayed_launch(_runtime, arguments):
+                nonlocal child
+                config_name = next(
+                    arguments[index + 1]
+                    for index, argument in enumerate(arguments[:-1])
+                    if argument == "+exec"
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
+                )
+                child = subprocess.Popen([
+                    sys.executable,
+                    "-c",
+                    (
+                        "import pathlib, sys, time; "
+                        "time.sleep(4.0); "
+                        "pathlib.Path(sys.argv[2]).write_bytes("
+                        "pathlib.Path(sys.argv[1]).read_bytes())"
+                    ),
+                    str(target / "qw" / config_name),
+                    str(marker),
+                ])
+                return child
+
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with mock.patch.object(player, "check_paks"):
+                        with mock.patch.object(player, "available_local_games", return_value=[game]):
+                            with mock.patch.object(player, "installed_component_for_game", return_value="ktx"):
+                                with mock.patch.object(player, "verify_component"):
+                                    with mock.patch.object(
+                                        player, "ktx_archive_members",
+                                        return_value=frozenset({"bots/maps/aerowalk.bot"}),
+                                    ):
+                                        with mock.patch.object(
+                                            player, "local_map_names", return_value=["aerowalk"],
+                                        ):
+                                            with mock.patch.object(
+                                                player, "choose_host_runtime",
+                                                return_value=("ezQuake stable 3.6.9", runtime),
+                                            ):
+                                                with mock.patch.object(
+                                                    player, "launch_runtime",
+                                                    side_effect=delayed_launch,
+                                                ):
+                                                    with mock.patch.object(
+                                                        play_qw,
+                                                        "transfer_runtime_config_controller",
+                                                        side_effect=runtime_configs.transfer_runtime_config_controller,
+                                                    ):
+                                                        with mock.patch.object(
+                                                            player, "verify_local_play_support",
+                                                        ):
+                                                            with mock.patch.object(
+                                                                play_qw,
+                                                                "KTX_RUNTIME_CONFIG_STARTUP_GRACE_SECONDS",
+                                                                0.2,
+                                                            ):
+                                                                player.play_local(
+                                                                    "ktx", "duel", "aerowalk", options,
+                                                                    ruleset="x86qw",
+                                                                )
+                self.assertIsNotNone(child)
+                assert child is not None
+                session_configs = tuple((target / "qw").glob("x86qw-ktx-session-*.cfg"))
+                self.assertEqual(1, len(session_configs))
+                self.assertIsNone(child.poll())
+                child.wait(timeout=10)
+                self.assertTrue(marker.is_file())
+                self.assertIn(b"x86qw_ktx_launch", marker.read_bytes())
+                recovery = runtime_configs.recover_runtime_configs(target)
+                self.assertEqual(session_configs, recovery.removed)
+                self.assertFalse(session_configs[0].exists())
+            finally:
+                if child is not None and child.poll() is None:
+                    child.kill()
+                    child.wait(timeout=10)
+                for path in (target / "qw").glob("x86qw-ktx-session-*.cfg"):
+                    path.unlink(missing_ok=True)
 
     def test_frogbot_name_catalog_prioritizes_straw_hats_and_is_unique(self):
         document = json.loads(

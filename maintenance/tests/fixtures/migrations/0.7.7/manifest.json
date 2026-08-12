@@ -1,0 +1,16 @@
+{
+  "source_tag": "x86qw-installer-0.7.7",
+  "source_commit": "978b06b85d3d662d1f28bb11b7d21197f34d6f8f",
+  "source_path": "dist/installer/VERSION",
+  "source_version": "0.7.7",
+  "fixture_kind": "public-release-backed",
+  "payload_kind": "public-installer-archive-plus-legacy-layout",
+  "layout": "legacy-metadata-with-format-1-state",
+  "source_archive": {
+    "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+    "path": "archive/x86qw-installer-0.7.7.zip",
+    "size": 577558,
+    "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+    "extracted_path": "bundle"
+  }
+}

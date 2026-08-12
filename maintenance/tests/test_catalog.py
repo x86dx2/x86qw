@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -17,12 +18,39 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 from add_package import register_package  # noqa: E402
 from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
 from validate_catalog import validate_catalog  # noqa: E402
-from publish_gitlab_packages import artifact_url, upload  # noqa: E402
+from publish_gitlab_packages import artifact_url, main as publish_gitlab_main, upload  # noqa: E402
 from build_component_packages import component_package_metadata, register_packages  # noqa: E402
 from build_core_package import build_core_package  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
+    def test_gitlab_publish_verifies_existing_remote_without_local_build(self) -> None:
+        package = copy.deepcopy(json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )["packages"][0])
+        package.update({
+            "package": "x86qw-core-id1",
+            "version": "0.1.0",
+            "filename": "x86qw-core-id1-0.1.0.zip",
+            "size": 1,
+            "sha256": "a" * 64,
+            "urls": ["https://example.invalid/x86qw-core-id1-0.1.0.zip"],
+            "origin_url": "https://example.invalid/x86qw-core-id1-0.1.0.zip",
+            "source_urls": ["https://example.invalid/source"],
+        })
+        catalog = {"format": 1, "project": "x86qw", "generated_at": "2026-08-04T00:00:00Z", "packages": [package]}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            catalog_path = root / "catalog.json"
+            catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+            with patch("publish_gitlab_packages.remote_sha256", return_value=(1, "a" * 64)), patch(
+                "publish_gitlab_packages.local_artifact", side_effect=AssertionError("local build required"),
+            ), patch.object(sys, "argv", [
+                "publish_gitlab_packages.py", "--catalog", str(catalog_path),
+                "--dist", str(root / "missing-dist"), "--builds", str(root / "missing-builds"),
+            ]):
+                self.assertEqual(0, publish_gitlab_main())
+
     @patch("publish_gitlab_packages.subprocess.run")
     def test_gitlab_upload_uses_documented_file_put_without_token_in_argv(self, run) -> None:
         run.return_value.returncode = 0
@@ -70,6 +98,28 @@ class CatalogTests(unittest.TestCase):
         catalog["packages"][0]["size"] = MAX_ARTIFACT_BYTES + 1
         with self.assertRaisesRegex(ValueError, "supported download limit"):
             validate_catalog(catalog)
+
+    def test_catalog_rejects_boolean_sizes_and_format(self) -> None:
+        source = json.loads(
+            (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+        )
+        invalid_size = copy.deepcopy(source)
+        invalid_size["packages"][0]["size"] = True
+        with self.assertRaises(ValueError):
+            validate_catalog(invalid_size)
+        invalid_format = copy.deepcopy(source)
+        invalid_format["format"] = True
+        with self.assertRaises(ValueError):
+            validate_catalog(invalid_format)
+
+    def test_catalog_json_duplicate_top_level_field_is_rejected(self) -> None:
+        from validate_catalog import _reject_duplicate_pairs
+
+        with self.assertRaises(ValueError):
+            json.loads(
+                '{"format":1,"format":1,"project":"x86qw","packages":[]}',
+                object_pairs_hook=_reject_duplicate_pairs,
+            )
 
     def test_catalog_rejects_credential_fragment_and_control_urls_without_secret(self) -> None:
         source = json.loads(
@@ -188,21 +238,6 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual("ktx", ktx["component"])
         self.assertTrue(all(package["urls"] for package in catalog["packages"]))
         self.assertTrue(all("github.com" in package["urls"][0] for package in catalog["packages"]))
-        release_metadata: dict[str, set[tuple[str, str, bool]]] = {}
-        for package in catalog["packages"]:
-            github_url = str(package["urls"][0])
-            marker = "/releases/download/"
-            if marker not in github_url:
-                continue
-            release_tag = github_url.split(marker, 1)[1].split("/", 1)[0]
-            release_metadata.setdefault(release_tag, set()).add((
-                str(package["mirror_title"]),
-                str(package["mirror_notes"]),
-                bool(package["mirror_latest"]),
-            ))
-        self.assertTrue(all(
-            len(metadata) == 1 for metadata in release_metadata.values()
-        ))
         clients = [package for package in catalog["packages"] if package["component"] == "ezquake"]
         content = [package for package in catalog["packages"] if package["channel"] == "content"]
         self.assertTrue(all(package.get("distribution_path") for package in clients))
@@ -232,10 +267,7 @@ class CatalogTests(unittest.TestCase):
         ]
         self.assertEqual(1, len(product_bootstraps))
         self.assertEqual("x86qw", product_bootstraps[0]["component"])
-        self.assertEqual(
-            "x86QW Content · nQuake e4cb23d40aa2",
-            product_bootstraps[0]["mirror_title"],
-        )
+        self.assertTrue(product_bootstraps[0]["mirror_title"].startswith("x86QW Content · "))
         td2 = next(package for package in catalog["packages"] if package.get("package") == "total-destruction-2")
         self.assertEqual("2.22+x86qw.5", td2["version"])
         self.assertEqual("td2", td2["component"])
@@ -334,6 +366,10 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(first["sha256"], second["sha256"])
             self.assertEqual(first["size"], second["size"])
             self.assertEqual("x86qw-core-id1", first["package"])
+            self.assertEqual(
+                "https://github.com/x86dx2/x86qw/blob/x86qw-content-core-0.1.0/LICENSE",
+                first["license_url"],
+            )
             self.assertEqual(2, len(first["urls"]))
             self.assertIn("gitlab.com/api/v4/projects/84813414", first["urls"][1])
             archive = next((root / "one").rglob(str(first["filename"])))

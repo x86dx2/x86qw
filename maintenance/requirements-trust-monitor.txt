@@ -1,0 +1,9 @@
+# Pure-Python TUF verification dependencies used by the read-only public monitor.
+# The monitor must remain runnable from the repository's pinned wheels without
+# reaching PyPI or loading signing keys.
+tuf==7.0.0 \
+    --hash=sha256:572bdbdc9ff4a82278a0d4773e6100863b9b33023f27575e84ca65b486dd0d79
+securesystemslib==1.4.0 \
+    --hash=sha256:f00fd784b062f6ca9471f97b86417163a539a56c212320b4a25c2d280bc1de02
+urllib3==2.7.0 \
+    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897

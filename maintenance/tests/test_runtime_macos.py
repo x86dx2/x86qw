@@ -335,14 +335,8 @@ class MacOSAdapterTests(unittest.TestCase):
             state.clear()
             state.update(values)
 
-        def delete(_domain, key):
-            self.assertEqual(domain, _domain)
-            state.pop(key, None)
-
         with mock.patch.object(macos, "_export_preference_domain", side_effect=export), mock.patch.object(
             macos, "_publish_preference_domain", side_effect=publish,
-        ), mock.patch.object(
-            macos, "_delete_preference_key", side_effect=delete,
         ):
             snapshot = macos.snapshot_preference_keys(domain, keys)
             macos.clear_preference_keys(snapshot)
@@ -357,55 +351,8 @@ class MacOSAdapterTests(unittest.TestCase):
             "volume": 0.75,
         }, state)
 
-    def test_preference_clear_deletes_keys_when_domain_import_keeps_cached_values(self):
-        """Clearing must not rely on replacing a CFPreferences domain."""
-
-        self.assertIsNotNone(macos, "the canonical macOS adapter is missing")
-        assert macos is not None
-        domain = "io.ezQuake"
-        keys = ("basedir", "version", "NSOSPLastRootDirectory")
-        state = {
-            "basedir": b"bookmark",
-            "version": "8065~b2d448f2c",
-            "NSOSPLastRootDirectory": b"last-directory",
-            "volume": 0.5,
-        }
-
-        def run_defaults(arguments, *, payload=None):
-            operation = arguments[0]
-            if operation == "export":
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 0,
-                    stdout=plistlib.dumps(state), stderr=b"",
-                )
-            if operation == "import":
-                imported = plistlib.loads(payload)
-                retained = {
-                    key: state[key]
-                    for key in keys
-                    if key in state and key not in imported
-                }
-                state.clear()
-                state.update(imported)
-                state.update(retained)
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 0, stdout=b"", stderr=b"",
-                )
-            if operation == "delete":
-                state.pop(arguments[2], None)
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 0, stdout=b"", stderr=b"",
-                )
-            self.fail(f"unexpected defaults operation: {arguments}")
-
-        with mock.patch.object(macos, "_run_defaults", side_effect=run_defaults):
-            snapshot = macos.snapshot_preference_keys(domain, keys)
-            macos.clear_preference_keys(snapshot)
-
-        self.assertEqual({"volume": 0.5}, state)
-
-    def test_partial_preference_delete_is_restored_before_reporting_failure(self):
-        """A failed defaults delete must not leave selected keys half-cleared."""
+    def test_partial_preference_publish_is_restored_before_reporting_failure(self):
+        """A failed defaults import must not leave selected keys half-cleared."""
 
         self.assertIsNotNone(macos, "the canonical macOS adapter is missing")
         assert macos is not None
@@ -420,33 +367,23 @@ class MacOSAdapterTests(unittest.TestCase):
         state = dict(original)
         attempts = 0
 
-        def run_defaults(arguments, *, payload=None):
-            nonlocal attempts
-            operation = arguments[0]
-            if operation == "export":
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 0,
-                    stdout=plistlib.dumps(state), stderr=b"",
-                )
-            if operation == "import":
-                state.clear()
-                state.update(plistlib.loads(payload))
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 0, stdout=b"", stderr=b"",
-                )
-            if operation == "delete":
-                attempts += 1
-                state.pop(arguments[2], None)
-                return subprocess.CompletedProcess(
-                    ["defaults", *arguments], 1 if attempts == 1 else 0,
-                    stdout=b"", stderr=b"simulated partial delete",
-                )
-            self.fail(f"unexpected defaults operation: {arguments}")
+        def export(_domain):
+            return dict(state)
 
-        with mock.patch.object(macos, "_run_defaults", side_effect=run_defaults):
+        def publish(_domain, values):
+            nonlocal attempts
+            attempts += 1
+            state.clear()
+            state.update(values)
+            if attempts == 1:
+                raise macos.MacOSAdapterError("simulated partial import")
+
+        with mock.patch.object(macos, "_export_preference_domain", side_effect=export), mock.patch.object(
+            macos, "_publish_preference_domain", side_effect=publish,
+        ):
             snapshot = macos.snapshot_preference_keys(domain, keys)
             with self.assertRaisesRegex(
-                macos.MacOSAdapterError, "Não foi possível limpar",
+                macos.MacOSAdapterError, "simulated partial import",
             ):
                 macos.clear_preference_keys(snapshot)
 
@@ -479,6 +416,24 @@ class MacOSAdapterTests(unittest.TestCase):
                 macos.clear_preference_keys(snapshot)
 
         self.assertEqual({"basedir": "/Games/new-choice", "volume": 0.5}, state)
+
+    def test_clearing_absent_managed_preferences_is_a_noop(self):
+        """A clean first install must not import an empty defaults domain."""
+
+        self.assertIsNotNone(macos, "the canonical macOS adapter is missing")
+        assert macos is not None
+        domain = "io.ezQuake"
+        keys = ("basedir", "version", "NSOSPLastRootDirectory")
+
+        with mock.patch.object(
+            macos, "_export_preference_domain", return_value={},
+        ), mock.patch.object(
+            macos, "_publish_preference_domain",
+        ) as publish:
+            snapshot = macos.snapshot_preference_keys(domain, keys)
+            self.assertEqual(snapshot, macos.clear_preference_keys(snapshot))
+
+        publish.assert_not_called()
 
 
 if __name__ == "__main__":

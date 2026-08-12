@@ -5,8 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path, PurePosixPath
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from x86qw_runtime.contracts.schema import ContractError, SchemaKind, validate_document_versions
 
@@ -160,7 +165,7 @@ def validate_runtime_catalog(catalog: object) -> None:
     ):
         raise ValueError("invalid runtime component catalog identity")
     try:
-        validate_document_versions(catalog, kind=SchemaKind.CATALOG, allow_legacy=True)  # type: ignore[arg-type]
+        validate_document_versions(catalog, kind=SchemaKind.CATALOG, allow_legacy=True)
     except ContractError as error:
         raise ValueError("invalid runtime component catalog contract") from error
     components = catalog.get("components")

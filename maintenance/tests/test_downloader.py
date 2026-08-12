@@ -173,6 +173,9 @@ ALLOWED_NETWORK_EXECUTABLE_SCOPES = {
     ROOT / "maintenance/tools/publish_gitlab_packages.py": {
         "curl": frozenset({"upload"}),
     },
+    ROOT / "maintenance/tools/publish_github_candidate.py": {
+        "gh": frozenset({"_execute_gh"}),
+    },
     **{
         path: {"socket": frozenset({"resolve_addresses"})}
         for path in POWERSHELL_BOOTSTRAP_PATHS
@@ -198,6 +201,9 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),
+    }),
+    ROOT / "maintenance/tools/native_m3_harness.py": frozenset({
+        ("subprocess.Popen", "run_native", "command"),
     }),
 }
 # Audited argv-forwarding helpers. Their subprocess call is suppressed above,
@@ -245,6 +251,9 @@ ALLOWED_NETWORK_PROCESS_CALLS = {
     }),
     ROOT / "maintenance/tools/publish_gitlab_packages.py": frozenset({
         ("curl", "subprocess.run", "upload", "subprocess.run(['curl', '--disable', '--fail', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15', '--max-time', '900', '--max-redirs', '0', '--output', os.devnull, '--write-out', '%{http_code}', '--request', 'PUT', '--header', '@-', '--upload-file', str(path), artifact_url(package)], input=f'PRIVATE-TOKEN: {token}\\n', text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)"),
+    }),
+    ROOT / "maintenance/tools/publish_github_candidate.py": frozenset({
+        ("gh", "subprocess.run", "_execute_gh", "subprocess.run(['gh', *arguments], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300, check=False)"),
     }),
 }
 ALLOWED_OPENER_OPEN_CALLS = {
@@ -1270,7 +1279,13 @@ class BlockingResolverProcess:
         self.dns_active.clear()
 
 
+# Windows runners can defer a daemon worker for several scheduler turns while
+# the process object is being cancelled.  This is a test-only observation
+# window; the downloader's production deadline and bounded resolver reap stay
+# unchanged.  The assertions below still require collection and no residual
+# worker before the test completes.
 RESOLVER_CLEANUP_WAIT_SECONDS = 5
+RESOLVER_STARTUP_WAIT_SECONDS = 5
 
 
 class DownloaderTests(unittest.TestCase):
@@ -2732,6 +2747,106 @@ class DownloaderTests(unittest.TestCase):
         self.assertTrue(process.killed)
         self.assertEqual(2, process.calls)
 
+    def test_dns_resolver_reap_never_uses_unbounded_communicate_after_kill(self) -> None:
+        class KillableResolver:
+            args = ["python", "resolver"]
+            returncode: int | None = None
+
+            def __init__(self) -> None:
+                self.killed = False
+                self.waited = False
+                self.timeouts: list[float | None] = []
+
+            def communicate(self, input: bytes | None = None, timeout: float | None = None):
+                if timeout is None:
+                    raise AssertionError("resolver reap must remain bounded")
+                self.timeouts.append(timeout)
+                raise subprocess.TimeoutExpired(self.args, timeout)
+
+            def kill(self) -> None:
+                self.killed = True
+
+            def wait(self, timeout: float | None = None) -> int:
+                if timeout is None:
+                    raise AssertionError("resolver reap must remain bounded")
+                self.timeouts.append(timeout)
+                self.waited = True
+                self.returncode = -9
+                return -9
+
+        process = KillableResolver()
+        with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                downloader._resolve_addresses("example.invalid", 443, 0.01)
+        self.assertTrue(process.killed)
+        self.assertTrue(process.waited)
+        self.assertGreaterEqual(len(process.timeouts), 2)
+        self.assertEqual(2, len(process.timeouts[-2:]))
+        self.assertTrue(all(
+            timeout is not None and timeout <= downloader.RESOLVER_REAP_TIMEOUT_SECONDS
+            for timeout in process.timeouts[-2:]
+        ))
+
+    def test_dns_resolver_reap_uses_one_total_timeout_budget(self) -> None:
+        class Resolver:
+            args = ["python", "resolver"]
+
+            def __init__(self) -> None:
+                self.timeouts: list[float | None] = []
+
+            def communicate(self, input: bytes | None = None, timeout: float | None = None):
+                self.timeouts.append(timeout)
+                raise subprocess.TimeoutExpired(self.args, timeout)
+
+            def wait(self, timeout: float | None = None) -> int:
+                self.timeouts.append(timeout)
+                return -9
+
+        process = Resolver()
+        with mock.patch.object(
+            downloader.time,
+            "monotonic",
+            side_effect=[100.0, 100.1, 100.24],
+        ):
+            downloader._reap_resolver(process)
+        self.assertEqual(2, len(process.timeouts))
+        self.assertAlmostEqual(0.15, process.timeouts[0], places=6)
+        self.assertAlmostEqual(0.01, process.timeouts[1], places=6)
+        self.assertLessEqual(
+            sum(timeout for timeout in process.timeouts if timeout is not None),
+            downloader.RESOLVER_REAP_TIMEOUT_SECONDS,
+        )
+
+    def test_dns_resolver_cleanup_error_does_not_mask_deadline(self) -> None:
+        class CleanupErrorResolver:
+            args = ["python", "resolver"]
+            returncode: int | None = None
+
+            def __init__(self) -> None:
+                self.killed = False
+                self.timeouts: list[float | None] = []
+
+            def communicate(self, input: bytes | None = None, timeout: float | None = None):
+                self.timeouts.append(timeout)
+                if input == b"G":
+                    raise subprocess.TimeoutExpired(self.args, timeout)
+                raise ValueError("pipe already closed")
+
+            def kill(self) -> None:
+                self.killed = True
+
+            def wait(self, timeout: float | None = None) -> int:
+                self.timeouts.append(timeout)
+                raise ValueError("process handle already closed")
+
+        process = CleanupErrorResolver()
+        with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                downloader._resolve_addresses("example.invalid", 443, 0.01)
+        self.assertTrue(process.killed)
+        self.assertGreaterEqual(len(process.timeouts), 3)
+        self.assertTrue(all(timeout is not None for timeout in process.timeouts))
+
     def test_dns_resolver_subprocess_returns_bounded_local_candidates(self) -> None:
         candidates = downloader._resolve_addresses("localhost", 80, 3)
 
@@ -2771,7 +2886,23 @@ class DownloaderTests(unittest.TestCase):
 
     def test_complete_download_cancels_and_collects_blocked_resolver(self) -> None:
         process = BlockingResolverProcess()
-        with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
+        real_start = downloader.threading.Thread.start
+        observed: dict[str, threading.Thread] = {}
+
+        def start_then_observe_resolver(thread: threading.Thread) -> None:
+            real_start(thread)
+            if thread.name == "x86qw-download-open":
+                observed["thread"] = thread
+                # Make the adversarial fixture deterministic on slow Windows
+                # schedulers: the deadline must cancel a resolver that really
+                # exists, rather than racing a worker that has not entered
+                # the transport yet.
+                self.assertTrue(process.started.wait(RESOLVER_STARTUP_WAIT_SECONDS))
+
+        with mock.patch.object(downloader.subprocess, "Popen", return_value=process), \
+             mock.patch.object(
+                 downloader.threading.Thread, "start", start_then_observe_resolver,
+             ):
             with self.assertRaises(downloader.DownloadDeadlineError):
                 self.download(
                     downloader.BoundedMetadata(
@@ -2783,9 +2914,15 @@ class DownloaderTests(unittest.TestCase):
                 )
 
         # A deadline cancellation and the resolver's own timeout can complete
-        # on separate scheduler turns on slower Windows/Python combinations.
-        self.assertTrue(process.killed.wait(RESOLVER_CLEANUP_WAIT_SECONDS))
-        self.assertTrue(process.collected.is_set())
+        # on separate scheduler turns. Wait for collection, then prove that
+        # the worker itself has unwound before this test proceeds.
+        self.assertTrue(process.collected.wait(RESOLVER_CLEANUP_WAIT_SECONDS))
+        self.assertTrue(process.killed.is_set())
+        worker = observed.get("thread")
+        self.assertIsNotNone(worker)
+        assert worker is not None
+        worker.join(timeout=RESOLVER_CLEANUP_WAIT_SECONDS)
+        self.assertFalse(worker.is_alive())
         self.assertEqual(b"G", process.inputs[0])
         self.assertTrue(process.dns_started.is_set())
         self.assertFalse(any(

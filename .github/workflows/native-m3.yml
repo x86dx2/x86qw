@@ -1,0 +1,147 @@
+name: Native M3 candidate evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_artifact_id:
+        description: "Artifact ID imutável produzido pelo build-once"
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: "Nome exato do artifact produzido pelo build-once"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Run ID que produziu o artifact imutável"
+        required: true
+        type: string
+      candidate_commit:
+        description: "SHA completo do commit usado no candidato"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA-256 exato de candidate.json"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-native-m3-${{ inputs.candidate_sha256 }}
+  cancel-in-progress: false
+
+jobs:
+  native-m3:
+    name: Execute exact candidate on Apple M3
+    runs-on: [self-hosted, macOS, arm64, M3]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate commit and download the immutable candidate
+        env:
+          EXPECTED_COMMIT: ${{ inputs.candidate_commit }}
+          EXPECTED_RUN_ID: ${{ inputs.candidate_run_id }}
+          EXPECTED_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          EXPECTED_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+          [[ "$EXPECTED_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$EXPECTED_RUN_ID" \
+            --commit "$EXPECTED_COMMIT" \
+            --artifact "$EXPECTED_ARTIFACT_NAME" \
+            --artifact-id "$EXPECTED_ARTIFACT_ID" \
+            --workflow .github/workflows/release.yml \
+            --output "$RUNNER_TEMP/candidate-artifact.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: candidate
+      - name: Verify candidate identity without using a personal installation
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          [[ "$EXPECTED_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify candidate
+      - name: Generate plan from the candidate-owned contract
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          python3 -m maintenance.tools.native_plan_adapter \
+            --candidate candidate \
+            --expected-candidate-sha256 "$EXPECTED_CANDIDATE_SHA256" \
+            --entrypoint-contract runtime/native-smoke/macos-arm64/entrypoint.json \
+            --output "$RUNNER_TEMP/native-plan.json"
+      - name: Execute all native cases from candidate bytes
+        run: |
+          python3 -m maintenance.tools.native_macos_harness run \
+            --candidate candidate \
+            --plan "$RUNNER_TEMP/native-plan.json" \
+            --output-dir "$RUNNER_TEMP/native-m3"
+      - name: Normalize the passed native handoff into an unsigned release record
+        run: |
+          python3 maintenance/tools/native_release_smoke.py \
+            --candidate candidate \
+            --platform macOS-ARM64 \
+            --handoff "$RUNNER_TEMP/native-m3/release-smoke.json" \
+            --output "$RUNNER_TEMP/native-m3/release-smoke-normalized.json"
+          mkdir -p "$RUNNER_TEMP/native-m3/records"
+          python3 maintenance/tools/native_release_evidence.py \
+            --candidate candidate \
+            --platform macOS-ARM64 \
+            --report "$RUNNER_TEMP/native-m3/release-smoke-normalized.json" \
+            --artifact-root "$RUNNER_TEMP/native-m3" \
+            --output "$RUNNER_TEMP/native-m3/records/macOS-ARM64.json"
+      - name: Prepare the exact unsigned body for the external signer
+        run: |
+          python3 -m maintenance.tools.assemble_release_evidence prepare \
+            --candidate candidate \
+            --records-dir "$RUNNER_TEMP/native-m3/records" \
+            --output "$RUNNER_TEMP/native-m3/release-evidence-body.json"
+      - name: Create redacted unsigned pending aggregate
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          python3 -m maintenance.tools.native_handoff_evidence aggregate \
+            --candidate candidate \
+            --handoff "$RUNNER_TEMP/native-m3/handoff.json" \
+            --expected-candidate-sha256 "$EXPECTED_CANDIDATE_SHA256" \
+            --output "$RUNNER_TEMP/native-m3/native-evidence-pending.json"
+          mkdir -p "$RUNNER_TEMP/native-evidence-input/records"
+          cp "$RUNNER_TEMP/native-m3/native-evidence-pending.json" \
+            "$RUNNER_TEMP/native-evidence-input/native-evidence-pending.json"
+          cp "$RUNNER_TEMP/native-plan.json" \
+            "$RUNNER_TEMP/native-evidence-input/native-plan.json"
+          cp "$RUNNER_TEMP/native-m3/records/macOS-ARM64.json" \
+            "$RUNNER_TEMP/native-evidence-input/records/macOS-ARM64.json"
+          cp "$RUNNER_TEMP/native-m3/release-evidence-body.json" \
+            "$RUNNER_TEMP/native-evidence-input/release-evidence-body.json"
+          echo "signed: false; promotable: false; pending only; external signature required" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload exact M3 observation for the signing ceremony
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-m3-input-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-evidence-input
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90

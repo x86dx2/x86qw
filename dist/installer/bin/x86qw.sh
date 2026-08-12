@@ -59,7 +59,8 @@ Manutenção:
   update [--yes]       atualiza somente clientes e componentes já instalados
   upgrade [--yes]      incorpora novidades do perfil da instalação
   verify               verifica a integridade da instalação
-  changes              compara mudanças locais com a instalação registrada
+  changes [--sync-gitignore] compara mudanças locais com a instalação registrada
+  migrate [--dry-run]   migra metadados para o contrato 1.0
   repair [--dry-run]   diagnostica e repara conteúdo gerenciado
   cleanup              limpa o cache gerenciado pelo x86QW
   uninstall            remove o x86QW e preserva PAKs e dados pessoais
@@ -83,7 +84,7 @@ case "${1:-}" in
   help|-h|--help) show_help; exit 0 ;;
   version|-V|--version) exec "$python_runtime" "$app" --version ;;
   play|host|proxy|qtv|status) action=$1; shift; exec "$python_runtime" "$app" "$action" "$@" --target "$root" ;;
-  update|upgrade|hub|verify|changes|repair|cleanup|uninstall) action=$1; shift ;;
+  update|upgrade|hub|verify|changes|migrate|repair|cleanup|uninstall) action=$1; shift ;;
   *) printf 'x86qw: comando desconhecido: %s\n\n' "$1" >&2; show_help >&2; exit 2 ;;
 esac
 

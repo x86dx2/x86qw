@@ -31,6 +31,8 @@ from maintenance.tools.native_handoff import (
 
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
 class PlanNotRun(NativeHandoffError):
     """The candidate has no explicit native entrypoint capability."""
 
@@ -56,9 +58,7 @@ def _preflight_output(candidate: Path, output: Path) -> None:
 
 
 def _write_exclusive(path: Path, value: object) -> None:
-    payload = (
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
     temporary = Path(temporary_name)
     try:
@@ -116,14 +116,10 @@ def generate_native_plan(
         or contract.get("protocol") != NATIVE_CASE_PROTOCOL
     ):
         raise NativeHandoffError("contrato de entrypoint possui identidade/protocolo inválido")
-    entrypoint_name = _relative(
-        contract.get("entrypoint_artifact"), label="entrypoint_artifact",
-    )
+    entrypoint_name = _relative(contract.get("entrypoint_artifact"), label="entrypoint_artifact")
     if entrypoint_name not in artifacts:
         raise NativeHandoffError("entrypoint não está registrado no candidato")
-    _entrypoint_path, entrypoint_size, entrypoint_digest = candidate_artifact(
-        candidate, entrypoint_name,
-    )
+    _entrypoint_path, entrypoint_size, entrypoint_digest = candidate_artifact(candidate, entrypoint_name)
     _preflight_output(candidate, output)
     plan = {
         "format": PLAN_FORMAT,

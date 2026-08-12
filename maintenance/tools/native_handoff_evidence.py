@@ -21,8 +21,10 @@ from maintenance.tools.native_handoff import (
     PLATFORM,
     PROJECT,
     NativeHandoffError,
+    OBSERVATION_CASES,
     candidate_identity,
     read_json,
+    validate_case_observations,
     validate_evidence_file,
 )
 
@@ -95,7 +97,7 @@ def _project_case(case: Mapping[str, object]) -> dict[str, object]:
     receipt = case.get("_receipt_data")
     if not isinstance(runtime, Mapping) or not isinstance(entrypoint, Mapping) or not isinstance(receipt, Mapping):
         raise NativeHandoffError("handoff validado perdeu a identidade do runtime")
-    return {
+    projected = {
         "name": case["name"],
         "status": case["status"],
         "exit_code": case["exit_code"],
@@ -114,6 +116,14 @@ def _project_case(case: Mapping[str, object]) -> dict[str, object]:
         "stdout_sha256": case["stdout_sha256"],
         "stderr_sha256": case["stderr_sha256"],
     }
+    if receipt["case"] in OBSERVATION_CASES:
+        observations = receipt.get("observations")
+        if observations is None:
+            raise NativeHandoffError(f"recibo de serviço sem observações: {receipt['case']}")
+        projected["receipt"]["observations"] = validate_case_observations(
+            str(receipt["case"]), observations,
+        )
+    return projected
 
 
 def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str, object]:
@@ -174,7 +184,13 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
             raise NativeHandoffError(f"runtime redigido inválido: {expected_name}")
         if not isinstance(entrypoint, Mapping) or set(entrypoint) != ENTRYPOINT_FIELDS:
             raise NativeHandoffError(f"entrypoint redigido inválido: {expected_name}")
-        if not isinstance(receipt, Mapping) or set(receipt) != REDACTED_RECEIPT_FIELDS:
+        if not isinstance(receipt, Mapping):
+            raise NativeHandoffError(f"recibo redigido inválido: {expected_name}")
+        receipt_fields = set(receipt)
+        allowed_receipt_fields = set(REDACTED_RECEIPT_FIELDS)
+        if expected_name in OBSERVATION_CASES:
+            allowed_receipt_fields.add("observations")
+        if receipt_fields != allowed_receipt_fields:
             raise NativeHandoffError(f"recibo redigido inválido: {expected_name}")
         if type(runtime.get("size")) is not int or runtime["size"] < 0:
             raise NativeHandoffError(f"runtime redigido inválido: {expected_name}")
@@ -213,6 +229,8 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
         expected_after = "uninstalled" if expected_name == CANONICAL_CASES[-1] else "installed"
         if state != {"before": expected_before, "after": expected_after}:
             raise NativeHandoffError(f"estado redigido inválido: {expected_name}")
+        if expected_name in OBSERVATION_CASES:
+            validate_case_observations(expected_name, receipt.get("observations"))
         for field in (
             "candidate_artifact_sha256", "stdout_sha256", "stderr_sha256",
         ):

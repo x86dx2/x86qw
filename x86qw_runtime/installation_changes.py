@@ -1,4 +1,4 @@
-"""Compare an installed tree with the recorded installation baseline."""
+"""Compare an installed tree with the immutable component inventories."""
 
 from __future__ import annotations
 
@@ -94,14 +94,13 @@ def render_installation_gitignore(
 ) -> str:
     """Render exact ignore rules without hiding unmanaged sibling files."""
 
-    paths = sorted({
-        *(_escape_gitignore_path(path.rstrip("/")) for path in ignored_paths),
-        *(_escape_gitignore_path(path) for path in managed_paths),
-    })
+    operational = sorted({_escape_gitignore_path(path.rstrip("/")) for path in ignored_paths})
+    managed = sorted({_escape_gitignore_path(path) for path in managed_paths})
     lines = [
         "# Gerado pelo x86QW a partir dos inventories instalados.",
         "# Arquivos novos continuam visíveis; use `x86qw changes` para M/D/A.",
-        *[f"/{path}" for path in paths],
+        *[f"/{path}" for path in operational],
+        *[f"/{path}" for path in managed],
         "",
     ]
     return "\n".join(lines)

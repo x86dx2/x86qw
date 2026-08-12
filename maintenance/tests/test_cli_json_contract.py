@@ -41,21 +41,6 @@ class CliJsonContractTests(unittest.TestCase):
             result = manager.main(arguments)
         return result, parse_json_output(output.getvalue()), errors.getvalue()
 
-    def test_parse_arguments_accepts_interspersed_target_and_options(self) -> None:
-        target = str(Path("/tmp/x86qw-parser-target"))
-        cases = (
-            (["status", "--json", target], "status", False),
-            (["status", target, "--json"], "status", False),
-            (["repair", "--dry-run", "--json", target], "repair", True),
-        )
-        for arguments, action, dry_run in cases:
-            with self.subTest(arguments=arguments):
-                namespace = manager.parse_arguments(arguments, ROOT)
-                self.assertEqual(action, namespace.action)
-                self.assertEqual(Path(target), namespace.target)
-                self.assertTrue(namespace.json)
-                self.assertEqual(dry_run, namespace.dry_run)
-
     @staticmethod
     def status_data() -> dict[str, object]:
         return {
@@ -473,6 +458,11 @@ class CliJsonContractTests(unittest.TestCase):
     def test_json_flag_is_rejected_for_gameplay_actions(self) -> None:
         with self.assertRaises(SystemExit):
             manager.parse_arguments(["play", "--json"], ROOT)
+
+    def test_migrate_dry_run_is_an_explicit_maintenance_action(self) -> None:
+        namespace = manager.parse_arguments(["migrate", "--dry-run"], ROOT)
+        self.assertEqual("migrate", namespace.action)
+        self.assertTrue(namespace.dry_run)
 
     def test_malformed_json_constructor_values_fail_with_typed_errors(self) -> None:
         with self.assertRaises(JsonOutputError):

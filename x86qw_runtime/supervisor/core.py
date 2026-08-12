@@ -133,6 +133,18 @@ def process_remains_alive(
     return True
 
 
+def is_managed_process(process: object) -> bool:
+    """Return whether ``process`` is a real runtime process handle.
+
+    Entry points use this seam instead of importing the platform's process
+    implementation.  Test doubles and alternate launch adapters therefore
+    retain the historical bounded-observation behavior without duplicating
+    the native policy in gameplay code.
+    """
+
+    return isinstance(process, POPEN_TYPE)
+
+
 def spawn_background_controller(
     arguments: tuple[str, ...],
     cwd: Path,
@@ -737,6 +749,7 @@ __all__ = (
     "Journal",
     "POPEN_TYPE",
     "process_remains_alive",
+    "is_managed_process",
     "Reporter",
     "ServiceSignal",
     "WindowsJobObject",

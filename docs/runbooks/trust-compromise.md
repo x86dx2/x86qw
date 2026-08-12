@@ -1,9 +1,7 @@
 # Runbook — comprometimento de trust metadata
 
-Este procedimento é um contrato para uma futura cadeia de trust metadata. O
-baseline 0.7.3 não contém endpoint, chave de produção ou implementação de
-rotação; nada neste documento autoriza publicação automática ou substitui
-aprovação humana.
+Este procedimento complementa o [ADR 0006](../adr/0006-trust-metadata.md).
+Ele não autoriza publicação automática nem substitui aprovação humana.
 
 1. Pare a promoção e preserve os bytes, digests, logs e horário observados.
    Nunca registre segredo de assinatura em shell, argv, journal ou ticket.
@@ -21,17 +19,22 @@ aprovação humana.
 6. Invalide caches da versão comprometida, registre a revisão criptográfica e
    obtenha aprovação antes de reabrir a promoção.
 
-Ao validar metadata assinada quando esse recurso existir, persista
-atomicamente o estado de confiança completo, incluindo o envelope/digest do
-root e a evidência correspondente. Um estado incompleto não prova a próxima
-rotação e deve interromper a operação.
+Ao validar `release-evidence.json`, persista atomicamente o `TrustedVersions`
+retornado, incluindo o envelope/digest do root e o par de evidence. Um estado
+evidence-only sem esse root não consegue provar a próxima rotação e deve ser
+tratado como incompleto.
 
-As chaves privadas de produção ficam offline. Não gere uma chave de produção ou
-reutilize qualquer fixture de teste como configuração oficial.
+As chaves privadas de produção ficam offline. Os arquivos locais desta PR usam
+uma chave de teste apenas para validar a cadeia; isso não é uma autorização de
+release.
 
 ## Gate externo para confiança oficial
 
-Antes de habilitar trust no catálogo oficial, registre fora do repositório:
+Este checkout não contém endpoint, mirror ou chave pública de produção. Os
+arquivos `maintenance/inventory/trust/` e `ROOT_PUBLIC_KEY` são fixtures de
+verificação; não os reutilize como configuração oficial nem gere uma chave de
+produção durante testes locais. Antes de habilitar o trust no catálogo oficial,
+registre fora do repositório:
 
 - endpoint HTTPS e política de mirrors imutáveis;
 - custódia offline, operadores e threshold de cada papel;
@@ -39,6 +42,6 @@ Antes de habilitar trust no catálogo oficial, registre fora do repositório:
 - cerimônia de assinatura, aprovação humana e plano de rotação/recuperação.
 
 Sem esses itens, mantenha o trust oficial desabilitado. Bundles públicos 0.7.3
-sem metadata local continuam no fluxo legado por compatibilidade; qualquer
+sem metadados locais continuam no fluxo legado por compatibilidade; qualquer
 conjunto local incompleto ou estado persistido inválido deve interromper a
 operação, nunca cair para um catálogo não autenticado.

@@ -141,6 +141,7 @@ e os 5 testes do site passaram. Eles comprovam localmente o ownership, o grafo
 sem ciclo, o zipapp de 56 membros e as corridas adversariais de rollback,
 quarantine, locks, journals e arquivos pessoais. A matriz Linux, macOS e
 Windows do snapshot enviado à PR continua necessária e não substitui os smokes
-nativos do candidato previstos no PR 11. A issue #52 permanece aberta até essa
-revisão. A release pública `0.7.1` não é alterada e esta decisão não autoriza
+nativos do candidato previstos no PR 11. A issue #52 foi encerrada pela PR 62;
+a revisão nativa da estabilização 1.0 continua pendente. A release pública
+`0.7.1` não é alterada e esta decisão não autoriza
 publicação.

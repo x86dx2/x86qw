@@ -70,6 +70,45 @@ class KtxRuntimeConfigRecoveryTests(unittest.TestCase):
             finally:
                 self.assertTrue(gameplay.remove_ktx_runtime_config(current))
 
+    def test_controller_transfer_keeps_live_client_config_until_guardian_exits(self):
+        """A launcher exit must not make a still-running ezQuake config reclaimable."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            (target / "qw").mkdir(parents=True)
+            current = gameplay.write_ktx_runtime_config(
+                target, (("k_fb_name_0", "Luffy"),),
+            )
+            child = subprocess.Popen([
+                sys.executable, "-c", "import time; time.sleep(60)",
+            ])
+            try:
+                transferred = runtime_configs.transfer_runtime_config_controller(
+                    target, current.ownership, child,
+                )
+                document = json.loads(
+                    transferred.journal.read_text(encoding="utf-8"),
+                )
+                self.assertEqual(child.pid, document["controller"]["pid"])
+                self.assertTrue(transferred.config.is_file())
+
+                recovery = runtime_configs.recover_runtime_configs(target)
+                self.assertEqual((), recovery.removed)
+                self.assertTrue(transferred.config.is_file())
+
+                child.terminate()
+                child.wait(timeout=10)
+                recovery = runtime_configs.recover_runtime_configs(target)
+                self.assertEqual((transferred.config,), recovery.removed)
+                self.assertFalse(transferred.config.exists())
+                self.assertFalse(transferred.journal.exists())
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.wait(timeout=10)
+                if current.ownership.journal.exists():
+                    runtime_configs.recover_runtime_configs(target)
+
     def test_crash_after_durable_intent_never_leaves_an_unjournaled_public_config(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "quake-world"

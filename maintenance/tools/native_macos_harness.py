@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from maintenance.tools.native_handoff import (
+    CANONICAL_CASES,
     FORMAT,
     PLATFORM,
     PROJECT,
@@ -30,6 +32,11 @@ from maintenance.tools.native_handoff import (
     validate_evidence_file,
     validate_plan,
     validate_runtime,
+)
+from maintenance.tools.native_evidence_contract import (
+    CASE_ASSERTIONS,
+    NATIVE_EVIDENCE_FORMAT,
+    UTC_TIMESTAMP,
 )
 
 M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
@@ -42,6 +49,12 @@ class HardwareObservation:
 
     chip: str
     model: str
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z",
+    )
 
 
 def detect_m3_hardware(
@@ -198,12 +211,20 @@ def _stage_entrypoint(
     return validate_runtime(runtime)
 
 
-def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path) -> list[dict[str, object]]:
+def execute_cases(
+    *,
+    candidate: Path,
+    plan: dict[str, object],
+    output_dir: Path,
+    release_metadata: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
     """Run the candidate-owned entrypoint for every canonical case."""
 
     candidate = Path(candidate).absolute()
     cases = validate_plan(plan, candidate=candidate)
     initial_identity = candidate_identity(candidate)
+    if release_metadata is not None and release_metadata:
+        raise NativeHandoffError("metadados de release precisam iniciar vazios")
     output_dir = Path(output_dir).absolute()
     try:
         output_dir.mkdir(parents=True, exist_ok=False)
@@ -256,6 +277,13 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
             for part in case["arguments"]
         ]
         command = [sys.executable, str(runtime["path"]), *arguments]
+        started_at = _utc_timestamp()
+        if release_metadata is not None:
+            release_metadata.append({
+                "name": name,
+                "command": list(command),
+                "started_at": started_at,
+            })
         started = time.monotonic()
         timed_out = False
         with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
@@ -324,6 +352,105 @@ def execute_cases(*, candidate: Path, plan: dict[str, object], output_dir: Path)
     return results
 
 
+def _release_artifact(output_dir: Path, relative: object, *, kind: str) -> dict[str, object]:
+    if not isinstance(relative, str) or not relative or "\\" in relative:
+        raise NativeHandoffError("artefato de release possui caminho inválido")
+    path = Path(relative)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise NativeHandoffError("artefato de release possui caminho inseguro")
+    target = Path(output_dir).joinpath(*path.parts)
+    if target.is_symlink() or not target.is_file():
+        raise NativeHandoffError(f"artefato de release ausente ou inseguro: {relative}")
+    return {
+        "path": path.as_posix(),
+        "kind": kind,
+        "size": target.stat().st_size,
+        "sha256": _sha256(target),
+    }
+
+
+def build_release_smoke_report(
+    *,
+    candidate: Path,
+    output_dir: Path,
+    results: list[dict[str, object]],
+    release_metadata: list[dict[str, object]],
+    hardware: HardwareObservation,
+    completed_at: str,
+) -> dict[str, object]:
+    """Project the local execution into the closed release-smoke v2 shape."""
+
+    if not isinstance(hardware, HardwareObservation):
+        raise NativeHandoffError("hardware M3 ausente no relatório de release")
+    if UTC_TIMESTAMP.fullmatch(completed_at) is None:
+        raise NativeHandoffError("completed_at precisa ser timestamp UTC canônico")
+    if len(results) != len(CANONICAL_CASES) or len(release_metadata) != len(results):
+        raise NativeHandoffError("execução nativa incompleta para relatório de release")
+    cases: list[dict[str, object]] = []
+    for expected_name, result, metadata in zip(
+        CANONICAL_CASES, results, release_metadata, strict=True,
+    ):
+        if result.get("name") != expected_name or metadata.get("name") != expected_name:
+            raise NativeHandoffError(f"ordem nativa divergente: {expected_name}")
+        command = metadata.get("command")
+        started_at = metadata.get("started_at")
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(part, str) and part for part in command)
+            or not isinstance(started_at, str)
+            or UTC_TIMESTAMP.fullmatch(started_at) is None
+        ):
+            raise NativeHandoffError(f"metadados nativos inválidos: {expected_name}")
+        cases.append({
+            "name": expected_name,
+            "command": command,
+            "status": result["status"],
+            "exit_code": result["exit_code"],
+            "started_at": started_at,
+            "duration_ms": result["duration_ms"],
+            "assertions": sorted(CASE_ASSERTIONS[expected_name]),
+            "artifacts": [
+                _release_artifact(
+                    output_dir,
+                    result["receipt"],
+                    kind=f"{expected_name}-receipt",
+                ),
+                _release_artifact(
+                    output_dir,
+                    result["stdout"],
+                    kind=f"{expected_name}-stdout",
+                ),
+                _release_artifact(
+                    output_dir,
+                    result["stderr"],
+                    kind=f"{expected_name}-stderr",
+                ),
+            ],
+        })
+    return {
+        "format": NATIVE_EVIDENCE_FORMAT,
+        "project": PROJECT,
+        "status": "passed" if all(case["status"] == "passed" for case in cases) else "failed",
+        "platform": "macOS-ARM64",
+        "completed_at": completed_at,
+        "candidate": candidate_identity(Path(candidate)),
+        "environment": {
+            "os": "macOS",
+            "architecture": "arm64",
+            "standard_user": True,
+            "elevated": False,
+            "distro": None,
+            "distro_version": None,
+            "glibc_version": None,
+        },
+        "runtime_executed": True,
+        "cases": cases,
+        "secrets": "redacted",
+        "hardware": {"chip": hardware.chip, "model": hardware.model},
+    }
+
+
 def _write_json(path: Path, value: object) -> None:
     with Path(path).open("x", encoding="utf-8") as stream:
         json.dump(value, stream, ensure_ascii=False, indent=2, sort_keys=True)
@@ -379,8 +506,26 @@ def run_native(
         )
         _write_json(output_dir / "handoff.json", handoff)
         return handoff
-    results = execute_cases(candidate=candidate, plan=plan, output_dir=output_dir)
+    release_metadata: list[dict[str, object]] = []
+    results = execute_cases(
+        candidate=candidate,
+        plan=plan,
+        output_dir=output_dir,
+        release_metadata=release_metadata,
+    )
     passed = len(results) == len(plan["cases"]) and all(case["status"] == "passed" for case in results)
+    if passed:
+        _write_json(
+            output_dir / "release-smoke.json",
+            build_release_smoke_report(
+                candidate=candidate,
+                output_dir=output_dir,
+                results=results,
+                release_metadata=release_metadata,
+                hardware=hardware,
+                completed_at=_utc_timestamp(),
+            ),
+        )
     handoff = {
         "format": FORMAT,
         "project": PROJECT,

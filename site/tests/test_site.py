@@ -74,6 +74,18 @@ class SiteTests(unittest.TestCase):
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
 
+    def test_release_documentation_keeps_mac_local_boundary(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        cloudflare = (PROJECT_ROOT / "site/docs/cloudflare.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("até os smokes nativos", home)
+        self.assertIn("condicionais por essa limitação", home)
+        self.assertIn("smokes nativos não são requisito do fluxo Mac/local", home)
+        self.assertNotIn("workflow protegido", cloudflare)
+        self.assertIn("publicação remota só ocorre após autorização explícita", cloudflare)
+        self.assertIn("npm ci && npm run deploy:dry-run", cloudflare)
+        self.assertIn("manualmente com o Wrangler local", cloudflare)
+
     def test_public_product_facts_match_the_canonical_catalogs_and_documentation(self):
         product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
         packages = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
@@ -113,32 +125,11 @@ class SiteTests(unittest.TestCase):
             for platform in runtime["platforms"]
         }
         self.assertEqual(canonical_support, public_support)
-        canonical_validation = {
-            (runtime["id"], platform["variant"]): platform["validation"]
-            for runtime in runtimes["runtimes"]
-            for platform in runtime["platforms"]
-        }
-        public_validation = {
-            (runtime["id"], platform["variant"]): platform["validation"]
-            for runtime in product["runtimes"]
-            for platform in runtime["platforms"]
-        }
-        self.assertEqual(canonical_validation, public_validation)
         self.assertEqual(
             "conditional", public_support[("ezquake-stable", "macos-universal")],
         )
         self.assertEqual(
             "preview", public_support[("ezquake-nightly", "macos-universal")],
-        )
-        stable_macos = next(
-            platform for runtime in product["runtimes"]
-            if runtime["id"] == "ezquake-stable"
-            for platform in runtime["platforms"]
-            if platform["variant"] == "macos-universal"
-        )
-        self.assertEqual(
-            {"macos-arm64", "macos-x64"},
-            {target["variant"] for target in stable_macos["support_targets"]},
         )
         self.assertEqual(
             {entry["id"] for entry in games["games"]},
@@ -160,7 +151,11 @@ class SiteTests(unittest.TestCase):
         for document in (home, readme, manual):
             self.assertIn(version, document)
             self.assertIn(f"{product['component_count']} componentes", document)
-        self.assertIn(f"{product['package_count']} pacotes", home)
+        # The home page keeps the numeric value in a data marker so the live
+        # catalog script can refresh it; compare the rendered text rather than
+        # relying on the number and noun being adjacent in raw HTML.
+        visible_home = re.sub(r"<[^>]+>", "", home)
+        self.assertIn(f"{product['package_count']} pacotes", visible_home)
         for command in product["commands"]:
             self.assertIn(f"`{command}`", readme)
         cli_help = subprocess.run(

@@ -22,6 +22,7 @@ from maintenance.manage import (
     Asset,
     command_add,
     command_check,
+    command_publish,
     command_update,
     distribution_delta,
     ezquake_source_revision,
@@ -51,6 +52,17 @@ from maintenance.tools.downloader import DownloadHTTPError, DownloadResult
 
 
 class DistributionManagerTests(unittest.TestCase):
+    def test_publish_never_builds_missing_local_artifacts(self) -> None:
+        options = mock.Mock(gitlab_only=False, github_only=True, dry_run=True)
+        catalog = {"project": "x86qw", "packages": []}
+        with mock.patch("maintenance.manage.load_json", return_value=catalog), \
+             mock.patch("maintenance.manage.validate_catalog"), \
+             mock.patch("maintenance.manage.publish_github") as publish, \
+             mock.patch("maintenance.manage.command_build", side_effect=AssertionError("rebuild")) as build:
+            self.assertEqual(0, command_publish(options))
+        build.assert_not_called()
+        publish.assert_called_once_with(catalog, dry_run=True)
+
     def test_portable_path_contract_accepts_posix_separators_and_limit(self) -> None:
         canonical = "dist/mods/td2/2.22/source/payload.zip"
         self.assertEqual(canonical, safe_relative(canonical, "dist"))
@@ -1831,8 +1843,24 @@ class DistributionManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             artifact = Path(temporary) / package["filename"]
             artifact.write_bytes(b"x")
+            created = {
+                "id": 7,
+                "name": package["mirror_title"],
+                "body": package["mirror_notes"],
+                "assets": [],
+            }
+            uploaded = {
+                **created,
+                "assets": [{
+                    "name": package["filename"],
+                    "size": package["size"],
+                    "digest": "sha256:" + package["sha256"],
+                }],
+            }
             with mock.patch("maintenance.manage.local_artifact", return_value=artifact):
-                with mock.patch("maintenance.manage.github_release", return_value=None):
+                with mock.patch(
+                    "maintenance.manage.github_release", side_effect=[None, created, uploaded],
+                ):
                     with mock.patch("maintenance.manage.github_latest_release_tag", return_value=None):
                         with mock.patch("maintenance.manage.run") as run:
                             publish_github({"packages": [package]}, dry_run=False)
@@ -1847,6 +1875,64 @@ class DistributionManagerTests(unittest.TestCase):
                 "x86qw-test-0.1.0.zip",
             ),
         )
+
+    def test_github_publish_verifies_existing_asset_without_local_build(self) -> None:
+        package = {
+            "component": "core",
+            "package": "x86qw-core-id1",
+            "version": "0.1.0",
+            "filename": "x86qw-core-id1-0.1.0.zip",
+            "size": 1,
+            "sha256": "a" * 64,
+            "urls": [
+                "https://github.com/x86dx2/x86qw/releases/download/"
+                "x86qw-content-core-0.1.0/x86qw-core-id1-0.1.0.zip"
+            ],
+            "mirror_latest": False,
+        }
+        release = {
+            "id": 7,
+            "name": "x86QW Content · x86qw-content-core-0.1.0",
+            "body": "Pacotes versionados da distribuição x86QW.",
+            "assets": [{
+                "name": package["filename"],
+                "size": 1,
+                "digest": "sha256:" + package["sha256"],
+            }],
+        }
+        with mock.patch("maintenance.manage.github_release", return_value=release), mock.patch(
+            "maintenance.manage.github_latest_release_tag", return_value=None,
+        ), mock.patch(
+            "maintenance.manage.local_artifact", side_effect=AssertionError("local build required"),
+        ):
+            publish_github({"packages": [package]}, dry_run=True)
+
+    def test_github_publish_dry_run_reports_missing_asset_without_local_build(self) -> None:
+        package = {
+            "component": "core",
+            "package": "x86qw-core-id1",
+            "version": "0.1.0",
+            "filename": "x86qw-core-id1-0.1.0.zip",
+            "size": 1,
+            "sha256": "a" * 64,
+            "urls": [
+                "https://github.com/x86dx2/x86qw/releases/download/"
+                "x86qw-content-core-0.1.0/x86qw-core-id1-0.1.0.zip"
+            ],
+            "mirror_latest": False,
+        }
+        release = {
+            "id": 7,
+            "name": "x86QW Content · x86qw-content-core-0.1.0",
+            "body": "Pacotes versionados da distribuição x86QW.",
+            "assets": [],
+        }
+        with mock.patch("maintenance.manage.github_release", return_value=release), mock.patch(
+            "maintenance.manage.github_latest_release_tag", return_value=None,
+        ), mock.patch(
+            "maintenance.manage.local_artifact", side_effect=AssertionError("local build required"),
+        ):
+            publish_github({"packages": [package]}, dry_run=True)
 
     def test_public_parser_exposes_the_complete_lifecycle(self) -> None:
         choices = parser()._subparsers._group_actions[0].choices

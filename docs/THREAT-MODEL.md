@@ -28,14 +28,12 @@ Sessões possuem lock por instalação, identidade de controlador e journal; a
 recuperação é conservadora e nunca encerra PID sem correspondência de token e
 executável. Segredos não entram em argv, logs, journals ou mensagens.
 
-Para um candidato 1.0 futuro, os metadados de release deverão ser validados por
-raiz fixada, assinatura RSA-PSS, threshold, expiração, versão monotônica e
-papéis separados (`root`, `snapshot`, `current` e `evidence`). A evidência
-deverá exigir uma identidade de candidato esperada, rejeitar
-rollback/equivocation por versão SemVer e digest canônico, e exigir que o root
-inicial seja assinado pela chave fixada. Chaves privadas ficam fora do
-repositório. O baseline 0.7.3 não habilita essa cadeia de trust nem contém
-chave de produção; nenhum desses controles deve ser inferido como executado.
+Metadados de release são validados por raiz fixada, assinatura RSA-PSS,
+threshold, expiração, versão monotônica e papéis separados (`root`, `snapshot`,
+`current` e `evidence`). A evidência exige uma identidade de candidato
+esperada, rejeita rollback/equivocation por versão SemVer e digest canônico, e
+o root inicial precisa ser assinado pela chave fixada. Chaves privadas ficam
+fora do repositório.
 
 ## Limites
 

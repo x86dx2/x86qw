@@ -20,6 +20,44 @@ on:
         required: true
         default: "1.0.0"
         type: string
+      release_title:
+        description: "Título imutável da release e dos mirrors"
+        required: true
+        type: string
+      release_notes:
+        description: "Notas imutáveis da release e dos mirrors"
+        required: true
+        type: string
+      native_evidence_run_id:
+        description: "Run externo protegido que produziu a evidência M3 assinada"
+        required: false
+        default: ""
+        type: string
+      native_evidence_artifact_id:
+        description: "Artifact ID imutável do release-evidence.json assinado"
+        required: false
+        default: ""
+        type: string
+      tuf_metadata_run_id:
+        description: "Run externo protegido que entregou metadata TUF já assinada"
+        required: false
+        default: ""
+        type: string
+      tuf_metadata_artifact_id:
+        description: "Artifact ID imutável do repositório TUF assinado"
+        required: false
+        default: ""
+        type: string
+      tuf_metadata_artifact_name:
+        description: "Nome exato do artifact do repositório TUF assinado"
+        required: false
+        default: ""
+        type: string
+      tuf_metadata_workflow:
+        description: "Workflow protegido que produziu o artifact TUF assinado"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -34,7 +72,7 @@ jobs:
     permissions:
       contents: read
 
-  prepare-candidate:
+  build-once:
     name: Build once and bind candidate bytes
     needs: validate
     runs-on: ubuntu-latest
@@ -43,6 +81,7 @@ jobs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
       candidate-sha256: ${{ steps.identity.outputs.candidate-sha256 }}
+      candidate-artifact-name: ${{ steps.identity.outputs.candidate-artifact-name }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -57,6 +96,8 @@ jobs:
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
           CANDIDATE_MODE: ${{ inputs.mode }}
           CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          RELEASE_TITLE: ${{ inputs.release_title }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
@@ -69,21 +110,31 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_MODE: ${{ inputs.mode }}
           CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          RELEASE_TITLE: ${{ inputs.release_title }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
+          CANDIDATE_GENERATED_AT="$(python -c 'import sys; from datetime import datetime, timezone; print(datetime.fromisoformat(sys.argv[1]).astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))' "$(git show -s --format=%cI "$CANDIDATE_COMMIT")")"
+          test -n "$CANDIDATE_GENERATED_AT"
           ./maintenance/manage.py build
           python3 maintenance/tools/build_installer_bundle.py \
             --output release-work/installer-build \
-            --version "$CANDIDATE_VERSION"
-          mkdir -p release-work/input/content release-work/input/installer release-work/input/runtime
+            --version "$CANDIDATE_VERSION" \
+            --ownership-output release-work/ownership-installer.json
+          mkdir -p release-work/input/content release-work/input/installer release-work/input/runtime release-work/input/site
           find maintenance/build/packages -type f -print0 | while IFS= read -r -d '' artifact; do
             relative="${artifact#maintenance/build/packages/}"
-            install -Dm644 "$artifact" "release-work/input/content/$relative"
+            destination="release-work/input/content/$relative"
+            mkdir -p "$(dirname "$destination")"
+            install -m644 "$artifact" "$destination"
           done
           for runtime_root in clients servers services; do
             find "dist/$runtime_root" -type f -print0 | while IFS= read -r -d '' artifact; do
               relative="${artifact#dist/$runtime_root/}"
-              install -Dm644 "$artifact" "release-work/input/runtime/$runtime_root/$relative"
+              destination="release-work/input/runtime/$runtime_root/$relative"
+              mkdir -p "$(dirname "$destination")"
+              install -m644 "$artifact" "$destination"
             done
           done
           install -m644 \
@@ -96,11 +147,49 @@ jobs:
           install -m644 \
             maintenance/native/macos-arm64/entrypoint.json \
             release-work/input/runtime/native-smoke/macos-arm64/entrypoint.json
+          python3 maintenance/tools/build_release_catalog.py \
+            --source site/public/api/v1/catalog.json \
+            --installer "release-work/input/installer/x86qw-installer-$CANDIDATE_VERSION.zip" \
+            --output release-work/input/catalog.json \
+            --version "$CANDIDATE_VERSION" \
+            --release-title "$RELEASE_TITLE" \
+            --generated-at "$CANDIDATE_GENERATED_AT" \
+            --release-notes "$RELEASE_NOTES" \
+            --product-source site/public/api/v1/product.json \
+            --product-output release-work/input/product.json
+          python3 maintenance/tools/render_release_site.py \
+            --source site/public \
+            --catalog release-work/input/catalog.json \
+            --product release-work/input/product.json \
+            --bootstrap-source dist/installer/bin \
+            --output release-work/input/site/public
+          rm -rf release-work/input/site/public/api/v1/trust
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from maintenance.tools import release_ownership
+          root = Path("release-work/input")
+          artifacts = {}
+          for path in sorted(root.rglob("*")):
+              if path.is_file():
+                  relative = path.relative_to(root).as_posix()
+                  payload = path.read_bytes()
+                  artifacts[relative] = {
+                      "size": len(payload),
+                      "sha256": hashlib.sha256(payload).hexdigest(),
+                  }
+          release_ownership.write_document(
+              Path("release-work/ownership-all.json"),
+              release_ownership.default_document(artifacts),
+          )
+          PY
           python3 maintenance/tools/release_candidate.py prepare \
             --source release-work/input \
             --output release-work/candidate \
             --version "$CANDIDATE_VERSION" \
-            --commit "$CANDIDATE_COMMIT"
+            --commit "$CANDIDATE_COMMIT" \
+            --generated-at "$CANDIDATE_GENERATED_AT" \
+            --ownership-fragment release-work/ownership-all.json
           git diff --exit-code
       - name: Verify candidate before transport
         env:
@@ -108,9 +197,12 @@ jobs:
         run: python3 maintenance/tools/release_candidate.py verify release-work/candidate
       - name: Record exact candidate identity
         id: identity
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
         run: |
           digest="$(python3 -c 'import hashlib; print(hashlib.sha256(open("release-work/candidate/candidate.json", "rb").read()).hexdigest())')"
           echo "candidate-sha256=$digest" >> "$GITHUB_OUTPUT"
+          echo "candidate-artifact-name=candidate-${CANDIDATE_COMMIT}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Upload without overwrite
         id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -119,11 +211,11 @@ jobs:
           path: release-work/candidate
           if-no-files-found: error
           overwrite: false
-          retention-days: 7
+          retention-days: 90
 
-  verify-candidate:
+  portable-verify:
     name: Verify exact candidate / ${{ matrix.os }}
-    needs: prepare-candidate
+    needs: build-once
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -142,23 +234,23 @@ jobs:
       - name: Download by immutable artifact ID
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
           merge-multiple: true
           path: downloaded-candidate
       - name: Verify downloaded bytes without rebuild
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-          EXPECTED_CANDIDATE_SHA256: ${{ needs.prepare-candidate.outputs.candidate-sha256 }}
+          EXPECTED_CANDIDATE_SHA256: ${{ needs.build-once.outputs.candidate-sha256 }}
         run: |
           actual="$(python -c 'import hashlib; print(hashlib.sha256(open("downloaded-candidate/candidate.json", "rb").read()).hexdigest())')"
           test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
           python maintenance/tools/release_candidate.py verify downloaded-candidate
 
-  rehearsal:
+  approval-preview:
     name: Evidence-free rehearsal only
     if: ${{ inputs.mode == 'rehearsal' }}
-    needs: [prepare-candidate, verify-candidate]
+    needs: [build-once, portable-verify]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -167,16 +259,19 @@ jobs:
           lfs: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
           merge-multiple: true
           path: candidate
+      # release_evidence_binding.py remains available for private raw-handoff
+      # audits; the legacy --artifact-root m3-evidence contract is intentionally
+      # not executed here because this rehearsal makes no M3 claim.
       - name: Rehearse immutable copy without M3 claim
         run: python3 maintenance/tools/release_candidate.py rehearse candidate "$RUNNER_TEMP/x86qw-rehearsal"
 
-  approve-candidate:
+  approval:
     name: Protected 1.0 approval boundary
     if: ${{ inputs.mode == 'promote-1.0' }}
-    needs: [prepare-candidate, verify-candidate]
+    needs: [build-once, portable-verify]
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -184,15 +279,107 @@ jobs:
         run: |
           echo "version=${{ inputs.candidate_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "commit=${{ inputs.candidate_commit }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "candidate=${{ needs.prepare-candidate.outputs.candidate-sha256 }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "transport=${{ needs.prepare-candidate.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate=${{ needs.build-once.outputs.candidate-sha256 }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "transport=${{ needs.build-once.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo "M3 evidence is mandatory; this PR does not manufacture it." >> "$GITHUB_STEP_SUMMARY"
+
+  release-blockers:
+    name: Recheck live P0/P1 blockers
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [approval]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Fail closed on open P0/P1 issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 maintenance/tools/check_release_blockers.py --repo "$GITHUB_REPOSITORY"
+
+  attach-native-evidence:
+    name: Attach external M3 evidence without rebuild
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [build-once, portable-verify, approval, release-blockers]
+    # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
+    # its .github/workflows/native-m3.yml input was verified against the
+    # independent native run.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate external handoff coordinates
+        env:
+          EVIDENCE_RUN_ID: ${{ inputs.native_evidence_run_id }}
+          EVIDENCE_ARTIFACT_ID: ${{ inputs.native_evidence_artifact_id }}
+        run: |
+          [[ "$EVIDENCE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$EVIDENCE_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+      - name: Download exact candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
+          merge-multiple: true
+          path: downloaded-candidate
+      - name: Download external signed M3 handoff
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.native_evidence_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.native_evidence_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: external-evidence
+      - name: Attach evidence and reverify candidate bytes
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/attach_release_evidence.py \
+            --candidate downloaded-candidate \
+            --evidence external-evidence \
+            --output candidate-with-m3
+          python3 maintenance/tools/release_candidate.py verify candidate-with-m3
+      - name: Upload evidence-bound candidate without overwrite
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-with-m3-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate-with-m3
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
     if: ${{ inputs.mode == 'promote-1.0' }}
-    needs: [prepare-candidate, approve-candidate]
+    needs: [build-once, approval, release-blockers, attach-native-evidence]
+    outputs:
+      promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -200,36 +387,214 @@ jobs:
           lfs: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          artifact-ids: ${{ needs.prepare-candidate.outputs.artifact-id }}
+          artifact-ids: ${{ needs.attach-native-evidence.outputs.artifact-id }}
           merge-multiple: true
           path: candidate
       - name: Require PR G M3 evidence before any mirror or metadata operation
+        env:
+          M3_TRUST_ROOT_B64: ${{ secrets.M3_TRUST_ROOT_B64 }}
         run: |
+          test -n "$M3_TRUST_ROOT_B64" || {
+            echo "M3_TRUST_ROOT_B64 não está configurada no ambiente protegido release" >&2
+            exit 1
+          }
+          root="$RUNNER_TEMP/m3-root.json"
+          umask 077
+          printf '%s' "$M3_TRUST_ROOT_B64" | base64 --decode > "$root"
+          test -s "$root"
           test -f candidate/release-evidence.json || {
             echo "M3 release-evidence.json is absent; promotion remains fail-closed" >&2
             exit 1
           }
           python3 maintenance/tools/release_candidate.py promote \
-            candidate "$RUNNER_TEMP/promoted" --trust-root m3/root.json
+            candidate promoted --trust-root "$root"
+      - name: Upload promoted bytes without overwrite
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: promoted-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: promoted
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
 
-  verify-release-mirrors:
-    name: Reserved mirror gate after M3 promotion
+  publish-assets:
+    name: Publish exact candidate assets to GitHub
     if: ${{ inputs.mode == 'promote-1.0' }}
+    # Promotion-gate is the single dependency that carries the exact,
+    # evidence-bound candidate into publication.
     needs: promotion-gate
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
     steps:
-      - name: Block until a separately approved immutable mirror publisher exists
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - name: Publish only missing immutable GitHub assets
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Mirror publication is not authorized or implemented by PR F" >&2
-          exit 1
+          python3 maintenance/tools/publish_github_candidate.py \
+            --candidate candidate \
+            --repository "$GITHUB_REPOSITORY" \
+            --publish
+
+  publish-gitlab:
+    name: Publish exact installer mirror to GitLab
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [promotion-gate, publish-assets]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - name: Publish only missing immutable GitLab installer mirror
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          python3 maintenance/tools/publish_gitlab_candidate.py \
+            --candidate candidate \
+            --publish
+
+  verify-release-mirrors:
+    name: Verify every public mirror after publication
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    # verify-mirrors is the public mirror gate.
+    needs: [promotion-gate, publish-assets, publish-gitlab]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - name: Verify GitHub and GitLab bytes from the candidate pin
+        env:
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/verify_release_mirrors.py \
+            --candidate candidate \
+            --catalog candidate/catalog.json \
+            --expected-release "$CANDIDATE_VERSION"
 
   metadata-last:
-    name: Reserved signed metadata-last boundary
+    name: Publish the verified site generation last
     if: ${{ inputs.mode == 'promote-1.0' }}
-    needs: verify-release-mirrors
+    needs: [promotion-gate, verify-release-mirrors]
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - name: No metadata publisher in PR F
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate external signed metadata handoff
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          TUF_RUN_ID: ${{ inputs.tuf_metadata_run_id }}
+          TUF_ARTIFACT_ID: ${{ inputs.tuf_metadata_artifact_id }}
+          TUF_ARTIFACT_NAME: ${{ inputs.tuf_metadata_artifact_name }}
+          TUF_WORKFLOW: ${{ inputs.tuf_metadata_workflow }}
         run: |
-          echo "Signed metadata publisher belongs to PR G and remains unavailable" >&2
-          exit 1
+          [[ "$TUF_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TUF_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+          [[ "$TUF_ARTIFACT_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]]
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$TUF_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$TUF_ARTIFACT_NAME" \
+            --artifact-id "$TUF_ARTIFACT_ID" \
+            --workflow "$TUF_WORKFLOW" \
+            --output "$RUNNER_TEMP/tuf-run.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
+          merge-multiple: true
+          path: candidate
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.tuf_metadata_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.tuf_metadata_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: signed-tuf
+      - name: Authenticate signed TUF against the exact candidate catalog
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/publish_tuf_metadata.py \
+            --metadata-dir signed-tuf \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --stage-dir release-work/trust
+      - name: Assemble one immutable public site tree
+        run: |
+          mkdir -p release-work/site
+          cp site/wrangler.jsonc release-work/site/wrangler.jsonc
+          python3 maintenance/tools/assemble_site_release.py \
+            --site-source candidate/site/public \
+            --catalog candidate/catalog.json \
+            --product candidate/product.json \
+            --trust-repository release-work/trust \
+            --output release-work/site/public
+      - name: Dry-run the exact public site before deployment
+        working-directory: site
+        run: |
+          npm ci
+          node_modules/.bin/wrangler deploy \
+            --config ../release-work/site/wrangler.jsonc \
+            --dry-run
+      - name: Deploy the verified site generation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          site/node_modules/.bin/wrangler deploy \
+            --config release-work/site/wrangler.jsonc
+      - name: Verify public TUF after deployment
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/verify_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json
+          python3 maintenance/tools/verify_public_bootstraps.py --candidate candidate
+      - name: Record metadata-last post-publish result
+        run: |
+          echo "metadata-last verified candidate catalog, signed TUF and public endpoint" >> "$GITHUB_STEP_SUMMARY"

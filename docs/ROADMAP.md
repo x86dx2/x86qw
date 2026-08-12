@@ -1,67 +1,65 @@
 # Roadmap do x86QW
 
-Este é o índice estratégico da jornada da release pública `0.7.6` até
-`1.0.0`. O estado factual está em
-[PROJECT-STATUS.md](PROJECT-STATUS.md); os contratos, dependências e gates
-detalhados estão em
+Este é o índice estratégico da jornada da baseline pública `0.7.13` até
+`1.0.0`. O estado operacional presente está em
+[PROJECT-STATUS.md](PROJECT-STATUS.md); a execução detalhada, a auditoria das
+branches e os gates estão em
 [implementation/stabilization-1.0-plan.md](implementation/stabilization-1.0-plan.md).
-Nenhum documento autoriza publicação por si só.
+As notas de release históricas e o rascunho de `1.0.0` ficam em
+[releases/](releases/).
 
 ## Autoridade e baseline
 
-O `main` remoto inclui o hotfix 0.7.6 da PR #78,
-`a9680e9cc5d0eb728d3d84203d0966f0d1167592`. A release `0.7.6` é pública;
-os bundles 0.7.5, 0.7.4 e 0.7.3 permanecem históricos e imutáveis.
+`origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` é a linha canônica. A
+release pública atual é `x86qw-installer-0.7.13`, preparada no commit
+`04a55aed8711ec5466dc70f0e33a591d92e07ccb`; a correção posterior em `main`
+alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
+os cinco jogos, os runtimes declarados e a distinção entre contratos portáveis e
+execução nativa. O checkpoint
+`codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
+aprovação nem release.
 
-O candidato local `1.0.0` foi preparado e verificado, mas não é uma release
-nem um RC publicado. A seleção de plataforma e a execução nativa devem
-continuar separadas da matriz `portable-contract`.
+O roadmap principal responde “em que ordem e sob quais gates”. O status
+responde “o que é verdade agora”. O plano detalhado responde “como cada fase
+será extraída, testada e aprovada”. Nenhum documento autoriza publicação por si
+só.
 
-## Estado das frentes
+## Jornada até 1.0
 
-1. **A — verdade de plataforma:** PR #66 mesclada; a release corretiva
-   `0.7.4` foi publicada separadamente pela PR #71.
-2. **B — governança:** PR #55 mesclada; os runbooks e a fronteira de aprovação
-   continuam vigentes.
-3. **C — contratos:** PR #53 mesclada; SemVer, schemas, JSON e receipts estão
-   congelados para a linha 1.0.
-4. **D — migração:** PR #46 mesclada; somente estados publicados são fontes de
-   migração.
-5. **E1/E2 — trust:** PR #48 registrou a arquitetura, PR #69 materializou as
-   dependências/runtime fail-closed e PRs #77/#78 publicaram e verificaram a
-   root e a cadeia produtiva. O 0.7.6 corrigiu o fim da rotação por HTTP 404.
-6. **F — candidato imutável:** PR #51 mesclada; preparação e promoção continuam
-   separadas e falham fechado sem evidência.
-7. **G — Mac M3/arm64:** PR #54 mesclada; PR #73 corrigiu a detecção do Apple
-   M3 e PR #74 corrigiu o handoff determinístico. A evidência M3 do candidato
-   exato ainda não foi produzida.
-8. **RC e H:** `1.0.0-rc.1` ainda não foi publicada nem passou por período de
-   uso. H não deve ser aberta antes de trust, evidência M3, RC e mirrors
-   convergentes.
+1. **PR A — verdade de plataforma:** separar artefato, suporte e validação;
+   classificar estados de plataforma e preservar a CI portável. Publicar a
+   `0.7.4` somente em uma PR de release posterior.
+2. **PR B — governança (`#55`):** consolidar licença, avisos, ownership,
+   Dependabot, lockfile, threat model e runbooks.
+3. **PR C — contratos (`#53`):** congelar SemVer, schemas, envelopes JSON,
+   redaction e códigos; alvo sugerido `0.8.0`.
+4. **PR D — migração (`#46`):** migrar somente estados publicados de
+   `0.7.0–0.7.13`; fixtures prospectivas não representam releases.
+5. **PRs E1/E2 — trust (`#48`):** aprovar a arquitetura e só depois
+   implementar a cadeia de confiança; alvo sugerido `0.9.0`.
+6. **PR F — candidato imutável (`#51`):** construir uma vez, fixar Actions,
+   conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
+7. **PR G — Mac M3/arm64 (`#54`):** executar o candidato exato e abrir uma PR
+   de release separada para `1.0.0-rc.1`.
+8. **PR H — `1.0.0`:** promover somente após o período de uso do RC, com trust,
+   evidência M3, bytes idênticos e mirrors convergentes.
 
-## Gates restantes
+Cada item exige issue antes da branch, uma frente estrutural por vez e release
+separada da implementação. O plano é a autoridade para dependências, extração
+seletiva e limites de aprovação.
 
-- construir o RC a partir do candidato exato, preservar seus hashes e iniciar
-  o período de uso sem alegar `1.0.0`;
-- executar o lifecycle nativo no host M3 e produzir `release-evidence.json`
-  autenticado para os mesmos bytes;
-- validar cada mirror sem overwrite, conferir convergência e promover
-  metadata por último;
-- abrir H somente com aprovação humana explícita e documentação coerente.
+## Gates comuns
 
-O waiver solo-maintainer do ADR 0007 registra uma exceção de governança; não
-deve ser descrito como revisão criptográfica independente nem reduz os gates
-de custódia, metadata, evidência, RC e mirrors.
-
-## Próxima sequência
-
-1. Preparar um candidato novo a partir do baseline 0.7.6 e congelar seus hashes.
-2. Publicar e testar `1.0.0-rc.1`; iniciar e observar o período de uso.
-3. Reexecutar H no Mac M3, verificar bytes, evidência e mirrors.
-4. Abrir, revisar e promover H para `1.0.0`; publicar metadata por último.
-
-O catálogo TUF 0.7.6 é a autoridade autenticada da CLI. Ele não antecipa nem
-substitui os gates próprios dos futuros bytes de RC e 1.0.
+- suporte `supported`/`conditional` só com evidência nativa do candidato exato;
+  `preview` não significa smoke executado;
+- Linux, Windows, macOS Intel e nightly começam como `preview`; o stable
+  macOS pode permanecer `conditional` por assinatura/notarização;
+- workflows portáveis e o executor M3 são gates separados; jobs portáveis não
+  são smokes nativos;
+- trust de produção, evidência M3, hashes, SBOM, provenance e mirrors são
+  gates independentes e falham fechados;
+- nenhuma promoção ou publicação `1.0` ocorre antes dos gates; releases
+  corretivas permanecem separadas das PRs de implementação.
 
 ## Depois de 1.0
 
@@ -69,8 +67,8 @@ Central de demos, validação formal de MVD/QWD, treinamento como comando,
 clientes ou engines novos, mods/mapas externos, serviços persistentes do
 sistema e perfis operacionais adicionais exigem propostas próprias, artefatos,
 contratos, migração, testes, evidência de plataforma e aprovação de release.
-Eles não entram como efeito colateral de `play`, `host`, `update` ou
-`upgrade`.
+Eles não entram como efeito colateral de `play`, `host`, `update` ou `upgrade`.
 
 Para a visão de longo prazo do ecossistema, consulte
-[ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md).
+[ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md). Para o estado de hoje,
+consulte [PROJECT-STATUS.md](PROJECT-STATUS.md).

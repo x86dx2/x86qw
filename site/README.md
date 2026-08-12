@@ -12,7 +12,8 @@ Executar localmente:
 
 ```sh
 cd site
-npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
+npm ci
+npm run dev
 ```
 
 Abra <http://127.0.0.1:8787>. O catalogo consumido pelo instalador fica em

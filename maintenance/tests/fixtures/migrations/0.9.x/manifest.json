@@ -1,0 +1,7 @@
+{
+  "source_family": "0.9.x",
+  "fixture_kind": "prospective-contract",
+  "payload_kind": "synthetic-contract-only",
+  "public_release_available": false,
+  "reason": "No public x86QW 0.9.x tag exists yet."
+}

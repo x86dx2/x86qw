@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 
+
 _CHUNK_SIZE = 1024 * 1024
 _ALLOWED_COMPRESSION_METHODS = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _ALLOWED_GENERAL_PURPOSE_FLAGS = 0x080E
@@ -53,8 +54,7 @@ _WINDOWS_RESERVED_NAMES = frozenset({
 })
 _VERSION_PATTERN = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-    r"(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
-    r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 _LOCAL_FILE_HEADER = b"PK\x03\x04"
@@ -66,6 +66,21 @@ _ZIP64_END_LOCATOR = b"PK\x06\x07"
 
 class ArchiveError(ValueError):
     """An archive failed the canonical safety or integrity contract."""
+
+
+def _bundle_version_numbers(version: object) -> tuple[int, int, int]:
+    if not isinstance(version, str):
+        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    match = _VERSION_PATTERN.fullmatch(version)
+    if match is None:
+        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    return tuple(int(match.group(index)) for index in range(1, 4))
+
+
+def _includes_project_legal_files(version: str) -> bool:
+    """Return whether a bundle version carries project-owned legal files."""
+
+    return _bundle_version_numbers(version)[0] >= 1
 
 
 def _private_filesystem_boundary():
@@ -1610,18 +1625,14 @@ def _identity_document(payload: bytes, label: str) -> dict[str, object]:
     return value
 
 
-def _includes_project_legal_files(version: str) -> bool:
-    return tuple(int(part) for part in version.split(".")) >= (1, 0, 0)
-
-
 def _validate_installer_bundle_layout(
     source: Path | bytes,
     version: str,
     *,
     includes_version_member: bool,
+    includes_legal_members: bool,
 ) -> ArchivePlan:
-    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
-        raise ArchiveError(f"invalid installer bundle version: {version!r}")
+    _bundle_version_numbers(version)
     prefix = f"x86qw-installer-{version}"
     names = [
         f"{prefix}/x86qw.pyz",
@@ -1633,17 +1644,24 @@ def _validate_installer_bundle_layout(
     ]
     if includes_version_member:
         names.insert(1, f"{prefix}/VERSION")
-    if _includes_project_legal_files(version):
-        names.extend((f"{prefix}/LICENSE", f"{prefix}/NOTICE"))
+    if includes_legal_members:
+        insert_at = 2 if includes_version_member else 1
+        names[insert_at:insert_at] = (
+            f"{prefix}/LICENSE",
+            f"{prefix}/NOTICE",
+        )
     executables = (
         f"{prefix}/x86qw.sh",
         f"{prefix}/dist/installer/bin/manager.py",
     )
     plan = scan_archive(source, required_members=names, executable_members=executables)
     if len(plan.members) != len(names) or set(plan.member_names) != set(names):
-        raise ArchiveError(
-            "installer bundle does not contain the exact member layout"
+        count = (
+            "nine" if includes_legal_members
+            else "seven" if includes_version_member
+            else "six"
         )
+        raise ArchiveError(f"installer bundle does not contain the exact {count}-member layout")
     identity_names = (
         f"{prefix}/installer.json",
         f"{prefix}/_x86qw/installer.json",
@@ -1654,8 +1672,6 @@ def _validate_installer_bundle_layout(
         if includes_version_member
         else identity_names
     )
-    if _includes_project_legal_files(version):
-        requested += (f"{prefix}/LICENSE", f"{prefix}/NOTICE")
     payloads = read_archive_members(plan, requested)
     if (
         includes_version_member
@@ -1670,12 +1686,13 @@ def _validate_installer_bundle_layout(
     for name in (f"{prefix}/installer.json", f"{prefix}/_x86qw/installer.json"):
         if _identity_document(payloads[name], name) != expected_identity:
             raise ArchiveError(f"installer identity does not match the bundle: {name}")
-    nested_required = ["_x86qw/installer.json"]
-    if _includes_project_legal_files(version):
-        nested_required.extend(("_x86qw/LICENSE", "_x86qw/NOTICE"))
+    nested_required = ("_x86qw/installer.json",) + (
+        ("_x86qw/LICENSE", "_x86qw/NOTICE")
+        if includes_legal_members else ()
+    )
     nested = scan_archive(
         payloads[f"{prefix}/x86qw.pyz"],
-        required_members=tuple(nested_required),
+        required_members=nested_required,
     )
     nested_identity = _identity_document(
         read_archive_member(nested, "_x86qw/installer.json"),
@@ -1683,37 +1700,40 @@ def _validate_installer_bundle_layout(
     )
     if nested_identity != expected_identity:
         raise ArchiveError("x86qw.pyz identity does not match the installer bundle")
-    if _includes_project_legal_files(version):
+    if includes_legal_members:
+        outer_legal = read_archive_members(
+            plan, (f"{prefix}/LICENSE", f"{prefix}/NOTICE"),
+        )
         nested_legal = read_archive_members(
             nested, ("_x86qw/LICENSE", "_x86qw/NOTICE"),
         )
-        for outer_name, nested_name in (
-            (f"{prefix}/LICENSE", "_x86qw/LICENSE"),
-            (f"{prefix}/NOTICE", "_x86qw/NOTICE"),
+        if (
+            outer_legal[f"{prefix}/LICENSE"] != nested_legal["_x86qw/LICENSE"]
+            or outer_legal[f"{prefix}/NOTICE"] != nested_legal["_x86qw/NOTICE"]
         ):
-            if payloads[outer_name] != nested_legal[nested_name]:
-                raise ArchiveError(
-                    f"installer legal notice differs between layers: {outer_name}"
-                )
+            raise ArchiveError("installer legal notices differ between bundle layers")
     return plan
 
 
 def validate_installer_bundle(source: Path | bytes, version: str) -> ArchivePlan:
-    """Validate the immutable seven-member public installer bundle contract."""
+    """Validate the immutable versioned public installer bundle contract."""
+    version_value = _bundle_version_numbers(version)
     return _validate_installer_bundle_layout(
-        source, version, includes_version_member=True,
+        source,
+        version,
+        includes_version_member=True,
+        includes_legal_members=version_value[0] >= 1,
     )
 
 
 def validate_installer_history_bundle(source: Path | bytes, version: str) -> ArchivePlan:
     """Validate the exact layout used by every immutable published bundle."""
-    if not isinstance(version, str) or not _VERSION_PATTERN.fullmatch(version):
-        raise ArchiveError(f"invalid installer bundle version: {version!r}")
-    numeric_version = tuple(int(part) for part in version.split("-", 1)[0].split("."))
+    version_value = _bundle_version_numbers(version)
     return _validate_installer_bundle_layout(
         source,
         version,
-        includes_version_member=numeric_version >= (0, 1, 20),
+        includes_version_member=version_value >= (0, 1, 20),
+        includes_legal_members=version_value[0] >= 1,
     )
 
 

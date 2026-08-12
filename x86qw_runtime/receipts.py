@@ -12,8 +12,7 @@ from dataclasses import dataclass, fields
 from pathlib import PurePosixPath
 
 from .io.downloader import DownloadPolicyError, validate_https_url
-from .contracts.schema import ContractError, SchemaKind, validate_document_versions
-from .versioning import NIGHTLY_VERSION, SEMVER_VERSION, STABLE_VERSION
+from .versioning import NIGHTLY_VERSION, SEMVER, STABLE_VERSION
 
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -293,20 +292,10 @@ def parse_cli_receipt(payload: bytes) -> CliReceipt:
         or not isinstance(version, str)
     ):
         raise ReceiptError("invalid CLI receipt identity", code="cli_identity")
-    if not SEMVER_VERSION.fullmatch(version):
+    if not SEMVER.fullmatch(version):
         raise ReceiptError(
             "invalid CLI receipt version", code="cli_version", value=version,
         )
-    try:
-        validate_document_versions(
-            document,
-            kind=SchemaKind.RECEIPT,
-            allow_legacy=True,
-        )
-    except ContractError as error:
-        raise ReceiptError(
-            "invalid CLI receipt contract", code="cli_contract",
-        ) from error
     return CliReceipt(1, "x86qw", version, copy.deepcopy(document))
 
 

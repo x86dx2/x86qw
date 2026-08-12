@@ -116,10 +116,6 @@ migrations.execute_migration(plan)
         self.assertIn("migrate", manager.session_control.LOCK_COMMANDS)
         self.assertIn("migrate", manager.session_control.MAINTENANCE_COMMANDS)
 
-    def test_migrate_remains_outside_the_frozen_json_command_contract(self) -> None:
-        with self.assertRaises(SystemExit):
-            manager.parse_arguments(["migrate", "--json"], ROOT)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -355,6 +355,7 @@ def apply_archive_layers(
                 "source": str(raw_layer["policy"]),
                 "sha256": policy_sha256,
                 "conflicts": str(len(policy)),
+                "ownership": "mixed",
             },
         ]
         updated[index] = (
@@ -415,6 +416,7 @@ def apply_archive_text_replacements(
             "member": member,
             "source_sha256": source_sha256,
             "replacement_sha256": file_sha256_bytes(after),
+            "ownership": "mixed",
         })
     return rewrite_zip_members(payload, member_payloads), applied
 
@@ -533,6 +535,7 @@ def reference_component_payload(
             "target": upstream_path,
             "source_sha256": str(replacement["source_sha256"]),
             "replacement_sha256": file_sha256_bytes(after),
+            "ownership": "mixed",
         })
     replacements: dict[str, bytes] = {}
     additions: set[str] = set()
@@ -724,7 +727,11 @@ def project_component_payloads(
             raise ValueError(f"canonical x86QW project source is empty: {source}")
         destination = str(entry["destination"])
         member = f"{'defaults' if entry['mode'] == 'default' else 'payload'}/{destination}"
-        selected.append((source_name, member, payload, []))
+        selected.append((source_name, member, payload, [{
+            "ownership": "project",
+            "ownership_basis": "project-source",
+            "project_source": source_name,
+        }]))
     return selected
 
 
@@ -758,6 +765,8 @@ def apply_project_overrides(
             "target": upstream_path,
             "project_override": source_name,
             "sha256": file_sha256_bytes(replacement),
+            "ownership": "project",
+            "ownership_basis": "project-override",
         }]))
         applied.add(upstream_path)
     missing = set(overrides) - applied
@@ -816,6 +825,8 @@ def apply_project_archive_overrides(
             "member": member,
             "project_override": source,
             "sha256": file_sha256_bytes(replacement),
+            "ownership": "mixed",
+            "archive_member_override": True,
         } for member, (source, replacement) in sorted(replacements.items())]
         updated[index] = (
             upstream_path, member_path, payload, [*metadata, *override_metadata],

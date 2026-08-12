@@ -44,18 +44,34 @@ def artifact_url(package: dict[str, object]) -> str:
     return f"{API_ROOT}/{'/'.join(quoted)}"
 
 
-def local_artifact(package: dict[str, object], dist: Path, builds: Path) -> Path:
+def local_artifact(
+    package: dict[str, object], dist: Path, builds: Path, candidate: Path | None = None,
+) -> Path:
     filename = str(package["filename"])
-    relative = package.get("distribution_path")
-    if isinstance(relative, str):
-        path = dist / relative
-    elif package.get("channel") == "content":
-        candidates = [path for path in builds.rglob(filename) if path.is_file() and not path.is_symlink()]
-        if len(candidates) != 1:
-            raise ValueError(f"expected one temporary build artifact for {filename}, found {len(candidates)}")
-        path = candidates[0]
+    if candidate is not None:
+        root = Path(candidate)
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError(f"candidate directory is missing or unsafe: {root}")
+        matches = [
+            path for path in root.rglob(filename)
+            if path.is_file() and not path.is_symlink()
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"expected one candidate artifact for {filename}, found {len(matches)}"
+            )
+        path = matches[0]
     else:
-        raise ValueError(f"catalog package has no local distribution artifact: {filename}")
+        relative = package.get("distribution_path")
+        if isinstance(relative, str):
+            path = dist / relative
+        elif package.get("channel") == "content":
+            candidates = [path for path in builds.rglob(filename) if path.is_file() and not path.is_symlink()]
+            if len(candidates) != 1:
+                raise ValueError(f"expected one temporary build artifact for {filename}, found {len(candidates)}")
+            path = candidates[0]
+        else:
+            raise ValueError(f"catalog package has no local distribution artifact: {filename}")
     if not path.is_file() or path.is_symlink():
         raise ValueError(f"distribution artifact is missing: {path}")
     if path.stat().st_size != package["size"]:
@@ -131,6 +147,10 @@ def main() -> int:
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--dist", type=Path, default=ROOT / "dist")
     parser.add_argument("--builds", type=Path, default=ROOT / "maintenance/build/packages")
+    parser.add_argument(
+        "--candidate", type=Path,
+        help="diretório do candidato imutável; bytes ausentes serão lidos somente dele",
+    )
     parser.add_argument("--publish", action="store_true", help="envia artefatos ausentes usando a autenticação do glab")
     parser.add_argument("--register", action="store_true", help="adiciona URLs GitLab ao catálogo após verificar tudo")
     arguments = parser.parse_args()
@@ -144,13 +164,15 @@ def main() -> int:
     catalog_changed = False
     for index, package in enumerate(packages, 1):
         assert isinstance(package, dict)
-        path = local_artifact(package, arguments.dist, arguments.builds)
         url = artifact_url(package)
         remote = remote_sha256(url, int(package["size"]), str(package["sha256"]))
         if remote is None:
             if not arguments.publish:
                 raise ValueError(f"GitLab mirror is missing: {package['filename']}")
             print(f"[{index}/{len(packages)}] enviando {package['filename']}...", flush=True)
+            path = local_artifact(
+                package, arguments.dist, arguments.builds, candidate=arguments.candidate,
+            )
             upload(path, package)
             remote = remote_sha256(url, int(package["size"]), str(package["sha256"]))
         if remote != (package["size"], package["sha256"]):

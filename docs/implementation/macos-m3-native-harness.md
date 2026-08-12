@@ -2,17 +2,19 @@
 
 ## Estado
 
-O harness e o agregado desta etapa são infraestrutura local. Nenhum smoke M3
-do candidato foi executado, nenhuma evidência foi assinada e nenhum estado de
-suporte ou release foi promovido.
+O harness e o agregado desta etapa são infraestrutura local. A execução real
+do candidato continua sendo uma operação externa ao CI portátil; neste
+checkpoint, uma execução local M3 foi concluída e gerou handoff v1 e relatório
+de smoke v2. Nenhuma evidência foi assinada e nenhum estado de suporte ou
+release foi promovido.
 
 ## Entrada executável
 
-O candidato produzido pela etapa F em `main@216e90b62c8dabdd749e462a884d115cb5993253`
-vincula os bytes de runtime em `runtime/{clients,servers,services}` e contém o
-contrato e o entrypoint Python candidato-owned. Isso torna possível gerar um
-plano local determinístico, mas não substitui a execução em hardware Apple M3
-nem cria evidência de release por si só.
+Cada candidato produzido pela etapa F vincula os bytes de runtime em
+`runtime/{clients,servers,services}` e contém o contrato e o entrypoint Python
+candidate-owned. O `candidate.json` é a autoridade da versão, commit e digest;
+isso torna possível gerar um plano local determinístico, mas não substitui a
+execução em hardware Apple M3 nem cria evidência de release por si só.
 
 Um candidato capaz de executar o smoke precisa declarar, em `artifacts` de
 `candidate.json`, tanto o contrato quanto o executável. O contrato fechado é:
@@ -55,6 +57,14 @@ humano é reaberto. O `output-dir` também é normalizado para absoluto antes de
 criar scratch, logs e recibos, evitando caminhos duplicados quando o chamador
 usa um caminho relativo.
 
+O primeiro caso de instalação usa ainda `--online-only`, extrai os dois
+launchers do bundle candidato ao lado do `x86qw.pyz` e executa, na instalação
+temporária criada pelo próprio caso, `help`, `version`, `changes` e
+`migrate --dry-run`. O recibo nativo só é aprovado quando os quatro comandos
+terminam com código zero, o help lista `changes` e `migrate`, e a versão do
+launcher corresponde à versão do candidato. Isso comprova a CLI instalada sem
+reutilizar uma instalação pessoal ou depender da árvore `quake-world`.
+
 Contrato ausente resulta em exit code 2 e `not-run`, sem plano. Contrato
 malformado, artifact não registrado ou bytes divergentes resultam em erro,
 também sem plano. O adaptador nunca altera o candidato.
@@ -87,7 +97,25 @@ com timeout, e conserva apenas chip e modelo. Falha de detecção, Apple M1/M2/M
 arquitetura diferente, candidato ausente ou plano ausente produzem `not-run`;
 nenhum desses estados é convertido em evidência nativa.
 
-Somente um handoff `passed` pode alimentar o agregado intermediário:
+O mesmo comando também grava `release-smoke.json`, que é o relatório v2
+diretamente consumível pelo fluxo de release. Ele contém os comandos efetivos,
+asserções declaradas e os hashes dos recibos/stdout/stderr; não contém chaves,
+segredos ou caminhos de custódia. O arquivo ainda não é evidência assinada.
+
+Para transformar o relatório bruto em uma forma aceita pelo produtor de
+evidência:
+
+```sh
+python3 maintenance/tools/native_release_smoke.py \
+  --candidate /caminho/candidate \
+  --platform macOS-ARM64 \
+  --handoff /caminho/handoff-local/release-smoke.json \
+  --output /fora/release-smoke-normalized.json
+```
+
+O handoff v1 continua disponível para auditoria detalhada e para o agregado
+local legado. Somente um handoff `passed` pode alimentar o agregado
+intermediário:
 
 ```sh
 python3 -m maintenance.tools.native_handoff_evidence aggregate \
@@ -105,3 +133,30 @@ digests necessários para uma futura cerimônia protegida.
 O arquivo produzido é sempre `status: pending`, `signed: false` e
 `promotable: false`. Ele fica fora do candidato imutável, não pode se chamar
 `release-evidence.json` e não satisfaz o gate de promoção da etapa F.
+
+## Montagem protegida da evidência
+
+O workflow `native-m3.yml` também valida o `release-smoke.json` no runner e
+produz, fora do candidato, `records/macOS-ARM64.json` e
+`release-evidence-body.json`. O artifact `native-m3-input` leva apenas esses
+dois arquivos, o plano e o agregado pending; os logs e recibos brutos ficam no
+scratch privado do runner.
+
+O custodiante assina os bytes exatos de `release-evidence-body.json` fora do
+repositório e devolve um envelope JSON público com `body_sha256` e
+`{keyid,sig}`. O workflow `sign-native-evidence.yml` verifica a proveniência do
+run M3, baixa o candidato e o input, executa:
+
+```sh
+python3 -m maintenance.tools.assemble_release_evidence assemble \
+  --candidate candidate \
+  --records-dir native-input/records \
+  --body native-input/release-evidence-body.json \
+  --signatures signatures.json \
+  --trust-root m3-root.json \
+  --output signed-evidence/release-evidence.json
+```
+
+O comando não possui modo de gerar assinatura nem aceita chave privada. Sem
+`--trust-root`, a CLI falha antes de produzir o agregado; depois da validação,
+o artifact `native-m3-signed` é o único que o workflow de promoção aceita.

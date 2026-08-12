@@ -17,30 +17,21 @@ por componente está em [maintenance/docs/provenance.md](../maintenance/docs/pro
 e nos inventários. O `license_url` de uma release de componente é um endereço
 imutável da fonte correspondente e não um endereço da licença do x86QW.
 
-## Identificação SPDX e candidatos de release
+O SBOM SPDX 2.3 de um candidato é alimentado por `ownership.json`, produzido
+pelos builders e vinculado ao SHA-256 de cada artefato. Ele aplica `MIT` apenas
+às entradas declaradas como próprias (incluindo membros próprios conhecidos de
+um archive) e mantém `NOASSERTION` para conteúdo upstream, dados-base, PAKs e
+archives mistos. O candidato nunca deduz licença por nome de arquivo,
+extensão ou diretório.
 
-Arquivos próprios novos devem usar `SPDX-License-Identifier: MIT` quando o
-formato aceitar um cabeçalho SPDX. Para formatos sem cabeçalho, o inventário e
-o SBOM devem registrar `MIT` explicitamente. A documentação e os artefatos
-legados continuam cobertos por este documento e por `LICENSE`/`NOTICE`.
+Bundles modernos do instalador (`>=1.0.0`) carregam cópias byte a byte de
+`LICENSE` e `NOTICE` tanto no ZIP externo quanto no `x86qw.pyz` instalado. O
+validador exige os dois avisos e confirma que as camadas são idênticas. Os
+bundles históricos da série 0.x mantêm seu layout e seus metadados imutáveis;
+essa mudança não reescreve nem republica versões anteriores.
 
-Um candidato futuro que produza SBOM SPDX 2.3 deve vinculá-lo ao SHA-256 de
-cada artefato e a um registro de ownership produzido pelo builder. O registro
-aplica `MIT` apenas às entradas declaradas como próprias (incluindo membros
-próprios conhecidos de um archive) e mantém `NOASSERTION` para conteúdo
-upstream, dados-base, PAKs e archives mistos. Nenhum candidato pode deduzir
-licença por nome de arquivo, extensão ou diretório. O baseline público 0.7.3
-não contém esse pipeline de candidato 1.0; a regra descreve o gate futuro.
-
-Bundles modernos do instalador (`>=1.0.0`) deverão carregar cópias byte a byte
-de `LICENSE` e `NOTICE` tanto no ZIP externo quanto no `x86qw.pyz` instalado. O
-validador desse candidato deverá exigir os dois avisos e confirmar que as
-camadas são idênticas. Os bundles históricos da série 0.x mantêm seu layout e
-seus metadados imutáveis; essa regra não reescreve nem republica versões
-anteriores.
-
-Em uma release futura aprovada, `candidate.json`, `checksums.txt`,
-`sbom.spdx.json` e `provenance.json` deverão ser publicados como assets
-imutáveis junto aos bundles. São documentos de auditoria do processo de
-release; a presença pública não altera a licença dos payloads upstream nem
-substitui os avisos de origem.
+Em uma release aprovada, `candidate.json`, `checksums.txt`,
+`sbom.spdx.json` e `provenance.json` são publicados
+como assets imutáveis junto aos bundles. Eles são documentos de auditoria do
+processo de release; a presença pública não altera a licença dos payloads
+upstream nem substitui os avisos de origem.

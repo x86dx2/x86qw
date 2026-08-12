@@ -21,10 +21,11 @@ import tempfile
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 sys.dont_write_bytecode = True
 
@@ -141,11 +142,6 @@ from x86qw_runtime.versioning import (
     STABLE_VERSION,
     parse_semver,
 )
-from x86qw_runtime.trust import (
-    BoundedTufFetcher,
-    TrustError,
-    load_trusted_catalog,
-)
 
 from x86qw_runtime.catalogs import (
     components_by_id,
@@ -171,6 +167,11 @@ from x86qw_runtime.installation_changes import (
     ManagedInstallationFile,
     inspect_installation_changes,
     render_installation_gitignore,
+)
+from x86qw_runtime.trust import (
+    BoundedTufFetcher,
+    TrustError,
+    load_trusted_catalog,
 )
 from x86qw_runtime.catalogs import (
     load_capabilities,
@@ -270,6 +271,8 @@ INSTALL_STATE = ".x86qw/state.json"
 INSTALLATION_CAPABILITIES: frozenset[str] = frozenset()
 INSTALLER_BUNDLE_METADATA = "_x86qw/installer.json"
 DEVELOPMENT_VERSION_FILE = Path("dist/installer/VERSION")
+NATIVE_CANDIDATE_ROOT_ENV = "X86QW_NATIVE_CANDIDATE_ROOT"
+NATIVE_CANDIDATE_ARTIFACT_KEY = "_native_candidate_artifact"
 QW_PACKAGE_PRIORITY = (
     "ktx.pk3",
     "models.pk3",
@@ -292,6 +295,12 @@ LEGACY_COMPONENT_REPLACEMENTS = {
 LEGACY_COMPONENT_REMOVALS = {
     "nquake-sounds": "sons de Clan Arena incorporados ao KTX",
 }
+
+
+def trust_now() -> datetime:
+    """Return the UTC clock used for installed-client trust checks."""
+
+    return datetime.now(timezone.utc)
 LEGACY_COMPONENTS = frozenset({
     "clan-arena", *LEGACY_COMPONENT_REPLACEMENTS, *LEGACY_COMPONENT_REMOVALS,
 })
@@ -459,6 +468,20 @@ class LazyMapping(Mapping[str, object]):
 
 CAPABILITY_CATALOG = LazyMapping(lambda: load_launcher_contracts()[0])
 RUNTIME_CATALOG = LazyMapping(lambda: load_launcher_contracts()[1])
+
+
+def public_command_names() -> tuple[str, ...]:
+    """Return the public command contract from the bundled catalog."""
+
+    commands = load_launcher_contracts()[0].get("commands")
+    if (
+        not isinstance(commands, list)
+        or not commands
+        or any(not isinstance(command, str) or not command for command in commands)
+        or len(commands) != len(set(commands))
+    ):
+        raise InstallerError("Catálogo de capacidades sem uma lista de comandos pública válida.")
+    return tuple(commands)
 
 
 @lru_cache(maxsize=1)
@@ -842,10 +865,19 @@ class Installer:
         )
         self.selected_component_profile = "none"
         self.requested_components: list[str] = []
+        # Install-only automation keeps the existing interactive flow as the
+        # default while allowing release smoke jobs to provide every choice
+        # explicitly.  These values are scoped to one install transaction and
+        # are never persisted as user preferences.
+        self._non_interactive_install = False
+        self._requested_channel: str | None = None
+        self._requested_release: str | None = None
+        self._requested_profile: str | None = None
         self._component_catalog: dict[str, object] | None = None
         self._components: dict[str, dict[str, object]] | None = None
         self._content_component_namespaces: set[str] | None = None
         self._runtime_launch_hashes: dict[Path, str] = {}
+        self._native_candidate_manifest_data: dict[str, object] | None = None
 
     @property
     def component_catalog(self) -> dict[str, object]:
@@ -1296,7 +1328,7 @@ class Installer:
         if (
             result.bytes_written != expected_size
             or destination.stat().st_size != expected_size
-            or file_hash(destination) != expected_sha256
+            or file_hash(destination, maximum_size=MAX_ARTIFACT_BYTES) != expected_sha256
         ):
             raise InstallerError(f"{label.capitalize()} falhou na verificação após a cópia.")
         return destination
@@ -1975,31 +2007,43 @@ class Installer:
             raise InstallerError("Nenhuma versão foi selecionada.")
         return next(record for record in catalog if record[0] == selected)
 
-    def choose_channel(self, selected: str | None = None) -> str:
-        channel = selected
-        if channel is None:
-            channel = navigation.select_one(
-                "Qual canal deseja instalar?",
-                (
-                    navigation.MenuOption(
-                        "stable", "Stable", "releases oficiais", aliases=("s",),
-                    ),
-                    navigation.MenuOption(
-                        "nightly", "Nightly", "snapshots de desenvolvimento", aliases=("n",),
-                    ),
+    def choose_channel(self, requested: str | None = None) -> str:
+        if requested is not None:
+            if requested not in {"stable", "nightly"}:
+                raise InstallerError(
+                    f"Canal de instalação inválido: {requested}. Use stable ou nightly."
+                )
+            self.channel = requested
+            console.success(f"Canal selecionado: {requested}")
+            return requested
+        channel = navigation.select_one(
+            "Qual canal deseja instalar?",
+            (
+                navigation.MenuOption(
+                    "stable", "Stable", "releases oficiais", aliases=("s",),
                 ),
-                breadcrumb="x86QW › Instalação › Canal",
-                invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
-            )
+                navigation.MenuOption(
+                    "nightly", "Nightly", "snapshots de desenvolvimento", aliases=("n",),
+                ),
+            ),
+            breadcrumb="x86QW › Instalação › Canal",
+            invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
+        )
         if channel is None:
             raise InstallerError("Nenhum canal foi selecionado.")
-        if channel not in {"stable", "nightly"}:
-            raise InstallerError(f"Canal de instalação inválido: {channel}.")
         self.channel = channel
         console.success(f"Canal selecionado: {channel}")
         return channel
 
     def confirm_components(self) -> bool:
+        if self._non_interactive_install:
+            # The profile is mandatory in non-interactive mode, so accepting
+            # this phase is deterministic and never falls back to a prompt.
+            if self._requested_profile not in {"essential", "recommended", "complete"}:
+                raise InstallerError(
+                    "Instalação não interativa exige --profile essential, recommended ou complete."
+                )
+            return True
         return navigation.confirm(
             "Instalar também os componentes x86QW?",
             breadcrumb="x86QW › Instalação › Conteúdo",
@@ -2017,6 +2061,41 @@ class Installer:
         architecture: str,
     ) -> list[ReleaseRecord]:
         assert self.spec is not None
+        native_root = self._native_candidate_root()
+        if native_root is not None:
+            if component != "ezquake":
+                raise InstallerError(f"O candidato nativo não declara o runtime {component}.")
+            prefix = f"runtime/clients/ezquake/{channel}/"
+            records: list[ReleaseRecord] = []
+            artifacts = self._native_candidate_manifest()["artifacts"]
+            assert isinstance(artifacts, dict)
+            for raw_name in artifacts:
+                if not isinstance(raw_name, str) or not raw_name.startswith(prefix):
+                    continue
+                parts = PurePosixPath(raw_name).parts
+                if len(parts) != 7 or parts[5] != "macos-universal":
+                    continue
+                version, filename = parts[4], parts[6]
+                if not version_pattern.fullmatch(version) or filename != expected_filename(version):
+                    continue
+                _, _, digest = self._native_candidate_artifact(raw_name)
+                records.append((version, (f"https://candidate.invalid/{filename}",), digest))
+            if not records:
+                raise InstallerError(
+                    f"Nenhuma versão {channel} de {component} foi encontrada no candidato nativo."
+                )
+            if len(records) != len({record[0] for record in records}):
+                raise InstallerError(f"O candidato nativo contém versões duplicadas de {component}.")
+            if channel == "nightly":
+                records.sort(key=lambda record: record[0], reverse=True)
+            else:
+                records.sort(
+                    key=lambda record: tuple(
+                        int(part) for part in record[0].removeprefix("v").split(".")
+                    ),
+                    reverse=True,
+                )
+            return records
         catalog = self.public_catalog("Consultando o catálogo oficial x86QW...")
         packages = catalog["packages"]
 
@@ -2104,19 +2183,21 @@ class Installer:
             self.spec.architecture,
         )
 
-    def choose_release(self, selected: str | None = None) -> None:
+    def choose_release(self, requested: str | None = None) -> None:
         assert self.spec is not None
         catalog = self.stable_catalog() if self.channel == "stable" else self.nightly_catalog()
-        if selected is None:
-            release = self.prompt_catalog(self.channel, catalog)
+        if requested is None:
+            selected = self.prompt_catalog(self.channel, catalog)
+        elif requested == "latest":
+            selected = catalog[0]
         else:
-            matches = [record for record in catalog if record[0] == selected]
+            matches = [record for record in catalog if record[0] == requested]
             if len(matches) != 1:
                 raise InstallerError(
-                    f"A versão {selected} não está disponível no canal {self.channel}."
+                    f"A versão {requested} não está disponível no canal {self.channel}."
                 )
-            release = matches[0]
-        self.configure_release(release)
+            selected = matches[0]
+        self.configure_release(selected)
         console.success(f"Versão selecionada: {self.selected_version}")
 
     def configure_release(self, selected: ReleaseRecord) -> None:
@@ -2138,6 +2219,15 @@ class Installer:
                 raise InstallerError("O artefato selecionado não possui identidade única na distribuição.")
             self.app_distribution_path = str(selected_packages[0].get("distribution_path", ""))
             self.app_expected_size = int(selected_packages[0]["size"])
+        elif self._native_candidate_root() is not None:
+            _, _, size, _ = self._native_candidate_matching(
+                lambda name: name == (
+                    f"runtime/clients/ezquake/{self.channel}/{self.selected_version}/"
+                    f"macos-universal/{self.app_archive_name}"
+                ),
+                "runtime ezQuake nativo",
+            )
+            self.app_expected_size = size
         console.detail(f"Artefato: {safe_url_for_log(self.app_url)}")
         if self.channel == "stable":
             if self.app_archive_name != self.spec.stable_archive:
@@ -2169,7 +2259,7 @@ class Installer:
         archive = self.cache_bin / cache_name
         ensure_no_symlink(archive, "cached archive")
         if archive.is_file():
-            if file_hash(archive) != self.app_expected_checksum:
+            if file_hash(archive, maximum_size=MAX_ARTIFACT_BYTES) != self.app_expected_checksum:
                 raise InstallerError(f"O arquivo em cache falhou na verificação: {archive}. Execute cleanup e tente novamente.")
             if self.update_ui:
                 console.download_result(
@@ -2179,6 +2269,24 @@ class Installer:
                 console.info(f"Usando arquivo já disponível no cache: {self.app_archive_name}")
                 console.success("Arquivo do cache validado.")
         else:
+            if self._native_candidate_root() is not None:
+                _, source, expected_size, expected_sha256 = self._native_candidate_matching(
+                    lambda name: name == (
+                        f"runtime/clients/ezquake/{self.channel}/{self.selected_version}/"
+                        f"macos-universal/{self.app_archive_name}"
+                    ),
+                    "runtime ezQuake nativo",
+                )
+                self.publish_cache_artifact(
+                    source,
+                    archive,
+                    expected_size=expected_size,
+                    expected_sha256=expected_sha256,
+                    label="o artefato ezQuake do candidato",
+                )
+                self.app_archive_sha256 = file_hash(archive)
+                console.success(f"Artefato candidato validado: {self.app_archive_name}")
+                return archive
             local = self.distribution_artifact(
                 self.app_distribution_path, self.app_archive_name,
                 expected_size=self.app_expected_size or None, expected_sha256=self.app_expected_checksum,
@@ -2197,7 +2305,9 @@ class Installer:
                     )
                 else:
                     console.success(f"Artefato carregado da distribuição local: {self.app_distribution_path}")
-                self.app_archive_sha256 = file_hash(archive)
+                self.app_archive_sha256 = file_hash(
+                    archive, maximum_size=MAX_ARTIFACT_BYTES,
+                )
                 return archive
             download = self.stage / f"{self.app_archive_name}.download"
             if not self.update_ui:
@@ -2209,7 +2319,7 @@ class Installer:
                 expected_sha256=self.app_expected_checksum,
                 maximum_size=MAX_ARTIFACT_BYTES,
             )
-            if file_hash(download) != self.app_expected_checksum:
+            if file_hash(download, maximum_size=MAX_ARTIFACT_BYTES) != self.app_expected_checksum:
                 raise InstallerError(
                     "O arquivo baixado falhou na verificação: "
                     f"{safe_url_for_log(self.app_url)}"
@@ -2227,7 +2337,9 @@ class Installer:
                 )
             else:
                 console.success(f"Download concluído e validado ({format_bytes(archive.stat().st_size)}).")
-        self.app_archive_sha256 = file_hash(archive)
+        self.app_archive_sha256 = file_hash(
+            archive, maximum_size=MAX_ARTIFACT_BYTES,
+        )
         console.detail(f"SHA-256 local: {self.app_archive_sha256}")
         return archive
 
@@ -4250,24 +4362,31 @@ class Installer:
                 console.detail(f"Novidades: {safe_url_for_log(package['release_url'])}")
 
     def choose_components(self) -> list[str]:
-        profile = navigation.select_one(
-            "Qual conjunto de componentes deseja preparar?",
-            (
-                navigation.MenuOption(
-                    "recommended", "Recomendado", "experiência nQuake sem addons grandes",
+        if self._non_interactive_install:
+            profile = self._requested_profile
+            if profile not in {"essential", "recommended", "complete"}:
+                raise InstallerError(
+                    "Instalação não interativa exige --profile essential, recommended ou complete."
+                )
+        else:
+            profile = navigation.select_one(
+                "Qual conjunto de componentes deseja preparar?",
+                (
+                    navigation.MenuOption(
+                        "recommended", "Recomendado", "experiência nQuake sem addons grandes",
+                    ),
+                    navigation.MenuOption(
+                        "essential", "Essencial", "configuração, interface principal e KTX",
+                    ),
+                    navigation.MenuOption(
+                        "complete", "Completo", f"todos os {len(self.components)} componentes atuais",
+                    ),
+                    navigation.MenuOption(
+                        "custom", "Personalizado", "escolha componentes individualmente",
+                    ),
                 ),
-                navigation.MenuOption(
-                    "essential", "Essencial", "configuração, interface principal e KTX",
-                ),
-                navigation.MenuOption(
-                    "complete", "Completo", f"todos os {len(self.components)} componentes atuais",
-                ),
-                navigation.MenuOption(
-                    "custom", "Personalizado", "escolha componentes individualmente",
-                ),
-            ),
-            breadcrumb="x86QW › Instalação › Perfil",
-        )
+                breadcrumb="x86QW › Instalação › Perfil",
+            )
         if profile is None:
             raise InstallerError("Nenhum perfil foi selecionado.")
         if profile != "custom":
@@ -4316,8 +4435,157 @@ class Installer:
                 print(f"    novidades: {safe_url_for_log(package['release_url'])}")
         return selected
 
+    def select_components_profile(self, profile: str) -> list[str]:
+        if profile not in {"recommended", "essential", "complete"}:
+            raise InstallerError(f"Perfil nativo inválido: {profile}")
+        try:
+            selected = resolve_dependencies(
+                self.component_catalog,
+                list(self.component_catalog["profiles"][profile]),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise InstallerError(f"Perfil nativo inválido: {profile}") from error
+        self.selected_component_profile = profile
+        self.requested_components = []
+        console.success(f"{len(selected)} componente(s) selecionado(s).")
+        print("\nVersões que serão instaladas ou atualizadas:")
+        for identifier in selected:
+            package = self.component_package_record(identifier)
+            print(f"  - {self.components[identifier]['label']}: {package['version']}")
+            if package.get("release_url"):
+                print(f"    novidades: {safe_url_for_log(package['release_url'])}")
+        return selected
+
+    def _native_candidate_root(self) -> Path | None:
+        value = os.environ.get(NATIVE_CANDIDATE_ROOT_ENV)
+        if value is None:
+            return None
+        root = Path(value).absolute()
+        if root.is_symlink() or not root.is_dir():
+            raise InstallerError("O candidato nativo é ausente ou inseguro.")
+        return root
+
+    def _native_candidate_manifest(self) -> dict[str, object]:
+        if self._native_candidate_manifest_data is not None:
+            return self._native_candidate_manifest_data
+        root = self._native_candidate_root()
+        if root is None:
+            raise InstallerError("O candidato nativo não foi informado.")
+        path = root / "candidate.json"
+        try:
+            document = json.loads(
+                read_bounded_regular_file(path, maximum_size=CATALOG_MAX_BYTES),
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+            raise InstallerError("O manifest do candidato nativo é inválido.") from error
+        if (
+            not isinstance(document, dict)
+            or document.get("project") != "x86qw"
+            or not isinstance(document.get("artifacts"), dict)
+        ):
+            raise InstallerError("O manifest do candidato nativo é inválido.")
+        self._native_candidate_manifest_data = document
+        return document
+
+    def _native_candidate_artifact(self, relative: str) -> tuple[Path, int, str]:
+        root = self._native_candidate_root()
+        if root is None:
+            raise InstallerError("O candidato nativo não foi informado.")
+        relative_path = PurePosixPath(relative)
+        if (
+            relative_path.is_absolute()
+            or "\\" in relative
+            or any(part in {"", ".", ".."} for part in relative_path.parts)
+        ):
+            raise InstallerError("O caminho do artifact nativo é inseguro.")
+        artifacts = self._native_candidate_manifest()["artifacts"]
+        identity = artifacts.get(relative) if isinstance(artifacts, dict) else None
+        if (
+            not isinstance(identity, dict)
+            or type(identity.get("size")) is not int
+            or identity["size"] <= 0
+            or not isinstance(identity.get("sha256"), str)
+            or HEX64.fullmatch(identity["sha256"]) is None
+        ):
+            raise InstallerError(f"Identidade ausente do artifact nativo: {relative}")
+        path = root.joinpath(*relative_path.parts)
+        current = path
+        while current != root:
+            if current.is_symlink():
+                raise InstallerError(f"Artifact nativo usa symlink: {relative}")
+            current = current.parent
+        if not path.is_file() or path.is_symlink():
+            raise InstallerError(f"Artifact nativo ausente: {relative}")
+        expected_size = int(identity["size"])
+        expected_sha256 = str(identity["sha256"])
+        if (
+            path.stat().st_size != expected_size
+            or file_hash(
+                path,
+                expected_size=expected_size,
+                maximum_size=MAX_ARTIFACT_BYTES,
+            ) != expected_sha256
+        ):
+            raise InstallerError(f"Bytes do artifact nativo divergem: {relative}")
+        return path, expected_size, expected_sha256
+
+    def _native_candidate_matching(
+        self, predicate: Callable[[str], bool], label: str,
+    ) -> tuple[str, Path, int, str]:
+        artifacts = self._native_candidate_manifest()["artifacts"]
+        assert isinstance(artifacts, dict)
+        matches = [str(name) for name in artifacts if isinstance(name, str) and predicate(name)]
+        if len(matches) != 1:
+            raise InstallerError(
+                f"Artifact nativo ausente ou ambíguo ({label}): {len(matches)} encontrados."
+            )
+        path, size, digest = self._native_candidate_artifact(matches[0])
+        return matches[0], path, size, digest
+
+    def _native_component_package(self, identifier: str) -> dict[str, object]:
+        manifest_name, manifest_path, _, _ = self._native_candidate_matching(
+            lambda name: (
+                name.startswith("content/components-") and name.endswith("/manifest.json")
+            ),
+            "manifesto de componentes",
+        )
+        try:
+            manifest = json.loads(
+                read_bounded_regular_file(manifest_path, maximum_size=CATALOG_MAX_BYTES),
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+            raise InstallerError(f"Manifesto de componentes nativo inválido: {manifest_name}") from error
+        packages = manifest.get("packages") if isinstance(manifest, dict) else None
+        if not isinstance(packages, list):
+            raise InstallerError("Manifesto de componentes nativo sem packages.")
+        matches = [
+            package for package in packages
+            if isinstance(package, dict)
+            and package.get("package") == identifier
+            and package.get("channel") == "content"
+            and package.get("platform") == "any"
+            and package.get("architecture") == "any"
+        ]
+        if len(matches) != 1:
+            raise InstallerError(
+                f"O candidato nativo deve publicar exatamente um pacote para {identifier}."
+            )
+        package = dict(matches[0])
+        filename = package.get("filename")
+        if not isinstance(filename, str):
+            raise InstallerError(f"Nome ausente do pacote nativo {identifier}.")
+        relative = PurePosixPath(manifest_name).parent / filename
+        package[NATIVE_CANDIDATE_ARTIFACT_KEY] = relative.as_posix()
+        self._native_candidate_artifact(package[NATIVE_CANDIDATE_ARTIFACT_KEY])
+        return package
+
     def component_package_record(self, identifier: str) -> dict[str, object]:
-        catalog = self.public_catalog("Consultando o catálogo atual de componentes x86QW...")
+        native_root = self._native_candidate_root()
+        catalog = (
+            {"packages": [self._native_component_package(identifier)]}
+            if native_root is not None
+            else self.public_catalog("Consultando o catálogo atual de componentes x86QW...")
+        )
         packages = catalog["packages"]
         matches = [package for package in packages if isinstance(package, dict) and (
             package.get("package"), package.get("channel"),
@@ -4362,6 +4630,37 @@ class Installer:
         return package
 
     def core_id1_package_record(self) -> dict[str, object]:
+        native_root = self._native_candidate_root()
+        if native_root is not None:
+            name, artifact, size, digest = self._native_candidate_matching(
+                lambda value: (
+                    value.startswith("content/core-")
+                    and value.endswith("/x86qw-core-id1-0.1.0.zip")
+                ),
+                "pacote de dados base",
+            )
+            try:
+                plan = scan_archive(artifact, required_members=("_x86qw/component.json",))
+                metadata = json.loads(read_archive_member(plan, "_x86qw/component.json"))
+            except (ArchiveError, OSError, KeyError, UnicodeError, json.JSONDecodeError, TypeError) as error:
+                raise InstallerError(f"Metadados inválidos do pacote de dados base nativo: {name}") from error
+            if not isinstance(metadata, dict):
+                raise InstallerError("Metadados inválidos do pacote de dados base nativo.")
+            return {
+                "component": "core",
+                "package": CORE_ID1_PACKAGE,
+                "channel": "content",
+                "platform": "any",
+                "architecture": "any",
+                "version": metadata.get("version"),
+                "filename": Path(name).name,
+                "source_revision": metadata.get("source_revision"),
+                "sha256": digest,
+                "size": size,
+                "urls": [f"https://candidate.invalid/{Path(name).name}"],
+                "redistribution_reviewed": True,
+                NATIVE_CANDIDATE_ARTIFACT_KEY: name,
+            }
         catalog = self.public_catalog("Consultando o pacote de dados base x86QW...")
         matches = [package for package in catalog["packages"] if isinstance(package, dict) and (
             package.get("component"), package.get("package"), package.get("channel"),
@@ -4408,7 +4707,7 @@ class Installer:
         package = matches[0]
         version = package.get("version")
         filename = package.get("filename")
-        if not isinstance(version, str) or not STABLE_VERSION.fullmatch(version):
+        if not isinstance(version, str) or not SEMVER_VERSION.fullmatch(version):
             raise InstallerError("Versão inválida do bundle x86QW.")
         if filename != f"x86qw-installer-{version}.zip":
             raise InstallerError("Identidade inconsistente do bundle x86QW.")
@@ -4449,17 +4748,9 @@ class Installer:
         self, receipt: Path, metadata: dict[str, object],
     ) -> None:
         try:
-            version = metadata.get("version")
-            if (
-                isinstance(version, str)
-                and SEMVER_VERSION.fullmatch(version)
-                and parse_semver(version).major >= 1
-            ):
-                metadata = add_contract_versions(
-                    metadata,
-                    ContractVersions(),
-                    kind=SchemaKind.RECEIPT,
-                )
+            metadata = add_contract_versions(
+                dict(metadata), ContractVersions(), kind=SchemaKind.RECEIPT,
+            )
             model = parse_cli_receipt(
                 json.dumps(metadata, ensure_ascii=False).encode("utf-8")
             )
@@ -4515,7 +4806,7 @@ class Installer:
             identity.get("format") != 1
             or identity.get("project") != "x86qw"
             or not isinstance(version, str)
-            or not STABLE_VERSION.fullmatch(version)
+            or not SEMVER_VERSION.fullmatch(version)
         ):
             raise InstallerError(f"Identidade do bundle público inválida: {location}")
         return identity
@@ -4701,7 +4992,7 @@ class Installer:
             raise InstallerError(
                 f"Artefato incompleto na distribuição: {candidate}. Execute git lfs pull e tente novamente."
             )
-        if file_hash(candidate) != expected_sha256:
+        if file_hash(candidate, maximum_size=MAX_ARTIFACT_BYTES) != expected_sha256:
             raise InstallerError(
                 f"Artefato adulterado na distribuição: {candidate}. Execute git lfs pull e tente novamente."
             )
@@ -4719,7 +5010,10 @@ class Installer:
         artifact = cache / filename
         ensure_no_symlink(artifact, "pacote de componente em cache")
         if artifact.is_file():
-            if artifact.stat().st_size != package["size"] or file_hash(artifact) != digest:
+            if (
+                artifact.stat().st_size != package["size"]
+                or file_hash(artifact, maximum_size=MAX_ARTIFACT_BYTES) != digest
+            ):
                 raise InstallerError(f"O pacote {identifier} em cache é inválido. Execute cleanup e tente novamente.")
             if self.update_ui:
                 console.download_result(
@@ -4727,6 +5021,20 @@ class Installer:
                 )
             else:
                 console.detail(f"Pacote validado no cache: {artifact}")
+            return artifact
+        native_relative = package.get(NATIVE_CANDIDATE_ARTIFACT_KEY)
+        if isinstance(native_relative, str):
+            source, expected_size, expected_sha256 = self._native_candidate_artifact(native_relative)
+            if expected_size != int(package["size"]) or expected_sha256 != str(package["sha256"]):
+                raise InstallerError(f"Identidade do pacote nativo diverge: {identifier}")
+            self.publish_cache_artifact(
+                source,
+                artifact,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+                label=f"o pacote nativo {identifier}",
+            )
+            console.success(f"Pacote candidato validado: {filename}")
             return artifact
         distribution_path = package.get("distribution_path")
         if isinstance(distribution_path, str) and distribution_path:
@@ -4757,7 +5065,10 @@ class Installer:
             expected_sha256=digest,
             maximum_size=MAX_ARTIFACT_BYTES,
         )
-        if temporary.stat().st_size != package["size"] or file_hash(temporary) != digest:
+        if (
+            temporary.stat().st_size != package["size"]
+            or file_hash(temporary, maximum_size=MAX_ARTIFACT_BYTES) != digest
+        ):
             raise InstallerError(f"Um mirror entregou um pacote inválido: {identifier}")
         self.publish_cache_artifact(
             temporary,
@@ -5411,21 +5722,15 @@ class Installer:
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
             if "x86qw-client-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
-                preset_existed = lexists(preset)
-                assert self.stage is not None
-                staged_preset = self.stage / "nquake-default-preset.cfg"
-                staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
-                preset_result = self.install_component_default_transaction(
-                    staged_preset, preset,
-                )
-                if preset_result is not None:
-                    results.append(preset_result)
-                    if preset_existed:
-                        console.info(
-                            f"Configuração inicial existente registrada: {preset}"
-                        )
-                    else:
-                        console.info(f"Configuração inicial criada: {preset}")
+                if not preset.is_file():
+                    assert self.stage is not None
+                    staged_preset = self.stage / "nquake-default-preset.cfg"
+                    staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+                    preset_result = self.install_component_default_transaction(
+                        staged_preset, preset,
+                    )
+                    if preset_result is not None:
+                        results.append(preset_result)
             self.migrate_saved_configs(results)
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
@@ -5792,10 +6097,12 @@ class Installer:
                 mutation_results=results,
             )
 
-    def install_component_phase(self) -> tuple[MutationResult, ...]:
+    def install_component_phase(
+        self, *, selected: list[str] | None = None,
+    ) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         console.section("Fase 2/2 · Componentes x86QW")
-        selected = self.choose_components()
+        selected = self.choose_components() if selected is None else selected
         results = list(self.install_components(selected))
         try:
             self.write_install_state(
@@ -6181,7 +6488,18 @@ class Installer:
         managed = self.installation_change_baseline()
         ignored = self.installation_change_ignored_paths()
         if sync_gitignore:
-            self.sync_installation_gitignore(managed=managed, ignored=ignored)
+            payload = render_installation_gitignore(
+                managed,
+                ignored_paths=ignored,
+            ).encode("utf-8")
+            destination = self.target / ".gitignore"
+            try:
+                atomic_write_bytes(destination, payload, mode=0o644)
+            except AtomicWriteError as error:
+                raise InstallerError(
+                    f"Não foi possível atualizar o filtro Git da instalação: {destination}"
+                ) from error
+            console.info(f"Filtro Git seletivo atualizado: {destination}")
 
         changes = inspect_installation_changes(
             self.target,
@@ -6199,29 +6517,6 @@ class Installer:
         else:
             console.success("Nenhuma diferença local em relação à instalação-base.")
         return changes
-
-    def sync_installation_gitignore(
-        self,
-        *,
-        managed: Mapping[str, ManagedInstallationFile] | None = None,
-        ignored: Iterable[str] | None = None,
-    ) -> None:
-        baseline = self.installation_change_baseline() if managed is None else managed
-        ignored_paths = (
-            self.installation_change_ignored_paths() if ignored is None else ignored
-        )
-        payload = render_installation_gitignore(
-            baseline,
-            ignored_paths=ignored_paths,
-        ).encode("utf-8")
-        destination = self.target / ".gitignore"
-        try:
-            atomic_write_bytes(destination, payload, mode=0o644)
-        except AtomicWriteError as error:
-            raise InstallerError(
-                f"Não foi possível atualizar o filtro Git da instalação: {destination}"
-            ) from error
-        console.info(f"Filtro Git seletivo atualizado: {destination}")
 
     def component_metadata_assessment(self) -> tuple[list[str], list[str]]:
         valid: list[str] = []
@@ -7167,6 +7462,7 @@ class Installer:
                         apply=lambda path=path, expected=observations.get(path): (
                             quarantine.apply_quarantine_removal(
                                 path, expected_observation=expected,
+                                allow_non_regular=True,
                             )
                         ),
                         rollback=quarantine.rollback_quarantine,
@@ -7206,20 +7502,41 @@ class Installer:
         platform: str | None = None,
         channel: str | None = None,
         release: str | None = None,
-        without_components: bool = False,
+        profile: str | None = None,
+        non_interactive: bool = False,
+        native_profile: str | None = None,
         before_mutation: Callable[[], None] | None = None,
         mutation_results: list[MutationResult] | None = None,
     ) -> None:
+        if non_interactive:
+            missing = [
+                name for name, value in (
+                ("--platform", platform),
+                ("--channel", channel),
+                ("--release", release),
+                ("--profile", profile if profile is not None else native_profile),
+                ) if value is None
+            ]
+            if missing:
+                raise InstallerError(
+                    "Instalação não interativa exige as opções: " + ", ".join(missing)
+                )
+        self._non_interactive_install = non_interactive
+        self._requested_channel = channel
+        self._requested_release = release
+        self._requested_profile = profile
         console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
-        if channel is None:
-            self.choose_channel()
-        else:
+        if non_interactive:
             self.choose_channel(channel)
-        if release is None:
-            self.choose_release()
-        else:
             self.choose_release(release)
+        else:
+            # Keep the historical zero-argument interactive seam.  Apart
+            # from preserving subclasses and test doubles, this ensures
+            # that ordinary installs do not accidentally enter the
+            # non-interactive selection contract.
+            self.choose_channel()
+            self.choose_release()
         if before_mutation is not None:
             before_mutation()
         reset_macos_game_directory = self.macos_game_directory_reset_required()
@@ -7259,14 +7576,17 @@ class Installer:
             console.success("ezQuake instalado e recibo registrado.")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
-            if not without_components and self.confirm_components():
+            if native_profile is not None:
+                if native_profile != "complete" or self._native_candidate_root() is None:
+                    raise InstallerError(
+                        "--native-profile exige o perfil complete em um candidato nativo explícito."
+                    )
+                selected = self.select_components_profile(native_profile)
+                installation_results.extend(self.install_component_phase(selected=selected))
+            elif self.confirm_components():
                 installation_results.extend(self.install_component_phase())
             else:
-                console.info(
-                    "Dados nQuake não solicitados; esta etapa foi ignorada."
-                    if not without_components
-                    else "Componentes desativados para esta execução; esta etapa foi ignorada."
-                )
+                console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
                 self.write_install_state(
                     "none", [], mutation_results=installation_results,
                 )
@@ -7280,7 +7600,6 @@ class Installer:
                 )
             console.section("Verificação final")
             self.verify_installation()
-            self.sync_installation_gitignore()
         except BaseException as error:
             if (
                 mutation_results is None
@@ -7946,11 +8265,11 @@ class Installer:
                     "Não foi possível publicar a CLI, o recibo e os launchers como uma geração única."
                 ) from error
             try:
-                receipt_identity = self.validate_cli_receipt(cli_root / "receipt")
-                if {
-                    key: receipt_identity.get(key)
-                    for key in ("format", "project", "version")
-                } != identity:
+                installed_identity = self.validate_cli_receipt(cli_root / "receipt")
+                if any(
+                    installed_identity.get(field) != identity.get(field)
+                    for field in ("format", "project", "version")
+                ):
                     raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
                 if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
                     raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
@@ -8013,15 +8332,23 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="instala um cliente para macos, linux ou windows em vez do SO detectado",
     )
     parser.add_argument(
-        "--channel", choices=("stable", "nightly"), metavar="CANAL",
-        help=argparse.SUPPRESS,
+        "--non-interactive", action="store_true",
+        help="no install, exige todas as seleções por argumento e nunca abre prompts",
     )
     parser.add_argument(
-        "--release", metavar="VERSÃO",
-        help=argparse.SUPPRESS,
+        "--channel", choices=("stable", "nightly"),
+        help="no install não interativo, seleciona o canal do cliente",
     )
     parser.add_argument(
-        "--without-components", action="store_true",
+        "--release",
+        help="no install não interativo, usa latest ou uma versão exata do cliente",
+    )
+    parser.add_argument(
+        "--profile", choices=("essential", "recommended", "complete"),
+        help="no install não interativo, seleciona o perfil de componentes",
+    )
+    parser.add_argument(
+        "--native-profile", choices=("complete",),
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -8042,7 +8369,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     parser.add_argument(
         "--json", action="store_true",
-        help="emite o envelope JSON estável para comandos suportados",
+        help="emite uma resposta JSON estável (sem prompts ou ANSI)",
     )
     parser.add_argument(
         "--yes", action="store_true",
@@ -8075,29 +8402,66 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
-    namespace = parser.parse_intermixed_args(arguments)
-    valid_actions = (
-        "install", "menu", "play", "host", "proxy", "qtv", "status", "version", "update", "upgrade", "repair", "migrate", "components",
-        "presets", "hub", "verify", "changes", "uninstall", "cleanup",
+    # Python 3.10/3.11 do not accept the installation target after an option
+    # with the regular parser.  The public CLI documents both orders, so use
+    # the stdlib intermixed parser when available and retain the older fallback
+    # for runtimes that do not expose it.
+    parse_intermixed = getattr(parser, "parse_intermixed_args", None)
+    namespace = (
+        parse_intermixed(arguments)
+        if callable(parse_intermixed)
+        else parser.parse_args(arguments)
     )
+    # version is intentionally usable before any bundled catalog is opened;
+    # this is the bootstrap diagnostic path for a damaged or partial bundle.
+    if namespace.action == "version":
+        return namespace
+    internal_actions = ("install", "menu", "components", "presets")
+    valid_actions = (*internal_actions, *public_command_names())
     if namespace.action not in valid_actions:
         parser.error(f"ação desconhecida: {namespace.action}. Use {', '.join(valid_actions)}")
     if namespace.action != "cleanup" and (namespace.downloads or namespace.personal_data):
         parser.error("--downloads e --personal-data só podem ser usados com cleanup")
+    selection_flags = (
+        namespace.non_interactive, namespace.channel, namespace.release, namespace.profile,
+    )
+    if namespace.action != "install" and any(value is not None and value is not False for value in selection_flags):
+        parser.error("--non-interactive, --channel, --release e --profile só podem ser usados com install")
+    if namespace.action != "install" and namespace.native_profile is not None:
+        parser.error("--native-profile só pode ser usado com install")
+    if namespace.native_profile is not None and not os.environ.get(NATIVE_CANDIDATE_ROOT_ENV):
+        parser.error("--native-profile é reservado a um candidato nativo explícito")
+    if namespace.native_profile is not None and namespace.profile is not None:
+        parser.error("--native-profile não pode ser combinado com --profile")
+    if namespace.native_profile is not None and (
+        namespace.channel is None or namespace.release is None
+    ):
+        parser.error("--native-profile exige --channel e --release")
+    if namespace.action != "install" and namespace.non_interactive:
+        parser.error("--non-interactive só pode ser usado com install")
+    explicit_target = namespace.target is not None
+    if namespace.non_interactive:
+        missing = [
+            name for name, value in (
+                ("--platform", namespace.platform),
+                ("--channel", namespace.channel),
+                ("--release", namespace.release),
+                (
+                    "--profile",
+                    namespace.profile if namespace.profile is not None else namespace.native_profile,
+                ),
+            ) if value is None
+        ]
+        if not explicit_target:
+            missing.append("target")
+        if missing:
+            parser.error(
+                "install não interativo exige: " + ", ".join(missing)
+            )
     if namespace.purge and namespace.action != "uninstall":
         parser.error("--purge só pode ser usado com uninstall")
     if namespace.sync_gitignore and namespace.action != "changes":
         parser.error("--sync-gitignore só pode ser usado com changes")
-    if namespace.action != "install" and (
-        namespace.channel is not None
-        or namespace.release is not None
-        or namespace.without_components
-    ):
-        parser.error(
-            "--channel, --release e --without-components só podem ser usados com install"
-        )
-    if (namespace.channel is None) != (namespace.release is None):
-        parser.error("--channel e --release precisam ser fornecidos juntos")
     if namespace.installed_cli and namespace.action in {"install", "components", "presets"}:
         parser.error(
             f"{namespace.action} não está disponível na CLI instalada; use install.sh para instalar ou adicionar conteúdo"
@@ -8113,7 +8477,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
             "--json só pode ser usado com version, status, hub, verify, repair, update ou upgrade"
         )
     if namespace.json and namespace.action in {"repair", "update", "upgrade"} and not namespace.dry_run:
-        parser.error(f"{namespace.action} --json exige --dry-run")
+        parser.error(f"{namespace.action} --json exige --dry-run para não ocultar mutações")
     if namespace.yes and namespace.action not in {"update", "upgrade"}:
         parser.error("--yes só pode ser usado com update ou upgrade")
     if namespace.platform is not None and namespace.action != "install":
@@ -8181,7 +8545,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8284,6 +8648,8 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("update", "Atualizar", "atualizar somente o que já está instalado"),
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
+                    navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
+                    navigation.MenuOption("migrate", "Migrar metadados", "converter o estado legado para o contrato 1.0"),
                     navigation.MenuOption("repair", "Diagnosticar e reparar", "preserva arquivos pessoais"),
                     navigation.MenuOption("cleanup", "Limpar dados locais", "cache e dados regeneráveis"),
                     navigation.MenuOption("uninstall", "Desinstalar", "preservar ou remover todos os dados"),
@@ -8394,7 +8760,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -8405,11 +8771,11 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
 
 
 def _json_status_data(target: Path) -> dict[str, object]:
-    """Project a read-only installation snapshot into the public shape."""
+    """Return a read-only installation/status snapshot without loading catalogs."""
 
     state_path = target / INSTALL_STATE
     sessions_path = target / ".x86qw" / "sessions"
-    sessions: list[dict[str, str]] = []
+    sessions: list[dict[str, object]] = []
     if sessions_path.is_dir() and not sessions_path.is_symlink():
         for directory in sorted(sessions_path.iterdir()):
             if not directory.is_dir() or directory.is_symlink():
@@ -8421,12 +8787,14 @@ def _json_status_data(target: Path) -> dict[str, object]:
                 document = json.loads(journal.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, json.JSONDecodeError):
                 continue
-            if isinstance(document, dict):
-                sessions.append({
-                    "session_id": str(document.get("session_id", directory.name)),
-                    "status": str(document.get("status", "unknown")),
-                    "command": str(document.get("command", "unknown")),
-                })
+            if not isinstance(document, dict):
+                continue
+            # Keep the public status surface deliberately small and redactable.
+            sessions.append({
+                "session_id": str(document.get("session_id", directory.name)),
+                "status": str(document.get("status", "unknown")),
+                "command": str(document.get("command", "unknown")),
+            })
     return {
         "project": "x86qw",
         "target": str(target),
@@ -8437,6 +8805,8 @@ def _json_status_data(target: Path) -> dict[str, object]:
 
 
 def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
+    """Project one maintenance row into the stable dry-run wire shape."""
+
     return {
         "kind": row.kind,
         "item": row.item,
@@ -8448,19 +8818,45 @@ def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
 
 
 def _json_hub_servers(servers: object) -> list[dict[str, object]]:
-    """Project mutable Hub rows without crossing raw fields into JSON."""
+    """Project the mutable Hub response into the closed public JSON shape.
+
+    The Hub response is intentionally kept out of the public contract: it may
+    contain nested settings, player records, or QTV metadata that are useful to
+    the terminal UI but are not stable API.  Normalize it here so the JSON
+    command remains deterministic and cannot leak arbitrary fields.
+    """
 
     if not isinstance(servers, list):
         raise InstallerError("O Hub retornou um catálogo de servidores inválido.")
     projected: list[dict[str, object]] = []
+    seen_addresses: set[str] = set()
+    address_pattern = re.compile(r"^[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$")
+    qtv_pattern = re.compile(r"^[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$")
     for server in servers:
         if not isinstance(server, dict):
             continue
+        address = server.get("address")
+        if not isinstance(address, str) or not address_pattern.fullmatch(address):
+            continue
+        if address in seen_addresses:
+            continue
+        port = int(address.rsplit(":", 1)[1])
+        if not 1 <= port <= 65535:
+            continue
         settings = server.get("settings")
         settings = settings if isinstance(settings, dict) else {}
-        address = server.get("address")
-        if not isinstance(address, str):
-            continue
+
+        def text_value(*values: object, fallback: str) -> str:
+            for value in values:
+                if isinstance(value, str):
+                    cleaned = "".join(
+                        character if character.isprintable() and character != "\ufffd" else "?"
+                        for character in value
+                    ).strip()
+                    if cleaned:
+                        return cleaned[:4096]
+            return fallback
+
         raw_players = server.get("players")
         humans = bots = 0
         if isinstance(raw_players, list):
@@ -8470,31 +8866,39 @@ def _json_hub_servers(servers: object) -> list[dict[str, object]]:
                 elif isinstance(player, dict):
                     humans += 1
         elif isinstance(raw_players, dict):
-            if type(raw_players.get("humans")) is int:
-                humans = raw_players["humans"]
-            if type(raw_players.get("bots")) is int:
-                bots = raw_players["bots"]
-        qtv = server.get("qtv_stream")
-        if isinstance(qtv, dict):
-            qtv = qtv.get("url") or qtv.get("stream")
+            raw_humans = raw_players.get("humans")
+            raw_bots = raw_players.get("bots")
+            if type(raw_humans) is int and raw_humans >= 0:
+                humans = raw_humans
+            if type(raw_bots) is int and raw_bots >= 0:
+                bots = raw_bots
+
+        qtv_stream: str | None = None
+        raw_qtv = server.get("qtv_stream")
+        if isinstance(raw_qtv, dict):
+            raw_qtv = raw_qtv.get("url") or raw_qtv.get("stream")
+        if isinstance(raw_qtv, str) and qtv_pattern.fullmatch(raw_qtv):
+            qtv_stream = raw_qtv
+
         projected.append({
             "address": address,
-            "title": settings.get("hostname") or server.get("title") or server.get("name") or address,
-            "mode": server.get("mode") or settings.get("mode") or "-",
-            "map": settings.get("map") or server.get("map") or "-",
+            "title": text_value(
+                settings.get("hostname"), server.get("title"), server.get("name"),
+                fallback=address,
+            ),
+            "mode": text_value(server.get("mode"), settings.get("mode"), fallback="-"),
+            "map": text_value(settings.get("map"), server.get("map"), fallback="-"),
             "players": {"humans": humans, "bots": bots},
-            "qtv_stream": qtv if isinstance(qtv, str) else None,
+            "qtv_stream": qtv_stream,
         })
+        seen_addresses.add(address)
     if not projected:
         raise InstallerError("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
     return sorted(projected, key=lambda item: str(item["address"]))
 
 
-def execute_json_action(
-    options: argparse.Namespace,
-    project_root: Path,
-) -> int:
-    """Emit exactly one validated JSON document for a supported command."""
+def execute_json_action(options: argparse.Namespace, project_root: Path) -> int:
+    """Execute a read-only public command and emit exactly one JSON document."""
 
     command = str(options.action)
     target = options.target.expanduser().resolve() if options.target is not None else None
@@ -8502,7 +8906,10 @@ def execute_json_action(
     try:
         with redirect_stdout(captured), redirect_stderr(captured):
             if command == "version":
-                data: object = {"project": "x86qw", "version": application_version()}
+                data: object = {
+                    "project": "x86qw",
+                    "version": application_version(),
+                }
             elif command == "status":
                 assert target is not None
                 data = _json_status_data(target)
@@ -8510,7 +8917,10 @@ def execute_json_action(
                 assert target is not None
                 installer = Installer(project_root, target, online_only=options.online_only)
                 installer.validate_target("verify", purge=False)
-                data = {"target": str(target), "servers": _json_hub_servers(installer.hub_servers())}
+                data = {
+                    "servers": _json_hub_servers(installer.hub_servers()),
+                    "target": str(target),
+                }
             elif command == "verify":
                 assert target is not None
                 installer = Installer(project_root, target, online_only=options.online_only)
@@ -8519,6 +8929,10 @@ def execute_json_action(
                 installer.verify_installation()
                 data = {"target": str(target), "verified": True}
             else:
+                # Dry-run maintenance goes through the same lock/plan path as
+                # the human CLI, but rows are projected directly from the
+                # operation model.  Human terminal rendering remains captured
+                # and is never part of the JSON contract.
                 plan_rows: list[dict[str, object]] = []
                 execute_manager_action(options, project_root, plan_sink=plan_rows)
                 data = {
@@ -8526,10 +8940,14 @@ def execute_json_action(
                     "status": "planned" if plan_rows else "noop",
                     "operations": plan_rows,
                 }
-        output = make_json_output(command, data=data, dry_run=bool(options.dry_run))
+        output = make_json_output(
+            command,
+            data=data,
+            dry_run=bool(options.dry_run),
+        )
         print(render_json_output(output), end="")
         return int(ExitCode.SUCCESS)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as error:
         output = make_json_output(
             command,
             ok=False,
@@ -8544,12 +8962,15 @@ def execute_json_action(
             command,
             ok=False,
             exit_code=getattr(error, "exit_code", ExitCode.FAILURE),
-            errors=({"code": getattr(error, "code", "operation"), "message": str(error)},),
+            errors=({
+                "code": getattr(error, "code", "operation"),
+                "message": str(error),
+            },),
             dry_run=bool(options.dry_run),
         )
         print(render_json_output(output), end="")
         return int(getattr(error, "exit_code", ExitCode.FAILURE))
-    except Exception as error:  # pragma: no cover - defensive boundary
+    except Exception as error:  # pragma: no cover - defensive JSON boundary
         output = make_json_output(
             command,
             ok=False,
@@ -8635,10 +9056,15 @@ def execute_manager_action(
         if not options.purge:
             installer.reject_target_symlinks()
         if options.action == "migrate":
-            # Planning is intentionally read-only. Dry-run does not acquire
-            # the maintenance lock or recover a pending journal.
+            # Planning is intentionally read-only.  Unlike mutating maintenance
+            # actions, dry-run must not create the operation lock or recover
+            # sessions; the planner snapshots the target before any write.
             if not options.dry_run:
                 acquire_operation_lock()
+                # A previous process may have crashed after publishing a
+                # migration journal.  Recovery is a mutation and therefore
+                # belongs only to the non-dry-run path, under the exclusive
+                # installation lock, before the preview is rebuilt.
                 if inspect_pending_migration(installer.target) is not None:
                     recover_migration(installer.target)
             console.section("Migração da instalação")
@@ -8670,14 +9096,14 @@ def execute_manager_action(
                         installer.target, target_version="1.0.0", dry_run=False,
                     )
                     console.success("Migração concluída e validada.")
-        elif options.action == "verify":
-            console.section("Verificação da instalação")
-            installer.verify_installation()
-            console.success("Verificação concluída sem problemas.")
         elif options.action == "changes":
             installer.report_installation_changes(
                 sync_gitignore=options.sync_gitignore,
             )
+        elif options.action == "verify":
+            console.section("Verificação da instalação")
+            installer.verify_installation()
+            console.success("Verificação concluída sem problemas.")
         elif options.action == "repair":
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []
@@ -8739,8 +9165,6 @@ def execute_manager_action(
             if plan_sink is not None:
                 plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not plan_rows:
-                if not options.dry_run:
-                    installer.sync_installation_gitignore()
                 message = (
                     "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
                     if options.action == "upgrade"
@@ -8763,22 +9187,31 @@ def execute_manager_action(
                     operation(dry_run=False, mutation_results=operation_results)
                 if options.skip_cli_update:
                     installer.install_online_cli(mutation_results=operation_results)
-            installer.sync_installation_gitignore()
         else:
             if options.action == "install":
                 with installer.component_state_transaction() as operation_results:
-                    install_arguments = {
+                    install_kwargs: dict[str, object] = {
                         "platform": options.platform,
                         "before_mutation": acquire_operation_lock,
                         "mutation_results": operation_results,
                     }
-                    if options.channel is not None:
-                        install_arguments["channel"] = options.channel
-                    if options.release is not None:
-                        install_arguments["release"] = options.release
-                    if options.without_components:
-                        install_arguments["without_components"] = True
-                    installer.install(**install_arguments)
+                    if options.non_interactive:
+                        install_kwargs.update({
+                            "channel": options.channel,
+                            "release": options.release,
+                            "profile": options.profile,
+                            "non_interactive": True,
+                        })
+                    if options.native_profile is not None:
+                        install_kwargs.update({
+                            "channel": options.channel,
+                            "release": options.release,
+                            "native_profile": options.native_profile,
+                            "non_interactive": True,
+                        })
+                    installer.install(
+                        **install_kwargs,
+                    )
                     installer.install_online_cli(mutation_results=operation_results)
             else:
                 acquire_operation_lock()

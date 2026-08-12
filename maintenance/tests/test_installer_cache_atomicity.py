@@ -361,6 +361,41 @@ class InstallerCacheAtomicityTests(unittest.TestCase):
 
             self.assertEqual(payload, artifact.read_bytes())
 
+    def test_component_archive_hash_uses_the_artifact_bound(self):
+        payload = b"large-component-placeholder"
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _ = self.make_installer(Path(temporary))
+            package = {
+                "package": "component",
+                "version": "1",
+                "filename": "component.zip",
+                "size": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "urls": ["https://example.invalid/component.zip"],
+            }
+
+            def download(_urls, destination, **_options):
+                destination.write_bytes(payload)
+                return b"", str(package["urls"][0])
+
+            with mock.patch.object(
+                installer.remote,
+                "get_mirrors",
+                side_effect=download,
+            ), mock.patch.object(
+                install_qw,
+                "file_hash",
+                wraps=install_qw.file_hash,
+            ) as file_hash:
+                installer.download_component_package(package)
+
+            self.assertTrue(
+                any(
+                    call.kwargs.get("maximum_size") == install_qw.MAX_ARTIFACT_BYTES
+                    for call in file_hash.call_args_list
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

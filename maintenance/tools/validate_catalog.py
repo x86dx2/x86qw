@@ -9,6 +9,10 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 try:
     from .downloader import DownloadPolicyError, MAX_ARTIFACT_BYTES, validate_https_url
 except ImportError:  # Execucao direta
@@ -23,7 +27,6 @@ except ImportError:  # Execucao direta: python3 maintenance/tools/validate_catal
     from component_policy import load_component_policy, require_component
 
 
-ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CATALOG = ROOT / "site/public/api/v1/catalog.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
@@ -39,6 +42,15 @@ PACKAGE_FIELDS = (
 REQUIRED = frozenset(PACKAGE_FIELDS)
 
 
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate catalog field: {key}")
+        value[key] = item
+    return value
+
+
 def validate_package(
     package: object,
     label: str = "package",
@@ -47,9 +59,9 @@ def validate_package(
 ) -> tuple[str, ...]:
     if not isinstance(package, dict) or not REQUIRED <= package.keys():
         raise ValueError(f"{label} is missing required fields")
-    if package["channel"] not in CHANNELS:
+    if not isinstance(package["channel"], str) or package["channel"] not in CHANNELS:
         raise ValueError(f"{label}.channel is invalid")
-    if package["platform"] not in PLATFORMS:
+    if not isinstance(package["platform"], str) or package["platform"] not in PLATFORMS:
         raise ValueError(f"{label}.platform is invalid")
     if not all(isinstance(package[key], str) and package[key] for key in (
         "component", "version", "architecture", "filename", "license"
@@ -80,7 +92,7 @@ def validate_package(
         raise ValueError(f"{label}.redistribution_reviewed must be a boolean")
     if require_reviewed and package["redistribution_reviewed"] is not True:
         raise ValueError(f"{label}.redistribution_reviewed must be true")
-    if not isinstance(package["size"], int) or package["size"] <= 0:
+    if type(package["size"]) is not int or package["size"] <= 0:
         raise ValueError(f"{label}.size must be a positive integer")
     if package["size"] > MAX_ARTIFACT_BYTES:
         raise ValueError(f"{label}.size exceeds the supported download limit")
@@ -176,11 +188,10 @@ def validate_catalog(catalog: object) -> int:
     if type(catalog.get("format")) is not int or catalog.get("format") != 1 or catalog.get("project") != "x86qw":
         raise ValueError("unsupported catalog identity or format")
     try:
-        validate_document_versions(
-            catalog,
-            kind=SchemaKind.CATALOG,
-            allow_legacy=True,
-        )
+        # The public 0.x catalog is a deliberately supported legacy document;
+        # signed 1.0 snapshots may carry explicit catalog_version and CLI
+        # bounds and are validated by the same contract.
+        validate_document_versions(catalog, kind=SchemaKind.CATALOG, allow_legacy=True)
     except ContractError as error:
         raise ValueError("unsupported catalog schema contract") from error
     packages = catalog.get("packages")
@@ -208,7 +219,7 @@ def main(argv: list[str]) -> int:
     if len(argv) > 2:
         raise ValueError("usage: validate_catalog.py [catalog.json]")
     raw = path.read_bytes()
-    count = validate_catalog(json.loads(raw))
+    count = validate_catalog(json.loads(raw, object_pairs_hook=_reject_duplicate_pairs))
     digest = hashlib.sha256(raw).hexdigest()
     print(f"catalog valid: {count} package(s), sha256={digest}")
     return 0

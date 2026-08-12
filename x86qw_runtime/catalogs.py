@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from .contracts.schema import ContractError, SchemaKind, validate_document_versions
 
+
 IDENTIFIER = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 COMPONENT_ID = IDENTIFIER
 ALLOWED_COMPONENT_KINDS = frozenset({
@@ -29,6 +30,30 @@ WINDOWS_RESERVED_PATH_NAMES = frozenset({
 })
 PORTABLE_RELATIVE_PATH_MAX_UTF16_UNITS = 240
 PORTABLE_PATH_COMPONENT_MAX_UTF16_UNITS = 255
+
+
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate catalog field: {key}")
+        document[key] = value
+    return document
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, object]:
+    try:
+        document = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+    except ValueError as error:
+        raise ValueError(f"cannot read {label} catalog: {path}") from error
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read {label} catalog: {path}") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"invalid {label} catalog identity")
+    return document
 
 
 def profile_fingerprint(selected: list[str]) -> str:
@@ -68,28 +93,6 @@ def validate_portable_relative_path(value: object, label: str) -> str:
             f"{label} exceeds {PORTABLE_RELATIVE_PATH_MAX_UTF16_UNITS} UTF-16 code units"
         )
     return path.as_posix()
-
-
-def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    document: dict[str, object] = {}
-    for key, value in pairs:
-        if key in document:
-            raise ValueError(f"duplicate catalog field: {key}")
-        document[key] = value
-    return document
-
-
-def _read_json_object(path: Path, label: str) -> dict[str, object]:
-    try:
-        document = json.loads(
-            path.read_text(encoding="utf-8"),
-            object_pairs_hook=_reject_duplicate_pairs,
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
-        raise ValueError(f"cannot read {label} catalog: {path}") from error
-    if not isinstance(document, dict):
-        raise ValueError(f"invalid {label} catalog identity")
-    return document
 
 
 def _load_document(
@@ -238,6 +241,7 @@ def _validate_component_dependency_graph(
 def validate_component_catalog(catalog: object) -> None:
     if (
         not isinstance(catalog, dict)
+        or type(catalog.get("format")) is not int
         or catalog.get("format") != 1
         or catalog.get("project") != "x86qw-runtime"
     ):
@@ -267,13 +271,15 @@ def validate_component_catalog(catalog: object) -> None:
             raise ValueError(f"runtime component lacks user-facing metadata: {identifier}")
         requires = component.get("requires")
         if not isinstance(requires, list) or not all(
-            isinstance(item, str) for item in requires
-        ):
+            isinstance(item, str) and COMPONENT_ID.fullmatch(item)
+            for item in requires
+        ) or len(requires) != len(set(requires)):
             raise ValueError(f"invalid runtime dependencies: {identifier}")
         dependencies[identifier] = requires
         managed_files = component.get("managed_files")
         if (
             not isinstance(managed_files, list)
+            or not all(isinstance(path, str) for path in managed_files)
             or len(managed_files) != len(set(managed_files))
         ):
             raise ValueError(f"invalid runtime managed files: {identifier}")
@@ -290,7 +296,7 @@ def validate_component_catalog(catalog: object) -> None:
             ):
                 raise ValueError(f"invalid runtime platform file: {identifier}")
             platform = entry.get("platform")
-            if platform not in SERVICE_PLATFORMS or platform in seen_platforms:
+            if not isinstance(platform, str) or platform not in SERVICE_PLATFORMS or platform in seen_platforms:
                 raise ValueError(
                     f"invalid or duplicate runtime platform file: {identifier}/{platform}"
                 )
@@ -320,6 +326,7 @@ def validate_component_catalog(catalog: object) -> None:
     if (
         not isinstance(namespaces, list)
         or not namespaces
+        or not all(isinstance(item, str) for item in namespaces)
         or len(namespaces) != len(set(namespaces))
         or not all(
             isinstance(item, str) and COMPONENT_ID.fullmatch(item)
@@ -336,6 +343,7 @@ def validate_component_catalog(catalog: object) -> None:
     for name, selected in profiles.items():
         if (
             not isinstance(selected, list)
+            or not all(isinstance(item, str) for item in selected)
             or len(selected) != len(set(selected))
             or set(selected) - identifiers
         ):
@@ -350,6 +358,7 @@ def validate_component_catalog(catalog: object) -> None:
     for name, fingerprints in history.items():
         if (
             not isinstance(fingerprints, list)
+            or not all(isinstance(value, str) for value in fingerprints)
             or not fingerprints
             or len(fingerprints) != len(set(fingerprints))
             or not all(
@@ -363,10 +372,7 @@ def validate_component_catalog(catalog: object) -> None:
 
 
 def load_component_catalog(path: Path) -> dict[str, object]:
-    try:
-        catalog = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read runtime component catalog: {path}") from error
+    catalog = _read_json_object(path, "runtime component")
     validate_component_catalog(catalog)
     return catalog
 
@@ -414,14 +420,6 @@ def project_component_catalog(catalog: dict[str, object]) -> dict[str, object]:
 
 def load_development_component_catalog(path: Path) -> dict[str, object]:
     catalog = _read_json_object(path, "component")
-    try:
-        validate_document_versions(
-            catalog,
-            kind=SchemaKind.CATALOG,
-            allow_legacy=True,
-        )
-    except ContractError as error:
-        raise ValueError("invalid development component catalog contract") from error
     # Validate the exact runtime projection while preserving repository-only
     # source metadata required by development installs.
     project_component_catalog(catalog)

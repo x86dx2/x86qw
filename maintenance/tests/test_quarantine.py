@@ -230,8 +230,8 @@ class QuarantineTests(unittest.TestCase):
             )
             self.assertTrue(token.previous.is_dir())
 
-    def test_finalization_unlinks_a_symlink_without_touching_its_target(self) -> None:
-        """A committed purge removes the link itself without following it."""
+    def test_symlink_is_preserved_in_quarantine_instead_of_path_unlink(self) -> None:
+        """Finalization must not unlink a non-regular node by pathname."""
 
         quarantine = self.runtime()
         with tempfile.TemporaryDirectory() as temporary:
@@ -247,11 +247,37 @@ class QuarantineTests(unittest.TestCase):
                 self.skipTest(f"symlink indisponível: {error}")
 
             token = quarantine.apply_quarantine_removal(link)
-            quarantine.finalize_quarantine(token)
+            with self.assertRaises(quarantine.QuarantineError):
+                quarantine.finalize_quarantine(token)
 
             self.assertEqual(secret.read_bytes(), b"keep")
             self.assertFalse(link.exists())
+            self.assertTrue(token.previous.is_symlink())
+
+    def test_explicit_purge_mode_unlinks_a_symlink_without_following_target(self) -> None:
+        """Purge may remove the link object, never the path it references."""
+
+        quarantine = self.runtime()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            personal = root / "personal"
+            personal.mkdir()
+            secret = personal / "keep.txt"
+            secret.write_bytes(b"keep")
+            link = root / "managed-link"
+            try:
+                link.symlink_to(personal, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlink indisponível: {error}")
+
+            token = quarantine.apply_quarantine_removal(
+                link, allow_non_regular=True,
+            )
+            quarantine.finalize_quarantine(token)
+
+            self.assertFalse(link.exists())
             self.assertFalse(token.quarantine.exists())
+            self.assertEqual(b"keep", secret.read_bytes())
 
     def test_finalization_preserves_directory_swapped_at_private_move(self) -> None:
         """An empty replacement must not be removed after directory validation."""

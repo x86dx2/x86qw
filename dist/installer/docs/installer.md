@@ -926,6 +926,12 @@ destrutiva. Quando o plano exige payload, a CLI instalada orienta a reexecução
 do bootstrap para obtê-lo pelo fluxo público validado. Arquivos pessoais e
 arquivos gerenciados modificados são preservados.
 
+Para converter os metadados de uma instalação legada para o contrato 1.0, use
+`./x86qw.sh migrate --dry-run` para apenas visualizar o plano ou
+`./x86qw.sh migrate` para executá-lo. A migração reorganiza recibos e estado
+com hashes, journal e rollback; não baixa pacotes nem altera PAKs,
+configurações pessoais, demos ou logs.
+
 Antes de alterar qualquer arquivo, os dois comandos consultam o catálogo e
 mostram somente as mudanças reais no formato do Homebrew: manifesto baixado,
 pacotes tabulados, versão instalada, versão disponível e tamanho do download.
@@ -981,7 +987,7 @@ mas não apresenta Team ID nem ticket stapled e é rejeitado por `spctl`. Preser
 o bundle evita degradá-lo, mas não prova Developer ID, notarização ou autoria.
 Se o Gatekeeper bloquear a abertura, use **Ajustes do Sistema > Privacidade e
 Segurança > Abrir Mesmo Assim**. O instalador não remove a quarentena nem
-contorna as proteções do macOS. O suporte dos dois canais macOS é condicional
+contorna as proteções do macOS. O stable macOS é condicional e o nightly permanece preview
 até os smokes nativos descritos no
 [ADR 0004](../../../docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
 

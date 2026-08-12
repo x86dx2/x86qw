@@ -186,8 +186,9 @@ permanecer. No Windows, todos os processos entram em um Job Object com
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. No código corretivo da PR 4, cada processo
 nasce suspenso, entra no Job Object e só então tem sua thread inicial retomada;
 falha de associação encerra o líder ainda suspenso, sem executar o runtime.
-Os casos Win32 passaram nos jobs Windows com Python 3.10 e 3.13; smokes de
-MVDSV, QTV e QWFWD reais sob conta padrão permanecem no PR 11.
+Os casos Win32 registrados na release pública são históricos; no fluxo atual,
+MVDSV, QTV e QWFWD não executam smokes nativos e seus contratos permanecem
+disponíveis para compatibilidade.
 
 Somente uma stack de serviços ou operação mutável pode ficar ativa por
 instalação. `host`, `proxy`, `qtv`, `install`, `components`, `presets`,
@@ -225,10 +226,10 @@ parada, logs e configurações sensíveis usam no Windows uma DACL protegida com
 acesso somente ao usuário atual e a `LOCAL SYSTEM`. O objeto nasce privado,
 antes da primeira escrita; um volume ou ACL inconclusivo faz a operação falhar
 fechada. Arquivos externos de senha são apenas validados e lidos pelo mesmo
-handle, nunca reconfigurados pelo x86QW. A matriz nativa Windows foi validada
-nos runners Windows com Python 3.10 e 3.13. O smoke dos runtimes sob
-uma conta padrão sem elevação permanece pendente na evidência de release, e a
-release pública `0.7.1` não contém essa mudança. Consulte o
+handle, nunca reconfigurados pelo x86QW. A matriz nativa Windows registrada na
+release pública `0.7.3` é evidência histórica do contrato; o fluxo atual é
+operado somente no Mac/local, sem runner Windows e sem smoke nativo obrigatório.
+A mudança foi publicada na release pública `0.7.3`. Consulte o
 [ADR 0003](adr/0003-dacl-privada-windows.md).
 
 Arquivos materializados e temporários não sensíveis atuais registram também o
@@ -298,5 +299,5 @@ confirmado é removido pelo próprio handle, nunca por `DeleteFileW` aplicado a
 um nome reaberto. Consulte o
 [ADR da fronteira de arquivos](adr/0002-fronteira-unica-de-arquivos.md).
 
-Essa implementação ainda não pertence à release pública `0.7.1`; publicação e
-smokes nativos permanecem etapas separadas.
+A fronteira canônica foi publicada na release pública `0.7.3`; o fluxo atual
+usa a validação Mac/local e não inclui smokes nativos dos runtimes.

@@ -13,6 +13,7 @@ from unittest import mock
 
 from x86qw_runtime.errors import InstallerError
 from x86qw_runtime.io.managed_files import (
+    MAX_HASHABLE_FILE_SIZE,
     MAX_MANAGED_FILE_SIZE,
     MaterializedDirectory,
     cleanup_materialized_directory,
@@ -44,17 +45,6 @@ class ManagedFileHashTests(unittest.TestCase):
                 )
             )
 
-    def test_hashes_an_archive_larger_than_one_extracted_member(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "component.zip"
-            archive_size = 128 * 1024 * 1024 + 1
-            with path.open("wb") as archive:
-                archive.truncate(archive_size)
-
-            digest = file_sha256(path, expected_size=archive_size)
-
-            self.assertRegex(digest, r"^[0-9a-f]{64}$")
-
     def test_rejects_a_size_that_exceeds_the_managed_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "conteudo.bin"
@@ -62,6 +52,31 @@ class ManagedFileHashTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 file_sha256(path, expected_size=MAX_MANAGED_FILE_SIZE + 1)
+
+    def test_artifact_hash_can_use_the_explicit_archive_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "pacote.zip"
+            path.write_bytes(b"x86QW")
+
+            with self.assertRaises(OSError):
+                file_sha256(path, maximum_size=4)
+
+            self.assertEqual(
+                file_sha256(path, maximum_size=5),
+                hashlib.sha256(b"x86QW").hexdigest(),
+            )
+
+    def test_artifact_hash_accepts_a_file_larger_than_one_archive_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "qrp-hires.zip"
+            with path.open("wb") as stream:
+                stream.truncate(MAX_MANAGED_FILE_SIZE + 1)
+
+            with self.assertRaises(OSError):
+                file_sha256(path)
+
+            digest = file_sha256(path, maximum_size=MAX_HASHABLE_FILE_SIZE)
+            self.assertEqual(len(digest), 64)
 
     def test_hash_match_returns_false_for_a_changed_size(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

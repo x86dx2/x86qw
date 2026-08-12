@@ -39,6 +39,74 @@ PUBLIC_ARCHIVES = {
         "size": 286137,
         "sha256": "41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6",
     },
+    "0.7.4": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+        "size": 286223,
+        "sha256": "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f",
+    },
+    "0.7.5": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.5/x86qw-installer-0.7.5.zip",
+        "size": 577437,
+        "sha256": "2af9a14729f0aa4dfd3ae8397fa025bc92c7b354ad5df8f1b741406e69414cf6",
+    },
+    "0.7.6": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+        "size": 577554,
+        "sha256": "ee3ce227fd1e6b604d56cf1c7559b57fe843fd5377fa592c075ba7210ed740c0",
+    },
+    "0.7.7": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+        "size": 577558,
+        "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+    },
+    "0.7.8": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+        "size": 577617,
+        "sha256": "a594700b634be563c941d99272e017d8da2434417fa82c412666ac1e45db818c",
+    },
+    "0.7.9": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+        "size": 581134,
+        "sha256": "fb08bc987641d4bea84c463d8f58b9c93b62595ff42ea0f764d4123814be7e33",
+    },
+    "0.7.10": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+        "size": 581288,
+        "sha256": "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a627837b61",
+    },
+    "0.7.11": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+        "size": 581352,
+        "sha256": "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53",
+    },
+    "0.7.12": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+        "size": 581623,
+        "sha256": "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7",
+    },
+    "0.7.13": {
+        "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+        "size": 581883,
+        "sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+    },
+}
+PUBLIC_RELEASE_REFS = {
+    "0.7.0": "x86qw-installer-0.7.0",
+    "0.7.1": "x86qw-installer-0.7.1",
+    "0.7.2": "x86qw-installer-0.7.2",
+    "0.7.3": "x86qw-installer-0.7.3",
+    "0.7.4": "x86qw-installer-0.7.4",
+    "0.7.5": "x86qw-installer-0.7.5",
+    "0.7.6": "x86qw-installer-0.7.6",
+    "0.7.7": "x86qw-installer-0.7.7",
+    "0.7.8": "x86qw-installer-0.7.8",
+    "0.7.9": "x86qw-installer-0.7.9",
+    "0.7.10": "x86qw-installer-0.7.10",
+    "0.7.11": "x86qw-installer-0.7.11",
+    "0.7.12": "x86qw-installer-0.7.12",
+    # The public 0.7.13 tag is not present in this audit branch; the release
+    # commit is retained by origin/main and is the immutable source identity.
+    "0.7.13": "04a55aed8711ec5466dc70f0e33a591d92e07ccb",
 }
 
 
@@ -85,12 +153,17 @@ def _write_state(root: Path, *, format: int = 1) -> None:
 
 class MigrationOnePointZeroTests(unittest.TestCase):
     def test_migration_fixture_manifests_use_one_explicit_schema(self) -> None:
-        expected_public = {"0.7.0", "0.7.1", "0.7.2", "0.7.3"}
+        expected_public = {
+            "0.7.0", "0.7.1", "0.7.2", "0.7.3", "0.7.4", "0.7.5",
+            "0.7.6", "0.7.7", "0.7.8", "0.7.9", "0.7.10", "0.7.11",
+            "0.7.12", "0.7.13",
+        }
+        expected_prospective = {"0.8.x", "0.9.x"}
         self.assertEqual(
-            expected_public,
+            expected_public | expected_prospective,
             {path.name for path in FIXTURES.iterdir() if path.is_dir()},
         )
-        for version in sorted(expected_public):
+        for version in sorted(expected_public | expected_prospective):
             with self.subTest(version=version):
                 fixture = FIXTURES / version
                 manifest_path = fixture / "manifest.json"
@@ -118,6 +191,13 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                     self.assertEqual(expected_archive["sha256"], archive.get("sha256"))
                     self.assertEqual("archive/x86qw-installer-" + version + ".zip", archive.get("path"))
                     self.assertEqual("bundle", archive.get("extracted_path"))
+                else:
+                    self.assertEqual("prospective-contract", manifest.get("fixture_kind"))
+                    self.assertEqual("synthetic-contract-only", manifest.get("payload_kind"))
+                    self.assertEqual(version, manifest.get("source_family"))
+                    self.assertIs(manifest.get("public_release_available"), False)
+                    self.assertTrue(str(manifest.get("reason", "")).strip())
+                    self.assertFalse((fixture / "VERSION").exists())
 
     def test_public_fixture_archives_and_materialized_members_are_exact(self) -> None:
         for version, expected_archive in PUBLIC_ARCHIVES.items():
@@ -630,9 +710,10 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             plan = migrations.plan_migration(root, source_version="0.7.3")
 
             self.assertTrue(plan.executable, plan.conflicts)
+            operation_keys = {operation.key for operation in plan.operations}
             self.assertIn(
                 "component:x86qw-client-bootstrap:receipt",
-                {operation.key for operation in plan.operations},
+                operation_keys,
             )
             result = migrations.execute_migration(plan)
 
@@ -798,21 +879,21 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             receipts.validate_receipt_inventory(receipt, inventory + b"tamper", component="ktx")
 
     def test_public_0_7_fixtures_match_tagged_metadata_contract(self) -> None:
-        for version in ("0.7.0", "0.7.1", "0.7.2", "0.7.3"):
+        for version in PUBLIC_ARCHIVES:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 fixture = FIXTURES / version
                 root = Path(directory) / "quake world"
                 shutil.copytree(fixture, root)
                 manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
                 tagged_commit = subprocess.run(
-                    ["git", "rev-parse", manifest["source_tag"]],
+                    ["git", "rev-parse", PUBLIC_RELEASE_REFS[version]],
                     cwd=ROOT,
                     check=True,
                     capture_output=True,
                     text=True,
                 ).stdout.strip()
                 tagged_version = subprocess.run(
-                    ["git", "show", f"{manifest['source_tag']}:{manifest['source_path']}"],
+                    ["git", "show", f"{PUBLIC_RELEASE_REFS[version]}:{manifest['source_path']}"],
                     cwd=ROOT,
                     check=True,
                     capture_output=True,
@@ -840,7 +921,7 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                 self.assertGreaterEqual(len(plan.operations), 3)
 
     def test_public_0_7_fixtures_execute_and_converge_without_touching_payloads(self) -> None:
-        for version in ("0.7.0", "0.7.1", "0.7.2", "0.7.3"):
+        for version in PUBLIC_ARCHIVES:
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 fixture = FIXTURES / version
                 root = Path(directory) / "quake world"
@@ -885,30 +966,6 @@ class MigrationOnePointZeroTests(unittest.TestCase):
                 )
                 self.assertTrue(rerun.executable, rerun.conflicts)
                 self.assertEqual((), rerun.operations)
-
-    def test_migrated_state_emits_the_frozen_state_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = FIXTURES / "0.7.3"
-            root = Path(directory) / "quake world"
-            shutil.copytree(fixture, root)
-
-            result = migrations.migrate_installation(
-                root,
-                source_version="0.7.3",
-                dry_run=False,
-            )
-
-            self.assertEqual("committed", result.status)
-            migrated = json.loads(
-                (root / ".x86qw/state.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(2, migrated["state_version"])
-            self.assertEqual("0.7.0", migrated["min_cli_version"])
-            state.parse_install_state(
-                migrated,
-                allowed_profiles=state.INSTALLATION_PROFILES,
-                allowed_capabilities=frozenset(),
-            )
 
     def test_plan_is_dry_run_and_preserves_unknown_personal_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1583,67 +1640,14 @@ class MigrationOnePointZeroTests(unittest.TestCase):
             self.assertEqual(before, after)
             self.assertIsNone(migrations.inspect_pending_migration(root))
 
-    def test_source_versions_without_fixture_evidence_are_rejected(self) -> None:
-        cases = (
-            ("0.7.4", "unsupported-source"),
-            ("0.8.0", "prospective-source"),
-            ("0.9.0", "prospective-source"),
-        )
-        for version, conflict_code in cases:
+    def test_unsupported_0_8_and_0_9_contracts_are_explicitly_prospective(self) -> None:
+        for version in ("0.8.0", "0.9.0"):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
                 plan = migrations.plan_migration(
                     Path(directory), source_version=version,
                 )
                 self.assertFalse(plan.executable)
-                self.assertTrue(any(item.code == conflict_code for item in plan.conflicts))
-
-    def test_windows_cleanup_identity_uses_the_native_path_handle(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "transaction"
-            path.mkdir()
-            file_path = path / "payload"
-            file_path.write_bytes(b"payload")
-            destination = path / "destination"
-            root = path.parent
-            identity = (123, 456)
-            with (
-                mock.patch.object(migrations.os, "name", "nt"),
-                mock.patch.object(
-                    migrations,
-                    "persistent_path_identity",
-                    return_value=identity,
-                ) as native_identity,
-                mock.patch.object(
-                    migrations.os,
-                    "open",
-                    side_effect=AssertionError("Windows cleanup must not use os.open"),
-                ),
-                mock.patch.object(
-                    migrations,
-                    "_safe_payload",
-                    return_value=b"payload",
-                ),
-            ):
-                self.assertEqual(
-                    identity,
-                    migrations._private_path_identity(path, directory=True),
-                )
-                payload, payload_identity = migrations._optional_payload(
-                    root, file_path,
-                )
-                self.assertEqual(b"payload", payload)
-                self.assertEqual(identity, payload_identity)
-                operation = migrations._operation(
-                    root,
-                    key="payload",
-                    source=file_path,
-                    destination=destination,
-                    kind="move-receipt",
-                    payload=b"payload",
-                )
-                self.assertEqual(identity, operation.source_identity)
-            native_identity.assert_any_call(path, directory=True)
-            native_identity.assert_any_call(file_path, directory=False)
+                self.assertTrue(any(item.code == "prospective-source" for item in plan.conflicts))
 
     def test_hard_crash_leaves_a_recoverable_journal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -3,14 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 from unittest import mock
 
+from maintenance.tools import native_release_smoke, release_candidate
 from maintenance.tools.native_handoff import (
     CANONICAL_CASES,
     NativeHandoffError,
@@ -20,12 +21,11 @@ from maintenance.tools.native_handoff import (
 from maintenance.tools.native_macos_harness import (
     HardwareObservation,
     _stage_entrypoint,
+    build_release_smoke_report,
     detect_m3_hardware,
     execute_cases,
     select_platform,
 )
-from maintenance.tools.native_plan_adapter import generate_native_plan
-from maintenance.tools.release_candidate import prepare_candidate
 
 
 CONTRACT_PATH = "runtime/native-smoke/macos-arm64/entrypoint.json"
@@ -191,7 +191,45 @@ elif not target.is_dir() or not state.is_file():
     raise SystemExit(82)
 (scratch / "execucoes.txt").open("a", encoding="utf-8").write(case + "\\n")
 receipt.parent.mkdir(parents=True, exist_ok=True)
-receipt.write_text(json.dumps({
+observations = None
+if case == "install-clean-space-unicode":
+    observations = {
+        "launcher": "x86qw.sh",
+        "commands": [
+            {"name": "help", "exit_code": 0},
+            {"name": "version", "exit_code": 0},
+            {"name": "changes", "exit_code": 0},
+            {"name": "migrate", "exit_code": 0},
+        ],
+        "help_lists_changes": True,
+        "help_lists_migrate": True,
+        "version_matches": True,
+        "changes_executed": True,
+        "migrate_dry_run_executed": True,
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
+elif case == "mvdsv-mvd":
+    observations = {
+        "service": "mvdsv", "server_ready": True, "map": "dm6",
+        "gamecode_log": "Loading vm file qwprogs.qvm...", "mvd_valid": True,
+        "mvd_size": 64, "mvd_sha256": "a" * 64,
+        "termination": "controlled", "process_exit_code": -15,
+    }
+elif case == "qtv-stream":
+    observations = {
+        "service": "qtv", "http_ready": True, "http_status": 200,
+        "upstream_map": "dm6", "stream_readable": True,
+        "stream_header": "QTVSV 1\\nBEGIN: native", "stream_bytes": 65,
+        "termination": "controlled", "process_exit_code": -15,
+    }
+elif case == "qwfwd-forward":
+    observations = {
+        "service": "qwfwd", "udp_forwarded": True,
+        "response_returned": True, "termination": "controlled",
+        "process_exit_code": -15,
+    }
+receipt_value = {
     "format": 1,
     "project": "x86qw",
     "protocol": "x86qw-native-case-v1",
@@ -206,7 +244,10 @@ receipt.write_text(json.dumps({
         "before": "clean" if case == "install-clean-space-unicode" else "installed",
         "after": "uninstalled" if case == "lifecycle-uninstall" else "installed",
     },
-}, sort_keys=True) + "\\n", encoding="utf-8")
+}
+if observations is not None:
+    receipt_value["observations"] = observations
+receipt.write_text(json.dumps(receipt_value, sort_keys=True) + "\\n", encoding="utf-8")
 print(f"executed {case}")
 """,
             encoding="utf-8",
@@ -372,6 +413,61 @@ print(f"executed {case}")
             with self.assertRaisesRegex(NativeHandoffError, "runtime exato"):
                 validate_evidence_file(handoff_path, candidate=candidate)
 
+    def test_release_smoke_report_is_normalizable_without_reusing_personal_install(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture_candidate, _fixture_identity = self._candidate(root)
+            source = root / "release-source"
+            source.mkdir()
+            for path in fixture_candidate.rglob("*"):
+                if path.is_file() and path.name != "candidate.json":
+                    destination = source / path.relative_to(fixture_candidate)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(path, destination)
+            candidate = root / "release-candidate"
+            release_candidate.prepare_candidate(
+                source=source,
+                output=candidate,
+                version="1.0.0-rc.1",
+                commit="c" * 40,
+                generated_at="2026-08-11T19:00:00Z",
+            )
+            identity = candidate_identity(candidate)
+            output = root / "logs"
+            metadata: list[dict[str, object]] = []
+            results = execute_cases(
+                candidate=candidate,
+                plan=self._plan(candidate, identity),
+                output_dir=output,
+                release_metadata=metadata,
+            )
+
+            report = build_release_smoke_report(
+                candidate=candidate,
+                output_dir=output,
+                results=results,
+                release_metadata=metadata,
+                hardware=HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+                completed_at="2026-08-11T20:00:00Z",
+            )
+            report_path = output / "release-smoke.json"
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            normalized = native_release_smoke.normalize_native_smoke(
+                candidate=candidate,
+                platform="macOS-ARM64",
+                handoff=report_path,
+            )
+            self.assertEqual("passed", normalized["status"])
+            self.assertEqual(
+                list(CANONICAL_CASES),
+                [case["name"] for case in normalized["cases"]],
+            )
+            self.assertTrue(all(case["artifacts"] for case in normalized["cases"]))
+
     def test_relative_output_dir_is_absolutized_before_child_execution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -422,92 +518,11 @@ print(f"executed {case}")
                     )
 
     @unittest.skipIf(os.name == "nt", "artefatos macOS/POSIX não executáveis no Windows")
-    def test_real_f_candidate_and_python_entrypoint_share_lifecycle_state_and_receipts(self) -> None:
+    def test_candidate_owned_entrypoint_and_python_harness_share_lifecycle_state_and_receipts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source = root / "input"
-            source.mkdir()
-            installer = source / "installer/x86qw-installer-1.0.0.zip"
-            installer.parent.mkdir(parents=True)
-            installer_code = b"""from pathlib import Path
-import sys
-
-action = next((item for item in sys.argv[1:] if item in {
-    'install', 'update', 'upgrade', 'verify', 'repair', 'cleanup', 'uninstall',
-}), None)
-target = Path(sys.argv[-1])
-if action == 'install':
-    target.mkdir(parents=True, exist_ok=True)
-    (target / 'managed-state').write_text('installed\\n', encoding='utf-8')
-elif action in {'update', 'upgrade', 'verify', 'repair', 'cleanup', 'uninstall'}:
-    if not target.is_dir() or not (target / 'managed-state').is_file():
-        raise SystemExit(41)
-else:
-    raise SystemExit(42)
-"""
-            with zipfile.ZipFile(installer, "w") as archive:
-                archive.writestr("bin/x86qw.pyz", installer_code)
-
-            def client_archive(channel: str) -> None:
-                version = "3.6.9" if channel == "stable" else "fixture"
-                filename = "ezQuake-macOS-universal.zip" if channel == "stable" else f"{channel}.zip"
-                archive_path = source / (
-                    f"runtime/clients/ezquake/{channel}/{version}/"
-                    f"macos-universal/{filename}"
-                )
-                archive_path.parent.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(archive_path, "w") as archive:
-                    archive.writestr(
-                        "ezQuake.app/Contents/MacOS/ezQuake",
-                        b"#!/bin/sh\nexit 0\n",
-                    )
-
-            client_archive("stable")
-            client_archive("nightly")
-            for relative in (
-                "runtime/servers/mvdsv/fixture/x86qw/runtime/macos-arm64/mvdsv",
-                "runtime/services/qtv/fixture/x86qw/runtime/macos-arm64/qtv",
-                "runtime/services/qwfwd/fixture/x86qw/runtime/macos-arm64/qwfwd",
-            ):
-                service = source / relative
-                service.parent.mkdir(parents=True, exist_ok=True)
-                service.write_bytes(b"#!/bin/sh\nexit 0\n")
-
-            entrypoint = source / ENTRYPOINT_PATH
-            entrypoint.parent.mkdir(parents=True, exist_ok=True)
-            entrypoint.write_bytes(
-                (Path(__file__).resolve().parents[2] / "maintenance/native_case_entrypoint.py").read_bytes()
-            )
-            contract = source / CONTRACT_PATH
-            contract.write_text(
-                json.dumps({
-                    "format": 1,
-                    "project": "x86qw",
-                    "platform": "macOS-ARM64",
-                    "protocol": "x86qw-native-case-v1",
-                    "entrypoint_artifact": ENTRYPOINT_PATH,
-                }, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-
-            candidate = root / "candidate"
-            prepare_candidate(
-                source=source,
-                output=candidate,
-                version="1.0.0",
-                commit="a" * 40,
-                generated_at="2026-08-07T00:00:00Z",
-            )
-            candidate_sha256 = hashlib.sha256(
-                (candidate / "candidate.json").read_bytes()
-            ).hexdigest()
-            plan_path = root / "native-plan.json"
-            plan = generate_native_plan(
-                candidate=candidate,
-                expected_candidate_sha256=candidate_sha256,
-                entrypoint_contract=CONTRACT_PATH,
-                output=plan_path,
-            )
+            candidate, identity = self._candidate(root)
+            plan = self._plan(candidate, identity)
             before = {
                 path.relative_to(candidate).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                 for path in candidate.rglob("*") if path.is_file()

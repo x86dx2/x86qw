@@ -69,10 +69,17 @@ ENTRYPOINT_RESULT_FIELDS = frozenset({"artifact", "size", "sha256"})
 RECEIPT_FIELDS = frozenset({
     "format", "project", "protocol", "case", "artifact", "execution", "state",
 })
+RECEIPT_OPTIONAL_FIELDS = frozenset({"observations"})
 RECEIPT_ARTIFACT_FIELDS = frozenset({"name", "size", "sha256"})
 RECEIPT_EXECUTION_FIELDS = frozenset({"status", "exit_code"})
 RECEIPT_STATE_FIELDS = frozenset({"before", "after"})
 NATIVE_STATES = frozenset({"clean", "installed", "uninstalled"})
+SERVICE_CASES = frozenset({"mvdsv-mvd", "qtv-stream", "qwfwd-forward"})
+OBSERVATION_CASES = SERVICE_CASES | {"install-clean-space-unicode"}
+CLIENT_CASES = frozenset({
+    "client-stable-window-map-exit", "client-nightly-window-map-exit",
+    "game-ktx", "game-final-arena", "game-pro-x", "game-team-fortress", "game-td2",
+})
 
 
 class NativeHandoffError(RuntimeError):
@@ -298,17 +305,128 @@ def _expected_state(case: str) -> tuple[str, str]:
     return "installed", "installed"
 
 
+def validate_case_observations(expected_case: str, value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    if expected_case == "install-clean-space-unicode":
+        required = {
+            "launcher", "commands", "help_lists_changes", "help_lists_migrate",
+            "version_matches", "changes_executed", "migrate_dry_run_executed",
+            "termination", "process_exit_code",
+        }
+        if set(value) != required or value.get("launcher") not in {"x86qw.sh", "x86qw.cmd"}:
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        commands = value.get("commands")
+        expected_commands = ["help", "version", "changes", "migrate"]
+        if (
+            not isinstance(commands, list)
+            or len(commands) != len(expected_commands)
+            or any(
+                not isinstance(item, Mapping)
+                or set(item) != {"name", "exit_code"}
+                or item.get("name") != name
+                or item.get("exit_code") != 0
+                for item, name in zip(commands, expected_commands, strict=True)
+            )
+            or any(type(value.get(field)) is not bool or value[field] is not True for field in (
+                "help_lists_changes", "help_lists_migrate", "version_matches",
+                "changes_executed", "migrate_dry_run_executed",
+            ))
+        ):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "mvdsv-mvd":
+        required = {
+            "service", "server_ready", "map", "gamecode_log", "mvd_valid", "mvd_size",
+            "mvd_sha256", "termination", "process_exit_code",
+        }
+        if set(value) != required or value.get("service") != "mvdsv":
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if (
+            value.get("server_ready") is not True
+            or value.get("map") != "dm6"
+            or not isinstance(value.get("gamecode_log"), str)
+            or not value["gamecode_log"]
+            or value.get("mvd_valid") is not True
+            or type(value.get("mvd_size")) is not int
+            or value["mvd_size"] < 64
+            or not isinstance(value.get("mvd_sha256"), str)
+            or SHA256.fullmatch(value["mvd_sha256"]) is None
+        ):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "qtv-stream":
+        required = {
+            "service", "http_ready", "http_status", "upstream_map", "stream_readable",
+            "stream_header", "stream_bytes", "termination", "process_exit_code",
+        }
+        if set(value) != required or value.get("service") != "qtv":
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if (
+            value.get("http_ready") is not True
+            or value.get("http_status") != 200
+            or value.get("upstream_map") != "dm6"
+            or value.get("stream_readable") is not True
+            or not isinstance(value.get("stream_header"), str)
+            or "QTVSV" not in value["stream_header"]
+            or type(value.get("stream_bytes")) is not int
+            or value["stream_bytes"] <= 64
+        ):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "qwfwd-forward":
+        required = {
+            "service", "udp_forwarded", "response_returned", "termination", "process_exit_code",
+        }
+        if set(value) != required or value.get("service") != "qwfwd":
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if value.get("udp_forwarded") is not True or value.get("response_returned") is not True:
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case in CLIENT_CASES:
+        required = {
+            "window_title", "map", "gamecode_log", "content", "termination", "process_exit_code",
+        }
+        if set(value) != required:
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if (
+            not isinstance(value["window_title"], str)
+            or not value["window_title"]
+            or len(value["window_title"]) > 512
+            or not isinstance(value["map"], str)
+            or not value["map"]
+            or not isinstance(value["gamecode_log"], (str, type(None)))
+            or not isinstance(value["content"], Mapping)
+        ):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+        content = value["content"]
+        if set(content) != {"gamedir", "map", "map_source", "gamecode_package"}:
+            raise NativeHandoffError(f"conteúdo nativo inválido: {expected_case}")
+        if (
+            not isinstance(content["gamedir"], str)
+            or not isinstance(content["map"], str)
+            or not isinstance(content["map_source"], str)
+            or not isinstance(content["gamecode_package"], (str, type(None)))
+        ):
+            raise NativeHandoffError(f"conteúdo nativo inválido: {expected_case}")
+    else:
+        raise NativeHandoffError(f"observações nativas não suportadas: {expected_case}")
+    if value.get("termination") != "controlled" or type(value.get("process_exit_code")) is not int:
+        raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    return dict(value)
+
+
 def validate_case_receipt(
     path: Path,
     *,
     candidate: Path,
     expected_case: str,
     require_passed: bool = True,
+    require_native_observations: bool = False,
 ) -> dict[str, object]:
     """Validate the candidate-owned receipt for one executed case."""
 
     value = read_json(path, label="recibo nativo")
-    if set(value) != RECEIPT_FIELDS:
+    if (
+        not RECEIPT_FIELDS.issubset(value)
+        or set(value) - RECEIPT_FIELDS - RECEIPT_OPTIONAL_FIELDS
+    ):
         raise NativeHandoffError("recibo nativo possui campos desconhecidos ou ausentes")
     if (
         value.get("format") != FORMAT
@@ -347,7 +465,7 @@ def validate_case_receipt(
         or state.get("after") not in NATIVE_STATES
     ):
         raise NativeHandoffError(f"pré-condição de lifecycle inválida: {expected_case}")
-    return {
+    result = {
         "format": FORMAT,
         "project": PROJECT,
         "protocol": NATIVE_CASE_PROTOCOL,
@@ -360,6 +478,13 @@ def validate_case_receipt(
         "execution": {"status": status, "exit_code": exit_code},
         "state": {"before": state["before"], "after": state["after"]},
     }
+    observations = value.get("observations")
+    if observations is None:
+        if require_native_observations and expected_case in OBSERVATION_CASES:
+            raise NativeHandoffError(f"observações nativas ausentes: {expected_case}")
+    else:
+        result["observations"] = validate_case_observations(expected_case, observations)
+    return result
 
 
 def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
@@ -440,7 +565,10 @@ def validate_evidence_file(path: Path, *, candidate: Path) -> dict[str, object]:
         if not isinstance(receipt_digest, str) or _digest(receipt_path)[1] != receipt_digest:
             raise NativeHandoffError(f"recibo diverge: {expected_name}")
         receipt = validate_case_receipt(
-            receipt_path, candidate=candidate, expected_case=expected_name,
+            receipt_path,
+            candidate=candidate,
+            expected_case=expected_name,
+            require_native_observations=True,
         )
         if (
             receipt["artifact"]["name"] != artifact

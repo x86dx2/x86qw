@@ -4,12 +4,13 @@
 - **Baseline inicial:** `00098330e5833ba2c83c7121272d644c2a204a7b`
 - **HEAD analisado:** `29d76a48721190aad1203d0986a31d839d62070e`
 - **Recorte documentado:** `23194fd..29d76a4`
-- **Versão pública preservada:** `0.7.1`
-- **Estado:** código e regressão local concluídos; revisão/matriz pendentes; não publicada
+- **Versão pública preservada:** `0.7.3`
+- **Estado:** snapshot histórico integrado pela PR #62 na linha pública `0.7.3`; a trilha PR6 permanece pausada para revisão arquitetural final e validação nativa do candidato 1.0
 
-Esta nota registra somente mudanças commitadas na branch
-`agent/runtime-boundaries`. A matriz da futura PR, smokes nativos e o trabalho
-reservado às PRs 7–12 não são apresentados como entregues.
+Esta nota registra somente mudanças commitadas na branch histórica
+`agent/runtime-boundaries`. A integração dessa fronteira foi publicada na
+`0.7.3`; a matriz nativa do candidato 1.0 e o trabalho reservado às PRs 7–12
+não são apresentados como entregues nesta nota.
 
 ## Problema e risco confirmados
 
@@ -181,6 +182,8 @@ Windows deve reproduzir o snapshot enviado à PR.
 - o snapshot final ainda precisa da matriz portável da PR;
 - smokes nativos de clientes e serviços pertencem ao PR 11.
 
-Por isso a issue #52 permanece aberta até a revisão e a matriz. A `0.7.1`, seus
+Por isso a issue #52 foi encerrada pela PR 62; a revisão e a matriz nativa
+continuam registradas como gates da estabilização 1.0. A `0.7.3`, seus
 artefatos, hashes, tag, catálogo e bootstraps públicos permanecem imutáveis.
-Não houve publicação.
+Esta nota não autoriza nem registra a publicação de uma nova versão: o
+checkout corretivo da estabilização 1.0 continua separado da linha pública.

@@ -26,7 +26,11 @@ from x86qw_runtime.io.managed_files import (
     remove_persistent_identity_bound_path,
 )
 from x86qw_runtime.io.paths import lexists
-from x86qw_runtime.platform.processes import process_identity, probe_expected_process
+from x86qw_runtime.platform.processes import (
+    ProcessIdentity,
+    process_identity,
+    probe_expected_process,
+)
 
 
 _CONFIG_NAME = re.compile(r"x86qw-ktx-session-([0-9a-f]{24})\.cfg\Z")
@@ -98,15 +102,32 @@ def _journal_document(
     controller = process_identity(os.getpid())
     if controller.status != "alive" or controller.identity is None:
         raise InstallerError("Não foi possível registrar o controlador da configuração KTX.")
+    return _journal_document_for_controller(
+        target, config, staging, identity, digest, size, state, controller.identity,
+    )
+
+
+def _journal_document_for_controller(
+    target: Path,
+    config: Path,
+    staging: Path,
+    identity: tuple[int, int] | None,
+    digest: str,
+    size: int,
+    state: str,
+    controller: ProcessIdentity,
+) -> dict[str, object]:
+    """Build a journal document bound to a verified process identity."""
+
     return {
         "format": 1,
         "project": "x86qw",
         "type": "ktx-runtime-config",
         "state": state,
         "controller": {
-            "pid": controller.identity.pid,
-            "creation_token": controller.identity.creation_token,
-            "executable": controller.identity.executable,
+            "pid": controller.pid,
+            "creation_token": controller.creation_token,
+            "executable": controller.executable,
         },
         "config": {
             "path": _relative_under(target, config),
@@ -375,6 +396,70 @@ def _read_ownership(
         state,
     )
     return ownership, controller
+
+
+def transfer_runtime_config_controller(
+    target: Path,
+    ownership: RuntimeConfigOwnership,
+    process: object,
+) -> RuntimeConfigOwnership:
+    """Transfer recovery ownership from the launcher to its child process.
+
+    The launcher exits immediately after opening ezQuake.  Binding the journal
+    to the returned process (the POSIX guardian on Unix, or ezQuake directly
+    on Windows) prevents a later invocation from treating a still-running
+    client configuration as abandoned.
+    """
+
+    pid = getattr(process, "pid", None)
+    if type(pid) is not int or pid <= 1:
+        raise InstallerError("O processo ezQuake não expôs um PID válido para o journal KTX.")
+    probe = process_identity(pid)
+    if probe.status != "alive" or probe.identity is None:
+        detail = f": {probe.detail}" if probe.detail else "."
+        raise InstallerError(
+            "A identidade do processo ezQuake não pôde ser confirmada" + detail
+        )
+    target = Path(target)
+    try:
+        current_identity = persistent_path_identity(ownership.journal, directory=False)
+    except OSError as error:
+        raise InstallerError(
+            f"O journal KTX desapareceu antes da transferência: {ownership.journal}"
+        ) from error
+    if current_identity != ownership.journal_identity:
+        raise InstallerError(
+            "O journal KTX mudou de identidade durante a transferência; estado preservado."
+        )
+    document = _journal_document_for_controller(
+        target,
+        ownership.config,
+        ownership.staging,
+        ownership.config_identity,
+        ownership.sha256,
+        ownership.size,
+        ownership.state,
+        probe.identity,
+    )
+    payload = (json.dumps(document, ensure_ascii=False, sort_keys=True) + "\n").encode()
+    try:
+        atomic_write_bytes(ownership.journal, payload, mode=0o600)
+        private_fs.validate_private_file(ownership.journal)
+        new_identity = persistent_path_identity(ownership.journal, directory=False)
+    except (AtomicWriteError, OSError) as error:
+        raise InstallerError(
+            f"Não foi possível transferir a ownership do journal KTX: {error}"
+        ) from error
+    return RuntimeConfigOwnership(
+        ownership.journal,
+        new_identity,
+        ownership.config,
+        ownership.staging,
+        ownership.config_identity,
+        ownership.sha256,
+        ownership.size,
+        ownership.state,
+    )
 
 
 def recover_runtime_configs(target: Path) -> RuntimeConfigRecovery:

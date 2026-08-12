@@ -81,10 +81,11 @@ x86QW.
 Na versão `0.7.1`, o mesmo teste por `sys.version_info` acontece antes do
 download em todos os sistemas. O launcher grava o executável Python que
 concluiu a instalação e repete a resolução segura se esse runtime desaparecer.
-O contrato passou nos sete jobs obrigatórios de Ubuntu, macOS e Windows, com
-Python 3.10 e 3.13, além de 393 testes de manutenção e quatro testes do site.
+Na validação atual, Ubuntu e macOS executam a suíte integral; Windows executa
+o contrato de preview sem alegação de suporte nativo, porque os casos que
+dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
-O bootstrap público `0.7.13` valida o instalador por SHA-256, autentica o catálogo com TUF e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público `0.7.13` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
@@ -101,6 +102,9 @@ download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
 posterior. A versão pública indicada acima é a `0.7.13`.
+Esta árvore de desenvolvimento ainda materializa a base local `0.7.3` para
+reprodução histórica; ela não substitui nem republica os bytes públicos
+`0.7.13`.
 
 ## O que vem no x86QW
 
@@ -210,10 +214,16 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | `update` | Atualiza a CLI e o que já está instalado |
 | `upgrade` | Também incorpora novidades do perfil escolhido |
 | `verify` | Compara a instalação com os recibos registrados |
+| `changes` | Mostra arquivos novos, alterados ou removidos localmente |
+| `migrate` | Converte metadados legados para o contrato 1.0 |
 | `repair` | Recompõe somente conteúdo gerenciado ausente ou incorreto |
 | `cleanup` | Remove resíduos seguros identificados pela CLI |
 | `uninstall` | Desinstala com confirmação explícita |
 | `version` | Mostra a versão da CLI instalada |
+
+`migrate --dry-run` somente exibe a conversão dos metadados antigos para o
+layout 1.0. `migrate` executa a conversão em uma transação; ele não baixa
+pacotes nem altera PAKs, configurações pessoais, demos ou logs.
 
 ### Hosting seguro por padrão
 
@@ -289,9 +299,9 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A versão pública indicada é `0.7.13`; as referências históricas a `0.7.12`, `0.7.11`, `0.7.10`, `0.7.9`, `0.7.8`, `0.7.7`, `0.7.6`, `0.7.5`, `0.7.4` e `0.7.3` permanecem
-legítimas e imutáveis; a `1.0.0` ainda é uma jornada planejada, não uma release
-preparada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
+A versão pública continua em `0.7.13`; as referências às versões anteriores
+permanecem históricas e imutáveis; a `1.0.0` ainda é uma jornada planejada, não
+uma release preparada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
 o [roadmap estratégico](docs/ROADMAP.md) e o
 [plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
 para distinguir baseline, sequência, evidência e gates de aprovação.
@@ -307,7 +317,7 @@ para distinguir baseline, sequência, evidência e gates de aprovação.
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`; no Windows, o job é explicitamente preview e exclui casos POSIX/macOS ou nativos. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso

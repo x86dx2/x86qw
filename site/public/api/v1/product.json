@@ -9,6 +9,8 @@
     "update",
     "upgrade",
     "verify",
+    "changes",
+    "migrate",
     "repair",
     "cleanup",
     "uninstall",

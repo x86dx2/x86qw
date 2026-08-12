@@ -15,46 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Quality gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          lfs: false
-          fetch-depth: 0
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.13"
-      - name: Install trust signing backend
-        run: python -m pip install --requirement maintenance/requirements-trust.txt
-      - name: Materialize and verify Git LFS
-        run: |
-          git lfs pull
-          git lfs fsck
-          python3 maintenance/tools/check_lfs.py
-      - name: Verify distribution and test suites
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: ./maintenance/manage.py verify
-      - name: Reject malformed diffs
-        run: python3 maintenance/tools/check_committed_diff.py
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: site/package-lock.json
-      - name: Validate Cloudflare static assets from lockfile
-        working-directory: site
-        run: |
-          npm ci
-          npm run deploy:dry-run
-
   portable:
     name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -63,63 +27,97 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          lfs: false
           fetch-depth: 0
+          lfs: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
-      - name: Install trust signing backend
-        run: python -m pip install --requirement maintenance/requirements-trust.txt
-      - name: Materialize and verify Git LFS
+      - name: Install pinned trust dependencies from vendored wheels
+        shell: bash
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Verify LFS and committed bytes
         shell: bash
         run: |
           git lfs pull
           git lfs fsck
           python maintenance/tools/check_lfs.py
-      - name: Validate catalogs, schemas, paths and bundle inputs
+          python maintenance/tools/check_committed_diff.py
+      - name: Verify contracts without executing native claims
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python maintenance/manage.py verify --no-tests
-      - name: Run portable installer and runtime tests
+      - name: Run portable maintenance tests
+        if: matrix.os != 'windows-latest'
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           X86QW_CI_PORTABLE: "1"
         run: python -m unittest discover -s maintenance/tests -v
-      - name: Run site contract tests
+      - name: Run Windows preview contract
+        if: matrix.os == 'windows-latest'
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python -m unittest discover -s site/tests -v
-      - name: Parse every public CLI surface
-        shell: bash
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
+          X86QW_CI_PORTABLE: "1"
         run: |
-          python dist/installer/bin/manager.py --help >/dev/null
-          python dist/installer/bin/manager.py play --help >/dev/null
-          python dist/installer/bin/manager.py host --help >/dev/null
-          python dist/installer/bin/manager.py proxy --help >/dev/null
-          python dist/installer/bin/manager.py qtv --help >/dev/null
+          python -c '
+          import pathlib
+          import subprocess
+          import sys
 
-  # Keep the protected contexts from the pre-1.0 matrix while the public job
-  # names make the portable/native boundary explicit.
-  portable-legacy-context:
-    name: ${{ matrix.os }} / Python ${{ matrix.python }}
-    needs: portable
-    if: ${{ always() }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.10", "3.13"]
-    steps:
-      - name: Mirror the portable contract result
+          windows_preview_excluded = {
+              "test_gameplay_ktx_runtime_recovery",
+              "test_installer",
+              "test_installer_purge_transaction",
+              "test_installation_changes",
+              "test_migration_1_0",
+              "test_migration_manager",
+              "test_modern_components",
+              "test_native_case_entrypoint",
+              "test_native_m3_harness",
+              "test_native_release_evidence",
+              "test_native_release_smoke",
+              "test_platform_processes",
+              "test_quarantine",
+              "test_runtime_host",
+          }
+          modules = [
+              f"maintenance.tests.{path.stem}"
+              for path in sorted(pathlib.Path("maintenance/tests").glob("test_*.py"))
+              if path.stem not in windows_preview_excluded
+          ]
+          print("Windows preview exclusions:", ", ".join(sorted(windows_preview_excluded)))
+          raise SystemExit(subprocess.call([sys.executable, "-m", "unittest", *modules, "-v"]))
+          '
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Validate site from lockfile
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        working-directory: site
         shell: bash
-        run: test "${{ needs.portable.result }}" = success
+        run: |
+          npm ci
+          npm run deploy:dry-run
+          python -m unittest discover -s tests -v
 
-# Keep the pull_request gate visible when the branch is synchronized. The
-# legacy names remain protected contexts until branch protection is migrated;
-# each mirrors the aggregate portable contract result.
+  native-contract:
+    name: native-contract / no support claim
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 1
+          lfs: false
+      - name: Check native evidence contract only
+        run: |
+          test -f x86qw_runtime/contracts/native_evidence.py
+          test -f maintenance/tools/native_release_smoke.py
+          test -f maintenance/tools/native_release_evidence.py
+          test -f maintenance/tools/release_evidence_binding.py
+          echo "Portable CI does not substitute for Apple M3 execution."

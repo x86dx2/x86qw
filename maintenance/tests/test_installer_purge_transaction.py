@@ -77,6 +77,26 @@ class InstallerPurgeTransactionTests(unittest.TestCase):
             self.assertEqual(concurrent, (target / "personal").read_bytes())
             self.assertTrue((parked / "managed").is_file())
 
+    def test_purge_removes_nested_symlinks_without_following_their_targets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, target, _ = self.make_installer(root)
+            outside = root / "personal-outside"
+            outside.mkdir()
+            secret = outside / "keep.txt"
+            secret.write_bytes(b"keep")
+            link = target / "managed-link"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlink indisponível: {error}")
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                installer.purge()
+
+            self.assertFalse(target.exists())
+            self.assertEqual(b"keep", secret.read_bytes())
+
     def test_cleanup_preserves_cache_replaced_after_plan_revalidation(self):
         """Cache ownership must stay bound to the directory validated by its marker."""
 

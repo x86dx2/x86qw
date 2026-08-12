@@ -14,18 +14,13 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 
 from .catalogs import profile_fingerprint, validate_portable_relative_path
-from .contracts.schema import ContractVersions, SchemaKind, add_contract_versions
-from .errors import InstallerError
 from .io import private_fs
 from .io.atomic import (
     atomic_create_bytes,
     atomic_write_bytes,
     atomic_write_json,
 )
-from .io.managed_files import (
-    persistent_path_identity,
-    remove_persistent_identity_bound_path,
-)
+from .io.managed_files import remove_persistent_identity_bound_path
 from .io.metadata import MetadataFileError, read_bounded_regular_file
 from .receipts import (
     ComponentReceipt,
@@ -113,11 +108,6 @@ def migrate_install_state(
         document["installation_version"] = target_version
     elif marker is not None:
         document["installation_version"] = marker
-    document = add_contract_versions(
-        document,
-        ContractVersions(),
-        kind=SchemaKind.STATE,
-    )
     return parse_install_state(
         document,
         allowed_profiles=allowed_profiles,
@@ -283,8 +273,6 @@ class MigrationResult:
 
 
 _SOURCE_VERSION = re.compile(
-    # 0.8.x/0.9.x are recognized only so an unbacked marker fails closed;
-    # executable migration sources remain the published 0.7.x line.
     r"^0\.(7|8|9)(?:\.(\d+)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
@@ -304,7 +292,6 @@ LEGACY_COMPONENT_REPLACEMENTS = {
     "nquake-ktx": "ktx",
 }
 LEGACY_COMPONENT_REMOVALS = frozenset({"nquake-sounds"})
-FIXTURE_BACKED_MIGRATION_SOURCES = frozenset({"0.7.0", "0.7.1", "0.7.2", "0.7.3"})
 _JOURNAL_FORMAT = 1
 _JOURNAL_MAX_BYTES = 1024 * 1024
 _JOURNAL_TRANSACTION = re.compile(r"^tx-[0-9a-f]{24}$")
@@ -458,7 +445,8 @@ def _optional_payload(root: Path, path: Path) -> tuple[bytes | None, tuple[int, 
     if not path.exists() and not path.is_symlink():
         return None, None
     payload = _safe_payload(root, path)
-    return payload, _private_path_identity(path, directory=False)
+    metadata = path.lstat()
+    return payload, (int(metadata.st_dev), int(metadata.st_ino))
 
 
 def _remove_private_tree(path: Path) -> None:
@@ -476,22 +464,13 @@ def _remove_private_tree(path: Path) -> None:
         if stat.S_ISDIR(child_metadata.st_mode):
             _remove_private_tree(child)
         elif stat.S_ISREG(child_metadata.st_mode):
-            identity = _private_path_identity(child, directory=False)
-            try:
-                private_fs.unlink_private_file(child, expected_identity=identity)
-            except OSError as error:
-                raise MigrationError(
-                    f"migration journal child changed identity: {child}"
-                ) from error
+            private_fs.unlink_private_file(
+                child,
+                expected_identity=(int(child_metadata.st_dev), int(child_metadata.st_ino)),
+            )
         else:
             raise MigrationError(f"migration journal child has an unsafe type: {child}")
-    try:
-        private_fs.validate_private_directory(path)
-    except OSError as error:
-        raise MigrationError(f"migration journal path is not private: {path}") from error
-    identity = _private_path_identity(path, directory=True)
-    if not remove_persistent_identity_bound_path(path, identity, directory=True):
-        raise MigrationError(f"migration journal path changed identity: {path}")
+    path.rmdir()
 
 
 def _persist_migration_journal(path: Path, document: dict[str, object]) -> None:
@@ -814,9 +793,12 @@ def inspect_pending_migration(
         except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
             return PendingMigration(root, directory, journal, directory.name, None, str(error))
         try:
-            journal_identity = _private_path_identity(journal, directory=False)
-        except MigrationError as error:
+            journal_metadata = journal.lstat()
+        except OSError as error:
             return PendingMigration(root, directory, journal, directory.name, None, str(error))
+        journal_identity = (
+            int(journal_metadata.st_dev), int(journal_metadata.st_ino),
+        )
         journal_sha256 = _digest(payload)
         validated, detail = _validate_pending_document(root, directory, journal, document)
         if detail:
@@ -851,7 +833,10 @@ def _remove_if_owned(root: Path, path: Path, expected_sha256: str) -> None:
         return
     if _digest(payload) != expected_sha256 or identity is None:
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
-    if _private_path_identity(path, directory=False) != identity:
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or (
+        int(metadata.st_dev), int(metadata.st_ino)
+    ) != identity:
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
     if not remove_persistent_identity_bound_path(path, identity, directory=False):
         raise MigrationError(f"migration recovery found changed path: {_rel(root, path)}")
@@ -869,11 +854,6 @@ def _private_path_identity(path: Path, *, directory: bool) -> tuple[int, int]:
         or stat.S_ISREG(metadata.st_mode) == directory
     ):
         raise MigrationError(f"migration cleanup path has an unsafe type: {path}")
-    if os.name == "nt":
-        try:
-            return persistent_path_identity(path, directory=directory)
-        except (OSError, InstallerError) as error:
-            raise MigrationError(f"migration cleanup path cannot be opened: {path}") from error
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     if directory:
@@ -1030,9 +1010,12 @@ def _validate_cleanup_tree(root: Path, pending: PendingMigration) -> _CleanupPla
         required=True,
     )
     assert journal_entry is not None
+    journal_metadata = journal.lstat()
     if (
         pending.journal_identity is not None
-        and journal_entry.identity != pending.journal_identity
+        and (
+            int(journal_metadata.st_dev), int(journal_metadata.st_ino)
+        ) != pending.journal_identity
     ):
         raise MigrationError("migration cleanup journal changed identity")
 
@@ -1329,7 +1312,9 @@ def _operation(
         expected_sha256=_digest(payload),
         source_sha256=_digest(payload if source_payload is None else source_payload),
         payload=payload,
-        source_identity=_private_path_identity(source, directory=False),
+        source_identity=(
+            int(source.lstat().st_dev), int(source.lstat().st_ino)
+        ),
     )
 
 
@@ -1674,9 +1659,9 @@ def inspect_migration_source(
             if identity.kind == "cli" and identity.selection is not None:
                 cli_versions.append(identity.selection)
     # Authenticated metadata wins over an optional API override.  The
-    # An explicit source version remains useful for metadata-light historical
-    # fixtures, but it cannot downgrade an authenticated installation into a
-    # different source family.
+    # override remains useful for synthetic fixtures that intentionally omit
+    # historical receipts, but it cannot downgrade a real installation into
+    # a different source family.
     if cli_versions:
         version = cli_versions[0]
     elif state_version is not None:
@@ -1720,7 +1705,7 @@ def plan_migration(
     target_version: str = "1.0.0",
     dry_run: bool = True,
 ) -> MigrationPlan:
-    """Build a complete, zero-write published 0.7.x → 1.0 plan."""
+    """Build a complete, zero-write 0.7/0.8/0.9 → 1.0 plan."""
 
     root = Path(root)
     target = _normalize_target(target_version)
@@ -1745,7 +1730,7 @@ def plan_migration(
                 "unsafe-metadata", ".x86qw", "metadata root is not a private directory",
             ))
     # A caller-provided source version is only an assertion for metadata-light
-    # historical fixtures. Once a valid CLI receipt or state marker exists,
+    # synthetic fixtures.  Once a valid CLI receipt or state marker exists,
     # authenticated evidence controls the source family.  Keep a target-state
     # marker compatible with an old override so an already migrated, state-only
     # installation remains idempotent when callers replay their original
@@ -1787,7 +1772,7 @@ def plan_migration(
         conflicts.append(MigrationConflict(
             "source-version-mismatch",
             ".x86qw",
-            "source_version override is outside the published 0.7.x source contract",
+            "source_version override is outside the supported source contract",
         ))
     # The canonical CLI receipt is already in its target location after a
     # successful migration, but it remains ownership evidence on re-plans.
@@ -1828,21 +1813,16 @@ def plan_migration(
         conflicts.append(MigrationConflict(
             "unknown-source", ".x86qw", "the historical installer version is not authenticated",
         ))
-    elif source.family == "0.7.x" and source.version not in FIXTURE_BACKED_MIGRATION_SOURCES:
-        conflicts.append(MigrationConflict(
-            "unsupported-source", source.version or "",
-            "source version is not backed by a published migration fixture",
-        ))
     elif source.family in {"0.8.x", "0.9.x"}:
-        # Future version markers are recognized only to report a closed
-        # boundary; no unreleased source is executable or fixture-backed here.
+        # No public 0.8.x/0.9.x release exists yet.  Keep the contract explicit
+        # rather than treating a hand-written directory as release evidence.
         conflicts.append(MigrationConflict(
             "prospective-source", source.family,
-            "future source markers are outside the published migration boundary",
+            "public fixtures are not available for this source family yet",
         ))
     elif source.family not in {"0.7.x", "1.0.x"}:
         conflicts.append(MigrationConflict(
-            "unsupported-source", source.version or "", "source is outside the published 0.7.x migration boundary",
+            "unsupported-source", source.version or "", "source is outside the 0.7.x/0.8.x/0.9.x contract",
         ))
 
     state_path = metadata / "state.json"
@@ -2191,7 +2171,9 @@ def _rollback_records(root: Path, records: list[_RollbackRecord]) -> None:
                 metadata = destination.lstat()
                 if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
                     raise OSError(f"migration destination changed identity: {record.destination}")
-                if _private_path_identity(destination, directory=False) != record.destination_identity:
+                if (
+                    int(metadata.st_dev), int(metadata.st_ino)
+                ) != record.destination_identity:
                     raise OSError(f"migration destination changed identity: {record.destination}")
                 if _digest(_safe_payload(root, destination)) != record.destination_sha256:
                     raise OSError(f"migration destination bytes changed: {record.destination}")
@@ -2253,7 +2235,10 @@ def execute_migration(
             source = root / operation.source
             source_payload = _safe_payload(root, source)
             if operation.source_identity is not None:
-                if _private_path_identity(source, directory=False) != operation.source_identity:
+                source_metadata = source.lstat()
+                if (
+                    int(source_metadata.st_dev), int(source_metadata.st_ino)
+                ) != operation.source_identity:
                     raise MigrationError(f"source identity changed during staging: {operation.source}")
             if _digest(source_payload) != operation.source_sha256:
                 raise MigrationError(f"source changed during staging: {operation.source}")
@@ -2305,12 +2290,15 @@ def execute_migration(
                         raise MigrationError(f"destination changed during commit: {operation.destination}")
                 else:
                     atomic_create_bytes(destination, payload)
+            destination_metadata = destination.lstat()
             records.append(_RollbackRecord(
                 operation.source,
                 operation.destination,
                 previous_source,
                 previous_destination,
-                _private_path_identity(destination, directory=False),
+                (
+                    int(destination_metadata.st_dev), int(destination_metadata.st_ino)
+                ),
                 _digest(_safe_payload(root, destination)),
                 operation.kind,
             ))
@@ -2320,7 +2308,7 @@ def execute_migration(
             ):
                 raise MigrationError("migration journal operation checkpoint is invalid")
             journal_operations[index]["destination_after_identity"] = [
-                *_private_path_identity(destination, directory=False),
+                int(destination_metadata.st_dev), int(destination_metadata.st_ino),
             ]
             applied.append(operation.key)
             _journal_checkpoint(
@@ -2341,8 +2329,9 @@ def execute_migration(
                     current_payload = _safe_payload(root, source)
                     if (
                         operation.source_identity is not None
-                        and _private_path_identity(source, directory=False)
-                        != operation.source_identity
+                        and (
+                            int(source.lstat().st_dev), int(source.lstat().st_ino)
+                        ) != operation.source_identity
                     ):
                         raise MigrationError(
                             f"source identity changed before finalize: {operation.source}"

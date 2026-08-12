@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import json
 import io
+import base64
+import hashlib
 import os
+import re
+import sys
 import urllib.parse
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +23,9 @@ from .io.metadata import read_bounded_regular_file
 
 CATALOG_TARGET = "catalog/catalog.json"
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
+# Compatibility limit for generic bounded metadata consumers. TUF role-specific
+# limits remain stricter inside the verifier.
+MAX_METADATA_BYTES = 1 * 1024 * 1024
 EXPECTED_ROLE_POLICY = {
     "root": (3, 2),
     "targets": (3, 2),
@@ -27,6 +36,214 @@ EXPECTED_ROLE_POLICY = {
 
 class TrustError(RuntimeError):
     """The authenticated metadata chain could not establish catalog trust."""
+
+
+EVIDENCE_ROOT_FORMAT = "x86qw-m3-evidence-root-v1"
+EVIDENCE_ROOT_THRESHOLD = 2
+EVIDENCE_ROOT_KEY_COUNT = 3
+EVIDENCE_ROOT_MAX_BYTES = 512 * 1024
+RELEASE_EVIDENCE_MAX_BYTES = 2 * 1024 * 1024
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_HEX40 = re.compile(r"^[0-9a-f]{40}$")
+_BASE64URL = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _load_unique_json(payload: bytes, label: str, maximum_size: int) -> dict[str, object]:
+    if not isinstance(payload, bytes) or not payload or len(payload) > maximum_size:
+        raise TrustError(f"{label} ausente ou excede o limite")
+
+    def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        value: dict[str, object] = {}
+        for key, item in pairs:
+            if key in value:
+                raise TrustError(f"{label} contém chave duplicada")
+            value[key] = item
+        return value
+
+    try:
+        value = json.loads(payload.decode("utf-8"), object_pairs_hook=reject_duplicates)
+    except TrustError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise TrustError(f"{label} não é JSON UTF-8 válido") from error
+    if not isinstance(value, dict):
+        raise TrustError(f"{label} precisa ser um objeto JSON")
+    return value
+
+
+def _signature_bytes(value: object, label: str) -> bytes:
+    if not isinstance(value, str) or _BASE64URL.fullmatch(value) is None:
+        raise TrustError(f"{label} possui assinatura inválida")
+    padded = value + ("=" * (-len(value) % 4))
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as error:
+        raise TrustError(f"{label} possui assinatura inválida") from error
+    if len(decoded) != 64 or base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != value:
+        raise TrustError(f"{label} possui assinatura não canônica")
+    return decoded
+
+
+def _evidence_key_id(keytype: str, scheme: str, keyval: dict[str, str]) -> str:
+    return hashlib.sha256(_canonical_json({
+        "keytype": keytype,
+        "scheme": scheme,
+        "keyval": keyval,
+    })).hexdigest()
+
+
+def _load_evidence_keys(signed_root: dict[str, object]) -> dict[str, Any]:
+    keys = signed_root.get("keys")
+    if not isinstance(keys, dict) or len(keys) != EVIDENCE_ROOT_KEY_COUNT:
+        raise TrustError("root M3 precisa declarar exatamente três chaves")
+    try:
+        from securesystemslib.signer import SSlibKey
+    except ImportError as error:
+        raise TrustError("backend Ed25519 da evidência está indisponível") from error
+    result: dict[str, Any] = {}
+    for keyid, raw_key in keys.items():
+        if not isinstance(keyid, str) or _HEX64.fullmatch(keyid) is None:
+            raise TrustError("root M3 contém key ID inválido")
+        if not isinstance(raw_key, dict) or set(raw_key) != {"keytype", "scheme", "keyval"}:
+            raise TrustError("root M3 contém chave com schema inválido")
+        keytype = raw_key.get("keytype")
+        scheme = raw_key.get("scheme")
+        keyval = raw_key.get("keyval")
+        if (
+            keytype != "ed25519"
+            or scheme != "ed25519"
+            or not isinstance(keyval, dict)
+            or set(keyval) != {"public"}
+            or not isinstance(keyval.get("public"), str)
+            or _HEX64.fullmatch(keyval["public"]) is None
+            or _evidence_key_id(keytype, scheme, keyval) != keyid
+        ):
+            raise TrustError("root M3 contém material Ed25519 inválido")
+        result[keyid] = SSlibKey(keyid, keytype, scheme, keyval)
+    return result
+
+
+def _verify_evidence_signatures(
+    signatures: object,
+    *,
+    keys: Mapping[str, Any],
+    payload: bytes,
+    threshold: int,
+    label: str,
+) -> None:
+    if not isinstance(signatures, list) or len(signatures) < threshold:
+        raise TrustError(f"{label} não satisfaz o threshold M3")
+    used: set[str] = set()
+    try:
+        from securesystemslib.signer import Signature
+    except ImportError as error:
+        raise TrustError("backend Ed25519 da evidência está indisponível") from error
+    for index, raw_signature in enumerate(signatures, start=1):
+        if not isinstance(raw_signature, dict) or set(raw_signature) != {"keyid", "sig"}:
+            raise TrustError(f"{label} contém assinatura {index} inválida")
+        keyid = raw_signature.get("keyid")
+        if not isinstance(keyid, str) or keyid not in keys or keyid in used:
+            raise TrustError(f"{label} contém key ID duplicado ou não autorizado")
+        used.add(keyid)
+        signature = _signature_bytes(raw_signature.get("sig"), f"{label} {index}")
+        try:
+            keys[keyid].verify_signature(Signature(keyid, signature.hex()), payload)
+        except Exception as error:
+            raise TrustError(f"{label} contém assinatura criptograficamente inválida") from error
+
+
+def _load_evidence_root(payload: bytes) -> dict[str, Any]:
+    root = _load_unique_json(payload, "root M3", EVIDENCE_ROOT_MAX_BYTES)
+    if set(root) != {"signed", "signatures"} or not isinstance(root.get("signed"), dict):
+        raise TrustError("root M3 possui envelope inválido")
+    signed = root["signed"]
+    assert isinstance(signed, dict)
+    expected_fields = {
+        "format", "project", "role", "version", "expires", "threshold", "keys",
+    }
+    if set(signed) != expected_fields or signed.get("format") != EVIDENCE_ROOT_FORMAT:
+        raise TrustError("root M3 possui identidade inválida")
+    if (
+        signed.get("project") != "x86qw"
+        or signed.get("role") != "evidence"
+        or type(signed.get("version")) is not int
+        or signed["version"] < 1
+        or signed.get("threshold") != EVIDENCE_ROOT_THRESHOLD
+    ):
+        raise TrustError("root M3 diverge da política 2-de-3")
+    expires = signed.get("expires")
+    if not isinstance(expires, str):
+        raise TrustError("root M3 não possui expiração UTC")
+    try:
+        expiry = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise TrustError("expiração da root M3 é inválida") from error
+    if expiry.tzinfo is None or expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+        raise TrustError("root M3 expirada")
+    keys = _load_evidence_keys(signed)
+    _verify_evidence_signatures(
+        root.get("signatures"),
+        keys=keys,
+        payload=_canonical_json(signed),
+        threshold=EVIDENCE_ROOT_THRESHOLD,
+        label="assinaturas da root M3",
+    )
+    return keys
+
+
+def verify_release_evidence(
+    trust_root: bytes,
+    evidence: bytes,
+    *,
+    expected_identity: Mapping[str, object],
+) -> dict[str, object]:
+    """Verify external 2-of-3 M3 evidence without handling private keys."""
+    if (
+        not isinstance(expected_identity, Mapping)
+        or set(expected_identity) != {"version", "commit", "manifest_sha256"}
+        or not isinstance(expected_identity.get("version"), str)
+        or not isinstance(expected_identity.get("commit"), str)
+        or not isinstance(expected_identity.get("manifest_sha256"), str)
+        or _HEX40.fullmatch(expected_identity["commit"]) is None
+        or _HEX64.fullmatch(expected_identity["manifest_sha256"]) is None
+    ):
+        raise TrustError("identidade esperada do candidato é inválida")
+    keys = _load_evidence_root(trust_root)
+    document = _load_unique_json(evidence, "agregado de evidência M3", RELEASE_EVIDENCE_MAX_BYTES)
+    expected_fields = {
+        "format", "project", "version", "commit", "status", "candidate", "platforms", "signatures",
+    }
+    if set(document) != expected_fields:
+        raise TrustError("agregado de evidência M3 possui campos inválidos")
+    if (
+        document.get("format") != 1
+        or document.get("project") != "x86qw"
+        or document.get("version") != expected_identity["version"]
+        or document.get("commit") != expected_identity["commit"]
+        or document.get("status") != "complete"
+        or document.get("candidate") != dict(expected_identity)
+        or not isinstance(document.get("platforms"), dict)
+        or not document["platforms"]
+    ):
+        raise TrustError("agregado de evidência M3 diverge do candidato")
+    body = {key: value for key, value in document.items() if key != "signatures"}
+    _verify_evidence_signatures(
+        document.get("signatures"),
+        keys=keys,
+        payload=_canonical_json(body),
+        threshold=EVIDENCE_ROOT_THRESHOLD,
+        label="assinaturas da evidência M3",
+    )
+    return document
 
 
 class BoundedTufFetcher:
@@ -111,6 +328,26 @@ def _tuf_api():
         from tuf.ngclient import Updater
         from tuf.ngclient.config import UpdaterConfig
     except ImportError as error:
+        # The source checkout keeps the exact wheel inputs beside the
+        # maintenance tooling; the installed zipapp flattens those same
+        # packages into its own import root.  This small fallback keeps both
+        # entrypoints on the identical pinned dependency set without adding a
+        # runtime dependency on ``maintenance``.
+        vendor = Path(__file__).resolve().parents[1] / "maintenance/vendor/wheels"
+        if vendor.is_dir():
+            for wheel in sorted(vendor.glob("*.whl"), reverse=True):
+                wheel_path = os.fspath(wheel)
+                if wheel_path not in sys.path:
+                    sys.path.insert(0, wheel_path)
+            try:
+                from tuf.api import exceptions
+                from tuf.api.metadata import Metadata, Root
+                from tuf.ngclient import Updater
+                from tuf.ngclient.config import UpdaterConfig
+            except ImportError:
+                pass
+            else:
+                return exceptions, Metadata, Root, Updater, UpdaterConfig
         raise TrustError("dependências TUF fixadas estão indisponíveis") from error
     return exceptions, Metadata, Root, Updater, UpdaterConfig
 

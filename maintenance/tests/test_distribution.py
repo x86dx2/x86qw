@@ -368,6 +368,10 @@ class DistributionTests(unittest.TestCase):
             write_manifest(path, manifest)
             loaded = load_manifest(path)
             self.assertEqual(1, verify_distribution(root, loaded))
+            cache = root / "installer/bin/__pycache__"
+            cache.mkdir(parents=True)
+            (cache / "manager.cpython-314.pyc").write_bytes(b"runtime cache")
+            self.assertEqual(1, verify_distribution(root, loaded))
             extra = root / "unused.bin"
             extra.write_bytes(b"unused")
             with self.assertRaisesRegex(ValueError, "without an explicit consumer"):

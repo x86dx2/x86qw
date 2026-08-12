@@ -221,8 +221,44 @@ class HostPlatformAdapterTests(unittest.TestCase):
                 executable.parent.symlink_to(original, target_is_directory=True)
             except OSError as error:
                 self.skipTest(f"symlinks indisponíveis neste runner: {error}")
-            with self.assertRaisesRegex(host.HostPlatformError, "mudou"):
+            with self.assertRaisesRegex(
+                host.HostPlatformError,
+                "Alvo de execução|ausente ou inseguro",
+            ):
                 host.revalidate_launch_target(target)
+
+    def test_macos_launch_snapshot_preserves_the_application_bundle(self):
+        """A validated macOS client must still launch with its bundle resources."""
+
+        self.assertIsNotNone(host, "the canonical host adapter is missing")
+        assert host is not None
+        with TemporaryDirectory() as temporary:
+            app = Path(temporary) / "ezQuake.app"
+            executable = app / "Contents/MacOS/ezQuake"
+            executable.parent.mkdir(parents=True)
+            (app / "Contents/Resources").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_text("bundle", encoding="utf-8")
+            (app / "Contents/Resources/ezquake.icns").write_bytes(b"icon")
+            payload = b"verified Mach-O fixture"
+            executable.write_bytes(payload)
+            executable.chmod(0o755)
+            target = host.client_launch_target(
+                app,
+                system="Darwin",
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+            )
+
+            with host.bound_launch_target(target, system_name="Darwin") as bound:
+                snapshot_executable = Path(bound.executable)
+                snapshot_app = snapshot_executable.parents[2]
+                self.assertEqual("ezQuake.app", snapshot_app.name)
+                self.assertEqual(payload, snapshot_executable.read_bytes())
+                self.assertTrue((snapshot_app / "Contents/Info.plist").is_file())
+                self.assertTrue(
+                    (snapshot_app / "Contents/Resources/ezquake.icns").is_file()
+                )
+
+            self.assertFalse(snapshot_app.exists())
 
     def test_portable_binary_inspection_validates_linux_and_windows_formats(self):
         """Client identity must be derived only after the declared native format."""

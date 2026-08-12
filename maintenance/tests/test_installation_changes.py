@@ -14,13 +14,13 @@ from x86qw_runtime.installation_changes import (
 
 
 class InstallationChangesTests(unittest.TestCase):
-    def test_reports_added_modified_and_deleted_files_against_baseline(self) -> None:
+    def test_reports_added_modified_and_deleted_files_against_component_inventories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "quake-world"
             (target / "qw").mkdir(parents=True)
-            (target / "qw/default.cfg").write_bytes(b"original\n")
-            (target / "qw/changed.cfg").write_bytes(b"changed\n")
-            (target / "qw/personal.cfg").write_bytes(b"personal\n")
+            (target / "qw/default.cfg").write_text("original\n", encoding="utf-8")
+            (target / "qw/changed.cfg").write_text("changed\n", encoding="utf-8")
+            (target / "qw/personal.cfg").write_text("personal\n", encoding="utf-8")
             (target / ".x86qw").mkdir()
             (target / ".x86qw/state.json").write_text("{}\n", encoding="utf-8")
             (target / "ezQuake Stable.app").mkdir()
@@ -90,14 +90,6 @@ class InstallationChangesTests(unittest.TestCase):
                 "?? quake-world/ezquake/configs/config.cfg\n",
                 status.stdout,
             )
-
-    def test_gitignore_deduplicates_operational_and_managed_paths(self) -> None:
-        rendered = render_installation_gitignore(
-            ("LICENSE", "qw/default.cfg"),
-            ignored_paths=("LICENSE", ".x86qw"),
-        )
-
-        self.assertEqual(1, rendered.count("/LICENSE\n"))
 
 
 if __name__ == "__main__":

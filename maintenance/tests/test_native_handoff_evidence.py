@@ -6,7 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from maintenance.tools.native_handoff import CANONICAL_CASES, NativeHandoffError
+from maintenance.tools.native_handoff import (
+    CANONICAL_CASES,
+    NativeHandoffError,
+    validate_case_receipt,
+)
 from maintenance.tools.native_handoff_evidence import (
     EvidenceNotRun,
     aggregate_pending_evidence,
@@ -90,8 +94,7 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
             stderr.write_text("PASSWORD=never-copy-this\n", encoding="utf-8")
             receipt = evidence / f"receipts/{index:02d}-{name}.json"
             receipt.parent.mkdir(parents=True, exist_ok=True)
-            receipt.write_text(
-                json.dumps({
+            receipt_value = {
                     "format": 1,
                     "project": "x86qw",
                     "protocol": "x86qw-native-case-v1",
@@ -106,7 +109,58 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
                         "before": "clean" if index == 1 else "installed",
                         "after": "uninstalled" if index == len(CANONICAL_CASES) else "installed",
                     },
-                }, sort_keys=True) + "\n",
+                }
+            if name == "install-clean-space-unicode":
+                receipt_value["observations"] = {
+                    "launcher": "x86qw.sh",
+                    "commands": [
+                        {"name": "help", "exit_code": 0},
+                        {"name": "version", "exit_code": 0},
+                        {"name": "changes", "exit_code": 0},
+                        {"name": "migrate", "exit_code": 0},
+                    ],
+                    "help_lists_changes": True,
+                    "help_lists_migrate": True,
+                    "version_matches": True,
+                    "changes_executed": True,
+                    "migrate_dry_run_executed": True,
+                    "termination": "controlled",
+                    "process_exit_code": 0,
+                }
+            if name == "mvdsv-mvd":
+                receipt_value["observations"] = {
+                    "service": "mvdsv",
+                    "server_ready": True,
+                    "map": "dm6",
+                    "gamecode_log": "Loading vm file qwprogs.qvm...",
+                    "mvd_valid": True,
+                    "mvd_size": 5945,
+                    "mvd_sha256": "a" * 64,
+                    "termination": "controlled",
+                    "process_exit_code": -15,
+                }
+            elif name == "qtv-stream":
+                receipt_value["observations"] = {
+                    "service": "qtv",
+                    "http_ready": True,
+                    "http_status": 200,
+                    "upstream_map": "dm6",
+                    "stream_readable": True,
+                    "stream_header": "QTVSV 1.0\nBEGIN: native",
+                    "stream_bytes": 128,
+                    "termination": "controlled",
+                    "process_exit_code": -15,
+                }
+            elif name == "qwfwd-forward":
+                receipt_value["observations"] = {
+                    "service": "qwfwd",
+                    "udp_forwarded": True,
+                    "response_returned": True,
+                    "termination": "controlled",
+                    "process_exit_code": -15,
+                }
+            receipt.write_text(
+                json.dumps(receipt_value, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
             cases.append({
@@ -209,6 +263,110 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
             self.assertEqual(
                 {"size", "sha256"},
                 set(first_case["runtime"]),
+            )
+
+    def test_service_receipts_require_real_service_observations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            handoff = self._handoff(root, identity)
+            receipt = handoff.parent / "receipts/10-mvdsv-mvd.json"
+            value = json.loads(receipt.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "mvdsv",
+                validate_case_receipt(
+                    receipt,
+                    candidate=candidate,
+                    expected_case="mvdsv-mvd",
+                )["observations"]["service"],
+            )
+            del value["observations"]
+            receipt.write_text(json.dumps(value) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(NativeHandoffError, "observações"):
+                validate_case_receipt(
+                    receipt,
+                    candidate=candidate,
+                    expected_case="mvdsv-mvd",
+                    require_native_observations=True,
+                )
+
+    def test_install_receipt_validates_the_installed_launcher_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            handoff = self._handoff(root, identity)
+            receipt = handoff.parent / "receipts/01-install-clean-space-unicode.json"
+            value = json.loads(receipt.read_text(encoding="utf-8"))
+            value["observations"] = {
+                "launcher": "x86qw.sh",
+                "commands": [
+                    {"name": "help", "exit_code": 0},
+                    {"name": "version", "exit_code": 0},
+                    {"name": "changes", "exit_code": 0},
+                    {"name": "migrate", "exit_code": 0},
+                ],
+                "help_lists_changes": True,
+                "help_lists_migrate": True,
+                "version_matches": True,
+                "changes_executed": True,
+                "migrate_dry_run_executed": True,
+                "termination": "controlled",
+                "process_exit_code": 0,
+            }
+            receipt.write_text(json.dumps(value) + "\n", encoding="utf-8")
+
+            validated = validate_case_receipt(
+                receipt,
+                candidate=candidate,
+                expected_case="install-clean-space-unicode",
+                require_native_observations=True,
+            )
+            self.assertTrue(validated["observations"]["version_matches"])
+
+    def test_pending_aggregate_preserves_the_installed_launcher_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            handoff = self._handoff(root, identity)
+            receipt = handoff.parent / "receipts/01-install-clean-space-unicode.json"
+            value = json.loads(receipt.read_text(encoding="utf-8"))
+            value["observations"] = {
+                "launcher": "x86qw.sh",
+                "commands": [
+                    {"name": "help", "exit_code": 0},
+                    {"name": "version", "exit_code": 0},
+                    {"name": "changes", "exit_code": 0},
+                    {"name": "migrate", "exit_code": 0},
+                ],
+                "help_lists_changes": True,
+                "help_lists_migrate": True,
+                "version_matches": True,
+                "changes_executed": True,
+                "migrate_dry_run_executed": True,
+                "termination": "controlled",
+                "process_exit_code": 0,
+            }
+            receipt.write_text(json.dumps(value) + "\n", encoding="utf-8")
+            handoff_value = json.loads(handoff.read_text(encoding="utf-8"))
+            handoff_value["cases"][0]["receipt_sha256"] = hashlib.sha256(
+                receipt.read_bytes()
+            ).hexdigest()
+            handoff.write_text(json.dumps(handoff_value) + "\n", encoding="utf-8")
+            output = root / "pending.json"
+
+            aggregate_pending_evidence(
+                candidate=candidate,
+                handoff=handoff,
+                expected_candidate_sha256=identity["manifest_sha256"],
+                output=output,
+            )
+
+            first_case = json.loads(output.read_text(encoding="utf-8"))["platforms"][
+                "macOS-ARM64"
+            ]["cases"][0]
+            self.assertEqual(
+                "x86qw.sh",
+                first_case["receipt"]["observations"]["launcher"],
             )
 
     def test_candidate_digest_mismatch_or_identity_drift_creates_nothing(self) -> None:

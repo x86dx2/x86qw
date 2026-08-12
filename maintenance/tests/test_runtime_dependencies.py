@@ -35,7 +35,9 @@ class RuntimeDependencyTests(unittest.TestCase):
             )
             self.assertFalse(any(name.endswith((".pem", ".key")) for name in names))
             lock = json.loads(archive.read("_x86qw/runtime-dependencies.json"))
-        self.assertEqual(json.loads(LOCK.read_text(encoding="utf-8")), lock)
+        self.assertEqual(builder.runtime_dependency_projection(), lock)
+        self.assertNotIn("source", lock["dependencies"][0])
+        self.assertNotIn("package_prefixes", lock["dependencies"][0])
 
         wheel_path = (
             ROOT / "maintenance/vendor/wheels/securesystemslib-1.4.0-py3-none-any.whl"

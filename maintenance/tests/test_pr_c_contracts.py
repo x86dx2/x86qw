@@ -28,7 +28,9 @@ class SemVerContractTests(unittest.TestCase):
         archive = importlib.import_module("x86qw_runtime.io.archive")
         builder = importlib.import_module("maintenance.tools.build_installer_bundle")
         self.assertIsNotNone(archive._VERSION_PATTERN.fullmatch("1.0.0-rc.1"))
+        self.assertTrue(archive._includes_project_legal_files("1.0.0-rc.1"))
         self.assertIsNotNone(builder.VERSION_PATTERN.fullmatch("1.0.0-rc.1"))
+        self.assertTrue(builder.includes_project_legal_files("1.0.0-rc.1"))
 
 
 class SchemaContractTests(unittest.TestCase):
