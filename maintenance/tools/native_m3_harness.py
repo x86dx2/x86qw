@@ -15,6 +15,7 @@ validated through the same closed contract used by release promotion.
 from __future__ import annotations
 
 import argparse
+from functools import wraps
 import hashlib
 import json
 import os
@@ -22,6 +23,7 @@ import platform as host_platform
 import re
 import secrets
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -272,6 +274,36 @@ def _terminate_process_group(process: subprocess.Popen[object], *, force: bool =
         raise NativeM3Error(f"não foi possível encerrar o grupo do caso nativo: {error}") from error
 
 
+def _cleanup_run_scratch(scratch_root: Path) -> None:
+    """Remove only the private shared scratch tree owned by this run."""
+
+    scratch_root = Path(scratch_root).absolute()
+    if scratch_root.is_symlink():
+        raise NativeM3Error("scratch compartilhado usa symlink")
+    if not scratch_root.exists():
+        return
+    if not scratch_root.is_dir():
+        raise NativeM3Error("scratch compartilhado não é diretório")
+    shutil.rmtree(scratch_root)
+
+
+def _cleanup_legacy_native_scratch(function: Any) -> Any:
+    """Clean scratch created by the legacy run without touching old output."""
+
+    @wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> Path:
+        output_dir = Path(kwargs["output_dir"]).absolute()
+        owns_output = not output_dir.exists() and not output_dir.is_symlink()
+        try:
+            return function(*args, **kwargs)
+        finally:
+            if owns_output:
+                _cleanup_run_scratch(output_dir / "scratch")
+
+    return wrapped
+
+
+@_cleanup_legacy_native_scratch
 def run_native(*, candidate: Path, plan_path: Path, output_dir: Path) -> Path:
     candidate = Path(candidate).resolve()
     if candidate.is_symlink() or not candidate.is_dir():
@@ -279,7 +311,7 @@ def run_native(*, candidate: Path, plan_path: Path, output_dir: Path) -> Path:
     environment = _m3_environment()
     identity = _identity(candidate)
     cases = _plan(plan_path, identity)
-    output_dir = Path(output_dir).resolve()
+    output_dir = Path(output_dir).absolute()
     if output_dir.exists() or output_dir.is_symlink():
         raise NativeM3Error(f"saída nativa já existe: {output_dir}")
     output_dir.mkdir(parents=True, mode=0o700)
