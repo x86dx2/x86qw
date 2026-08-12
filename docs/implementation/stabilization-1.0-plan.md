@@ -2,13 +2,13 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional; implementação local parcial, sem publicação |
-| Baseline pública | `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` (`x86qw-installer-0.7.13`) |
+| Estado | plano operacional; implementação incremental integrada até o PR #100, sem publicação do candidato |
+| Baseline pública | `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8` (`x86qw-installer-0.7.13`) |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | `codex/stabilize-1.0@30e9d5bd4f4032772c63d37666ebdedbb33fc292` + alterações locais não publicadas |
+| Checkpoint auditável | `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`; rehearsal `31600754928`; M3 `31604145989` pendente |
 | Versão alvo | `1.0.0` |
-| Data da auditoria | 2026-08-11 |
-| Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; nenhum commit, push, release ou publicação |
+| Data da auditoria | 2026-08-12 |
+| Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; publicação ainda bloqueada por M3 e operação protegida |
 
 Este documento registra a sequência aprovada para transformar a baseline pública
 `0.7.13` em uma `1.0` verificável. O estado corrente fica em
@@ -48,7 +48,7 @@ qualquer ação futura de limpeza, a ancestralidade deve ser revalidada contra
 
 | Ref | Estado observado | Decisão do plano |
 |---|---|---|
-| `origin/main` | `d4a92c0` / release `x86qw-installer-0.7.13` | única linha canônica |
+| `origin/main` | `99fcad8` / release `x86qw-installer-0.7.13` | única linha canônica |
 | `codex/stabilize-1.0` | `30e9d5b`, checkpoint com trabalho de preparação | congelada; extrair símbolos/hunks, nunca fazer merge/cherry-pick |
 | `origin/codex/control-maps` | `362f705`, quatro commits à frente e 105 atrás, quatro commits exclusivos | manter até uma decisão própria; não apagar com a limpeza do checkpoint |
 | `agent/bounded-downloader` | `a60a625`; 0 à frente/86 atrás, integrado pela PR #58 (`b833ba4`) | apagar apenas depois de revalidar ancestralidade e com autorização |
@@ -310,7 +310,7 @@ evidência. Isso não é aprovação de RC nem de publicação.
 O gate desta entrega é executado no worktree sem criar estado remoto:
 
 1. confirmar que a base canônica ainda resolve para
-   `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`; se avançar, repetir a
+   `origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`; se avançar, repetir a
    auditoria antes de editar;
 2. executar `git diff --check` e revisar os links Markdown locais, resolvendo
    cada destino a partir do diretório do documento e ignorando somente URLs

@@ -2,10 +2,10 @@
 
 ## Baseline real
 
-A `main` pública observada neste checkpoint é
-`origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`. A implementação em
-execução fica no PR
-[#95](https://github.com/x86dx2/x86qw/pull/95). A identidade do candidato
+A `main` canônica observada neste checkpoint é
+`origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8`. O avanço mais recente
+está integrado no PR
+[#100](https://github.com/x86dx2/x86qw/pull/100). A identidade do candidato
 oficial — commit, SHA do `candidate.json` e digest do artifact — é sempre a
 registrada pelo próprio workflow e pelo checkpoint do PR, nunca por uma cópia
 manual neste documento.
@@ -21,13 +21,11 @@ pública por si só.
 
 ## Estado de confiança
 
-A root Ed25519 incorporada é validada localmente. A lease pública foi renovada
-para TUF v12 e implantada no Cloudflare (deployment
-`2625d035-6db0-4754-a02e-df054b5ee7ec`); o timestamp v12 expira em
-`2026-08-13T05:20:06Z`. A validação local autentica a cadeia e a implantação foi
-reportada pelo Wrangler, mas o HTTPS direto deste host para o edge expirou; a
-convergência pública independente ainda precisa ser confirmada por um caminho
-externo. Isso não constitui evidência de custódia humana independente nem
+A root Ed25519 incorporada é validada localmente. Em 2026-08-12, a leitura
+pública encontrou a root v1, timestamp v12, snapshot v12 e targets v12; o
+timestamp público e o arquivo versionado no repositório têm o mesmo hash e
+expiram em `2026-08-13T05:20:06Z`. Isso confirma a convergência observada nesse
+instante, mas não constitui evidência de custódia humana independente nem
 substitui a cerimônia TUF do candidato.
 
 ## Estado local
@@ -48,18 +46,19 @@ substitui a cerimônia TUF do candidato.
 
 ## Candidato oficial
 
-O workflow `Immutable candidate rehearsal` produz o candidato uma única vez,
-verifica os mesmos bytes em Ubuntu, Windows e macOS e registra o manifest do
-candidato junto ao artifact imutável. O smoke M3 local executa o plano
-candidate-owned contra esses mesmos bytes e redige handoff, smoke normalizado e
-registro de evidência. A evidência permanece `signed=false`/`promotable=false`
-até a cerimônia externa; o workflow oficial `native-m3.yml` precisa estar
-disponível na branch padrão para ser dispatchado sobre o artifact fixado.
+O workflow `Immutable candidate rehearsal` produziu uma única vez o candidato
+do commit `99fcad83b8bacd951e2eeb56842f854e14ec10a8` no run
+`31600754928`, com validação portátil concluída. O workflow oficial
+`native-m3.yml` foi despachado para o mesmo candidato no run `31604145989`, mas
+permanece `queued` porque não há runner self-hosted M3 disponível. A evidência
+permanece `signed=false`/`promotable=false` até a execução nativa e a cerimônia
+externa; nenhum artifact de uma instalação pessoal é usado.
 
 ## Bloqueios atuais
 
-1. a evidência M3 exata precisa da cerimônia externa de assinatura; o agregado
-   local pending não é promotable;
+1. a execução M3 exata está na fila sem runner self-hosted Apple M3 e, depois
+   dela, ainda precisa da cerimônia externa de assinatura; o agregado pending
+   não é promotable;
 2. o ambiente GitHub `release` não possui os secrets `M3_TRUST_ROOT_B64` e
    `CLOUDFLARE_API_TOKEN` (o único nome de secret visível no ambiente é
    `GITLAB_TOKEN`);
@@ -81,6 +80,7 @@ a lease dessa versão pública.
 
 ## Próxima ação
 
-Integrar o PR, executar o workflow M3 oficial contra o artifact fixado, obter a
-assinatura externa e iniciar o fluxo protegido de promoção somente depois que
-os secrets operacionais e o handoff TUF assinado estiverem disponíveis.
+Disponibilizar o runner self-hosted Apple M3 e os secrets operacionais, então
+deixar o run `31604145989` concluir contra o artifact fixado, obter a assinatura
+externa e iniciar o fluxo protegido de promoção somente depois que o handoff
+TUF assinado estiver disponível.

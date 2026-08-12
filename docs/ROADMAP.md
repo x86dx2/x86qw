@@ -10,7 +10,7 @@ As notas de release históricas e o rascunho de `1.0.0` ficam em
 
 ## Autoridade e baseline
 
-`origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c` é a linha canônica. A
+`origin/main@99fcad83b8bacd951e2eeb56842f854e14ec10a8` é a linha canônica. A
 release pública atual é `x86qw-installer-0.7.13`, preparada no commit
 `04a55aed8711ec5466dc70f0e33a591d92e07ccb`; a correção posterior em `main`
 alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
