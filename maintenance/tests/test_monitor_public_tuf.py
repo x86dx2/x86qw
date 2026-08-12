@@ -7,6 +7,9 @@ from maintenance.tools import monitor_public_tuf
 
 
 class PublicTufMonitorTests(unittest.TestCase):
+    def test_default_warning_window_fits_the_timestamp_lease_policy(self) -> None:
+        self.assertEqual(6, monitor_public_tuf.DEFAULT_WARNING_HOURS)
+
     def test_metadata_payload_selects_consistent_snapshot_role(self) -> None:
         records = {
             "https://example.invalid/metadata/timestamp.json": b"timestamp",

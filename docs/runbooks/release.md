@@ -152,7 +152,7 @@ publicação do site recebe somente o staging validado.
 
 A renovação operacional ainda requer custódia independente, monitor de
 expiração e um signer agendado. `.github/workflows/tuf-monitor.yml` executa a
-verificação autenticada de hora em hora, falha 72 horas antes do vencimento e
+verificação autenticada de hora em hora, falha 6 horas antes do vencimento e
 abre/atualiza uma única issue acionável quando o monitor falha; ele é somente
 observabilidade e não substitui a cerimônia externa de renovação. Sem signer,
 alertas entregues e um drill de recuperação observados, a 1.0 permanece NO-GO
