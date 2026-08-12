@@ -48,10 +48,13 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          runners="$(curl -fsSL \
+          if ! runners="$(curl -fsSL \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?per_page=100")"
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?per_page=100" 2>/dev/null)"; then
+            echo "Self-hosted runner inventory unavailable; native evidence cannot start." >&2
+            exit 1
+          fi
           online_m3="$(printf '%s' "$runners" | jq '[
             .runners[]
             | select(.status == "online")
