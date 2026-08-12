@@ -29,6 +29,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/assemble_site_release.py",
             "maintenance/tools/verify_public_tuf.py",
             "maintenance/tools/verify_public_bootstraps.py",
+            "maintenance/tools/verify_public_product.py",
             "maintenance/tools/materialize_lfs.py",
         )
         for relative in scripts:
@@ -261,6 +262,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--site-source candidate/site/public", source)
         self.assertNotIn("--output release-work/site-preview", source)
         self.assertNotIn("--site-source site/public", source)
+
+    def test_metadata_last_verifies_the_public_product_projection(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "maintenance/tools/verify_public_product.py --candidate candidate",
+            source,
+        )
+        self.assertLess(
+            source.index("verify_public_product.py"),
+            source.index("Record metadata-last post-publish result"),
+        )
 
 
 if __name__ == "__main__":
