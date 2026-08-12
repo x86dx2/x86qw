@@ -265,6 +265,37 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("windows_preview_excluded", workflow)
         self.assertNotIn("continue-on-error", workflow)
 
+    def test_portable_contract_seeds_one_shared_lfs_cache_before_other_matrix_jobs(self):
+        workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("max-parallel: 1", workflow)
+        self.assertIn("matrix:\n        include:", workflow)
+        self.assertIn("seed_lfs: true", workflow)
+        self.assertIn("seed_lfs: false", workflow)
+        self.assertIn(
+            "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+            workflow,
+        )
+        self.assertIn("path: .git/lfs/objects", workflow)
+        self.assertIn(
+            "key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+        )
+        self.assertIn("enableCrossOsArchive: true", workflow)
+        self.assertIn("cache-hit", workflow)
+        self.assertIn("git lfs checkout", workflow)
+        self.assertIn("materialize_lfs.py", workflow)
+        self.assertIn("git lfs fsck --pointers", workflow)
+        self.assertEqual(0, workflow.count("git lfs pull"))
+
+    def test_lfs_materializer_is_a_bounded_content_addressed_ci_boundary(self):
+        materializer = ROOT / "maintenance/tools/materialize_lfs.py"
+        self.assertTrue(materializer.is_file())
+        source = materializer.read_text(encoding="utf-8")
+        self.assertIn("media.githubusercontent.com/media", source)
+        self.assertIn("PinnedArtifact", source)
+        self.assertIn("expected_sha256", source)
+        self.assertIn("expected_size", source)
+
     def test_release_catalog_timestamp_is_bound_to_the_candidate_commit(self):
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn('git show -s --format=%cI "$CANDIDATE_COMMIT"', release)
