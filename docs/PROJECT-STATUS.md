@@ -4,9 +4,10 @@
 
 A `main` pública observada neste checkpoint é
 `origin/main@d4a92c0fe29786fdc6ec5c7d978813cb634be62c`. A implementação em
-execução fica na branch `codex/integrate-1.0`; o SHA exato do candidato é
-registrado em seu `candidate.json` e deve ser tratado como a identidade dos
-artefatos.
+execução fica na branch `codex/stabilize-1.0`, no commit
+`20a5135cce9ac227457c6b10977c82a57013b0de`; o PR aberto é o
+[#95](https://github.com/x86dx2/x86qw/pull/95). A identidade do candidato
+oficial é sempre a do artifact imutável produzido pelo workflow.
 
 ## Versão pública
 
@@ -19,12 +20,14 @@ pública por si só.
 
 ## Estado de confiança
 
-A root Ed25519 incorporada é validada localmente. A última cadeia pública
-observada tinha root v1 e targets/snapshot/timestamp v11; o timestamp expirou em
-`2026-08-11T23:10:15Z`. Os endpoints do portal não responderam no checkpoint
-atual. Portanto a confiança técnica do snapshot histórico não é evidência de
-renovação operacional, custódia humana independente ou recuperação após
-expiração.
+A root Ed25519 incorporada é validada localmente. A lease pública foi renovada
+para TUF v12 e implantada no Cloudflare (deployment
+`2625d035-6db0-4754-a02e-df054b5ee7ec`); o timestamp v12 expira em
+`2026-08-13T05:20:06Z`. A validação local autentica a cadeia e a implantação foi
+reportada pelo Wrangler, mas o HTTPS direto deste host para o edge expirou; a
+convergência pública independente ainda precisa ser confirmada por um caminho
+externo. Isso não constitui evidência de custódia humana independente nem
+substitui a cerimônia TUF do candidato.
 
 ## Estado local
 
@@ -42,27 +45,47 @@ expiração.
   quando não há evidência nativa do candidato exato;
 - a instalação pessoal temporária não é usada pelos testes de release.
 
+## Candidato oficial
+
+O rehearsal oficial `31568840428` terminou com 20/20 jobs verdes. O artifact
+imutável é `9130680724`, com 648110869 bytes e digest
+`sha256:cfd629e1c1d28b9192757d9a0eece94dd3b968465c8a7e882ef9c76a7ceffb59`.
+Seu `candidate.json` tem SHA-256
+`9beeaafbe3ddf0a48edd576c3d0e409b7d181628ae54dce0ecb566bee9cea070`, versão
+`1.0.0-rc.1`, commit `20a5135cce9ac227457c6b10977c82a57013b0de` e 73 artefatos.
+Ubuntu, Windows e macOS verificaram esse artifact sem rebuild.
+
+O smoke M3 local executou os 18 casos contra os mesmos bytes e passou; a
+evidência redigida está vinculada ao candidato, mas permanece
+`signed=false`/`promotable=false`. O workflow oficial `native-m3.yml` ainda não
+pôde ser dispatchado porque está somente nesta branch; após a integração do PR,
+ele deve ser executado contra o artifact `9130680724`.
+
 ## Bloqueios atuais
 
-1. o candidato precisa ser reconstruído após o último alinhamento de contratos e
-   passar novamente pelos gates portáteis e pelos 18 casos nativos no M3;
-2. a evidência nativa é unsigned/pending até uma cerimônia externa de assinatura;
-3. o timestamp TUF público está expirado e o portal está indisponível; não há
-   signer/custódia de produção demonstrados neste ambiente;
-4. a publicação final, mirrors e metadata-last permanecem bloqueados até o
-   candidato exato, a evidência assinada e a operação TUF estarem disponíveis;
+1. a evidência M3 exata precisa da cerimônia externa de assinatura; o agregado
+   local pending não é promotable;
+2. o ambiente GitHub `release` não possui os secrets `M3_TRUST_ROOT_B64` e
+   `CLOUDFLARE_API_TOKEN` (o único nome de secret visível no ambiente é
+   `GITLAB_TOKEN`);
+3. a configuração de reviewer aponta para o próprio `x86dx2`; o waiver do
+   maintainer único registra a ausência de revisão independente, não a simula;
+4. o candidato exato ainda não foi publicado no GitHub/GitLab; depois da
+   assinatura, assets imutáveis, mirrors convergentes e metadata-last precisam
+   passar pelo workflow protegido;
 5. Linux, Windows e macOS Intel continuam preview; nenhum resultado portátil é
-   apresentado como smoke nativo dessas plataformas.
+   apresentado como smoke nativo dessas plataformas;
+6. o RC ainda precisa do período de uso definido antes da promoção final.
 
 ## Veredito
 
-A implementação local pode avançar para um `1.0.0-rc.1` candidato, mas não há
+A implementação local pode avançar para um candidato `1.0.0-rc.1`, mas não há
 autorização técnica para declarar RC publicado ou promover `1.0.0`. O release
-público `0.7.13` não foi alterado por este checkpoint.
+público `0.7.13` não foi alterado por este checkpoint; TUF v12 somente reparou
+a lease dessa versão pública.
 
 ## Próxima ação
 
-Reconstruir o candidato a partir do commit integrado, executar novamente os gates
-portáteis e o harness M3 sobre os mesmos bytes, anexar o agregado unsigned ao PR
-e manter a promoção bloqueada até a disponibilidade do portal TUF e da
-custódia de assinatura.
+Integrar o PR, executar o workflow M3 oficial contra o artifact fixado, obter a
+assinatura externa e iniciar o fluxo protegido de promoção somente depois que
+os secrets operacionais e o handoff TUF assinado estiverem disponíveis.
