@@ -151,3 +151,15 @@ jobs:
           if-no-files-found: error
           overwrite: false
           retention-days: 90
+      - name: Remove native M3 temporary workspace
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf -- \
+            "$GITHUB_WORKSPACE/candidate" \
+            "$RUNNER_TEMP/x86qw-python" \
+            "$RUNNER_TEMP/candidate-artifact.json" \
+            "$RUNNER_TEMP/native-plan.json" \
+            "$RUNNER_TEMP/native-m3" \
+            "$RUNNER_TEMP/native-evidence-input"
