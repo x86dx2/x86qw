@@ -282,7 +282,18 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertIn("cache-hit", workflow)
         self.assertIn("git lfs checkout", workflow)
-        self.assertEqual(1, workflow.count("git lfs pull"))
+        self.assertIn("materialize_lfs.py", workflow)
+        self.assertIn("git lfs fsck --pointers", workflow)
+        self.assertEqual(0, workflow.count("git lfs pull"))
+
+    def test_lfs_materializer_is_a_bounded_content_addressed_ci_boundary(self):
+        materializer = ROOT / "maintenance/tools/materialize_lfs.py"
+        self.assertTrue(materializer.is_file())
+        source = materializer.read_text(encoding="utf-8")
+        self.assertIn("raw.githubusercontent.com", source)
+        self.assertIn("PinnedArtifact", source)
+        self.assertIn("expected_sha256", source)
+        self.assertIn("expected_size", source)
 
     def test_release_catalog_timestamp_is_bound_to_the_candidate_commit(self):
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

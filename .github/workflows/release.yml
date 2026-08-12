@@ -102,7 +102,9 @@ jobs:
           if [ "${{ steps.lfs-cache.outputs.cache-hit }}" = "true" ]; then
             git lfs checkout
           else
-            git lfs pull
+            python3 maintenance/tools/materialize_lfs.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --commit "${{ inputs.candidate_commit }}"
             git lfs checkout
           fi
       - name: Validate immutable source identity and LFS
@@ -116,7 +118,7 @@ jobs:
           [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
           test "$CANDIDATE_MODE" != "promote-1.0" || test "$CANDIDATE_VERSION" = "1.0.0"
-          git lfs fsck
+          git lfs fsck --pointers
           python3 maintenance/tools/check_lfs.py
           ./maintenance/manage.py verify
       - name: Build every candidate payload once

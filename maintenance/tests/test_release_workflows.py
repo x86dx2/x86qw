@@ -29,6 +29,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/assemble_site_release.py",
             "maintenance/tools/verify_public_tuf.py",
             "maintenance/tools/verify_public_bootstraps.py",
+            "maintenance/tools/materialize_lfs.py",
         )
         for relative in scripts:
             with self.subTest(script=relative):
@@ -76,7 +77,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
-    def test_release_reuses_lfs_cache_and_keeps_pull_as_fallback(self):
+    def test_release_reuses_lfs_cache_and_materializes_on_miss(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn(
             "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
@@ -89,7 +90,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertIn("cache-hit", source)
         self.assertIn("git lfs checkout", source)
-        self.assertIn("git lfs pull", source)
+        self.assertIn("materialize_lfs.py", source)
+        self.assertIn("git lfs fsck --pointers", source)
+        self.assertNotIn("git lfs pull", source)
 
     def test_candidate_downloads_flatten_artifact_layout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

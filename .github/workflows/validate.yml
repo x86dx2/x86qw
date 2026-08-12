@@ -64,13 +64,15 @@ jobs:
           if [ "${{ steps.lfs-cache.outputs.cache-hit }}" = "true" ]; then
             git lfs checkout
           elif [ "${{ matrix.seed_lfs }}" = "true" ]; then
-            git lfs pull
+            python maintenance/tools/materialize_lfs.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --commit "$GITHUB_SHA"
             git lfs checkout
           else
             echo "[ERRO] cache LFS ausente fora do job seed" >&2
             exit 1
           fi
-          git lfs fsck
+          git lfs fsck --pointers
           python maintenance/tools/check_lfs.py
           python maintenance/tools/check_committed_diff.py
       - name: Verify contracts without executing native claims
