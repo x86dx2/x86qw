@@ -1342,7 +1342,6 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
 
         class BlockingResolver:
             def __init__(self):
-                self.args = ["python", "resolver"]
                 self.returncode = None
                 self.calls = 0
                 self.killed = False

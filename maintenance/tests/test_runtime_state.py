@@ -211,8 +211,6 @@ class InstallStateMigrationTests(unittest.TestCase):
             "format": 2,
             "project": "x86qw",
             "profile": "custom",
-            "state_version": 2,
-            "min_cli_version": "0.7.0",
             "requested_components": ["ktx", "clan-arena"],
             "recorded_components": ["ktx", "clan-arena"],
             "known_components": ["ktx", "clan-arena"],

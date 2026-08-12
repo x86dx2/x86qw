@@ -449,13 +449,6 @@ class _WindowsFileApi:
             raise OSError("tipo de arquivo incompatível")
         return self.identity(handle)
 
-    def checked_reparse_identity(self, handle: int) -> tuple[int, int]:
-        """Return the identity of a reparse point without following its target."""
-
-        if not self.attributes(handle) & self.FILE_ATTRIBUTE_REPARSE_POINT:
-            raise OSError("ponto de nova análise esperado")
-        return self.identity(handle)
-
     def write(self, handle: int, payload: bytes) -> None:
         from ctypes import wintypes
 

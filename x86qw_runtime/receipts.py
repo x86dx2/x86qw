@@ -296,16 +296,6 @@ def parse_cli_receipt(payload: bytes) -> CliReceipt:
         raise ReceiptError(
             "invalid CLI receipt version", code="cli_version", value=version,
         )
-    try:
-        validate_document_versions(
-            document,
-            kind=SchemaKind.RECEIPT,
-            allow_legacy=True,
-        )
-    except ContractError as error:
-        raise ReceiptError(
-            "invalid CLI receipt contract", code="cli_contract",
-        ) from error
     return CliReceipt(1, "x86qw", version, copy.deepcopy(document))
 
 

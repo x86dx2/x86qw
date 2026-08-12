@@ -474,12 +474,6 @@ def _publish_preference_domain(domain: str, values: Mapping[str, object]) -> Non
         raise MacOSAdapterError("Não foi possível publicar as preferências do ezQuake.")
 
 
-def _delete_preference_key(domain: str, key: str) -> None:
-    result = _run_defaults(["delete", domain, key])
-    if result.returncode != 0:
-        raise MacOSAdapterError("Não foi possível limpar as preferências do ezQuake.")
-
-
 def snapshot_preference_keys(
     domain: str, keys: tuple[str, ...],
 ) -> PreferenceSnapshot:
@@ -519,9 +513,7 @@ def clear_preference_keys(snapshot: PreferenceSnapshot) -> PreferenceSnapshot:
     for key in snapshot.keys:
         cleared.pop(key, None)
     try:
-        for key in snapshot.keys:
-            if key in current:
-                _delete_preference_key(snapshot.domain, key)
+        _publish_preference_domain(snapshot.domain, cleared)
         empty = _snapshot_from_values(snapshot.domain, snapshot.keys, {})
         if snapshot_preference_keys(snapshot.domain, snapshot.keys) != empty:
             raise MacOSAdapterError("Não foi possível limpar as preferências do ezQuake.")

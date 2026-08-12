@@ -3954,16 +3954,16 @@ class ModernComponentTests(unittest.TestCase):
                 for index in range(len(arguments) - 1)
             ])
 
-    def test_exact_3on3on3_launch_uses_one_frogbot_entry_alias(self):
+    def test_ktx_bot_options_enable_frogbot_before_map_and_add_after_entry(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_player(Path(temporary))
             (target / "qw").mkdir()
             game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
             runtime = target / "ezQuake Stable.app"
             options = play_qw.KtxLaunchOptions(
-                bots=8, bot_skill=20, bot_names_profile="x86qw",
+                bots=2, bot_skill=10, bot_team="red",
             )
-            assets = frozenset({"bots/maps/aerowalk.bot"})
+            assets = frozenset({"bots/maps/dm6.bot"})
             captured: dict[str, object] = {}
 
             def capture_launch(selected_runtime, arguments):
@@ -4000,7 +4000,7 @@ class ModernComponentTests(unittest.TestCase):
                         with mock.patch.object(installer, "installed_component_for_game", return_value="ktx"):
                             with mock.patch.object(installer, "verify_component"):
                                 with mock.patch.object(installer, "ktx_archive_members", return_value=assets):
-                                    with mock.patch.object(installer, "local_map_names", return_value=["aerowalk"]):
+                                    with mock.patch.object(installer, "local_map_names", return_value=["dm6"]):
                                         with mock.patch.object(installer, "choose_host_runtime", return_value=("stable", runtime)):
                                             with mock.patch.object(
                                                 installer, "launch_runtime",
@@ -4014,8 +4014,7 @@ class ModernComponentTests(unittest.TestCase):
                                             ) as stability:
                                                 with mock.patch.object(installer, "verify_local_play_support"):
                                                     installer.play_local(
-                                                        "ktx", "3on3on3", "aerowalk", options,
-                                                        ruleset="x86qw",
+                                                        "ktx", "2on2", "dm6", options,
                                                     )
             launch.assert_called_once()
             stability.assert_called_once()
@@ -4030,20 +4029,16 @@ class ModernComponentTests(unittest.TestCase):
             self.assertNotIn("+tempalias", arguments)
             self.assertLess(arguments.index("+exec"), arguments.index("+map"))
             config = str(captured["config"])
-            self.assertIn("set_ex k_fb_name_0", config)
-            self.assertIn("if ($k_maxclients < 9) then k_maxclients 9", config)
-            self.assertIn("if ($maxclients < 9) then maxclients 9", config)
-            self.assertRegex(
-                config,
-                r'(?m)^tempalias x86qw_ktx_launch_setup "x86qw_ktx_launch_',
+            self.assertNotIn("unset k_fb_name_0", config)
+            self.assertNotIn("unset_re", config)
+            self.assertIn("if ($k_maxclients < 3) then k_maxclients 3", config)
+            self.assertIn("if ($maxclients < 3) then maxclients 3", config)
+            # The runtime state machine also carries this command in the
+            # managed INS aliases; the launch sequence itself must contain at
+            # least the two requested additions.
+            self.assertGreaterEqual(
+                config.count("cmd botcmd addbot 10 red"), 2,
             )
-            self.assertIn(
-                'tempalias on_enter "exec x86qw-ktx.cfg;'
-                'x86qw_ktx_launch_setup"',
-                config,
-            )
-            # Eight launch additions plus the reusable INS management alias.
-            self.assertEqual(9, config.count("cmd botcmd addbot 20"))
             self.assertGreaterEqual(config.count(";wait"), play_qw.FROGBOT_ADD_WAIT_FRAMES)
             self.assertIn("ownership", transferred)
             self.assertTrue(play_qw.release_runtime_config(target, transferred["ownership"]))

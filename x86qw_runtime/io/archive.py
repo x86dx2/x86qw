@@ -1625,10 +1625,6 @@ def _identity_document(payload: bytes, label: str) -> dict[str, object]:
     return value
 
 
-def _includes_project_legal_files(version: str) -> bool:
-    return tuple(int(part) for part in version.split(".")) >= (1, 0, 0)
-
-
 def _validate_installer_bundle_layout(
     source: Path | bytes,
     version: str,
@@ -1676,8 +1672,6 @@ def _validate_installer_bundle_layout(
         if includes_version_member
         else identity_names
     )
-    if _includes_project_legal_files(version):
-        requested += (f"{prefix}/LICENSE", f"{prefix}/NOTICE")
     payloads = read_archive_members(plan, requested)
     if (
         includes_version_member

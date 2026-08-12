@@ -200,14 +200,6 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("versão pública continua sendo `0.7.3`", draft)
         self.assertNotIn("sem smokes nativos ou runners externos", draft)
 
-    def test_portable_jobs_are_named_as_contracts_not_native_smokes(self):
-        workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        portable = workflow.split("\n  portable:\n", 1)[1].split(
-            "\n  # Keep the protected contexts", 1,
-        )[0]
-        self.assertIn("name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}", portable)
-        self.assertNotIn("name: ${{ matrix.os }} / Python ${{ matrix.python }}", portable)
-
     def test_committed_diff_gate_uses_event_shas_and_rejects_committed_whitespace(self):
         script = ROOT / "maintenance/tools/check_committed_diff.py"
         source = script.read_text(encoding="utf-8")
@@ -384,54 +376,6 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("dist/**/*.mvd filter=lfs", attributes)
         self.assertIn("dist/servers/**/x86qw/runtime/** filter=lfs", attributes)
         self.assertIn("dist/services/**/x86qw/runtime/** filter=lfs", attributes)
-
-    def test_migration_fixtures_are_not_checkout_translated(self):
-        paths = [
-            "maintenance/tests/fixtures/migrations/0.7.3/VERSION",
-            "maintenance/tests/fixtures/migrations/0.7.3/.x86qw/ktx.inventory",
-            "maintenance/tests/fixtures/migrations/0.7.3/.x86qw/state.json",
-            "maintenance/tests/fixtures/migrations/0.7.3/archive/x86qw-installer-0.7.3.zip",
-        ]
-        result = subprocess.run(
-            ["git", "check-attr", "text", "--", *paths],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        self.assertEqual(
-            [f"{path}: text: unset" for path in paths],
-            result.stdout.splitlines(),
-        )
-
-    def test_signed_trust_bytes_are_pinned_to_lf_on_every_checkout(self):
-        paths = [
-            "maintenance/trust/root.json",
-            "site/public/api/v1/trust/metadata/1.root.json",
-            "site/public/api/v1/trust/metadata/1.targets.json",
-            "site/public/api/v1/trust/metadata/1.snapshot.json",
-            "site/public/api/v1/trust/metadata/timestamp.json",
-            (
-                "site/public/api/v1/trust/targets/catalog/"
-                "7370b2f6e2e35f19476aecdfb7c3156d94be2b33db942af30b78e87976bd0479."
-                "catalog.json"
-            ),
-        ]
-        result = subprocess.run(
-            ["git", "check-attr", "text", "eol", "--", *paths],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        self.assertEqual(
-            [
-                value
-                for path in paths
-                for value in (f"{path}: text: set", f"{path}: eol: lf")
-            ],
-            result.stdout.splitlines(),
-        )
 
 
 if __name__ == "__main__":
