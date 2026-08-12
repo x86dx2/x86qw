@@ -28,6 +28,7 @@ from x86qw_runtime.trust import load_trusted_catalog  # noqa: E402
 
 
 METADATA_NAME = re.compile(r"^(?:\d+\.)?(timestamp|snapshot|targets)\.json$")
+DEFAULT_WARNING_HOURS = 6
 UTC = timezone.utc
 
 
@@ -85,7 +86,8 @@ def _expires(payload: bytes, role: str) -> tuple[int, datetime]:
 
 
 def monitor_public_tuf(
-    *, root: Path, base_url: str = DEFAULT_BASE_URL, warning_hours: int = 72,
+    *, root: Path, base_url: str = DEFAULT_BASE_URL,
+    warning_hours: int = DEFAULT_WARNING_HOURS,
 ) -> dict[str, object]:
     if type(warning_hours) is not int or not 1 <= warning_hours <= 8760:
         raise PublicTufMonitorError("warning_hours deve estar entre 1 e 8760")
@@ -144,7 +146,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--warning-hours", type=int, default=72)
+    parser.add_argument("--warning-hours", type=int, default=DEFAULT_WARNING_HOURS)
     options = parser.parse_args(arguments)
     try:
         result = monitor_public_tuf(

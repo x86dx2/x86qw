@@ -31,7 +31,7 @@ jobs:
       - name: Check authenticated public lease
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python maintenance/tools/monitor_public_tuf.py --root maintenance/trust/root.json --warning-hours 72
+        run: python maintenance/tools/monitor_public_tuf.py --root maintenance/trust/root.json --warning-hours 6
       - name: Record one actionable TUF lease alert
         if: failure()
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8

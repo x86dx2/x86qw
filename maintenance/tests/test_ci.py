@@ -340,7 +340,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "17 * * * *"', monitor)
         self.assertIn("monitor_public_tuf.py", monitor)
-        self.assertIn("--warning-hours 72", monitor)
+        self.assertIn("--warning-hours 6", monitor)
 
     def test_tuf_monitor_persists_one_actionable_alert_on_failure(self):
         monitor = (ROOT / ".github/workflows/tuf-monitor.yml").read_text(encoding="utf-8")
