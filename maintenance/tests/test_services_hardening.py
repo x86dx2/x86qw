@@ -3091,7 +3091,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             thread.start()
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                state = json.loads(journal.path.read_text(encoding="utf-8"))
+                state = services.load_session_journal(journal.path)
                 if state["status"] == "running":
                     break
                 time.sleep(0.05)
@@ -3103,7 +3103,7 @@ with session_control._installation_acquisition_mutex(target, sessions):
             self.assertEqual([0], result)
             self.assertFalse(lock.path.exists())
             self.assertFalse((journal.directory / "stop.request").exists())
-            final = json.loads(journal.path.read_text(encoding="utf-8"))
+            final = services.load_session_journal(journal.path)
             self.assertEqual("clean", final["status"])
             self.assertTrue(final["background"])
             self.assertEqual(".x86qw/logs/service-test.log", final["background_log"])
