@@ -49,6 +49,20 @@ class ServiceSignal(Exception):
         self.signum = signum
 
 
+def _probe_process_group_until_conclusive(
+    process_group: int, *, timeout: float,
+) -> str:
+    deadline = time.monotonic() + timeout
+    while True:
+        status = posix_process_group_status(process_group)
+        if status != "inconclusive":
+            return status
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return status
+        time.sleep(min(0.05, remaining))
+
+
 def spawn_detached_client(
     arguments: tuple[str, ...],
     cwd: Path,
@@ -233,7 +247,7 @@ def stop_processes(processes: list[subprocess.Popen[bytes]]) -> None:
                     except OSError:
                         pass
     for process_group in groups:
-        status = posix_process_group_status(process_group)
+        status = _probe_process_group_until_conclusive(process_group, timeout=1.0)
         if status == "inconclusive":
             raise InstallerError(
                 f"Não foi possível confirmar o encerramento do grupo {process_group}."
