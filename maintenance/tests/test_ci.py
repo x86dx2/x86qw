@@ -277,7 +277,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertIn("path: .git/lfs/objects", workflow)
         self.assertIn(
-            "key: x86qw-lfs-v2-${{ hashFiles('dist/**', '.gitattributes') }}",
+            "key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}",
             workflow,
         )
         self.assertIn("enableCrossOsArchive: true", workflow)

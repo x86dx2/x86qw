@@ -95,7 +95,7 @@ jobs:
         id: lfs-cache
         with:
           path: .git/lfs/objects
-          key: x86qw-lfs-v2-${{ hashFiles('dist/**', '.gitattributes') }}
+          key: x86qw-lfs-v3-${{ inputs.candidate_commit }}
           enableCrossOsArchive: true
       - name: Restore or fetch the LFS materialization
         shell: bash

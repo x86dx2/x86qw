@@ -85,7 +85,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertIn("path: .git/lfs/objects", source)
         self.assertIn(
-            "key: x86qw-lfs-v2-${{ hashFiles('dist/**', '.gitattributes') }}",
+            "key: x86qw-lfs-v3-${{ inputs.candidate_commit }}",
             source,
         )
         self.assertIn("enableCrossOsArchive: true", source)
