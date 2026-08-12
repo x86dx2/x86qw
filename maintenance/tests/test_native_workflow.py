@@ -87,6 +87,18 @@ class NativeWorkflowTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, source)
 
+    def test_m3_workflow_fails_before_queue_when_no_online_m3_runner_exists(self):
+        source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertIn("name: Preflight online M3 runner", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("/actions/runners?per_page=100", source)
+        self.assertIn('select(.status == "online")', source)
+        self.assertIn('select(.labels | map(.name) | index("M3"))', source)
+        self.assertIn('select(.labels | map(.name) | index("macOS"))', source)
+        self.assertIn('select(.labels | map(.name) | index("arm64"))', source)
+        self.assertIn("No online Apple M3 runner is registered", source)
+        self.assertIn("needs: m3-preflight", source)
+
 
 if __name__ == "__main__":
     unittest.main()
