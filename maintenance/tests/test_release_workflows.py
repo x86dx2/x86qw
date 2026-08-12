@@ -76,6 +76,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
+    def test_release_reuses_lfs_cache_and_keeps_pull_as_fallback(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+            source,
+        )
+        self.assertIn("path: .git/lfs/objects", source)
+        self.assertIn(
+            "key: x86qw-lfs-v1-${{ hashFiles('dist/**', '.gitattributes') }}",
+            source,
+        )
+        self.assertIn("cache-hit", source)
+        self.assertIn("git lfs checkout", source)
+        self.assertIn("git lfs pull", source)
+
     def test_candidate_downloads_flatten_artifact_layout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         lines = source.splitlines()
