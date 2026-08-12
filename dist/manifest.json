@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-08-04T21:49:05Z",
+  "captured_at": "2026-08-10T22:45:45Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4486,6 +4486,34 @@
       "size": 157113,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.1/x86qw-installer-0.7.1.zip"
     },
+    "installer/packages/0.7.10/x86qw-installer-0.7.10.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a627837b61",
+      "size": 581288,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip"
+    },
+    "installer/packages/0.7.11/x86qw-installer-0.7.11.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53",
+      "size": 581352,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip"
+    },
+    "installer/packages/0.7.12/x86qw-installer-0.7.12.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7",
+      "size": 581623,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip"
+    },
+    "installer/packages/0.7.13/x86qw-installer-0.7.13.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+      "size": 581883,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip"
+    },
     "installer/packages/0.7.2/x86qw-installer-0.7.2.zip": {
       "component": "installer",
       "consumer": "archive:installer-history",
@@ -4495,10 +4523,52 @@
     },
     "installer/packages/0.7.3/x86qw-installer-0.7.3.zip": {
       "component": "installer",
-      "consumer": "bootstrap:installer",
+      "consumer": "archive:installer-history",
       "sha256": "41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6",
       "size": 286137,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.3/x86qw-installer-0.7.3.zip"
+    },
+    "installer/packages/0.7.4/x86qw-installer-0.7.4.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f",
+      "size": 286223,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip"
+    },
+    "installer/packages/0.7.5/x86qw-installer-0.7.5.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "2af9a14729f0aa4dfd3ae8397fa025bc92c7b354ad5df8f1b741406e69414cf6",
+      "size": 577437,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.5/x86qw-installer-0.7.5.zip"
+    },
+    "installer/packages/0.7.6/x86qw-installer-0.7.6.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "ee3ce227fd1e6b604d56cf1c7559b57fe843fd5377fa592c075ba7210ed740c0",
+      "size": 577554,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip"
+    },
+    "installer/packages/0.7.7/x86qw-installer-0.7.7.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+      "size": 577558,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip"
+    },
+    "installer/packages/0.7.8/x86qw-installer-0.7.8.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "a594700b634be563c941d99272e017d8da2434417fa82c412666ac1e45db818c",
+      "size": 577617,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip"
+    },
+    "installer/packages/0.7.9/x86qw-installer-0.7.9.zip": {
+      "component": "installer",
+      "consumer": "archive:installer-history",
+      "sha256": "fb08bc987641d4bea84c463d8f58b9c93b62595ff42ea0f764d4123814be7e33",
+      "size": 581134,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip"
     },
     "mods/final-arena/1.20/upstream/farena12.zip": {
       "component": "final-arena",

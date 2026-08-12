@@ -45,6 +45,15 @@ class InstallerTests(unittest.TestCase):
         return install_qw.Installer(project, target, cache), target, cache
 
     @contextlib.contextmanager
+    def trusted_public_catalog(self, catalog):
+        with mock.patch.object(
+            install_qw, "trusted_root_bytes", return_value=b"test root",
+        ), mock.patch.object(
+            install_qw, "load_trusted_catalog", return_value=catalog,
+        ) as load:
+            yield load
+
+    @contextlib.contextmanager
     def component_catalog_unavailable(self):
         with mock.patch.object(
             install_qw, "load_component_catalog",
@@ -1014,6 +1023,9 @@ class InstallerTests(unittest.TestCase):
                 state.clear()
                 state.update(values)
 
+            def delete(_domain, key):
+                state.pop(key, None)
+
             output = io.StringIO()
             with mock.patch.object(
                 install_qw.host_platform, "system", return_value="Darwin",
@@ -1023,6 +1035,8 @@ class InstallerTests(unittest.TestCase):
                 install_qw.macos, "_export_preference_domain", side_effect=export,
             ), mock.patch.object(
                 install_qw.macos, "_publish_preference_domain", side_effect=publish,
+            ), mock.patch.object(
+                install_qw.macos, "_delete_preference_key", side_effect=delete,
             ), contextlib.redirect_stdout(output):
                 result = installer.reset_macos_game_directory()
 
@@ -2350,6 +2364,12 @@ class InstallerTests(unittest.TestCase):
                     )
                     self.assertEqual(0, version.returncode, version.stderr)
                     self.assertEqual("x86QW 1.0.6\n", version.stdout)
+            changes = subprocess.run(
+                [*command, "changes", "--help"], text=True, encoding="utf-8",
+                capture_output=True, check=False, env=environment,
+            )
+            self.assertEqual(0, changes.returncode, changes.stderr)
+            self.assertIn("--sync-gitignore", changes.stdout)
             rejected = subprocess.run(
                 [*command, "install"], text=True, encoding="utf-8",
                 capture_output=True, check=False, env=environment,
@@ -2909,6 +2929,36 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("linux", installer.install.call_args.kwargs["platform"])
         self.assertTrue(callable(installer.install.call_args.kwargs["before_mutation"]))
 
+    def test_main_forwards_deterministic_install_selection_without_prompting(self):
+        target = Path("/tmp/x86qw-deterministic-install")
+        installer = mock.MagicMock()
+        installer.target = target
+        installer.component_state_transaction.return_value.__enter__.return_value = []
+        with mock.patch.object(install_qw, "Installer", return_value=installer), \
+                mock.patch("builtins.input", side_effect=AssertionError("prompt aberto")):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    0,
+                    install_qw.main([
+                        "install", str(target), "--platform", "macos",
+                        "--channel", "stable", "--release", "3.6.9",
+                        "--without-components",
+                    ]),
+                )
+        installer.install.assert_called_once()
+        self.assertEqual(
+            {
+                "platform": "macos",
+                "channel": "stable",
+                "release": "3.6.9",
+                "without_components": True,
+            },
+            {
+                key: installer.install.call_args.kwargs[key]
+                for key in ("platform", "channel", "release", "without_components")
+            },
+        )
+
     def test_active_service_lock_blocks_every_mutating_manager_action(self):
         cases = (
             ["install"], ["components"], ["presets"], ["update"],
@@ -3231,6 +3281,83 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(1, installer.update.call_count)
         self.assertIn("Nenhuma atualização disponível", output.getvalue())
         self.assertNotIn("Aplicação do plano", output.getvalue())
+
+    def test_update_without_content_changes_restores_missing_gitignore(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.update = mock.Mock(return_value=False)
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire", return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main(["update", str(target)]))
+
+            gitignore = target / ".gitignore"
+            self.assertTrue(gitignore.is_file())
+            self.assertIn("/.x86qw\n", gitignore.read_text(encoding="utf-8"))
+
+    def test_content_update_refreshes_gitignore_after_applying_the_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            managed = target / "qw/default.cfg"
+            managed.parent.mkdir()
+            managed.write_text("original\n", encoding="utf-8")
+            metadata = target / ".x86qw/components/ktx"
+            metadata.mkdir(parents=True)
+            inventory = metadata / "inventory"
+            receipt = metadata / "receipt"
+            installer.write_inventory_record(inventory, ((
+                "qw/default.cfg",
+                "25718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
+            ),))
+            installer.write_component_receipt(
+                "ktx", "test", "https://example.invalid/ktx.zip", inventory, receipt,
+            )
+
+            def update(*, dry_run, plan_rows=None, **_options):
+                if dry_run:
+                    assert plan_rows is not None
+                    plan_rows.append(install_qw.UpdatePlanRow(
+                        "Componente", "KTX", "old", "new", "Atualizar",
+                    ))
+                return True
+
+            @contextlib.contextmanager
+            def transaction():
+                yield []
+
+            installer.update = mock.Mock(side_effect=update)
+            installer.validate_target = mock.Mock()
+            installer.reject_target_symlinks = mock.Mock()
+            installer.confirm_update_plan = mock.Mock(return_value=True)
+            installer.component_state_transaction = mock.Mock(
+                side_effect=transaction,
+            )
+            operation_lock = mock.Mock()
+
+            with mock.patch.object(
+                install_qw, "Installer", return_value=installer,
+            ), mock.patch.object(
+                install_qw.session_control.InstallationLock,
+                "acquire", return_value=operation_lock,
+            ), mock.patch(
+                "x86qw_runtime.supervisor.sessions.recover_sessions",
+            ), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, install_qw.main([
+                    "update", str(target), "--yes",
+                ]))
+
+            gitignore = target / ".gitignore"
+            self.assertTrue(gitignore.is_file())
+            self.assertIn("/qw/default.cfg\n", gitignore.read_text(encoding="utf-8"))
 
     def test_upgrade_without_changes_exits_before_confirmation_and_application(self):
         target = Path("/tmp/x86qw-no-upgrade-test")
@@ -4958,7 +5085,7 @@ class InstallerTests(unittest.TestCase):
                 )
         self.assertLess(time.monotonic() - started, 0.5)
 
-    def test_public_catalog_falls_back_to_the_next_mirror(self):
+    def test_public_catalog_does_not_fall_back_to_unsigned_mirrors(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
             installer.online_only = True

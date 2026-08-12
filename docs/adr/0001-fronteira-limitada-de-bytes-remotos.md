@@ -216,6 +216,9 @@ Essas exceções não são rotas alternativas autorizadas para instalar conteúd
 sem identidade prévia. Elas precisam ser eliminadas ou formalmente absorvidas pelos PRs que
 tratam trust metadata, automação de release e ACL antes da versão 1.0.0.
 
+A arquitetura proposta para trust metadata, ainda sem implementação ou chaves,
+está no [ADR 0006](0006-tuf-trust-metadata.md).
+
 ## Consequências
 
 Um novo consumidor Python direto de `urlopen` ou `urlretrieve` falha no teste

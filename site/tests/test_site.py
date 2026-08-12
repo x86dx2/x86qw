@@ -125,11 +125,32 @@ class SiteTests(unittest.TestCase):
             for platform in runtime["platforms"]
         }
         self.assertEqual(canonical_support, public_support)
+        canonical_validation = {
+            (runtime["id"], platform["variant"]): platform["validation"]
+            for runtime in runtimes["runtimes"]
+            for platform in runtime["platforms"]
+        }
+        public_validation = {
+            (runtime["id"], platform["variant"]): platform["validation"]
+            for runtime in product["runtimes"]
+            for platform in runtime["platforms"]
+        }
+        self.assertEqual(canonical_validation, public_validation)
         self.assertEqual(
             "conditional", public_support[("ezquake-stable", "macos-universal")],
         )
         self.assertEqual(
-            "conditional", public_support[("ezquake-nightly", "macos-universal")],
+            "preview", public_support[("ezquake-nightly", "macos-universal")],
+        )
+        stable_macos = next(
+            platform for runtime in product["runtimes"]
+            if runtime["id"] == "ezquake-stable"
+            for platform in runtime["platforms"]
+            if platform["variant"] == "macos-universal"
+        )
+        self.assertEqual(
+            {"macos-arm64", "macos-x64"},
+            {target["variant"] for target in stable_macos["support_targets"]},
         )
         self.assertEqual(
             {entry["id"] for entry in games["games"]},

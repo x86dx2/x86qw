@@ -2022,15 +2022,13 @@ class Installer:
                 navigation.MenuOption(
                     "stable", "Stable", "releases oficiais", aliases=("s",),
                 ),
-                navigation.MenuOption(
-                    "nightly", "Nightly", "snapshots de desenvolvimento", aliases=("n",),
-                ),
-            ),
-            breadcrumb="x86QW › Instalação › Canal",
-            invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
-        )
+                breadcrumb="x86QW › Instalação › Canal",
+                invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
+            )
         if channel is None:
             raise InstallerError("Nenhum canal foi selecionado.")
+        if channel not in {"stable", "nightly"}:
+            raise InstallerError(f"Canal de instalação inválido: {channel}.")
         self.channel = channel
         console.success(f"Canal selecionado: {channel}")
         return channel
@@ -5722,15 +5720,21 @@ class Installer:
                 console.success(f"{component['label']} atualizado ({file_count(count)}).")
             if "x86qw-client-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
-                if not preset.is_file():
-                    assert self.stage is not None
-                    staged_preset = self.stage / "nquake-default-preset.cfg"
-                    staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
-                    preset_result = self.install_component_default_transaction(
-                        staged_preset, preset,
-                    )
-                    if preset_result is not None:
-                        results.append(preset_result)
+                preset_existed = lexists(preset)
+                assert self.stage is not None
+                staged_preset = self.stage / "nquake-default-preset.cfg"
+                staged_preset.write_text(DEFAULT_PRESET, encoding="utf-8")
+                preset_result = self.install_component_default_transaction(
+                    staged_preset, preset,
+                )
+                if preset_result is not None:
+                    results.append(preset_result)
+                    if preset_existed:
+                        console.info(
+                            f"Configuração inicial existente registrada: {preset}"
+                        )
+                    else:
+                        console.info(f"Configuração inicial criada: {preset}")
             self.migrate_saved_configs(results)
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
@@ -7586,7 +7590,11 @@ class Installer:
             elif self.confirm_components():
                 installation_results.extend(self.install_component_phase())
             else:
-                console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+                console.info(
+                    "Dados nQuake não solicitados; esta etapa foi ignorada."
+                    if not without_components
+                    else "Componentes desativados para esta execução; esta etapa foi ignorada."
+                )
                 self.write_install_state(
                     "none", [], mutation_results=installation_results,
                 )
@@ -7600,6 +7608,7 @@ class Installer:
                 )
             console.section("Verificação final")
             self.verify_installation()
+            self.sync_installation_gitignore()
         except BaseException as error:
             if (
                 mutation_results is None
@@ -9104,6 +9113,10 @@ def execute_manager_action(
             console.section("Verificação da instalação")
             installer.verify_installation()
             console.success("Verificação concluída sem problemas.")
+        elif options.action == "changes":
+            installer.report_installation_changes(
+                sync_gitignore=options.sync_gitignore,
+            )
         elif options.action == "repair":
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []
@@ -9165,6 +9178,8 @@ def execute_manager_action(
             if plan_sink is not None:
                 plan_sink.extend(_json_plan_row(row) for row in plan_rows)
             if not plan_rows:
+                if not options.dry_run:
+                    installer.sync_installation_gitignore()
                 message = (
                     "Nenhuma novidade disponível; a instalação já corresponde ao perfil atual."
                     if options.action == "upgrade"
@@ -9187,6 +9202,7 @@ def execute_manager_action(
                     operation(dry_run=False, mutation_results=operation_results)
                 if options.skip_cli_update:
                     installer.install_online_cli(mutation_results=operation_results)
+            installer.sync_installation_gitignore()
         else:
             if options.action == "install":
                 with installer.component_state_transaction() as operation_results:

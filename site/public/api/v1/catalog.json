@@ -1203,6 +1203,126 @@
     {
       "component": "installer",
       "package": "x86qw-installer",
+      "version": "0.7.10",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.10.zip",
+      "size": 581288,
+      "sha256": "284ea22d82945d0d1b9e06fa41e130813755cdc63d24a34ae334d9a627837b61",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.10/x86qw-installer-0.7.10.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.10/x86qw-installer-0.7.10.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.10/x86qw-installer-0.7.10.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.10",
+      "release_title": "x86QW Installer 0.7.10",
+      "release_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
+      "mirror_title": "x86QW Installer 0.7.10",
+      "mirror_notes": "# x86QW 0.7.10\n\nHotfix da criação automática do filtro Git seletivo da instalação.\n\n## Correção\n\n- cria `quake-world/.gitignore` automaticamente ao concluir uma instalação;\n- restaura o filtro quando `x86qw update` encontra o conteúdo já atualizado;\n- atualiza o filtro após aplicar updates de componentes;\n- ignora somente os caminhos exatos registrados nos inventories, mantendo\n  arquivos novos visíveis ao Git;\n- mantém `x86qw changes` como comparação por hash capaz de mostrar arquivos\n  padrão modificados ou removidos, que o `.gitignore` sozinho não detecta;\n- preserva `x86qw changes --sync-gitignore` como regeneração manual.\n\nA release 0.7.9 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.10 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED para instalação sem `.gitignore`;\n- regressões para update sem novidades e update com plano aplicado;\n- suíte completa do instalador e comparação de mudanças;\n- gate completo de manutenção, site e contratos portáveis.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.11",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.11.zip",
+      "size": 581352,
+      "sha256": "3ce8e3c31c76d040249119c6dee37fc0829c14ff4d973f58ccdd72598f1bba53",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.11/x86qw-installer-0.7.11.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.11/x86qw-installer-0.7.11.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.11/x86qw-installer-0.7.11.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.11",
+      "release_title": "x86QW Installer 0.7.11",
+      "release_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
+      "mirror_title": "x86QW Installer 0.7.11",
+      "mirror_notes": "# x86QW 0.7.11\n\nHotfix do dispatcher da CLI permanente instalada.\n\n## Correção\n\n- aceita `x86qw changes` nos launchers Unix e Windows;\n- encaminha `changes` para a CLI Python com o diretório instalado correto;\n- documenta o comando na ajuda de `x86qw.sh` e `x86qw.cmd`;\n- preserva `x86qw changes --sync-gitignore` para regeneração manual do filtro.\n\nA release 0.7.10 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.11 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo `x86qw: comando desconhecido: changes`;\n- execução real do launcher instalado em Unix e Windows;\n- suíte completa, site e contratos portáveis.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.12",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.12.zip",
+      "size": 581623,
+      "sha256": "aa6fb98383c16c907a620b7041da03e50faec52fa5033fd66b9ee824bdf7dbb7",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.12/x86qw-installer-0.7.12.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.12/x86qw-installer-0.7.12.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.12/x86qw-installer-0.7.12.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.12",
+      "release_title": "x86QW Installer 0.7.12",
+      "release_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_title": "x86QW Installer 0.7.12",
+      "mirror_notes": "# x86QW 0.7.12\n\nHotfix da finalização transacional do `uninstall --purge`.\n\n## Correção\n\n- remove symlinks pertencentes ao quarantine sem seguir seus alvos;\n- finaliza corretamente o cache TUF que contém `metadata/root.json` como link;\n- usa rename exclusivo e identidade de inode no POSIX;\n- usa handle nativo aberto no reparse point no Windows;\n- continua preservando sockets, devices e outros nós especiais não autorizados.\n\nNa 0.7.11, a transação podia ser confirmada e deixar a finalização incompleta\nao encontrar o symlink criado pelo próprio cache TUF. A 0.7.12 elimina essa\nincompatibilidade sem ampliar a fronteira de remoção.\n\nA release 0.7.11 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.12 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo o quarantine preservado;\n- teste de que o link é removido e seu alvo externo permanece intacto;\n- 1.418 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.13",
+      "current": true,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.13.zip",
+      "size": 581883,
+      "sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.13/x86qw-installer-0.7.13.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.13/x86qw-installer-0.7.13.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.13/x86qw-installer-0.7.13.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.13",
+      "release_title": "x86QW Installer 0.7.13",
+      "release_notes": "# x86QW 0.7.13\n\nHotfix da preparação do ezQuake no macOS.\n\n## Correção\n\n- remove individualmente as preferências antigas `basedir`, `version` e\n  `NSOSPLastRootDirectory` do domínio `com.ezquake.ezQuake`;\n- evita a importação do domínio inteiro, que podia retornar sucesso sem vencer\n  o cache ativo do CFPreferences;\n- confirma que cada chave realmente desapareceu antes de continuar a instalação;\n- restaura o snapshot original se qualquer remoção parcial falhar.\n\nNa 0.7.12, uma instalação limpa podia chegar ao ezQuake stable 3.6.9 e falhar na\netapa `directory-preferences`, mesmo depois de validar o ZIP e os PAKs. A 0.7.13\nfaz a limpeza pela operação nativa por chave e mantém o rollback transacional.\n\nA release 0.7.12 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.13 e para a metadata TUF v10.\n\n## Validação\n\n- regressão RED reproduzindo o sucesso falso da importação com cache CFPreferences;\n- remoção e restauração reais das três preferências em macOS;\n- 1.422 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_title": "x86QW Installer 0.7.13",
+      "mirror_notes": "# x86QW 0.7.13\n\nHotfix da preparação do ezQuake no macOS.\n\n## Correção\n\n- remove individualmente as preferências antigas `basedir`, `version` e\n  `NSOSPLastRootDirectory` do domínio `com.ezquake.ezQuake`;\n- evita a importação do domínio inteiro, que podia retornar sucesso sem vencer\n  o cache ativo do CFPreferences;\n- confirma que cada chave realmente desapareceu antes de continuar a instalação;\n- restaura o snapshot original se qualquer remoção parcial falhar.\n\nNa 0.7.12, uma instalação limpa podia chegar ao ezQuake stable 3.6.9 e falhar na\netapa `directory-preferences`, mesmo depois de validar o ZIP e os PAKs. A 0.7.13\nfaz a limpeza pela operação nativa por chave e mantém o rollback transacional.\n\nA release 0.7.12 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.13 e para a metadata TUF v10.\n\n## Validação\n\n- regressão RED reproduzindo o sucesso falso da importação com cache CFPreferences;\n- remoção e restauração reais das três preferências em macOS;\n- 1.422 testes de manutenção e cinco testes do site;\n- matriz protegida em Ubuntu, macOS e Windows com Python 3.10 e 3.13.",
+      "mirror_latest": true
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
       "version": "0.7.2",
       "current": false,
       "channel": "content",
@@ -1234,7 +1354,7 @@
       "component": "installer",
       "package": "x86qw-installer",
       "version": "0.7.3",
-      "current": true,
+      "current": false,
       "channel": "content",
       "platform": "any",
       "architecture": "any",
@@ -1258,7 +1378,187 @@
       "release_notes": "# x86QW 0.7.3\n\nCorreção de manutenção para instalações macOS que atualizam o cliente stable\nupstream.\n\n## macOS stable\n\n- aceita bundles upstream sem entitlements declarados, como o ezQuake stable\n  3.6.9 preservado pela distribuição;\n- continua tratando o stable como não sandboxed quando `codesign` retorna\n  somente diagnóstico e nenhum plist de entitlements;\n- mantém a rejeição de plist de entitlements realmente inválido;\n- não altera assinatura, `Info.plist`, sandbox ou conteúdo do bundle stable.\n\n## Validação\n\n- regressão específica para bundle sem entitlements;\n- suíte de manutenção: 1.198 testes aprovados, 37 skips explícitos;\n- smoke local no bundle instalado `ezQuake Stable.app` confirmou\n  `app_is_sandboxed=False`.\n\n> Estado: **publicada e verificada**. A `0.7.3` é a versão `current`; a `0.7.2`\n> e todas as versões anteriores permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.3.zip` · 286137 bytes · SHA-256\n`41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6`.",
       "mirror_title": "x86QW Installer 0.7.3",
       "mirror_notes": "# x86QW 0.7.3\n\nCorreção de manutenção para instalações macOS que atualizam o cliente stable\nupstream.\n\n## macOS stable\n\n- aceita bundles upstream sem entitlements declarados, como o ezQuake stable\n  3.6.9 preservado pela distribuição;\n- continua tratando o stable como não sandboxed quando `codesign` retorna\n  somente diagnóstico e nenhum plist de entitlements;\n- mantém a rejeição de plist de entitlements realmente inválido;\n- não altera assinatura, `Info.plist`, sandbox ou conteúdo do bundle stable.\n\n## Validação\n\n- regressão específica para bundle sem entitlements;\n- suíte de manutenção: 1.198 testes aprovados, 37 skips explícitos;\n- smoke local no bundle instalado `ezQuake Stable.app` confirmou\n  `app_is_sandboxed=False`.\n\n> Estado: **publicada e verificada**. A `0.7.3` é a versão `current`; a `0.7.2`\n> e todas as versões anteriores permanecem imutáveis no histórico.\n\nBundle: `x86qw-installer-0.7.3.zip` · 286137 bytes · SHA-256\n`41ecb4d82d41c6d4733c6990c5baf40a9062f85ce9faf098d8e8822ad66784d6`.",
-      "mirror_latest": true
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.4",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.4.zip",
+      "size": 286223,
+      "sha256": "37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.4/x86qw-installer-0.7.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.4/x86qw-installer-0.7.4.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.4/x86qw-installer-0.7.4.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.4",
+      "release_title": "x86QW Installer 0.7.4",
+      "release_notes": "# x86QW 0.7.4\n\nRelease corretiva da verdade de plataforma e da matriz de validação do x86QW.\n\n> Estado: candidata preparada em uma PR de release separada. A tag e a\n> publicação pública serão criadas somente após o merge e a etapa remota de\n> publicação autorizada.\n\n## Verdade de plataforma\n\n- separa presença de artefato, suporte declarado e validação executada;\n- conserva o cliente macOS universal como suporte condicional;\n- classifica Linux, Windows, serviços macOS e variantes ainda não submetidas a\n  smoke nativo como preview quando essa é a evidência disponível;\n- registra `portable-contract` para a validação de catálogo, contratos,\n  caminhos e CLI, sem apresentar isso como smoke nativo de runtime;\n- não declara evidência M3, assinatura Developer ID, notarização ou confiança\n  operacional de produção.\n\n## Evidência de entrada\n\n- a correção de plataforma foi integrada pela PR #66 em `db5f7088`;\n- os sete contextos protegidos passaram no head final da PR A;\n- esta PR acrescenta a identidade 0.7.4, os artefatos derivados e a regressão\n  da publicação corretiva.\n\n## Integridade\n\nO bundle 0.7.3 permanece histórico e imutável. O pacote 0.7.4 somente será\nconsiderado público depois que a tag, o asset, os mirrors, o catálogo e os\nbootstraps forem verificados após a publicação.\n\nIdentidade candidata: `x86qw-installer-0.7.4.zip`, 286223 bytes,\nSHA-256 `37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f`.",
+      "mirror_title": "x86QW Installer 0.7.4",
+      "mirror_notes": "# x86QW 0.7.4\n\nRelease corretiva da verdade de plataforma e da matriz de validação do x86QW.\n\n> Estado: candidata preparada em uma PR de release separada. A tag e a\n> publicação pública serão criadas somente após o merge e a etapa remota de\n> publicação autorizada.\n\n## Verdade de plataforma\n\n- separa presença de artefato, suporte declarado e validação executada;\n- conserva o cliente macOS universal como suporte condicional;\n- classifica Linux, Windows, serviços macOS e variantes ainda não submetidas a\n  smoke nativo como preview quando essa é a evidência disponível;\n- registra `portable-contract` para a validação de catálogo, contratos,\n  caminhos e CLI, sem apresentar isso como smoke nativo de runtime;\n- não declara evidência M3, assinatura Developer ID, notarização ou confiança\n  operacional de produção.\n\n## Evidência de entrada\n\n- a correção de plataforma foi integrada pela PR #66 em `db5f7088`;\n- os sete contextos protegidos passaram no head final da PR A;\n- esta PR acrescenta a identidade 0.7.4, os artefatos derivados e a regressão\n  da publicação corretiva.\n\n## Integridade\n\nO bundle 0.7.3 permanece histórico e imutável. O pacote 0.7.4 somente será\nconsiderado público depois que a tag, o asset, os mirrors, o catálogo e os\nbootstraps forem verificados após a publicação.\n\nIdentidade candidata: `x86qw-installer-0.7.4.zip`, 286223 bytes,\nSHA-256 `37f1372d2252a72ebdacb489ac15aacb45d45cebc5ee537ef158e43ed4e23e7f`.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.5",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.5.zip",
+      "size": 577437,
+      "sha256": "2af9a14729f0aa4dfd3ae8397fa025bc92c7b354ad5df8f1b741406e69414cf6",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.5/x86qw-installer-0.7.5.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.5/x86qw-installer-0.7.5.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.5/x86qw-installer-0.7.5.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.5/x86qw-installer-0.7.5.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.5",
+      "release_title": "x86QW Installer 0.7.5",
+      "release_notes": "# x86QW 0.7.5\n\nHotfix do canal autenticado de atualização do x86QW.\n\n## TUF\n\n- incorpora ao instalador a root pública Ed25519 de produção;\n- exige thresholds `2-de-3` para root e targets e `1-de-2` para snapshot e\n  timestamp;\n- autentica o catálogo pelo fluxo root → timestamp → snapshot → targets;\n- publica consistent snapshots em `/api/v1/trust/`;\n- falha de forma fechada quando a cadeia, o catálogo ou as versões divergem.\n\nAs dez chaves privadas não fazem parte do Git, do bundle, dos artefatos de CI\nou do site. A release 0.7.4 permanece histórica e imutável.\n\n## Validação\n\n- testes de threshold, expiração, rollback, equivocation e rotação de root;\n- refresh real com `python-tuf` 7.0.0 sobre a metadata assinada;\n- verificação do hash fixado da root incorporada;\n- inspeção do ZIP para impedir material privado.",
+      "mirror_title": "x86QW Installer 0.7.5",
+      "mirror_notes": "# x86QW 0.7.5\n\nHotfix do canal autenticado de atualização do x86QW.\n\n## TUF\n\n- incorpora ao instalador a root pública Ed25519 de produção;\n- exige thresholds `2-de-3` para root e targets e `1-de-2` para snapshot e\n  timestamp;\n- autentica o catálogo pelo fluxo root → timestamp → snapshot → targets;\n- publica consistent snapshots em `/api/v1/trust/`;\n- falha de forma fechada quando a cadeia, o catálogo ou as versões divergem.\n\nAs dez chaves privadas não fazem parte do Git, do bundle, dos artefatos de CI\nou do site. A release 0.7.4 permanece histórica e imutável.\n\n## Validação\n\n- testes de threshold, expiração, rollback, equivocation e rotação de root;\n- refresh real com `python-tuf` 7.0.0 sobre a metadata assinada;\n- verificação do hash fixado da root incorporada;\n- inspeção do ZIP para impedir material privado.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.6",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.6.zip",
+      "size": 577554,
+      "sha256": "ee3ce227fd1e6b604d56cf1c7559b57fe843fd5377fa592c075ba7210ed740c0",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.6/x86qw-installer-0.7.6.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.6/x86qw-installer-0.7.6.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.6/x86qw-installer-0.7.6.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.6",
+      "release_title": "x86QW Installer 0.7.6",
+      "release_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_title": "x86QW Installer 0.7.6",
+      "mirror_notes": "# x86QW 0.7.6\n\nHotfix do refresh TUF do instalador público.\n\n## Correção\n\n- preserva o status HTTP 404 recebido ao consultar a próxima versão de\n  `root.json`, permitindo que o cliente TUF encerre normalmente a rotação de\n  root quando não existe uma versão posterior;\n- mantém os limites de download, o catálogo autenticado e o comportamento\n  fail-closed para qualquer outra falha de trust;\n- adiciona regressão que reproduz a conversão de erro feita pelo downloader do\n  instalador.\n\nA release 0.7.5 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.6 e para a nova versão monotônica da metadata TUF.\n\n## Validação\n\n- refresh TUF real usando o domínio público;\n- instalação nova isolada pelo bootstrap público;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.7",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.7.zip",
+      "size": 577558,
+      "sha256": "7a3b0f2551f267e5d9a03ce9e3ac0b1a55b8be1bfc47f075500415624bfa637f",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.7/x86qw-installer-0.7.7.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.7/x86qw-installer-0.7.7.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.7/x86qw-installer-0.7.7.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.7",
+      "release_title": "x86QW Installer 0.7.7",
+      "release_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_title": "x86QW Installer 0.7.7",
+      "mirror_notes": "# x86QW 0.7.7\n\nHotfix do perfil Completo para pacotes grandes autenticados.\n\n## Correção\n\n- permite o hashing de arquivos ZIP de componentes com até 512 MiB, o mesmo\n  limite já aplicado ao download e ao arquivo-fonte do extrator;\n- mantém em 128 MiB o limite individual de cada arquivo extraído;\n- corrige a instalação do QRP alta resolução, cujo pacote tem aproximadamente\n  385,4 MiB;\n- adiciona regressão que reproduz a falha `EFBIG` observada no perfil Completo.\n\nA release 0.7.6 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.7 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- suíte completa de manutenção e site;\n- instalação dos 21 componentes pelo perfil Completo;\n- atualização e verificação pela CLI instalada;\n- hashes conferidos nos mirrors GitHub e GitLab.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.8",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.8.zip",
+      "size": 577617,
+      "sha256": "a594700b634be563c941d99272e017d8da2434417fa82c412666ac1e45db818c",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.8/x86qw-installer-0.7.8.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.8/x86qw-installer-0.7.8.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.8/x86qw-installer-0.7.8.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.8",
+      "release_title": "x86QW Installer 0.7.8",
+      "release_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
+      "mirror_title": "x86QW Installer 0.7.8",
+      "mirror_notes": "# x86QW 0.7.8\n\nHotfix da inicialização de Frogbots nas partidas KTX locais.\n\n## Correção\n\n- mantém os aliases de gerenciamento de Frogbots no nível superior da\n  configuração efêmera;\n- faz o evento de entrada do KTX chamar um único alias raiz, evitando que o\n  ezQuake descarte a sequência pós-mapa quando a configuração é longa;\n- corrige o comando `3on3on3` com oito bots, habilidade 20, nomes x86QW e mapa\n  `aerowalk`;\n- adiciona regressão automatizada para o comando exato relatado e preserva os\n  fluxos ToT, Practice, Race e CTF.\n\nA release 0.7.7 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.8 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressão RED reproduzindo a cadeia inválida de 23 aliases;\n- seis testes KTX direcionados;\n- suíte completa de componentes modernos;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions em macOS, Linux e Windows.",
+      "mirror_latest": false
+    },
+    {
+      "component": "installer",
+      "package": "x86qw-installer",
+      "version": "0.7.9",
+      "current": false,
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-installer-0.7.9.zip",
+      "size": 581134,
+      "sha256": "fb08bc987641d4bea84c463d8f58b9c93b62595ff42ea0f764d4123814be7e33",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+      "license": "x86qw-project-terms",
+      "license_url": "https://github.com/x86dx2/x86qw",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-0.7.9/x86qw-installer-0.7.9.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/0.7.9/x86qw-installer-0.7.9.zip"
+      ],
+      "distribution_path": "installer/packages/0.7.9/x86qw-installer-0.7.9.zip",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-0.7.9",
+      "release_title": "x86QW Installer 0.7.9",
+      "release_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
+      "mirror_title": "x86QW Installer 0.7.9",
+      "mirror_notes": "# x86QW 0.7.9\n\nCorreção da comparação de mudanças locais após uma instalação limpa.\n\n## Correção\n\n- registra os arquivos de configuração pessoal criados pelo instalador em um\n  baseline transacional separado dos componentes gerenciados;\n- faz `x86qw changes` considerar esse baseline, evitando marcar como novos os\n  arquivos padrão acabados de instalar;\n- adiciona `x86qw changes --sync-gitignore` para ignorar somente os arquivos\n  exatos da instalação e manter arquivos novos visíveis ao Git;\n- adota configurações legadas apenas quando os bytes ainda são idênticos ao\n  template, preservando alterações pessoais existentes;\n- mantém a comparação portátil e determinística em Linux, macOS e Windows.\n\nA release 0.7.8 permanece histórica e imutável. O bootstrap público passa a\napontar para o bundle 0.7.9 e para a versão seguinte da metadata TUF.\n\n## Validação\n\n- regressões de instalação limpa, arquivo novo, alterado e removido;\n- regressões de rollback e adoção segura de configurações legadas;\n- gate completo de manutenção e site;\n- contratos portáveis do GitHub Actions com Python 3.10 e 3.13 em macOS, Linux\n  e Windows.",
+      "mirror_latest": false
     },
     {
       "component": "ktx",

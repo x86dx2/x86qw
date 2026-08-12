@@ -20,6 +20,7 @@ from maintenance.tools.runtime_catalog import (
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "maintenance/inventory"
+AUDIT_METADATA_MEMBERS = frozenset({"_x86qw/runtime-dependencies.json"})
 
 
 def runtime_projection_leaks(payload: bytes) -> tuple[str, ...]:
@@ -27,6 +28,8 @@ def runtime_projection_leaks(payload: bytes) -> tuple[str, ...]:
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         for name in archive.namelist():
             if not name.startswith("_x86qw/") or not name.endswith(".json"):
+                continue
+            if name in AUDIT_METADATA_MEMBERS:
                 continue
             serialized = json.dumps(json.loads(archive.read(name))).casefold()
             if "https://" in serialized:
@@ -210,6 +213,31 @@ class RuntimeCatalogTests(unittest.TestCase):
         macos["support"] = "complete"
         with self.assertRaisesRegex(ValueError, "support"):
             self.validate(documents)
+
+    def test_platform_support_separates_artifact_state_from_validation(self):
+        support_states = {"supported", "conditional", "preview", "deprecated", "unavailable"}
+        validation_states = {"portable-contract", "native-evidence", "not-run"}
+        runtimes = runtimes_by_id(self.inventory["runtimes"])
+
+        for runtime in runtimes.values():
+            for platform in runtime["platforms"]:
+                with self.subTest(runtime=runtime["id"], variant=platform["variant"]):
+                    self.assertIn(platform["support"], support_states)
+                    self.assertIn(platform["validation"], validation_states)
+
+        self.assertEqual("conditional", runtimes["ezquake-stable"]["platforms"][0]["support"])
+        self.assertEqual("preview", runtimes["ezquake-stable"]["platforms"][1]["support"])
+        self.assertEqual("preview", runtimes["ezquake-nightly"]["platforms"][0]["support"])
+
+        targets = runtimes["ezquake-stable"]["platforms"][0]["support_targets"]
+        self.assertEqual(
+            {"macos-arm64", "macos-x64"},
+            {target["variant"] for target in targets},
+        )
+        self.assertEqual(
+            "preview",
+            next(target["support"] for target in targets if target["variant"] == "macos-x64"),
+        )
 
     def test_installer_zipapp_contains_only_runtime_projections(self):
         payload = zipapp_bytes("0.1.25")

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -217,6 +219,46 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             payload = artifact.read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), record["sha256"])
             self.assertEqual(len(payload), record["size"])
+
+    def test_modern_installer_carries_exact_project_notices_in_both_layers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".modern-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            with mock.patch.object(installer_builder, "validate_bootstrap_archive_source"):
+                result = installer_builder.build(output, "1.0.0")
+            self.assertEqual(
+                "installer/packages/1.0.0/x86qw-installer-1.0.0.zip",
+                result["distribution_path"],
+            )
+            archive_path = output / "1.0.0" / "x86qw-installer-1.0.0.zip"
+            outer = archive_runtime.validate_installer_bundle(archive_path, "1.0.0")
+            prefix = "x86qw-installer-1.0.0"
+            payloads = archive_runtime.read_archive_members(
+                outer,
+                (
+                    f"{prefix}/LICENSE",
+                    f"{prefix}/NOTICE",
+                    f"{prefix}/x86qw.pyz",
+                ),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), payloads[f"{prefix}/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), payloads[f"{prefix}/NOTICE"])
+            nested = archive_runtime.scan_archive(payloads[f"{prefix}/x86qw.pyz"])
+            nested_payloads = archive_runtime.read_archive_members(
+                nested, ("_x86qw/LICENSE", "_x86qw/NOTICE"),
+            )
+            self.assertEqual((ROOT / "LICENSE").read_bytes(), nested_payloads["_x86qw/LICENSE"])
+            self.assertEqual((ROOT / "NOTICE").read_bytes(), nested_payloads["_x86qw/NOTICE"])
+            self.assertEqual(9, len(outer.members))
+            self.assertEqual(hashlib.sha256(archive_path.read_bytes()).hexdigest(), result["sha256"])
+
+    def test_historical_installer_build_keeps_the_seven_member_outer_layout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix=".legacy-bundle-") as temporary:
+            output = Path(temporary) / "packages"
+            with mock.patch.object(installer_builder, "validate_bootstrap_archive_source"):
+                installer_builder.build(output, "0.7.3")
+            archive_path = output / "0.7.3" / "x86qw-installer-0.7.3.zip"
+            plan = archive_runtime.validate_installer_bundle(archive_path, "0.7.3")
+            self.assertEqual(7, len(plan.members))
 
     def test_component_package_rejects_source_replaced_after_scan(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -621,6 +663,55 @@ class BuilderArchiveBindingTests(unittest.TestCase):
             payload = target.read_bytes()
             self.assertEqual(hashlib.sha256(payload).hexdigest(), result["sha256"])
             self.assertEqual(len(payload), result["size"])
+            self.assertEqual(
+                target.relative_to(ROOT / "dist").as_posix(),
+                result["distribution_path"],
+            )
+
+    def test_workflow_candidate_build_uses_external_output_and_explicit_identity(self) -> None:
+        candidate_version = "1.0.0"
+        public_version = installer_builder.VERSION_FILE.read_bytes()
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "release-work/installer-build"
+            completed = subprocess.run(
+                (
+                    sys.executable,
+                    str(ROOT / "maintenance/tools/build_installer_bundle.py"),
+                    "--output",
+                    str(output),
+                    "--version",
+                    candidate_version,
+                ),
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            result = json.loads(completed.stdout)
+            filename = f"x86qw-installer-{candidate_version}.zip"
+            self.assertEqual(f"{candidate_version}/{filename}", result["distribution_path"])
+
+            archive = output / candidate_version / filename
+            plan = archive_runtime.validate_installer_bundle(archive, candidate_version)
+            prefix = f"x86qw-installer-{candidate_version}"
+            members = archive_runtime.read_archive_members(
+                plan,
+                (
+                    f"{prefix}/VERSION",
+                    f"{prefix}/installer.json",
+                    f"{prefix}/_x86qw/installer.json",
+                ),
+            )
+            self.assertEqual(
+                f"{candidate_version}\n".encode("ascii"),
+                members[f"{prefix}/VERSION"],
+            )
+            for name in ("installer.json", "_x86qw/installer.json"):
+                identity = json.loads(members[f"{prefix}/{name}"])
+                self.assertEqual(candidate_version, identity["version"])
+
+        self.assertEqual(public_version, installer_builder.VERSION_FILE.read_bytes())
 
     def test_installer_record_uses_immutable_project_license_tag(self) -> None:
         record = installer_builder.installer_record(

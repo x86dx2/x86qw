@@ -309,14 +309,14 @@ para distinguir baseline, sequência, evidência e gates de aprovação.
 
 | Componente | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
-| ezQuake stable + nightly | Universal · condicional | x86-64 | x64 |
-| MVDSV | Apple Silicon | amd64 | x64 |
-| QTV | Apple Silicon | amd64 | x64 |
-| QWFWD | Apple Silicon | amd64 | x64 |
+| ezQuake stable + nightly | Universal · condicional/preview | x86-64 · preview | x64 · preview |
+| MVDSV | arm64 · preview | amd64 · preview | x64 · preview |
+| QTV | arm64 · preview | amd64 · preview | x64 · preview |
+| QWFWD | arm64 · preview | amd64 · preview | x64 · preview |
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso
