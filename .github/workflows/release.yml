@@ -611,6 +611,7 @@ jobs:
             --root maintenance/trust/root.json \
             --catalog candidate/catalog.json
           python3 maintenance/tools/verify_public_bootstraps.py --candidate candidate
+          python3 maintenance/tools/verify_public_product.py --candidate candidate
       - name: Record metadata-last post-publish result
         run: |
-          echo "metadata-last verified candidate catalog, signed TUF and public endpoint" >> "$GITHUB_STEP_SUMMARY"
+          echo "metadata-last verified candidate catalog, product, bootstraps, signed TUF and public endpoint" >> "$GITHUB_STEP_SUMMARY"

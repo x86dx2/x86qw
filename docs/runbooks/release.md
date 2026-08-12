@@ -135,8 +135,8 @@ stale se ela aparecer no staging.
 8. `verify-mirrors` valida cada URL declarado pelo catálogo;
 9. `metadata-last` valida metadata TUF assinada fornecida pela custódia e só a
    disponibiliza para staging depois dos assets;
-   a verificação final de TUF e bootstraps públicos ocorre no mesmo job após o
-   deploy.
+   a verificação final de TUF, produto e bootstraps públicos ocorre no mesmo job
+   após o deploy; o produto é comparado byte a byte com o candidato aprovado.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,
