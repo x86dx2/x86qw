@@ -1654,7 +1654,10 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                 self.calls += 1
                 if self.calls == 1:
                     self.registry.register(threading.get_ident(), CancelConnection())
-                    release.wait(1)
+                    # Do not let the fake response win the same deadline race
+                    # as the production worker.  The downloader must cancel
+                    # this open before it is allowed to return.
+                    release.wait()
                 return Response(b"valid", request.full_url)
 
         timeout = TimeoutThenValidOpener()
@@ -1674,6 +1677,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
                     2,
                 )
             self.assertEqual(b"valid", destination.read_bytes())
+        self.assertTrue(release.is_set())
         self.assertEqual(2, timeout.calls)
 
         connect_release = threading.Event()
