@@ -87,28 +87,17 @@ class NativeWorkflowTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, source)
 
-    def test_m3_workflow_fails_before_queue_when_no_online_m3_runner_exists(self):
+    def test_m3_workflow_queues_only_on_the_explicit_m3_runner_labels(self):
         source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
-        self.assertIn("name: Preflight online M3 runner", source)
-        self.assertIn("actions: read", source)
-        self.assertIn("/actions/runners?per_page=100", source)
-        self.assertIn('if ! runners="$(curl -fsSL', source)
-        self.assertIn("Self-hosted runner inventory unavailable", source)
-        self.assertIn('select(.status == "online")', source)
-        self.assertIn(
-            'select(.labels | map(.name | ascii_downcase) | index("m3"))',
-            source,
-        )
-        self.assertIn(
-            'select(.labels | map(.name | ascii_downcase) | index("macos"))',
-            source,
-        )
-        self.assertIn(
-            'select(.labels | map(.name | ascii_downcase) | index("arm64"))',
-            source,
-        )
-        self.assertIn("No online Apple M3 runner is registered", source)
-        self.assertIn("needs: m3-preflight", source)
+        self.assertIn("name: Execute exact candidate on Apple M3", source)
+        self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", source)
+
+    def test_m3_workflow_does_not_probe_runner_inventory_with_github_token(self):
+        source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertNotIn("/actions/runners?per_page=100", source)
+        self.assertNotIn("GITHUB_API_URL", source)
+        self.assertNotIn("needs: m3-preflight", source)
+        self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", source)
 
 
 if __name__ == "__main__":
