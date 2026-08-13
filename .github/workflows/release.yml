@@ -16,6 +16,26 @@ on:
         description: "SHA completo do commit candidato"
         required: true
         type: string
+      candidate_run_id:
+        description: "Run que produziu o candidato imutável"
+        required: false
+        default: ""
+        type: string
+      candidate_artifact_id:
+        description: "Artifact ID do candidato imutável"
+        required: false
+        default: ""
+        type: string
+      candidate_artifact_name:
+        description: "Nome exato do artifact do candidato imutável"
+        required: false
+        default: ""
+        type: string
+      candidate_sha256:
+        description: "SHA-256 exato de candidate.json do candidato imutável"
+        required: false
+        default: ""
+        type: string
       candidate_version:
         description: "Versão SemVer do candidato (não altera VERSION público)"
         required: true
@@ -91,6 +111,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - name: Checkout immutable candidate commit
+        if: ${{ inputs.mode == 'rehearsal' }}
         shell: bash
         env:
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
@@ -101,13 +122,36 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
+      - name: Validate prebuilt candidate provenance
+        if: ${{ inputs.mode != 'rehearsal' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+        run: |
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$CANDIDATE_ARTIFACT_NAME" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --workflow .github/workflows/release.yml \
+            --output "$RUNNER_TEMP/candidate-artifact.json"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: ${{ inputs.mode == 'rehearsal' }}
         id: lfs-cache
         with:
           path: .git/lfs/objects
           key: x86qw-lfs-v3-${{ inputs.candidate_commit }}
           enableCrossOsArchive: true
       - name: Restore or fetch the LFS materialization
+        if: ${{ inputs.mode == 'rehearsal' }}
         shell: bash
         run: |
           if [ "${{ steps.lfs-cache.outputs.cache-hit }}" = "true" ]; then
@@ -119,6 +163,7 @@ jobs:
             git lfs checkout
           fi
       - name: Validate immutable source identity and LFS
+        if: ${{ inputs.mode == 'rehearsal' }}
         env:
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
           CANDIDATE_MODE: ${{ inputs.mode }}
@@ -135,7 +180,38 @@ jobs:
           git lfs fsck --pointers
           python3 maintenance/tools/check_lfs.py
           ./maintenance/manage.py verify
+      - name: Download immutable candidate artifact
+        if: ${{ inputs.mode != 'rehearsal' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: release-work/candidate
+      - name: Verify downloaded candidate identity
+        if: ${{ inputs.mode != 'rehearsal' }}
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          EXPECTED_COMMIT: ${{ inputs.candidate_commit }}
+          EXPECTED_VERSION: ${{ inputs.candidate_version }}
+        run: |
+          [[ "$EXPECTED_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("release-work/candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify release-work/candidate
+          python3 - "$EXPECTED_COMMIT" "$EXPECTED_VERSION" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path("release-work/candidate/candidate.json").read_text(encoding="utf-8"))
+          if manifest["commit"] != sys.argv[1] or manifest["version"] != sys.argv[2]:
+              raise SystemExit("candidate.json diverge da identidade solicitada")
+          PY
       - name: Build every candidate payload once
+        if: ${{ inputs.mode == 'rehearsal' }}
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
@@ -228,8 +304,14 @@ jobs:
         id: identity
         env:
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_MODE: ${{ inputs.mode }}
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
         run: |
           digest="$(python3 -c 'import hashlib; print(hashlib.sha256(open("release-work/candidate/candidate.json", "rb").read()).hexdigest())')"
+          if [ "$CANDIDATE_MODE" != "rehearsal" ]; then
+            [[ "$EXPECTED_CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            test "$digest" = "$EXPECTED_CANDIDATE_SHA256"
+          fi
           echo "candidate-sha256=$digest" >> "$GITHUB_OUTPUT"
           echo "candidate-artifact-name=candidate-${CANDIDATE_COMMIT}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Upload without overwrite
