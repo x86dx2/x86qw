@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest import mock
 
@@ -64,6 +65,65 @@ class PrivateFilesystemContractTests(unittest.TestCase):
             managed,
         )
         self.assertEqual(windows_acl._WindowsApi.FILE_SHARE_READ, external)
+
+    def test_managed_reader_releases_directory_lease_before_consuming_snapshot(self):
+        events: list[str] = []
+        lease = mock.MagicMock()
+        lease.__enter__.side_effect = lambda: events.append("lease-enter") or lease
+        lease.__exit__.side_effect = lambda *_args: events.append("lease-exit")
+
+        kernel32 = mock.Mock()
+        kernel32.CreateFileW.return_value = 123
+
+        def get_file_size(_handle, pointer):
+            events.append("size")
+            pointer._obj.value = 1
+            return True
+
+        kernel32.GetFileSizeEx.side_effect = get_file_size
+        kernel32.CloseHandle.return_value = True
+        api = SimpleNamespace(
+            kernel32=kernel32,
+            INVALID_HANDLE_VALUE=-1,
+            FILE_READ_DATA=1,
+            READ_CONTROL=2,
+            FILE_READ_ATTRIBUTES=4,
+            FILE_SHARE_READ=8,
+            OPEN_EXISTING=3,
+            FILE_ATTRIBUTE_NORMAL=16,
+            FILE_FLAG_OPEN_REPARSE_POINT=32,
+        )
+        source = mock.MagicMock()
+        source.__enter__.side_effect = lambda: events.append("read-enter") or source
+        source.read.side_effect = lambda _size: events.append("read") or b"x"
+        source.__exit__.side_effect = lambda *_args: events.append("read-exit")
+        fake_msvcrt = SimpleNamespace(
+            open_osfhandle=lambda *_args: os.open(os.devnull, os.O_RDONLY),
+        )
+
+        with mock.patch.object(
+            windows_acl, "_hold_plain_directory_chain", return_value=lease,
+        ), mock.patch.object(
+            windows_acl, "_assert_persistent_acls",
+        ), mock.patch.object(
+            windows_acl, "_assert_handle_type",
+        ), mock.patch.object(
+            windows_acl, "_acl_from_handle", return_value=object(),
+        ), mock.patch.object(
+            windows_acl, "_assert_acl",
+        ), mock.patch.object(
+            windows_acl, "_api", return_value=api,
+        ), mock.patch.object(
+            windows_acl.os, "fdopen", return_value=source,
+        ), mock.patch.dict(sys.modules, {"msvcrt": fake_msvcrt}):
+            self.assertEqual(
+                b"x",
+                windows_acl.read_validated_private_file(
+                    Path("C:/x86qw/session.json"), maximum_size=64,
+                ),
+            )
+
+        self.assertLess(events.index("lease-exit"), events.index("read-enter"))
 
     @unittest.skipIf(os.name == "nt", "modos POSIX são validados nos runners Unix")
     def test_posix_private_creation_is_owner_only(self):

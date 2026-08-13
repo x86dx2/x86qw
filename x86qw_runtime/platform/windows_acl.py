@@ -806,15 +806,15 @@ def read_validated_private_file(
     """Validate and read a private regular file through one no-follow handle."""
     if type(maximum_size) is not int or maximum_size < 0:
         raise ValueError("maximum_size must be a non-negative integer")
+    api = _api()
+    # Managed metadata is atomically replaced and deleted while status or
+    # recovery may be reading the previous object.  Share mutation for
+    # canonical x86QW files: the handle still pins the exact snapshot being
+    # validated and read.  A user-supplied password file is different; keep
+    # it read-shared only so it cannot change during secret ingestion.
+    share_mode = _private_read_share_mode(exact=exact)
     with _hold_plain_directory_chain(path.parent):
         _assert_persistent_acls(path.parent)
-        api = _api()
-        # Managed metadata is atomically replaced and deleted while status or
-        # recovery may be reading the previous object.  Share mutation for
-        # canonical x86QW files: the handle still pins the exact snapshot being
-        # validated and read.  A user-supplied password file is different; keep
-        # it read-shared only so it cannot change during secret ingestion.
-        share_mode = _private_read_share_mode(exact=exact)
         handle = api.kernel32.CreateFileW(
             str(path), api.FILE_READ_DATA | api.READ_CONTROL | api.FILE_READ_ATTRIBUTES,
             share_mode, None, api.OPEN_EXISTING,
@@ -822,7 +822,6 @@ def read_validated_private_file(
         )
         if handle == api.INVALID_HANDLE_VALUE:
             raise api.error(f"could not open private file {path}")
-        transferred = False
         try:
             _assert_handle_type(handle, directory=False)
             _assert_acl(
@@ -838,15 +837,17 @@ def read_validated_private_file(
             descriptor = msvcrt.open_osfhandle(
                 int(handle), os.O_RDONLY | getattr(os, "O_BINARY", 0),
             )
-            transferred = True
-            with os.fdopen(descriptor, "rb", closefd=True) as source:
-                payload = source.read(maximum_size + 1)
-            if len(payload) > maximum_size:
-                raise WindowsAclError(f"private file exceeds {maximum_size} bytes")
-            return payload
-        finally:
-            if not transferred:
-                api.kernel32.CloseHandle(handle)
+        except BaseException:
+            api.kernel32.CloseHandle(handle)
+            raise
+    try:
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            payload = source.read(maximum_size + 1)
+        if len(payload) > maximum_size:
+            raise WindowsAclError(f"private file exceeds {maximum_size} bytes")
+        return payload
+    finally:
+        os.close(descriptor)
 
 
 def read_and_protect_legacy_file(
