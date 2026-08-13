@@ -142,10 +142,12 @@ produz, fora do candidato, `records/macOS-ARM64.json` e
 dois arquivos, o plano e o agregado pending; os logs e recibos brutos ficam no
 scratch privado do runner.
 
-O custodiante assina os bytes exatos de `release-evidence-body.json` fora do
-repositório e devolve um envelope JSON público com `body_sha256` e
-`{keyid,sig}`. O workflow `sign-native-evidence.yml` verifica a proveniência do
-run M3, baixa o candidato e o input, executa:
+O mantenedor autorizado assina os bytes exatos de
+`release-evidence-body.json` fora do repositório e devolve um envelope JSON
+público com `body_sha256` e `{keyid,sig}`. Neste projeto, o único mantenedor
+pode executar essa cerimônia sob o waiver do ADR 0007; isso não é revisão
+humana independente. O workflow `sign-native-evidence.yml` verifica a
+proveniência do run M3, baixa o candidato e o input, executa:
 
 ```sh
 python3 -m maintenance.tools.assemble_release_evidence assemble \

@@ -206,7 +206,12 @@ def verify_release_evidence(
     *,
     expected_identity: Mapping[str, object],
 ) -> dict[str, object]:
-    """Verify external 2-of-3 M3 evidence without handling private keys."""
+    """Verify authorized 2-of-3 M3 evidence without handling private keys.
+
+    The cryptographic threshold remains 2-of-3 even though ADR 0007 records
+    that all custodial keys belong to the sole maintainer; that waiver never
+    becomes a claim of independent human review.
+    """
     if (
         not isinstance(expected_identity, Mapping)
         or set(expected_identity) != {"version", "commit", "manifest_sha256"}

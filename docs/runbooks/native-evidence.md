@@ -71,12 +71,18 @@ JSON canônico que será assinado; stdout, stderr, recibos brutos e o runtime
 temporário permanecem no scratch privado do runner.
 
 O workflow `.github/workflows/sign-native-evidence.yml` é o adaptador protegido
-da custódia. Ele verifica por API que o artifact do `build-once` e o run
+da custódia. Sob o waiver do ADR 0007, o único mantenedor pode executar a
+assinatura fora da CI; isso não cria revisão humana independente. O workflow
+verifica por API que o artifact do `build-once` e o run
 `native-m3` pertencem ao repositório, ao commit e aos IDs/nomes informados,
 baixa os mesmos bytes, recebe apenas um
 envelope público de assinaturas (`signatures.json` em base64) e exige
 `M3_TRUST_ROOT_B64` no ambiente protegido. `maintenance.tools.assemble_release_evidence`
 recusa qualquer chave privada, exige o `--trust-root`, confere o hash do corpo
 canônico e autentica o agregado antes de o workflow produzir
-`native-m3-signed`. Esse workflow não assina: a assinatura continua sendo
-gerada por um custodiante externo.
+`native-m3-signed`. Esse workflow não assina: a assinatura é gerada pelo
+mantenedor autorizado fora da CI e a CI verifica somente o envelope público.
+A root pública versionada é `maintenance/trust/m3-root.json`; a política
+criptográfica continua 2-de-3 e cada evidência precisa de duas chaves distintas.
+As três sementes privadas ficam no cofre Proton Pass `x86QW`; o mantenedor único
+é o custodiante de todas elas, sem alegação de independência humana.

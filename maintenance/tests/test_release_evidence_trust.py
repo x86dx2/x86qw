@@ -3,9 +3,13 @@ from __future__ import annotations
 import base64
 import json
 import unittest
+from pathlib import Path
 
 from maintenance.tests.trust_support import EphemeralSigner
 from x86qw_runtime import trust
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def canonical(value: object) -> bytes:
@@ -84,6 +88,14 @@ class ReleaseEvidenceTrustTests(unittest.TestCase):
             expected_identity=self.identity,
         )
         self.assertEqual("complete", result["status"])
+
+    def test_versioned_production_m3_root_is_self_signed_and_keeps_two_of_three(self):
+        root_path = ROOT / "maintenance/trust/m3-root.json"
+        self.assertTrue(root_path.is_file())
+        keys = trust._load_evidence_root(root_path.read_bytes())
+        self.assertEqual(3, len(keys))
+        document = json.loads(root_path.read_text(encoding="utf-8"))
+        self.assertEqual(2, document["signed"]["threshold"])
 
     def test_root_requires_self_signed_threshold(self):
         root = json.loads(json.dumps(self.root))

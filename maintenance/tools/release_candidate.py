@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from maintenance.tools.release_trust import TrustError, verify_release_evidence
+from x86qw_runtime.trust import TrustError, verify_release_evidence
 from x86qw_runtime.contracts.native_evidence import (
     NATIVE_EVIDENCE_FORMAT,
     NativeEvidenceError,
