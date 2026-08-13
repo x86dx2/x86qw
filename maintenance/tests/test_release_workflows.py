@@ -122,7 +122,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotRegex(source, r"(?m)^permissions:\n  contents: (?:read|write)\n\nconcurrency:")
         self.assertIn("  publish-assets:\n", source)
         publish = source.split("  publish-assets:\n", 1)[1].split("\n  publish-gitlab:\n", 1)[0]
-        self.assertIn("    permissions:\n      contents: write\n", publish)
+        self.assertIn("    permissions:\n      contents: read\n", publish)
+        self.assertIn("GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}", publish)
+        self.assertNotIn("GH_TOKEN: ${{ github.token }}", publish)
         for job_name in ("build-once", "portable-verify", "approval-preview", "approval", "verify-release-mirrors"):
             start = source.index(f"  {job_name}:\n")
             following = re.search(r"\n  [A-Za-z0-9_-]+:\n", source[start + 1:])
