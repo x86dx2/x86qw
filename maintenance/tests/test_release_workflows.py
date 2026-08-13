@@ -25,6 +25,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/publish_gitlab_candidate.py",
             "maintenance/tools/verify_release_mirrors.py",
             "maintenance/tools/publish_tuf_metadata.py",
+            "maintenance/tools/prepare_tuf_handoff.py",
             "maintenance/tools/render_release_site.py",
             "maintenance/tools/assemble_site_release.py",
             "maintenance/tools/verify_public_tuf.py",
@@ -48,6 +49,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/validate.yml",
             ROOT / ".github/workflows/release.yml",
             ROOT / ".github/workflows/sign-native-evidence.yml",
+            ROOT / ".github/workflows/tuf-metadata-handoff.yml",
             ROOT / ".github/workflows/tuf-monitor.yml",
         ]
         for path in workflows:
@@ -64,6 +66,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertTrue((ROOT / "site/package.json").is_file())
         self.assertTrue((ROOT / "site/package-lock.json").is_file())
         self.assertIn("npm ci", workflows[0].read_text(encoding="utf-8"))
+
+    def test_tuf_handoff_is_protected_and_binds_the_exact_candidate(self):
+        source = (ROOT / ".github/workflows/tuf-metadata-handoff.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("--workflow .github/workflows/release.yml", source)
+        self.assertIn("prepare_tuf_handoff.py", source)
+        self.assertIn("publish_tuf_metadata.py", source)
+        self.assertIn("candidate/catalog.json", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn("retention-days: 90", source)
+        self.assertIn("tuf-metadata-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
 
     def test_release_builds_once_then_reuses_one_digest_bound_candidate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

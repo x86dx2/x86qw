@@ -1,0 +1,118 @@
+name: Assemble signed TUF metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_artifact_id:
+        description: "Artifact ID imutável produzido pelo build-once"
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: "Nome exato do artifact produzido pelo build-once"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Run ID que produziu o candidato"
+        required: true
+        type: string
+      candidate_commit:
+        description: "SHA completo do commit candidato"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA-256 exato de candidate.json"
+        required: true
+        type: string
+      metadata_bundle_b64:
+        description: "Bundle gzip/tar assinado, base64, contendo somente metadata/ e targets/"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-tuf-metadata-${{ inputs.candidate_commit }}
+  cancel-in-progress: false
+
+jobs:
+  handoff:
+    name: Verify provenance and assemble exact TUF metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate immutable coordinates
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          TUF_METADATA_BUNDLE_B64: ${{ inputs.metadata_bundle_b64 }}
+        run: |
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          test -n "$TUF_METADATA_BUNDLE_B64"
+          test "${#TUF_METADATA_BUNDLE_B64}" -le 65535
+      - name: Verify candidate build artifact provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "${{ inputs.candidate_run_id }}" \
+            --commit "${{ inputs.candidate_commit }}" \
+            --artifact "${{ inputs.candidate_artifact_name }}" \
+            --artifact-id "${{ inputs.candidate_artifact_id }}" \
+            --workflow .github/workflows/release.yml \
+            --output "$RUNNER_TEMP/candidate-artifact.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: candidate
+      - name: Verify exact candidate bytes
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify candidate
+      - name: Decode the bounded signed handoff
+        env:
+          TUF_METADATA_BUNDLE_B64: ${{ inputs.metadata_bundle_b64 }}
+        run: python3 maintenance/tools/prepare_tuf_handoff.py --output signed-tuf
+      - name: Authenticate signed TUF against exact candidate catalog
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/publish_tuf_metadata.py \
+            --metadata-dir signed-tuf \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --stage-dir verified-tuf
+      - name: Upload exact signed metadata without overwrite
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tuf-metadata-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified-tuf
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
