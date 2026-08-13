@@ -58,9 +58,9 @@ jobs:
           online_m3="$(printf '%s' "$runners" | jq '[
             .runners[]
             | select(.status == "online")
-            | select(.labels | map(.name) | index("M3"))
-            | select(.labels | map(.name) | index("macOS"))
-            | select(.labels | map(.name) | index("arm64"))
+            | select(.labels | map(.name | ascii_downcase) | index("m3"))
+            | select(.labels | map(.name | ascii_downcase) | index("macos"))
+            | select(.labels | map(.name | ascii_downcase) | index("arm64"))
           ] | length')"
           if [ "$online_m3" -lt 1 ]; then
             echo "No online Apple M3 runner is registered; native evidence cannot start." >&2

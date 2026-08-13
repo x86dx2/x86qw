@@ -95,9 +95,18 @@ class NativeWorkflowTests(unittest.TestCase):
         self.assertIn('if ! runners="$(curl -fsSL', source)
         self.assertIn("Self-hosted runner inventory unavailable", source)
         self.assertIn('select(.status == "online")', source)
-        self.assertIn('select(.labels | map(.name) | index("M3"))', source)
-        self.assertIn('select(.labels | map(.name) | index("macOS"))', source)
-        self.assertIn('select(.labels | map(.name) | index("arm64"))', source)
+        self.assertIn(
+            'select(.labels | map(.name | ascii_downcase) | index("m3"))',
+            source,
+        )
+        self.assertIn(
+            'select(.labels | map(.name | ascii_downcase) | index("macos"))',
+            source,
+        )
+        self.assertIn(
+            'select(.labels | map(.name | ascii_downcase) | index("arm64"))',
+            source,
+        )
         self.assertIn("No online Apple M3 runner is registered", source)
         self.assertIn("needs: m3-preflight", source)
 

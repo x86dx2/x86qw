@@ -267,10 +267,10 @@ class ContinuousIntegrationTests(unittest.TestCase):
 
     def test_portable_contract_seeds_one_shared_lfs_cache_before_other_matrix_jobs(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        self.assertIn("max-parallel: 1", workflow)
+        self.assertIn("lfs-seed:", workflow)
+        self.assertIn("needs: lfs-seed", workflow)
+        self.assertNotIn("seed_lfs:", workflow)
         self.assertIn("matrix:\n        include:", workflow)
-        self.assertIn("seed_lfs: true", workflow)
-        self.assertIn("seed_lfs: false", workflow)
         self.assertIn(
             "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
             workflow,
@@ -375,6 +375,13 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("self-hosted, macOS, arm64, M3", native_workflow)
         self.assertIn("native-m3.yml", release)
         self.assertIn('REQUIRED_NATIVE_PLATFORMS = frozenset({"macOS-ARM64"})', contract)
+
+    def test_native_m3_preflight_accepts_github_normalized_runner_labels(self):
+        native_workflow = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
+        self.assertIn("ascii_downcase", native_workflow)
+        github_runner_labels = {"self-hosted", "macOS", "ARM64", "M3"}
+        normalized_labels = {label.casefold() for label in github_runner_labels}
+        self.assertTrue({"macos", "arm64", "m3"} <= normalized_labels)
 
     def test_site_uses_lockfile(self):
         self.assertTrue((ROOT / "site/package.json").is_file())
