@@ -211,10 +211,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_keeps_rehearsal_separate_from_fail_closed_promotion(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("mode == 'rehearsal'", source)
-        self.assertIn("mode == 'promote-1.0'", source)
+        self.assertIn("promote-1.0", source)
+        self.assertIn("inputs.mode != 'rehearsal'", source)
         self.assertIn("environment: release", source)
         self.assertIn("release-evidence.json", source)
         self.assertIn("M3", source)
+
+    def test_release_exposes_a_protected_rc_promotion_path(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("- promote-rc", source)
+        self.assertIn("inputs.mode != 'rehearsal'", source)
+        self.assertIn("promote-rc) [[ \"$CANDIDATE_VERSION\" =~ ^1\\.0\\.0-rc\\.[0-9]+$ ]]", source)
+        self.assertIn("Protected release approval boundary", source)
 
     def test_promotion_rechecks_live_p0_p1_blockers_before_m3_gate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
