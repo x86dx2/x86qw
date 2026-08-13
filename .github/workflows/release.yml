@@ -88,7 +88,7 @@ jobs:
         with:
           ref: main
           lfs: false
-          fetch-depth: 1
+          fetch-depth: 0
           fetch-tags: true
       - name: Checkout immutable candidate commit
         shell: bash
