@@ -51,6 +51,9 @@ concurrency:
 jobs:
   assemble:
     name: Verify provenance and assemble exact M3 evidence
+    # ADR 0007 — solo maintainer waiver: the owner signs outside CI. The
+    # cryptographic root remains 2-of-3; two distinct keys are required, but
+    # this job never claims independent human review or handles private keys.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release
@@ -153,6 +156,11 @@ jobs:
           printf '%s' "$M3_TRUST_ROOT_B64" | base64 --decode > "$RUNNER_TEMP/m3-root.json"
           test -s "$RUNNER_TEMP/signatures.json"
           test -s "$RUNNER_TEMP/m3-root.json"
+          versioned_root_b64="$(python3 -c 'import base64; print(base64.b64encode(open("maintenance/trust/m3-root.json", "rb").read()).decode("ascii"))')"
+          test "$M3_TRUST_ROOT_B64" = "$versioned_root_b64" || {
+            echo "M3 root secret diverges from the versioned public root" >&2
+            exit 1
+          }
           mkdir -p signed-evidence
           python3 -m maintenance.tools.assemble_release_evidence assemble \
             --candidate candidate \

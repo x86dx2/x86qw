@@ -1,8 +1,10 @@
 """Prepare and assemble the signed release-evidence handoff.
 
 This tool never handles a private key.  The native runner produces unsigned
-platform records; an external custodian signs the canonical body and returns a
-small public signature envelope.  This module binds both to the exact
+platform records; the authorized release signer signs the canonical body
+outside the repository and returns a small public signature envelope.  Under
+ADR 0007 that signer may be the sole maintainer; this is a governance waiver,
+not a claim of independent human review.  This module binds both to the exact
 candidate and emits the aggregate consumed by the promotion gate.
 """
 
@@ -24,8 +26,9 @@ if str(ROOT) not in sys.path:
 
 from maintenance.tools import native_release_evidence
 from maintenance.tools.release_candidate import CandidateError, verify_candidate
-from maintenance.tools.release_trust import canonical_json_bytes, verify_release_evidence
+from maintenance.tools.release_trust import canonical_json_bytes
 from x86qw_runtime.contracts.native_evidence import REQUIRED_NATIVE_PLATFORMS
+from x86qw_runtime.trust import TrustError as EvidenceTrustError, verify_release_evidence
 
 
 PROJECT = "x86qw"
@@ -168,7 +171,7 @@ def _canonical_body(path: Path, *, identity: dict[str, str], records: tuple[dict
 
 
 def prepare_body(*, candidate: Path, records_dir: Path, output: Path) -> dict[str, object]:
-    """Write the exact unsigned body that the external signer must sign."""
+    """Write the exact unsigned body that the authorized signer must sign."""
 
     output = _safe_output(candidate, output, label="corpo")
     identity = _manifest_identity(Path(candidate))
@@ -230,7 +233,7 @@ def assemble(
     output: Path,
     trust_root: Path | None = None,
 ) -> dict[str, object]:
-    """Attach only external public signatures and optionally verify their root."""
+    """Attach only authorized public signatures and verify their root."""
 
     output = _safe_output(candidate, output, label="evidência assinada")
     identity = _manifest_identity(Path(candidate))
@@ -275,7 +278,7 @@ def assemble(
                     )
                 except EvidenceAssemblyError:
                     raise
-                except (OSError, ValueError) as error:
+                except (EvidenceTrustError, OSError, ValueError) as error:
                     raise EvidenceAssemblyError(
                         f"assinaturas não foram autenticadas pelo root fornecido: {error}"
                     ) from error
@@ -299,7 +302,7 @@ def main(arguments: list[str] | None = None) -> int:
     prepare.add_argument("--candidate", type=Path, required=True)
     prepare.add_argument("--records-dir", type=Path, required=True)
     prepare.add_argument("--output", type=Path, required=True)
-    assemble_parser = commands.add_parser("assemble", help="anexar assinaturas externas sem chave privada")
+    assemble_parser = commands.add_parser("assemble", help="anexar assinaturas autorizadas sem chave privada")
     assemble_parser.add_argument("--candidate", type=Path, required=True)
     assemble_parser.add_argument("--records-dir", type=Path, required=True)
     assemble_parser.add_argument("--body", type=Path, required=True)

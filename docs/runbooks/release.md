@@ -120,9 +120,10 @@ stale se ela aparecer no staging.
    e o nome exato do artifact, verifica pela API que a publicação pertence ao
    `build-once`, confere o SHA do candidato no runner self-hosted Apple M3 e
    produz somente observação `pending`, sem assinatura;
-4. a cerimônia independente assina o corpo canônico fora do repositório; o
-   workflow `sign-native-evidence.yml` autentica esse envelope e fornece o
-   artifact `native-m3-signed` ao workflow de promoção;
+4. o mantenedor autorizado assina o corpo canônico fora do repositório, sob o
+   waiver do ADR 0007; isso não é revisão humana independente. O workflow
+   `sign-native-evidence.yml` autentica esse envelope e fornece o artifact
+   `native-m3-signed` ao workflow de promoção;
 5. `approval` e `release-blockers` formam o limite protegido: a API do GitHub
    é consultada com `issues: read` e falha
    fechado se houver issue P0/P1 aberta ou se a resposta não puder ser
@@ -147,14 +148,15 @@ evidência não assinada ou metadata TUF ausente falham fechados.
 `maintenance/tools/publish_tuf_metadata.py` valida a root incorporada, autentica
 timestamp/snapshot/targets e compara o target `catalog/catalog.json` com o
 catálogo final. Ele não cria chaves, assina, renova ou publica metadata. A
-cerimônia externa deve fornecer `metadata/` e `targets/`; o processo de
-publicação do site recebe somente o staging validado.
+cerimônia autorizada do mantenedor deve fornecer `metadata/` e `targets/`; o
+processo de publicação do site recebe somente o staging validado.
 
-A renovação operacional ainda requer custódia independente, monitor de
-expiração e um signer agendado. `.github/workflows/tuf-monitor.yml` executa a
+A renovação operacional, neste repositório de mantenedor único, requer custódia
+explicitamente sob o ADR 0007, monitor de expiração e um signer agendado.
+`.github/workflows/tuf-monitor.yml` executa a
 verificação autenticada de hora em hora, falha 6 horas antes do vencimento e
 abre/atualiza uma única issue acionável quando o monitor falha; ele é somente
-observabilidade e não substitui a cerimônia externa de renovação. Sem signer,
+observabilidade e não substitui a cerimônia autorizada de renovação. Sem signer,
 alertas entregues e um drill de recuperação observados, a 1.0 permanece NO-GO
 mesmo que a validação técnica da TUF passe.
 

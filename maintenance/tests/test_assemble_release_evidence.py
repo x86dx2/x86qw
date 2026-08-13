@@ -104,7 +104,7 @@ class AssembleReleaseEvidenceTests(unittest.TestCase):
                 body_path.read_bytes(), assemble_release_evidence.canonical_json_bytes(body),
             )
 
-    def test_assemble_binds_external_signatures_without_private_key_material(self):
+    def test_assemble_binds_authorized_signatures_without_private_key_material(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate = self._candidate(root)

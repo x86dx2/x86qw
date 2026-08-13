@@ -118,7 +118,7 @@ jobs:
             --report "$RUNNER_TEMP/native-m3/release-smoke-normalized.json" \
             --artifact-root "$RUNNER_TEMP/native-m3" \
             --output "$RUNNER_TEMP/native-m3/records/macOS-ARM64.json"
-      - name: Prepare the exact unsigned body for the external signer
+      - name: Prepare the exact unsigned body for the authorized signer
         run: |
           python3 -m maintenance.tools.assemble_release_evidence prepare \
             --candidate candidate \
@@ -142,7 +142,7 @@ jobs:
             "$RUNNER_TEMP/native-evidence-input/records/macOS-ARM64.json"
           cp "$RUNNER_TEMP/native-m3/release-evidence-body.json" \
             "$RUNNER_TEMP/native-evidence-input/release-evidence-body.json"
-          echo "signed: false; promotable: false; pending only; external signature required" >> "$GITHUB_STEP_SUMMARY"
+          echo "signed: false; promotable: false; pending only; authorized maintainer signature required under ADR 0007" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload exact M3 observation for the signing ceremony
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

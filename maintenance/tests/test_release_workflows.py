@@ -256,7 +256,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         gate = source[source.index("promotion-gate:"):]
         self.assertIn("release-blockers", gate.split("verify-release-mirrors:", 1)[0])
 
-    def test_promotion_attaches_external_m3_evidence_without_rebuild(self):
+    def test_promotion_attaches_authorized_m3_evidence_without_rebuild(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("native_evidence_run_id", source)
         self.assertIn("native_evidence_artifact_id", source)
@@ -265,6 +265,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("maintenance/tools/attach_release_evidence.py", source)
         self.assertIn("run-id:", source)
         self.assertIn("M3_TRUST_ROOT_B64", source)
+        self.assertIn("maintenance/trust/m3-root.json", source)
+        self.assertIn("M3 root secret diverges from the versioned public root", source)
         self.assertNotIn("--trust-root m3/root.json", source)
         self.assertIn("needs.attach-native-evidence.outputs.artifact-id", source)
 

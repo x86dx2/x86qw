@@ -30,7 +30,7 @@ on:
         required: true
         type: string
       native_evidence_run_id:
-        description: "Run externo protegido que produziu a evidência M3 assinada"
+        description: "Run protegido que produziu a evidência M3 assinada"
         required: false
         default: ""
         type: string
@@ -40,7 +40,7 @@ on:
         default: ""
         type: string
       tuf_metadata_run_id:
-        description: "Run externo protegido que entregou metadata TUF já assinada"
+        description: "Run protegido que entregou metadata TUF já assinada"
         required: false
         default: ""
         type: string
@@ -326,12 +326,13 @@ jobs:
         run: python3 maintenance/tools/check_release_blockers.py --repo "$GITHUB_REPOSITORY"
 
   attach-native-evidence:
-    name: Attach external M3 evidence without rebuild
+    name: Attach authorized M3 evidence without rebuild
     if: ${{ inputs.mode != 'rehearsal' }}
     needs: [build-once, portable-verify, approval, release-blockers]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
-    # independent native run.
+    # native run. Under ADR 0007 the signer may be the sole maintainer; the
+    # workflow does not claim independent human review.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -362,7 +363,7 @@ jobs:
           artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
           merge-multiple: true
           path: downloaded-candidate
-      - name: Download external signed M3 handoff
+      - name: Download authorized signed M3 handoff
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ inputs.native_evidence_artifact_id }}
@@ -422,6 +423,11 @@ jobs:
           umask 077
           printf '%s' "$M3_TRUST_ROOT_B64" | base64 --decode > "$root"
           test -s "$root"
+          versioned_root_b64="$(python3 -c 'import base64; print(base64.b64encode(open("maintenance/trust/m3-root.json", "rb").read()).decode("ascii"))')"
+          test "$M3_TRUST_ROOT_B64" = "$versioned_root_b64" || {
+            echo "M3 root secret diverges from the versioned public root" >&2
+            exit 1
+          }
           test -f candidate/release-evidence.json || {
             echo "M3 release-evidence.json is absent; promotion remains fail-closed" >&2
             exit 1
@@ -541,7 +547,7 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
-      - name: Validate external signed metadata handoff
+      - name: Validate authorized signed metadata handoff
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

@@ -7,6 +7,20 @@
 Este runbook governa a cerimônia inicial, renovação, rotação, revogação e
 resposta a comprometimento. Ele não autoriza publicação.
 
+## Modo operacional atual: maintainer único
+
+O projeto tem somente o mantenedor `x86dx2`. O ADR 0007 autoriza a continuidade
+documentada sem revisor humano independente; ele não cria um segundo operador,
+uma conta auxiliar ou uma revisão fictícia. As tabelas abaixo preservam o
+modelo multioperador desejado, mas não descrevem pessoas atualmente existentes.
+
+No modo solo, o mantenedor registra a aprovação e executa a cerimônia fora da
+CI usando duas chaves distintas quando a role exigir threshold 2-de-3. As
+chaves continuam sob uma única custódia humana: isso preserva a barreira
+criptográfica, mas não equivale a independência humana. Nunca reduza threshold,
+gere uma assinatura duplicada com a mesma chave ou apresente o waiver como
+revisão independente.
+
 ## Implementação operacional 0.7.5
 
 A root pública fica em `maintenance/trust/root.json`. As chaves privadas ficam
@@ -38,7 +52,7 @@ Renovações usam uma saída nova e `--version N+1`. Targets vence em até 90 di
 snapshot em 7 dias, timestamp em 24 horas e root em 365 dias. Nunca reutilize
 uma versão para bytes diferentes.
 
-## Papéis humanos
+## Papéis humanos do modelo-alvo
 
 | Papel | Responsabilidade | Não pode fazer sozinho |
 |---|---|---|
@@ -53,6 +67,11 @@ Os nomes e contatos pertencem ao inventário confidencial de custódia. A ata
 pública registra papéis e key IDs, nunca localização precisa, PIN, seed, backup
 ou segredo.
 
+No modo solo atual, somente `x86dx2` existe e acumula as funções operacionais
+necessárias sob o ADR 0007. A ata deve registrar explicitamente a ausência de
+revisão independente; não deve preencher os papéis acima com identidades
+inventadas.
+
 ## Condições de parada
 
 Interrompa a operação, preserve a evidência e não publique `timestamp.json` se:
@@ -64,7 +83,9 @@ Interrompa a operação, preserve a evidência e não publique `timestamp.json` 
 - houver menos assinaturas independentes que o threshold;
 - um fingerprint divergir entre custodian, ata e metadata;
 - qualquer mirror já contiver bytes diferentes no mesmo caminho imutável;
-- revisão independente ou aprovação humana exigida estiver ausente.
+- a aprovação do mantenedor único sob o ADR 0007 não estiver registrada; a
+  ausência de revisão independente continua sendo um risco declarado e não
+  pode ser ocultada.
 
 Falha parcial não é autorização para reduzir threshold, estender metadata
 expirada, reutilizar versão ou voltar ao catálogo sem TUF.
@@ -73,16 +94,17 @@ expirada, reutilizar versão ou voltar ao catálogo sem TUF.
 
 ### Preparação
 
-- [ ] ADR 0006 aprovado por maintainers, segurança e revisor independente.
+- [ ] ADR 0006 e o waiver solo do ADR 0007 estão aprovados pelo único
+      mantenedor; a ausência de revisão independente está registrada.
 - [ ] Issue/PR de E2 identifica o commit e os artefatos exatos.
 - [ ] Versões e hashes de `python-tuf`, `securesystemslib` e backend
   criptográfico foram conferidos por duas pessoas.
 - [ ] Ambiente offline limpo, relógio UTC, mídia e dispositivos foram
   inventariados; interfaces de rede estão desabilitadas para root/targets.
-- [ ] Três custodians root e três autoridades targets estão presentes ou existe
-  quorum sem compartilhar dispositivo, PIN ou material de recuperação.
-- [ ] Dois operadores online e o auditor conhecem os procedimentos de expiração
-  e incidente.
+- [ ] No modo solo, duas chaves distintas do threshold estão disponíveis ao
+  único mantenedor, sem compartilhar seed ou reduzir o threshold.
+- [ ] O único mantenedor conhece os procedimentos de expiração e incidente; a
+  ausência de operadores e auditor independentes está registrada como risco.
 - [ ] O diretório de saída está vazio; nenhuma fixture ou metadata anterior será
   reutilizada.
 
@@ -94,12 +116,13 @@ expirada, reutilizar versão ou voltar ao catálogo sem TUF.
    biblioteca. Cada custodian confere o fingerprint por um segundo canal.
 3. O mesmo processo é repetido para targets. Snapshot e timestamp usam pares
    distintos; a reserva permanece selada e inativa.
-4. O auditor confirma unicidade de key IDs, separação entre roles e thresholds:
-   root 2-de-3, targets 2-de-3, snapshot 1-de-2 e timestamp 1-de-2.
+4. O mantenedor confirma unicidade de key IDs, separação entre roles e
+   thresholds: root 2-de-3, targets 2-de-3, snapshot 1-de-2 e timestamp 1-de-2.
 5. A root inicial declara Ed25519, SHA-256, consistent snapshots e as janelas do
    ADR. Datas são calculadas na cerimônia e não copiadas.
-6. Dois custodians root assinam os mesmos bytes. O auditor verifica o threshold
-   com uma instalação limpa da biblioteca aprovada.
+6. Duas chaves distintas assinam os mesmos bytes. O mantenedor verifica o
+   threshold com uma instalação limpa da biblioteca aprovada e registra que as
+   assinaturas não representam revisão humana independente.
 
 ### Assinatura e publicação inicial
 
@@ -144,7 +167,8 @@ confere que nenhum segredo entrou na ata antes de anexá-la à evidência da iss
 ### Targets, em cada promoção ou antes de 30 dias restantes
 
 - [ ] catálogo foi aprovado e seus payloads já existem imutavelmente;
-- [ ] duas autoridades independentes conferiram tamanho e SHA-256;
+- [ ] o mantenedor conferiu tamanho e SHA-256; a ausência de duas autoridades
+      independentes está registrada pelo ADR 0007;
 - [ ] versão de targets é exatamente a anterior mais um;
 - [ ] nova expiração não passa de 90 dias;
 - [ ] duas assinaturas targets válidas cobrem os mesmos bytes;
@@ -242,14 +266,16 @@ root como rotação normal.
 - [ ] clientes com cache anterior e clientes limpos atualizam com segurança;
 - [ ] nenhuma chave privada, PIN, seed, token ou localização sensível entrou na
   evidência;
-- [ ] auditor independente e autoridade humana aprovaram o encerramento.
+- [ ] o mantenedor aprovou o encerramento sob o ADR 0007; se não houver auditor
+      independente, essa ausência aparece explicitamente na evidência.
 
 ## Gate de aprovação E1
 
 - [ ] maintainers aprovam TUF, Ed25519 e `python-tuf`/`securesystemslib`;
 - [ ] segurança aprova thresholds, custódia e janelas de expiração;
 - [ ] operações aceita o SLA de timestamp e os alertas;
-- [ ] revisão criptográfica independente não possui achado bloqueador;
+- [ ] revisão criptográfica independente não possui achado bloqueador ou, no
+      modo solo, o waiver ADR 0007 e o risco aceito estão anexados;
 - [ ] plano de clientes legados elimina fallbacks para `main` mutável;
 - [ ] todos reconhecem que E1 não cria nem promove trust de produção.
 

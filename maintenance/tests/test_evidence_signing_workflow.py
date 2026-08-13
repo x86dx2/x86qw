@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class EvidenceSigningWorkflowTests(unittest.TestCase):
-    def test_protected_workflow_assembles_only_external_public_signatures(self):
+    def test_protected_workflow_assembles_only_authorized_public_signatures(self):
         workflow = ROOT / ".github/workflows/sign-native-evidence.yml"
         self.assertTrue(workflow.is_file())
         source = workflow.read_text(encoding="utf-8")
@@ -24,12 +24,16 @@ class EvidenceSigningWorkflowTests(unittest.TestCase):
             "--artifact-id \"$NATIVE_ARTIFACT_ID\"",
             "maintenance.tools.assemble_release_evidence assemble",
             "--trust-root",
+            "maintenance/trust/m3-root.json",
             "maintenance/tools/attach_release_evidence.py",
             "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
             "overwrite: false",
+            "ADR 0007",
+            "solo maintainer waiver",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, source)
+        self.assertNotIn("external custodian", source.casefold())
         self.assertNotIn("private_key", source)
         self.assertNotIn("M3_PRIVATE", source)
         self.assertNotIn("openssl", source)
