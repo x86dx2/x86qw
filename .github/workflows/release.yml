@@ -1,15 +1,16 @@
-name: Immutable candidate rehearsal
+name: Immutable candidate release
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Rehearsal local ou tentativa protegida de promoção 1.0"
+        description: "Rehearsal local ou promoção protegida de release"
         required: true
         default: rehearsal
         type: choice
         options:
           - rehearsal
+          - promote-rc
           - promote-1.0
       candidate_commit:
         description: "SHA completo do commit candidato"
@@ -118,7 +119,10 @@ jobs:
         run: |
           [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
-          test "$CANDIDATE_MODE" != "promote-1.0" || test "$CANDIDATE_VERSION" = "1.0.0"
+          case "$CANDIDATE_MODE" in
+            promote-rc) [[ "$CANDIDATE_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]] ;;
+            promote-1.0) test "$CANDIDATE_VERSION" = "1.0.0" ;;
+          esac
           git lfs fsck --pointers
           python3 maintenance/tools/check_lfs.py
           ./maintenance/manage.py verify
@@ -285,8 +289,8 @@ jobs:
         run: python3 maintenance/tools/release_candidate.py rehearse candidate "$RUNNER_TEMP/x86qw-rehearsal"
 
   approval:
-    name: Protected 1.0 approval boundary
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    name: Protected release approval boundary
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [build-once, portable-verify]
     runs-on: ubuntu-latest
     environment: release
@@ -301,7 +305,7 @@ jobs:
 
   release-blockers:
     name: Recheck live P0/P1 blockers
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [approval]
     runs-on: ubuntu-latest
     permissions:
@@ -323,7 +327,7 @@ jobs:
 
   attach-native-evidence:
     name: Attach external M3 evidence without rebuild
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [build-once, portable-verify, approval, release-blockers]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
@@ -388,7 +392,7 @@ jobs:
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [build-once, approval, release-blockers, attach-native-evidence]
     outputs:
       promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
@@ -436,7 +440,7 @@ jobs:
 
   publish-assets:
     name: Publish exact candidate assets to GitHub
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     # Promotion-gate is the single dependency that carries the exact,
     # evidence-bound candidate into publication.
     needs: promotion-gate
@@ -466,7 +470,7 @@ jobs:
 
   publish-gitlab:
     name: Publish exact installer mirror to GitLab
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [promotion-gate, publish-assets]
     runs-on: ubuntu-latest
     environment: release
@@ -493,7 +497,7 @@ jobs:
 
   verify-release-mirrors:
     name: Verify every public mirror after publication
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     # verify-mirrors is the public mirror gate.
     needs: [promotion-gate, publish-assets, publish-gitlab]
     runs-on: ubuntu-latest
@@ -521,7 +525,7 @@ jobs:
 
   metadata-last:
     name: Publish the verified site generation last
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode != 'rehearsal' }}
     needs: [promotion-gate, verify-release-mirrors]
     runs-on: ubuntu-latest
     environment: release
