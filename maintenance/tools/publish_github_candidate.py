@@ -36,6 +36,7 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 MAX_GH_RESPONSE_BYTES = 4 * 1024 * 1024
+GH_TOKEN_RE = re.compile(r"(?i)\b(?:gho|ghp|ghs|ghr|github_pat)_[A-Za-z0-9_]+\b")
 
 
 class PublisherError(RuntimeError):
@@ -197,7 +198,9 @@ def _execute_gh(arguments: Sequence[str]) -> str:
     if result.returncode != 0:
         if "404" in result.stderr or "Not Found" in result.stderr:
             raise GitHubNotFound("objeto GitHub não encontrado")
-        raise PublisherError("comando GitHub falhou")
+        raise PublisherError(
+            f"comando GitHub falhou: {_redacted_github_stderr(result.stderr)}"
+        )
     if len(result.stdout.encode("utf-8")) > MAX_GH_RESPONSE_BYTES:
         raise PublisherError("resposta GitHub excede o limite")
     return result.stdout
@@ -313,6 +316,19 @@ def _validate_release(
 
 def _endpoint(repository: str, suffix: str) -> str:
     return f"repos/{quote(repository, safe='/')}/{suffix}"
+
+
+def _redacted_github_stderr(stderr: str) -> str:
+    """Keep GitHub diagnostics useful without allowing credentials into logs."""
+
+    compact = " ".join(stderr.split())
+    compact = GH_TOKEN_RE.sub("[redacted]", compact)
+    compact = re.sub(
+        r"(?i)(authorization\s*:\s*(?:bearer|token)\s+)\S+",
+        r"\1[redacted]",
+        compact,
+    )
+    return compact[:512] or "stderr vazio"
 
 
 def publish_candidate(

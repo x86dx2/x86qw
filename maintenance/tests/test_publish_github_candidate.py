@@ -4,10 +4,12 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from maintenance.tools.publish_github_candidate import (
     PublisherError,
     _asset_plan,
+    _execute_gh,
     _expected_assets,
     _github_latest,
     _release_create_command,
@@ -116,6 +118,23 @@ class PublishGithubCandidateTests(unittest.TestCase):
         )
         self.assertIn("--prerelease", command)
         self.assertIn("--latest=false", command)
+
+    def test_github_failure_reports_redacted_stderr(self) -> None:
+        with mock.patch(
+            "maintenance.tools.publish_github_candidate.subprocess.run",
+            return_value=subprocess_result(
+                returncode=1,
+                stderr="HTTP 403: token gho_secret-value is not allowed",
+            ),
+        ):
+            with self.assertRaises(PublisherError) as raised:
+                _execute_gh(("release", "create"))
+        self.assertIn("HTTP 403", str(raised.exception))
+        self.assertNotIn("gho_secret-value", str(raised.exception))
+
+
+def subprocess_result(*, returncode: int, stderr: str):
+    return mock.Mock(returncode=returncode, stdout="", stderr=stderr)
 
 
 if __name__ == "__main__":
