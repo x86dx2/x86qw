@@ -19,6 +19,8 @@ class EvidenceSigningWorkflowTests(unittest.TestCase):
             "native_input_run_id:",
             "signatures_b64:",
             "environment: release",
+            "Install pinned trust dependencies from vendored wheels",
+            "python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt",
             "maintenance/tools/verify_external_handoff.py",
             '--artifact-id "$CANDIDATE_ARTIFACT_ID"',
             "--artifact-id \"$NATIVE_ARTIFACT_ID\"",
