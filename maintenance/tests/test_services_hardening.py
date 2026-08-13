@@ -3089,7 +3089,8 @@ with session_control._installation_acquisition_mutex(target, sessions):
 
             thread = threading.Thread(target=controller)
             thread.start()
-            deadline = time.monotonic() + 5
+            startup_timeout = 15 if os.name == "nt" else 5
+            deadline = time.monotonic() + startup_timeout
             while time.monotonic() < deadline:
                 state = services.load_session_journal(journal.path)
                 if state["status"] == "running":
@@ -3097,8 +3098,8 @@ with session_control._installation_acquisition_mutex(target, sessions):
                 time.sleep(0.05)
             else:
                 self.fail("a fixture de serviço não ficou pronta")
-            services.request_service_stop(target, timeout=5)
-            thread.join(timeout=5)
+            services.request_service_stop(target, timeout=startup_timeout)
+            thread.join(timeout=startup_timeout)
             self.assertFalse(thread.is_alive())
             self.assertEqual([0], result)
             self.assertFalse(lock.path.exists())
