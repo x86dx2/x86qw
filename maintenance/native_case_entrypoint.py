@@ -123,7 +123,7 @@ import CoreGraphics
 
 let targetPid = Int(CommandLine.arguments.dropFirst().first ?? "-1") ?? -1
 let windows = CGWindowListCopyWindowInfo(
-    [.optionOnScreenOnly, .excludeDesktopElements],
+    [.optionAll, .excludeDesktopElements],
     kCGNullWindowID,
 ) as? [[String: Any]] ?? []
 for window in windows {
