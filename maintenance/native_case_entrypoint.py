@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 
 
@@ -142,6 +142,7 @@ _SERVICE_SUFFIXES = {
     "qwfwd-forward": ("runtime/services/qwfwd/", "runtime/macos-arm64/qwfwd"),
 }
 _SERVICE_READY_TIMEOUT_SECONDS = 30
+_SERVICE_START_ATTEMPTS = 3
 _SERVICE_MVD_MAP = "dm6"
 _SERVICE_MVD_GAMECODE = ("qwprogs.qvm", "qwprogs.map")
 _SERVICE_OOB = b"\xff\xff\xff\xff"
@@ -935,6 +936,49 @@ def _wait_tcp_listener(process: subprocess.Popen[bytes], port: int, label: str) 
     raise CandidateCaseError(f"{label} não abriu a porta nativa {port}")
 
 
+def _start_tcp_service(
+    command_factory: Callable[[], tuple[tuple[str, ...], int]],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    label: str,
+) -> tuple[subprocess.Popen[bytes], tuple[str, ...], int]:
+    """Start a service whose ephemeral TCP port can be lost before bind.
+
+    The port probe used by the native cases necessarily closes its socket
+    before the third-party process starts.  A short retry is therefore part
+    of the contract for an early bind failure; a service that stays alive but
+    never becomes ready is not retried and keeps its useful timeout error.
+    """
+
+    for attempt in range(1, _SERVICE_START_ATTEMPTS + 1):
+        argv, port = command_factory()
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=environment,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            shell=False,
+        )
+        try:
+            _wait_tcp_listener(process, port, label)
+            return process, argv, port
+        except CandidateCaseError as error:
+            exited_early = process.poll() is not None
+            output, _ = _terminate_service_process(process)
+            if not exited_early or attempt == _SERVICE_START_ATTEMPTS:
+                detail = output.decode("utf-8", errors="replace").strip()
+                if detail:
+                    raise CandidateCaseError(
+                        f"{error}: {detail[-512:]}"
+                    ) from error
+                raise
+
+    raise AssertionError("serviço TCP terminou sem resultado")
+
+
 def _mvd_record(target: Path, process: subprocess.Popen[bytes]) -> tuple[Path, int, str]:
     if process.stdin is None:
         raise CandidateCaseError("MVDSV não aceitou stdin para gravação MVD")
@@ -964,20 +1008,18 @@ def _run_mvdsv_service(
     environment: dict[str, str],
 ) -> tuple[int, bytes, bytes, dict[str, object]]:
     _prepare_mvdsv_target(candidate, target)
-    argv = _service_runtime_argv(prepared, "mvdsv-mvd")
-    stream_index = argv.index("+qtv_streamport") + 1
-    stream_port = int(argv[stream_index])
-    process = subprocess.Popen(
-        argv,
+    def command_factory() -> tuple[tuple[str, ...], int]:
+        argv = _service_runtime_argv(prepared, "mvdsv-mvd")
+        stream_index = argv.index("+qtv_streamport") + 1
+        return argv, int(argv[stream_index])
+
+    process, _argv, _stream_port = _start_tcp_service(
+        command_factory,
         cwd=prepared.cwd,
-        env=environment,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        shell=False,
+        environment=environment,
+        label="MVDSV",
     )
     try:
-        _wait_tcp_listener(process, stream_port, "MVDSV")
         server_port_ready = True
         mvd_path, mvd_size, mvd_sha256 = _mvd_record(target, process)
         output, process_exit_code = _terminate_service_process(process)
@@ -1081,25 +1123,26 @@ def _run_qtv_service(
     dependency = Path(scratch) / "dependencies/mvdsv"
     _snapshot_artifact(mvd_artifact, dependency)
     os.chmod(dependency, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-    mvd_port = _free_port(socket.SOCK_DGRAM)
-    stream_port = _free_port(socket.SOCK_STREAM)
-    mvd_command = (
-        str(dependency), "-mem", "64", "-basedir", str(target),
-        "-port", str(mvd_port), "+qtv_streamport", str(stream_port),
-        "+sv_progtype", "2", "+map", _SERVICE_MVD_MAP,
-    )
-    mvd = subprocess.Popen(
-        mvd_command,
+    def command_factory() -> tuple[tuple[str, ...], int]:
+        mvd_port = _free_port(socket.SOCK_DGRAM)
+        stream_port = _free_port(socket.SOCK_STREAM)
+        return (
+            (
+                str(dependency), "-mem", "64", "-basedir", str(target),
+                "-port", str(mvd_port), "+qtv_streamport", str(stream_port),
+                "+sv_progtype", "2", "+map", _SERVICE_MVD_MAP,
+            ),
+            stream_port,
+        )
+
+    mvd, _mvd_command, stream_port = _start_tcp_service(
+        command_factory,
         cwd=target,
-        env=environment,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        shell=False,
+        environment=environment,
+        label="MVDSV upstream do QTV",
     )
     qtv: subprocess.Popen[bytes] | None = None
     try:
-        _wait_tcp_listener(mvd, stream_port, "MVDSV upstream do QTV")
         http_port = _free_port(socket.SOCK_STREAM)
         _prepare_qtv_config(candidate, prepared, http_port, stream_port)
         qtv = subprocess.Popen(
