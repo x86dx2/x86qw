@@ -267,10 +267,10 @@ class ContinuousIntegrationTests(unittest.TestCase):
 
     def test_portable_contract_seeds_one_shared_lfs_cache_before_other_matrix_jobs(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        self.assertIn("max-parallel: 1", workflow)
+        self.assertIn("lfs-seed:", workflow)
+        self.assertIn("needs: lfs-seed", workflow)
+        self.assertNotIn("seed_lfs:", workflow)
         self.assertIn("matrix:\n        include:", workflow)
-        self.assertIn("seed_lfs: true", workflow)
-        self.assertIn("seed_lfs: false", workflow)
         self.assertIn(
             "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
             workflow,

@@ -15,33 +15,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lfs-seed:
+    name: portable-contract / LFS seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          lfs: false
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: lfs-cache
+        with:
+          path: .git/lfs/objects
+          key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
+          enableCrossOsArchive: true
+      - name: Materialize the single LFS cache
+        shell: bash
+        run: |
+          if [ "${{ steps.lfs-cache.outputs.cache-hit }}" != "true" ]; then
+            python3 maintenance/tools/materialize_lfs.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --commit "$GITHUB_SHA"
+          fi
+          git lfs checkout
+          git lfs fsck --pointers
+          python3 maintenance/tools/check_lfs.py
+          python3 maintenance/tools/check_committed_diff.py
+
   portable:
     name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
+    needs: lfs-seed
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-latest
             python: "3.10"
-            seed_lfs: true
           - os: ubuntu-latest
             python: "3.13"
-            seed_lfs: false
           - os: macos-latest
             python: "3.10"
-            seed_lfs: false
           - os: macos-latest
             python: "3.13"
-            seed_lfs: false
           - os: windows-latest
             python: "3.10"
-            seed_lfs: false
           - os: windows-latest
             python: "3.13"
-            seed_lfs: false
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -62,17 +84,11 @@ jobs:
       - name: Restore or fetch the single LFS materialization
         shell: bash
         run: |
-          if [ "${{ steps.lfs-cache.outputs.cache-hit }}" = "true" ]; then
-            git lfs checkout
-          elif [ "${{ matrix.seed_lfs }}" = "true" ]; then
-            python maintenance/tools/materialize_lfs.py \
-              --repository "$GITHUB_REPOSITORY" \
-              --commit "$GITHUB_SHA"
-            git lfs checkout
-          else
+          if [ "${{ steps.lfs-cache.outputs.cache-hit }}" != "true" ]; then
             echo "[ERRO] cache LFS ausente fora do job seed" >&2
             exit 1
           fi
+          git lfs checkout
           git lfs fsck --pointers
           python maintenance/tools/check_lfs.py
           python maintenance/tools/check_committed_diff.py
