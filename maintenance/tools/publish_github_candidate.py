@@ -172,8 +172,14 @@ def _release_create_command(
     ]
     if prerelease:
         command.append("--prerelease")
-    command.append("--latest" if latest else "--latest=false")
+    command.append("--latest" if latest and not prerelease else "--latest=false")
     return command
+
+
+def _github_latest(*, mirror_latest: bool, prerelease: bool) -> bool:
+    """Map site-current metadata to GitHub's non-prerelease Latest flag."""
+
+    return mirror_latest and not prerelease
 
 
 def _execute_gh(arguments: Sequence[str]) -> str:
@@ -333,8 +339,8 @@ def publish_candidate(
     record = _catalog_record(candidate, version)
     expected = _expected_assets(candidate, manifest)
     tag = f"x86qw-installer-{version}"
-    latest = record["mirror_latest"] is True
     prerelease = parsed_version.is_prerelease
+    latest = _github_latest(mirror_latest=record["mirror_latest"] is True, prerelease=prerelease)
     title = str(record["release_title"])
     notes = str(record["release_notes"])
     if not publish:
