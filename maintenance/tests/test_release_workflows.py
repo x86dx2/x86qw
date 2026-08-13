@@ -123,6 +123,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", build)
         self.assertIn("fetch-tags: true", build)
 
+    def test_promotion_reuses_a_verified_prebuilt_candidate_without_rebuild(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        build = source.split("  build-once:\n", 1)[1].split("\n  portable-verify:\n", 1)[0]
+        for input_name in (
+            "candidate_run_id:",
+            "candidate_artifact_id:",
+            "candidate_artifact_name:",
+            "candidate_sha256:",
+        ):
+            self.assertIn(input_name, source)
+        self.assertIn("Validate prebuilt candidate provenance", build)
+        self.assertIn("maintenance/tools/verify_external_handoff.py", build)
+        self.assertIn("Download immutable candidate artifact", build)
+        self.assertIn("candidate_sha256", build)
+        self.assertIn("if: ${{ inputs.mode == 'rehearsal' }}", build)
+        self.assertIn("if: ${{ inputs.mode != 'rehearsal' }}", build)
+
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(10, source.count("name: Checkout immutable candidate commit"))
