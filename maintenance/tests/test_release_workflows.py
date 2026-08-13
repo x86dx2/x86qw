@@ -194,7 +194,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             )
             blocks.append("\n".join(lines[start:end]))
 
-        self.assertEqual(10, len(blocks))
+        self.assertEqual(11, len(blocks))
         for block in blocks:
             self.assertIn("artifact-ids:", block)
             self.assertRegex(block, r"(?m)^\s+merge-multiple:\s*true\s*$")
