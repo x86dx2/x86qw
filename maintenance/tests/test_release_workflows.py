@@ -142,12 +142,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertEqual(10, source.count("name: Checkout immutable candidate commit"))
+        self.assertEqual(6, source.count("name: Checkout immutable candidate commit"))
         self.assertEqual(10, source.count("ref: main"))
         self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
-        self.assertEqual(10, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
-        self.assertEqual(10, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
-        self.assertEqual(11, source.count('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"'))
+        self.assertEqual(6, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
+        self.assertEqual(6, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
+        self.assertEqual(7, source.count('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"'))
+
+    def test_publication_jobs_pin_release_code_separately_from_candidate_bytes(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        for job_name in ("publish-assets:", "publish-gitlab:", "verify-release-mirrors:", "metadata-last:"):
+            start = source.index(f"  {job_name}\n")
+            following = re.search(r"\n  [A-Za-z0-9_-]+:\n", source[start + 1:])
+            end = start + 1 + following.start() if following else len(source)
+            block = source[start:end]
+            self.assertIn("name: Pin release orchestration commit", block)
+            self.assertIn('RELEASE_COMMIT: ${{ github.sha }}', block)
+            self.assertIn('git fetch --no-tags origin "$RELEASE_COMMIT"', block)
+            self.assertNotIn("name: Checkout immutable candidate commit", block)
+            self.assertNotIn('git checkout --detach "$CANDIDATE_COMMIT"', block)
 
     def test_release_trust_jobs_install_pinned_backend(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

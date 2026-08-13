@@ -600,14 +600,14 @@ jobs:
           ref: main
           lfs: false
           fetch-depth: 1
-      - name: Checkout immutable candidate commit
+      - name: Pin release orchestration commit
         shell: bash
         env:
-          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: |
-          git fetch --no-tags origin "$CANDIDATE_COMMIT"
-          git checkout --detach "$CANDIDATE_COMMIT"
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          git fetch --no-tags origin "$RELEASE_COMMIT"
+          git checkout --detach "$RELEASE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
@@ -636,14 +636,14 @@ jobs:
           ref: main
           lfs: false
           fetch-depth: 1
-      - name: Checkout immutable candidate commit
+      - name: Pin release orchestration commit
         shell: bash
         env:
-          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: |
-          git fetch --no-tags origin "$CANDIDATE_COMMIT"
-          git checkout --detach "$CANDIDATE_COMMIT"
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          git fetch --no-tags origin "$RELEASE_COMMIT"
+          git checkout --detach "$RELEASE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
@@ -670,14 +670,14 @@ jobs:
           ref: main
           lfs: false
           fetch-depth: 1
-      - name: Checkout immutable candidate commit
+      - name: Pin release orchestration commit
         shell: bash
         env:
-          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: |
-          git fetch --no-tags origin "$CANDIDATE_COMMIT"
-          git checkout --detach "$CANDIDATE_COMMIT"
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          git fetch --no-tags origin "$RELEASE_COMMIT"
+          git checkout --detach "$RELEASE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
@@ -708,14 +708,14 @@ jobs:
           ref: main
           lfs: false
           fetch-depth: 1
-      - name: Checkout immutable candidate commit
+      - name: Pin release orchestration commit
         shell: bash
         env:
-          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: |
-          git fetch --no-tags origin "$CANDIDATE_COMMIT"
-          git checkout --detach "$CANDIDATE_COMMIT"
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+          git fetch --no-tags origin "$RELEASE_COMMIT"
+          git checkout --detach "$RELEASE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
