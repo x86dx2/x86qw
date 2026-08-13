@@ -125,6 +125,43 @@ class PrivateFilesystemContractTests(unittest.TestCase):
 
         self.assertLess(events.index("lease-exit"), events.index("read-enter"))
 
+    def test_private_promotion_retries_transient_windows_access_denied(self):
+        kernel32 = mock.Mock()
+        kernel32.SetFileInformationByHandle.side_effect = [False, True]
+        api = SimpleNamespace(
+            kernel32=kernel32,
+            FILE_RENAME_INFO=3,
+            ERROR_ACCESS_DENIED=5,
+            ERROR_SHARING_VIOLATION=32,
+        )
+        lease = mock.MagicMock()
+        fake_msvcrt = SimpleNamespace(get_osfhandle=lambda _descriptor: 123)
+
+        with mock.patch.object(
+            windows_acl, "_hold_plain_directory_chain", return_value=lease,
+        ), mock.patch.object(
+            windows_acl, "_assert_persistent_acls",
+        ), mock.patch.object(
+            windows_acl, "_assert_handle_type",
+        ), mock.patch.object(
+            windows_acl, "_acl_from_handle", return_value=object(),
+        ), mock.patch.object(
+            windows_acl, "_assert_acl",
+        ), mock.patch.object(
+            windows_acl, "_api", return_value=api,
+        ), mock.patch.object(
+            windows_acl.ctypes, "get_last_error", return_value=5, create=True,
+        ), mock.patch.object(
+            windows_acl.time, "sleep",
+        ), mock.patch.dict(sys.modules, {"msvcrt": fake_msvcrt}):
+            windows_acl.replace_open_private_file(
+                1,
+                Path("C:/x86qw/.session.json.tmp"),
+                Path("C:/x86qw/session.json"),
+            )
+
+        self.assertEqual(2, kernel32.SetFileInformationByHandle.call_count)
+
     @unittest.skipIf(os.name == "nt", "modos POSIX são validados nos runners Unix")
     def test_posix_private_creation_is_owner_only(self):
         with tempfile.TemporaryDirectory() as temporary:
