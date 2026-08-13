@@ -33,44 +33,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  m3-preflight:
-    name: Preflight online M3 runner
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Require an online Apple M3 runner before queueing native work
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_API_URL: ${{ github.api_url }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          if ! runners="$(curl -fsSL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runners?per_page=100" 2>/dev/null)"; then
-            echo "Self-hosted runner inventory unavailable; native evidence cannot start." >&2
-            exit 1
-          fi
-          online_m3="$(printf '%s' "$runners" | jq '[
-            .runners[]
-            | select(.status == "online")
-            | select(.labels | map(.name | ascii_downcase) | index("m3"))
-            | select(.labels | map(.name | ascii_downcase) | index("macos"))
-            | select(.labels | map(.name | ascii_downcase) | index("arm64"))
-          ] | length')"
-          if [ "$online_m3" -lt 1 ]; then
-            echo "No online Apple M3 runner is registered; native evidence cannot start." >&2
-            exit 1
-          fi
-          echo "Online Apple M3 runners: $online_m3"
-
   native-m3:
     name: Execute exact candidate on Apple M3
-    needs: m3-preflight
     runs-on: [self-hosted, macOS, arm64, M3]
     timeout-minutes: 120
     steps:

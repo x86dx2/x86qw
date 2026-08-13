@@ -376,12 +376,11 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("native-m3.yml", release)
         self.assertIn('REQUIRED_NATIVE_PLATFORMS = frozenset({"macOS-ARM64"})', contract)
 
-    def test_native_m3_preflight_accepts_github_normalized_runner_labels(self):
+    def test_native_m3_workflow_does_not_require_runner_inventory_api_access(self):
         native_workflow = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
-        self.assertIn("ascii_downcase", native_workflow)
-        github_runner_labels = {"self-hosted", "macOS", "ARM64", "M3"}
-        normalized_labels = {label.casefold() for label in github_runner_labels}
-        self.assertTrue({"macos", "arm64", "m3"} <= normalized_labels)
+        self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", native_workflow)
+        self.assertNotIn("/actions/runners?per_page=100", native_workflow)
+        self.assertNotIn("GITHUB_API_URL", native_workflow)
 
     def test_site_uses_lockfile(self):
         self.assertTrue((ROOT / "site/package.json").is_file())
