@@ -117,6 +117,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
+    def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertEqual(10, source.count("name: Checkout immutable candidate commit"))
+        self.assertEqual(10, source.count("ref: main"))
+        self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
+        self.assertEqual(10, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
+        self.assertEqual(10, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
+        self.assertEqual(11, source.count('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"'))
+
+    def test_release_trust_jobs_install_pinned_backend(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        install = "python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt"
+        self.assertEqual(3, source.count("Install pinned trust dependencies from vendored wheels"))
+        self.assertEqual(3, source.count(install))
+
     def test_release_reuses_lfs_cache_and_materializes_on_miss(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn(
