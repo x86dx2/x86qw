@@ -123,11 +123,11 @@ class NativeM3HarnessTests(unittest.TestCase):
             }
             with self.assertRaisesRegex(native_m3_harness.NativeM3Error, "ligada"):
                 native_m3_harness._observed_artifacts(
-                    case, output, nonce="expected", started_ns=time.time_ns() - 1_000_000,
+                    case, output, nonce="expected", started_ns=0,
                 )
             artifact.write_text("expected nonce\n", encoding="utf-8")
             observed = native_m3_harness._observed_artifacts(
-                case, output, nonce="expected", started_ns=time.time_ns() - 1_000_000,
+                case, output, nonce="expected", started_ns=0,
             )
             self.assertEqual("case-attestation", observed[0]["kind"])
 

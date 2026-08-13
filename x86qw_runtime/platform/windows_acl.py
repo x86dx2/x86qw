@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import os
 import re
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -139,9 +140,11 @@ class _TokenUser(ctypes.Structure):
 
 class _WindowsApi:
     ERROR_ALREADY_EXISTS = 183
+    ERROR_ACCESS_DENIED = 5
     ERROR_FILE_EXISTS = 80
     ERROR_INSUFFICIENT_BUFFER = 122
     ERROR_NO_TOKEN = 1008
+    ERROR_SHARING_VIOLATION = 32
     INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
     TOKEN_QUERY = 0x0008
@@ -611,13 +614,22 @@ def replace_open_private_file(descriptor: int, source: Path, destination: Path) 
         information.root_directory = None
         information.file_name_length = len(encoded)
         ctypes.memmove(ctypes.addressof(buffer) + name_offset, encoded, len(encoded))
-        if not api.kernel32.SetFileInformationByHandle(
-            native_handle,
-            api.FILE_RENAME_INFO,
-            buffer,
-            len(buffer),
-        ):
-            raise api.error(f"could not promote private file {source}")
+        rename_attempts = 100
+        for attempt in range(rename_attempts):
+            if api.kernel32.SetFileInformationByHandle(
+                native_handle,
+                api.FILE_RENAME_INFO,
+                buffer,
+                len(buffer),
+            ):
+                break
+            error_code = ctypes.get_last_error()
+            if error_code not in {
+                api.ERROR_ACCESS_DENIED,
+                api.ERROR_SHARING_VIOLATION,
+            } or attempt == rename_attempts - 1:
+                raise api.error(f"could not promote private file {source}", error_code)
+            time.sleep(0.01)
         _assert_acl(_acl_from_handle(native_handle, directory=False))
 
 
