@@ -78,9 +78,11 @@ class NativeMacosHarnessTests(unittest.TestCase):
             candidate, identity = self._candidate(root)
             plan = self._plan(candidate, identity)
             output = root / "logs"
+            observed: dict[str, Path] = {}
 
             def failed_execution(**kwargs: object) -> list[dict[str, object]]:
-                scratch = Path(kwargs["output_dir"]) / "scratch"
+                scratch = Path(kwargs["scratch_root"])
+                observed["scratch"] = scratch
                 (scratch / "instalação espaço").mkdir(parents=True)
                 (scratch / "instalação espaço" / "partial.bin").write_bytes(b"partial")
                 raise NativeHandoffError("falha nativa simulada")
@@ -107,7 +109,48 @@ class NativeMacosHarnessTests(unittest.TestCase):
                         hardware=HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
                     )
 
-            self.assertFalse((output / "scratch").exists())
+            self.assertFalse(observed["scratch"].exists())
+
+    def test_run_native_uses_short_private_scratch_and_cleans_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate, identity = self._candidate(root)
+            plan = self._plan(candidate, identity)
+            output = root / "logs" / ("very-long-release-evidence-directory-" * 4)
+            observed: dict[str, Path] = {}
+
+            def failed_execution(**kwargs: object) -> list[dict[str, object]]:
+                scratch = Path(kwargs["scratch_root"])
+                observed["scratch"] = scratch
+                (scratch / "instalação espaço").mkdir(parents=True)
+                raise NativeHandoffError("falha nativa simulada")
+
+            with (
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.system",
+                    return_value="Darwin",
+                ),
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.host_platform.machine",
+                    return_value="arm64",
+                ),
+                mock.patch(
+                    "maintenance.tools.native_macos_harness.execute_cases",
+                    side_effect=failed_execution,
+                ),
+            ):
+                with self.assertRaisesRegex(NativeHandoffError, "falha nativa simulada"):
+                    run_native(
+                        candidate=candidate,
+                        plan=plan,
+                        output_dir=output,
+                        hardware=HardwareObservation(chip="Apple M3 Pro", model="Mac15,6"),
+                    )
+
+            scratch = observed["scratch"]
+            self.assertNotIn(str(output.absolute()), str(scratch))
+            self.assertLess(len(str(scratch / "instalação espaço")), 100)
+            self.assertFalse(scratch.exists())
 
     def test_staging_preserves_entrypoint_bytes_with_newlines(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

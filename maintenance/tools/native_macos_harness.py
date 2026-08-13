@@ -12,6 +12,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -153,6 +154,17 @@ def _cleanup_run_scratch(scratch_root: Path) -> None:
     shutil.rmtree(scratch_root)
 
 
+def _create_run_scratch() -> Path:
+    """Create a short-lived scratch root outside the evidence directory."""
+
+    try:
+        scratch_root = Path(tempfile.mkdtemp(prefix="x86qw-m3-"))
+        scratch_root.chmod(0o700)
+        return scratch_root
+    except OSError as error:
+        raise NativeHandoffError("não foi possível criar scratch nativo privado") from error
+
+
 def _stage_entrypoint(
     *, source: Path, destination: Path, expected_size: int, expected_digest: str,
 ) -> dict[str, object]:
@@ -231,6 +243,7 @@ def execute_cases(
     plan: dict[str, object],
     output_dir: Path,
     release_metadata: list[dict[str, object]] | None = None,
+    scratch_root: Path | None = None,
 ) -> list[dict[str, object]]:
     """Run the candidate-owned entrypoint for every canonical case."""
 
@@ -247,8 +260,12 @@ def execute_cases(
     output_dir.chmod(0o700)
     runtime_dir = output_dir / ".runtime"
     runtime_dir.mkdir(mode=0o700)
-    scratch_root = output_dir / "scratch"
-    scratch_root.mkdir(mode=0o700)
+    scratch_root = (
+        output_dir / "scratch"
+        if scratch_root is None
+        else Path(scratch_root).absolute()
+    )
+    scratch_root.mkdir(mode=0o700, exist_ok=True)
     receipt_dir = output_dir / "receipts"
     receipt_dir.mkdir(mode=0o700)
     first_case = cases[0]
@@ -260,8 +277,8 @@ def execute_cases(
     )
     environment = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(output_dir.absolute()),
-        "TMPDIR": str(output_dir.absolute()),
+        "HOME": str(scratch_root),
+        "TMPDIR": str(scratch_root),
         "X86QW_CANDIDATE_ROOT": str(candidate),
         "X86QW_CANDIDATE_COMMIT": initial_identity["commit"],
         "X86QW_CANDIDATE_MANIFEST_SHA256": initial_identity["manifest_sha256"],
@@ -521,15 +538,17 @@ def run_native(
         _write_json(output_dir / "handoff.json", handoff)
         return handoff
     release_metadata: list[dict[str, object]] = []
+    scratch_root = _create_run_scratch()
     try:
         results = execute_cases(
             candidate=candidate,
             plan=plan,
             output_dir=output_dir,
             release_metadata=release_metadata,
+            scratch_root=scratch_root,
         )
     finally:
-        _cleanup_run_scratch(output_dir.absolute() / "scratch")
+        _cleanup_run_scratch(scratch_root)
     passed = len(results) == len(plan["cases"]) and all(case["status"] == "passed" for case in results)
     if passed:
         _write_json(
