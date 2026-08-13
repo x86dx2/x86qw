@@ -733,6 +733,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          RELEASE_COMMIT: ${{ github.sha }}
           TUF_RUN_ID: ${{ inputs.tuf_metadata_run_id }}
           TUF_ARTIFACT_ID: ${{ inputs.tuf_metadata_artifact_id }}
           TUF_ARTIFACT_NAME: ${{ inputs.tuf_metadata_artifact_name }}
@@ -743,10 +744,11 @@ jobs:
           [[ "$TUF_ARTIFACT_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]]
           python3 maintenance/tools/verify_external_handoff.py \
             --run-id "$TUF_RUN_ID" \
-            --commit "$CANDIDATE_COMMIT" \
+            --commit "$RELEASE_COMMIT" \
             --artifact "$TUF_ARTIFACT_NAME" \
             --artifact-id "$TUF_ARTIFACT_ID" \
             --workflow "$TUF_WORKFLOW" \
+            --head-branch main \
             --output "$RUNNER_TEMP/tuf-run.json"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

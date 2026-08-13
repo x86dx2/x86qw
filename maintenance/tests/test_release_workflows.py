@@ -382,6 +382,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('--artifact "$TUF_ARTIFACT_NAME"', metadata_step)
         self.assertIn('--artifact-id "$TUF_ARTIFACT_ID"', metadata_step)
         self.assertIn('--workflow "$TUF_WORKFLOW"', metadata_step)
+        self.assertIn('RELEASE_COMMIT: ${{ github.sha }}', metadata_step)
+        self.assertIn('--commit "$RELEASE_COMMIT"', metadata_step)
+        self.assertIn('--head-branch main', metadata_step)
+        self.assertNotIn('--commit "$CANDIDATE_COMMIT"', metadata_step)
 
     def test_metadata_last_assembles_the_rendered_candidate_site(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
