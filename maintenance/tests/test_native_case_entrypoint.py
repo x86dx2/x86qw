@@ -19,6 +19,7 @@ from maintenance.native_case_entrypoint import (
     _materialize_qwfwd_config,
     _cleanup_case_scratch,
     _run_installed_launcher_contract,
+    _start_tcp_service,
     build_case_command,
     load_candidate,
     validate_case_name,
@@ -337,6 +338,39 @@ class NativeCaseEntrypointTests(unittest.TestCase):
             "-777",
             _qwfwd_challenge_token(b"\xff\xff\xff\xffc-777\n\0"),
         )
+
+    def test_tcp_service_retries_when_ephemeral_port_is_lost_before_bind(self) -> None:
+        first = type("Process", (), {"poll": lambda self: 1})()
+        second = type("Process", (), {"poll": lambda self: None})()
+        commands = iter([
+            (("mvdsv", "--port", "41001"), 41001),
+            (("mvdsv", "--port", "41002"), 41002),
+        ])
+        with patch(
+            "maintenance.native_case_entrypoint.subprocess.Popen",
+            side_effect=[first, second],
+        ) as popen, patch(
+            "maintenance.native_case_entrypoint._wait_tcp_listener",
+            side_effect=[
+                CandidateCaseError("MVDSV terminou antes de abrir a porta nativa"),
+                None,
+            ],
+        ), patch(
+            "maintenance.native_case_entrypoint._terminate_service_process",
+            return_value=(b"bind failed", 1),
+        ) as terminate:
+            process, argv, port = _start_tcp_service(
+                lambda: next(commands),
+                cwd=Path("/tmp/native-service"),
+                environment={"PATH": "/usr/bin:/bin"},
+                label="MVDSV",
+            )
+
+        self.assertIs(second, process)
+        self.assertEqual(("mvdsv", "--port", "41002"), argv)
+        self.assertEqual(41002, port)
+        self.assertEqual(2, popen.call_count)
+        terminate.assert_called_once_with(first)
 
     def test_qwfwd_remote_ready_requires_server_packet_after_connection(self) -> None:
         self.assertTrue(
