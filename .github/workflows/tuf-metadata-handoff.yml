@@ -72,12 +72,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
         run: |
           python3 maintenance/tools/verify_external_handoff.py \
-            --run-id "${{ inputs.candidate_run_id }}" \
-            --commit "${{ inputs.candidate_commit }}" \
-            --artifact "${{ inputs.candidate_artifact_name }}" \
-            --artifact-id "${{ inputs.candidate_artifact_id }}" \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$CANDIDATE_ARTIFACT_NAME" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --workflow .github/workflows/release.yml \
             --output "$RUNNER_TEMP/candidate-artifact.json"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
