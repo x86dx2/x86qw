@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.candidate_commit }}
+          ref: main
           lfs: false
           fetch-depth: 1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -85,6 +85,12 @@ jobs:
           [[ "$NATIVE_RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$NATIVE_ARTIFACT_ID" =~ ^[0-9]+$ ]]
           [[ "$NATIVE_ARTIFACT_NAME" =~ ^native-m3-input-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+      - name: Checkout immutable candidate commit
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+        run: |
+          git fetch --no-tags origin "$CANDIDATE_COMMIT"
+          git checkout --detach "$CANDIDATE_COMMIT"
           test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
       - name: Verify candidate build artifact provenance
         env:
