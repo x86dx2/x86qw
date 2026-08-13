@@ -247,6 +247,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("promote-rc) [[ \"$CANDIDATE_VERSION\" =~ ^1\\.0\\.0-rc\\.[0-9]+$ ]]", source)
         self.assertIn("Protected release approval boundary", source)
 
+    def test_signing_workflow_fetches_sha_before_verifying_candidate(self):
+        source = (ROOT / ".github/workflows/sign-native-evidence.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ref: main", source)
+        self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
+        self.assertIn('git fetch --no-tags origin "$CANDIDATE_COMMIT"', source)
+        self.assertIn('git checkout --detach "$CANDIDATE_COMMIT"', source)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"', source)
+        self.assertIn("Checkout immutable candidate commit", source)
+
     def test_promotion_rechecks_live_p0_p1_blockers_before_m3_gate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("release-blockers:", source)
