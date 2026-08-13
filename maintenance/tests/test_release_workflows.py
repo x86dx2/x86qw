@@ -88,6 +88,22 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("tuf-metadata-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
         self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
 
+    def test_tuf_handoff_fetches_sha_and_installs_trust_backend(self):
+        source = (ROOT / ".github/workflows/tuf-metadata-handoff.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ref: main", source)
+        self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
+        self.assertIn("Install pinned trust dependencies from vendored wheels", source)
+        self.assertIn(
+            "python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt",
+            source,
+        )
+        self.assertIn('git fetch --no-tags origin "$CANDIDATE_COMMIT"', source)
+        self.assertIn('git checkout --detach "$CANDIDATE_COMMIT"', source)
+        self.assertIn('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"', source)
+        self.assertIn("Checkout immutable candidate commit", source)
+
     def test_release_builds_once_then_reuses_one_digest_bound_candidate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(1, source.count("release_candidate.py prepare"))
