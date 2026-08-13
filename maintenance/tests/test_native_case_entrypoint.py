@@ -13,6 +13,7 @@ from maintenance.native_case_entrypoint import (
     CANONICAL_CASES,
     CandidateArtifact,
     CandidateCaseError,
+    _WINDOW_PROBE_SOURCE,
     _window_titles,
     _qwfwd_challenge_token,
     _qwfwd_remote_ready_packet,
@@ -332,6 +333,10 @@ class NativeCaseEntrypointTests(unittest.TestCase):
                 ) as run:
                     self.assertEqual("standby - 1/8 - dm6", _window_titles(1234, root))
             self.assertEqual(2, run.call_count)
+
+    def test_window_probe_includes_window_server_windows_outside_on_screen_filter(self) -> None:
+        self.assertIn("[.optionAll, .excludeDesktopElements]", _WINDOW_PROBE_SOURCE)
+        self.assertNotIn("optionOnScreenOnly", _WINDOW_PROBE_SOURCE)
 
     def test_qwfwd_challenge_token_strips_native_line_ending(self) -> None:
         self.assertEqual(
