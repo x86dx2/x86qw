@@ -232,11 +232,24 @@ class MenuTests(unittest.TestCase):
         writer = threading.Thread(target=write_keys)
         try:
             with os.fdopen(slave, "r", encoding="utf-8") as terminal_input:
-                writer.start()
-                with mock.patch.object(menu.sys, "stdin", terminal_input):
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        self.assertTrue(menu.confirm("Confirmar?", default=False, interactive=True))
-                writer.join(timeout=1)
+                import termios
+                import tty
+
+                original_attributes = termios.tcgetattr(terminal_input.fileno())
+                try:
+                    # Make the PTY input mode deterministic before the writer can
+                    # queue bytes; otherwise a slow macOS runner can leave the
+                    # carriage return in canonical mode and block the read.
+                    tty.setraw(terminal_input.fileno(), when=termios.TCSANOW)
+                    writer.start()
+                    with mock.patch.object(menu.sys, "stdin", terminal_input):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            self.assertTrue(menu.confirm("Confirmar?", default=False, interactive=True))
+                    writer.join(timeout=1)
+                finally:
+                    termios.tcsetattr(
+                        terminal_input.fileno(), termios.TCSANOW, original_attributes,
+                    )
         finally:
             if writer.is_alive():
                 writer.join(timeout=1)
