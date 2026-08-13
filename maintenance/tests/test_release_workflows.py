@@ -117,6 +117,19 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
+    def test_release_publish_permission_is_explicit_without_broadening_other_jobs(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"(?m)^permissions:\n  contents: (?:read|write)\n\nconcurrency:")
+        self.assertIn("  publish-assets:\n", source)
+        publish = source.split("  publish-assets:\n", 1)[1].split("\n  publish-gitlab:\n", 1)[0]
+        self.assertIn("    permissions:\n      contents: write\n", publish)
+        for job_name in ("build-once", "portable-verify", "approval-preview", "approval", "verify-release-mirrors"):
+            start = source.index(f"  {job_name}:\n")
+            following = re.search(r"\n  [A-Za-z0-9_-]+:\n", source[start + 1:])
+            end = start + 1 + following.start() if following else len(source)
+            block = source[start:end]
+            self.assertIn("    permissions:\n      contents: read\n", block, job_name)
+
     def test_build_once_fetches_history_for_public_migration_fixtures(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build = source.split("  build-once:\n", 1)[1].split("\n  portable-verify:\n", 1)[0]

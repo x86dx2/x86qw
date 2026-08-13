@@ -80,9 +80,6 @@ on:
         default: ""
         type: string
 
-permissions:
-  contents: read
-
 concurrency:
   group: x86qw-candidate-${{ inputs.candidate_commit }}
   cancel-in-progress: false
@@ -98,6 +95,8 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
@@ -329,6 +328,8 @@ jobs:
     needs: build-once
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -371,6 +372,8 @@ jobs:
     if: ${{ inputs.mode == 'rehearsal' }}
     needs: [build-once, portable-verify]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -402,6 +405,8 @@ jobs:
     needs: [build-once, portable-verify]
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: read
     steps:
       - name: Show exact approval identity
         run: |
@@ -664,6 +669,8 @@ jobs:
     needs: [promotion-gate, publish-assets, publish-gitlab]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
