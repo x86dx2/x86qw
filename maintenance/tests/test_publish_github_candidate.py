@@ -9,6 +9,7 @@ from maintenance.tools.publish_github_candidate import (
     PublisherError,
     _asset_plan,
     _expected_assets,
+    _github_latest,
     _release_create_command,
 )
 
@@ -101,6 +102,20 @@ class PublishGithubCandidateTests(unittest.TestCase):
         self.assertIn("a" * 40, command)
         self.assertNotIn("--clobber", command)
         self.assertNotIn("--force", command)
+
+    def test_prerelease_is_not_github_latest_even_when_site_is_current(self) -> None:
+        self.assertFalse(_github_latest(mirror_latest=True, prerelease=True))
+        command = _release_create_command(
+            repository="x86dx2/x86qw",
+            tag="x86qw-installer-1.0.0-rc.1",
+            title="x86QW Installer 1.0.0-rc.1",
+            notes="Release candidate.",
+            commit="a" * 40,
+            prerelease=True,
+            latest=True,
+        )
+        self.assertIn("--prerelease", command)
+        self.assertIn("--latest=false", command)
 
 
 if __name__ == "__main__":
