@@ -117,6 +117,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release create", source)
         self.assertNotIn("maintenance/manage.py publish", source)
 
+    def test_build_once_fetches_history_for_public_migration_fixtures(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        build = source.split("  build-once:\n", 1)[1].split("\n  portable-verify:\n", 1)[0]
+        self.assertIn("fetch-depth: 0", build)
+        self.assertIn("fetch-tags: true", build)
+
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(10, source.count("name: Checkout immutable candidate commit"))
