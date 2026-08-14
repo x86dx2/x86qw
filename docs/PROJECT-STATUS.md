@@ -1,5 +1,21 @@
 # Estado atual do projeto
 
+## Modo operacional vigente
+
+Desde 2026-08-14, o projeto está formalmente em `owner-only`: um único
+usuário/mantenedor e instalação descartável autorizada. A decisão está em
+[`ADR 0008`](adr/0008-owner-only-release-gates.md).
+
+Neste modo, instalação limpa, lifecycle descartável, evidência M3, contratos
+portáveis, build-once e integridade dos bytes são gates. Migração histórica,
+soak de usuários externos e operação TUF sustentável são capacidades
+`post-public`; não bloqueiam a primeira instalação do mantenedor. O código e as
+fixtures de migração permanecem preservados.
+
+Quando o produto for declarado aberto a usuários externos, a promoção deverá
+usar `release_audience=external-public`; esse valor reativa explicitamente os
+gates de migração, soak e operação TUF externa.
+
 ## Baseline real
 
 A linha canônica é `origin/main`. A revisão exata de um snapshot deve ser
@@ -52,13 +68,15 @@ TUF do candidato. As execuções seguintes do monitor, runs `31791717871` às
 do primeiro alerta está em
 [`1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json).
 Enquanto a renovação/recuperação manual não for concluída e verificada, o gate
-TUF público está `NO-GO`.
+TUF de `external-public` está `NO-GO`; a validação da cadeia ainda é exigida
+para qualquer instalação que use endpoints públicos.
 
 ## Estado local
 
 - downloader, archives, SemVer, launchers, `changes` e `migrate` compartilham
   contratos de runtime;
-- fixtures de migração cobrem os instaladores públicos `0.7.0`–`0.7.13`;
+- fixtures de migração continuam cobrindo os instaladores públicos
+  `0.7.0`–`0.7.13`, mas são capacidade pós-publicação e não gate do modo atual;
 - o publisher é build-once e falha fechado para bytes ausentes, mirrors
   divergentes e metadata TUF fora de ordem;
 - o candidato carrega o site renderizado e os binários de `dist`, sem depender
@@ -93,17 +111,13 @@ TUF público está `NO-GO`.
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
 - a instalação pessoal temporária não é usada pelos testes de release.
-- a aceitação pública completa está implementada em
-  `maintenance/tools/public_install_smoke.py --full-lifecycle` e no workflow
-  M3 manual; a execução protegida histórica de 2026-08-14 falhou na etapa
-  macOS `directory-preferences`, enquanto a rechecagem local posterior dos
-  mesmos bytes públicos passou catálogo/TUF, instalação completa e todo o
-  lifecycle. A execução seguinte também comprovou a migração real pública de
-  `0.7.13` para o RC, com preservação de configuração, demo e PAKs. Os recibos
-  locais estão em:
-  `docs/releases/1.0.0-rc.1-public-acceptance-local-2026-08-14.json` e
-  `docs/releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`;
-  nenhum substitui o artifact do workflow protegido nem inicia o soak;
+- a aceitação M3 possui dois escopos explícitos em
+  `maintenance/tools/public_install_smoke.py --acceptance-scope`: o modo
+  `single-user` instala em destino vazio e executa lifecycle descartável sem
+  baixar `0.7.13`; o modo `external-users` acrescenta a migração histórica.
+  A rechecagem local dos bytes públicos passou catálogo/TUF, instalação limpa,
+  lifecycle e purge. O recibo histórico de migração continua arquivado como
+  evidência opcional, não como bloqueio do owner-only;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
   candidato `1.0.0-rc.2` estão verdes em `25/25`, mas isso não substitui o
@@ -130,16 +144,18 @@ TUF público está `NO-GO`.
   recibo antes do upload. Não há ainda signer configurado nem renovação
   observada no endpoint público. A
   última leitura somente-leitura do ambiente protegido `release` confirmou que
-  `TUF_TIMESTAMP_KEY_B64` ainda não existe; os workflows devem falhar fechado
-  até que a custódia seja configurada ou o modo manual B seja comprovado. Por
-  isso, o gate operacional TUF permanece pendente;
+  `TUF_TIMESTAMP_KEY_B64` ainda não existe; os workflows de operação externa
+  devem falhar fechado até que a custódia seja configurada ou o modo manual B
+  seja comprovado. Isso é pendência `external-public`, não bloqueio do modo
+  owner-only;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
   confere a issue canônica fechada, valida sete dias de observações verdes com
   hardware `macos-arm64`/M3 e uma referência HTTPS por dia, e publica um
   artifact imutável. O job `verify-soak` de `release.yml` exige esse handoff e
-  o inclui no recibo final; nenhum run protegido concluído está registrado
-  ainda, portanto o gate continua pendente;
+  o inclui no recibo final quando `release_audience=external-public`. Nenhum run
+  protegido concluído está registrado ainda; o soak fica estacionado até a
+  declaração de usuários externos;
 - a promoção final também executa `monitor_public_tuf.py` imediatamente antes
   da evidência M3. O gate foi incluído porque o drill operacional, sozinho, não
   prova que a lease pública atual ainda está saudável;
@@ -165,29 +181,31 @@ verificação somente-leitura; suas IDs, digests e tamanhos estão registrados e
 
 ## Gaps e gates restantes
 
-1. o período de uso do RC está registrado em
-   `docs/releases/1.0.0-rc.1-soak.md`, mas foi interrompido pela falha de
-   aceitação pública do RC.1 e precisa reiniciar com um novo candidato;
-   o workflow protegido e o verificador do handoff já estão implementados,
-   mas a issue #143 ainda não foi encerrada nem existe artifact de soak aceito;
-2. a evidência M3 deste RC ainda depende da retenção de 90 dias dos artifacts até
-   que os três assets duráveis sejam publicados;
-3. a aceitação pública pós-deploy tem uma rechecagem local verde e workflow/
-   verificador implementados, mas ainda precisa do artifact e handoff do run
-   M3 protegido;
-4. a migração real pública de `0.7.13` para `1.0.0-rc.1` está comprovada no
-   M3 local pelo recibo v2; Frogbot, upgrade apply e reparo por corrupção agora
-   também estão verdes no preflight local `1.0.0-rc.2`, mas ainda precisam de
-   execução pública/protegida, e os casos completos precisam ser repetidos em
-   um candidato final novo;
-5. a operação TUF tem drill offline implementado e um workflow protegido que
-   vincula o relatório ao recibo final, mas os monitores públicos falharam nos
-   runs `31791717871` e `31798419309` por lease dentro da janela de alerta; a
-   issue #152 está aberta e faltam renovação observada, recuperação registrada
-   e lease saudável;
-6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
+### Gates do modo owner-only
+
+1. a evidência M3 do candidato final precisa ser assinada, vinculada e
+   publicada de forma durável; artifacts de Actions com retenção de 90 dias não
+   bastam como único registro;
+2. a aceitação `single-user` do candidato exato precisa ser executada no runner
+   M3 protegido, com instalação limpa, lifecycle, uninstall e purge;
+3. a branch que contém os workflows precisa estar no GitHub remoto e passar a
+   validação protegida; o checkout local não executa Actions;
+4. nenhum blocker P0/P1 pode permanecer aberto;
+5. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
+
+### Pendências estacionadas até usuários externos
+
+1. migração real de `0.7.13` e preservação de instalações antigas;
+2. soak protegido de sete dias;
+3. drill operacional TUF com custódia e renovação observadas;
+4. lease TUF sustentável durante uso externo e resolução da issue #152;
+5. aceitação `external-users` pelos endpoints públicos.
+
+Essas pendências não autorizam alegar compatibilidade externa, mas não impedem
+o uso e a promoção no modo `owner-only` quando os gates da seção anterior
+estiverem verdes.
 
 ## Registro remoto de governança
 
@@ -226,14 +244,16 @@ está em
 
 ## Veredito
 
-O RC público é um marco legítimo e está em `GO` para uso operacional. A
-promoção de `1.0.0` permanece `NO-GO` até que todos os gates acima tenham
-evidência pública e o candidato final seja novo. Nenhum novo `0.7.x` deve ser
-publicado salvo regressão crítica.
+O RC público é um marco legítimo e está em `GO` para uso do mantenedor. A
+promoção de `1.0.0` em modo `owner-only` fica bloqueada somente pelos gates
+owner-only acima; migração, soak externo e operação TUF sustentável não são
+pré-requisitos desta fase. A promoção `external-public` continua `NO-GO` até
+que todas as pendências externas sejam comprovadas. Nenhum novo `0.7.x` deve
+ser publicado salvo regressão crítica.
 
 ## Próxima ação
 
-Manter o soak do RC, fechar a aceitação pública e as lacunas M3, publicar a
-evidência durável e provar a operação TUF. Depois disso, congelar a linha,
-gerar um novo candidato `1.0.0`, repetir todos os gates sobre seus bytes e só
-então promover a versão final.
+Publicar a alteração de política, executar a aceitação `single-user` no M3,
+publicar a evidência durável e repetir o candidato final sobre os bytes exatos.
+Quando o mantenedor declarar usuários externos, reabrir o plano de migração,
+soak e operação TUF usando `release_audience=external-public`.

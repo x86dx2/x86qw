@@ -1,5 +1,13 @@
 # Roadmap do x86QW
 
+## Modo operacional vigente
+
+O projeto está em `owner-only`: um usuário, um mantenedor e reinstalação limpa
+permitida. A política está formalizada no
+[`ADR 0008`](adr/0008-owner-only-release-gates.md). Migração histórica, soak
+para usuários externos e operação TUF sustentável continuam no roadmap, mas
+não bloqueiam a primeira instalação desta fase.
+
 Este é o índice estratégico da jornada da baseline pública `0.7.13` até
 `1.0.0`. O estado operacional presente está em
 [PROJECT-STATUS.md](PROJECT-STATUS.md); a execução detalhada, a auditoria das
@@ -16,8 +24,9 @@ As notas de release históricas, o RC público e o rascunho de `1.0.0` ficam em
 alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
 os cinco jogos, os runtimes declarados e a distinção entre contratos portáveis e
 execução nativa. O Release Candidate público separado é
-`x86qw-installer-1.0.0-rc.1`; seu soak está interrompido pela aceitação pública
-falha e ele não autoriza a promoção final.
+`x86qw-installer-1.0.0-rc.1`; ele pode ser usado pelo mantenedor. O soak
+externo permanece estacionado e só volta a ser gate quando a audiência mudar
+para `external-public`.
 O checkpoint
 `codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
 aprovação nem release.
@@ -36,23 +45,22 @@ só.
    Dependabot, lockfile, threat model e runbooks.
 3. **PR C — contratos (`#53`):** congelar SemVer, schemas, envelopes JSON,
    redaction e códigos; alvo sugerido `0.8.0`.
-4. **PR D — migração (`#46`):** migrar somente estados publicados de
-   `0.7.0–0.7.13`; fixtures prospectivas não representam releases.
+4. **PR D — migração (`#46`):** capacidade preservada para a transição
+   `external-public`, cobrindo os estados publicados `0.7.0–0.7.13`; não é
+   gate da primeira instalação `owner-only`.
 5. **PRs E1/E2 — trust (`#48`):** aprovar a arquitetura e só depois
    implementar a cadeia de confiança; alvo sugerido `0.9.0`.
 6. **PR F — candidato imutável (`#51`):** construir uma vez, fixar Actions,
    conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
 7. **RC `1.0.0-rc.1` — concluído:** candidato imutável executado no M3,
    evidência assinada, publicação GitHub/GitLab e metadata-last verificados.
-8. **Soak do RC — aguardando abertura protegida:** aceitação pelos endpoints
-   públicos, migração real, lifecycle apply, Frogbot, evidência durável e
-   operação TUF sustentável. O registro operacional é a [issue #143](https://github.com/x86dx2/x86qw/issues/143);
-   os gates de evidência, aceitação, migração, M3 e TUF estão nas issues
-   [#144–#148](https://github.com/x86dx2/x86qw/issues/144) e no alerta [#152](https://github.com/x86dx2/x86qw/issues/152),
-   enquanto a promoção final está em [#149](https://github.com/x86dx2/x86qw/issues/149).
-9. **PR H — `1.0.0`:** gerar um candidato final novo e promover somente após o
-   período de uso do RC, com trust, evidência M3, bytes idênticos e mirrors
-   convergentes.
+8. **Aceitação owner-only:** instalação limpa no M3, lifecycle descartável,
+   Frogbot, update, repair, purge, evidência durável e candidato imutável.
+9. **PR H — `1.0.0` owner-only:** gerar candidato final novo e promover após
+   os gates da fase owner-only, com mirrors convergentes e metadata consistente.
+10. **Transição external-public:** quando declarada pelo mantenedor, reativar
+    migração, aceitação de usuários externos, soak protegido e operação TUF
+    sustentável antes da promoção pública.
 
 Cada item exige issue antes da branch, uma frente estrutural por vez e release
 separada da implementação. O plano é a autoridade para dependências, extração
@@ -68,8 +76,12 @@ seletiva e limites de aprovação.
   são smokes nativos;
 - trust de produção, evidência M3, hashes, SBOM, provenance e mirrors são
   gates independentes e falham fechados;
-- o RC publicado não autoriza a promoção final; qualquer alteração nos bytes de
-  produto exige um novo RC versionado e reinício do soak;
+- o RC publicado não autoriza automaticamente a promoção final; qualquer
+  alteração nos bytes de produto exige um novo candidato. O reinício do soak
+  aplica quando a audiência for `external-public`;
+- `owner-only` exige instalação limpa e não exige migração histórica;
+- `external-public` exige explicitamente migração, soak e operação TUF
+  sustentável;
 - nenhuma promoção ou publicação `1.0` ocorre antes dos gates; releases
   corretivas permanecem separadas das PRs de implementação.
 

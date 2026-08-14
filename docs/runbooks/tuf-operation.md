@@ -1,10 +1,15 @@
 # Operação TUF — renovação e recuperação
 
+No modo vigente `owner-only`, este runbook é uma capacidade estacionada e não
+bloqueia a primeira instalação ou promoção owner-only. Ele se torna gate de
+release quando `release_audience=external-public` for declarado; a cadeia TUF
+continua sendo verificada sempre que uma instalação usa endpoints públicos.
+
 O monitor público é somente observabilidade. Ele autentica a cadeia e abre ou
 atualiza uma issue quando timestamp, snapshot ou targets entram na janela de
 alerta; ele não assina, renova nem publica metadata.
 
-## Drill obrigatório antes de 1.0
+## Drill obrigatório antes de 1.0 external-public
 
 O custodiante deve executar o drill em uma máquina de operação isolada, com as
 chaves privadas fora do checkout e com um repositório TUF assinado localmente:
@@ -78,7 +83,7 @@ roles (`timestamp`, `snapshot` e `targets`), com `current` e `renewed` em cada
 uma. O verificador rejeita o formato histórico sem esse vínculo individual;
 isso evita que um `max` agregado esconda uma role que não avançou.
 
-Para registrar o exercício no gate final, o relatório aprovado deve ser enviado
+Para registrar o exercício no gate final external-public, o relatório aprovado deve ser enviado
 ao workflow protegido
 `.github/workflows/tuf-operation-drill.yml`. Esse workflow vincula o relatório
 ao `candidate.json`, verifica target/root/expiração/recuperação e publica um
@@ -107,4 +112,5 @@ Anexar ao issue de soak e ao gate final:
 - confirmação de que nenhuma metadata foi publicada pelo drill.
 
 Ausência de um relatório não é equivalente a drill executado. Até a evidência
-ser anexada e revisada, a promoção de `1.0.0` permanece `NO-GO`.
+ser anexada e revisada, a promoção `external-public` de `1.0.0` permanece
+`NO-GO`; o modo owner-only segue os gates do ADR 0008.

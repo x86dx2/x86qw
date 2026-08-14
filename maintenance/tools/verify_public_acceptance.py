@@ -21,10 +21,9 @@ from x86qw_runtime.io.metadata import read_bounded_regular_file  # noqa: E402
 
 MAX_RECORD_BYTES = 256 * 1024
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-REQUIRED_OPERATIONS = (
+BASE_OPERATIONS = (
     "version",
     "changes",
-    "migrate_dry_run",
     "update_dry_run",
     "update_apply",
     "update_idempotent",
@@ -32,6 +31,8 @@ REQUIRED_OPERATIONS = (
     "uninstall",
     "uninstall_purge",
 )
+EXTERNAL_USER_OPERATIONS = ("migrate_dry_run", *BASE_OPERATIONS)
+ACCEPTANCE_SCOPES = frozenset({"single-user", "external-users"})
 REQUIRED_MIGRATION_FIELDS = frozenset({
     "source_version",
     "source_bundle_sha256",
@@ -79,6 +80,7 @@ def verify_record(
     expected_receipt_sha256: str | None = None,
     expected_bundle_sha256: str | None = None,
     expected_catalog_sha256: str | None = None,
+    expected_scope: str | None = None,
 ) -> dict[str, object]:
     if not _is_candidate_version(expected_version):
         raise PublicAcceptanceError("versão esperada do recibo não é SemVer válida")
@@ -94,6 +96,14 @@ def verify_record(
         raise PublicAcceptanceError("recibo público não usou o perfil completo corrente")
     if record.get("verified") is not True:
         raise PublicAcceptanceError("recibo público não está marcado como verificado")
+    acceptance_scope = record.get("acceptance_scope", "external-users")
+    if acceptance_scope not in ACCEPTANCE_SCOPES:
+        raise PublicAcceptanceError("recibo público possui acceptance_scope inválido")
+    if expected_scope is not None:
+        if expected_scope not in ACCEPTANCE_SCOPES:
+            raise PublicAcceptanceError("escopo esperado do recibo é inválido")
+        if acceptance_scope != expected_scope:
+            raise PublicAcceptanceError("recibo público possui escopo diferente do gate")
     digest = record.get("bundle_sha256")
     if not isinstance(digest, str) or HEX64.fullmatch(digest) is None:
         raise PublicAcceptanceError("recibo público não possui digest do bundle")
@@ -112,15 +122,20 @@ def verify_record(
     if launcher not in {"x86qw.sh", "x86qw.cmd"}:
         raise PublicAcceptanceError("recibo público não identifica launcher instalado")
     operations = lifecycle.get("operations")
-    if not isinstance(operations, dict) or set(operations) != set(REQUIRED_OPERATIONS):
+    required_operations = (
+        EXTERNAL_USER_OPERATIONS
+        if acceptance_scope == "external-users"
+        else BASE_OPERATIONS
+    )
+    if not isinstance(operations, dict) or set(operations) != set(required_operations):
         raise PublicAcceptanceError("recibo público não contém todas as operações obrigatórias")
-    if any(type(operations[name]) is not bool or operations[name] is not True for name in REQUIRED_OPERATIONS):
+    if any(type(operations[name]) is not bool or operations[name] is not True for name in required_operations):
         raise PublicAcceptanceError("recibo público contém operação não comprovada")
     if lifecycle.get("personal_data_preserved_by_uninstall") is not True:
         raise PublicAcceptanceError("recibo público não comprovou uninstall conservador")
     if lifecycle.get("purge_removed_personal_data") is not True:
         raise PublicAcceptanceError("recibo público não comprovou purge")
-    if record_format == 2:
+    if record_format == 2 and acceptance_scope == "external-users":
         migration = lifecycle.get("migration")
         if not isinstance(migration, dict) or set(migration) != REQUIRED_MIGRATION_FIELDS:
             raise PublicAcceptanceError(
@@ -149,12 +164,13 @@ def verify_record(
         "project": "x86qw",
         "status": "verified-public-acceptance",
         "candidate_version": expected_version,
+        "acceptance_scope": acceptance_scope,
         "receipt_sha256": receipt_digest,
         "bundle_sha256": digest,
         "catalog_sha256": catalog_digest,
-        "operations": list(REQUIRED_OPERATIONS),
+        "operations": list(required_operations),
         "migration_source_version": (
-            "0.7.13" if record_format == 2 else None
+            "0.7.13" if record_format == 2 and acceptance_scope == "external-users" else None
         ),
     }
 
@@ -166,6 +182,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--expected-receipt-sha256")
     parser.add_argument("--expected-bundle-sha256")
     parser.add_argument("--expected-catalog-sha256")
+    parser.add_argument("--expected-scope", choices=sorted(ACCEPTANCE_SCOPES))
     options = parser.parse_args(arguments)
     try:
         result = verify_record(
@@ -174,6 +191,7 @@ def main(arguments: list[str] | None = None) -> int:
             expected_receipt_sha256=options.expected_receipt_sha256,
             expected_bundle_sha256=options.expected_bundle_sha256,
             expected_catalog_sha256=options.expected_catalog_sha256,
+            expected_scope=options.expected_scope,
         )
     except (OSError, PublicAcceptanceError) as error:
         print(f"[ERRO] Aceitação pública inválida: {error}", file=sys.stderr)

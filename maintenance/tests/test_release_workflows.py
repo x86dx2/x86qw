@@ -173,6 +173,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("    permissions:\n      contents: read", job)
         self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", job)
 
+    def test_release_declares_owner_only_mode_and_defers_external_gates(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("release_audience:", source)
+        self.assertIn("owner-only", source)
+        self.assertIn("external-public", source)
+        self.assertIn("inputs.release_audience == 'external-public'", source)
+        self.assertIn("acceptance_scope", source)
+
     def test_release_gates_require_success_of_all_mandatory_upstream_jobs(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         attach = source.split("  attach-native-evidence:\n", 1)[1].split(

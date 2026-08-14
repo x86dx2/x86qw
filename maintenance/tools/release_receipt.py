@@ -36,6 +36,7 @@ SOAK_ARTIFACT = re.compile(r"^rc-soak-[0-9a-f]{40}-[0-9]+-[0-9]+$")
 SOAK_WORKFLOW = ".github/workflows/rc-soak.yml"
 TUF_OPERATION_SLA = re.compile(r"^[1-9][0-9]{0,3}$")
 TUF_OPERATION_WORKFLOW = ".github/workflows/tuf-operation-drill.yml"
+RELEASE_AUDIENCES = frozenset({"owner-only", "external-public"})
 MAX_JSON_BYTES = 2 * 1024 * 1024
 PUBLIC_METADATA_NAMES = (
     "candidate.json",
@@ -228,13 +229,13 @@ def _normalize_soak(value: object) -> dict[str, str]:
     return soak
 
 
-def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
+def _validate_coordinates(value: object) -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
-    allowed_sections = set(SECTIONS) | {"public_acceptance", "tuf_operation", "soak"}
+    allowed_sections = set(SECTIONS) | {"public_acceptance", "tuf_operation", "soak", "release_audience"}
     if set(value) - allowed_sections or not set(SECTIONS).issubset(value):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
-    result: dict[str, dict[str, str]] = {}
+    result: dict[str, object] = {}
     secret_words = ("token", "secret", "password", "private", "credential", "key")
     for section in SECTIONS:
         raw = value.get(section)
@@ -251,6 +252,11 @@ def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
                 raise ReleaseReceiptError(f"valor inválido nas coordenadas: {section}.{key}")
             normalized[key] = item
         result[section] = normalized
+    if "release_audience" in value:
+        audience = value["release_audience"]
+        if not isinstance(audience, str) or audience not in RELEASE_AUDIENCES:
+            raise ReleaseReceiptError("release_audience inválido nas coordenadas")
+        result["release_audience"] = audience
     if "public_acceptance" in value:
         result["public_acceptance"] = _normalize_public_acceptance(value["public_acceptance"])
     if "tuf_operation" in value:
@@ -281,7 +287,7 @@ def validate_final_public_acceptance(receipt: Mapping[str, object], version: str
 def validate_final_tuf_operation(receipt: Mapping[str, object], version: str) -> None:
     """Require and validate the accountable TUF operation handoff for final 1.0.0."""
 
-    if version != "1.0.0":
+    if version != "1.0.0" or receipt.get("release_audience", "external-public") == "owner-only":
         return
     raw = receipt.get("tuf_operation")
     if not isinstance(raw, Mapping) or set(raw) != TUF_OPERATION_FIELDS:
@@ -299,7 +305,7 @@ def validate_final_tuf_operation(receipt: Mapping[str, object], version: str) ->
 def validate_final_soak(receipt: Mapping[str, object], version: str) -> None:
     """Require and validate the completed RC soak handoff for final 1.0.0."""
 
-    if version != "1.0.0":
+    if version != "1.0.0" or receipt.get("release_audience", "external-public") == "owner-only":
         return
     raw = receipt.get("soak")
     if not isinstance(raw, Mapping) or set(raw) != SOAK_FIELDS:
@@ -417,30 +423,35 @@ def build_receipt(
     if not isinstance(version, str) or not isinstance(commit, str) or HEX40.fullmatch(commit) is None:
         raise ReleaseReceiptError("identidade do candidato inválida")
     if version == "1.0.0":
-        validate_final_soak(normalized_coordinates, version)
-        validate_final_tuf_operation(normalized_coordinates, version)
+        audience = normalized_coordinates.get("release_audience", "external-public")
+        if audience not in RELEASE_AUDIENCES:
+            raise ReleaseReceiptError("release_audience ausente ou inválido para a versão final")
+        if audience == "external-public":
+            validate_final_soak(normalized_coordinates, version)
+            validate_final_tuf_operation(normalized_coordinates, version)
         validate_final_public_acceptance(normalized_coordinates, version)
-        soak = normalized_coordinates["soak"]
-        acceptance = normalized_coordinates["public_acceptance"]
-        if (
-            acceptance["version"] != soak["version"]
-            or acceptance["bundle_sha256"] != soak["bundle_sha256"]
-        ):
-            raise ReleaseReceiptError(
-                "aceitação pública diverge do RC sob soak"
-            )
-        if manifest_identity["sha256"] == soak["candidate_json_sha256"]:
-            raise ReleaseReceiptError(
-                "recibo final reutiliza o candidate.json do RC sob soak"
-            )
-        installer_name = f"x86qw-installer-{version}.zip"
-        installer_identity = assets.get(installer_name)
-        if not isinstance(installer_identity, Mapping):
-            raise ReleaseReceiptError("recibo final não possui o instalador candidato")
-        if installer_identity.get("sha256") == soak["bundle_sha256"]:
-            raise ReleaseReceiptError(
-                "recibo final reutiliza o instalador do RC sob soak"
-            )
+        if audience == "external-public":
+            soak = normalized_coordinates["soak"]
+            acceptance = normalized_coordinates["public_acceptance"]
+            if (
+                acceptance["version"] != soak["version"]
+                or acceptance["bundle_sha256"] != soak["bundle_sha256"]
+            ):
+                raise ReleaseReceiptError(
+                    "aceitação pública diverge do RC sob soak"
+                )
+            if manifest_identity["sha256"] == soak["candidate_json_sha256"]:
+                raise ReleaseReceiptError(
+                    "recibo final reutiliza o candidate.json do RC sob soak"
+                )
+            installer_name = f"x86qw-installer-{version}.zip"
+            installer_identity = assets.get(installer_name)
+            if not isinstance(installer_identity, Mapping):
+                raise ReleaseReceiptError("recibo final não possui o instalador candidato")
+            if installer_identity.get("sha256") == soak["bundle_sha256"]:
+                raise ReleaseReceiptError(
+                    "recibo final reutiliza o instalador do RC sob soak"
+                )
     receipt: dict[str, object] = {
         "format": FORMAT,
         "project": PROJECT,
@@ -538,6 +549,8 @@ def validate_durable_assets(
         coordinates["tuf_operation"] = document["tuf_operation"]
     if "soak" in document:
         coordinates["soak"] = document["soak"]
+    if "release_audience" in document:
+        coordinates["release_audience"] = document["release_audience"]
     expected = build_receipt(candidate=candidate, evidence_root=root, coordinates=coordinates)
     if expected != document:
         raise ReleaseReceiptError("release-receipt.json diverge dos bytes públicos")

@@ -93,6 +93,21 @@ class VerifyPublicAcceptanceTests(unittest.TestCase):
                 self.write(value), expected_version="1.0.0-rc.1",
             )
 
+    def test_single_user_v2_acceptance_does_not_require_legacy_migration(self):
+        value = record(format=2, acceptance_scope="single-user")
+        lifecycle = value["full_lifecycle"]
+        assert isinstance(lifecycle, dict)
+        operations = lifecycle["operations"]
+        assert isinstance(operations, dict)
+        operations.pop("migrate_dry_run")
+        result = verify_public_acceptance.verify_record(
+            self.write(value),
+            expected_version="1.0.0-rc.1",
+            expected_scope="single-user",
+        )
+        self.assertEqual("single-user", result["acceptance_scope"])
+        self.assertIsNone(result["migration_source_version"])
+
     def test_rejects_public_bytes_that_do_not_match_the_handoff(self):
         path = self.write(record())
         with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):

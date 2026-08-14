@@ -12,6 +12,14 @@ on:
           - rehearsal
           - promote-rc
           - promote-1.0
+      release_audience:
+        description: "Público da release: owner-only não exige gates de usuários externos"
+        required: true
+        default: owner-only
+        type: choice
+        options:
+          - owner-only
+          - external-public
       candidate_commit:
         description: "SHA completo do commit candidato"
         required: true
@@ -124,6 +132,14 @@ on:
         required: false
         default: ""
         type: string
+      public_acceptance_scope:
+        description: "Escopo comprovado pela aceitação: instalação limpa ou usuários externos"
+        required: false
+        default: single-user
+        type: choice
+        options:
+          - single-user
+          - external-users
       tuf_operation_run_id:
         description: "Run protegido que registrou o drill operacional TUF"
         required: false
@@ -603,6 +619,8 @@ jobs:
           ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
           ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
           ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          ACCEPTANCE_SCOPE: ${{ inputs.public_acceptance_scope }}
+          RELEASE_AUDIENCE: ${{ inputs.release_audience }}
         run: |
           [[ "$ACCEPTANCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$ACCEPTANCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
@@ -612,6 +630,13 @@ jobs:
           [[ "$ACCEPTANCE_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$ACCEPTANCE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$ACCEPTANCE_CATALOG_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_SCOPE" == "single-user" || "$ACCEPTANCE_SCOPE" == "external-users" ]]
+          if [ "$RELEASE_AUDIENCE" = "owner-only" ]; then
+            test "$ACCEPTANCE_SCOPE" = "single-user"
+          else
+            test "$RELEASE_AUDIENCE" = "external-public"
+            test "$ACCEPTANCE_SCOPE" = "external-users"
+          fi
       - name: Verify the protected acceptance run provenance
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -643,6 +668,7 @@ jobs:
           ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
           ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
           ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          ACCEPTANCE_SCOPE: ${{ inputs.public_acceptance_scope }}
         run: |
           test -f public-acceptance/public-acceptance.json
           python3 maintenance/tools/verify_public_acceptance.py \
@@ -650,12 +676,13 @@ jobs:
             --version "$ACCEPTANCE_VERSION" \
             --expected-receipt-sha256 "$ACCEPTANCE_RECEIPT_SHA256" \
             --expected-bundle-sha256 "$ACCEPTANCE_BUNDLE_SHA256" \
-            --expected-catalog-sha256 "$ACCEPTANCE_CATALOG_SHA256"
+            --expected-catalog-sha256 "$ACCEPTANCE_CATALOG_SHA256" \
+            --expected-scope "$ACCEPTANCE_SCOPE"
           echo "public RC acceptance verified for $ACCEPTANCE_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   verify-soak:
     name: Require a completed protected RC soak before 1.0.0
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
     needs: [approval, release-blockers, verify-public-acceptance]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -749,7 +776,7 @@ jobs:
 
   verify-public-tuf:
     name: Require a healthy live public TUF lease before 1.0.0
-    if: ${{ inputs.mode == 'promote-1.0' }}
+    if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
     needs: [approval, release-blockers, verify-public-acceptance, verify-soak]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -812,7 +839,7 @@ jobs:
       - name: Install pinned trust dependencies from vendored wheels
         run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
       - name: Validate final TUF operation handoff coordinates
-        if: ${{ inputs.mode == 'promote-1.0' }}
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
         env:
           TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
           TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
@@ -832,7 +859,7 @@ jobs:
           [[ "$TUF_OPERATION_SLA_HOURS" =~ ^[1-9][0-9]{0,3}$ ]]
           test "$TUF_OPERATION_SLA_HOURS" -le 8760
       - name: Verify final TUF operation handoff provenance
-        if: ${{ inputs.mode == 'promote-1.0' }}
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -880,7 +907,7 @@ jobs:
           merge-multiple: true
           path: downloaded-candidate
       - name: Download final TUF operation report
-        if: ${{ inputs.mode == 'promote-1.0' }}
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ inputs.tuf_operation_artifact_id }}
@@ -890,7 +917,7 @@ jobs:
           merge-multiple: true
           path: tuf-operation
       - name: Verify final TUF operation report against candidate
-        if: ${{ inputs.mode == 'promote-1.0' }}
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
         env:
           TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
           TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
@@ -957,6 +984,7 @@ jobs:
           TUF_ARTIFACT_ID: ${{ inputs.tuf_metadata_artifact_id }}
           TUF_ARTIFACT_NAME: ${{ inputs.tuf_metadata_artifact_name }}
           TUF_WORKFLOW: ${{ inputs.tuf_metadata_workflow }}
+          RELEASE_AUDIENCE: ${{ inputs.release_audience }}
           ACCEPTANCE_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
           ACCEPTANCE_COMMIT: ${{ inputs.public_acceptance_commit }}
           ACCEPTANCE_RUN_ID: ${{ inputs.public_acceptance_run_id }}
@@ -966,7 +994,7 @@ jobs:
           ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
           ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
           ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
-          TUF_OPERATION_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          TUF_OPERATION_REQUIRED: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
           TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
           TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
           TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
@@ -974,7 +1002,7 @@ jobs:
           TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
           TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
           TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
-          SOAK_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          SOAK_REQUIRED: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
           SOAK_COMMIT: ${{ inputs.soak_commit }}
           SOAK_VERSION: ${{ inputs.soak_version }}
           SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
@@ -999,6 +1027,7 @@ jobs:
           tag = f"x86qw-installer-{version}"
           filename = f"x86qw-installer-{version}.zip"
           coordinates = {
+              "release_audience": os.environ["RELEASE_AUDIENCE"],
               "promotion": {
                   "workflow": ".github/workflows/release.yml",
                   "run_id": os.environ["RELEASE_RUN_ID"],
@@ -1122,7 +1151,7 @@ jobs:
           merge-multiple: true
           path: candidate
       - name: Require final candidate bytes differ from soaked RC
-        if: ${{ inputs.mode == 'promote-1.0' }}
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
         env:
           CANDIDATE_VERSION: ${{ inputs.candidate_version }}
           SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}

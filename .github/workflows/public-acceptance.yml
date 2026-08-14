@@ -22,6 +22,14 @@ on:
         required: true
         default: "https://x86qw.x86.com.br/api/v1/trust/"
         type: string
+      acceptance_scope:
+        description: "single-user valida instalação limpa; external-users também exige migração"
+        required: true
+        default: single-user
+        type: choice
+        options:
+          - single-user
+          - external-users
 
 permissions:
   contents: read
@@ -67,6 +75,7 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.candidate_version }}
           CATALOG_URL: ${{ inputs.catalog_url }}
           TRUST_METADATA_URL: ${{ inputs.trust_metadata_url }}
+          ACCEPTANCE_SCOPE: ${{ inputs.acceptance_scope }}
         run: |
           python3 maintenance/tools/public_install_smoke.py \
             --version "$CANDIDATE_VERSION" \
@@ -77,6 +86,7 @@ jobs:
             --catalog-url "$CATALOG_URL" \
             --trust-metadata-url "$TRUST_METADATA_URL" \
             --full-lifecycle \
+            --acceptance-scope "$ACCEPTANCE_SCOPE" \
             --output "$RUNNER_TEMP/public-acceptance.json"
       - name: Upload the exact public acceptance receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -107,6 +117,7 @@ jobs:
           {
             echo "public candidate=${{ inputs.candidate_version }}"
             echo "release code=${{ inputs.release_code_commit }}"
+            echo "acceptance scope=${{ inputs.acceptance_scope }}"
             echo "acceptance artifact=public-acceptance-${{ inputs.candidate_version }}-${{ github.run_id }}-${{ github.run_attempt }}"
             echo "all lifecycle operations used disposable targets"
           } >> "$GITHUB_STEP_SUMMARY"

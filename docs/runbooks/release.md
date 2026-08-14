@@ -1,5 +1,22 @@
 # Runbook de release
 
+## Audiência da release
+
+O modo vigente é `owner-only`, conforme o
+[`ADR 0008`](../adr/0008-owner-only-release-gates.md). Nesse modo, a aceitação
+M3 usa `--acceptance-scope single-user`: instala em destino vazio, executa o
+lifecycle descartável e não baixa nem migra `0.7.13`.
+
+O workflow `.github/workflows/release.yml` recebe
+`release_audience=owner-only` por padrão. Essa escolha mantém obrigatórios
+build-once, evidência M3, integridade dos bytes, mirrors e metadata consistente,
+mas não exige soak de sete dias nem drill de operação TUF externa.
+
+Quando o produto for declarado aberto a usuários externos, use
+`release_audience=external-public` e despache a aceitação com
+`acceptance_scope=external-users`. Só então os gates de migração, soak e
+operação TUF sustentável ficam obrigatórios.
+
 O fluxo de release tem duas camadas: a validação local/portátil e o workflow
 protegido de candidato. Linux, Windows e macOS Intel continuam `preview`; o
 único smoke nativo obrigatório deste escopo é um Mac M3 (Apple M3/macOS arm64) real.
@@ -156,8 +173,9 @@ stale se ela aparecer no staging.
     SHA-256 do recibo JSON, do instalador público e do catálogo TUF aceitos; o
     workflow final compara esses três valores antes de anexar a evidência M3.
     A aceitação de um RC não pode ser fabricada pelo próprio workflow de
-    promoção.
-11. antes da promoção final `1.0.0`,
+    promoção. No modo owner-only, o escopo esperado é `single-user`; no modo
+    external-public, é `external-users` e inclui a migração histórica.
+11. antes da promoção final `1.0.0` em `external-public`,
     `.github/workflows/rc-soak.yml` deve ser despachado na ref exata do commit
     do RC sob uso. O run protegido consulta a issue canônica, exige sete dias
     completos de observações verdes e publica um único `report.json` como
@@ -169,7 +187,8 @@ stale se ela aparecer no staging.
     `verify-soak` da promoção valida a procedência do run, o ID/nome/digest do
     artifact, a issue fechada, o hardware M3, as referências diárias e a
     identidade do RC; sem esse handoff a promoção final permanece bloqueada.
-    As coordenadas entram na seção `soak` do `release-receipt.json`.
+    As coordenadas entram na seção `soak` do `release-receipt.json`. Em
+    `owner-only`, esse job é pulado e o recibo não contém essa seção.
 
 ## Sequência protegida de despacho
 
@@ -190,7 +209,8 @@ RC_CANDIDATE_ARTIFACT_NAME=candidate-a8758ee27bebd7c72c24a31dc19335652e260c0a-31
 
 gh workflow run public-acceptance.yml --repo "$REPO" --ref "$CODE_COMMIT" \
   -f release_code_commit="$CODE_COMMIT" \
-  -f candidate_version="$RC_VERSION"
+  -f candidate_version="$RC_VERSION" \
+  -f acceptance_scope=single-user
 ```
 
 O run de aceitação deve terminar verde no runner Apple M3. Registre seu
@@ -209,13 +229,17 @@ gh workflow run tuf-operation-drill.yml --repo "$REPO" --ref "$CODE_COMMIT" \
   -f operation_report_b64="$OPERATION_REPORT_B64"
 ```
 
-Depois de sete dias completos de uso sem P0/P1, feche a issue canônica e
-despache `rc-soak.yml` com datas contínuas, as cinco flags verdadeiras e o
-JSON base64 `date→URL HTTPS` das observações. Só então copie os IDs e digests
-dos três handoffs para `release.yml` em modo `promote-1.0`. Cada run deve ser
-consultado por `gh run view <run-id>` e validado pelo verificador do workflow;
-um run local, uma issue aberta ou um nome de artifact sem ID não satisfaz o
-gate.
+No modo owner-only, após a aceitação `single-user` verde, copie somente os
+handoffs aplicáveis para `release.yml` e use `release_audience=owner-only` em
+modo `promote-1.0`. Não invente coordenadas de soak ou operação TUF.
+
+Quando usuários externos forem declarados, espere sete dias completos sem P0/P1,
+feche a issue canônica e despache `rc-soak.yml` com datas contínuas, as cinco
+flags verdadeiras e o JSON base64 `date→URL HTTPS` das observações. Só então
+copie os IDs e digests dos handoffs para `release.yml` com
+`release_audience=external-public`. Cada run deve ser consultado por
+`gh run view <run-id>` e validado pelo verificador do workflow; um run local,
+uma issue aberta ou um nome de artifact sem ID não satisfaz o gate externo.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,

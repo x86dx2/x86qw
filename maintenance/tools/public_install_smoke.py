@@ -59,6 +59,7 @@ STABLE_VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)
 NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
 MIGRATION_SOURCE_VERSION = "0.7.13"
 MIGRATION_FIXTURE_ROOT = ROOT / "maintenance/tests/fixtures/migrations/0.7.13"
+ACCEPTANCE_SCOPES = ("single-user", "external-users")
 
 
 class PublicInstallSmokeError(RuntimeError):
@@ -657,8 +658,12 @@ def _run_full_lifecycle(
     release: str,
     profile: str,
     version: str,
+    acceptance_scope: str = "external-users",
 ) -> dict[str, object]:
     """Exercise the installed launcher against disposable public targets."""
+
+    if acceptance_scope not in ACCEPTANCE_SCOPES:
+        raise PublicInstallSmokeError(f"escopo de aceitação inválido: {acceptance_scope}")
 
     version_result = _run_launcher(target, ("version",), env=env, timeout=60)
     if f"x86QW {version}" not in version_result.stdout:
@@ -666,9 +671,11 @@ def _run_full_lifecycle(
 
     sentinels = _write_acceptance_sentinels(target)
     changes = _run_launcher(target, ("changes",), env=env, timeout=PROCESS_TIMEOUT_SECONDS)
-    migrate = _run_launcher(
-        target, ("migrate", "--dry-run"), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
-    )
+    migrate = None
+    if acceptance_scope == "external-users":
+        migrate = _run_launcher(
+            target, ("migrate", "--dry-run"), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+        )
     update_plan = _run_launcher_json(
         target, "update", "--dry-run", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
@@ -704,42 +711,46 @@ def _run_full_lifecycle(
     )
     if purge_target.exists() or purge_target.is_symlink():
         raise PublicInstallSmokeError("uninstall --purge não removeu o destino descartável")
-    migration_package = _catalog_package(
-        catalog, MIGRATION_SOURCE_VERSION, current=False,
-    )
-    migration_application, migration_bundle = _download_public_bundle(
-        migration_package, MIGRATION_SOURCE_VERSION, workspace, "migration-0.7.13",
-    )
-    migration_target = workspace / "instalação pública migração ✓"
-    migration = _run_public_migration(
-        application,
-        migration_application,
-        migration_bundle,
-        migration_target,
-        env=env,
-        platform=platform,
-        channel=channel,
-        release=release,
-        profile=profile,
-        version=version,
-    )
-    return {
+    operations = {
+        "version": True,
+        "changes": changes.returncode == 0,
+        "update_dry_run": update_plan.get("ok") is True and update_plan.get("dry_run") is True,
+        "update_apply": update_first.returncode == 0,
+        "update_idempotent": update_second.returncode == 0,
+        "verify": verify.get("ok") is True,
+        "uninstall": uninstall.returncode == 0,
+        "uninstall_purge": purge.returncode == 0,
+    }
+    if migrate is not None:
+        operations["migrate_dry_run"] = migrate.returncode == 0
+    result = {
         "launcher": _launcher_path(target).name,
-        "operations": {
-            "version": True,
-            "changes": changes.returncode == 0,
-            "migrate_dry_run": migrate.returncode == 0,
-            "update_dry_run": update_plan.get("ok") is True and update_plan.get("dry_run") is True,
-            "update_apply": update_first.returncode == 0,
-            "update_idempotent": update_second.returncode == 0,
-            "verify": verify.get("ok") is True,
-            "uninstall": uninstall.returncode == 0,
-            "uninstall_purge": purge.returncode == 0,
-        },
+        "acceptance_scope": acceptance_scope,
+        "operations": operations,
         "personal_data_preserved_by_uninstall": True,
         "purge_removed_personal_data": True,
-        "migration": migration,
     }
+    if acceptance_scope == "external-users":
+        migration_package = _catalog_package(
+            catalog, MIGRATION_SOURCE_VERSION, current=False,
+        )
+        migration_application, migration_bundle = _download_public_bundle(
+            migration_package, MIGRATION_SOURCE_VERSION, workspace, "migration-0.7.13",
+        )
+        migration_target = workspace / "instalação pública migração ✓"
+        result["migration"] = _run_public_migration(
+            application,
+            migration_application,
+            migration_bundle,
+            migration_target,
+            env=env,
+            platform=platform,
+            channel=channel,
+            release=release,
+            profile=profile,
+            version=version,
+        )
+    return result
 
 
 def run_smoke(
@@ -752,6 +763,7 @@ def run_smoke(
     catalog_url: str,
     trust_metadata_url: str,
     full_lifecycle: bool = False,
+    acceptance_scope: str = "external-users",
     output: Path | None = None,
 ) -> dict[str, Any]:
     if not _is_candidate_version(version):
@@ -766,6 +778,8 @@ def run_smoke(
         raise PublicInstallSmokeError("release nightly precisa ser latest ou YYYYMMDD-HHMMSS_sha.")
     if profile not in {"essential", "recommended", "complete"}:
         raise PublicInstallSmokeError("perfil inválido.")
+    if acceptance_scope not in ACCEPTANCE_SCOPES:
+        raise PublicInstallSmokeError(f"escopo de aceitação inválido: {acceptance_scope}")
     trust_url = _require_https(trust_metadata_url, "metadados de confiança")
     _http_catalog, catalog_payload = _download_catalog_payload(catalog_url)
     authenticated_catalog = _authenticate_public_catalog(catalog_payload, trust_url)
@@ -817,6 +831,7 @@ def run_smoke(
             "format": 2 if full_lifecycle else 1,
             "project": "x86qw",
             "candidate_version": version,
+            "acceptance_scope": acceptance_scope,
             "platform": platform,
             "channel": channel,
             "release": release,
@@ -837,6 +852,7 @@ def run_smoke(
                 release=release,
                 profile=profile,
                 version=version,
+                acceptance_scope=acceptance_scope,
             )
         if output is not None:
             destination = Path(output)
@@ -862,6 +878,10 @@ def _parser() -> argparse.ArgumentParser:
         "--full-lifecycle", action="store_true",
         help="também executa a aceitação completa pelo launcher instalado em destinos descartáveis",
     )
+    parser.add_argument(
+        "--acceptance-scope", choices=ACCEPTANCE_SCOPES, default="external-users",
+        help="single-user valida instalação limpa; external-users também valida migração histórica",
+    )
     parser.add_argument("--output", type=Path, help="grava o recibo JSON da aceitação sem overwrite")
     return parser
 
@@ -878,6 +898,7 @@ def main(argv: list[str] | None = None) -> int:
             catalog_url=options.catalog_url,
             trust_metadata_url=options.trust_metadata_url,
             full_lifecycle=options.full_lifecycle,
+            acceptance_scope=options.acceptance_scope,
             output=options.output,
         )
     except (PublicInstallSmokeError, DownloadError, ArchiveError, OSError, subprocess.SubprocessError) as error:

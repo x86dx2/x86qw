@@ -208,6 +208,35 @@ class ReleaseReceiptTests(unittest.TestCase):
                         coordinates=coordinates,
                     )
 
+    def test_owner_only_final_receipt_does_not_require_soak_or_tuf_operation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["release_audience"] = "owner-only"
+            coordinates["public_acceptance"] = {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                receipt = release_receipt.write_durable_assets(
+                    candidate=candidate,
+                    evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                    coordinates=coordinates,
+                )
+            self.assertEqual("owner-only", receipt["release_audience"])
+            self.assertNotIn("soak", receipt)
+            self.assertNotIn("tuf_operation", receipt)
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
+
     def test_final_receipt_binds_tuf_operation_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
