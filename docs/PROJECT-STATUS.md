@@ -109,6 +109,12 @@ TUF do candidato.
   prova o contrato técnico e o contexto não secreto, mas não prova custódia
   humana independente nem operação contínua de produção; o workflow protegido
   ainda é obrigatório;
+- o período de uso agora possui um workflow protegido em
+  `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
+  confere a issue canônica fechada, valida sete dias de observações verdes e
+  publica um artifact imutável. O job `verify-soak` de `release.yml` exige esse
+  handoff e o inclui no recibo final; nenhum run protegido concluído está
+  registrado ainda, portanto o gate continua pendente;
 
 ## Candidato oficial e promoção
 
@@ -132,6 +138,8 @@ Actions.
 1. o período de uso do RC está registrado em
    `docs/releases/1.0.0-rc.1-soak.md`, mas foi interrompido pela falha de
    aceitação pública do RC.1 e precisa reiniciar com um novo candidato;
+   o workflow protegido e o verificador do handoff já estão implementados,
+   mas a issue #143 ainda não foi encerrada nem existe artifact de soak aceito;
 2. a evidência M3 deste RC ainda depende da retenção de 90 dias dos artifacts até
    que os três assets duráveis sejam publicados;
 3. a aceitação pública pós-deploy tem uma rechecagem local verde e workflow/

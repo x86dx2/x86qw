@@ -159,6 +159,51 @@ on:
         required: false
         default: ""
         type: string
+      soak_commit:
+        description: "Commit exato do RC coberto pelo soak concluído"
+        required: false
+        default: ""
+        type: string
+      soak_version:
+        description: "Versão RC coberta pelo soak concluído"
+        required: false
+        default: "1.0.0-rc.1"
+        type: string
+      soak_candidate_json_sha256:
+        description: "SHA-256 de candidate.json do RC sob soak"
+        required: false
+        default: ""
+        type: string
+      soak_bundle_sha256:
+        description: "SHA-256 do instalador do RC sob soak"
+        required: false
+        default: ""
+        type: string
+      soak_run_id:
+        description: "Run protegido que concluiu o soak"
+        required: false
+        default: ""
+        type: string
+      soak_artifact_id:
+        description: "Artifact ID imutável do relatório de soak"
+        required: false
+        default: ""
+        type: string
+      soak_artifact_name:
+        description: "Nome exato do artifact do relatório de soak"
+        required: false
+        default: ""
+        type: string
+      soak_report_sha256:
+        description: "SHA-256 do relatório JSON de soak"
+        required: false
+        default: ""
+        type: string
+      soak_issue_number:
+        description: "Issue canônico encerrado do soak"
+        required: false
+        default: "143"
+        type: string
 
 concurrency:
   group: x86qw-candidate-${{ inputs.candidate_commit }}
@@ -608,10 +653,104 @@ jobs:
             --expected-catalog-sha256 "$ACCEPTANCE_CATALOG_SHA256"
           echo "public RC acceptance verified for $ACCEPTANCE_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
+  verify-soak:
+    name: Require a completed protected RC soak before 1.0.0
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [approval, release-blockers, verify-public-acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate protected soak coordinates
+        env:
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$SOAK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOAK_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]]
+          [[ "$SOAK_CANDIDATE_JSON_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOAK_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOAK_ARTIFACT_NAME" =~ ^rc-soak-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$SOAK_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_ISSUE_NUMBER" =~ ^[1-9][0-9]{0,8}$ ]]
+          test "$SOAK_VERSION" = "$ACCEPTANCE_VERSION"
+          test "$SOAK_BUNDLE_SHA256" = "$ACCEPTANCE_BUNDLE_SHA256"
+      - name: Verify completed soak run provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$SOAK_RUN_ID" \
+            --commit "$SOAK_COMMIT" \
+            --artifact "$SOAK_ARTIFACT_NAME" \
+            --artifact-id "$SOAK_ARTIFACT_ID" \
+            --workflow .github/workflows/rc-soak.yml \
+            --output "$RUNNER_TEMP/soak-artifact.json"
+      - name: Download the exact immutable soak report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.soak_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.soak_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: soak-report
+      - name: Verify the completed soak report and exact RC identity
+        env:
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
+        run: |
+          set -euo pipefail
+          test -f soak-report/report.json
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("soak-report/report.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$SOAK_REPORT_SHA256"
+          python3 maintenance/tools/verify_soak_report.py \
+            --report soak-report/report.json \
+            --expected-commit "$SOAK_COMMIT" \
+            --expected-version "$SOAK_VERSION" \
+            --expected-candidate-json-sha256 "$SOAK_CANDIDATE_JSON_SHA256" \
+            --expected-bundle-sha256 "$SOAK_BUNDLE_SHA256" \
+            --expected-issue-number "$SOAK_ISSUE_NUMBER" \
+            --minimum-days 7
+          echo "completed protected RC soak verified for $SOAK_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
   attach-native-evidence:
     name: Attach authorized M3 evidence without rebuild
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') }}
-    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance]
+    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance, verify-soak]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
     # native run. Under ADR 0007 the signer may be the sole maintainer; the
@@ -806,6 +945,16 @@ jobs:
           TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
           TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
           TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+          SOAK_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
           RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -865,6 +1014,20 @@ jobs:
                   "bundle_sha256": os.environ["ACCEPTANCE_BUNDLE_SHA256"],
                   "catalog_sha256": os.environ["ACCEPTANCE_CATALOG_SHA256"],
               }
+          if os.environ["SOAK_REQUIRED"].lower() == "true":
+              coordinates["soak"] = {
+                  "workflow": ".github/workflows/rc-soak.yml",
+                  "run_id": os.environ["SOAK_RUN_ID"],
+                  "artifact_id": os.environ["SOAK_ARTIFACT_ID"],
+                  "artifact_name": os.environ["SOAK_ARTIFACT_NAME"],
+                  "report_sha256": os.environ["SOAK_REPORT_SHA256"],
+                  "commit": os.environ["SOAK_COMMIT"],
+                  "version": os.environ["SOAK_VERSION"],
+                  "candidate_json_sha256": os.environ["SOAK_CANDIDATE_JSON_SHA256"],
+                  "bundle_sha256": os.environ["SOAK_BUNDLE_SHA256"],
+                  "issue_number": os.environ["SOAK_ISSUE_NUMBER"],
+                  "minimum_days": "7",
+              }
           if os.environ["TUF_OPERATION_REQUIRED"].lower() == "true":
               coordinates["tuf_operation"] = {
                   "workflow": ".github/workflows/tuf-operation-drill.yml",
@@ -897,8 +1060,8 @@ jobs:
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') }}
-    needs: [build-once, approval, release-blockers, attach-native-evidence, verify-public-acceptance]
+    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') }}
+    needs: [build-once, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak]
     outputs:
       promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest

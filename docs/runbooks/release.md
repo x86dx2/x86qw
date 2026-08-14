@@ -157,6 +157,14 @@ stale se ela aparecer no staging.
     workflow final compara esses três valores antes de anexar a evidência M3.
     A aceitação de um RC não pode ser fabricada pelo próprio workflow de
     promoção.
+11. antes da promoção final `1.0.0`,
+    `.github/workflows/rc-soak.yml` deve ser despachado na ref exata do commit
+    do RC sob uso. O run protegido consulta a issue canônica, exige sete dias
+    completos de observações verdes e publica um único `report.json` como
+    artifact imutável. A etapa `verify-soak` da promoção valida a procedência
+    do run, o ID/nome/digest do artifact, a issue fechada e a identidade do
+    RC; sem esse handoff a promoção final permanece bloqueada. As coordenadas
+    entram na seção `soak` do `release-receipt.json`.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,

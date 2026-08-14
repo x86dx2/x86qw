@@ -325,7 +325,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "native-m3.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
-                "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "validate.yml",
+                "rc-soak.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "validate.yml",
             },
             {path.name for path in workflow_files},
         )

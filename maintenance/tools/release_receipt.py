@@ -32,6 +32,8 @@ POSITIVE_ID = re.compile(r"^[1-9][0-9]{0,19}$")
 PUBLIC_ACCEPTANCE_ARTIFACT = re.compile(r"^public-acceptance-[A-Za-z0-9._-]{1,180}$")
 PUBLIC_ACCEPTANCE_VERSION = re.compile(r"^1\.0\.0-rc\.[0-9]+$")
 TUF_OPERATION_ARTIFACT = re.compile(r"^tuf-operation-[0-9a-f]{40}-[0-9]+-[0-9]+$")
+SOAK_ARTIFACT = re.compile(r"^rc-soak-[0-9a-f]{40}-[0-9]+-[0-9]+$")
+SOAK_WORKFLOW = ".github/workflows/rc-soak.yml"
 TUF_OPERATION_SLA = re.compile(r"^[1-9][0-9]{0,3}$")
 TUF_OPERATION_WORKFLOW = ".github/workflows/tuf-operation-drill.yml"
 MAX_JSON_BYTES = 2 * 1024 * 1024
@@ -59,6 +61,11 @@ SECTION_FIELDS = {
 TUF_OPERATION_FIELDS = frozenset({
     "workflow", "run_id", "artifact_id", "artifact_name", "report_sha256",
     "operator", "custody_host", "timestamp_sla_hours",
+})
+SOAK_FIELDS = frozenset({
+    "workflow", "run_id", "artifact_id", "artifact_name", "report_sha256",
+    "commit", "version", "candidate_json_sha256", "bundle_sha256",
+    "issue_number", "minimum_days",
 })
 PUBLIC_ACCEPTANCE_FIELDS = frozenset({
     "commit", "run_id", "artifact_id", "artifact_name", "version",
@@ -186,10 +193,45 @@ def _normalize_tuf_operation(value: object) -> dict[str, str]:
     return operation
 
 
+def _normalize_soak(value: object) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != SOAK_FIELDS:
+        raise ReleaseReceiptError("coordenadas inválidas na seção soak")
+    soak = {key: value[key] for key in SOAK_FIELDS}
+    for field in ("workflow",):
+        item = soak[field]
+        if not isinstance(item, str) or item != SOAK_WORKFLOW:
+            raise ReleaseReceiptError(f"coordenadas inválidas na seção soak: {field}")
+    if (
+        not isinstance(soak["run_id"], str)
+        or POSITIVE_ID.fullmatch(soak["run_id"]) is None
+        or not isinstance(soak["artifact_id"], str)
+        or POSITIVE_ID.fullmatch(soak["artifact_id"]) is None
+        or not isinstance(soak["artifact_name"], str)
+        or SOAK_ARTIFACT.fullmatch(soak["artifact_name"]) is None
+        or not isinstance(soak["report_sha256"], str)
+        or HEX64.fullmatch(soak["report_sha256"]) is None
+        or not isinstance(soak["commit"], str)
+        or HEX40.fullmatch(soak["commit"]) is None
+        or not isinstance(soak["version"], str)
+        or PUBLIC_ACCEPTANCE_VERSION.fullmatch(soak["version"]) is None
+        or not isinstance(soak["candidate_json_sha256"], str)
+        or HEX64.fullmatch(soak["candidate_json_sha256"]) is None
+        or not isinstance(soak["bundle_sha256"], str)
+        or HEX64.fullmatch(soak["bundle_sha256"]) is None
+        or not isinstance(soak["issue_number"], str)
+        or POSITIVE_ID.fullmatch(soak["issue_number"]) is None
+        or not isinstance(soak["minimum_days"], str)
+        or not re.fullmatch(r"[1-9][0-9]{0,2}", soak["minimum_days"])
+        or not 1 <= int(soak["minimum_days"]) <= 366
+    ):
+        raise ReleaseReceiptError("coordenadas inválidas na seção soak")
+    return soak
+
+
 def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
     if not isinstance(value, Mapping):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
-    allowed_sections = set(SECTIONS) | {"public_acceptance", "tuf_operation"}
+    allowed_sections = set(SECTIONS) | {"public_acceptance", "tuf_operation", "soak"}
     if set(value) - allowed_sections or not set(SECTIONS).issubset(value):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
     result: dict[str, dict[str, str]] = {}
@@ -213,6 +255,8 @@ def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
         result["public_acceptance"] = _normalize_public_acceptance(value["public_acceptance"])
     if "tuf_operation" in value:
         result["tuf_operation"] = _normalize_tuf_operation(value["tuf_operation"])
+    if "soak" in value:
+        result["soak"] = _normalize_soak(value["soak"])
     return result
 
 
@@ -249,6 +293,24 @@ def validate_final_tuf_operation(receipt: Mapping[str, object], version: str) ->
     except ReleaseReceiptError as error:
         raise ReleaseReceiptError(
             "handoff de operação TUF possui coordenadas inválidas"
+        ) from error
+
+
+def validate_final_soak(receipt: Mapping[str, object], version: str) -> None:
+    """Require and validate the completed RC soak handoff for final 1.0.0."""
+
+    if version != "1.0.0":
+        return
+    raw = receipt.get("soak")
+    if not isinstance(raw, Mapping) or set(raw) != SOAK_FIELDS:
+        raise ReleaseReceiptError(
+            "recibo durável da versão final não contém o handoff do soak"
+        )
+    try:
+        _normalize_soak(raw)
+    except ReleaseReceiptError as error:
+        raise ReleaseReceiptError(
+            "handoff do soak possui coordenadas inválidas"
         ) from error
 
 
@@ -355,6 +417,7 @@ def build_receipt(
     if not isinstance(version, str) or not isinstance(commit, str) or HEX40.fullmatch(commit) is None:
         raise ReleaseReceiptError("identidade do candidato inválida")
     if version == "1.0.0":
+        validate_final_soak(normalized_coordinates, version)
         validate_final_tuf_operation(normalized_coordinates, version)
         validate_final_public_acceptance(normalized_coordinates, version)
     receipt: dict[str, object] = {
@@ -452,6 +515,8 @@ def validate_durable_assets(
         coordinates["public_acceptance"] = document["public_acceptance"]
     if "tuf_operation" in document:
         coordinates["tuf_operation"] = document["tuf_operation"]
+    if "soak" in document:
+        coordinates["soak"] = document["soak"]
     expected = build_receipt(candidate=candidate, evidence_root=root, coordinates=coordinates)
     if expected != document:
         raise ReleaseReceiptError("release-receipt.json diverge dos bytes públicos")
@@ -503,6 +568,7 @@ __all__ = [
     "main",
     "validate_durable_assets",
     "validate_final_public_acceptance",
+    "validate_final_soak",
     "validate_final_tuf_operation",
     "write_durable_assets",
 ]

@@ -35,6 +35,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_public_acceptance.py",
             "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
+            "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/materialize_lfs.py",
         )
         for relative in scripts:
@@ -56,6 +57,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/tuf-metadata-handoff.yml",
             ROOT / ".github/workflows/tuf-monitor.yml",
             ROOT / ".github/workflows/public-acceptance.yml",
+            ROOT / ".github/workflows/rc-soak.yml",
             ROOT / ".github/workflows/tuf-operation-drill.yml",
         ]
         for path in workflows:
@@ -164,7 +166,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(6, source.count("name: Checkout immutable candidate commit"))
-        self.assertEqual(11, source.count("ref: main"))
+        self.assertEqual(12, source.count("ref: main"))
         self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
         self.assertEqual(6, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
         self.assertEqual(6, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
@@ -228,7 +230,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             )
             blocks.append("\n".join(lines[start:end]))
 
-        self.assertEqual(13, len(blocks))
+        self.assertEqual(14, len(blocks))
         for block in blocks:
             self.assertIn("artifact-ids:", block)
             self.assertRegex(block, r"(?m)^\s+merge-multiple:\s*true\s*$")
@@ -501,6 +503,46 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--expected-bundle-sha256", gate)
         self.assertIn("--expected-catalog-sha256", gate)
         self.assertIn("needs.verify-public-acceptance.result", source)
+
+    def test_final_promotion_requires_a_proven_completed_rc_soak(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        for field in (
+            "soak_commit:",
+            "soak_version:",
+            "soak_candidate_json_sha256:",
+            "soak_bundle_sha256:",
+            "soak_run_id:",
+            "soak_artifact_id:",
+            "soak_artifact_name:",
+            "soak_report_sha256:",
+            "soak_issue_number:",
+        ):
+            self.assertIn(field, source)
+        self.assertIn("verify-soak:", source)
+        soak = source.split("  verify-soak:\n", 1)[1].split("\n  attach-native-evidence:\n", 1)[0]
+        self.assertIn("verify_external_handoff.py", soak)
+        self.assertIn("verify_soak_report.py", soak)
+        self.assertIn("rc-soak.yml", soak)
+        self.assertIn("actions: read", soak)
+        attach = source.split("  attach-native-evidence:\n", 1)[1].split("\n  promotion-gate:\n", 1)[0]
+        self.assertIn("verify-soak", attach)
+        self.assertIn("needs.verify-soak.result", source)
+
+    def test_rc_soak_workflow_is_protected_and_uploads_immutable_report(self):
+        path = ROOT / ".github/workflows/rc-soak.yml"
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("issues: read", source)
+        self.assertIn("ref: ${{ inputs.candidate_commit }}", source)
+        self.assertIn("verify_soak_report.py", source)
+        self.assertIn("actions/upload-artifact@", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn("retention-days: 90", source)
+        self.assertIn("rc-soak-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
+        self.assertIn("id: upload", source)
+        self.assertIn("steps.upload.outputs.artifact-id", source)
+        self.assertIn("soak_artifact_id=", source)
 
     def test_tuf_operation_handoff_is_protected_and_candidate_bound(self):
         path = ROOT / ".github/workflows/tuf-operation-drill.yml"

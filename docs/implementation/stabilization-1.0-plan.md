@@ -231,6 +231,13 @@ catálogo do candidato, conter contexto de operador/host/SLA e comprovar
 renovação, expiração simulada e recuperação; suas coordenadas entram no recibo
 durável de `1.0.0`.
 
+O gate final também exige o período de uso do RC por
+`.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.
+O relatório precisa comprovar sete dias completos, observações diárias verdes,
+as cinco condições operacionais e a issue canônica encerrada. `verify-soak`
+confere a procedência do run e o artifact imutável; suas coordenadas entram na
+seção `soak` do recibo durável de `1.0.0`.
+
 ### PR G — Mac M3/arm64 e RC (`issue #54`; fechamento operacional `#147`)
 
 O executor `native_macos_harness.py` e o workflow
@@ -266,8 +273,9 @@ gates. A PR faz apenas promoção/release, sem correção funcional. Exigir trus
 válido, evidência M3, bytes idênticos, mirrors convergentes e documentação
 coerente.
 
-**Gate final:** aprovação humana explícita, metadata publicada por último,
-reversão documentada e nenhum claim de plataforma além da evidência existente.
+**Gate final:** aprovação humana explícita, soak protegido concluído, metadata
+publicada por último, reversão documentada e nenhum claim de plataforma além da
+evidência existente.
 
 ## 6. Releases intermediárias e dependências
 
@@ -332,6 +340,8 @@ A jornada só pode ser declarada concluída quando:
 - suporte por plataforma corresponde à evidência nativa do candidato;
 - `PROJECT-STATUS.md`, `ROADMAP.md`, README e notas de release apontam para o
   mesmo estado;
+- existe um artifact protegido de soak, com issue encerrada e coordenadas
+  conferidas no recibo durável final;
 - nenhuma alteração funcional é escondida em uma PR de promoção.
 
 Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,

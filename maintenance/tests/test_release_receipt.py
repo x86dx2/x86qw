@@ -71,6 +71,21 @@ class ReleaseReceiptTests(unittest.TestCase):
             },
         }
 
+    def _soak_coordinates(self) -> dict[str, str]:
+        return {
+            "workflow": ".github/workflows/rc-soak.yml",
+            "run_id": "31752738005",
+            "artifact_id": "9006",
+            "artifact_name": "rc-soak-" + "a" * 40 + "-31752738005-1",
+            "report_sha256": "b" * 64,
+            "commit": "c" * 40,
+            "version": "1.0.0-rc.2",
+            "candidate_json_sha256": "d" * 64,
+            "bundle_sha256": "e" * 64,
+            "issue_number": "143",
+            "minimum_days": "7",
+        }
+
     def test_materializes_root_and_receipt_bound_to_candidate_and_m3_observations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -157,13 +172,15 @@ class ReleaseReceiptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["soak"] = self._soak_coordinates()
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "operação TUF"):
                     release_receipt.write_durable_assets(
                         candidate=candidate,
                         evidence_root=ROOT / "maintenance/trust/m3-root.json",
-                        coordinates=self._coordinates(),
+                        coordinates=coordinates,
                     )
 
     def test_final_receipt_binds_tuf_operation_handoff(self) -> None:
@@ -171,6 +188,7 @@ class ReleaseReceiptTests(unittest.TestCase):
             root = Path(temporary)
             candidate = self._candidate(root, version="1.0.0")
             coordinates = self._coordinates()
+            coordinates["soak"] = self._soak_coordinates()
             coordinates["tuf_operation"] = {
                 "workflow": ".github/workflows/tuf-operation-drill.yml",
                 "run_id": "31752738004",
@@ -191,6 +209,7 @@ class ReleaseReceiptTests(unittest.TestCase):
                 "bundle_sha256": "e" * 64,
                 "catalog_sha256": "f" * 64,
             }
+            coordinates["soak"] = self._soak_coordinates()
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 receipt = release_receipt.write_durable_assets(
@@ -202,11 +221,83 @@ class ReleaseReceiptTests(unittest.TestCase):
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
 
+    def test_final_receipt_requires_completed_soak_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["public_acceptance"] = {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
+            }
+            coordinates["tuf_operation"] = {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "soak"):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
+
+    def test_final_receipt_binds_completed_soak_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["public_acceptance"] = {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
+            }
+            coordinates["tuf_operation"] = {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            }
+            coordinates["soak"] = self._soak_coordinates()
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                receipt = release_receipt.write_durable_assets(
+                    candidate=candidate,
+                    evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                    coordinates=coordinates,
+                )
+            self.assertEqual(coordinates["soak"], receipt["soak"])
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
+
     def test_final_receipt_requires_public_acceptance_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate = self._candidate(root, version="1.0.0")
             coordinates = self._coordinates()
+            coordinates["soak"] = self._soak_coordinates()
             coordinates["tuf_operation"] = {
                 "workflow": ".github/workflows/tuf-operation-drill.yml",
                 "run_id": "31752738004",
@@ -231,6 +322,7 @@ class ReleaseReceiptTests(unittest.TestCase):
             root = Path(temporary)
             candidate = self._candidate(root, version="1.0.0")
             coordinates = self._coordinates()
+            coordinates["soak"] = self._soak_coordinates()
             coordinates["tuf_operation"] = {
                 "workflow": ".github/workflows/tuf-operation-drill.yml",
                 "run_id": "31752738004",
@@ -255,6 +347,7 @@ class ReleaseReceiptTests(unittest.TestCase):
             root = Path(temporary)
             candidate = self._candidate(root, version="1.0.0")
             coordinates = self._coordinates()
+            coordinates["soak"] = self._soak_coordinates()
             coordinates["tuf_operation"] = {
                 "workflow": ".github/workflows/tuf-metadata-handoff.yml",
                 "run_id": "31752738004",
