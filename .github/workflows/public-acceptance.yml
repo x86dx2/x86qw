@@ -35,6 +35,7 @@ jobs:
     name: Install and exercise the public candidate
     runs-on: [self-hosted, macOS, arm64, M3]
     timeout-minutes: 240
+    environment: release
     permissions:
       contents: read
     steps:

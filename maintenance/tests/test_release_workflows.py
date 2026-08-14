@@ -113,6 +113,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"', source)
         self.assertIn("Checkout immutable candidate commit", source)
 
+    def test_public_acceptance_runs_inside_the_protected_release_environment(self):
+        source = (ROOT / ".github/workflows/public-acceptance.yml").read_text(
+            encoding="utf-8"
+        )
+        job = source.split("  accept:\n", 1)[1].split("\n    steps:\n", 1)[0]
+        self.assertIn("    environment: release\n", job)
+        self.assertIn("    permissions:\n      contents: read", job)
+        self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", job)
+
     def test_release_builds_once_then_reuses_one_digest_bound_candidate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(1, source.count("release_candidate.py prepare"))
