@@ -63,6 +63,36 @@ class VerifyPublicAcceptanceTests(unittest.TestCase):
         self.assertEqual("a" * 64, result["bundle_sha256"])
         self.assertEqual("b" * 64, result["catalog_sha256"])
 
+    def test_v2_requires_and_accepts_real_public_migration(self):
+        value = record(format=2)
+        lifecycle = value["full_lifecycle"]
+        assert isinstance(lifecycle, dict)
+        lifecycle["migration"] = {
+            "source_version": "0.7.13",
+            "source_bundle_sha256": "c" * 64,
+            "migrate_apply": True,
+            "target_version": "1.0.0-rc.1",
+            "upgrade_to_candidate": True,
+            "verify_after_upgrade": True,
+            "uninstall_preserved_personal_data": True,
+            "uninstall_preserved_paks": True,
+            "uninstall_exit_code": 0,
+        }
+        result = verify_public_acceptance.verify_record(
+            self.write(value),
+            expected_version="1.0.0-rc.1",
+            expected_bundle_sha256="a" * 64,
+            expected_catalog_sha256="b" * 64,
+        )
+        self.assertEqual("0.7.13", result["migration_source_version"])
+
+    def test_v2_rejects_missing_real_public_migration(self):
+        value = record(format=2)
+        with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):
+            verify_public_acceptance.verify_record(
+                self.write(value), expected_version="1.0.0-rc.1",
+            )
+
     def test_rejects_public_bytes_that_do_not_match_the_handoff(self):
         path = self.write(record())
         with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):

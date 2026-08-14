@@ -79,9 +79,12 @@ TUF do candidato.
   M3 manual; a execução protegida histórica de 2026-08-14 falhou na etapa
   macOS `directory-preferences`, enquanto a rechecagem local posterior dos
   mesmos bytes públicos passou catálogo/TUF, instalação completa e todo o
-  lifecycle. O recibo local está em
-  `docs/releases/1.0.0-rc.1-public-acceptance-local-2026-08-14.json`; ele não
-  substitui o artifact do workflow protegido nem inicia o soak;
+  lifecycle. A execução seguinte também comprovou a migração real pública de
+  `0.7.13` para o RC, com preservação de configuração, demo e PAKs. Os recibos
+  locais estão em:
+  `docs/releases/1.0.0-rc.1-public-acceptance-local-2026-08-14.json` e
+  `docs/releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`;
+  nenhum substitui o artifact do workflow protegido nem inicia o soak;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
   candidato exato estão verdes, mas isso não substitui o handoff M3 assinado
@@ -122,10 +125,10 @@ Actions.
 3. a aceitação pública pós-deploy tem uma rechecagem local verde e workflow/
    verificador implementados, mas ainda precisa do artifact e handoff do run
    M3 protegido;
-4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
-   lifecycle estão comprovados nos preflights locais `1.0.0-rc.4` e `1.0.0`;
-   ainda precisam de execução protegida e aceitação pública de um candidato
-   publicado;
+4. a migração real pública de `0.7.13` para `1.0.0-rc.1` está comprovada no
+   M3 local pelo recibo v2; Frogbot, upgrade apply e reparo por corrupção ainda
+   precisam de execução pública/protegida, e os casos completos precisam ser
+   repetidos em um candidato final novo;
 5. a operação TUF tem monitor público verde, drill offline implementado e agora
    um workflow protegido que vincula o relatório ao recibo final; ainda faltam
    custódia de produção sustentada, renovação observada, alerta, expiração

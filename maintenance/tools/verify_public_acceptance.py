@@ -32,6 +32,17 @@ REQUIRED_OPERATIONS = (
     "uninstall",
     "uninstall_purge",
 )
+REQUIRED_MIGRATION_FIELDS = frozenset({
+    "source_version",
+    "source_bundle_sha256",
+    "migrate_apply",
+    "target_version",
+    "upgrade_to_candidate",
+    "verify_after_upgrade",
+    "uninstall_preserved_personal_data",
+    "uninstall_preserved_paks",
+    "uninstall_exit_code",
+})
 
 
 class PublicAcceptanceError(RuntimeError):
@@ -72,7 +83,8 @@ def verify_record(
     if not _is_candidate_version(expected_version):
         raise PublicAcceptanceError("versão esperada do recibo não é SemVer válida")
     record = _read_json(Path(path))
-    if record.get("format") != 1 or record.get("project") != "x86qw":
+    record_format = record.get("format")
+    if record_format not in {1, 2} or record.get("project") != "x86qw":
         raise PublicAcceptanceError("identidade do recibo público inválida")
     if record.get("candidate_version") != expected_version:
         raise PublicAcceptanceError("recibo público pertence a outra versão")
@@ -108,6 +120,30 @@ def verify_record(
         raise PublicAcceptanceError("recibo público não comprovou uninstall conservador")
     if lifecycle.get("purge_removed_personal_data") is not True:
         raise PublicAcceptanceError("recibo público não comprovou purge")
+    if record_format == 2:
+        migration = lifecycle.get("migration")
+        if not isinstance(migration, dict) or set(migration) != REQUIRED_MIGRATION_FIELDS:
+            raise PublicAcceptanceError(
+                "recibo público v2 não contém a migração real 0.7.13"
+            )
+        if migration.get("source_version") != "0.7.13":
+            raise PublicAcceptanceError("migração pública não partiu de 0.7.13")
+        source_digest = migration.get("source_bundle_sha256")
+        if not isinstance(source_digest, str) or HEX64.fullmatch(source_digest) is None:
+            raise PublicAcceptanceError("migração pública não possui digest do instalador 0.7.13")
+        if migration.get("target_version") != expected_version:
+            raise PublicAcceptanceError("migração pública não convergiu para o candidato")
+        for field in (
+            "migrate_apply",
+            "upgrade_to_candidate",
+            "verify_after_upgrade",
+            "uninstall_preserved_personal_data",
+            "uninstall_preserved_paks",
+        ):
+            if migration.get(field) is not True:
+                raise PublicAcceptanceError(f"migração pública não comprovou {field}")
+        if type(migration.get("uninstall_exit_code")) is not int or migration["uninstall_exit_code"] != 0:
+            raise PublicAcceptanceError("uninstall pós-migração pública terminou com erro")
     return {
         "format": 1,
         "project": "x86qw",
@@ -117,6 +153,9 @@ def verify_record(
         "bundle_sha256": digest,
         "catalog_sha256": catalog_digest,
         "operations": list(REQUIRED_OPERATIONS),
+        "migration_source_version": (
+            "0.7.13" if record_format == 2 else None
+        ),
     }
 
 

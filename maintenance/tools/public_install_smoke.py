@@ -57,6 +57,8 @@ SEMVER = re.compile(
 )
 STABLE_VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 NIGHTLY_VERSION = re.compile(r"^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$")
+MIGRATION_SOURCE_VERSION = "0.7.13"
+MIGRATION_FIXTURE_ROOT = ROOT / "maintenance/tests/fixtures/migrations/0.7.13"
 
 
 class PublicInstallSmokeError(RuntimeError):
@@ -79,7 +81,12 @@ def _require_https(value: object, label: str) -> str:
     return value
 
 
-def _catalog_package(catalog: object, version: str) -> dict[str, Any]:
+def _catalog_package(
+    catalog: object,
+    version: str,
+    *,
+    current: bool = True,
+) -> dict[str, Any]:
     if not isinstance(catalog, dict) or catalog.get("project") != "x86qw":
         raise PublicInstallSmokeError("catálogo público inválido.")
     packages = catalog.get("packages")
@@ -90,7 +97,7 @@ def _catalog_package(catalog: object, version: str) -> dict[str, Any]:
         if isinstance(item, dict)
         and item.get("package") == "x86qw-installer"
         and item.get("version") == version
-        and item.get("current") is True
+        and item.get("current") is current
     ]
     if len(matches) != 1:
         raise PublicInstallSmokeError(
@@ -115,6 +122,50 @@ def _catalog_package(catalog: object, version: str) -> dict[str, Any]:
         "sha256": digest,
         "urls": normalized_urls,
         "filename": filename,
+    }
+
+
+def _download_public_bundle(
+    package: dict[str, Any],
+    version: str,
+    workspace: Path,
+    label: str,
+) -> tuple[Path, dict[str, Any]]:
+    """Download, authenticate, and extract one public installer bundle."""
+
+    bundle_root = Path(workspace) / label
+    bundle_root.mkdir(parents=True, exist_ok=False)
+    bundle_path = bundle_root / str(package["filename"])
+    try:
+        download_mirrors(tuple(
+            PinnedArtifact(
+                url=url,
+                destination=bundle_path,
+                expected_size=package["size"],
+                expected_sha256=package["sha256"],
+                maximum_size=BUNDLE_MAX_BYTES,
+                deadline_seconds=BUNDLE_DEADLINE_SECONDS,
+                retry=RetryPolicy(attempts=3),
+                label=f"bundle público {version}",
+            )
+            for url in package["urls"]
+        ))
+        plan = validate_installer_bundle(bundle_path, version)
+        extracted = bundle_root / "bundle"
+        extract_archive(plan, extracted)
+    except (ArchiveError, DownloadError, OSError) as error:
+        raise PublicInstallSmokeError(f"bundle público rejeitado: {error}") from error
+    prefix = extracted / f"x86qw-installer-{version}"
+    application = prefix / "x86qw.pyz"
+    if not application.is_file() or application.is_symlink():
+        raise PublicInstallSmokeError(
+            f"bundle público {version} não contém x86qw.pyz seguro."
+        )
+    return application, {
+        "version": version,
+        "filename": package["filename"],
+        "size": package["size"],
+        "sha256": package["sha256"],
     }
 
 
@@ -317,32 +368,56 @@ def _install_application(
     profile: str,
     version: str,
 ) -> dict[str, Any]:
-    command = [
-        sys.executable,
-        str(application),
-        "--online-only",
-        "--non-interactive",
-        "--platform", platform,
-        "--channel", channel,
-        "--release", release,
-        "--profile", profile,
-        "install", str(target),
-    ]
-    result = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=PROCESS_TIMEOUT_SECONDS,
-        check=False,
-    )
+    if version == MIGRATION_SOURCE_VERSION:
+        # The public 0.7.13 installer predates the modern non-interactive
+        # contract.  Keep its historical argv intact; the target is still
+        # disposable and the public catalog/TUF policy remains enforced by
+        # the surrounding smoke.
+        result = subprocess.run(
+            [sys.executable, str(application), "install", str(target)],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            input="\n1\n2\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=PROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+    else:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(application),
+                "--online-only",
+                "--non-interactive",
+                "--platform", platform,
+                "--channel", channel,
+                "--release", release,
+                "--profile", profile,
+                "install", str(target),
+            ],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            input=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=PROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
     print(result.stdout, end="")
     if result.returncode != 0:
         raise PublicInstallSmokeError(
             f"instalação pública terminou com código {result.returncode}."
         )
+    if version == MIGRATION_SOURCE_VERSION:
+        # 0.7.13 installs the game content but predates the permanent CLI
+        # receipt/launcher contract.  The migration fixture below adds the
+        # authenticated historical metadata before the current public
+        # candidate is exercised against the same destination.
+        _regular_file_bytes(target / "id1" / "pak0.pak", "PAK base legado")
+        return {"format": 1, "project": "x86qw", "version": version}
     receipt_path = target / ".x86qw" / "cli" / "receipt"
     try:
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -375,11 +450,207 @@ def _require_preserved_sentinels(sentinels: tuple[Path, Path]) -> None:
         raise PublicInstallSmokeError("uninstall conservador removeu a demo pessoal")
 
 
+def _regular_file_bytes(path: Path, label: str) -> bytes:
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise PublicInstallSmokeError(f"{label} ausente ou inseguro: {path}")
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise PublicInstallSmokeError(f"não foi possível ler {label}: {path}") from error
+
+
+def _write_fixture_bytes(path: Path, payload: bytes, label: str) -> None:
+    path = Path(path)
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise PublicInstallSmokeError(f"destino de {label} inseguro: {path}")
+    for ancestor in path.parents:
+        if ancestor.is_symlink() or (ancestor.exists() and not ancestor.is_dir()):
+            raise PublicInstallSmokeError(f"diretório de {label} inseguro: {ancestor}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.write_bytes(payload)
+    except OSError as error:
+        raise PublicInstallSmokeError(f"não foi possível escrever {label}: {path}") from error
+
+
+def _remove_fixture_file(path: Path, label: str) -> None:
+    path = Path(path)
+    if not path.exists() and not path.is_symlink():
+        return
+    if path.is_symlink() or not path.is_file():
+        raise PublicInstallSmokeError(f"metadado legado inseguro: {label}")
+    try:
+        path.unlink()
+    except OSError as error:
+        raise PublicInstallSmokeError(f"não foi possível remover metadado legado: {label}") from error
+
+
+def _identity_for_public_migration(path: Path, label: str) -> dict[str, object]:
+    payload = _regular_file_bytes(path, label)
+    return {"size": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+
+
+def _seed_public_legacy_installation(target: Path) -> dict[str, object]:
+    """Turn a real public 0.7.13 install into the documented legacy fixture."""
+
+    fixture = MIGRATION_FIXTURE_ROOT
+    state_path = fixture / ".x86qw/state.json"
+    if not state_path.is_file() or state_path.is_symlink():
+        raise PublicInstallSmokeError("fixture pública de migração 0.7.13 ausente")
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise PublicInstallSmokeError("fixture pública de migração 0.7.13 inválida") from error
+    if not isinstance(state, dict):
+        raise PublicInstallSmokeError("estado legado público não é um objeto JSON")
+    state["installation_version"] = MIGRATION_SOURCE_VERSION
+
+    for name, canonical in (
+        ("cli.receipt", ".x86qw/cli/receipt"),
+        ("ktx.receipt", ".x86qw/components/ktx/receipt"),
+        ("ktx.inventory", ".x86qw/components/ktx/inventory"),
+    ):
+        source = fixture / ".x86qw" / name
+        payload = _regular_file_bytes(source, f"fixture legado {name}")
+        _remove_fixture_file(Path(target) / canonical, canonical)
+        _write_fixture_bytes(Path(target) / ".x86qw" / name, payload, f"fixture legado {name}")
+    _write_fixture_bytes(
+        Path(target) / ".x86qw/state.json",
+        (json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        "estado legado público",
+    )
+
+    personal: dict[str, dict[str, object]] = {}
+    for relative, payload in (
+        ("qw/configs/x86qw-public-migration.cfg", b"seta name x86qw-public-migration\n"),
+        ("qw/demos/x86qw-public-migration.mvd", b"MVD1 x86qw public migration fixture\n"),
+    ):
+        path = Path(target) / relative
+        _write_fixture_bytes(path, payload, f"dado pessoal {relative}")
+        personal[relative] = _identity_for_public_migration(path, f"dado pessoal {relative}")
+
+    paks: dict[str, dict[str, object]] = {}
+    for name in ("pak0.pak", "pak1.pak"):
+        path = Path(target) / "id1" / name
+        paks[f"id1/{name}"] = _identity_for_public_migration(path, f"PAK público {name}")
+    return {"personal": personal, "paks": paks}
+
+
+def _require_public_migration_preservation(
+    target: Path,
+    context: dict[str, object],
+    *,
+    label: str,
+) -> None:
+    for group in ("personal", "paks"):
+        entries = context.get(group)
+        if not isinstance(entries, dict):
+            raise PublicInstallSmokeError(f"contexto de migração inválido: {group}")
+        for relative, identity in entries.items():
+            if not isinstance(relative, str) or not isinstance(identity, dict):
+                raise PublicInstallSmokeError(f"identidade de migração inválida: {relative!r}")
+            actual = _identity_for_public_migration(Path(target) / relative, f"{label} {relative}")
+            if actual != identity:
+                raise PublicInstallSmokeError(
+                    f"{label} alterou {relative}: esperado={identity!r} atual={actual!r}"
+                )
+
+
+def _run_public_migration(
+    candidate_application: Path,
+    source_application: Path,
+    source_bundle: dict[str, Any],
+    target: Path,
+    *,
+    env: dict[str, str],
+    platform: str,
+    channel: str,
+    release: str,
+    profile: str,
+    version: str,
+) -> dict[str, object]:
+    """Exercise a real public 0.7.13 migration and converge it to the RC."""
+
+    _install_application(
+        source_application,
+        target,
+        env=env,
+        platform=platform,
+        channel=channel,
+        release=release,
+        profile=profile,
+        version=MIGRATION_SOURCE_VERSION,
+    )
+    context = _seed_public_legacy_installation(target)
+    migration_command = [
+        sys.executable,
+        str(candidate_application),
+        "migrate",
+        str(target),
+    ]
+    migration_result = subprocess.run(
+        migration_command,
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=PROCESS_TIMEOUT_SECONDS,
+        check=False,
+    )
+    print(migration_result.stdout, end="")
+    if migration_result.returncode != 0:
+        raise PublicInstallSmokeError(
+            f"migração pública terminou com código {migration_result.returncode}."
+        )
+    migration_state = json.loads(
+        _regular_file_bytes(Path(target) / ".x86qw/state.json", "estado migrado").decode("utf-8")
+    )
+    if not isinstance(migration_state, dict) or migration_state.get("installation_version") != "1.0.0":
+        raise PublicInstallSmokeError("migração pública não publicou o estado 1.0")
+    _require_public_migration_preservation(target, context, label="migração pública")
+
+    _install_application(
+        candidate_application,
+        target,
+        env=env,
+        platform=platform,
+        channel=channel,
+        release=release,
+        profile=profile,
+        version=version,
+    )
+    version_result = _run_launcher(target, ("version",), env=env, timeout=60)
+    if f"x86QW {version}" not in version_result.stdout:
+        raise PublicInstallSmokeError("instalação pública migrada não convergiu para o candidato")
+    verify = _run_launcher_json(target, "verify", env=env, timeout=PROCESS_TIMEOUT_SECONDS)
+    if verify.get("ok") is not True:
+        raise PublicInstallSmokeError("verify pós-migração pública falhou")
+    _require_public_migration_preservation(target, context, label="upgrade público")
+    uninstall = _run_launcher(
+        target, ("uninstall",), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+    )
+    _require_public_migration_preservation(target, context, label="uninstall pós-migração")
+    return {
+        "source_version": MIGRATION_SOURCE_VERSION,
+        "source_bundle_sha256": source_bundle["sha256"],
+        "migrate_apply": True,
+        "target_version": version,
+        "upgrade_to_candidate": True,
+        "verify_after_upgrade": verify.get("ok") is True,
+        "uninstall_preserved_personal_data": True,
+        "uninstall_preserved_paks": True,
+        "uninstall_exit_code": uninstall.returncode,
+    }
+
+
 def _run_full_lifecycle(
     application: Path,
     target: Path,
     *,
     workspace: Path,
+    catalog: dict[str, Any],
     env: dict[str, str],
     platform: str,
     channel: str,
@@ -433,6 +704,25 @@ def _run_full_lifecycle(
     )
     if purge_target.exists() or purge_target.is_symlink():
         raise PublicInstallSmokeError("uninstall --purge não removeu o destino descartável")
+    migration_package = _catalog_package(
+        catalog, MIGRATION_SOURCE_VERSION, current=False,
+    )
+    migration_application, migration_bundle = _download_public_bundle(
+        migration_package, MIGRATION_SOURCE_VERSION, workspace, "migration-0.7.13",
+    )
+    migration_target = workspace / "instalação pública migração ✓"
+    migration = _run_public_migration(
+        application,
+        migration_application,
+        migration_bundle,
+        migration_target,
+        env=env,
+        platform=platform,
+        channel=channel,
+        release=release,
+        profile=profile,
+        version=version,
+    )
     return {
         "launcher": _launcher_path(target).name,
         "operations": {
@@ -448,6 +738,7 @@ def _run_full_lifecycle(
         },
         "personal_data_preserved_by_uninstall": True,
         "purge_removed_personal_data": True,
+        "migration": migration,
     }
 
 
@@ -482,31 +773,9 @@ def run_smoke(
 
     with tempfile.TemporaryDirectory(prefix="x86qw-public-install-") as temporary:
         workspace = Path(temporary)
-        bundle_path = workspace / str(package["filename"])
-        try:
-            download_mirrors(tuple(
-                PinnedArtifact(
-                    url=url,
-                    destination=bundle_path,
-                    expected_size=package["size"],
-                    expected_sha256=package["sha256"],
-                    maximum_size=BUNDLE_MAX_BYTES,
-                    deadline_seconds=BUNDLE_DEADLINE_SECONDS,
-                    retry=RetryPolicy(attempts=3),
-                    label="bundle público do candidato",
-                )
-                for url in package["urls"]
-            ))
-            plan = validate_installer_bundle(bundle_path, version)
-            extracted = workspace / "bundle"
-            extract_archive(plan, extracted)
-        except (ArchiveError, DownloadError, OSError) as error:
-            raise PublicInstallSmokeError(f"bundle público rejeitado: {error}") from error
-
-        prefix = extracted / f"x86qw-installer-{version}"
-        application = prefix / "x86qw.pyz"
-        if not application.is_file() or application.is_symlink():
-            raise PublicInstallSmokeError("bundle público não contém x86qw.pyz seguro.")
+        application, _bundle = _download_public_bundle(
+            package, version, workspace, "candidate",
+        )
         target = workspace / "instalação pública ✓"
         env = dict(os.environ)
         env["X86_QW_TRUST_METADATA_URL"] = trust_url.rstrip("/")
@@ -545,7 +814,7 @@ def run_smoke(
         if verify_json.get("ok") is not True:
             raise PublicInstallSmokeError("verify --json não confirmou a instalação pública.")
         result = {
-            "format": 1,
+            "format": 2 if full_lifecycle else 1,
             "project": "x86qw",
             "candidate_version": version,
             "platform": platform,
@@ -561,6 +830,7 @@ def run_smoke(
                 application,
                 target,
                 workspace=workspace,
+                catalog=authenticated_catalog,
                 env=env,
                 platform=platform,
                 channel=channel,
