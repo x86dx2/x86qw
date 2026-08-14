@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional atualizado; `1.0.0-rc.1` público, soak e gates finais em andamento |
+| Estado | `1.0.0-rc.1` público; aceitação pública v2 e drill técnico TUF locais verdes; soak e gates protegidos finais pendentes |
 | Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
 | Base canônica | `origin/main` |
 | Checkpoint auditável | `main@335d9a062f8ce33b226a9892de82979828a0fd1b`; RC `a8758ee27bebd7c72c24a31dc19335652e260c0a`; promoção `31752738047` |
@@ -29,11 +29,14 @@ fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
 plano continua sem autorizar a promoção final, alteração dos bytes publicados
 ou publicação de metadata TUF fora do workflow protegido. A implementação local
 do fechamento dos gates está na branch `agent/rc-1.0-completion`, atualmente no
-commit `f2cadeff3261ce07f7c9490313db1aa69e417fa2`. O preflight privado `1.0.0`
-dessa HEAD passou `25/25` casos no Apple M3 Pro, com `candidate.json` SHA-256
+commit `9ff3bfc8ccf23a26384ff90d89db99ec5cca3834`. O preflight privado `1.0.0`
+da revisão de produto `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passou `25/25`
+casos no Apple M3 Pro, com `candidate.json` SHA-256
 `c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; isso
 ainda precisa passar pelo fluxo remoto, handoff assinado e endpoint público
-antes de ser considerado evidência de release.
+antes de ser considerado evidência de release. Os commits posteriores desta
+sequência alteraram apenas tooling de release e documentação, não os arquivos
+de produto cobertos por aquele preflight.
 
 As invariantes para todas as fases são:
 
@@ -239,9 +242,15 @@ macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
 
 O RC público foi produzido e promovido no run `31752738047`. A implementação
 do fechamento desta frente adiciona os casos M3 restantes, a aceitação pública
-e a evidência durável. O preflight privado `1.0.0` passou os 25 casos no M3;
-o handoff assinado, a publicação e a aceitação pelo endpoint público ainda são
-pendentes.
+e a evidência durável. A rechecagem local v2 baixou os mesmos bytes pelos
+endpoints públicos, completou o lifecycle e comprovou a migração real
+`0.7.13 → 1.0.0-rc.1`; o recibo está em
+[`1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`](../releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json).
+O drill técnico TUF local também passou renovação, expiração simulada e
+recuperação, com contexto de operador/host/SLA e chaves efêmeras, em
+[`1.0.0-tuf-drill-local-2026-08-14.json`](../releases/1.0.0-tuf-drill-local-2026-08-14.json).
+O handoff/artifact do workflow protegido, a custódia produtiva e a abertura do
+soak continuam pendentes.
 
 **Gate:** implementação fechada localmente; evidência M3 autenticada para um
 novo candidato, smokes registrados e período de uso concluído sem promover
@@ -263,7 +272,7 @@ reversão documentada e nenhum claim de plataforma além da evidência existente
 |---|---|---|
 | nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
 | `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
-| `1.0.0-rc.1` | F e G executadas; evidência pública e soak | RC público e período de uso em andamento |
+| `1.0.0-rc.1` | F e G executadas; aceitação pública v2 e evidência operacional registradas | RC público disponível; soak ainda não formalmente aberto |
 | `1.0.0` | H e todos os gates | promoção sem correção funcional |
 
 O RC `1.0.0-rc.1` já foi criado, tagueado e publicado; a materialização desta
@@ -324,11 +333,14 @@ A jornada só pode ser declarada concluída quando:
 
 Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
 o publisher não recompila, a fixture pública 0.7.13 existe, os workflows não
-possuem placeholders deliberados e o harness M3 local passou `25/25` no
-preflight privado `1.0.0` da HEAD `f2cadeff3261ce07f7c9490313db1aa69e417fa2`.
-O RC público já foi promovido, mas a implementação local ainda não é
-aprovação de `1.0.0`: faltam handoff protegido, execução pública M3, operação
-TUF de produção, soak e novo candidato final após esses gates.
+possuem placeholders deliberados, a aceitação local v2 percorreu os endpoints
+públicos e a migração real preservou os dados, e o drill técnico TUF local
+passou renovação, expiração simulada e recuperação. O harness M3 local passou
+`25/25` no preflight privado `1.0.0` da revisão de produto
+`f2cadeff3261ce07f7c9490313db1aa69e417fa2`. O RC público já foi promovido,
+mas a implementação local ainda não é aprovação de `1.0.0`: faltam artifact e
+handoff protegido, cobertura pública/protegida dos casos M3 restantes,
+operação TUF de produção, soak e novo candidato final após esses gates.
 
 ## 10. Validação desta materialização
 
@@ -345,8 +357,10 @@ gates remotos e nativos:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o commit local `f2cadef` contra `origin/main`, mantendo separado o
-   trabalho histórico já publicado do candidato atual.
+5. revisar o commit local `9ff3bfc` contra `origin/main`, mantendo separado o
+   trabalho histórico já publicado do candidato atual; registrar os recibos
+   locais de aceitação pública e drill TUF sem tratá-los como handoffs
+   protegidos.
 
 Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
 nativa M3, a custódia TUF, o catálogo público e o soak continuam dependentes de
