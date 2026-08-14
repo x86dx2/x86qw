@@ -111,10 +111,7 @@ _CLIENT_CASES = {
             "+set", "k_fb_name_enemy_0", "/x86QW",
             "+set", "k_defmap", "dm6",
             "+set", "k_defmode", "1on1",
-            "+tempalias", "x86qw_native_frogbot",
-            '"cmd botcmd skill 5;cmd botcmd addbot 5"',
-            "+tempalias", "on_enter",
-            '"exec x86qw-ktx.cfg;x86qw_native_frogbot"',
+            "+exec", "x86qw-native-smoke-frogbot.cfg",
             "+map", "dm6",
         ), "dm6",
     ),
@@ -161,6 +158,41 @@ for window in windows {
     print("\(owner)\t\(name)")
 }
 '''
+
+
+def _native_frogbot_config_payload() -> bytes:
+    """Return the derived KTX config used by the real post-map smoke."""
+
+    return (
+        'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+        'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n'
+    ).encode("ascii")
+
+
+def _prepare_native_frogbot_config(target: Path) -> Path:
+    """Materialize the same top-level KTX event alias used by the launcher."""
+
+    target = Path(target).absolute()
+    if target.is_symlink() or not target.is_dir():
+        raise CandidateCaseError("destino nativo ausente ou inseguro para Frogbot")
+    config_directory = target / "qw"
+    if config_directory.is_symlink() or not config_directory.is_dir():
+        raise CandidateCaseError("diretório qw ausente ou inseguro para Frogbot")
+    config = config_directory / "x86qw-native-smoke-frogbot.cfg"
+    _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
+    return config
+
+
+def _remove_native_frogbot_config(config: Path) -> None:
+    """Remove only the derived config created for this smoke case."""
+
+    config = Path(config)
+    if config.is_symlink():
+        raise CandidateCaseError("configuração nativa de Frogbot foi trocada por symlink")
+    if config.exists():
+        if not config.is_file():
+            raise CandidateCaseError("configuração nativa de Frogbot não é arquivo regular")
+        config.unlink()
 _SERVICE_SUFFIXES = {
     "mvdsv-mvd": ("runtime/servers/mvdsv/", "runtime/macos-arm64/mvdsv"),
     "qtv-stream": ("runtime/services/qtv/", "runtime/macos-arm64/qtv"),
@@ -798,8 +830,22 @@ def _run_client_process(
                 break
             time.sleep(0.25)
         else:
+            diagnostics = [
+                f"window={window_title[:160]!r}",
+                f"target_open={str(Path(target).absolute()) in open_files}",
+                f"gamecode={_gamecode_log(target, gamedir)!r}",
+            ]
+            if case == "game-ktx-frogbot":
+                frogbot = _frogbot_log_evidence(target)
+                diagnostics.extend([
+                    f"frogbot_spawned={frogbot['frogbot_spawned']}",
+                    f"frogbot_skill={frogbot['frogbot_skill']}",
+                    f"frogbot_named={frogbot['frogbot_named']}",
+                    f"frogbot_log={str(frogbot['frogbot_log'])[-512:]!r}",
+                ])
             raise CandidateCaseError(
-                f"ezQuake não comprovou janela/mapa/conteúdo para {case}"
+                f"ezQuake não comprovou janela/mapa/conteúdo para {case}: "
+                + "; ".join(diagnostics)
             )
         process.send_signal(signal.SIGTERM)
         try:
@@ -1727,7 +1773,7 @@ def _preserve_native_user_files(target: Path) -> dict[str, dict[str, object]]:
 def _prepare_legacy_state(
     candidate: Candidate, target: Path, *, source_version: str,
 ) -> dict[str, object]:
-    """Install a candidate-owned historical state marker for a real apply."""
+    """Install candidate-owned historical metadata for a real migration apply."""
 
     prefix = "runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13/"
     fixture_state = _candidate_fixture_artifact(candidate, prefix + ".x86qw/state.json")
@@ -1752,6 +1798,30 @@ def _prepare_legacy_state(
     state_path = _regular_target_file(
         Path(target) / ".x86qw/state.json", "estado de instalação",
     )
+
+    # The install case has just written current-format receipts.  Replacing
+    # only state.json would create an intentionally contradictory installation
+    # (legacy state plus an authenticated RC CLI receipt), so seed the complete
+    # legacy metadata shape before invoking the real migration code.  Managed
+    # files are removed only after checking that they are regular files; user
+    # payloads and the candidate-owned CLI bytes remain untouched.
+    legacy_pairs = (
+        ("cli.receipt", ".x86qw/cli/receipt"),
+        ("ktx.receipt", ".x86qw/components/ktx/receipt"),
+        ("ktx.inventory", ".x86qw/components/ktx/inventory"),
+    )
+    for name, canonical_relative in legacy_pairs:
+        fixture = _candidate_fixture_artifact(candidate, prefix + ".x86qw/" + name)
+        canonical = Path(target) / canonical_relative
+        if canonical.is_symlink() or (canonical.exists() and not canonical.is_file()):
+            raise CandidateCaseError(f"metadado canônico legado é inseguro: {canonical_relative}")
+        if canonical.exists():
+            canonical.unlink()
+        _write_target_bytes(
+            Path(target) / ".x86qw" / name,
+            fixture.path.read_bytes(),
+            f"recibo legado {name}",
+        )
     preserved = _preserve_native_user_files(target)
     before = _target_digest(state_path, "estado de instalação")
     _write_target_bytes(
@@ -2070,11 +2140,14 @@ def _run_case(
         case_context = _prepare_uninstall_context(target)
     elif case == "lifecycle-purge":
         case_context = None
+    native_frogbot_config: Path | None = None
     try:
         if case == "lifecycle-purge":
             case_context = _prepare_purge_context(
                 candidate, target, scratch, state_root, environment,
             )
+        if case == "game-ktx-frogbot":
+            native_frogbot_config = _prepare_native_frogbot_config(target)
         observation: dict[str, object] | None = None
         if case in _CLIENT_CASES and sys.platform == "darwin":
             prepared = _isolate_macos_app(prepared, case, scratch)
@@ -2129,6 +2202,8 @@ def _run_case(
         exit_code = 127
         result = subprocess.CompletedProcess(prepared.argv, exit_code, b"", str(error).encode())
     finally:
+        if native_frogbot_config is not None:
+            _remove_native_frogbot_config(native_frogbot_config)
         _cleanup_case_scratch(scratch)
     sys.stdout.buffer.write(result.stdout)
     sys.stderr.buffer.write(result.stderr)

@@ -171,7 +171,16 @@ class ReleaseOwnershipTests(unittest.TestCase):
         second = self._entry("content/readme.txt", b"two")
         with self.assertRaises(module.OwnershipError):
             module.validate_document({"format": 1, "project": "x86qw", "artifacts": [first, second]})
-        deep = self._entry("a/b/c/d/e/f/g/h/i.txt", b"deep")
+        migration_fixture = self._entry(
+            "runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13/"
+            "bundle/x86qw-installer-0.7.13/VERSION",
+            b"fixture",
+        )
+        accepted = module.validate_document(
+            {"format": 1, "project": "x86qw", "artifacts": [migration_fixture]}
+        )
+        self.assertEqual(migration_fixture["path"], accepted["artifacts"][0]["path"])
+        deep = self._entry("a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q.txt", b"deep")
         with self.assertRaises(module.OwnershipError):
             module.validate_document({"format": 1, "project": "x86qw", "artifacts": [deep]})
 
