@@ -421,6 +421,14 @@ def build_receipt(
         validate_final_tuf_operation(normalized_coordinates, version)
         validate_final_public_acceptance(normalized_coordinates, version)
         soak = normalized_coordinates["soak"]
+        acceptance = normalized_coordinates["public_acceptance"]
+        if (
+            acceptance["version"] != soak["version"]
+            or acceptance["bundle_sha256"] != soak["bundle_sha256"]
+        ):
+            raise ReleaseReceiptError(
+                "aceitação pública diverge do RC sob soak"
+            )
         if manifest_identity["sha256"] == soak["candidate_json_sha256"]:
             raise ReleaseReceiptError(
                 "recibo final reutiliza o candidate.json do RC sob soak"

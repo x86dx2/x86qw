@@ -325,12 +325,29 @@ class ReleaseReceiptTests(unittest.TestCase):
             coordinates["soak"]["candidate_json_sha256"] = hashlib.sha256(  # type: ignore[index]
                 (candidate / "candidate.json").read_bytes()
             ).hexdigest()
-            coordinates["soak"]["bundle_sha256"] = hashlib.sha256(  # type: ignore[index]
+            bundle_sha256 = hashlib.sha256(
                 (candidate / "x86qw-installer-1.0.0.zip").read_bytes()
             ).hexdigest()
+            coordinates["soak"]["bundle_sha256"] = bundle_sha256  # type: ignore[index]
+            coordinates["public_acceptance"]["bundle_sha256"] = bundle_sha256  # type: ignore[index]
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "reutiliza"):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
+
+    def test_final_receipt_rejects_acceptance_for_a_different_soaked_rc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._final_coordinates()
+            coordinates["public_acceptance"]["version"] = "1.0.0-rc.3"  # type: ignore[index]
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "RC.*soak"):
                     release_receipt.write_durable_assets(
                         candidate=candidate,
                         evidence_root=ROOT / "maintenance/trust/m3-root.json",
