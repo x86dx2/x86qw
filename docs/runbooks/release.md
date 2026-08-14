@@ -171,6 +171,49 @@ stale se ela aparecer no staging.
     identidade do RC; sem esse handoff a promoção final permanece bloqueada.
     As coordenadas entram na seção `soak` do `release-receipt.json`.
 
+## Sequência protegida de despacho
+
+Depois que esta ref estiver publicada no repositório remoto, a sequência de
+execução é a seguinte. Os valores entre `<...>` são obrigatórios e devem ser
+copiados dos resumos dos runs; não se deve inferir um ID de artifact pelo nome.
+
+```sh
+REPO=x86dx2/x86qw
+CODE_COMMIT=<SHA-do-branch-que-contem-os-workflows>
+RC_COMMIT=a8758ee27bebd7c72c24a31dc19335652e260c0a
+RC_VERSION=1.0.0-rc.1
+RC_CANDIDATE_SHA256=<SHA-256-de-candidate.json-do-RC>
+RC_BUNDLE_SHA256=9600be7eb2ed14e23b2eeb079bd6aa0e4611f996be0c89741fda12587eb7fed8
+
+gh workflow run public-acceptance.yml --repo "$REPO" --ref "$CODE_COMMIT" \
+  -f release_code_commit="$CODE_COMMIT" \
+  -f candidate_version="$RC_VERSION"
+```
+
+O run de aceitação deve terminar verde no runner Apple M3. Registre seu
+`run_id`, `artifact_id`, nome do artifact, `receipt_sha256`, `bundle_sha256` e
+`catalog_sha256` do resumo. Em seguida, execute o drill TUF na mesma ref do
+candidato, com o relatório produzido na máquina de custódia:
+
+```sh
+OPERATION_REPORT_B64="$(base64 < /secure/x86qw/records/tuf-drill.json | tr -d '\n')"
+gh workflow run tuf-operation-drill.yml --repo "$REPO" --ref "$CODE_COMMIT" \
+  -f candidate_artifact_id=<candidate-artifact-id> \
+  -f candidate_artifact_name=<candidate-artifact-name> \
+  -f candidate_run_id=<candidate-run-id> \
+  -f candidate_commit="$RC_COMMIT" \
+  -f candidate_sha256="$RC_CANDIDATE_SHA256" \
+  -f operation_report_b64="$OPERATION_REPORT_B64"
+```
+
+Depois de sete dias completos de uso sem P0/P1, feche a issue canônica e
+despache `rc-soak.yml` com datas contínuas, as cinco flags verdadeiras e o
+JSON base64 `date→URL HTTPS` das observações. Só então copie os IDs e digests
+dos três handoffs para `release.yml` em modo `promote-1.0`. Cada run deve ser
+consultado por `gh run view <run-id>` e validado pelo verificador do workflow;
+um run local, uma issue aberta ou um nome de artifact sem ID não satisfaz o
+gate.
+
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,
 evidência não assinada ou metadata TUF ausente falham fechados.
