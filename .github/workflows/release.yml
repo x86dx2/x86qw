@@ -778,7 +778,7 @@ jobs:
 
   attach-native-evidence:
     name: Attach authorized M3 evidence without rebuild
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    if: ${{ always() && inputs.mode != 'rehearsal' && needs.build-once.result == 'success' && needs.portable-verify.result == 'success' && needs.approval.result == 'success' && needs.release-blockers.result == 'success' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
     needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance, verify-soak, verify-public-tuf]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
@@ -1089,8 +1089,8 @@ jobs:
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
-    needs: [build-once, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak, verify-public-tuf]
+    if: ${{ always() && inputs.mode != 'rehearsal' && needs.build-once.result == 'success' && needs.portable-verify.result == 'success' && needs.approval.result == 'success' && needs.release-blockers.result == 'success' && needs.attach-native-evidence.result == 'success' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak, verify-public-tuf]
     outputs:
       promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest

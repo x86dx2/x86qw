@@ -122,6 +122,33 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("    permissions:\n      contents: read", job)
         self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", job)
 
+    def test_release_gates_require_success_of_all_mandatory_upstream_jobs(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        attach = source.split("  attach-native-evidence:\n", 1)[1].split(
+            "\n    needs:", 1
+        )[0]
+        promotion = source.split("  promotion-gate:\n", 1)[1].split(
+            "\n    needs:", 1
+        )[0]
+        for block, required in (
+            (attach, ("build-once", "portable-verify", "approval", "release-blockers")),
+            (
+                promotion,
+                (
+                    "build-once",
+                    "approval",
+                    "release-blockers",
+                    "attach-native-evidence",
+                ),
+            ),
+        ):
+            for job_name in required:
+                self.assertIn(
+                    f"needs.{job_name}.result == 'success'",
+                    block,
+                    job_name,
+                )
+
     def test_release_builds_once_then_reuses_one_digest_bound_candidate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(1, source.count("release_candidate.py prepare"))
