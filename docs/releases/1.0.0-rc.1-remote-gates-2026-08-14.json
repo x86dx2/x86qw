@@ -1,0 +1,74 @@
+{
+  "checked_at": "2026-08-14T11:24:00Z",
+  "format": "x86qw-remote-gates-v1",
+  "project": "x86qw",
+  "release": {
+    "is_draft": false,
+    "is_immutable": false,
+    "is_prerelease": true,
+    "tag": "x86qw-installer-1.0.0-rc.1",
+    "url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0-rc.1"
+  },
+  "latest_tuf_monitor": {
+    "conclusion": "failure",
+    "run_id": 31791717871,
+    "url": "https://github.com/x86dx2/x86qw/actions/runs/31791717871"
+  },
+  "open_issues": [
+    {
+      "number": 143,
+      "title": "[P1] RC soak — x86QW 1.0.0-rc.1",
+      "url": "https://github.com/x86dx2/x86qw/issues/143"
+    },
+    {
+      "number": 144,
+      "title": "[P1] Durable signed release evidence",
+      "url": "https://github.com/x86dx2/x86qw/issues/144"
+    },
+    {
+      "number": 145,
+      "title": "[P1] Public RC acceptance",
+      "url": "https://github.com/x86dx2/x86qw/issues/145"
+    },
+    {
+      "number": 146,
+      "title": "[P1] Real 0.7.13 migration",
+      "url": "https://github.com/x86dx2/x86qw/issues/146"
+    },
+    {
+      "number": 147,
+      "title": "[P1] Remaining M3 functional coverage",
+      "url": "https://github.com/x86dx2/x86qw/issues/147"
+    },
+    {
+      "number": 148,
+      "title": "[P1] Sustainable TUF operation",
+      "url": "https://github.com/x86dx2/x86qw/issues/148"
+    },
+    {
+      "number": 149,
+      "title": "[P1] Final 1.0.0 promotion",
+      "url": "https://github.com/x86dx2/x86qw/issues/149"
+    },
+    {
+      "number": 150,
+      "title": "[P2] Remote branch cleanup after evidence registration",
+      "url": "https://github.com/x86dx2/x86qw/issues/150"
+    },
+    {
+      "number": 151,
+      "title": "[P2] Evaluate GitHub host-level immutable releases",
+      "url": "https://github.com/x86dx2/x86qw/issues/151"
+    },
+    {
+      "number": 152,
+      "title": "TUF public lease requires attention",
+      "url": "https://github.com/x86dx2/x86qw/issues/152"
+    }
+  ],
+  "status": "final-promotion-no-go",
+  "limitations": [
+    "This is a read-only snapshot of GitHub state; it does not authorize issue, release, branch, TUF, or workflow mutations.",
+    "Open issues are evidence of outstanding gates, not proof that their underlying work is complete."
+  ]
+}

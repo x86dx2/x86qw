@@ -169,6 +169,29 @@ verificação somente-leitura; suas IDs, digests e tamanhos estão registrados e
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
 
+## Registro remoto de governança
+
+Na verificação somente-leitura de 2026-08-14 11:24 UTC, o GitHub confirmou a
+release RC pública como prerelease não draft, mas ainda sem imutabilidade
+host-level. As issues canônicas abertas eram:
+
+- [#143 — RC soak](https://github.com/x86dx2/x86qw/issues/143);
+- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144);
+- [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145);
+- [#146 — real 0.7.13 migration](https://github.com/x86dx2/x86qw/issues/146);
+- [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147);
+- [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148);
+- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149);
+- [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
+- [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
+- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152).
+
+O último monitor TUF registrado nessa leitura foi o run
+[31791717871](https://github.com/x86dx2/x86qw/actions/runs/31791717871), com
+falha por lease dentro da janela de alerta. O snapshot completo, incluindo os
+limites da leitura, está em
+[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json).
+
 ## Veredito
 
 O RC público é um marco legítimo e está em `GO` para uso operacional. A
