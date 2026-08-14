@@ -646,6 +646,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
             source.index("Record metadata-last post-publish result"),
         )
 
+    def test_metadata_last_retries_public_propagation_before_failing(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        metadata = source.split("  metadata-last:\n", 1)[1]
+        verification = metadata.split(
+            "      - name: Verify public TUF after deployment", 1
+        )[1].split("      - name: Record metadata-last post-publish result", 1)[0]
+        self.assertIn("for attempt in 1 2 3 4 5", verification)
+        self.assertIn("sleep", verification)
+        self.assertIn("attempt ${attempt}/5", verification)
+
     def test_public_acceptance_runs_the_full_disposable_m3_lifecycle(self):
         path = ROOT / ".github/workflows/public-acceptance.yml"
         source = path.read_text(encoding="utf-8")
