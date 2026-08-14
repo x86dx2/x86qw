@@ -65,7 +65,7 @@ seletiva e limites de aprovação.
 - trust de produção, evidência M3, hashes, SBOM, provenance e mirrors são
   gates independentes e falham fechados;
 - o RC publicado não autoriza a promoção final; qualquer alteração nos bytes de
-  produto exige `1.0.0-rc.2` e reinício do soak;
+  produto exige um novo RC versionado e reinício do soak;
 - nenhuma promoção ou publicação `1.0` ocorre antes dos gates; releases
   corretivas permanecem separadas das PRs de implementação.
 
