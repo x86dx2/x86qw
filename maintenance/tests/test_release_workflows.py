@@ -270,6 +270,37 @@ class ReleaseWorkflowTests(unittest.TestCase):
             block = source[start:end]
             self.assertIn("    permissions:\n      contents: read\n", block, job_name)
 
+    def test_publication_jobs_require_a_successful_promotion_gate(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        expected = {
+            "publish-assets": (
+                "if: ${{ always() && (inputs.mode == 'promote-rc' || "
+                "inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' }}"
+            ),
+            "publish-gitlab": (
+                "if: ${{ always() && (inputs.mode == 'promote-rc' || "
+                "inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' "
+                "&& needs.publish-assets.result == 'success' }}"
+            ),
+            "verify-release-mirrors": (
+                "if: ${{ always() && (inputs.mode == 'promote-rc' || "
+                "inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' "
+                "&& needs.publish-assets.result == 'success' "
+                "&& needs.publish-gitlab.result == 'success' }}"
+            ),
+            "metadata-last": (
+                "if: ${{ always() && (inputs.mode == 'promote-rc' || "
+                "inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' "
+                "&& needs.verify-release-mirrors.result == 'success' }}"
+            ),
+        }
+        for job_name, condition in expected.items():
+            start = source.index(f"  {job_name}:\n")
+            following = re.search(r"\n  [A-Za-z0-9_-]+:\n", source[start + 1:])
+            end = start + 1 + following.start() if following else len(source)
+            block = source[start:end]
+            self.assertIn(condition, block, job_name)
+
     def test_build_once_fetches_history_for_public_migration_fixtures(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build = source.split("  build-once:\n", 1)[1].split("\n  portable-verify:\n", 1)[0]
