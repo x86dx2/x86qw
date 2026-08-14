@@ -55,21 +55,20 @@ a release RC não será alterada para experimentar essa configuração.
 
 ## Estado de confiança
 
-A root Ed25519 incorporada é validada localmente. O monitor público encontrou
-root v1, timestamp v16, snapshot v16 e targets v16; autenticou o catálogo com
-75 pacotes e timestamp válido até `2026-08-14T15:42:54Z`. O recibo está em
+A root Ed25519 incorporada é validada localmente. A fotografia inicial do
+monitor encontrou root v1, timestamp v16, snapshot v16 e targets v16; depois,
+o workflow de renovação publicou timestamp v17, com validade até
+`2026-08-15T20:43:28Z` (run `31839143732`). O handoff público foi implantado e
+verificado pelo run `31845099782`; TUF, bootstraps e product passaram na
+verificação pós-deploy. Os recibos históricos estão em
 [`docs/releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json).
-Esta é uma fotografia do endpoint público em 2026-08-14 05:04 UTC; não
-constitui evidência de custódia humana independente nem substitui a cerimônia
-TUF do candidato. As execuções seguintes do monitor, runs `31791717871` às
-10:19 UTC e `31798419309` às 11:59 UTC, falharam porque a mesma lease de
-`timestamp` entrou na janela de alerta de seis horas; a issue automática
-[#152](https://github.com/x86dx2/x86qw/issues/152) permanece aberta. O registro
-do primeiro alerta está em
+Esta é uma fotografia do endpoint público em 2026-08-14; não constitui
+evidência de custódia humana independente nem substitui a cerimônia TUF do
+candidato. Os alertas anteriores de lease estão preservados em
 [`1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json).
-Enquanto a renovação/recuperação manual não for concluída e verificada, o gate
-TUF de `external-public` está `NO-GO`; a validação da cadeia ainda é exigida
-para qualquer instalação que use endpoints públicos.
+A operação contínua e a custódia independente continuam pendência
+`external-public` (#152); a validação da cadeia ainda é exigida para qualquer
+instalação que use endpoints públicos.
 
 ## Estado local
 
@@ -116,8 +115,11 @@ para qualquer instalação que use endpoints públicos.
   `single-user` instala em destino vazio e executa lifecycle descartável sem
   baixar `0.7.13`; o modo `external-users` acrescenta a migração histórica.
   A rechecagem local dos bytes públicos passou catálogo/TUF, instalação limpa,
-  lifecycle e purge. O recibo histórico de migração continua arquivado como
-  evidência opcional, não como bloqueio do owner-only;
+  lifecycle e purge. O workflow protegido `31845951477` também passou no M3,
+  gerou o artifact `9235987853` e produziu o recibo SHA-256
+  `492fdc4995ceb187ed738ca44a129192c3a9743607567ffdef4821f5299c2bdc`. O
+  recibo histórico de migração continua arquivado como evidência opcional, não
+  como bloqueio do owner-only;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
   candidato `1.0.0-rc.2` estão verdes em `25/25`, mas isso não substitui o
@@ -137,17 +139,12 @@ para qualquer instalação que use endpoints públicos.
   caminho de signer limitado: aceita somente uma chave da role `timestamp`,
   autentica a saída e recusa qualquer mudança fora de
   `metadata/timestamp.json`; `verify_tuf_timestamp_renewal.py` repete essa
-  prova antes da publicação. O workflow
-  `.github/workflows/tuf-timestamp-publish.yml` então monta e implanta somente
-  essa geração timestamp-only sob aprovação protegida e verifica TUF,
-  bootstraps e product públicos; `verify_tuf_timestamp_publication.py` valida o
-  recibo antes do upload. Não há ainda signer configurado nem renovação
-  observada no endpoint público. A
-  última leitura somente-leitura do ambiente protegido `release` confirmou que
-  `TUF_TIMESTAMP_KEY_B64` ainda não existe; os workflows de operação externa
+  prova antes da publicação. Esse caminho foi executado e publicado no run
+  `31839143732`, e o deploy timestamp-only foi verificado no run
+  `31845099782`. A operação contínua, a custódia independente e a recuperação
+  fora do fluxo pontual continuam pendência `external-public`; os workflows
   devem falhar fechado até que a custódia seja configurada ou o modo manual B
-  seja comprovado. Isso é pendência `external-public`, não bloqueio do modo
-  owner-only;
+  seja comprovado. Isso não bloqueia o modo `owner-only`;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
   confere a issue canônica fechada, valida sete dias de observações verdes com
@@ -179,6 +176,23 @@ Actions. Os três artifacts do run final ainda estavam retidos na última
 verificação somente-leitura; suas IDs, digests e tamanhos estão registrados em
 [`1.0.0-rc.1-promotion-artifacts-2026-08-14.json`](releases/1.0.0-rc.1-promotion-artifacts-2026-08-14.json).
 
+## Preflight atual da promoção owner-only
+
+O candidato final `1.0.0` foi construído uma vez no commit
+`e12ed081b968f820f47200e4be954a4f444056a1`, com `candidate.json` SHA-256
+`0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21` e
+artifact `9233462439`. A evidência nativa protegida passou `25/25` casos no M3
+no run `31844022503`; a assinatura correspondente está no run `31844580590`,
+artifact `9235453104`. O handoff TUF está no run `31841473209`, artifact
+`9234407500`. A aceitação pública protegida está no run `31845951477`, artifact
+`9235987853`, com escopo `single-user`.
+
+Os quatro handoffs foram revalidados por `verify_external_handoff.py`, e a
+evidência assinada foi validada para `macOS-ARM64`. A promoção final ainda não
+foi despachada: o gate remoto retorna somente a issue P1 #149, que representa a
+própria tarefa de promoção e precisa ser resolvida no fluxo de governança antes
+do despacho.
+
 ## Gaps e gates restantes
 
 ### Gates do modo owner-only
@@ -187,7 +201,8 @@ verificação somente-leitura; suas IDs, digests e tamanhos estão registrados e
    publicada de forma durável; artifacts de Actions com retenção de 90 dias não
    bastam como único registro;
 2. a aceitação `single-user` do candidato exato precisa ser executada no runner
-   M3 protegido, com instalação limpa, lifecycle, uninstall e purge;
+   M3 protegido, com instalação limpa, lifecycle, uninstall e purge — concluído
+   no run `31845951477`;
 3. a branch que contém os workflows precisa estar no GitHub remoto e passar a
    validação protegida; o checkout local não executa Actions;
 4. nenhum blocker P0/P1 pode permanecer aberto;
@@ -209,27 +224,23 @@ estiverem verdes.
 
 ## Registro remoto de governança
 
-Na verificação somente-leitura de 2026-08-14 11:24 UTC, o GitHub confirmou a
-release RC pública como prerelease não draft, mas ainda sem imutabilidade
-host-level. As issues canônicas abertas eram:
-
-Uma rechecagem somente-leitura às 13:35 UTC confirmou que os workflows locais
-de aceitação pública, soak, drill operacional TUF, renovação limitada de
-timestamp e publicação timestamp-only ainda não estão presentes no remoto. O
-ambiente protegido `release`
-continua sem o secret `TUF_TIMESTAMP_KEY_B64`; o monitor público mais recente
-continua sendo o run `31798419309`, concluído com falha por lease dentro da
-janela de alerta. Esse snapshot está registrado em
-[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json);
-nenhuma mutação remota foi executada nesta rechecagem.
+Uma rechecagem remota posterior confirmou que os workflows de aceitação,
+renovação timestamp-only e publicação estão presentes no remoto. O workflow
+protegido de aceitação `31845951477` passou no M3 e o runner efêmero foi
+removido. O timestamp público foi renovado e o deploy `31845099782` passou a
+verificação pós-deploy. A release RC continua sem imutabilidade host-level;
+isso é uma pendência P2, não uma alteração a ser feita no RC. O snapshot
+histórico em
+[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json)
+deve ser lido como fotografia anterior, não como estado atual.
 
 - [#143 — RC soak](https://github.com/x86dx2/x86qw/issues/143);
-- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144);
-- [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145);
+- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144) (P2, aberto até a final);
+- [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145) (fechada após o run protegido);
 - [#146 — real 0.7.13 migration](https://github.com/x86dx2/x86qw/issues/146);
-- [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147);
+- [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147) (fechada após 25/25);
 - [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148);
-- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149);
+- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (P1, gate atual);
 - [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
 - [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
 - [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152).

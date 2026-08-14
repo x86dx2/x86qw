@@ -54,10 +54,13 @@ só.
    conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
 7. **RC `1.0.0-rc.1` — concluído:** candidato imutável executado no M3,
    evidência assinada, publicação GitHub/GitLab e metadata-last verificados.
-8. **Aceitação owner-only:** instalação limpa no M3, lifecycle descartável,
-   Frogbot, update, repair, purge, evidência durável e candidato imutável.
-9. **PR H — `1.0.0` owner-only:** gerar candidato final novo e promover após
-   os gates da fase owner-only, com mirrors convergentes e metadata consistente.
+8. **Aceitação owner-only — concluída:** instalação limpa no M3, lifecycle
+   descartável, Frogbot, update, repair, purge e aceitação pública protegida
+   pelo endpoint; evidência M3 e candidato imutável estão vinculados aos runs
+   registrados. A evidência durável será materializada pela promoção final.
+9. **PR H — `1.0.0` owner-only — em execução:** promover o candidato final
+   já preparado após o gate de promoção, com mirrors convergentes, assets de
+   evidência duráveis e metadata consistente.
 10. **Transição external-public:** quando declarada pelo mantenedor, reativar
     migração, aceitação de usuários externos, soak protegido e operação TUF
     sustentável antes da promoção pública.
