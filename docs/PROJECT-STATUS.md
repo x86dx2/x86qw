@@ -195,7 +195,7 @@ Na verificação somente-leitura de 2026-08-14 11:24 UTC, o GitHub confirmou a
 release RC pública como prerelease não draft, mas ainda sem imutabilidade
 host-level. As issues canônicas abertas eram:
 
-Uma rechecagem somente-leitura às 13:22 UTC confirmou que os workflows locais
+Uma rechecagem somente-leitura às 13:35 UTC confirmou que os workflows locais
 de aceitação pública, soak, drill operacional TUF, renovação limitada de
 timestamp e publicação timestamp-only ainda não estão presentes no remoto. O
 ambiente protegido `release`
