@@ -249,6 +249,9 @@ endpoints públicos, completou o lifecycle e comprovou a migração real
 O drill técnico TUF local também passou renovação, expiração simulada e
 recuperação, com contexto de operador/host/SLA e chaves efêmeras, em
 [`1.0.0-tuf-drill-local-2026-08-14.json`](../releases/1.0.0-tuf-drill-local-2026-08-14.json).
+O candidato local `1.0.0-rc.2`, distinto dos bytes do RC público, também passou
+os 25 casos M3 reais no Apple M3 Pro; o recibo unsigned/pending está em
+[`1.0.0-rc.2-native-preflight-local-2026-08-14.json`](../releases/1.0.0-rc.2-native-preflight-local-2026-08-14.json).
 O handoff/artifact do workflow protegido, a custódia produtiva e a abertura do
 soak continuam pendentes.
 

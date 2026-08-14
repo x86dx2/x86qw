@@ -70,6 +70,15 @@ TUF do candidato.
   Handoff, corpo unsigned e agregado pending foram preparados; continua sendo
   preflight privado não promotable, sem assinatura autorizada, publicação ou
   aceitação pública;
+- um novo candidato local `1.0.0-rc.2`, construído na HEAD documental
+  `12df4557fbc2d5b0efb3eb445ad922e4c2cf414a`, passou `25/25` casos M3 reais
+  em cache limpo no Apple M3 Pro. Seu `candidate.json` tem SHA-256
+  `87eb3b3ca39d5ad2de08f2e74a662b0f5d3935a84a53ae16cb484cff9de10699` e o
+  instalador tem SHA-256
+  `01315b9571f6b7752b7a305842b6853e4df59e6f61c9e71b90ad1d1f774aed33`.
+  O registro compacto está em
+  `docs/releases/1.0.0-rc.2-native-preflight-local-2026-08-14.json`; o corpo
+  e o agregado continuam unsigned/pending e não são evidência protegida;
 - o catálogo separa `supported`, `conditional` e `preview`: stable macOS
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
@@ -87,8 +96,9 @@ TUF do candidato.
   nenhum substitui o artifact do workflow protegido nem inicia o soak;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
-  candidato exato estão verdes, mas isso não substitui o handoff M3 assinado
-  pelo workflow protegido nem a aceitação pelos endpoints públicos;
+  candidato `1.0.0-rc.2` estão verdes em `25/25`, mas isso não substitui o
+  handoff M3 assinado pelo workflow protegido nem a aceitação pelos endpoints
+  públicos;
 - o drill TUF offline está implementado em
   `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
   uma visão corrente temporária; o recibo histórico está em
@@ -128,9 +138,10 @@ Actions.
    verificador implementados, mas ainda precisa do artifact e handoff do run
    M3 protegido;
 4. a migração real pública de `0.7.13` para `1.0.0-rc.1` está comprovada no
-   M3 local pelo recibo v2; Frogbot, upgrade apply e reparo por corrupção ainda
-   precisam de execução pública/protegida, e os casos completos precisam ser
-   repetidos em um candidato final novo;
+   M3 local pelo recibo v2; Frogbot, upgrade apply e reparo por corrupção agora
+   também estão verdes no preflight local `1.0.0-rc.2`, mas ainda precisam de
+   execução pública/protegida, e os casos completos precisam ser repetidos em
+   um candidato final novo;
 5. a operação TUF tem monitor público verde, drill offline implementado e agora
    um workflow protegido que vincula o relatório ao recibo final; ainda faltam
    custódia de produção sustentada, renovação observada, alerta, expiração
