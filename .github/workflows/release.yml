@@ -1121,6 +1121,26 @@ jobs:
           artifact-ids: ${{ needs.attach-native-evidence.outputs.artifact-id }}
           merge-multiple: true
           path: candidate
+      - name: Require final candidate bytes differ from soaked RC
+        if: ${{ inputs.mode == 'promote-1.0' }}
+        env:
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$SOAK_CANDIDATE_JSON_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          actual_candidate="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' candidate/candidate.json)"
+          test "$actual_candidate" != "$SOAK_CANDIDATE_JSON_SHA256"
+          bundle="candidate/installer/x86qw-installer-$CANDIDATE_VERSION.zip"
+          test -f "$bundle"
+          actual_bundle="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$bundle")"
+          test "$actual_bundle" != "$SOAK_BUNDLE_SHA256"
+          {
+            echo "final candidate.json differs from the soaked RC"
+            echo "final installer differs from the soaked RC"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Require PR G M3 evidence before any mirror or metadata operation
         env:
           M3_TRUST_ROOT_B64: ${{ secrets.M3_TRUST_ROOT_B64 }}

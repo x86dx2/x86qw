@@ -149,6 +149,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     job_name,
                 )
 
+    def test_final_promotion_rejects_reusing_soaked_candidate_bytes(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        gate = source.split("  promotion-gate:\n", 1)[1].split(
+            "\n  publish-assets:\n", 1
+        )[0]
+        self.assertIn("Require final candidate bytes differ from soaked RC", gate)
+        self.assertIn('test "$actual_candidate" != "$SOAK_CANDIDATE_JSON_SHA256"', gate)
+        self.assertIn('test "$actual_bundle" != "$SOAK_BUNDLE_SHA256"', gate)
+
     def test_release_builds_once_then_reuses_one_digest_bound_candidate(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(1, source.count("release_candidate.py prepare"))
