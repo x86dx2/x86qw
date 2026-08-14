@@ -312,8 +312,11 @@ def build_receipt(
     commit = manifest.get("commit")
     if not isinstance(version, str) or not isinstance(commit, str) or HEX40.fullmatch(commit) is None:
         raise ReleaseReceiptError("identidade do candidato inválida")
-    if version == "1.0.0" and "tuf_operation" not in normalized_coordinates:
-        raise ReleaseReceiptError("recibo final exige handoff de operação TUF")
+    if version == "1.0.0":
+        if "tuf_operation" not in normalized_coordinates:
+            raise ReleaseReceiptError("recibo final exige handoff de operação TUF")
+        if "public_acceptance" not in normalized_coordinates:
+            raise ReleaseReceiptError("recibo final exige handoff de aceitação pública")
     receipt: dict[str, object] = {
         "format": FORMAT,
         "project": PROJECT,
