@@ -36,6 +36,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/monitor_public_tuf.py",
             "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
+            "maintenance/tools/tuf_timestamp_renewal.py",
             "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/materialize_lfs.py",
@@ -61,6 +62,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/public-acceptance.yml",
             ROOT / ".github/workflows/rc-soak.yml",
             ROOT / ".github/workflows/tuf-operation-drill.yml",
+            ROOT / ".github/workflows/tuf-timestamp-renewal.yml",
         ]
         for path in workflows:
             source = path.read_text(encoding="utf-8")
@@ -113,6 +115,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git checkout --detach "$CANDIDATE_COMMIT"', source)
         self.assertIn('test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"', source)
         self.assertIn("Checkout immutable candidate commit", source)
+
+    def test_timestamp_renewal_is_protected_and_never_publishes(self):
+        source = (ROOT / ".github/workflows/tuf-timestamp-renewal.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("TUF_TIMESTAMP_KEY_B64", source)
+        self.assertIn("tuf_timestamp_renewal.py", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("tuf-metadata-handoff.yml", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn("published=false", source)
+        self.assertIn("tuf-timestamp-renewal-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
+        self.assertNotIn("publish_tuf_metadata.py", source)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
 
     def test_public_acceptance_runs_inside_the_protected_release_environment(self):
         source = (ROOT / ".github/workflows/public-acceptance.yml").read_text(
