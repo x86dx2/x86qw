@@ -60,7 +60,10 @@ de custódia humana independente nem substitui a cerimônia TUF do candidato.
 - a instalação pessoal temporária não é usada pelos testes de release.
 - a aceitação pública completa está implementada em
   `maintenance/tools/public_install_smoke.py --full-lifecycle` e no workflow
-  M3 manual; execução real e recibo público ainda estão pendentes;
+  M3 manual; a execução de 2026-08-14 autenticou catálogo/TUF e baixou o RC.1,
+  mas falhou na etapa macOS `directory-preferences`. O registro está em
+  `docs/releases/1.0.0-rc.1-public-acceptance.md`; a correção local exige novo
+  RC e novo recibo público;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos e testes locais estão verdes, mas isso
   não substitui um run nativo do candidato exato;
@@ -88,8 +91,8 @@ Actions.
 ## Gaps e gates restantes
 
 1. o período de uso do RC está registrado em
-   `docs/releases/1.0.0-rc.1-soak.md`, mas ainda precisa de diário, issue
-   canônica e encerramento explícito;
+   `docs/releases/1.0.0-rc.1-soak.md`, mas foi interrompido pela falha de
+   aceitação pública do RC.1 e precisa reiniciar com um novo candidato;
 2. a evidência M3 deste RC ainda depende da retenção de 90 dias dos artifacts até
    que os três assets duráveis sejam publicados;
 3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
