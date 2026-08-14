@@ -144,6 +144,7 @@ jobs:
           print(f"timestamp_sla_hours={operation['timestamp_sla_hours']}")
           PY
       - name: Upload exact operation report without overwrite
+        id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: tuf-operation-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -151,3 +152,11 @@ jobs:
           if-no-files-found: error
           overwrite: false
           retention-days: 90
+      - name: Record registered operation artifact coordinates
+        shell: bash
+        run: |
+          {
+            echo "operation_artifact_id=${{ steps.upload.outputs.artifact-id }}"
+            echo "operation_artifact_digest=${{ steps.upload.outputs.artifact-digest }}"
+            echo "operation_artifact_name=tuf-operation-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          } >> "$GITHUB_STEP_SUMMARY"

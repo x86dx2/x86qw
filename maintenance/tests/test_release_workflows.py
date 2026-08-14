@@ -514,6 +514,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("retention-days: 90", source)
         self.assertIn("tuf-operation-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
 
+    def test_tuf_operation_handoff_records_registered_artifact_coordinates(self):
+        path = ROOT / ".github/workflows/tuf-operation-drill.yml"
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("id: upload", source)
+        self.assertIn("steps.upload.outputs.artifact-id", source)
+        self.assertIn("steps.upload.outputs.artifact-digest", source)
+        self.assertIn("operation_artifact_id=", source)
+        self.assertIn("operation_artifact_digest=", source)
+
     def test_native_evidence_waits_for_public_acceptance_before_final_receipt(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         block = source.split("  attach-native-evidence:\n", 1)[1]

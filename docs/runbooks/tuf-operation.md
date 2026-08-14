@@ -44,6 +44,11 @@ artifact imutável somente com o JSON do relatório. A promoção de `1.0.0` exi
 as coordenadas desse artifact e o digest do relatório; um relatório histórico
 sem `operation` não é aceito.
 
+Após o upload, o workflow grava no resumo do run `operation_artifact_id`,
+`operation_artifact_digest` e `operation_artifact_name`. Esses valores devem ser
+copiados para os inputs correspondentes da promoção final; não se deve inferir
+o ID do artifact apenas pelo nome.
+
 ## Evidência mínima
 
 Anexar ao issue de soak e ao gate final:
