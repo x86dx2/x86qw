@@ -120,10 +120,11 @@ TUF público está `NO-GO`.
   ainda é obrigatório;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
-  confere a issue canônica fechada, valida sete dias de observações verdes e
-  publica um artifact imutável. O job `verify-soak` de `release.yml` exige esse
-  handoff e o inclui no recibo final; nenhum run protegido concluído está
-  registrado ainda, portanto o gate continua pendente;
+  confere a issue canônica fechada, valida sete dias de observações verdes com
+  hardware `macos-arm64`/M3 e uma referência HTTPS por dia, e publica um
+  artifact imutável. O job `verify-soak` de `release.yml` exige esse handoff e
+  o inclui no recibo final; nenhum run protegido concluído está registrado
+  ainda, portanto o gate continua pendente;
 - a promoção final também executa `monitor_public_tuf.py` imediatamente antes
   da evidência M3. O gate foi incluído porque o drill operacional, sozinho, não
   prova que a lease pública atual ainda está saudável;

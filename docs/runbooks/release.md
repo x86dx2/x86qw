@@ -161,10 +161,15 @@ stale se ela aparecer no staging.
     `.github/workflows/rc-soak.yml` deve ser despachado na ref exata do commit
     do RC sob uso. O run protegido consulta a issue canônica, exige sete dias
     completos de observações verdes e publica um único `report.json` como
-    artifact imutável. A etapa `verify-soak` da promoção valida a procedência
-    do run, o ID/nome/digest do artifact, a issue fechada e a identidade do
-    RC; sem esse handoff a promoção final permanece bloqueada. As coordenadas
-    entram na seção `soak` do `release-receipt.json`.
+    artifact imutável. O relatório `format: 2` registra explicitamente
+    `macos-arm64`, o hardware do M3 e uma referência HTTPS de evidência para
+    cada data observada. O input `observation_evidence_b64` é o JSON base64
+    `{"YYYY-MM-DD":"https://..."}`; suas chaves precisam corresponder
+    exatamente a `observed_dates`, sem lacunas ou duplicatas. A etapa
+    `verify-soak` da promoção valida a procedência do run, o ID/nome/digest do
+    artifact, a issue fechada, o hardware M3, as referências diárias e a
+    identidade do RC; sem esse handoff a promoção final permanece bloqueada.
+    As coordenadas entram na seção `soak` do `release-receipt.json`.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,

@@ -37,6 +37,16 @@ on:
         description: "Datas UTC observadas separadas por vírgula, sem lacunas"
         required: true
         type: string
+      hardware:
+        description: >-
+          Hardware usado no soak; ex.: MacBook Pro Mac15,6 / Apple M3 Pro
+        required: true
+        type: string
+      observation_evidence_b64:
+        description: >-
+          JSON base64 date→URL HTTPS com uma evidência pública por dia
+        required: true
+        type: string
       p0_p1_clear:
         description: "Nenhum P0/P1 durante todo o período"
         required: true
@@ -127,6 +137,8 @@ jobs:
           ISSUE_STATE: ${{ steps.issue.outputs.state }}
           ISSUE_URL: ${{ steps.issue.outputs.url }}
           OBSERVED_DATES: ${{ inputs.observed_dates }}
+          HARDWARE: ${{ inputs.hardware }}
+          OBSERVATION_EVIDENCE_B64: ${{ inputs.observation_evidence_b64 }}
           P0_P1_CLEAR: ${{ inputs.p0_p1_clear }}
           TUF_HEALTHY: ${{ inputs.tuf_healthy }}
           PUBLIC_INSTALL: ${{ inputs.public_install }}
@@ -137,13 +149,50 @@ jobs:
           mkdir -p "$RUNNER_TEMP/soak"
           python3 - "$RUNNER_TEMP/soak/report.json" <<'PY'
           import json
+          import base64
+          import binascii
           import os
           import sys
           from pathlib import Path
 
-          dates = [item.strip() for item in os.environ["OBSERVED_DATES"].split(",") if item.strip()]
+          dates = [
+              item.strip()
+              for item in os.environ["OBSERVED_DATES"].split(",")
+              if item.strip()
+          ]
           if not dates:
               raise SystemExit("observed_dates não pode ser vazio")
+          if len(dates) != len(set(dates)):
+              raise SystemExit("observed_dates não pode conter duplicatas")
+          encoded_evidence = os.environ["OBSERVATION_EVIDENCE_B64"]
+          if not encoded_evidence or len(encoded_evidence) > 512 * 1024:
+              raise SystemExit("observation_evidence_b64 vazio ou acima do limite")
+
+          def no_duplicate_pairs(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError(f"chave duplicada: {key}")
+                  result[key] = value
+              return result
+
+          try:
+              evidence_bytes = base64.b64decode(encoded_evidence, validate=True)
+              if not evidence_bytes or len(evidence_bytes) > 128 * 1024:
+                  raise ValueError("evidence payload acima do limite")
+              evidence_by_date = json.loads(
+                  evidence_bytes.decode("utf-8"),
+                  object_pairs_hook=no_duplicate_pairs,
+              )
+          except (ValueError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as error:
+              message = "observation_evidence_b64 precisa ser JSON UTF-8 base64 válido"
+              raise SystemExit(message) from error
+          if not isinstance(evidence_by_date, dict) or not evidence_by_date:
+              raise SystemExit("evidence por data precisa ser um objeto não vazio")
+          if set(evidence_by_date) != set(dates):
+              raise SystemExit(
+                  "evidence por data precisa corresponder exatamente a observed_dates"
+              )
           gates = {
               "p0_p1_clear": os.environ["P0_P1_CLEAR"].lower() == "true",
               "tuf_healthy": os.environ["TUF_HEALTHY"].lower() == "true",
@@ -152,9 +201,13 @@ jobs:
               "hosting": os.environ["HOSTING"].lower() == "true",
           }
           report = {
-              "format": 1,
+              "format": 2,
               "project": "x86qw",
               "status": "passed",
+              "environment": {
+                  "platform": "macos-arm64",
+                  "hardware": os.environ["HARDWARE"],
+              },
               "candidate": {
                   "commit": os.environ["CANDIDATE_COMMIT"],
                   "version": os.environ["CANDIDATE_VERSION"],
@@ -172,7 +225,14 @@ jobs:
                   "url": os.environ["ISSUE_URL"],
               },
               "gates": gates,
-              "observations": [{"date": date, "status": "green"} for date in dates],
+              "observations": [
+                  {
+                      "date": date,
+                      "status": "green",
+                      "evidence": evidence_by_date[date],
+                  }
+                  for date in dates
+              ],
           }
           Path(sys.argv[1]).write_text(
               json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n",
@@ -191,6 +251,9 @@ jobs:
           {
             echo "soak_report_sha256=$report_sha256"
             echo "soak_issue_number=$ISSUE_NUMBER"
+            echo "soak_platform=macos-arm64"
+            echo "soak_hardware=$HARDWARE"
+            echo "soak_observation_count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1], encoding="utf-8"))["observations"]))' "$RUNNER_TEMP/soak/report.json")"
             echo "soak_artifact_name=rc-soak-${CANDIDATE_COMMIT}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload immutable soak report

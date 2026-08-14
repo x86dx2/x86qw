@@ -9,16 +9,21 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
+from urllib.parse import urlsplit
 
 
 PROJECT = "x86qw"
-FORMAT = 1
+FORMAT = 2
+PLATFORM = "macos-arm64"
 MAX_JSON_BYTES = 512 * 1024
+MAX_HARDWARE_CHARS = 256
+MAX_EVIDENCE_URL_CHARS = 2048
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 RC_VERSION = re.compile(r"^1\.0\.0-rc\.[0-9]+$")
 UTC_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 OBSERVATION_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SAFE_HARDWARE = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 GATE_NAMES = frozenset({
     "p0_p1_clear",
     "tuf_healthy",
@@ -122,11 +127,36 @@ def verify_report(
     report = _read_report(path)
     _require_exact_mapping(
         report,
-        frozenset({"format", "project", "status", "candidate", "period", "issue", "gates", "observations"}),
+        frozenset({
+            "format",
+            "project",
+            "status",
+            "environment",
+            "candidate",
+            "period",
+            "issue",
+            "gates",
+            "observations",
+        }),
         label="raiz",
     )
     if report["format"] != FORMAT or report["project"] != PROJECT or report["status"] != "passed":
         raise SoakReportError("identidade/status do relatório de soak inválido")
+
+    environment = _require_exact_mapping(
+        report["environment"],
+        frozenset({"platform", "hardware"}),
+        label="environment",
+    )
+    if environment["platform"] != PLATFORM:
+        raise SoakReportError("plataforma do soak não é macOS arm64/M3")
+    hardware = environment["hardware"]
+    if (
+        not isinstance(hardware, str)
+        or len(hardware) > MAX_HARDWARE_CHARS
+        or SAFE_HARDWARE.fullmatch(hardware) is None
+    ):
+        raise SoakReportError("hardware do soak inválido")
 
     candidate = _require_exact_mapping(
         report["candidate"],
@@ -188,11 +218,33 @@ def verify_report(
     observations: dict[date, str] = {}
     for index, raw in enumerate(raw_observations):
         observation = _require_exact_mapping(
-            raw, frozenset({"date", "status"}), label=f"observations[{index}]",
+            raw,
+            frozenset({"date", "status", "evidence"}),
+            label=f"observations[{index}]",
         )
         observed_date = _parse_date(observation["date"], label=f"observations[{index}].date")
         if observation["status"] != "green":
             raise SoakReportError(f"observação de soak não está verde: {observed_date}")
+        evidence = observation["evidence"]
+        if (
+            not isinstance(evidence, str)
+            or len(evidence) > MAX_EVIDENCE_URL_CHARS
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in evidence)
+        ):
+            raise SoakReportError(f"referência de evidência inválida: {observed_date}")
+        try:
+            evidence_url = urlsplit(evidence)
+            hostname = evidence_url.hostname
+        except ValueError as error:
+            raise SoakReportError(f"referência de evidência inválida: {observed_date}") from error
+        if (
+            evidence_url.scheme != "https"
+            or not evidence_url.netloc
+            or not hostname
+            or evidence_url.username is not None
+            or evidence_url.password is not None
+        ):
+            raise SoakReportError(f"referência de evidência precisa ser HTTPS: {observed_date}")
         if observed_date in observations:
             raise SoakReportError(f"data de observação duplicada: {observed_date}")
         observations[observed_date] = "green"
