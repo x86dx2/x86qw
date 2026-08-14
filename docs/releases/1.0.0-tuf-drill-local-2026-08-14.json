@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-08-14T10:23:15.589695Z",
+  "current_metadata_version": 1,
+  "expiry_failure_detected": true,
+  "format": 1,
+  "mode": "offline-renewal-expiry-recovery",
+  "operation": {
+    "custody_host": "ephemeral-offline-drill",
+    "key_scope": "root-and-targets-offline",
+    "operator": "local-release-operator",
+    "timestamp_sla_hours": 6
+  },
+  "project": "x86qw",
+  "published": false,
+  "recovery_verified": true,
+  "renewed_metadata_version": 2,
+  "root_unchanged": true,
+  "status": "drill-passed",
+  "target": {
+    "path": "catalog/4364a1750cc0959ce471604007f7d787eb2ced34fe96dce79d06adbe9520069b.catalog.json",
+    "sha256": "4364a1750cc0959ce471604007f7d787eb2ced34fe96dce79d06adbe9520069b",
+    "size": 207153
+  },
+  "target_unchanged": true
+}

@@ -91,12 +91,14 @@ TUF do candidato.
   pelo workflow protegido nem a aceitação pelos endpoints públicos;
 - o drill TUF offline está implementado em
   `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
-  a visão corrente temporária; o recibo está em
-  `docs/releases/1.0.0-rc.1-tuf-drill.json`. O drill não publicou metadata e não
-  prova custódia humana independente nem a operação contínua de produção. A
-  ferramenta agora exige e registra operador, host de custódia e SLA; o recibo
-  histórico foi gerado antes desse contrato e ainda falta um drill operacional
-  com esse contexto não secreto;
+  uma visão corrente temporária; o recibo histórico está em
+  `docs/releases/1.0.0-rc.1-tuf-drill.json` e a execução local com operador,
+  host e SLA explícitos está em
+  `docs/releases/1.0.0-tuf-drill-local-2026-08-14.json`. O drill não publicou
+  metadata. Esta execução usou chaves efêmeras e o catálogo local do checkout:
+  prova o contrato técnico e o contexto não secreto, mas não prova custódia
+  humana independente nem operação contínua de produção; o workflow protegido
+  ainda é obrigatório;
 
 ## Candidato oficial e promoção
 
