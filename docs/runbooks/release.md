@@ -254,6 +254,25 @@ Além disso, `release.yml` executa `monitor_public_tuf.py` com janela de alerta 
 seis horas imediatamente antes da promoção final. Uma lease dentro dessa janela
 exige renovação/recuperação manual e mantém a promoção em `NO-GO`.
 
+O caminho de signer limitado está preparado como handoff protegido, mas não é
+agendado nem publica sozinho. Com `TUF_TIMESTAMP_KEY_B64` configurada somente no
+ambiente protegido `release`, o operador pode despachar:
+
+```sh
+gh workflow run tuf-timestamp-renewal.yml --repo "$REPO" --ref "$CODE_COMMIT" \
+  -f source_workflow_commit="$CODE_COMMIT" \
+  -f source_run_id=<tuf-metadata-run-id> \
+  -f source_artifact_id=<tuf-metadata-artifact-id> \
+  -f source_artifact_name=<tuf-metadata-artifact-name> \
+  -f candidate_commit="$RC_COMMIT" \
+  -f timestamp_key_id=<timestamp-key-id> \
+  -f lease_hours=24
+```
+
+Esse workflow valida a procedência do artifact TUF, renova somente
+`metadata/timestamp.json` e grava um artifact `published: false`; a publicação
+continua exigindo uma cerimônia separada, mirrors convergentes e metadata-last.
+
 ## Rollback e publicação
 
 Tags, assets e metadata publicados são imutáveis. Em divergência, interrompa a
