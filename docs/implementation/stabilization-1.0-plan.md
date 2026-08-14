@@ -155,7 +155,7 @@ Criar uma issue própria antes da branch. Separar artefato publicado, suporte e
 validação; conservar o macOS universal físico; classificar Linux, Windows,
 macOS Intel e nightly como `preview`; preservar a CI com os nomes
 `portable-contract / ...`; e registrar a regra de evidência do candidato exato.
-macOS M3 não é promovido antes de G. A release pública corrente `0.7.13` não é
+macOS M3 não é promovido antes de G. A baseline estável pública `0.7.13` não é
 reescrita; qualquer correção futura deve ser uma release nova, separada da PR
 de implementação e justificada por um gap P0/P1.
 

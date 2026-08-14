@@ -36,12 +36,13 @@ imutabilidade lógica recusando overwrite, divergência de digest e assets extra
 
 ## Estado de confiança
 
-A root Ed25519 incorporada é validada localmente. A fotografia pública atual
-encontrou root v1, timestamp v15, snapshot v15 e targets v15; o timestamp
-expira em `2026-08-14T13:11:16Z`. Catálogo, product e cadeia TUF foram
-comparados pelos bytes públicos e autenticados pela root incorporada. Isso
-confirma a convergência observada nesse instante, mas não constitui evidência
-de custódia humana independente nem substitui a cerimônia TUF do candidato.
+A root Ed25519 incorporada é validada localmente. O monitor público encontrou
+root v1, timestamp v16, snapshot v16 e targets v16; autenticou o catálogo com
+75 pacotes e timestamp válido até `2026-08-14T15:42:54Z`. O recibo está em
+[`docs/releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json).
+Esta é uma fotografia do endpoint público em 2026-08-14 05:04 UTC; não
+constitui evidência de custódia humana independente nem substitui a cerimônia
+TUF do candidato.
 
 ## Estado local
 
@@ -102,9 +103,9 @@ Actions.
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
    lifecycle estão implementados no candidato local, mas ainda precisam de run
    nativo do candidato exato;
-5. a operação TUF tem monitor e drill offline implementados; ainda faltam
-   custódia de produção, renovação observada, alerta, expiração simulada e
-   recuperação registrados;
+5. a operação TUF tem monitor público verde e drill offline implementados; ainda
+   faltam custódia de produção sustentada, renovação observada, alerta,
+   expiração simulada e recuperação registrados no ambiente público;
 6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.

@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-08-14T05:04:14.048005Z",
+  "catalog_sha256": "704f9027d89c306a31ca7d2531ee41aa967f16aca4930fe12d8fe24e23b112cd",
+  "format": 1,
+  "metadata_expires": {
+    "snapshot": "2026-08-20T15:42:54Z",
+    "targets": "2026-11-11T15:42:54Z",
+    "timestamp": "2026-08-14T15:42:54Z"
+  },
+  "metadata_versions": {
+    "snapshot": 16,
+    "targets": 16,
+    "timestamp": 16
+  },
+  "package_count": 75,
+  "project": "x86qw",
+  "status": "healthy",
+  "warning_hours": 6
+}

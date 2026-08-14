@@ -10,12 +10,14 @@ As notas de release históricas, o RC público e o rascunho de `1.0.0` ficam em
 
 ## Autoridade e baseline
 
-`origin/main` é a linha canônica. A release pública atual é
+`origin/main` é a linha canônica. A baseline estável pública é
 `x86qw-installer-0.7.13`, preparada no commit
 `04a55aed8711ec5466dc70f0e33a591d92e07ccb`; a correção posterior em `main`
 alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
 os cinco jogos, os runtimes declarados e a distinção entre contratos portáveis e
-execução nativa. O checkpoint
+execução nativa. O Release Candidate público separado é
+`x86qw-installer-1.0.0-rc.1`; ele está em soak e não autoriza a promoção final.
+O checkpoint
 `codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
 aprovação nem release.
 
