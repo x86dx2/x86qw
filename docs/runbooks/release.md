@@ -182,8 +182,11 @@ REPO=x86dx2/x86qw
 CODE_COMMIT=<SHA-do-branch-que-contem-os-workflows>
 RC_COMMIT=a8758ee27bebd7c72c24a31dc19335652e260c0a
 RC_VERSION=1.0.0-rc.1
-RC_CANDIDATE_SHA256=<SHA-256-de-candidate.json-do-RC>
+RC_CANDIDATE_SHA256=1552a896a0076dd2e347ed5b732b6dd31ba892292e1f9fb8c97fe9111f755bcb
 RC_BUNDLE_SHA256=9600be7eb2ed14e23b2eeb079bd6aa0e4611f996be0c89741fda12587eb7fed8
+RC_CANDIDATE_RUN_ID=31752738047
+RC_CANDIDATE_ARTIFACT_ID=9201652983
+RC_CANDIDATE_ARTIFACT_NAME=candidate-a8758ee27bebd7c72c24a31dc19335652e260c0a-31752738047-1
 
 gh workflow run public-acceptance.yml --repo "$REPO" --ref "$CODE_COMMIT" \
   -f release_code_commit="$CODE_COMMIT" \
@@ -198,9 +201,9 @@ candidato, com o relatório produzido na máquina de custódia:
 ```sh
 OPERATION_REPORT_B64="$(base64 < /secure/x86qw/records/tuf-drill.json | tr -d '\n')"
 gh workflow run tuf-operation-drill.yml --repo "$REPO" --ref "$CODE_COMMIT" \
-  -f candidate_artifact_id=<candidate-artifact-id> \
-  -f candidate_artifact_name=<candidate-artifact-name> \
-  -f candidate_run_id=<candidate-run-id> \
+  -f candidate_artifact_id="$RC_CANDIDATE_ARTIFACT_ID" \
+  -f candidate_artifact_name="$RC_CANDIDATE_ARTIFACT_NAME" \
+  -f candidate_run_id="$RC_CANDIDATE_RUN_ID" \
   -f candidate_commit="$RC_COMMIT" \
   -f candidate_sha256="$RC_CANDIDATE_SHA256" \
   -f operation_report_b64="$OPERATION_REPORT_B64"
