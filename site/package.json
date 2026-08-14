@@ -8,6 +8,6 @@
     "dev": "wrangler dev --ip 127.0.0.1 --port 8787"
   },
   "devDependencies": {
-    "wrangler": "4.114.0"
+    "wrangler": "4.121.0"
   }
 }
