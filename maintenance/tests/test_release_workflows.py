@@ -36,6 +36,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/monitor_public_tuf.py",
             "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
+            "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/materialize_lfs.py",
         )
@@ -592,12 +593,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("environment: release", source)
         self.assertIn("issues: read", source)
         self.assertIn("ref: ${{ inputs.candidate_commit }}", source)
+        self.assertIn("maintenance/tools/build_soak_report.py", source)
         self.assertIn("verify_soak_report.py", source)
         self.assertIn("hardware:", source)
         self.assertIn("observation_evidence_b64:", source)
-        self.assertIn('"format": 2', source)
-        self.assertIn('"platform": "macos-arm64"', source)
-        self.assertIn('"evidence": evidence_by_date[date]', source)
+        builder = (ROOT / "maintenance/tools/build_soak_report.py").read_text(encoding="utf-8")
+        self.assertIn("FORMAT = 2", builder)
+        self.assertIn('PLATFORM = "macos-arm64"', builder)
+        self.assertIn('"evidence": evidence_by_date[date]', builder)
         self.assertIn("actions/upload-artifact@", source)
         self.assertIn("overwrite: false", source)
         self.assertIn("retention-days: 90", source)
