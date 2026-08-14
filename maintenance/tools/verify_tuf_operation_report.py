@@ -105,7 +105,7 @@ def _regular_bytes(path: Path, *, label: str, maximum: int) -> bytes:
     return payload
 
 
-def _utc_timestamp(value: object) -> None:
+def _utc_timestamp(value: object) -> datetime:
     if not isinstance(value, str) or UTC_TIMESTAMP.fullmatch(value) is None:
         raise TufOperationReportError("checked_at precisa ser timestamp UTC canônico")
     try:
@@ -114,6 +114,7 @@ def _utc_timestamp(value: object) -> None:
         raise TufOperationReportError("checked_at não é timestamp válido") from error
     if parsed.tzinfo is None or parsed.astimezone(UTC) != parsed:
         raise TufOperationReportError("checked_at precisa ser timezone-aware")
+    return parsed
 
 
 def verify_report(*, candidate: Path, report: Path) -> dict[str, object]:
@@ -135,7 +136,9 @@ def verify_report(*, candidate: Path, report: Path) -> dict[str, object]:
         or report_value.get("recovery_verified") is not True
     ):
         raise TufOperationReportError("relatório TUF não comprova drill fechado")
-    _utc_timestamp(report_value.get("checked_at"))
+    checked_at = _utc_timestamp(report_value.get("checked_at"))
+    if checked_at > datetime.now(UTC):
+        raise TufOperationReportError("checked_at do drill TUF está no futuro")
 
     current = report_value.get("current_metadata_version")
     renewed = report_value.get("renewed_metadata_version")

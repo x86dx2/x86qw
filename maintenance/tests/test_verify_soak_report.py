@@ -76,6 +76,26 @@ class VerifySoakReportTests(unittest.TestCase):
             with self.assertRaisesRegex(verify_soak_report.SoakReportError, "duração"):
                 self._verify(report)
 
+    def test_rejects_soak_that_claims_a_future_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            report = self._write_report(
+                Path(temporary),
+                self._report(completed_at="2099-08-08T00:00:00Z"),
+            )
+            with self.assertRaisesRegex(verify_soak_report.SoakReportError, "futuro"):
+                self._verify(report)
+
+    def test_rejects_soak_with_a_missing_daily_observation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            payload = self._report()
+            payload["observations"] = [
+                {"date": f"2026-08-{day:02d}", "status": "green"}
+                for day in (1, 2, 3, 4, 5, 6, 8)
+            ]
+            report = self._write_report(Path(temporary), payload)
+            with self.assertRaisesRegex(verify_soak_report.SoakReportError, "ausentes"):
+                self._verify(report)
+
     def test_rejects_open_soak_issue(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report = self._write_report(

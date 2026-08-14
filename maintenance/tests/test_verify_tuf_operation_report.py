@@ -93,6 +93,21 @@ class VerifyTufOperationReportTests(unittest.TestCase):
             with self.assertRaises(verify_tuf_operation_report.TufOperationReportError):
                 verify_tuf_operation_report.verify_report(candidate=candidate, report=report)
 
+    def test_rejects_report_with_a_future_checked_at(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            value = self._report(candidate)
+            value["checked_at"] = "2099-08-14T08:10:11.227270Z"
+            report = root / "report.json"
+            report.write_text(json.dumps(value), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                verify_tuf_operation_report.TufOperationReportError,
+                "futuro",
+            ):
+                verify_tuf_operation_report.verify_report(candidate=candidate, report=report)
+
 
 if __name__ == "__main__":
     unittest.main()

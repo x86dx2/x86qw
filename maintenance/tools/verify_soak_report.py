@@ -155,6 +155,8 @@ def verify_report(
     completed = _parse_utc(period["completed_at"], label="completed_at")
     if completed < started:
         raise SoakReportError("período de soak termina antes de começar")
+    if completed > datetime.now(timezone.utc):
+        raise SoakReportError("período de soak termina no futuro")
     if period["minimum_days"] != minimum_days:
         raise SoakReportError("duração mínima declarada diverge do gate")
     if completed - started < timedelta(days=minimum_days):
@@ -198,8 +200,9 @@ def verify_report(
         started.date() + timedelta(days=offset)
         for offset in range((completed.date() - started.date()).days + 1)
     }
-    if not expected_dates.issubset(observations):
-        missing = ", ".join(str(item) for item in sorted(expected_dates - observations))
+    observed_dates = set(observations)
+    if not expected_dates.issubset(observed_dates):
+        missing = ", ".join(str(item) for item in sorted(expected_dates - observed_dates))
         raise SoakReportError(f"observações diárias ausentes no soak: {missing}")
     if any(item < started.date() or item > completed.date() for item in observations):
         raise SoakReportError("observação de soak fora da janela declarada")
