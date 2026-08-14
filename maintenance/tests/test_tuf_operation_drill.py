@@ -51,6 +51,31 @@ class TufOperationDrillTests(unittest.TestCase):
         self.assertTrue(tuf_operation_drill.target_unchanged(left, right))
         self.assertFalse(tuf_operation_drill.target_unchanged(left, {"size": 4, "sha256": "abc"}))
 
+    def test_operation_context_requires_custodian_host_and_sla(self):
+        result = tuf_operation_drill.operation_context(
+            operator="release-operator",
+            custody_host="offline-signer-01",
+            sla_hours=6,
+        )
+        self.assertEqual(
+            {
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": 6,
+                "key_scope": "root-and-targets-offline",
+            },
+            result,
+        )
+        for kwargs in (
+            {"operator": "", "custody_host": "offline-signer-01", "sla_hours": 6},
+            {"operator": "release-operator", "custody_host": "", "sla_hours": 6},
+            {"operator": "release-operator", "custody_host": "offline-signer-01", "sla_hours": 0},
+            {"operator": "release-operator", "custody_host": "offline-signer-01", "sla_hours": 8761},
+        ):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(tuf_operation_drill.TufDrillError):
+                    tuf_operation_drill.operation_context(**kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

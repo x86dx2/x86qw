@@ -81,7 +81,10 @@ TUF do candidato.
   `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
   a visão corrente temporária; o recibo está em
   `docs/releases/1.0.0-rc.1-tuf-drill.json`. O drill não publicou metadata e não
-  prova custódia humana independente nem a operação contínua de produção;
+  prova custódia humana independente nem a operação contínua de produção. A
+  ferramenta agora exige e registra operador, host de custódia e SLA; o recibo
+  histórico foi gerado antes desse contrato e ainda falta um drill operacional
+  com esse contexto não secreto;
 
 ## Candidato oficial e promoção
 

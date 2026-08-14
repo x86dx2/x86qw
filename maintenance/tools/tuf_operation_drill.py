@@ -29,10 +29,38 @@ ROLES = ("timestamp", "snapshot", "targets")
 UTC = timezone.utc
 MAX_METADATA_BYTES = 2 * 1024 * 1024
 MAX_CATALOG_BYTES = 2 * 1024 * 1024
+MAX_OPERATOR_TEXT = 128
 
 
 class TufDrillError(RuntimeError):
     """The renewal/recovery drill could not prove its bounded contract."""
+
+
+def operation_context(
+    *,
+    operator: str,
+    custody_host: str,
+    sla_hours: int,
+) -> dict[str, object]:
+    """Validate the non-secret operational accountability attached to a drill."""
+
+    for value, label in ((operator, "operator"), (custody_host, "custody_host")):
+        if (
+            not isinstance(value, str)
+            or not value
+            or value != value.strip()
+            or len(value) > MAX_OPERATOR_TEXT
+            or any(ord(char) < 0x20 for char in value)
+        ):
+            raise TufDrillError(f"{label} inválido")
+    if type(sla_hours) is not int or not 1 <= sla_hours <= 8760:
+        raise TufDrillError("sla_hours deve estar entre 1 e 8760")
+    return {
+        "operator": operator,
+        "custody_host": custody_host,
+        "timestamp_sla_hours": sla_hours,
+        "key_scope": "root-and-targets-offline",
+    }
 
 
 def _regular_file(path: Path, label: str, maximum: int) -> bytes:
@@ -171,6 +199,9 @@ def run_drill(
     catalog: Path,
     repository: Path,
     output: Path,
+    operator: str,
+    custody_host: str,
+    sla_hours: int,
     warning_hours: int = 6,
 ) -> dict[str, object]:
     """Renew metadata in isolation and record the recovery proof."""
@@ -180,6 +211,11 @@ def run_drill(
     catalog = Path(catalog)
     repository = Path(repository)
     output = Path(output)
+    operation = operation_context(
+        operator=operator,
+        custody_host=custody_host,
+        sla_hours=sla_hours,
+    )
     if output.exists() or output.is_symlink():
         raise TufDrillError(f"relatório do drill já existe: {output}")
     root_bytes = _regular_file(root, "root TUF incorporada", 512 * 1024)
@@ -243,6 +279,7 @@ def run_drill(
         "project": "x86qw",
         "status": "drill-passed",
         "mode": "offline-renewal-expiry-recovery",
+        "operation": operation,
         "current_metadata_version": current_version,
         "renewed_metadata_version": current_version + 1,
         "target": renewed_target,
@@ -267,6 +304,9 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--operator", required=True)
+    parser.add_argument("--custody-host", required=True)
+    parser.add_argument("--sla-hours", type=int, required=True)
     parser.add_argument("--warning-hours", type=int, default=6)
     options = parser.parse_args(arguments)
     try:
@@ -276,6 +316,9 @@ def main(arguments: list[str] | None = None) -> int:
             catalog=options.catalog,
             repository=options.repository,
             output=options.output,
+            operator=options.operator,
+            custody_host=options.custody_host,
+            sla_hours=options.sla_hours,
             warning_hours=options.warning_hours,
         )
     except (OSError, TufDrillError, ValueError) as error:

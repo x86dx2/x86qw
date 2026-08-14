@@ -15,7 +15,10 @@ python3 maintenance/tools/tuf_operation_drill.py \
   --root maintenance/trust/root.json \
   --catalog /secure/x86qw/candidate/catalog.json \
   --repository /secure/x86qw/tuf-current \
-  --output /secure/x86qw/records/tuf-drill-YYYYMMDD.json
+  --output /secure/x86qw/records/tuf-drill-YYYYMMDD.json \
+  --operator release-operator \
+  --custody-host offline-signer-01 \
+  --sla-hours 6
 ```
 
 O comando:
@@ -38,6 +41,8 @@ rotação, kill switch e alertas; a política criptográfica não muda.
 Anexar ao issue de soak e ao gate final:
 
 - recibo JSON do drill;
+- custodiante/operador, host de custódia e SLA de timestamp registrados no
+  campo `operation`;
 - versão anterior e renovada de cada role;
 - digest e tamanho do target antes/depois;
 - confirmação da root inalterada;

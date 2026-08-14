@@ -181,7 +181,10 @@ mesmo que a validação técnica da TUF passe.
 O drill operacional está em
 [`docs/runbooks/tuf-operation.md`](tuf-operation.md) e usa
 `maintenance/tools/tuf_operation_drill.py` em um diretório temporário; ele não
-publica metadata e não aceita overwrite do relatório.
+publica metadata e não aceita overwrite do relatório. A execução exige operador,
+host de custódia e SLA de timestamp, registrados no campo não secreto
+`operation`; isso documenta a responsabilidade do exercício, mas não substitui
+a prova de custódia independente nem a operação sustentada em produção.
 
 ## Rollback e publicação
 
