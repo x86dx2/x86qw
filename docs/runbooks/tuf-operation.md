@@ -36,6 +36,31 @@ online. Root e targets permanecem offline. Se for adotado um signer online,
 ele deve possuir somente a autoridade de timestamp, host isolado, auditoria,
 rotação, kill switch e alertas; a política criptográfica não muda.
 
+## Handoff de renovação somente de timestamp
+
+Quando a operação adotar um signer limitado, a renovação deve usar uma única
+chave cujo `keyid` pertença à role `timestamp`. A ferramenta não carrega chaves
+de root ou targets, recusa uma chave de outra role e autentica o repositório
+resultante antes de produzir o relatório:
+
+```sh
+python3 maintenance/tools/tuf_timestamp_renewal.py \
+  --repository /secure/x86qw/tuf-current \
+  --root maintenance/trust/root.json \
+  --catalog /secure/x86qw/catalog.json \
+  --timestamp-key /secure/x86qw/timestamp-key.pem \
+  --key-id <timestamp-key-id> \
+  --output /secure/x86qw/tuf-renewed \
+  --report /secure/x86qw/records/tuf-timestamp-renewal-YYYYMMDD.json \
+  --lease-hours 24
+```
+
+O diretório de saída deve diferir do repositório corrente e não pode existir.
+O relatório marca `published: false`, registra a role/key id, a versão anterior
+e a nova, e falha se qualquer byte além de `metadata/timestamp.json` mudar.
+Esse handoff ainda precisa passar pela aprovação protegida e pelo publicador;
+executar a ferramenta não atualiza o endpoint público.
+
 Novos relatórios usam `format: 2` e devem conter `role_versions` para as três
 roles (`timestamp`, `snapshot` e `targets`), com `current` e `renewed` em cada
 uma. O verificador rejeita o formato histórico sem esse vínculo individual;

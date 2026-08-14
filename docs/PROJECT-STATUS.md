@@ -119,6 +119,12 @@ TUF público está `NO-GO`.
   prova o contrato técnico e o contexto não secreto, mas não prova custódia
   humana independente nem operação contínua de produção; o workflow protegido
   ainda é obrigatório;
+- a ferramenta `maintenance/tools/tuf_timestamp_renewal.py` implementa o
+  caminho de signer limitado: aceita somente uma chave da role `timestamp`,
+  autentica a saída e recusa qualquer mudança fora de
+  `metadata/timestamp.json`. Ela produz apenas um handoff não publicado; não
+  há ainda signer configurado nem renovação observada no endpoint público, por
+  isso o gate operacional TUF permanece pendente;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
   confere a issue canônica fechada, valida sete dias de observações verdes com
