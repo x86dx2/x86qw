@@ -394,24 +394,24 @@ def _run_full_lifecycle(
         raise PublicInstallSmokeError("version do launcher instalado divergiu do candidato")
 
     sentinels = _write_acceptance_sentinels(target)
-    changes = _run_launcher_json(target, "changes", env=env, timeout=PROCESS_TIMEOUT_SECONDS)
-    migrate = _run_launcher_json(
-        target, "migrate", "--dry-run", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+    changes = _run_launcher(target, ("changes",), env=env, timeout=PROCESS_TIMEOUT_SECONDS)
+    migrate = _run_launcher(
+        target, ("migrate", "--dry-run"), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
     update_plan = _run_launcher_json(
         target, "update", "--dry-run", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
-    update_first = _run_launcher_json(
-        target, "update", "--yes", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+    update_first = _run_launcher(
+        target, ("update", "--yes"), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
-    update_second = _run_launcher_json(
-        target, "update", "--yes", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+    update_second = _run_launcher(
+        target, ("update", "--yes"), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
     verify = _run_launcher_json(
         target, "verify", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
-    uninstall = _run_launcher_json(
-        target, "uninstall", env=env, timeout=PROCESS_TIMEOUT_SECONDS,
+    uninstall = _run_launcher(
+        target, ("uninstall",), env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
     _require_preserved_sentinels(sentinels)
 
@@ -427,8 +427,8 @@ def _run_full_lifecycle(
         version=version,
     )
     _write_acceptance_sentinels(purge_target)
-    purge = _run_launcher_json(
-        purge_target, "uninstall", "--purge",
+    purge = _run_launcher(
+        purge_target, ("uninstall", "--purge"),
         env=env, timeout=PROCESS_TIMEOUT_SECONDS,
     )
     if purge_target.exists() or purge_target.is_symlink():
@@ -437,14 +437,14 @@ def _run_full_lifecycle(
         "launcher": _launcher_path(target).name,
         "operations": {
             "version": True,
-            "changes": changes.get("ok") is True,
-            "migrate_dry_run": migrate.get("ok") is True and migrate.get("dry_run") is True,
+            "changes": changes.returncode == 0,
+            "migrate_dry_run": migrate.returncode == 0,
             "update_dry_run": update_plan.get("ok") is True and update_plan.get("dry_run") is True,
-            "update_apply": update_first.get("ok") is True,
-            "update_idempotent": update_second.get("ok") is True,
+            "update_apply": update_first.returncode == 0,
+            "update_idempotent": update_second.returncode == 0,
             "verify": verify.get("ok") is True,
-            "uninstall": uninstall.get("ok") is True,
-            "uninstall_purge": purge.get("ok") is True,
+            "uninstall": uninstall.returncode == 0,
+            "uninstall_purge": purge.returncode == 0,
         },
         "personal_data_preserved_by_uninstall": True,
         "purge_removed_personal_data": True,

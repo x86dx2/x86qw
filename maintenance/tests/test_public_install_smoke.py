@@ -3,7 +3,10 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -184,6 +187,65 @@ class PublicInstallSmokeTests(unittest.TestCase):
         self.assertIn("--json", runs[2])
         self.assertIn("verify", runs[2])
         self.assertEqual(64, len(result["catalog_sha256"]))
+
+    def test_full_lifecycle_uses_text_for_mutating_launcher_actions(self):
+        text_calls: list[tuple[str, ...]] = []
+        json_calls: list[tuple[str, tuple[str, ...]]] = []
+
+        def run_text(target, arguments, **_kwargs):
+            text_calls.append(tuple(arguments))
+            if tuple(arguments) == ("uninstall", "--purge"):
+                shutil.rmtree(target)
+            stdout = "x86QW 1.0.0-rc.2\n" if tuple(arguments) == ("version",) else ""
+            return subprocess.CompletedProcess(arguments, 0, stdout=stdout)
+
+        def run_json(_target, action, *arguments, **_kwargs):
+            json_calls.append((action, tuple(arguments)))
+            return {"ok": True, "dry_run": action == "update"}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            target = workspace / "target"
+            target.mkdir()
+            application = workspace / "x86qw.pyz"
+
+            def install(_application, destination, **_kwargs):
+                destination.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher", side_effect=run_text))
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher_json", side_effect=run_json))
+                stack.enter_context(mock.patch.object(smoke, "_install_application", side_effect=install))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    result = smoke._run_full_lifecycle(
+                        application,
+                        target,
+                        workspace=workspace,
+                        env={},
+                        platform="macos",
+                        channel="stable",
+                        release="latest",
+                        profile="complete",
+                        version="1.0.0-rc.2",
+                    )
+
+        self.assertTrue(all(result["operations"].values()))
+        self.assertEqual(
+            [
+                ("version",),
+                ("changes",),
+                ("migrate", "--dry-run"),
+                ("update", "--yes"),
+                ("update", "--yes"),
+                ("uninstall",),
+                ("uninstall", "--purge"),
+            ],
+            text_calls,
+        )
+        self.assertEqual(
+            [("update", ("--dry-run",)), ("verify", ())],
+            json_calls,
+        )
 
 
 if __name__ == "__main__":
