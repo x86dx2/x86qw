@@ -499,7 +499,6 @@ def run_smoke(
             ))
             plan = validate_installer_bundle(bundle_path, version)
             extracted = workspace / "bundle"
-            extracted.mkdir()
             extract_archive(plan, extracted)
         except (ArchiveError, DownloadError, OSError) as error:
             raise PublicInstallSmokeError(f"bundle público rejeitado: {error}") from error

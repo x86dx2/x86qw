@@ -351,6 +351,40 @@ class MacOSAdapterTests(unittest.TestCase):
             "volume": 0.75,
         }, state)
 
+    def test_clear_falls_back_to_individual_defaults_deletes(self):
+        """macOS defaults import must be followed by key deletion when needed."""
+
+        self.assertIsNotNone(macos, "the canonical macOS adapter is missing")
+        assert macos is not None
+        domain = "io.ezQuake"
+        keys = ("basedir", "version", "NSOSPLastRootDirectory")
+        state = {
+            "basedir": "/Games/x86QW",
+            "version": 7,
+            "NSOSPLastRootDirectory": b"bookmark",
+            "volume": 0.5,
+        }
+        delete_calls: list[list[str]] = []
+
+        def delete(arguments, **_kwargs):
+            delete_calls.append(list(arguments))
+            state.pop(arguments[-1], None)
+            return subprocess.CompletedProcess(arguments, 0, stdout=b"", stderr=b"")
+
+        with mock.patch.object(
+            macos, "_export_preference_domain", side_effect=lambda _domain: dict(state),
+        ), mock.patch.object(macos, "_publish_preference_domain"), mock.patch.object(
+            macos, "_run_defaults", side_effect=delete,
+        ):
+            snapshot = macos.snapshot_preference_keys(domain, keys)
+            macos.clear_preference_keys(snapshot)
+
+        self.assertEqual(
+            [["delete", domain, key] for key in keys],
+            delete_calls,
+        )
+        self.assertEqual({"volume": 0.5}, state)
+
     def test_partial_preference_publish_is_restored_before_reporting_failure(self):
         """A failed defaults import must not leave selected keys half-cleared."""
 

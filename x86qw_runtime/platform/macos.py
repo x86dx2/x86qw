@@ -439,6 +439,20 @@ def _run_defaults(arguments: list[str], *, payload: bytes | None = None) -> subp
         raise MacOSAdapterError("O utilitário defaults não respondeu no tempo esperado.") from error
 
 
+def _delete_preference_keys(domain: str, keys: tuple[str, ...]) -> None:
+    _validate_preference_identity(domain, keys)
+    for key in keys:
+        result = _run_defaults(["delete", domain, key])
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or b"").decode(
+                "utf-8", errors="replace",
+            ).strip()
+            suffix = f": {detail}" if detail else ""
+            raise MacOSAdapterError(
+                f"Não foi possível remover a preferência macOS {key}{suffix}"
+            )
+
+
 def _export_preference_domain(domain: str) -> dict[str, object]:
     result = _run_defaults(["export", domain, "-"])
     if result.returncode != 0:
@@ -515,6 +529,11 @@ def clear_preference_keys(snapshot: PreferenceSnapshot) -> PreferenceSnapshot:
     try:
         _publish_preference_domain(snapshot.domain, cleared)
         empty = _snapshot_from_values(snapshot.domain, snapshot.keys, {})
+        if snapshot_preference_keys(snapshot.domain, snapshot.keys) != empty:
+            _delete_preference_keys(
+                snapshot.domain,
+                tuple(key for key in snapshot.keys if key in present),
+            )
         if snapshot_preference_keys(snapshot.domain, snapshot.keys) != empty:
             raise MacOSAdapterError("Não foi possível limpar as preferências do ezQuake.")
     except BaseException:

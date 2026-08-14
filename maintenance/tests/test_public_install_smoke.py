@@ -141,7 +141,12 @@ class PublicInstallSmokeTests(unittest.TestCase):
             ))
             stack.enter_context(mock.patch.object(smoke, "download_mirrors"))
             stack.enter_context(mock.patch.object(smoke, "validate_installer_bundle", return_value=mock.sentinel.plan))
-            stack.enter_context(mock.patch.object(smoke, "extract_archive"))
+
+            def fake_extract(_plan: object, destination: Path) -> None:
+                self.assertFalse(destination.exists())
+                destination.mkdir()
+
+            stack.enter_context(mock.patch.object(smoke, "extract_archive", side_effect=fake_extract))
             stack.enter_context(mock.patch.object(smoke.subprocess, "run", side_effect=fake_run))
             # The extracted application and receipt are represented by the
             # mock filesystem; this keeps the test independent of a published
