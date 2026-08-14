@@ -55,9 +55,9 @@ TUF do candidato.
   de uma instalação pessoal em `quake-world/`;
 - o harness Mac M3 executa plano candidato-owned e registra handoff, smoke
   normalizado e agregado unsigned pendente;
-- o candidato local `1.0.0-rc.2` do commit `3172a4864f8ae0cea7d24efedf261223da8e19f4`
+- o candidato local `1.0.0-rc.2` do commit `2706d0b4602f8d77b895e7b07575c2f354380fb9`
   passou o harness Apple M3 Pro com `25/25` casos; seu `candidate.json` tem
-  SHA-256 `f6c3deeee1819436c4af9f23741069ebfab0971dd2a6be5fcc2ae815229479d9`
+  SHA-256 `5e241fcb2043bb00953d06c50f9ea10786574f537aa0e4d87985241d22efb289`
   e o instalador local tem SHA-256
   `a3bed90a44e6f229987ddee2ad08391096b60f5af86e91e25b4844d5afe1b236`.
   Isso é um checkpoint local, não evidência pública assinada nem publicação;

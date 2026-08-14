@@ -49,6 +49,9 @@ install -m644 maintenance/native_case_entrypoint.py \
   "$WORK_DIR/input/runtime/native-smoke/macos-arm64/x86qw-native-smoke"
 install -m644 maintenance/native/macos-arm64/entrypoint.json \
   "$WORK_DIR/input/runtime/native-smoke/macos-arm64/entrypoint.json"
+mkdir -p "$WORK_DIR/input/runtime/native-smoke/macos-arm64/fixtures/migrations"
+cp -R maintenance/tests/fixtures/migrations/0.7.13 \
+  "$WORK_DIR/input/runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13"
 python3 maintenance/tools/build_release_catalog.py \
   --source site/public/api/v1/catalog.json \
   --installer "$WORK_DIR/input/installer/x86qw-installer-$VERSION.zip" \

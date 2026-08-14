@@ -122,7 +122,10 @@ CASE_FIELDS = frozenset({
     "artifacts",
 })
 ARTIFACT_FIELDS = frozenset({"path", "kind", "size", "sha256"})
-FORBIDDEN_COMMAND_MARKERS = ("mock", "fake", "stub", "fixture", "dry-run")
+# Candidate-owned migration fixtures may legitimately appear in a path argument;
+# their bytes are bound separately by the candidate manifest.  Reject runtime
+# markers, but do not confuse the word "fixture" in a staging path with a mock.
+FORBIDDEN_COMMAND_MARKERS = ("mock", "fake", "stub", "dry-run")
 M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
 
 

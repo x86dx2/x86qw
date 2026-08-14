@@ -29,7 +29,7 @@ fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
 plano continua sem autorizar a promoção final, alteração dos bytes publicados
 ou publicação de metadata TUF fora do workflow protegido. A implementação local
 do fechamento dos gates está no commit
-`3172a4864f8ae0cea7d24efedf261223da8e19f4` da branch
+`2706d0b4602f8d77b895e7b07575c2f354380fb9` da branch
 `agent/rc-1.0-completion`. O candidato local `1.0.0-rc.2` desse commit passou
 `25/25` casos no Apple M3 Pro; isso ainda precisa passar pelo fluxo remoto,
 handoff assinado e endpoint público antes de ser considerado evidência de
@@ -338,7 +338,7 @@ gates remotos e nativos:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o commit local `3172a48` contra `origin/main`, mantendo separado o
+5. revisar o commit local `2706d0b` contra `origin/main`, mantendo separado o
    trabalho histórico já publicado do candidato atual.
 
 Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
