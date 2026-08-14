@@ -167,9 +167,10 @@ verificação somente-leitura; suas IDs, digests e tamanhos estão registrados e
    execução pública/protegida, e os casos completos precisam ser repetidos em
    um candidato final novo;
 5. a operação TUF tem drill offline implementado e um workflow protegido que
-   vincula o relatório ao recibo final, mas o monitor público falhou no run
-   `31791717871` por lease dentro da janela de alerta; a issue #152 está aberta
-   e faltam renovação observada, recuperação registrada e lease saudável;
+   vincula o relatório ao recibo final, mas os monitores públicos falharam nos
+   runs `31791717871` e `31798419309` por lease dentro da janela de alerta; a
+   issue #152 está aberta e faltam renovação observada, recuperação registrada
+   e lease saudável;
 6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
@@ -191,10 +192,12 @@ host-level. As issues canônicas abertas eram:
 - [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
 - [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152).
 
-O último monitor TUF registrado nessa leitura foi o run
+O último monitor TUF incluído nessa leitura foi o run
 [31791717871](https://github.com/x86dx2/x86qw/actions/runs/31791717871), com
-falha por lease dentro da janela de alerta. O snapshot completo, incluindo os
-limites da leitura, está em
+falha por lease dentro da janela de alerta. Depois desse snapshot histórico,
+o run [31798419309](https://github.com/x86dx2/x86qw/actions/runs/31798419309)
+falhou pela mesma causa. O snapshot completo, incluindo os limites da leitura,
+está em
 [`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json).
 
 ## Veredito
