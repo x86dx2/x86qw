@@ -42,7 +42,13 @@ root v1, timestamp v16, snapshot v16 e targets v16; autenticou o catálogo com
 [`docs/releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json).
 Esta é uma fotografia do endpoint público em 2026-08-14 05:04 UTC; não
 constitui evidência de custódia humana independente nem substitui a cerimônia
-TUF do candidato.
+TUF do candidato. A execução seguinte do monitor, run `31791717871` às
+10:19 UTC, falhou porque a mesma lease de `timestamp` entrou na janela de
+alerta de seis horas; a issue automática [#152](https://github.com/x86dx2/x86qw/issues/152)
+permanece aberta. O registro está em
+[`1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json).
+Enquanto a renovação/recuperação manual não for concluída e verificada, o gate
+TUF público está `NO-GO`.
 
 ## Estado local
 
@@ -115,6 +121,9 @@ TUF do candidato.
   publica um artifact imutável. O job `verify-soak` de `release.yml` exige esse
   handoff e o inclui no recibo final; nenhum run protegido concluído está
   registrado ainda, portanto o gate continua pendente;
+- a promoção final também executa `monitor_public_tuf.py` imediatamente antes
+  da evidência M3. O gate foi incluído porque o drill operacional, sozinho, não
+  prova que a lease pública atual ainda está saudável;
 
 ## Candidato oficial e promoção
 
@@ -150,10 +159,10 @@ Actions.
    também estão verdes no preflight local `1.0.0-rc.2`, mas ainda precisam de
    execução pública/protegida, e os casos completos precisam ser repetidos em
    um candidato final novo;
-5. a operação TUF tem monitor público verde, drill offline implementado e agora
-   um workflow protegido que vincula o relatório ao recibo final; ainda faltam
-   custódia de produção sustentada, renovação observada, alerta, expiração
-   simulada e recuperação registrados no ambiente público;
+5. a operação TUF tem drill offline implementado e um workflow protegido que
+   vincula o relatório ao recibo final, mas o monitor público falhou no run
+   `31791717871` por lease dentro da janela de alerta; a issue #152 está aberta
+   e faltam renovação observada, recuperação registrada e lease saudável;
 6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.

@@ -33,6 +33,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_public_product.py",
             "maintenance/tools/public_install_smoke.py",
             "maintenance/tools/verify_public_acceptance.py",
+            "maintenance/tools/monitor_public_tuf.py",
             "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
             "maintenance/tools/verify_soak_report.py",
@@ -166,7 +167,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(6, source.count("name: Checkout immutable candidate commit"))
-        self.assertEqual(12, source.count("ref: main"))
+        self.assertEqual(13, source.count("ref: main"))
         self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
         self.assertEqual(6, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
         self.assertEqual(6, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
@@ -188,8 +189,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_trust_jobs_install_pinned_backend(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         install = "python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt"
-        self.assertEqual(3, source.count("Install pinned trust dependencies from vendored wheels"))
-        self.assertEqual(3, source.count(install))
+        self.assertEqual(4, source.count("Install pinned trust dependencies from vendored wheels"))
+        self.assertEqual(4, source.count(install))
 
     def test_release_reuses_lfs_cache_and_materializes_on_miss(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -527,6 +528,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
         attach = source.split("  attach-native-evidence:\n", 1)[1].split("\n  promotion-gate:\n", 1)[0]
         self.assertIn("verify-soak", attach)
         self.assertIn("needs.verify-soak.result", source)
+
+    def test_final_promotion_requires_a_healthy_live_public_tuf_lease(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("verify-public-tuf:", source)
+        tuf = source.split("  verify-public-tuf:\n", 1)[1].split("\n  attach-native-evidence:\n", 1)[0]
+        self.assertIn("monitor_public_tuf.py", tuf)
+        self.assertIn("--warning-hours 6", tuf)
+        self.assertIn("maintenance/trust/root.json", tuf)
+        attach = source.split("  attach-native-evidence:\n", 1)[1].split("\n  promotion-gate:\n", 1)[0]
+        self.assertIn("verify-public-tuf", attach)
+        self.assertIn("needs.verify-public-tuf.result", source)
 
     def test_rc_soak_workflow_is_protected_and_uploads_immutable_report(self):
         path = ROOT / ".github/workflows/rc-soak.yml"

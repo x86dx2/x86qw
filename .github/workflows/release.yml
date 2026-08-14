@@ -747,10 +747,39 @@ jobs:
             --minimum-days 7
           echo "completed protected RC soak verified for $SOAK_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
+  verify-public-tuf:
+    name: Require a healthy live public TUF lease before 1.0.0
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [approval, release-blockers, verify-public-acceptance, verify-soak]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Authenticate the live public TUF chain and lease
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/monitor_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --warning-hours 6
+          echo "live public TUF lease is outside the warning window" >> "$GITHUB_STEP_SUMMARY"
+
   attach-native-evidence:
     name: Attach authorized M3 evidence without rebuild
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') }}
-    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance, verify-soak]
+    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance, verify-soak, verify-public-tuf]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
     # native run. Under ADR 0007 the signer may be the sole maintainer; the
@@ -1060,8 +1089,8 @@ jobs:
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
-    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') }}
-    needs: [build-once, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak]
+    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    needs: [build-once, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak, verify-public-tuf]
     outputs:
       promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest

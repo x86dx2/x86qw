@@ -231,6 +231,11 @@ catálogo do candidato, conter contexto de operador/host/SLA e comprovar
 renovação, expiração simulada e recuperação; suas coordenadas entram no recibo
 durável de `1.0.0`.
 
+O workflow final também consulta a lease pública atual com
+`monitor_public_tuf.py` e janela de seis horas. O drill histórico não substitui
+essa verificação: enquanto a issue de alerta #152 estiver aberta ou a lease
+estiver dentro da janela, a promoção permanece `NO-GO`.
+
 O gate final também exige o período de uso do RC por
 `.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.
 O relatório precisa comprovar sete dias completos, observações diárias verdes,
