@@ -669,7 +669,7 @@ def verify_distribution(
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
         if path.is_file()
-        and path.name != "manifest.json"
+        and path.name not in {"manifest.json", ".DS_Store"}
         and "__pycache__" not in path.parts
         and path.suffix not in {".pyc", ".pyo"}
     }

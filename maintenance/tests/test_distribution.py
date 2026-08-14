@@ -372,6 +372,9 @@ class DistributionTests(unittest.TestCase):
             write_manifest(path, manifest)
             loaded = load_manifest(path)
             self.assertEqual(1, verify_distribution(root, loaded))
+            (root / ".DS_Store").write_bytes(b"Finder metadata")
+            self.assertEqual(1, verify_distribution(root, loaded))
+            (root / ".DS_Store").unlink()
             cache = root / "installer/bin/__pycache__"
             cache.mkdir(parents=True)
             (cache / "manager.cpython-314.pyc").write_bytes(b"runtime cache")
