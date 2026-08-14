@@ -242,9 +242,11 @@ verificado, exige `TUF_TIMESTAMP_KEY_B64` no ambiente protegido e produz apenas
 um handoff não publicado com `timestamp.json` renovado. O segundo workflow,
 `.github/workflows/tuf-timestamp-publish.yml`, verifica esse handoff contra o
 TUF de origem e o candidato, publica a geração timestamp-only sob o mesmo
-ambiente protegido e registra a verificação pública pós-deploy. A existência
-dos workflows não prova custódia nem saúde pública; sem secret configurada,
-execução verde e aprovação protegida, o gate TUF continua pendente.
+ambiente protegido, valida o recibo com
+`maintenance/tools/verify_tuf_timestamp_publication.py` e registra a
+verificação pública pós-deploy. A existência dos workflows não prova custódia
+nem saúde pública; sem secret configurada, execução verde e aprovação
+protegida, o gate TUF continua pendente.
 
 O gate final também exige o período de uso do RC por
 `.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.

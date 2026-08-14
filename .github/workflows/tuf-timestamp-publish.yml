@@ -387,6 +387,16 @@ jobs:
               raise SystemExit("recibo de publicação já existe")
           destination.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
+      - name: Verify immutable timestamp publication receipt
+        run: |
+          python3 maintenance/tools/verify_tuf_timestamp_publication.py \
+            --receipt "$RUNNER_TEMP/timestamp-publication/receipt.json" \
+            --candidate candidate \
+            --renewal-report renewal/report.json \
+            --verified-renewal "$RUNNER_TEMP/timestamp-renewal-verified.json" \
+            --public-tuf "$RUNNER_TEMP/timestamp-publication/tuf.json" \
+            --public-bootstraps "$RUNNER_TEMP/timestamp-publication/bootstraps.json" \
+            --public-product "$RUNNER_TEMP/timestamp-publication/product.json"
       - name: Upload immutable timestamp publication receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

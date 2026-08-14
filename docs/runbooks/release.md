@@ -315,7 +315,9 @@ arquivo alterado seja `metadata/timestamp.json`, autentica o catálogo, monta
 uma geração única do site, executa o deploy protegido e verifica TUF,
 bootstraps e product públicos após o deploy. O artifact
 `tuf-timestamp-publication-<commit>-<run_id>-<attempt>` é o recibo durável da
-operação. Sem o secret, a aprovação ou qualquer verificação pública, nenhum
+operação. Antes do upload, `maintenance/tools/verify_tuf_timestamp_publication.py`
+confere o recibo contra o candidato, o renewal report e os três resultados
+públicos. Sem o secret, a aprovação ou qualquer verificação pública, nenhum
 deploy ocorre.
 
 ## Rollback e publicação

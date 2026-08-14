@@ -126,8 +126,9 @@ TUF público está `NO-GO`.
   prova antes da publicação. O workflow
   `.github/workflows/tuf-timestamp-publish.yml` então monta e implanta somente
   essa geração timestamp-only sob aprovação protegida e verifica TUF,
-  bootstraps e product públicos, produzindo um recibo de publicação. Não há
-  ainda signer configurado nem renovação observada no endpoint público. A
+  bootstraps e product públicos; `verify_tuf_timestamp_publication.py` valida o
+  recibo antes do upload. Não há ainda signer configurado nem renovação
+  observada no endpoint público. A
   última leitura somente-leitura do ambiente protegido `release` confirmou que
   `TUF_TIMESTAMP_KEY_B64` ainda não existe; os workflows devem falhar fechado
   até que a custódia seja configurada ou o modo manual B seja comprovado. Por

@@ -69,8 +69,9 @@ Na operação protegida, o workflow
 de origem e o handoff `published: false`, repete essa verificação, faz staging
 da metadata, executa o deploy sob o ambiente `release` e verifica o endpoint
 público. Ele publica um recibo `timestamp-published` somente depois de TUF,
-bootstraps e product passarem; sem aprovação, secret ou verificação pós-deploy,
-não há publicação.
+bootstraps e product passarem; o recibo é validado por
+`maintenance/tools/verify_tuf_timestamp_publication.py` antes do upload. Sem
+aprovação, secret ou verificação pós-deploy, não há publicação.
 
 Novos relatórios usam `format: 2` e devem conter `role_versions` para as três
 roles (`timestamp`, `snapshot` e `targets`), com `current` e `renewed` em cada

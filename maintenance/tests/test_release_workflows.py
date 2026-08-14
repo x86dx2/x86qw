@@ -38,6 +38,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/tuf_operation_drill.py",
             "maintenance/tools/tuf_timestamp_renewal.py",
             "maintenance/tools/verify_tuf_timestamp_renewal.py",
+            "maintenance/tools/verify_tuf_timestamp_publication.py",
             "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/materialize_lfs.py",
@@ -154,6 +155,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("assemble_site_release.py", source)
         self.assertIn("CLOUDFLARE_API_TOKEN", source)
         self.assertIn("verify_public_tuf.py", source)
+        self.assertIn("verify_tuf_timestamp_publication.py", source)
+        self.assertIn("Verify immutable timestamp publication receipt", source)
         self.assertIn("overwrite: false", source)
         self.assertIn(
             "tuf-timestamp-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}",
