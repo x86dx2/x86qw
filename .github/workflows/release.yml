@@ -346,6 +346,7 @@ jobs:
         with:
           name: candidate-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: release-work/candidate
+          include-hidden-files: true
           if-no-files-found: error
           overwrite: false
           retention-days: 90
@@ -994,6 +995,7 @@ jobs:
         with:
           name: candidate-with-m3-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: candidate-with-m3
+          include-hidden-files: true
           if-no-files-found: error
           overwrite: false
           retention-days: 90
@@ -1092,6 +1094,7 @@ jobs:
         with:
           name: promoted-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: promoted
+          include-hidden-files: true
           if-no-files-found: error
           overwrite: false
           retention-days: 90
