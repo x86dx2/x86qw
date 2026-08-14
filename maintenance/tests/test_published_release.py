@@ -99,6 +99,16 @@ class PublishedReleaseTests(unittest.TestCase):
 
     def durable_receipt(self) -> dict[str, object]:
         return {
+            "tuf_operation": {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            },
             "public_acceptance": {
                 "commit": "c" * 40,
                 "run_id": "31752738003",
@@ -156,6 +166,16 @@ class PublishedReleaseTests(unittest.TestCase):
         durable = self.durable_receipt()
         durable["public_acceptance"]["bundle_sha256"] = "not-a-digest"  # type: ignore[index]
         with self.assertRaisesRegex(MODULE.PublishedReleaseError, "coordenadas inválidas"):
+            self.classify(payloads, durable_receipt=durable)
+
+    def test_final_release_requires_tuf_operation_handoff(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        durable = self.durable_receipt()
+        del durable["tuf_operation"]
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "operação TUF"):
             self.classify(payloads, durable_receipt=durable)
 
     def test_both_absent_is_absent(self):

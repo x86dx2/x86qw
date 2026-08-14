@@ -124,6 +124,41 @@ on:
         required: false
         default: ""
         type: string
+      tuf_operation_run_id:
+        description: "Run protegido que registrou o drill operacional TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_artifact_id:
+        description: "Artifact ID imutável do relatório do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_artifact_name:
+        description: "Nome exato do artifact do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_report_sha256:
+        description: "SHA-256 do relatório JSON do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_operator:
+        description: "Operador/custodiante registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_custody_host:
+        description: "Host de custódia registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_sla_hours:
+        description: "SLA de timestamp registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: x86qw-candidate-${{ inputs.candidate_commit }}
@@ -608,6 +643,43 @@ jobs:
           python-version: "3.13"
       - name: Install pinned trust dependencies from vendored wheels
         run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Validate final TUF operation handoff coordinates
+        if: ${{ inputs.mode == 'promote-1.0' }}
+        env:
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+        run: |
+          set -euo pipefail
+          [[ "$TUF_OPERATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$TUF_OPERATION_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$TUF_OPERATION_ARTIFACT_NAME" =~ ^tuf-operation-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$TUF_OPERATION_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$TUF_OPERATION_OPERATOR" =~ ^[^[:cntrl:][:space:]][^[:cntrl:]]{0,126}[^[:cntrl:][:space:]]$|^[^[:cntrl:][:space:]]$ ]]
+          [[ "$TUF_OPERATION_CUSTODY_HOST" =~ ^[^[:cntrl:][:space:]][^[:cntrl:]]{0,126}[^[:cntrl:][:space:]]$|^[^[:cntrl:][:space:]]$ ]]
+          [[ "$TUF_OPERATION_SLA_HOURS" =~ ^[1-9][0-9]{0,3}$ ]]
+          test "$TUF_OPERATION_SLA_HOURS" -le 8760
+      - name: Verify final TUF operation handoff provenance
+        if: ${{ inputs.mode == 'promote-1.0' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$TUF_OPERATION_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$TUF_OPERATION_ARTIFACT_NAME" \
+            --artifact-id "$TUF_OPERATION_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-operation-drill.yml \
+            --output "$RUNNER_TEMP/tuf-operation-artifact.json"
       - name: Validate external handoff coordinates
         env:
           EVIDENCE_RUN_ID: ${{ inputs.native_evidence_run_id }}
@@ -639,6 +711,52 @@ jobs:
           artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
           merge-multiple: true
           path: downloaded-candidate
+      - name: Download final TUF operation report
+        if: ${{ inputs.mode == 'promote-1.0' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.tuf_operation_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.tuf_operation_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: tuf-operation
+      - name: Verify final TUF operation report against candidate
+        if: ${{ inputs.mode == 'promote-1.0' }}
+        env:
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+        run: |
+          set -euo pipefail
+          test -f tuf-operation/report.json
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("tuf-operation/report.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$TUF_OPERATION_REPORT_SHA256"
+          python3 maintenance/tools/verify_tuf_operation_report.py \
+            --candidate downloaded-candidate \
+            --report tuf-operation/report.json \
+            > "$RUNNER_TEMP/tuf-operation-report.json"
+          TUF_OPERATION_OPERATOR="$TUF_OPERATION_OPERATOR" \
+          TUF_OPERATION_CUSTODY_HOST="$TUF_OPERATION_CUSTODY_HOST" \
+          TUF_OPERATION_SLA_HOURS="$TUF_OPERATION_SLA_HOURS" \
+          python3 - "$RUNNER_TEMP/tuf-operation-report.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          operation = report["operation"]
+          expected = {
+              "operator": os.environ["TUF_OPERATION_OPERATOR"],
+              "custody_host": os.environ["TUF_OPERATION_CUSTODY_HOST"],
+              "timestamp_sla_hours": int(os.environ["TUF_OPERATION_SLA_HOURS"]),
+          }
+          actual = {key: operation[key] for key in expected}
+          if actual != expected:
+              raise SystemExit("contexto operacional do relatório diverge dos inputs protegidos")
+          PY
       - name: Download authorized signed M3 handoff
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -680,6 +798,14 @@ jobs:
           ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
           ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
           ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          TUF_OPERATION_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
           RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -738,6 +864,17 @@ jobs:
                   "receipt_sha256": os.environ["ACCEPTANCE_RECEIPT_SHA256"],
                   "bundle_sha256": os.environ["ACCEPTANCE_BUNDLE_SHA256"],
                   "catalog_sha256": os.environ["ACCEPTANCE_CATALOG_SHA256"],
+              }
+          if os.environ["TUF_OPERATION_REQUIRED"].lower() == "true":
+              coordinates["tuf_operation"] = {
+                  "workflow": ".github/workflows/tuf-operation-drill.yml",
+                  "run_id": os.environ["TUF_OPERATION_RUN_ID"],
+                  "artifact_id": os.environ["TUF_OPERATION_ARTIFACT_ID"],
+                  "artifact_name": os.environ["TUF_OPERATION_ARTIFACT_NAME"],
+                  "report_sha256": os.environ["TUF_OPERATION_REPORT_SHA256"],
+                  "operator": os.environ["TUF_OPERATION_OPERATOR"],
+                  "custody_host": os.environ["TUF_OPERATION_CUSTODY_HOST"],
+                  "timestamp_sla_hours": os.environ["TUF_OPERATION_SLA_HOURS"],
               }
           Path(sys.argv[1]).write_text(json.dumps(coordinates, sort_keys=True) + "\n", encoding="utf-8")
           PY

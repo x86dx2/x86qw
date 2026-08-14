@@ -31,6 +31,9 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE_ID = re.compile(r"^[1-9][0-9]{0,19}$")
 PUBLIC_ACCEPTANCE_ARTIFACT = re.compile(r"^public-acceptance-[A-Za-z0-9._-]{1,180}$")
 PUBLIC_ACCEPTANCE_VERSION = re.compile(r"^1\.0\.0-rc\.[0-9]+$")
+TUF_OPERATION_ARTIFACT = re.compile(r"^tuf-operation-[0-9a-f]{40}-[0-9]+-[0-9]+$")
+TUF_OPERATION_SLA = re.compile(r"^[1-9][0-9]{0,3}$")
+TUF_OPERATION_WORKFLOW = ".github/workflows/tuf-operation-drill.yml"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 PUBLIC_METADATA_NAMES = (
     "candidate.json",
@@ -53,6 +56,10 @@ SECTION_FIELDS = {
     "tuf": frozenset({"workflow", "run_id", "artifact_id", "artifact_name"}),
     "deployment": frozenset({"endpoint", "verification"}),
 }
+TUF_OPERATION_FIELDS = frozenset({
+    "workflow", "run_id", "artifact_id", "artifact_name", "report_sha256",
+    "operator", "custody_host", "timestamp_sla_hours",
+})
 PUBLIC_ACCEPTANCE_FIELDS = frozenset({
     "commit", "run_id", "artifact_id", "artifact_name", "version",
     "receipt_sha256", "bundle_sha256", "catalog_sha256",
@@ -124,7 +131,7 @@ def _validate_asset(value: object, *, label: str) -> dict[str, object]:
 def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
     if not isinstance(value, Mapping):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
-    allowed_sections = set(SECTIONS) | {"public_acceptance"}
+    allowed_sections = set(SECTIONS) | {"public_acceptance", "tuf_operation"}
     if set(value) - allowed_sections or not set(SECTIONS).issubset(value):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
     result: dict[str, dict[str, str]] = {}
@@ -168,6 +175,38 @@ def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
         ):
             raise ReleaseReceiptError("coordenadas inválidas na seção public_acceptance")
         result["public_acceptance"] = acceptance
+    if "tuf_operation" in value:
+        raw_operation = value["tuf_operation"]
+        if not isinstance(raw_operation, Mapping) or set(raw_operation) != TUF_OPERATION_FIELDS:
+            raise ReleaseReceiptError("coordenadas inválidas na seção tuf_operation")
+        operation = {key: raw_operation[key] for key in TUF_OPERATION_FIELDS}
+        for field in ("workflow", "operator", "custody_host"):
+            item = operation[field]
+            if (
+                not isinstance(item, str)
+                or not item
+                or item != item.strip()
+                or len(item) > 128
+                or any(ord(char) < 0x20 for char in item)
+            ):
+                raise ReleaseReceiptError(f"coordenadas inválidas na seção tuf_operation: {field}")
+        if operation["workflow"] != TUF_OPERATION_WORKFLOW:
+            raise ReleaseReceiptError("coordenadas inválidas na seção tuf_operation: workflow")
+        if (
+            not isinstance(operation["run_id"], str)
+            or POSITIVE_ID.fullmatch(operation["run_id"]) is None
+            or not isinstance(operation["artifact_id"], str)
+            or POSITIVE_ID.fullmatch(operation["artifact_id"]) is None
+            or not isinstance(operation["artifact_name"], str)
+            or TUF_OPERATION_ARTIFACT.fullmatch(operation["artifact_name"]) is None
+            or not isinstance(operation["report_sha256"], str)
+            or HEX64.fullmatch(operation["report_sha256"]) is None
+            or not isinstance(operation["timestamp_sla_hours"], str)
+            or TUF_OPERATION_SLA.fullmatch(operation["timestamp_sla_hours"]) is None
+            or not 1 <= int(operation["timestamp_sla_hours"]) <= 8760
+        ):
+            raise ReleaseReceiptError("coordenadas inválidas na seção tuf_operation")
+        result["tuf_operation"] = operation
     return result
 
 
@@ -273,6 +312,8 @@ def build_receipt(
     commit = manifest.get("commit")
     if not isinstance(version, str) or not isinstance(commit, str) or HEX40.fullmatch(commit) is None:
         raise ReleaseReceiptError("identidade do candidato inválida")
+    if version == "1.0.0" and "tuf_operation" not in normalized_coordinates:
+        raise ReleaseReceiptError("recibo final exige handoff de operação TUF")
     receipt: dict[str, object] = {
         "format": FORMAT,
         "project": PROJECT,
@@ -366,6 +407,8 @@ def validate_durable_assets(
     coordinates = {section: document.get(section) for section in SECTIONS}
     if "public_acceptance" in document:
         coordinates["public_acceptance"] = document["public_acceptance"]
+    if "tuf_operation" in document:
+        coordinates["tuf_operation"] = document["tuf_operation"]
     expected = build_receipt(candidate=candidate, evidence_root=root, coordinates=coordinates)
     if expected != document:
         raise ReleaseReceiptError("release-receipt.json diverge dos bytes públicos")

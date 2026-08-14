@@ -33,6 +33,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_public_product.py",
             "maintenance/tools/public_install_smoke.py",
             "maintenance/tools/verify_public_acceptance.py",
+            "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
             "maintenance/tools/materialize_lfs.py",
         )
@@ -55,6 +56,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/tuf-metadata-handoff.yml",
             ROOT / ".github/workflows/tuf-monitor.yml",
             ROOT / ".github/workflows/public-acceptance.yml",
+            ROOT / ".github/workflows/tuf-operation-drill.yml",
         ]
         for path in workflows:
             source = path.read_text(encoding="utf-8")
@@ -226,7 +228,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             )
             blocks.append("\n".join(lines[start:end]))
 
-        self.assertEqual(12, len(blocks))
+        self.assertEqual(13, len(blocks))
         for block in blocks:
             self.assertIn("artifact-ids:", block)
             self.assertRegex(block, r"(?m)^\s+merge-multiple:\s*true\s*$")
@@ -370,6 +372,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_promotion_materializes_and_verifies_durable_evidence_receipt(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("native_evidence_artifact_name:", source)
+        self.assertIn("tuf_operation_artifact_name:", source)
         self.assertIn("maintenance/tools/release_receipt.py", source)
         self.assertIn("evidence-root.json", source)
         self.assertIn("release-receipt.json", source)
@@ -388,6 +391,37 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("ACCEPTANCE_ARTIFACT_NAME", receipt_step)
         self.assertIn("ACCEPTANCE_VERSION", receipt_step)
         self.assertIn("inputs.mode == 'promote-1.0'", receipt_step)
+
+    def test_final_receipt_binds_tuf_operation_handoff(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        receipt_step = source.split("      - name: Create durable evidence root and release receipt", 1)[1]
+        receipt_step = receipt_step.split("      - name: Upload evidence-bound candidate without overwrite", 1)[0]
+        self.assertIn("tuf_operation", receipt_step)
+        self.assertIn("TUF_OPERATION_RUN_ID", receipt_step)
+        self.assertIn("TUF_OPERATION_ARTIFACT_ID", receipt_step)
+        self.assertIn("TUF_OPERATION_ARTIFACT_NAME", receipt_step)
+        self.assertIn("TUF_OPERATION_REPORT_SHA256", receipt_step)
+        self.assertIn("TUF_OPERATION_OPERATOR", receipt_step)
+        self.assertIn("TUF_OPERATION_CUSTODY_HOST", receipt_step)
+        self.assertIn("TUF_OPERATION_SLA_HOURS", receipt_step)
+
+    def test_final_promotion_requires_tuf_operation_handoff(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        for field in (
+            "tuf_operation_run_id:",
+            "tuf_operation_artifact_id:",
+            "tuf_operation_artifact_name:",
+            "tuf_operation_report_sha256:",
+            "tuf_operation_operator:",
+            "tuf_operation_custody_host:",
+            "tuf_operation_sla_hours:",
+        ):
+            self.assertIn(field, source)
+        block = source.split("  attach-native-evidence:\n", 1)[1]
+        block = block.split("  promotion-gate:\n", 1)[0]
+        self.assertIn("tuf-operation-drill.yml", block)
+        self.assertIn("verify_tuf_operation_report.py", block)
+        self.assertIn("TUF_OPERATION_REPORT_SHA256", block)
 
     def test_metadata_last_uses_the_publish_tuf_metadata_cli_contract(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -467,6 +501,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--expected-bundle-sha256", gate)
         self.assertIn("--expected-catalog-sha256", gate)
         self.assertIn("needs.verify-public-acceptance.result", source)
+
+    def test_tuf_operation_handoff_is_protected_and_candidate_bound(self):
+        path = ROOT / ".github/workflows/tuf-operation-drill.yml"
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("operation_report_b64", source)
+        self.assertIn("verify_tuf_operation_report.py", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn("retention-days: 90", source)
+        self.assertIn("tuf-operation-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
 
     def test_native_evidence_waits_for_public_acceptance_before_final_receipt(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

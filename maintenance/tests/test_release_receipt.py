@@ -15,15 +15,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseReceiptTests(unittest.TestCase):
-    def _candidate(self, root: Path) -> Path:
+    def _candidate(self, root: Path, *, version: str = "1.0.0-rc.2") -> Path:
         source = root / "source"
         source.mkdir()
-        (source / "x86qw-installer-1.0.0-rc.2.zip").write_bytes(b"installer")
+        (source / f"x86qw-installer-{version}.zip").write_bytes(b"installer")
         candidate = root / "candidate"
         release_candidate.prepare_candidate(
             source=source,
             output=candidate,
-            version="1.0.0-rc.2",
+            version=version,
             commit="a" * 40,
             generated_at="2026-08-13T00:00:00Z",
         )
@@ -143,6 +143,93 @@ class ReleaseReceiptTests(unittest.TestCase):
                 "receipt_sha256": "d" * 64,
                 "bundle_sha256": "e" * 64,
                 "catalog_sha256": "f" * 64,
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaises(release_receipt.ReleaseReceiptError):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
+
+    def test_final_receipt_requires_tuf_operation_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "operação TUF"):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=self._coordinates(),
+                    )
+
+    def test_final_receipt_binds_tuf_operation_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["tuf_operation"] = {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                receipt = release_receipt.write_durable_assets(
+                    candidate=candidate,
+                    evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                    coordinates=coordinates,
+                )
+            self.assertEqual(coordinates["tuf_operation"], receipt["tuf_operation"])
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
+
+    def test_tuf_operation_handoff_rejects_malformed_report_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["tuf_operation"] = {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "not-a-digest",
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaises(release_receipt.ReleaseReceiptError):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
+
+    def test_tuf_operation_handoff_rejects_another_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._coordinates()
+            coordinates["tuf_operation"] = {
+                "workflow": ".github/workflows/tuf-metadata-handoff.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
             }
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
