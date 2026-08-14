@@ -68,8 +68,10 @@ de custódia humana independente nem substitui a cerimônia TUF do candidato.
   por corrupção e purge; os contratos e testes locais estão verdes, mas isso
   não substitui um run nativo do candidato exato;
 - o drill TUF offline está implementado em
-  `maintenance/tools/tuf_operation_drill.py`; chaves de produção, custódia e
-  execução operacional ainda não foram comprovadas nesta sessão.
+  `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
+  a visão corrente temporária; o recibo está em
+  `docs/releases/1.0.0-rc.1-tuf-drill.json`. O drill não publicou metadata e não
+  prova custódia humana independente nem a operação contínua de produção;
 
 ## Candidato oficial e promoção
 
