@@ -1,0 +1,45 @@
+{
+  "artifacts": [
+    {
+      "created_at": "2026-08-13T23:13:42Z",
+      "digest": "sha256:72860be614c2923c075b49460e8c8dcf25c98876da5e45939bb024a3aa49a568",
+      "expired": false,
+      "id": 9201652983,
+      "name": "candidate-a8758ee27bebd7c72c24a31dc19335652e260c0a-31752738047-1",
+      "size_in_bytes": 648111670,
+      "updated_at": "2026-08-13T23:13:42Z"
+    },
+    {
+      "created_at": "2026-08-13T23:16:40Z",
+      "digest": "sha256:b59519ed476b71b6dd2054815013850872c234c56a08ff628784546920795e10",
+      "expired": false,
+      "id": 9201723818,
+      "name": "candidate-with-m3-a8758ee27bebd7c72c24a31dc19335652e260c0a-31752738047-1",
+      "size_in_bytes": 648115120,
+      "updated_at": "2026-08-13T23:16:40Z"
+    },
+    {
+      "created_at": "2026-08-13T23:18:41Z",
+      "digest": "sha256:620400f00b9bca850bc08b25400206fc78ecee79250558890317f8ac213ec732",
+      "expired": false,
+      "id": 9201771761,
+      "name": "promoted-a8758ee27bebd7c72c24a31dc19335652e260c0a-31752738047-1",
+      "size_in_bytes": 648115120,
+      "updated_at": "2026-08-13T23:18:41Z"
+    }
+  ],
+  "candidate_commit": "a8758ee27bebd7c72c24a31dc19335652e260c0a",
+  "format": "x86qw-rc-promotion-artifacts-v1",
+  "limitations": [
+    "These GitHub Actions artifacts are retained but are not durable public release assets.",
+    "The record does not authorize overwrite or publication of the existing RC release."
+  ],
+  "project": "x86qw",
+  "promotion_run": {
+    "id": 31752738047,
+    "url": "https://github.com/x86dx2/x86qw/actions/runs/31752738047",
+    "workflow": ".github/workflows/release.yml"
+  },
+  "recorded_at": "2026-08-14T10:19:00Z",
+  "status": "retained-not-public"
+}

@@ -140,7 +140,9 @@ runner Apple M3 e promovido sem reconstrução. O fluxo final confirmou:
 A evidência assinada foi usada pela promoção, mas ainda precisa ser publicada
 de forma durável como asset (`release-evidence.json`, `evidence-root.json` e
 `release-receipt.json`) para que a prova não dependa da retenção de artifacts de
-Actions.
+Actions. Os três artifacts do run final ainda estavam retidos na última
+verificação somente-leitura; suas IDs, digests e tamanhos estão registrados em
+[`1.0.0-rc.1-promotion-artifacts-2026-08-14.json`](releases/1.0.0-rc.1-promotion-artifacts-2026-08-14.json).
 
 ## Gaps e gates restantes
 
