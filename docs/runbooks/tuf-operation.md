@@ -36,6 +36,14 @@ online. Root e targets permanecem offline. Se for adotado um signer online,
 ele deve possuir somente a autoridade de timestamp, host isolado, auditoria,
 rotação, kill switch e alertas; a política criptográfica não muda.
 
+Para registrar o exercício no gate final, o relatório aprovado deve ser enviado
+ao workflow protegido
+`.github/workflows/tuf-operation-drill.yml`. Esse workflow vincula o relatório
+ao `candidate.json`, verifica target/root/expiração/recuperação e publica um
+artifact imutável somente com o JSON do relatório. A promoção de `1.0.0` exige
+as coordenadas desse artifact e o digest do relatório; um relatório histórico
+sem `operation` não é aceito.
+
 ## Evidência mínima
 
 Anexar ao issue de soak e ao gate final:

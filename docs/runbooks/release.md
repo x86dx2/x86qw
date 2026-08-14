@@ -184,7 +184,10 @@ O drill operacional está em
 publica metadata e não aceita overwrite do relatório. A execução exige operador,
 host de custódia e SLA de timestamp, registrados no campo não secreto
 `operation`; isso documenta a responsabilidade do exercício, mas não substitui
-a prova de custódia independente nem a operação sustentada em produção.
+a prova de custódia independente nem a operação sustentada em produção. Para a
+promoção final, `.github/workflows/tuf-operation-drill.yml` registra o relatório
+validado e `release-receipt.json` vincula seu artifact, digest, operador, host e
+SLA; sem esse handoff a promoção permanece fail-closed.
 
 ## Rollback e publicação
 

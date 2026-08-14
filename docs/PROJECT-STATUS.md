@@ -116,9 +116,10 @@ Actions.
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
    lifecycle estão comprovados no candidato local `1.0.0-rc.4`; ainda precisam
    de execução protegida e aceitação pública desse candidato;
-5. a operação TUF tem monitor público verde e drill offline implementados; ainda
-   faltam custódia de produção sustentada, renovação observada, alerta,
-   expiração simulada e recuperação registrados no ambiente público;
+5. a operação TUF tem monitor público verde, drill offline implementado e agora
+   um workflow protegido que vincula o relatório ao recibo final; ainda faltam
+   custódia de produção sustentada, renovação observada, alerta, expiração
+   simulada e recuperação registrados no ambiente público;
 6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.

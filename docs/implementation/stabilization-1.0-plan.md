@@ -222,6 +222,12 @@ por digest imutável.
 preparação e promoção; nenhum destino é sobrescrito; trust não é importado
 implicitamente.
 
+O gate final também exige um handoff de operação TUF registrado por
+`.github/workflows/tuf-operation-drill.yml`. O relatório deve estar vinculado ao
+catálogo do candidato, conter contexto de operador/host/SLA e comprovar
+renovação, expiração simulada e recuperação; suas coordenadas entram no recibo
+durável de `1.0.0`.
+
 ### PR G — Mac M3/arm64 e RC (`issue #54`; fechamento operacional `#147`)
 
 O executor `native_macos_harness.py` e o workflow
