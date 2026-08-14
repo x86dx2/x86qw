@@ -126,11 +126,6 @@ _CLIENT_CASES = {
         "stable", ("-game", "td2", "+sv_gamedir", "td2", "+sv_progtype", "0"), "dm6",
     ),
 }
-_CLIENT_POST_MAP_ARGUMENTS = {
-    "game-ktx-frogbot": (
-        "+wait", "+exec", "x86qw-native-smoke-frogbot.cfg",
-    ),
-}
 _CLIENT_CONTENT = {
     "client-stable-window-map-exit": ("qw", None, "dm6"),
     "client-nightly-window-map-exit": ("qw", None, "dm6"),
@@ -167,13 +162,13 @@ def _native_frogbot_config_payload() -> bytes:
     """Return the derived KTX config used by the real post-map smoke."""
 
     return (
-        "cmd botcmd skill 5\n"
-        "cmd botcmd addbot 5\n"
+        'tempalias x86qw_native_frogbot "wait;wait;cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+        'tempalias on_enter "x86qw_native_frogbot"\n'
     ).encode("ascii")
 
 
-def _prepare_native_frogbot_config(target: Path) -> Path:
-    """Materialize the post-map commands for the real KTX smoke."""
+def _prepare_native_frogbot_config(target: Path) -> tuple[Path, Path, bytes]:
+    """Inject a reversible on-enter hook through the real KTX user config."""
 
     target = Path(target).absolute()
     if target.is_symlink() or not target.is_dir():
@@ -182,20 +177,37 @@ def _prepare_native_frogbot_config(target: Path) -> Path:
     if config_directory.is_symlink() or not config_directory.is_dir():
         raise CandidateCaseError("diretório qw ausente ou inseguro para Frogbot")
     config = config_directory / "x86qw-native-smoke-frogbot.cfg"
-    _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
-    return config
+    user_config = config_directory / "x86qw-ktx-user.cfg"
+    if user_config.is_symlink() or not user_config.is_file():
+        raise CandidateCaseError("configuração pessoal KTX ausente ou insegura")
+    original = user_config.read_bytes()
+    try:
+        _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
+        _write_target_bytes(
+            user_config,
+            original + b"\nexec x86qw-native-smoke-frogbot.cfg\n",
+            "configuração pessoal KTX temporária",
+        )
+    except BaseException:
+        if config.is_file() and not config.is_symlink():
+            config.unlink()
+        raise
+    return config, user_config, original
 
 
-def _remove_native_frogbot_config(config: Path) -> None:
-    """Remove only the derived config created for this smoke case."""
+def _remove_native_frogbot_config(state: tuple[Path, Path, bytes]) -> None:
+    """Restore the personal config and remove only the derived smoke file."""
 
-    config = Path(config)
+    config, user_config, original = state
     if config.is_symlink():
         raise CandidateCaseError("configuração nativa de Frogbot foi trocada por symlink")
     if config.exists():
         if not config.is_file():
             raise CandidateCaseError("configuração nativa de Frogbot não é arquivo regular")
         config.unlink()
+    if user_config.is_symlink() or not user_config.is_file():
+        raise CandidateCaseError("configuração pessoal KTX foi trocada durante o smoke")
+    _write_target_bytes(user_config, original, "restauração da configuração pessoal KTX")
 _SERVICE_SUFFIXES = {
     "mvdsv-mvd": ("runtime/servers/mvdsv/", "runtime/macos-arm64/mvdsv"),
     "qtv-stream": ("runtime/services/qtv/", "runtime/macos-arm64/qtv"),
@@ -1486,7 +1498,6 @@ def _client_command(
     map_name: str,
     scratch: Path,
     state_root: Path,
-    post_map_arguments: tuple[str, ...] = (),
 ) -> PreparedCase:
     archive = _artifact_matching(
         candidate,
@@ -1504,7 +1515,7 @@ def _client_command(
         "-nosound", "-window", "-width", "1280", "-height", "720",
         "-clientport", "0", "-condebug", *game_arguments,
         "+cfg_save_onquit", "0", "+sb_findroutes", "0", "+sb_autoupdate", "0",
-        "+map", map_name, *post_map_arguments,
+        "+map", map_name,
     )
     return PreparedCase(
         executable=binary, argv=(str(binary), *args), cwd=target, artifact=archive,
@@ -1663,7 +1674,6 @@ def build_case_command(
         channel, game_arguments, map_name = _CLIENT_CASES[case]
         return _client_command(
             candidate, channel, game_arguments, map_name, scratch, state_root,
-            _CLIENT_POST_MAP_ARGUMENTS.get(case, ()),
         )
     if case in _INSTALLER_CASES:
         arguments = _INSTALLER_CASES[case]
@@ -2145,7 +2155,7 @@ def _run_case(
         case_context = _prepare_uninstall_context(target)
     elif case == "lifecycle-purge":
         case_context = None
-    native_frogbot_config: Path | None = None
+    native_frogbot_config: tuple[Path, Path, bytes] | None = None
     try:
         if case == "lifecycle-purge":
             case_context = _prepare_purge_context(

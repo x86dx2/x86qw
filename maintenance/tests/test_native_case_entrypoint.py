@@ -12,7 +12,6 @@ from pathlib import Path
 from maintenance.native_case_entrypoint import (
     CANONICAL_CASES,
     _CLIENT_CASES,
-    _CLIENT_POST_MAP_ARGUMENTS,
     Candidate,
     CandidateArtifact,
     CandidateCaseError,
@@ -24,6 +23,8 @@ from maintenance.native_case_entrypoint import (
     _cleanup_case_scratch,
     _native_frogbot_config_payload,
     _frogbot_log_evidence,
+    _prepare_native_frogbot_config,
+    _remove_native_frogbot_config,
     _prepare_legacy_state,
     _run_installed_launcher_contract,
     _start_tcp_service,
@@ -89,13 +90,27 @@ class NativeCaseEntrypointTests(unittest.TestCase):
         _channel, arguments, _map_name = _CLIENT_CASES["game-ktx-frogbot"]
         self.assertNotIn("+tempalias", arguments)
         self.assertEqual(
-            ("+wait", "+exec", "x86qw-native-smoke-frogbot.cfg"),
-            _CLIENT_POST_MAP_ARGUMENTS["game-ktx-frogbot"],
-        )
-        self.assertEqual(
-            "cmd botcmd skill 5\ncmd botcmd addbot 5\n",
+            'tempalias x86qw_native_frogbot "wait;wait;cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+            'tempalias on_enter "x86qw_native_frogbot"\n',
             _native_frogbot_config_payload().decode("ascii"),
         )
+
+    def test_frogbot_fixture_restores_the_personal_ktx_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            user_config = target / "qw/x86qw-ktx-user.cfg"
+            user_config.parent.mkdir(parents=True)
+            original = b"seta name x86QW-native-test\n"
+            user_config.write_bytes(original)
+            state = _prepare_native_frogbot_config(target)
+            self.assertEqual(
+                original + b"\nexec x86qw-native-smoke-frogbot.cfg\n",
+                user_config.read_bytes(),
+            )
+            self.assertEqual(_native_frogbot_config_payload(), state[0].read_bytes())
+            _remove_native_frogbot_config(state)
+            self.assertEqual(original, user_config.read_bytes())
+            self.assertFalse(state[0].exists())
 
     def test_candidate_artifacts_are_hash_checked_before_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
