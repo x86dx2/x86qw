@@ -1,0 +1,177 @@
+name: Protected TUF timestamp renewal handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_code_commit:
+        description: "SHA exato da revisão que contém este workflow e os gates"
+        required: true
+        type: string
+      source_workflow_commit:
+        description: "SHA da revisão que executou o handoff TUF de origem"
+        required: true
+        type: string
+      source_run_id:
+        description: "Run protegido que publicou o repositório TUF corrente"
+        required: true
+        type: string
+      source_artifact_id:
+        description: "Artifact ID imutável do repositório TUF corrente"
+        required: true
+        type: string
+      source_artifact_name:
+        description: "Nome exato do artifact TUF corrente"
+        required: true
+        type: string
+      candidate_commit:
+        description: "Commit do produto associado ao artifact TUF"
+        required: true
+        type: string
+      timestamp_key_id:
+        description: "Key ID público da única chave timestamp autorizada"
+        required: true
+        type: string
+      lease_hours:
+        description: "Duração da nova lease timestamp"
+        required: false
+        default: "24"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-tuf-timestamp-${{ inputs.candidate_commit }}
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    name: Renew timestamp role without publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_code_commit }}
+          lfs: false
+          fetch-depth: 1
+      - name: Validate the pinned renewal-code checkout
+        shell: bash
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Validate protected renewal coordinates
+        env:
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          TIMESTAMP_KEY_ID: ${{ inputs.timestamp_key_id }}
+          LEASE_HOURS: ${{ inputs.lease_hours }}
+          TUF_TIMESTAMP_KEY_B64: ${{ secrets.TUF_TIMESTAMP_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" =~ ^tuf-metadata-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" == tuf-metadata-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$TIMESTAMP_KEY_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LEASE_HOURS" =~ ^[1-9][0-9]{0,3}$ ]]
+          test "$LEASE_HOURS" -le 8760
+          test -n "$TUF_TIMESTAMP_KEY_B64"
+      - name: Verify the exact source TUF artifact provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$SOURCE_RUN_ID" \
+            --commit "$SOURCE_WORKFLOW_COMMIT" \
+            --artifact "$SOURCE_ARTIFACT_NAME" \
+            --artifact-id "$SOURCE_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-metadata-handoff.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/source-tuf-artifact.json"
+      - name: Download the exact source TUF artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.source_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: source-tuf
+      - name: Select the authenticated catalog target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t catalogs < <(find source-tuf/targets -type f -name '*.catalog.json' -print | sort)
+          test "${#catalogs[@]}" -eq 1
+          printf '%s\n' "${catalogs[0]}" > "$RUNNER_TEMP/catalog-path"
+      - name: Materialize the protected timestamp key
+        env:
+          TUF_TIMESTAMP_KEY_B64: ${{ secrets.TUF_TIMESTAMP_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$TUF_TIMESTAMP_KEY_B64" | base64 --decode > "$RUNNER_TEMP/timestamp-key.pem"
+          chmod 600 "$RUNNER_TEMP/timestamp-key.pem"
+          test -s "$RUNNER_TEMP/timestamp-key.pem"
+      - name: Renew only timestamp metadata
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          TIMESTAMP_KEY_ID: ${{ inputs.timestamp_key_id }}
+          LEASE_HOURS: ${{ inputs.lease_hours }}
+        run: |
+          set -euo pipefail
+          catalog="$(cat "$RUNNER_TEMP/catalog-path")"
+          python3 maintenance/tools/tuf_timestamp_renewal.py \
+            --repository source-tuf \
+            --root maintenance/trust/root.json \
+            --catalog "$catalog" \
+            --timestamp-key "$RUNNER_TEMP/timestamp-key.pem" \
+            --key-id "$TIMESTAMP_KEY_ID" \
+            --output renewed-tuf \
+            --report "$RUNNER_TEMP/timestamp-renewal.json" \
+            --lease-hours "$LEASE_HOURS"
+          mkdir -p handoff
+          cp -R renewed-tuf handoff/repository
+          cp "$RUNNER_TEMP/timestamp-renewal.json" handoff/report.json
+          report_sha256="$(sha256sum handoff/report.json | awk '{print $1}')"
+          echo "timestamp_renewal_report_sha256=$report_sha256" >> "$GITHUB_STEP_SUMMARY"
+          echo "timestamp_renewal_published=false" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the un-published timestamp handoff
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tuf-timestamp-renewal-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: handoff
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+      - name: Record immutable handoff coordinates
+        run: |
+          echo "timestamp_renewal_artifact_id=${{ steps.upload.outputs.artifact-id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "timestamp_renewal_artifact_digest=${{ steps.upload.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "timestamp_renewal_artifact_name=tuf-timestamp-renewal-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_STEP_SUMMARY"

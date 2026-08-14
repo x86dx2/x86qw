@@ -34,6 +34,7 @@ from maintenance.tools.native_handoff import (
     validate_evidence_file,
     validate_plan,
     validate_runtime,
+    OBSERVATION_CASES,
 )
 from maintenance.tools.native_evidence_contract import (
     CASE_ASSERTIONS,
@@ -346,6 +347,7 @@ def execute_cases(
             candidate=candidate,
             expected_case=name,
             require_passed=not timed_out and exit_code == 0,
+            require_native_observations=name in OBSERVATION_CASES,
         )
         execution = receipt["execution"]
         if not isinstance(execution, dict) or execution["exit_code"] != exit_code:

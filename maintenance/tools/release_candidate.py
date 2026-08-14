@@ -57,6 +57,8 @@ METADATA_NAMES = frozenset({
     "sbom.spdx.json",
     "provenance.json",
     "release-evidence.json",
+    "evidence-root.json",
+    "release-receipt.json",
 })
 # These metadata files are produced once from the immutable build inputs.  The
 # native evidence is intentionally excluded: this checkout does not execute

@@ -11,6 +11,8 @@ from pathlib import Path
 
 from maintenance.native_case_entrypoint import (
     CANONICAL_CASES,
+    _CLIENT_CASES,
+    Candidate,
     CandidateArtifact,
     CandidateCaseError,
     _WINDOW_PROBE_SOURCE,
@@ -19,6 +21,11 @@ from maintenance.native_case_entrypoint import (
     _qwfwd_remote_ready_packet,
     _materialize_qwfwd_config,
     _cleanup_case_scratch,
+    _native_frogbot_config_payload,
+    _frogbot_log_evidence,
+    _prepare_native_frogbot_config,
+    _remove_native_frogbot_config,
+    _prepare_legacy_state,
     _run_installed_launcher_contract,
     _start_tcp_service,
     build_case_command,
@@ -52,12 +59,60 @@ class NativeCaseEntrypointTests(unittest.TestCase):
         )
         return candidate
 
-    def test_only_the_closed_eighteen_case_protocol_is_accepted(self) -> None:
-        self.assertEqual(18, len(CANONICAL_CASES))
+    def test_only_the_closed_functional_case_protocol_is_accepted(self) -> None:
+        self.assertEqual(25, len(CANONICAL_CASES))
+        self.assertIn("game-ktx-frogbot", CANONICAL_CASES)
+        self.assertIn("migration-0.7.13-real", CANONICAL_CASES)
+        self.assertIn("lifecycle-update-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-upgrade-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-repair-corruption", CANONICAL_CASES)
+        self.assertIn("lifecycle-migrate-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-purge", CANONICAL_CASES)
         for name in CANONICAL_CASES:
             self.assertEqual(name, validate_case_name(name))
         with self.assertRaises(CandidateCaseError):
             validate_case_name("unknown-case")
+
+    def test_frogbot_observation_accepts_ktx_runtime_entry_and_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            log = Path(temporary) / "qw" / "qconsole.log"
+            log.parent.mkdir()
+            log.write_text(
+                "x86qw_native_frogbot_config\n/x86QW entered the game\n"
+                "skill &cf005&r\n",
+                encoding="utf-8",
+            )
+            evidence = _frogbot_log_evidence(Path(temporary))
+            self.assertTrue(evidence["frogbot_spawned"])
+            self.assertTrue(evidence["frogbot_skill"])
+            self.assertTrue(evidence["frogbot_named"])
+            self.assertTrue(evidence["frogbot_config_loaded"])
+
+    def test_frogbot_case_uses_an_exec_config_for_post_map_commands(self) -> None:
+        _channel, arguments, _map_name = _CLIENT_CASES["game-ktx-frogbot"]
+        self.assertNotIn("+tempalias", arguments)
+        self.assertIn("+exec", arguments)
+        self.assertIn("x86qw-native-smoke-frogbot.cfg", arguments)
+        self.assertEqual(
+            "echo x86qw_native_frogbot_config\n"
+            'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+            'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n',
+            _native_frogbot_config_payload().decode("ascii"),
+        )
+
+    def test_frogbot_fixture_preserves_the_personal_ktx_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            user_config = target / "qw/x86qw-ktx-user.cfg"
+            user_config.parent.mkdir(parents=True)
+            original = b"seta name x86QW-native-test\n"
+            user_config.write_bytes(original)
+            state = _prepare_native_frogbot_config(target)
+            self.assertEqual(original, user_config.read_bytes())
+            self.assertEqual(_native_frogbot_config_payload(), state.read_bytes())
+            _remove_native_frogbot_config(state)
+            self.assertEqual(original, user_config.read_bytes())
+            self.assertFalse(state.exists())
 
     def test_candidate_artifacts_are_hash_checked_before_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -87,6 +142,64 @@ class NativeCaseEntrypointTests(unittest.TestCase):
                     case="mvdsv-mvd",
                     scratch=Path(temporary) / "scratch",
                 )
+
+    def test_legacy_migration_seed_replaces_current_receipts_with_fixture_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_root = root / "candidate"
+            fixture_root = candidate_root / "runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13"
+            fixture_root.joinpath(".x86qw").mkdir(parents=True)
+            fixture_files = {
+                "VERSION": b"0.7.13\n",
+                ".x86qw/state.json": b'{"format":1,"project":"x86qw"}\n',
+                ".x86qw/cli.receipt": b'{"format":1,"project":"x86qw","version":"0.7.13"}\n',
+                ".x86qw/ktx.receipt": b"format\t1\ncomponent\tktx\nselection\t0.7.13\n",
+                ".x86qw/ktx.inventory": b"qw/ktx.pk3\t" + b"d" * 64 + b"\n",
+            }
+            artifacts: dict[str, CandidateArtifact] = {}
+            for relative, payload in fixture_files.items():
+                path = fixture_root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+                artifacts[
+                    "runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13/" + relative
+                ] = CandidateArtifact(
+                    name=relative,
+                    path=path,
+                    size=len(payload),
+                    sha256=hashlib.sha256(payload).hexdigest(),
+                )
+            target = root / "target"
+            metadata = target / ".x86qw"
+            (metadata / "cli").mkdir(parents=True)
+            (metadata / "components/ktx").mkdir(parents=True)
+            (metadata / "state.json").write_text(
+                '{"format":2,"project":"x86qw","installation_version":"1.0.0-rc.2"}\n',
+                encoding="utf-8",
+            )
+            (metadata / "cli/receipt").write_bytes(b"current cli")
+            (metadata / "components/ktx/receipt").write_bytes(b"current ktx receipt")
+            (metadata / "components/ktx/inventory").write_bytes(b"current ktx inventory")
+            (target / "id1").mkdir(parents=True)
+            (target / "id1/pak0.pak").write_bytes(b"pak0")
+            (target / "id1/pak1.pak").write_bytes(b"pak1")
+
+            candidate = Candidate(
+                root=candidate_root,
+                version="1.0.0-rc.2",
+                commit="c" * 40,
+                artifacts=artifacts,
+            )
+            _prepare_legacy_state(candidate, target, source_version="0.7.13")
+
+            self.assertFalse((metadata / "cli/receipt").exists())
+            self.assertFalse((metadata / "components/ktx/receipt").exists())
+            self.assertFalse((metadata / "components/ktx/inventory").exists())
+            self.assertEqual(fixture_files[".x86qw/cli.receipt"], (metadata / "cli.receipt").read_bytes())
+            self.assertEqual(fixture_files[".x86qw/ktx.receipt"], (metadata / "ktx.receipt").read_bytes())
+            self.assertEqual(fixture_files[".x86qw/ktx.inventory"], (metadata / "ktx.inventory").read_bytes())
+            state = json.loads((metadata / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual("0.7.13", state["installation_version"])
 
     def test_case_dispatch_is_literal_and_uses_a_candidate_owned_service(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

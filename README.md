@@ -85,7 +85,10 @@ Na validação atual, Ubuntu e macOS executam a suíte integral; Windows executa
 o contrato de preview sem alegação de suporte nativo, porque os casos que
 dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
-O bootstrap público `0.7.13` valida o instalador por SHA-256, consulta o catálogo público e pergunta onde instalar. O sistema atual é detectado automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
+O bootstrap público valida o instalador corrente por SHA-256, consulta o
+catálogo TUF público e pergunta onde instalar. A baseline estável é `0.7.13`;
+o candidato público separado é `1.0.0-rc.1`. O sistema atual é detectado
+automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 /bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
@@ -101,7 +104,8 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A versão pública indicada acima é a `0.7.13`.
+posterior. A baseline estável indicada acima é a `0.7.13`; o RC público não
+substitui seus bytes estáveis nem é tratado como GitHub Latest.
 Esta árvore de desenvolvimento ainda materializa a base local `0.7.3` para
 reprodução histórica; ela não substitui nem republica os bytes públicos
 `0.7.13`.
@@ -299,9 +303,12 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A versão pública continua em `0.7.13`; as referências às versões anteriores
-permanecem históricas e imutáveis; a `1.0.0` ainda é uma jornada planejada, não
-uma release preparada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
+A baseline estável continua em `0.7.13` e as referências às versões anteriores
+permanecem históricas e imutáveis. O `1.0.0-rc.1` é um Release Candidate público;
+o workflow protegido de aceitação falhou, embora uma rechecagem local posterior
+dos mesmos bytes públicos tenha passado o lifecycle completo. O soak ainda não
+foi aberto formalmente e a `1.0.0` final ainda não foi aprovada. Consulte o
+[status operacional](docs/PROJECT-STATUS.md),
 o [roadmap estratégico](docs/ROADMAP.md) e o
 [plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
 para distinguir baseline, sequência, evidência e gates de aprovação.

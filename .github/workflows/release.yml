@@ -12,6 +12,14 @@ on:
           - rehearsal
           - promote-rc
           - promote-1.0
+      release_audience:
+        description: "Público da release: owner-only não exige gates de usuários externos"
+        required: true
+        default: owner-only
+        type: choice
+        options:
+          - owner-only
+          - external-public
       candidate_commit:
         description: "SHA completo do commit candidato"
         required: true
@@ -59,6 +67,11 @@ on:
         required: false
         default: ""
         type: string
+      native_evidence_artifact_name:
+        description: "Nome exato do artifact de evidência M3 assinado"
+        required: false
+        default: ""
+        type: string
       tuf_metadata_run_id:
         description: "Run protegido que entregou metadata TUF já assinada"
         required: false
@@ -78,6 +91,134 @@ on:
         description: "Workflow protegido que produziu o artifact TUF assinado"
         required: false
         default: ""
+        type: string
+      public_acceptance_commit:
+        description: "SHA do run M3 que executou a aceitação pública do RC"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_run_id:
+        description: "Run protegido que produziu o recibo de aceitação pública"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_artifact_id:
+        description: "Artifact ID imutável do recibo de aceitação pública"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_artifact_name:
+        description: "Nome exato do artifact de aceitação pública"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_version:
+        description: "Versão RC comprovada pelo recibo público antes da final"
+        required: false
+        default: "1.0.0-rc.1"
+        type: string
+      public_acceptance_receipt_sha256:
+        description: "SHA-256 do recibo JSON de aceitação pública"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_bundle_sha256:
+        description: "SHA-256 do instalador público aceito"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_catalog_sha256:
+        description: "SHA-256 do catálogo TUF público aceito"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_scope:
+        description: "Escopo comprovado pela aceitação: instalação limpa ou usuários externos"
+        required: false
+        default: single-user
+        type: choice
+        options:
+          - single-user
+          - external-users
+      tuf_operation_run_id:
+        description: "Run protegido que registrou o drill operacional TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_artifact_id:
+        description: "Artifact ID imutável do relatório do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_artifact_name:
+        description: "Nome exato do artifact do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_report_sha256:
+        description: "SHA-256 do relatório JSON do drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_operator:
+        description: "Operador/custodiante registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_custody_host:
+        description: "Host de custódia registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
+      tuf_operation_sla_hours:
+        description: "SLA de timestamp registrado no drill TUF"
+        required: false
+        default: ""
+        type: string
+      soak_commit:
+        description: "Commit exato do RC coberto pelo soak concluído"
+        required: false
+        default: ""
+        type: string
+      soak_version:
+        description: "Versão RC coberta pelo soak concluído"
+        required: false
+        default: "1.0.0-rc.1"
+        type: string
+      soak_candidate_json_sha256:
+        description: "SHA-256 de candidate.json do RC sob soak"
+        required: false
+        default: ""
+        type: string
+      soak_bundle_sha256:
+        description: "SHA-256 do instalador do RC sob soak"
+        required: false
+        default: ""
+        type: string
+      soak_run_id:
+        description: "Run protegido que concluiu o soak"
+        required: false
+        default: ""
+        type: string
+      soak_artifact_id:
+        description: "Artifact ID imutável do relatório de soak"
+        required: false
+        default: ""
+        type: string
+      soak_artifact_name:
+        description: "Nome exato do artifact do relatório de soak"
+        required: false
+        default: ""
+        type: string
+      soak_report_sha256:
+        description: "SHA-256 do relatório JSON de soak"
+        required: false
+        default: ""
+        type: string
+      soak_issue_number:
+        description: "Issue canônico encerrado do soak"
+        required: false
+        default: "143"
         type: string
 
 concurrency:
@@ -248,6 +389,10 @@ jobs:
           install -m644 \
             maintenance/native_case_entrypoint.py \
             release-work/input/runtime/native-smoke/macos-arm64/x86qw-native-smoke
+          mkdir -p release-work/input/runtime/native-smoke/macos-arm64/fixtures/migrations
+          cp -R \
+            maintenance/tests/fixtures/migrations/0.7.13 \
+            release-work/input/runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13
           install -m644 \
             maintenance/native/macos-arm64/entrypoint.json \
             release-work/input/runtime/native-smoke/macos-arm64/entrypoint.json
@@ -446,10 +591,222 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 maintenance/tools/check_release_blockers.py --repo "$GITHUB_REPOSITORY"
 
+  verify-public-acceptance:
+    name: Require public RC acceptance before 1.0.0
+    if: ${{ inputs.mode == 'promote-1.0' }}
+    needs: [approval, release-blockers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate public acceptance coordinates
+        env:
+          ACCEPTANCE_COMMIT: ${{ inputs.public_acceptance_commit }}
+          ACCEPTANCE_RUN_ID: ${{ inputs.public_acceptance_run_id }}
+          ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
+          ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          ACCEPTANCE_SCOPE: ${{ inputs.public_acceptance_scope }}
+          RELEASE_AUDIENCE: ${{ inputs.release_audience }}
+        run: |
+          [[ "$ACCEPTANCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ACCEPTANCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$ACCEPTANCE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$ACCEPTANCE_ARTIFACT_NAME" =~ ^public-acceptance-[A-Za-z0-9._-]{1,180}$ ]]
+          [[ "$ACCEPTANCE_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]]
+          [[ "$ACCEPTANCE_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_CATALOG_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_SCOPE" == "single-user" || "$ACCEPTANCE_SCOPE" == "external-users" ]]
+          if [ "$RELEASE_AUDIENCE" = "owner-only" ]; then
+            test "$ACCEPTANCE_SCOPE" = "single-user"
+          else
+            test "$RELEASE_AUDIENCE" = "external-public"
+            test "$ACCEPTANCE_SCOPE" = "external-users"
+          fi
+      - name: Verify the protected acceptance run provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ACCEPTANCE_COMMIT: ${{ inputs.public_acceptance_commit }}
+          ACCEPTANCE_RUN_ID: ${{ inputs.public_acceptance_run_id }}
+          ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
+          ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$ACCEPTANCE_RUN_ID" \
+            --commit "$ACCEPTANCE_COMMIT" \
+            --artifact "$ACCEPTANCE_ARTIFACT_NAME" \
+            --artifact-id "$ACCEPTANCE_ARTIFACT_ID" \
+            --workflow .github/workflows/public-acceptance.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/public-acceptance-artifact.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.public_acceptance_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.public_acceptance_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: public-acceptance
+      - name: Verify the public acceptance contract and exact RC version
+        env:
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          ACCEPTANCE_SCOPE: ${{ inputs.public_acceptance_scope }}
+        run: |
+          test -f public-acceptance/public-acceptance.json
+          python3 maintenance/tools/verify_public_acceptance.py \
+            --record public-acceptance/public-acceptance.json \
+            --version "$ACCEPTANCE_VERSION" \
+            --expected-receipt-sha256 "$ACCEPTANCE_RECEIPT_SHA256" \
+            --expected-bundle-sha256 "$ACCEPTANCE_BUNDLE_SHA256" \
+            --expected-catalog-sha256 "$ACCEPTANCE_CATALOG_SHA256" \
+            --expected-scope "$ACCEPTANCE_SCOPE"
+          echo "public RC acceptance verified for $ACCEPTANCE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  verify-soak:
+    name: Require a completed protected RC soak before 1.0.0
+    if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+    needs: [approval, release-blockers, verify-public-acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate protected soak coordinates
+        env:
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$SOAK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOAK_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]]
+          [[ "$SOAK_CANDIDATE_JSON_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOAK_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOAK_ARTIFACT_NAME" =~ ^rc-soak-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$SOAK_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_ISSUE_NUMBER" =~ ^[1-9][0-9]{0,8}$ ]]
+          test "$SOAK_VERSION" = "$ACCEPTANCE_VERSION"
+          test "$SOAK_BUNDLE_SHA256" = "$ACCEPTANCE_BUNDLE_SHA256"
+      - name: Verify completed soak run provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$SOAK_RUN_ID" \
+            --commit "$SOAK_COMMIT" \
+            --artifact "$SOAK_ARTIFACT_NAME" \
+            --artifact-id "$SOAK_ARTIFACT_ID" \
+            --workflow .github/workflows/rc-soak.yml \
+            --output "$RUNNER_TEMP/soak-artifact.json"
+      - name: Download the exact immutable soak report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.soak_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.soak_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: soak-report
+      - name: Verify the completed soak report and exact RC identity
+        env:
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
+        run: |
+          set -euo pipefail
+          test -f soak-report/report.json
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("soak-report/report.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$SOAK_REPORT_SHA256"
+          python3 maintenance/tools/verify_soak_report.py \
+            --report soak-report/report.json \
+            --expected-commit "$SOAK_COMMIT" \
+            --expected-version "$SOAK_VERSION" \
+            --expected-candidate-json-sha256 "$SOAK_CANDIDATE_JSON_SHA256" \
+            --expected-bundle-sha256 "$SOAK_BUNDLE_SHA256" \
+            --expected-issue-number "$SOAK_ISSUE_NUMBER" \
+            --minimum-days 7
+          echo "completed protected RC soak verified for $SOAK_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  verify-public-tuf:
+    name: Require a healthy live public TUF lease before 1.0.0
+    if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+    needs: [approval, release-blockers, verify-public-acceptance, verify-soak]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Authenticate the live public TUF chain and lease
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/monitor_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --warning-hours 6
+          echo "live public TUF lease is outside the warning window" >> "$GITHUB_STEP_SUMMARY"
+
   attach-native-evidence:
     name: Attach authorized M3 evidence without rebuild
-    if: ${{ inputs.mode != 'rehearsal' }}
-    needs: [build-once, portable-verify, approval, release-blockers]
+    if: ${{ always() && inputs.mode != 'rehearsal' && needs.build-once.result == 'success' && needs.portable-verify.result == 'success' && needs.approval.result == 'success' && needs.release-blockers.result == 'success' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance, verify-soak, verify-public-tuf]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
     # native run. Under ADR 0007 the signer may be the sole maintainer; the
@@ -481,19 +838,120 @@ jobs:
           python-version: "3.13"
       - name: Install pinned trust dependencies from vendored wheels
         run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Validate final TUF operation handoff coordinates
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+        env:
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+        run: |
+          set -euo pipefail
+          [[ "$TUF_OPERATION_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$TUF_OPERATION_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$TUF_OPERATION_ARTIFACT_NAME" =~ ^tuf-operation-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$TUF_OPERATION_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$TUF_OPERATION_OPERATOR" =~ ^[^[:cntrl:][:space:]][^[:cntrl:]]{0,126}[^[:cntrl:][:space:]]$|^[^[:cntrl:][:space:]]$ ]]
+          [[ "$TUF_OPERATION_CUSTODY_HOST" =~ ^[^[:cntrl:][:space:]][^[:cntrl:]]{0,126}[^[:cntrl:][:space:]]$|^[^[:cntrl:][:space:]]$ ]]
+          [[ "$TUF_OPERATION_SLA_HOURS" =~ ^[1-9][0-9]{0,3}$ ]]
+          test "$TUF_OPERATION_SLA_HOURS" -le 8760
+      - name: Verify final TUF operation handoff provenance
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$TUF_OPERATION_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$TUF_OPERATION_ARTIFACT_NAME" \
+            --artifact-id "$TUF_OPERATION_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-operation-drill.yml \
+            --output "$RUNNER_TEMP/tuf-operation-artifact.json"
       - name: Validate external handoff coordinates
         env:
           EVIDENCE_RUN_ID: ${{ inputs.native_evidence_run_id }}
           EVIDENCE_ARTIFACT_ID: ${{ inputs.native_evidence_artifact_id }}
+          EVIDENCE_ARTIFACT_NAME: ${{ inputs.native_evidence_artifact_name }}
         run: |
           [[ "$EVIDENCE_RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$EVIDENCE_ARTIFACT_ID" =~ ^[0-9]+$ ]]
+          [[ "$EVIDENCE_ARTIFACT_NAME" =~ ^native-m3-signed-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+      - name: Verify signed evidence handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          EVIDENCE_RUN_ID: ${{ inputs.native_evidence_run_id }}
+          EVIDENCE_ARTIFACT_ID: ${{ inputs.native_evidence_artifact_id }}
+          EVIDENCE_ARTIFACT_NAME: ${{ inputs.native_evidence_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$EVIDENCE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$EVIDENCE_ARTIFACT_NAME" \
+            --artifact-id "$EVIDENCE_ARTIFACT_ID" \
+            --workflow .github/workflows/sign-native-evidence.yml \
+            --output "$RUNNER_TEMP/native-evidence-artifact.json"
       - name: Download exact candidate artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ needs.build-once.outputs.artifact-id }}
           merge-multiple: true
           path: downloaded-candidate
+      - name: Download final TUF operation report
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.tuf_operation_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.tuf_operation_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: tuf-operation
+      - name: Verify final TUF operation report against candidate
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+        env:
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+        run: |
+          set -euo pipefail
+          test -f tuf-operation/report.json
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("tuf-operation/report.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$TUF_OPERATION_REPORT_SHA256"
+          python3 maintenance/tools/verify_tuf_operation_report.py \
+            --candidate downloaded-candidate \
+            --report tuf-operation/report.json \
+            > "$RUNNER_TEMP/tuf-operation-report.json"
+          TUF_OPERATION_OPERATOR="$TUF_OPERATION_OPERATOR" \
+          TUF_OPERATION_CUSTODY_HOST="$TUF_OPERATION_CUSTODY_HOST" \
+          TUF_OPERATION_SLA_HOURS="$TUF_OPERATION_SLA_HOURS" \
+          python3 - "$RUNNER_TEMP/tuf-operation-report.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          operation = report["operation"]
+          expected = {
+              "operator": os.environ["TUF_OPERATION_OPERATOR"],
+              "custody_host": os.environ["TUF_OPERATION_CUSTODY_HOST"],
+              "timestamp_sla_hours": int(os.environ["TUF_OPERATION_SLA_HOURS"]),
+          }
+          actual = {key: operation[key] for key in expected}
+          if actual != expected:
+              raise SystemExit("contexto operacional do relatório diverge dos inputs protegidos")
+          PY
       - name: Download authorized signed M3 handoff
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -512,6 +970,142 @@ jobs:
             --evidence external-evidence \
             --output candidate-with-m3
           python3 maintenance/tools/release_candidate.py verify candidate-with-m3
+      - name: Create durable evidence root and release receipt
+        env:
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_ARTIFACT_DIGEST: ${{ needs.build-once.outputs.artifact-digest }}
+          EVIDENCE_RUN_ID: ${{ inputs.native_evidence_run_id }}
+          EVIDENCE_ARTIFACT_ID: ${{ inputs.native_evidence_artifact_id }}
+          EVIDENCE_ARTIFACT_NAME: ${{ inputs.native_evidence_artifact_name }}
+          TUF_RUN_ID: ${{ inputs.tuf_metadata_run_id }}
+          TUF_ARTIFACT_ID: ${{ inputs.tuf_metadata_artifact_id }}
+          TUF_ARTIFACT_NAME: ${{ inputs.tuf_metadata_artifact_name }}
+          TUF_WORKFLOW: ${{ inputs.tuf_metadata_workflow }}
+          RELEASE_AUDIENCE: ${{ inputs.release_audience }}
+          ACCEPTANCE_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          ACCEPTANCE_COMMIT: ${{ inputs.public_acceptance_commit }}
+          ACCEPTANCE_RUN_ID: ${{ inputs.public_acceptance_run_id }}
+          ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
+          ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
+          TUF_OPERATION_REQUIRED: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+          TUF_OPERATION_RUN_ID: ${{ inputs.tuf_operation_run_id }}
+          TUF_OPERATION_ARTIFACT_ID: ${{ inputs.tuf_operation_artifact_id }}
+          TUF_OPERATION_ARTIFACT_NAME: ${{ inputs.tuf_operation_artifact_name }}
+          TUF_OPERATION_REPORT_SHA256: ${{ inputs.tuf_operation_report_sha256 }}
+          TUF_OPERATION_OPERATOR: ${{ inputs.tuf_operation_operator }}
+          TUF_OPERATION_CUSTODY_HOST: ${{ inputs.tuf_operation_custody_host }}
+          TUF_OPERATION_SLA_HOURS: ${{ inputs.tuf_operation_sla_hours }}
+          SOAK_REQUIRED: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+          SOAK_COMMIT: ${{ inputs.soak_commit }}
+          SOAK_VERSION: ${{ inputs.soak_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+          SOAK_RUN_ID: ${{ inputs.soak_run_id }}
+          SOAK_ARTIFACT_ID: ${{ inputs.soak_artifact_id }}
+          SOAK_ARTIFACT_NAME: ${{ inputs.soak_artifact_name }}
+          SOAK_REPORT_SHA256: ${{ inputs.soak_report_sha256 }}
+          SOAK_ISSUE_NUMBER: ${{ inputs.soak_issue_number }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - "$RUNNER_TEMP/release-receipt-coordinates.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          from urllib.parse import quote
+
+          version = os.environ["CANDIDATE_VERSION"]
+          tag = f"x86qw-installer-{version}"
+          filename = f"x86qw-installer-{version}.zip"
+          coordinates = {
+              "release_audience": os.environ["RELEASE_AUDIENCE"],
+              "promotion": {
+                  "workflow": ".github/workflows/release.yml",
+                  "run_id": os.environ["RELEASE_RUN_ID"],
+                  "run_attempt": os.environ["RELEASE_RUN_ATTEMPT"],
+                  "candidate_run_id": os.environ["CANDIDATE_RUN_ID"],
+                  "candidate_artifact_id": os.environ["CANDIDATE_ARTIFACT_ID"],
+                  "candidate_artifact_name": os.environ["CANDIDATE_ARTIFACT_NAME"],
+                  "candidate_artifact_digest": os.environ["CANDIDATE_ARTIFACT_DIGEST"],
+                  "native_evidence_run_id": os.environ["EVIDENCE_RUN_ID"],
+                  "native_evidence_artifact_id": os.environ["EVIDENCE_ARTIFACT_ID"],
+                  "native_evidence_artifact_name": os.environ["EVIDENCE_ARTIFACT_NAME"],
+              },
+              "publication": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "tag": tag,
+                  "github_release": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/{tag}",
+                  "gitlab_project": "x86dx2/x86qw",
+                  "gitlab_asset": (
+                      "https://gitlab.com/api/v4/projects/84813414/packages/generic/"
+                      f"x86qw-installer/{quote(version, safe='')}/{quote(filename, safe='')}"
+                  ),
+              },
+              "tuf": {
+                  "workflow": os.environ["TUF_WORKFLOW"],
+                  "run_id": os.environ["TUF_RUN_ID"],
+                  "artifact_id": os.environ["TUF_ARTIFACT_ID"],
+                  "artifact_name": os.environ["TUF_ARTIFACT_NAME"],
+              },
+              "deployment": {
+                  "endpoint": "https://x86qw.x86.com.br",
+                  "verification": "tuf,bootstraps,product,public-install",
+              },
+          }
+          if os.environ["ACCEPTANCE_REQUIRED"].lower() == "true":
+              coordinates["public_acceptance"] = {
+                  "commit": os.environ["ACCEPTANCE_COMMIT"],
+                  "run_id": os.environ["ACCEPTANCE_RUN_ID"],
+                  "artifact_id": os.environ["ACCEPTANCE_ARTIFACT_ID"],
+                  "artifact_name": os.environ["ACCEPTANCE_ARTIFACT_NAME"],
+                  "version": os.environ["ACCEPTANCE_VERSION"],
+                  "receipt_sha256": os.environ["ACCEPTANCE_RECEIPT_SHA256"],
+                  "bundle_sha256": os.environ["ACCEPTANCE_BUNDLE_SHA256"],
+                  "catalog_sha256": os.environ["ACCEPTANCE_CATALOG_SHA256"],
+              }
+          if os.environ["SOAK_REQUIRED"].lower() == "true":
+              coordinates["soak"] = {
+                  "workflow": ".github/workflows/rc-soak.yml",
+                  "run_id": os.environ["SOAK_RUN_ID"],
+                  "artifact_id": os.environ["SOAK_ARTIFACT_ID"],
+                  "artifact_name": os.environ["SOAK_ARTIFACT_NAME"],
+                  "report_sha256": os.environ["SOAK_REPORT_SHA256"],
+                  "commit": os.environ["SOAK_COMMIT"],
+                  "version": os.environ["SOAK_VERSION"],
+                  "candidate_json_sha256": os.environ["SOAK_CANDIDATE_JSON_SHA256"],
+                  "bundle_sha256": os.environ["SOAK_BUNDLE_SHA256"],
+                  "issue_number": os.environ["SOAK_ISSUE_NUMBER"],
+                  "minimum_days": "7",
+              }
+          if os.environ["TUF_OPERATION_REQUIRED"].lower() == "true":
+              coordinates["tuf_operation"] = {
+                  "workflow": ".github/workflows/tuf-operation-drill.yml",
+                  "run_id": os.environ["TUF_OPERATION_RUN_ID"],
+                  "artifact_id": os.environ["TUF_OPERATION_ARTIFACT_ID"],
+                  "artifact_name": os.environ["TUF_OPERATION_ARTIFACT_NAME"],
+                  "report_sha256": os.environ["TUF_OPERATION_REPORT_SHA256"],
+                  "operator": os.environ["TUF_OPERATION_OPERATOR"],
+                  "custody_host": os.environ["TUF_OPERATION_CUSTODY_HOST"],
+                  "timestamp_sla_hours": os.environ["TUF_OPERATION_SLA_HOURS"],
+              }
+          Path(sys.argv[1]).write_text(json.dumps(coordinates, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          python3 maintenance/tools/release_receipt.py write \
+            --candidate candidate-with-m3 \
+            --evidence-root maintenance/trust/m3-root.json \
+            --coordinates "$RUNNER_TEMP/release-receipt-coordinates.json"
+          python3 maintenance/tools/release_receipt.py verify \
+            --candidate candidate-with-m3 \
+            --trust-root maintenance/trust/m3-root.json
       - name: Upload evidence-bound candidate without overwrite
         id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -524,8 +1118,8 @@ jobs:
 
   promotion-gate:
     name: Fail closed without canonical M3 evidence
-    if: ${{ inputs.mode != 'rehearsal' }}
-    needs: [build-once, approval, release-blockers, attach-native-evidence]
+    if: ${{ always() && inputs.mode != 'rehearsal' && needs.build-once.result == 'success' && needs.portable-verify.result == 'success' && needs.approval.result == 'success' && needs.release-blockers.result == 'success' && needs.attach-native-evidence.result == 'success' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') && (needs.verify-soak.result == 'success' || needs.verify-soak.result == 'skipped') && (needs.verify-public-tuf.result == 'success' || needs.verify-public-tuf.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, attach-native-evidence, verify-public-acceptance, verify-soak, verify-public-tuf]
     outputs:
       promoted-artifact-id: ${{ steps.upload.outputs.artifact-id }}
     runs-on: ubuntu-latest
@@ -556,6 +1150,26 @@ jobs:
           artifact-ids: ${{ needs.attach-native-evidence.outputs.artifact-id }}
           merge-multiple: true
           path: candidate
+      - name: Require final candidate bytes differ from soaked RC
+        if: ${{ inputs.mode == 'promote-1.0' && inputs.release_audience == 'external-public' }}
+        env:
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          SOAK_CANDIDATE_JSON_SHA256: ${{ inputs.soak_candidate_json_sha256 }}
+          SOAK_BUNDLE_SHA256: ${{ inputs.soak_bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$SOAK_CANDIDATE_JSON_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOAK_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          actual_candidate="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' candidate/candidate.json)"
+          test "$actual_candidate" != "$SOAK_CANDIDATE_JSON_SHA256"
+          bundle="candidate/installer/x86qw-installer-$CANDIDATE_VERSION.zip"
+          test -f "$bundle"
+          actual_bundle="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$bundle")"
+          test "$actual_bundle" != "$SOAK_BUNDLE_SHA256"
+          {
+            echo "final candidate.json differs from the soaked RC"
+            echo "final installer differs from the soaked RC"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Require PR G M3 evidence before any mirror or metadata operation
         env:
           M3_TRUST_ROOT_B64: ${{ secrets.M3_TRUST_ROOT_B64 }}
@@ -577,6 +1191,17 @@ jobs:
             echo "M3 release-evidence.json is absent; promotion remains fail-closed" >&2
             exit 1
           }
+          test -f candidate/evidence-root.json || {
+            echo "evidence-root.json ausente; promoção permanece fail-closed" >&2
+            exit 1
+          }
+          test -f candidate/release-receipt.json || {
+            echo "release-receipt.json ausente; promoção permanece fail-closed" >&2
+            exit 1
+          }
+          python3 maintenance/tools/release_receipt.py verify \
+            --candidate candidate \
+            --trust-root "$root"
           python3 maintenance/tools/release_candidate.py promote \
             candidate promoted --trust-root "$root"
       - name: Upload promoted bytes without overwrite
@@ -755,6 +1380,13 @@ jobs:
           artifact-ids: ${{ needs.promotion-gate.outputs.promoted-artifact-id }}
           merge-multiple: true
           path: candidate
+      - name: Verify durable evidence in the post-publish candidate
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 maintenance/tools/release_receipt.py verify \
+            --candidate candidate \
+            --trust-root maintenance/trust/m3-root.json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           artifact-ids: ${{ inputs.tuf_metadata_artifact_id }}

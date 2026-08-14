@@ -40,7 +40,11 @@ IMMUTABLE_LICENSE_URL = re.compile(
 MAX_BYTES = 512 * 1024 * 1024
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
 MAX_ENTRIES = 100_000
-MAX_DEPTH = 8
+# Candidate-owned native migration fixtures are intentionally nested below the
+# runtime namespace.  Keep a bounded path policy while allowing the deepest
+# required fixture (12 components) and leave headroom for future versioned
+# fixture layouts.
+MAX_DEPTH = 16
 MAX_TEXT = 1024
 
 

@@ -28,6 +28,7 @@ from sync_distribution import (  # noqa: E402
     discover_nquake,
     discover_nightlies,
     download_asset,
+    is_git_lfs_pointer,
     load_manifest,
     pin_assets_from_manifest,
     prune_unconsumed,
@@ -226,7 +227,10 @@ class DistributionTests(unittest.TestCase):
 
     def test_nquake_snapshot_is_partitioned_without_unused_overlays(self) -> None:
         catalog = load_component_catalog(ROOT / "maintenance/inventory/components.json")
-        snapshots = list((ROOT / "dist/distributions/nquake").iterdir())
+        snapshots = [
+            path for path in (ROOT / "dist/distributions/nquake").iterdir()
+            if path.is_dir()
+        ]
         self.assertEqual(1, len(snapshots))
         paths = sorted(path.relative_to(snapshots[0]).as_posix() for path in snapshots[0].rglob("*") if path.is_file())
         partition = validate_tree_partition(catalog, paths)
@@ -368,6 +372,9 @@ class DistributionTests(unittest.TestCase):
             write_manifest(path, manifest)
             loaded = load_manifest(path)
             self.assertEqual(1, verify_distribution(root, loaded))
+            (root / ".DS_Store").write_bytes(b"Finder metadata")
+            self.assertEqual(1, verify_distribution(root, loaded))
+            (root / ".DS_Store").unlink()
             cache = root / "installer/bin/__pycache__"
             cache.mkdir(parents=True)
             (cache / "manager.cpython-314.pyc").write_bytes(b"runtime cache")
@@ -380,6 +387,30 @@ class DistributionTests(unittest.TestCase):
             payload.write_bytes(b"bad")
             with self.assertRaisesRegex(ValueError, "integrity"):
                 verify_distribution(root, loaded)
+
+    def test_unhydrated_lfs_pointer_is_reported_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload = root / "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip"
+            payload.parent.mkdir(parents=True)
+            payload.write_bytes(
+                b"version https://git-lfs.github.com/spec/v1\n"
+                b"oid sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+                b"size 3\n"
+            )
+            digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+            self.assertTrue(is_git_lfs_pointer(payload))
+            manifest = {
+                "format": 1, "project": "x86qw", "captured_at": None,
+                "layout": "distribution-v1", "repositories": {},
+                "files": {payload.relative_to(root).as_posix(): {
+                    "component": "ezquake", "consumer": "install:ezquake",
+                    "url": "https://example.invalid/ezQuake-macOS-universal.zip",
+                    "size": payload.stat().st_size, "sha256": digest,
+                }},
+            }
+            with self.assertRaisesRegex(ValueError, "unhydrated Git LFS pointer"):
+                verify_distribution(root, manifest)
 
     def test_download_does_not_reuse_stale_metadata_for_a_pinned_asset(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

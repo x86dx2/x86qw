@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "status": "local-preflight-passed",
+  "candidate": {
+    "version": "1.0.0-rc.2",
+    "commit": "12df4557fbc2d5b0efb3eb445ad922e4c2cf414a",
+    "candidate_json_sha256": "87eb3b3ca39d5ad2de08f2e74a662b0f5d3935a84a53ae16cb484cff9de10699",
+    "installer": "x86qw-installer-1.0.0-rc.2.zip",
+    "installer_size": 600930,
+    "installer_sha256": "01315b9571f6b7752b7a305842b6853e4df59e6f61c9e71b90ad1d1f774aed33"
+  },
+  "hardware": {
+    "platform": "macOS-ARM64",
+    "chip": "Apple M3 Pro",
+    "model": "Mac15,6"
+  },
+  "completed_at": "2026-08-14T10:38:35Z",
+  "runtime_executed": true,
+  "case_count": 25,
+  "passed_case_count": 25,
+  "cases": [
+    "install-clean-space-unicode",
+    "install-existing-space-unicode",
+    "migration-0.7.13-real",
+    "client-stable-window-map-exit",
+    "client-nightly-window-map-exit",
+    "game-ktx",
+    "game-ktx-frogbot",
+    "game-final-arena",
+    "game-pro-x",
+    "game-team-fortress",
+    "game-td2",
+    "mvdsv-mvd",
+    "qtv-stream",
+    "qwfwd-forward",
+    "lifecycle-update",
+    "lifecycle-update-apply",
+    "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
+    "lifecycle-verify",
+    "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
+    "lifecycle-cleanup",
+    "lifecycle-uninstall",
+    "lifecycle-purge"
+  ],
+  "derived_artifacts": {
+    "release_smoke_normalized_sha256": "cbe09e4c26fac906fd2f2865292cd0714a34a3db73b71ac9a5586b15233442af",
+    "native_record_sha256": "2cc018ff3a4aee5b00e78deea7ecf4def9c04458230f60adc9e9c256988a8b82",
+    "release_evidence_body_sha256": "6cc25dab36e13fbb486f195439f97f73cc370de57ff4e2b20058322c8b722478",
+    "native_evidence_pending_sha256": "187f00edd96c17c66b53e78bbdf199d911123095196ba81435cef14c74dcb646",
+    "signed": false,
+    "promotable": false
+  },
+  "limitations": [
+    "execução local no M3; não é artifact do workflow protegido",
+    "evidência permanece unsigned/pending e não autoriza promoção",
+    "não altera a release pública 1.0.0-rc.1 nem inicia o soak",
+    "custódia TUF produtiva, aceitação protegida e aprovação humana continuam pendentes"
+  ]
+}

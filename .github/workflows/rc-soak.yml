@@ -1,0 +1,185 @@
+name: Protected RC soak handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_commit:
+        description: "Commit do RC usado durante todo o soak"
+        required: true
+        type: string
+      candidate_version:
+        description: "Versão RC sob soak"
+        required: true
+        default: "1.0.0-rc.1"
+        type: string
+      candidate_sha256:
+        description: "SHA-256 de candidate.json do RC"
+        required: true
+        type: string
+      bundle_sha256:
+        description: "SHA-256 do instalador público do RC"
+        required: true
+        type: string
+      started_at:
+        description: "Início UTC do período contínuo, no formato ISO"
+        required: true
+        type: string
+      completed_at:
+        description: "Fim UTC do período contínuo, no formato ISO"
+        required: true
+        type: string
+      issue_number:
+        description: "Issue canônico do soak; normalmente 143"
+        required: true
+        default: "143"
+        type: string
+      observed_dates:
+        description: "Datas UTC observadas separadas por vírgula, sem lacunas"
+        required: true
+        type: string
+      hardware:
+        description: >-
+          Hardware usado no soak; ex.: MacBook Pro Mac15,6 / Apple M3 Pro
+        required: true
+        type: string
+      observation_evidence_b64:
+        description: >-
+          JSON base64 date→URL HTTPS com uma evidência pública por dia
+        required: true
+        type: string
+      p0_p1_clear:
+        description: "Nenhum P0/P1 durante todo o período"
+        required: true
+        default: false
+        type: boolean
+      tuf_healthy:
+        description: "Monitor e lease TUF permaneceram saudáveis"
+        required: true
+        default: false
+        type: boolean
+      public_install:
+        description: "Instalação pública periódica permaneceu verde"
+        required: true
+        default: false
+        type: boolean
+      gameplay:
+        description: "Gameplay real permaneceu verde"
+        required: true
+        default: false
+        type: boolean
+      hosting:
+        description: "Hosting real permaneceu verde"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: x86qw-rc-soak-${{ inputs.candidate_commit }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-record:
+    name: Verify and record completed RC soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate candidate input and reachable commit
+        shell: bash
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_COMMIT"
+      - name: Require the canonical soak issue to be closed
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          [[ "$ISSUE_NUMBER" =~ ^[1-9][0-9]{0,8}$ ]]
+          issue_json="$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER")"
+          state="$(printf '%s' "$issue_json" | jq -r '.state')"
+          url="$(printf '%s' "$issue_json" | jq -r '.html_url')"
+          is_pull_request="$(printf '%s' "$issue_json" | jq -r 'if .pull_request then "true" else "false" end')"
+          test "$is_pull_request" = "false"
+          test "$state" = "closed"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Build and verify the exact soak report
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+          STARTED_AT: ${{ inputs.started_at }}
+          COMPLETED_AT: ${{ inputs.completed_at }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          ISSUE_STATE: ${{ steps.issue.outputs.state }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+          OBSERVED_DATES: ${{ inputs.observed_dates }}
+          HARDWARE: ${{ inputs.hardware }}
+          OBSERVATION_EVIDENCE_B64: ${{ inputs.observation_evidence_b64 }}
+          P0_P1_CLEAR: ${{ inputs.p0_p1_clear }}
+          TUF_HEALTHY: ${{ inputs.tuf_healthy }}
+          PUBLIC_INSTALL: ${{ inputs.public_install }}
+          GAMEPLAY: ${{ inputs.gameplay }}
+          HOSTING: ${{ inputs.hosting }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/soak"
+          python3 maintenance/tools/build_soak_report.py \
+            --output "$RUNNER_TEMP/soak/report.json"
+          python3 maintenance/tools/verify_soak_report.py \
+            --report "$RUNNER_TEMP/soak/report.json" \
+            --expected-commit "$CANDIDATE_COMMIT" \
+            --expected-version "$CANDIDATE_VERSION" \
+            --expected-candidate-json-sha256 "$CANDIDATE_SHA256" \
+            --expected-bundle-sha256 "$BUNDLE_SHA256" \
+            --expected-issue-number "$ISSUE_NUMBER" \
+            --minimum-days 7
+          report_sha256="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$RUNNER_TEMP/soak/report.json")"
+          {
+            echo "soak_report_sha256=$report_sha256"
+            echo "soak_issue_number=$ISSUE_NUMBER"
+            echo "soak_platform=macos-arm64"
+            echo "soak_hardware=$HARDWARE"
+            echo "soak_observation_count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1], encoding="utf-8"))["observations"]))' "$RUNNER_TEMP/soak/report.json")"
+            echo "soak_artifact_name=rc-soak-${CANDIDATE_COMMIT}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload immutable soak report
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rc-soak-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/soak/report.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+      - name: Record registered soak artifact coordinates
+        shell: bash
+        run: |
+          {
+            echo "soak_artifact_id=${{ steps.upload.outputs.artifact-id }}"
+            echo "soak_artifact_digest=${{ steps.upload.outputs.artifact-digest }}"
+            echo "soak_artifact_name=rc-soak-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          } >> "$GITHUB_STEP_SUMMARY"

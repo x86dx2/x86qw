@@ -1,0 +1,25 @@
+{
+  "action": "renewal or recovery must be performed manually; the monitor does not renew or publish metadata",
+  "check": {
+    "expires_at": "2026-08-14T15:42:54Z",
+    "observed_at": "2026-08-14T10:19:12.6162659Z",
+    "role": "timestamp",
+    "warning_hours": 6
+  },
+  "format": "x86qw-public-tuf-monitor-alert-v1",
+  "issue": {
+    "number": 152,
+    "state": "open",
+    "url": "https://github.com/x86dx2/x86qw/issues/152"
+  },
+  "project": "x86qw",
+  "run": {
+    "commit": "335d9a062f8ce33b226a9892de82979828a0fd1b",
+    "conclusion": "failure",
+    "created_at": "2026-08-14T10:19:00Z",
+    "id": "31791717871",
+    "url": "https://github.com/x86dx2/x86qw/actions/runs/31791717871",
+    "workflow": ".github/workflows/tuf-monitor.yml"
+  },
+  "status": "attention"
+}

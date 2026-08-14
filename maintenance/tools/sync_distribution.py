@@ -45,6 +45,7 @@ USER_AGENT = "x86qw-maintenance/1"
 DISCOVERY_MAX_BYTES = 4 * 1024 * 1024
 NQUAKE_REPOSITORY = "nQuake/distfiles"
 NQUAKE_REF = "master"
+GIT_LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1\n"
 
 RELEASES = {
     "ezquake": (
@@ -350,6 +351,15 @@ def file_sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def is_git_lfs_pointer(path: Path) -> bool:
+    """Return whether a path is an unhydrated Git LFS pointer file."""
+    try:
+        with path.open("rb") as source:
+            return source.read(len(GIT_LFS_POINTER_PREFIX)) == GIT_LFS_POINTER_PREFIX
+    except OSError:
+        return False
 
 
 def load_manifest(path: Path) -> dict[str, object]:
@@ -659,7 +669,7 @@ def verify_distribution(
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
         if path.is_file()
-        and path.name != "manifest.json"
+        and path.name not in {"manifest.json", ".DS_Store"}
         and "__pycache__" not in path.parts
         and path.suffix not in {".pyc", ".pyo"}
     }
@@ -739,6 +749,11 @@ def verify_distribution(
         if not isinstance(metadata, dict) or metadata.get("component") not in {None, component}:
             raise ValueError(f"distribution file has invalid component metadata: {relative}")
         path = root / relative
+        if is_git_lfs_pointer(path):
+            raise ValueError(
+                "distribution file is an unhydrated Git LFS pointer: "
+                f"{relative}; run `git lfs pull --include='{relative}'`"
+            )
         if path.is_symlink() or path.stat().st_size != metadata.get("size") or file_sha256(path) != metadata.get("sha256"):
             raise ValueError(f"distribution file failed integrity verification: {relative}")
         checked += 1

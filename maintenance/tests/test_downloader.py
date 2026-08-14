@@ -205,6 +205,9 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     ROOT / "maintenance/tools/native_m3_harness.py": frozenset({
         ("subprocess.Popen", "run_native", "command"),
     }),
+    ROOT / "maintenance/tools/public_install_smoke.py": frozenset({
+        ("subprocess.run", "_run_launcher", "command"),
+    }),
 }
 # Audited argv-forwarding helpers. Their subprocess call is suppressed above,
 # but every caller remains part of the gate and is checked with the effective

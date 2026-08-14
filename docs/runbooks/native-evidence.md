@@ -24,12 +24,17 @@ O plano deve cobrir exatamente:
 
 - instalação limpa e instalação sobre árvore existente em caminho com espaço e
   Unicode;
+- migração real de uma instalação `0.7.13`, preservando configuração pessoal e
+  PAKs;
 - stable e nightly com janela, mapa carregado e encerramento;
-- KTX, Final Arena, Pro-X, Team Fortress e TD2 com gamecode e mapa;
+- KTX sem bots e KTX Duel com um Frogbot real, skill fixa e identidade
+  `x86QW`, além de Final Arena, Pro-X, Team Fortress e TD2 com gamecode e mapa;
 - MVDSV com MVD válido;
 - QTV com HTTP/upstream/stream legível;
 - QWFWD com encaminhamento UDP real;
-- update, upgrade, verify, repair, cleanup e uninstall.
+- update/upgrade em dry-run para o plano, e update/upgrade apply reais;
+- verify, repair em dry-run, repair com corrupção de permissão restaurada,
+  migrate apply, cleanup, uninstall conservador e purge explícito.
 
 Um exit code zero isolado não é suficiente. O plano deve ligar cada assertion a
 um artifact observável; o handoff é então validado por

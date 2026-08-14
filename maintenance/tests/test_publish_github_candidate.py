@@ -29,6 +29,9 @@ class PublishGithubCandidateTests(unittest.TestCase):
                 "ownership.json",
                 "sbom.spdx.json",
                 "provenance.json",
+                "release-evidence.json",
+                "evidence-root.json",
+                "release-receipt.json",
                 "mirrors.json",
             ):
                 (candidate / name).write_bytes(name.encode("utf-8"))
@@ -66,6 +69,9 @@ class PublishGithubCandidateTests(unittest.TestCase):
                     "ownership.json",
                     "sbom.spdx.json",
                     "provenance.json",
+                    "release-evidence.json",
+                    "evidence-root.json",
+                    "release-receipt.json",
                     "mirrors.json",
                 },
                 set(expected),
@@ -74,6 +80,39 @@ class PublishGithubCandidateTests(unittest.TestCase):
                 hashlib.sha256(zip_path.read_bytes()).hexdigest(),
                 expected["x86qw-installer-1.0.0.zip"]["digest"][len("sha256:"):],
             )
+
+    def test_native_smoke_zip_fixtures_are_not_public_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = Path(temporary)
+            internal = candidate / "runtime/native-smoke/macos-arm64/fixtures/0.7.13.zip"
+            internal.parent.mkdir(parents=True)
+            internal.write_bytes(b"historical bytes")
+            for name in (
+                "candidate.json", "checksums.txt", "ownership.json", "sbom.spdx.json",
+                "provenance.json", "release-evidence.json", "evidence-root.json",
+                "release-receipt.json",
+            ):
+                (candidate / name).write_bytes(name.encode("utf-8"))
+            manifest = {
+                "artifacts": {
+                    "runtime/native-smoke/macos-arm64/fixtures/0.7.13.zip": {
+                        "size": internal.stat().st_size,
+                        "sha256": hashlib.sha256(internal.read_bytes()).hexdigest(),
+                    },
+                },
+                "metadata": {
+                    name: {
+                        "size": len(name.encode("utf-8")),
+                        "sha256": hashlib.sha256(name.encode("utf-8")).hexdigest(),
+                    }
+                    for name in (
+                        "checksums.txt", "ownership.json", "sbom.spdx.json",
+                        "provenance.json",
+                    )
+                },
+            }
+            assets = _expected_assets(candidate, manifest)
+            self.assertNotIn("0.7.13.zip", assets)
 
     def test_asset_plan_only_returns_missing_and_rejects_divergence_or_extras(self) -> None:
         expected = {

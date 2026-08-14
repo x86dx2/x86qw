@@ -324,8 +324,8 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             {
-                "native-m3.yml", "release.yml", "sign-native-evidence.yml",
-                "tuf-metadata-handoff.yml", "tuf-monitor.yml", "validate.yml",
+                "native-m3.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
+                "rc-soak.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "tuf-timestamp-publish.yml", "tuf-timestamp-renewal.yml", "validate.yml",
             },
             {path.name for path in workflow_files},
         )
@@ -335,6 +335,9 @@ class ContinuousIntegrationTests(unittest.TestCase):
             if path.name == "native-m3.yml":
                 self.assertIn("Prepare isolated Python on self-hosted M3", source)
                 self.assertIn('python3_bin="$(command -v python3)"', source)
+            elif path.name == "public-acceptance.yml":
+                self.assertIn("Prepare isolated Python on self-hosted M3", source)
+                self.assertIn('python3 -m venv "$RUNNER_TEMP/x86qw-public-acceptance-python"', source)
             else:
                 self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")

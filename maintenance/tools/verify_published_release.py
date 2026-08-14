@@ -26,6 +26,12 @@ from maintenance.tools.release_candidate import (
     CandidateError,
     verify_candidate,
 )
+from maintenance.tools.release_receipt import (
+    ReleaseReceiptError,
+    validate_durable_assets,
+    validate_final_public_acceptance,
+    validate_final_tuf_operation,
+)
 from x86qw_runtime.io.downloader import (
     BoundedMetadata,
     DownloadError,
@@ -44,9 +50,17 @@ HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 ASSET_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-# Native evidence is an optional compatibility artifact in this Mac-only
-# checkout; it is not part of the public asset set or the release contract.
-PUBLIC_METADATA_NAMES = ("candidate.json", *BOUND_METADATA_NAMES)
+# Native evidence and its public root/receipt are release assets.  The
+# promotion gate authenticates them before publication and the public verifier
+# requires the same immutable set after deployment.
+PUBLIC_METADATA_NAMES = (
+    "candidate.json",
+    *BOUND_METADATA_NAMES,
+    "release-evidence.json",
+    "evidence-root.json",
+    "release-receipt.json",
+)
+INTERNAL_CANDIDATE_PREFIXES = ("runtime/native-smoke/",)
 
 
 class PublishedReleaseError(RuntimeError):
@@ -128,7 +142,11 @@ def _candidate_assets(manifest: Mapping[str, object], candidate: Path) -> dict[s
         assets[basename] = {"size": metadata["size"], "digest": metadata["digest"]}
 
     for raw_name, raw_metadata in raw_artifacts.items():
-        if not isinstance(raw_name, str) or not raw_name.casefold().endswith(".zip"):
+        if (
+            not isinstance(raw_name, str)
+            or not raw_name.casefold().endswith(".zip")
+            or raw_name.startswith(INTERNAL_CANDIDATE_PREFIXES)
+        ):
             continue
         if (
             not isinstance(raw_metadata, dict)
@@ -301,6 +319,12 @@ def classify_published_release(
         raise PublishedReleaseError("candidato aprovado não pôde ser verificado") from error
     if manifest.get("version") != version or manifest.get("commit") != commit:
         raise PublishedReleaseError("manifest verificado diverge da identidade solicitada")
+    try:
+        durable_receipt = validate_durable_assets(Path(candidate), trust_root=trust_root)
+        validate_final_public_acceptance(durable_receipt, version)
+        validate_final_tuf_operation(durable_receipt, version)
+    except ReleaseReceiptError as error:
+        raise PublishedReleaseError(f"evidência durável pública inválida: {error}") from error
     expected_assets = _candidate_assets(manifest, Path(candidate))
     tag = f"x86qw-installer-{version}"
     encoded_repo = urllib.parse.quote(repository, safe="/")

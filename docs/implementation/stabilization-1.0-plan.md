@@ -1,14 +1,21 @@
 # Plano de estabilização `0.7.13 → 1.0`
 
+> Política vigente: `owner-only`, conforme o
+> [ADR 0008](../adr/0008-owner-only-release-gates.md). A referência histórica
+> `0.7.13 → 1.0` continua documentada para a futura audiência externa, mas a
+> primeira instalação pode ser limpa e não exige migração. Os gates de soak,
+> migração e operação TUF sustentável abaixo são condicionais a
+> `release_audience=external-public`.
+
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional; implementação incremental integrada, sem publicação do candidato |
+| Estado | `1.0.0-rc.1` público; owner-only ativo; aceitação limpa, evidência M3 e gates de bytes em fechamento; gates externos estacionados |
 | Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | snapshot `origin/main` registrado pelo comando da auditoria; rehearsal `31600754928`; M3 `31604145989` pendente |
+| Checkpoint auditável | `main@335d9a062f8ce33b226a9892de82979828a0fd1b`; RC `a8758ee27bebd7c72c24a31dc19335652e260c0a`; promoção `31752738047` |
 | Versão alvo | `1.0.0` |
-| Data da auditoria | 2026-08-12 |
-| Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; publicação ainda bloqueada por M3 e operação protegida |
+| Data da auditoria | 2026-08-13, verificações finais em 2026-08-14 UTC |
+| Escopo desta entrega | política owner-only, evidência durável, aceitação limpa, cobertura M3 e gates de promoção; operação externa condicionada |
 
 Este documento registra a sequência aprovada para transformar a baseline pública
 `0.7.13` em uma `1.0` verificável. O estado corrente fica em
@@ -24,9 +31,19 @@ os bundles públicos anteriores permanecem imutáveis. O checkpoint é somente u
 fonte de consulta para extração seletiva: **checkpoint para extração, nunca
 merge**. Nenhum commit de `codex/stabilize-1.0` será incorporado como unidade.
 
-Durante este checkpoint não se publica nem se altera estado remoto. As
-correções locais podem alterar código, workflows, fixtures e documentação, mas
-não autorizam tag, release, catálogo público, metadata TUF ou branch remota.
+O checkpoint histórico que originou este plano não autorizava publicação. A
+fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
+plano continua sem autorizar a promoção final, alteração dos bytes publicados
+ou publicação de metadata TUF fora do workflow protegido. A implementação local
+do fechamento dos gates está na branch `agent/rc-1.0-completion`, no `HEAD`
+verificável dessa branch. O preflight privado `1.0.0`
+da revisão de produto `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passou `25/25`
+casos no Apple M3 Pro, com `candidate.json` SHA-256
+`c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; isso
+ainda precisa passar pelo fluxo remoto, handoff assinado e endpoint público
+antes de ser considerado evidência de release. Os commits posteriores desta
+sequência alteraram apenas tooling de release e documentação, não os arquivos
+de produto cobertos por aquele preflight.
 
 As invariantes para todas as fases são:
 
@@ -135,8 +152,9 @@ smoke nativo.
 
 Os workflows agora existem como gates executáveis: a validação portável é
 separada do runner self-hosted M3, e nenhum job portável afirma execução
-gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors e
-metadata-last; ausência de configuração externa falha fechada.
+gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors,
+evidência durável, aceitação pública para a final e metadata-last; ausência de
+configuração externa falha fechada.
 
 ## 5. Sequência A–H
 
@@ -150,7 +168,7 @@ Criar uma issue própria antes da branch. Separar artefato publicado, suporte e
 validação; conservar o macOS universal físico; classificar Linux, Windows,
 macOS Intel e nightly como `preview`; preservar a CI com os nomes
 `portable-contract / ...`; e registrar a regra de evidência do candidato exato.
-macOS M3 não é promovido antes de G. A release pública corrente `0.7.13` não é
+macOS M3 não é promovido antes de G. A baseline estável pública `0.7.13` não é
 reescrita; qualquer correção futura deve ser uma release nova, separada da PR
 de implementação e justificada por um gap P0/P1.
 
@@ -176,7 +194,7 @@ devem aceitar `1.0.0-rc.1`.
 **Gate:** schemas, writers e consumidores concordam; fixtures negativas cobrem
 redaction e códigos; nenhum bootstrap 0.7.x é quebrado.
 
-### PR D — migração (`issue #46`, alvo `0.8.1` ou `0.8.2`)
+### PR D — migração (`issue #46`, alvo `0.8.1` ou `0.8.2`, post-public)
 
 Atualizar a issue para suportar somente versões realmente publicadas. Usar
 fixtures reais `0.7.0–0.7.13`; remover claims sintéticos
@@ -184,8 +202,9 @@ fixtures reais `0.7.0–0.7.13`; remover claims sintéticos
 que o estado migrado satisfaz os schemas congelados em C e que rollback e
 ownership continuam diagnosticáveis.
 
-**Gate:** migração unilateral, preservação de arquivos pessoais, recibos
-coerentes e ausência de versão futura inventada.
+**Gate quando `external-public`:** migração unilateral, preservação de arquivos
+pessoais, recibos coerentes e ausência de versão futura inventada. No modo
+`owner-only`, a issue permanece capacidade futura e não bloqueia a instalação.
 
 ### PRs E1/E2 — trust (`issue #48`, alvo `0.9.0`)
 
@@ -214,7 +233,37 @@ por digest imutável.
 preparação e promoção; nenhum destino é sobrescrito; trust não é importado
 implicitamente.
 
-### PR G — Mac M3/arm64 e RC (`issue #54`)
+Em `external-public`, o gate final também exige um handoff de operação TUF registrado por
+`.github/workflows/tuf-operation-drill.yml`. O relatório deve estar vinculado ao
+catálogo do candidato, conter contexto de operador/host/SLA e comprovar
+renovação, expiração simulada e recuperação; suas coordenadas entram no recibo
+durável de `1.0.0`.
+
+Em `external-public`, o workflow final também consulta a lease pública atual com
+`monitor_public_tuf.py` e janela de seis horas. O drill histórico não substitui
+essa verificação: enquanto a issue de alerta #152 estiver aberta ou a lease
+estiver dentro da janela, a promoção permanece `NO-GO`.
+
+O caminho de renovação limitada está preparado em
+`.github/workflows/tuf-timestamp-renewal.yml`: ele consome um artifact TUF já
+verificado, exige `TUF_TIMESTAMP_KEY_B64` no ambiente protegido e produz apenas
+um handoff não publicado com `timestamp.json` renovado. O segundo workflow,
+`.github/workflows/tuf-timestamp-publish.yml`, verifica esse handoff contra o
+TUF de origem e o candidato, publica a geração timestamp-only sob o mesmo
+ambiente protegido, valida o recibo com
+`maintenance/tools/verify_tuf_timestamp_publication.py` e registra a
+verificação pública pós-deploy. A existência dos workflows não prova custódia
+nem saúde pública; sem secret configurada, execução verde e aprovação
+protegida, o gate TUF continua pendente.
+
+Em `external-public`, o gate final também exige o período de uso do RC por
+`.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.
+O relatório precisa comprovar sete dias completos, observações diárias verdes,
+as cinco condições operacionais e a issue canônica encerrada. `verify-soak`
+confere a procedência do run e o artifact imutável; suas coordenadas entram na
+seção `soak` do recibo durável de `1.0.0`.
+
+### PR G — Mac M3/arm64 e RC (`issue #54`; fechamento operacional `#147`)
 
 O executor `native_macos_harness.py` e o workflow
 `.github/workflows/native-m3.yml` exigem um plano fechado fornecido para o
@@ -223,21 +272,36 @@ candidato exato, executar o
 conjunto completo de clientes, jogos, serviços e lifecycle. Linux, Windows e
 macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
 
-Após o merge de G, abrir uma PR de release separada para `1.0.0-rc.1`, produzir
-a evidência e iniciar o período de uso.
+O RC público foi produzido e promovido no run `31752738047`. A implementação
+do fechamento desta frente adiciona os casos M3 restantes, a aceitação limpa e
+a evidência durável. A rechecagem local baixou os mesmos bytes pelos endpoints
+públicos e completou o lifecycle; a migração real
+`0.7.13 → 1.0.0-rc.1` fica arquivada como capacidade externa no recibo
+[`1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`](../releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json).
+O drill técnico TUF local formato 2 também passou renovação, expiração simulada e
+recuperação, com contexto de operador/host/SLA, versões por role e chaves efêmeras, em
+[`1.0.0-tuf-drill-local-2026-08-14.json`](../releases/1.0.0-tuf-drill-local-2026-08-14.json).
+O candidato local `1.0.0-rc.2`, distinto dos bytes do RC público, também passou
+os 25 casos M3 reais no Apple M3 Pro; o recibo unsigned/pending está em
+[`1.0.0-rc.2-native-preflight-local-2026-08-14.json`](../releases/1.0.0-rc.2-native-preflight-local-2026-08-14.json).
+O handoff/artifact do workflow protegido, a custódia produtiva e a abertura do
+soak continuam pendentes.
 
-**Gate:** evidência M3 autenticada para o candidato exato, bytes reprodutíveis,
-smokes registrados e período de uso iniciado sem promover 1.0.
+**Gate owner-only:** implementação fechada; evidência M3 autenticada para um
+novo candidato, instalação limpa e smokes registrados. O período de uso só é
+gate quando `external-public` for declarado.
 
-### PR H — promoção `1.0.0`
+### PR H — promoção `1.0.0` (`issue #149`)
 
-Criar a issue própria somente depois de o RC cumprir o período de uso e todos os
-gates. A PR faz apenas promoção/release, sem correção funcional. Exigir trust
-válido, evidência M3, bytes idênticos, mirrors convergentes e documentação
-coerente.
+Criar a issue própria depois de o candidato cumprir os gates da audiência
+escolhida. A PR faz apenas promoção/release, sem correção funcional. Exigir
+trust válido, evidência M3, bytes imutáveis, mirrors convergentes e
+documentação coerente.
 
-**Gate final:** aprovação humana explícita, metadata publicada por último,
-reversão documentada e nenhum claim de plataforma além da evidência existente.
+**Gate final owner-only:** aprovação registrada, aceitação limpa, evidência M3,
+metadata publicada por último, reversão documentada e nenhum claim de plataforma
+além da evidência existente. **Gate final external-public:** acrescenta soak,
+migração, operação TUF sustentável e handoffs externos.
 
 ## 6. Releases intermediárias e dependências
 
@@ -245,31 +309,35 @@ reversão documentada e nenhum claim de plataforma além da evidência existente
 |---|---|---|
 | nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
 | `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
-| `1.0.0-rc.1` | F e G aprovadas; evidência M3 | RC e período de uso |
-| `1.0.0` | H e todos os gates | promoção sem correção funcional |
+| `1.0.0-rc.1` | F e G executadas; aceitação pública v2 e evidência operacional registradas | RC público disponível; soak ainda não formalmente aberto |
+| `1.0.0` | H e gates da audiência escolhida | promoção sem correção funcional |
 
-Nenhuma dessas versões é criada, tagueada ou publicada durante a
-materialização documental. O mirror `gitlab/main` não é tratado como espelho
-confirmado antes de uma decisão explícita.
+O RC `1.0.0-rc.1` já foi criado, tagueado e publicado; a materialização desta
+implementação não altera seus bytes. Qualquer alteração de produto exige novo
+RC e reinício do soak. O mirror `gitlab/main` não é tratado como espelho
+confirmado fora da verificação registrada do RC.
 
-## 7. Fase 0 — controle e autorização futura
+## 7. Governança atual e limpeza futura
 
-As ações desta seção exigem nova autorização e nova verificação; elas não fazem
-parte desta entrega:
+As instruções históricas de controle abaixo foram substituídas pelo estado
+operacional do RC. As ações de limpeza continuam exigindo nova verificação e
+não podem remover evidência:
 
-1. criar a tag anotada `audit/stabilize-1.0-2026-08-06` em `30e9d5b`, sem GitHub
-   Release;
-2. revalidar ancestralidade e apagar somente as quatro refs listadas na
-   auditoria (`agent/bounded-downloader`, `agent/archive-boundary`,
-   `agent/runtime-boundaries` e
-   `origin/x86dx2/audit-ezquake-tournament-gameplay`);
-3. criar o label `post-1.0`, abrir backlog para os mapas visuais e fechar a
-   [PR 43](https://github.com/x86dx2/x86qw/pull/43) apontando para essa issue;
-4. manter `codex/control-maps`, congelar `codex/stabilize-1.0` e apagá-la apenas
-   após todas as extrações aceitas.
+1. não criar a tag histórica `audit/stabilize-1.0-2026-08-06` nem tratá-la como
+   autoridade;
+2. revalidar ancestralidade e apagar somente refs já integradas, depois de
+   registrar os SHAs e preservar refs ligadas ao RC, à evidência e ao TUF;
+3. manter o backlog operacional nas issues [#143–#152](https://github.com/x86dx2/x86qw/issues/143),
+   com a limpeza de branches em [#150](https://github.com/x86dx2/x86qw/issues/150)
+   e a avaliação de imutabilidade host-level em
+   [#151](https://github.com/x86dx2/x86qw/issues/151);
+4. manter `codex/control-maps` e os checkpoints históricos fora da linha de
+   release até decisão própria.
 
-Nenhuma tag, branch, issue, label, PR ou release deve ser criada para cumprir
-este documento agora.
+As issues históricas #68 e #70 foram encerradas por já estarem concluídas; não
+devem voltar a ser usadas como backlog de 1.0.
+
+
 
 ## 8. Riscos, rollback e fronteiras de aprovação
 
@@ -293,21 +361,31 @@ descritas para até obter autorização explícita.
 A jornada só pode ser declarada concluída quando:
 
 - A–G têm issues, branches, contratos, evidência e gates aprovados;
-- `1.0.0-rc.1` passou pelo período de uso com trust e evidência M3 válidos;
+- `1.0.0-rc.1` passou a aceitação e os gates exigidos pela audiência escolhida;
 - H promove somente bytes idênticos, mirrors convergentes e metadata coerente;
 - suporte por plataforma corresponde à evidência nativa do candidato;
 - `PROJECT-STATUS.md`, `ROADMAP.md`, README e notas de release apontam para o
   mesmo estado;
+- em `external-public`, existe artifact protegido de soak, issue encerrada e
+  coordenadas conferidas no recibo durável final;
 - nenhuma alteração funcional é escondida em uma PR de promoção.
 
 Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
-o publisher não recompila, a fixture pública 0.7.13 existe, os workflows não
-possuem placeholders deliberados e o harness M3 falha fechado sem plano ou
-evidência. Isso não é aprovação de RC nem de publicação.
+o publisher não recompila, a fixture pública 0.7.13 permanece arquivada, os
+workflows não possuem placeholders deliberados, a aceitação local limpa
+percorreu os endpoints públicos e o drill técnico TUF local
+passou renovação, expiração simulada e recuperação. O harness M3 local passou
+`25/25` no preflight privado `1.0.0` da revisão de produto
+`f2cadeff3261ce07f7c9490313db1aa69e417fa2`. O RC público já foi promovido,
+mas a implementação local ainda não é aprovação de `1.0.0`: faltam artifact e
+handoff protegido da aceitação limpa, evidência durável e novo candidato final.
+Operação TUF de produção, soak e migração permanecem estacionados para
+`external-public`.
 
 ## 10. Validação desta materialização
 
-O gate desta entrega é executado no worktree sem criar estado remoto:
+O gate da implementação local é executado no worktree; ele não substitui os
+gates remotos e nativos:
 
 1. confirmar que a base canônica ainda resolve para
    `origin/main`; registrar o SHA retornado no relatório da auditoria; se avançar, repetir a
@@ -319,9 +397,11 @@ O gate desta entrega é executado no worktree sem criar estado remoto:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o diff local contra `origin/main`, mantendo separado o trabalho
-   histórico já commitado do checkpoint.
+5. revisar o `HEAD` local contra `origin/main`, mantendo separado o
+   trabalho histórico já publicado do candidato atual; registrar os recibos
+   locais de aceitação pública e drill TUF sem tratá-los como handoffs
+   protegidos.
 
-Esse gate não cria tag, branch, issue, label, PR, release ou publicação. A
-execução nativa M3, a custódia TUF e o catálogo da próxima release continuam
-dependentes de entradas protegidas e não são inferidos localmente.
+Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
+nativa M3, a custódia TUF, o catálogo público e o soak continuam dependentes de
+entradas protegidas e não são inferidos localmente.

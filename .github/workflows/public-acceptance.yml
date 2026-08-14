@@ -1,0 +1,128 @@
+name: Public release acceptance on Apple M3
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_code_commit:
+        description: "SHA do commit de código do workflow e do gate"
+        required: true
+        type: string
+      candidate_version:
+        description: "Versão pública exata a ser aceita"
+        required: true
+        default: "1.0.0-rc.1"
+        type: string
+      catalog_url:
+        description: "Endpoint público do catálogo"
+        required: true
+        default: "https://x86qw.x86.com.br/api/v1/catalog.json"
+        type: string
+      trust_metadata_url:
+        description: "Endpoint público da cadeia TUF"
+        required: true
+        default: "https://x86qw.x86.com.br/api/v1/trust/"
+        type: string
+      acceptance_scope:
+        description: "single-user valida instalação limpa; external-users também exige migração"
+        required: true
+        default: single-user
+        type: choice
+        options:
+          - single-user
+          - external-users
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x86qw-public-acceptance-${{ inputs.candidate_version }}
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    name: Install and exercise the public candidate
+    runs-on: [self-hosted, macOS, arm64, M3]
+    timeout-minutes: 240
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_code_commit }}
+          lfs: false
+          fetch-depth: 1
+      - name: Validate the exact release-code checkout
+        shell: bash
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
+      - name: Prepare isolated Python on self-hosted M3
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c 'import sys; assert sys.version_info >= (3, 13), sys.version'
+          python3 -m venv "$RUNNER_TEMP/x86qw-public-acceptance-python"
+          echo "$RUNNER_TEMP/x86qw-public-acceptance-python/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/x86qw-public-acceptance-python/bin/python" --version
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Execute the public endpoint acceptance contract
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          CATALOG_URL: ${{ inputs.catalog_url }}
+          TRUST_METADATA_URL: ${{ inputs.trust_metadata_url }}
+          ACCEPTANCE_SCOPE: ${{ inputs.acceptance_scope }}
+        run: |
+          python3 maintenance/tools/public_install_smoke.py \
+            --version "$CANDIDATE_VERSION" \
+            --platform macos \
+            --channel stable \
+            --release latest \
+            --profile complete \
+            --catalog-url "$CATALOG_URL" \
+            --trust-metadata-url "$TRUST_METADATA_URL" \
+            --full-lifecycle \
+            --acceptance-scope "$ACCEPTANCE_SCOPE" \
+            --output "$RUNNER_TEMP/public-acceptance.json"
+      - name: Upload the exact public acceptance receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: public-acceptance-${{ inputs.candidate_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public-acceptance.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+      - name: Record exact public bytes for the final handoff
+        shell: bash
+        run: |
+          python3 - "$RUNNER_TEMP/public-acceptance.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          record = json.loads(path.read_text(encoding="utf-8"))
+          print(f"receipt_sha256={hashlib.sha256(path.read_bytes()).hexdigest()}")
+          print(f"bundle_sha256={record['bundle_sha256']}")
+          print(f"catalog_sha256={record['catalog_sha256']}")
+          print(f"candidate_version={record['candidate_version']}")
+          PY
+      - name: Record acceptance coordinates
+        run: |
+          {
+            echo "public candidate=${{ inputs.candidate_version }}"
+            echo "release code=${{ inputs.release_code_commit }}"
+            echo "acceptance scope=${{ inputs.acceptance_scope }}"
+            echo "acceptance artifact=public-acceptance-${{ inputs.candidate_version }}-${{ github.run_id }}-${{ github.run_attempt }}"
+            echo "all lifecycle operations used disposable targets"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove isolated acceptance workspace
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/x86qw-public-acceptance-python" "$RUNNER_TEMP/public-acceptance.json"

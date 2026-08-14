@@ -37,6 +37,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 MAX_GH_RESPONSE_BYTES = 4 * 1024 * 1024
 GH_TOKEN_RE = re.compile(r"(?i)\b(?:gho|ghp|ghs|ghr|github_pat)_[A-Za-z0-9_]+\b")
+INTERNAL_CANDIDATE_PREFIXES = ("runtime/native-smoke/",)
 
 
 class PublisherError(RuntimeError):
@@ -97,7 +98,11 @@ def _expected_assets(candidate: Path, manifest: Mapping[str, object]) -> dict[st
         expected[name] = actual
 
     for raw_name, raw_facts in raw_artifacts.items():
-        if not isinstance(raw_name, str) or not raw_name.casefold().endswith(".zip"):
+        if (
+            not isinstance(raw_name, str)
+            or not raw_name.casefold().endswith(".zip")
+            or raw_name.startswith(INTERNAL_CANDIDATE_PREFIXES)
+        ):
             continue
         if not isinstance(raw_facts, dict):
             raise PublisherError("metadado de ZIP do candidato inválido")

@@ -192,6 +192,26 @@ class NativeReleaseSmokeTests(unittest.TestCase):
                     handoff=handoff,
                 )
 
+    def test_normalize_accepts_candidate_paths_that_contain_fixture_word(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            handoff = self._handoff(candidate, root / "handoff.json")
+            payload = json.loads(handoff.read_text(encoding="utf-8"))
+            payload["cases"][0]["command"] = [
+                "python3",
+                "/private/tmp/candidate-with-fixtures/x86qw-native-smoke",
+                "--case",
+                "install-clean-space-unicode",
+            ]
+            handoff.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            report = native_release_smoke.normalize_native_smoke(
+                candidate=candidate,
+                platform="Linux-X64",
+                handoff=handoff,
+            )
+            self.assertIn("candidate-with-fixtures", report["cases"][0]["command"][1])
+
     def test_normalize_rejects_incomplete_linux_environment_and_elevated_windows(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

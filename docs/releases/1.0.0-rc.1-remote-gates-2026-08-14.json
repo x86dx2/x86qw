@@ -1,0 +1,122 @@
+{
+  "checked_at": "2026-08-14T13:35:04Z",
+  "format": "x86qw-remote-gates-v1",
+  "project": "x86qw",
+  "release": {
+    "is_draft": false,
+    "is_immutable": false,
+    "is_prerelease": true,
+    "tag": "x86qw-installer-1.0.0-rc.1",
+    "url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0-rc.1"
+  },
+  "latest_tuf_monitor": {
+    "conclusion": "failure",
+    "run_id": 31798419309,
+    "url": "https://github.com/x86dx2/x86qw/actions/runs/31798419309"
+  },
+  "remote_workflows": [
+    {
+      "name": "Native M3 candidate evidence",
+      "id": 332608714,
+      "state": "active"
+    },
+    {
+      "name": "Immutable candidate release",
+      "id": 324676896,
+      "state": "active"
+    },
+    {
+      "name": "Assemble signed M3 evidence",
+      "id": 332608716,
+      "state": "active"
+    },
+    {
+      "name": "Assemble signed TUF metadata",
+      "id": 333547080,
+      "state": "active"
+    },
+    {
+      "name": "Monitor public TUF lease",
+      "id": 332608717,
+      "state": "active"
+    },
+    {
+      "name": "Validate",
+      "id": 324642698,
+      "state": "active"
+    },
+    {
+      "name": "Dependabot Updates",
+      "id": 329369041,
+      "state": "active"
+    }
+  ],
+  "local_workflows_not_present_remotely": [
+    ".github/workflows/public-acceptance.yml",
+    ".github/workflows/rc-soak.yml",
+    ".github/workflows/tuf-operation-drill.yml",
+    ".github/workflows/tuf-timestamp-publish.yml",
+    ".github/workflows/tuf-timestamp-renewal.yml"
+  ],
+  "release_environment": {
+    "timestamp_signer_secret": "TUF_TIMESTAMP_KEY_B64",
+    "timestamp_signer_secret_present": false
+  },
+  "open_issues": [
+    {
+      "number": 143,
+      "title": "[P1] RC soak — x86QW 1.0.0-rc.1",
+      "url": "https://github.com/x86dx2/x86qw/issues/143"
+    },
+    {
+      "number": 144,
+      "title": "[P1] Durable signed release evidence",
+      "url": "https://github.com/x86dx2/x86qw/issues/144"
+    },
+    {
+      "number": 145,
+      "title": "[P1] Public RC acceptance",
+      "url": "https://github.com/x86dx2/x86qw/issues/145"
+    },
+    {
+      "number": 146,
+      "title": "[P1] Real 0.7.13 migration",
+      "url": "https://github.com/x86dx2/x86qw/issues/146"
+    },
+    {
+      "number": 147,
+      "title": "[P1] Remaining M3 functional coverage",
+      "url": "https://github.com/x86dx2/x86qw/issues/147"
+    },
+    {
+      "number": 148,
+      "title": "[P1] Sustainable TUF operation",
+      "url": "https://github.com/x86dx2/x86qw/issues/148"
+    },
+    {
+      "number": 149,
+      "title": "[P1] Final 1.0.0 promotion",
+      "url": "https://github.com/x86dx2/x86qw/issues/149"
+    },
+    {
+      "number": 150,
+      "title": "[P2] Remote branch cleanup after evidence registration",
+      "url": "https://github.com/x86dx2/x86qw/issues/150"
+    },
+    {
+      "number": 151,
+      "title": "[P2] Evaluate GitHub host-level immutable releases",
+      "url": "https://github.com/x86dx2/x86qw/issues/151"
+    },
+    {
+      "number": 152,
+      "title": "TUF public lease requires attention",
+      "url": "https://github.com/x86dx2/x86qw/issues/152"
+    }
+  ],
+  "status": "final-promotion-no-go",
+  "limitations": [
+    "This is a read-only snapshot of GitHub state; it does not authorize issue, release, branch, TUF, or workflow mutations.",
+    "Open issues are evidence of outstanding gates, not proof that their underlying work is complete."
+  ]
+}

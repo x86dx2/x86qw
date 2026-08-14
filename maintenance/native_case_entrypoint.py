@@ -36,9 +36,11 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 CANONICAL_CASES = (
     "install-clean-space-unicode",
     "install-existing-space-unicode",
+    "migration-0.7.13-real",
     "client-stable-window-map-exit",
     "client-nightly-window-map-exit",
     "game-ktx",
+    "game-ktx-frogbot",
     "game-final-arena",
     "game-pro-x",
     "game-team-fortress",
@@ -47,15 +49,21 @@ CANONICAL_CASES = (
     "qtv-stream",
     "qwfwd-forward",
     "lifecycle-update",
+    "lifecycle-update-apply",
     "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
     "lifecycle-verify",
     "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
     "lifecycle-cleanup",
     "lifecycle-uninstall",
+    "lifecycle-purge",
 )
 _BOUND_METADATA = frozenset({
     "checksums.txt", "ownership.json", "sbom.spdx.json", "provenance.json",
     "mirrors.json", "candidate.json", "release-evidence.json",
+    "evidence-root.json", "release-receipt.json",
 })
 
 
@@ -94,6 +102,18 @@ _CLIENT_CASES = {
     "client-stable-window-map-exit": ("stable", (), "dm6"),
     "client-nightly-window-map-exit": ("nightly", (), "dm6"),
     "game-ktx": ("stable", (), "dm6"),
+    "game-ktx-frogbot": (
+        "stable", (
+            "+set", "k_fb_enabled", "1",
+            "+set", "k_fb_skill", "5",
+            "+set", "k_fb_name_0", "/x86QW",
+            "+set", "k_fb_name_team_0", "/x86QW",
+            "+set", "k_fb_name_enemy_0", "/x86QW",
+            "+set", "k_defmap", "dm6",
+            "+set", "k_defmode", "1on1",
+            "+exec", "x86qw-native-smoke-frogbot.cfg",
+        ), "dm6",
+    ),
     "game-final-arena": (
         "stable", ("-game", "arena", "+sv_gamedir", "arena", "+sv_progtype", "0"), "23ar-a",
     ),
@@ -111,6 +131,7 @@ _CLIENT_CONTENT = {
     "client-stable-window-map-exit": ("qw", None, "dm6"),
     "client-nightly-window-map-exit": ("qw", None, "dm6"),
     "game-ktx": ("qw", "qw/ktx.pk3", "dm6"),
+    "game-ktx-frogbot": ("qw", "qw/ktx.pk3", "dm6"),
     "game-final-arena": ("arena", "arena/arena.pk3", "23ar-a"),
     "game-pro-x": ("prox", "prox/qwprogs.dat", "proxmap1"),
     "game-team-fortress": ("fortress", "fortress/qwprogs.dat", "2fort5r"),
@@ -136,6 +157,44 @@ for window in windows {
     print("\(owner)\t\(name)")
 }
 '''
+
+
+def _native_frogbot_config_payload() -> bytes:
+    """Return the top-level event config used by the real post-map smoke."""
+
+    return (
+        "echo x86qw_native_frogbot_config\n"
+        'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+        'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n'
+    ).encode("ascii")
+
+
+def _prepare_native_frogbot_config(target: Path) -> Path:
+    """Materialize a reversible top-level on-enter hook for the KTX smoke."""
+
+    target = Path(target).absolute()
+    if target.is_symlink() or not target.is_dir():
+        raise CandidateCaseError("destino nativo ausente ou inseguro para Frogbot")
+    config_directory = target / "qw"
+    if config_directory.is_symlink() or not config_directory.is_dir():
+        raise CandidateCaseError("diretório qw ausente ou inseguro para Frogbot")
+    config = config_directory / "x86qw-native-smoke-frogbot.cfg"
+    if config.exists() or config.is_symlink():
+        raise CandidateCaseError("configuração nativa de Frogbot já existe")
+    _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
+    return config
+
+
+def _remove_native_frogbot_config(config: Path) -> None:
+    """Remove only the derived smoke config."""
+
+    config = Path(config)
+    if config.is_symlink():
+        raise CandidateCaseError("configuração nativa de Frogbot foi trocada por symlink")
+    if config.exists():
+        if not config.is_file():
+            raise CandidateCaseError("configuração nativa de Frogbot não é arquivo regular")
+        config.unlink()
 _SERVICE_SUFFIXES = {
     "mvdsv-mvd": ("runtime/servers/mvdsv/", "runtime/macos-arm64/mvdsv"),
     "qtv-stream": ("runtime/services/qtv/", "runtime/macos-arm64/qtv"),
@@ -149,12 +208,18 @@ _SERVICE_OOB = b"\xff\xff\xff\xff"
 _INSTALLER_CASES = {
     "install-clean-space-unicode": ("install",),
     "install-existing-space-unicode": ("install",),
+    "migration-0.7.13-real": ("migrate",),
     "lifecycle-update": ("--dry-run", "update"),
+    "lifecycle-update-apply": ("--yes", "update"),
     "lifecycle-upgrade": ("--dry-run", "--yes", "upgrade"),
+    "lifecycle-upgrade-apply": ("--yes", "upgrade"),
     "lifecycle-verify": ("--json", "verify"),
     "lifecycle-repair": ("--dry-run", "repair"),
+    "lifecycle-repair-corruption": ("repair",),
+    "lifecycle-migrate-apply": ("migrate",),
     "lifecycle-cleanup": ("cleanup",),
     "lifecycle-uninstall": ("uninstall",),
+    "lifecycle-purge": ("uninstall", "--purge"),
 }
 _INSTALLATION_TARGET = "instalação espaço"
 _STATE_FILENAME = "lifecycle-state.json"
@@ -689,6 +754,40 @@ def _gamecode_log(target: Path, gamedir: str) -> str | None:
     return None
 
 
+def _frogbot_log_evidence(target: Path) -> dict[str, object]:
+    """Read the candidate-owned KTX log for an actual named Frogbot launch."""
+
+    chunks: list[str] = []
+    for path in _console_log_paths(target, "qw"):
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
+            continue
+        try:
+            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    log = "\n".join(chunks)
+    lowered = log.casefold()
+    return {
+        # KTX reports the control command, not necessarily the product word
+        # "Frogbot".  The command is therefore the stable runtime evidence;
+        # the map/window/gamecode assertions establish that it ran in the
+        # candidate-owned KTX process.
+        "frogbot_spawned": (
+            "botcmd addbot" in lowered
+            or bool(re.search(r"/?x86qw\s+entered\s+the\s+game", lowered))
+        ),
+        "frogbot_skill": (
+            bool(re.search(r"botcmd\s+skill\s+5\b", lowered))
+            or bool(re.search(r"skill\b[^\n]{0,32}(?:\b5\b|cf005)", lowered))
+        ),
+        "frogbot_named": "x86qw" in lowered and (
+            "k_fb_name_0" in lowered or "/x86qw" in lowered
+        ),
+        "frogbot_config_loaded": "x86qw_native_frogbot_config" in lowered,
+        "frogbot_log": log[-2048:],
+    }
+
+
 def _run_client_process(
     prepared: PreparedCase,
     case: str,
@@ -730,12 +829,34 @@ def _run_client_process(
             # candidate-owned console log, while lsof only guards against a
             # fallback to another basedir.
             files_ready = target_prefix in open_files
-            if map_name.casefold() in window_title.casefold() and files_ready:
+            frogbot_ready = (
+                all(_frogbot_log_evidence(target).get(field) is True for field in (
+                    "frogbot_spawned", "frogbot_skill", "frogbot_named",
+                    "frogbot_config_loaded",
+                ))
+                if case == "game-ktx-frogbot" else True
+            )
+            if map_name.casefold() in window_title.casefold() and files_ready and frogbot_ready:
                 break
             time.sleep(0.25)
         else:
+            diagnostics = [
+                f"window={window_title[:160]!r}",
+                f"target_open={str(Path(target).absolute()) in open_files}",
+                f"gamecode={_gamecode_log(target, gamedir)!r}",
+            ]
+            if case == "game-ktx-frogbot":
+                frogbot = _frogbot_log_evidence(target)
+                diagnostics.extend([
+                    f"frogbot_spawned={frogbot['frogbot_spawned']}",
+                    f"frogbot_skill={frogbot['frogbot_skill']}",
+                    f"frogbot_named={frogbot['frogbot_named']}",
+                    f"frogbot_config_loaded={frogbot['frogbot_config_loaded']}",
+                    f"frogbot_log={str(frogbot['frogbot_log'])[-512:]!r}",
+                ])
             raise CandidateCaseError(
-                f"ezQuake não comprovou janela/mapa/conteúdo para {case}"
+                f"ezQuake não comprovou janela/mapa/conteúdo para {case}: "
+                + "; ".join(diagnostics)
             )
         process.send_signal(signal.SIGTERM)
         try:
@@ -755,6 +876,14 @@ def _run_client_process(
             "termination": "controlled",
             "process_exit_code": process_exit_code,
         }
+        if case == "game-ktx-frogbot":
+            frogbot = _frogbot_log_evidence(target)
+            if not all(frogbot.get(field) is True for field in (
+                "frogbot_spawned", "frogbot_skill", "frogbot_named",
+                "frogbot_config_loaded",
+            )):
+                raise CandidateCaseError("KTX não comprovou o Frogbot nomeado no log")
+            observation.update(frogbot)
         return 0, stdout or b"", stderr or b"", observation
     except BaseException:
         if process.poll() is None:
@@ -1585,9 +1714,475 @@ def _prepare_state(case: str, state_root: Path) -> str:
         if status is not None or os.path.lexists(target):
             raise CandidateCaseError("install-clean exige scratch sem instalação anterior")
         return "clean"
+    if case == "lifecycle-purge":
+        if status != "uninstalled" or target.is_symlink() or not target.is_dir():
+            raise CandidateCaseError(
+                "lifecycle-purge exige a instalação compartilhada já desinstalada"
+            )
+        return "uninstalled"
     if status != "installed" or target.is_symlink() or not target.is_dir():
         raise CandidateCaseError(f"{case} exige a instalação compartilhada já instalada")
     return "installed"
+
+
+def _candidate_fixture_artifact(candidate: Candidate, relative: str) -> CandidateArtifact:
+    artifact = candidate.artifacts.get(relative)
+    if artifact is None:
+        raise CandidateCaseError(f"fixture nativa ausente no candidato: {relative}")
+    return artifact
+
+
+def _regular_target_file(path: Path, label: str) -> Path:
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        raise CandidateCaseError(f"arquivo de {label} ausente ou inseguro: {path}")
+    return path
+
+
+def _target_digest(path: Path, label: str) -> str:
+    regular = _regular_target_file(path, label)
+    return _digest(regular)[1]
+
+
+def _write_target_bytes(path: Path, payload: bytes, label: str) -> None:
+    path = Path(path)
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise CandidateCaseError(f"destino de {label} é inseguro: {path}")
+    if path.parent.is_symlink() or (path.parent.exists() and not path.parent.is_dir()):
+        raise CandidateCaseError(f"diretório de {label} é inseguro: {path.parent}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.native-tmp")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except OSError as error:
+        temporary.unlink(missing_ok=True)
+        raise CandidateCaseError(f"não foi possível escrever {label}: {path}") from error
+
+
+def _preserve_native_user_files(target: Path) -> dict[str, dict[str, object]]:
+    personal: dict[str, dict[str, object]] = {}
+    for relative, payload in (
+        ("qw/configs/x86qw-native-legacy.cfg", b"seta name x86qw-native-legacy\n"),
+        ("qw/demos/x86qw-native-legacy.mvd", b"MVD1 x86qw native migration demo\n"),
+    ):
+        path = Path(target) / relative
+        if not path.exists():
+            _write_target_bytes(path, payload, "arquivo pessoal nativo")
+        digest = _target_digest(path, "arquivo pessoal nativo")
+        personal[relative] = {"sha256": digest, "size": path.stat().st_size}
+    paks: dict[str, dict[str, object]] = {}
+    for name in ("pak0.pak", "pak1.pak"):
+        path = Path(target) / "id1" / name
+        digest = _target_digest(path, f"PAK {name}")
+        paks[f"id1/{name}"] = {"sha256": digest, "size": path.stat().st_size}
+    return {"personal": personal, "paks": paks}
+
+
+def _prepare_legacy_state(
+    candidate: Candidate, target: Path, *, source_version: str,
+) -> dict[str, object]:
+    """Install candidate-owned historical metadata for a real migration apply."""
+
+    prefix = "runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13/"
+    fixture_state = _candidate_fixture_artifact(candidate, prefix + ".x86qw/state.json")
+    fixture_version = _candidate_fixture_artifact(candidate, prefix + "VERSION")
+    version = fixture_version.path.read_text(encoding="utf-8").strip()
+    if version != source_version:
+        raise CandidateCaseError("fixture de migração 0.7.13 diverge da versão esperada")
+    try:
+        document = json.loads(
+            fixture_state.path.read_text(encoding="utf-8"),
+            object_pairs_hook=_no_duplicates,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CandidateCaseError("fixture de estado 0.7.13 inválida") from error
+    if (
+        not isinstance(document, dict)
+        or document.get("format") != 1
+        or document.get("project") != PROJECT
+    ):
+        raise CandidateCaseError("fixture de estado 0.7.13 não é formato legado")
+    document["installation_version"] = source_version
+    state_path = _regular_target_file(
+        Path(target) / ".x86qw/state.json", "estado de instalação",
+    )
+
+    # The install case has just written current-format receipts.  Replacing
+    # only state.json would create an intentionally contradictory installation
+    # (legacy state plus an authenticated RC CLI receipt), so seed the complete
+    # legacy metadata shape before invoking the real migration code.  Managed
+    # files are removed only after checking that they are regular files; user
+    # payloads and the candidate-owned CLI bytes remain untouched.
+    legacy_pairs = (
+        ("cli.receipt", ".x86qw/cli/receipt"),
+        ("ktx.receipt", ".x86qw/components/ktx/receipt"),
+        ("ktx.inventory", ".x86qw/components/ktx/inventory"),
+    )
+    for name, canonical_relative in legacy_pairs:
+        fixture = _candidate_fixture_artifact(candidate, prefix + ".x86qw/" + name)
+        canonical = Path(target) / canonical_relative
+        if canonical.is_symlink() or (canonical.exists() and not canonical.is_file()):
+            raise CandidateCaseError(f"metadado canônico legado é inseguro: {canonical_relative}")
+        if canonical.exists():
+            canonical.unlink()
+        _write_target_bytes(
+            Path(target) / ".x86qw" / name,
+            fixture.path.read_bytes(),
+            f"recibo legado {name}",
+        )
+    preserved = _preserve_native_user_files(target)
+    before = _target_digest(state_path, "estado de instalação")
+    _write_target_bytes(
+        state_path,
+        (json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        "estado legado de instalação",
+    )
+    return {
+        "source_version": source_version,
+        "fixture_state_sha256": fixture_state.sha256,
+        "fixture_version_sha256": fixture_version.sha256,
+        "state_before_sha256": before,
+        **preserved,
+    }
+
+
+def _prepare_update_apply_state(candidate: Candidate, target: Path) -> dict[str, object]:
+    """Seed a valid old component inventory whose update has one real mutation."""
+
+    canonical_inventory = _regular_target_file(
+        Path(target) / ".x86qw/components/ktx/inventory",
+        "inventário canônico do KTX",
+    )
+    current_inventory = canonical_inventory.read_bytes()
+    context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+    old_payload = b"x86qw-native-0.7.13-ktx-fixture\n"
+    ktx_payload = _regular_target_file(Path(target) / "qw/ktx.pk3", "PAK KTX")
+    _write_target_bytes(ktx_payload, old_payload, "payload legado do KTX")
+    old_digest = hashlib.sha256(old_payload).hexdigest()
+    inventory_lines: list[bytes] = []
+    replaced = False
+    for line in current_inventory.splitlines(keepends=True):
+        content = line.rstrip(b"\r\n")
+        ending = line[len(content):]
+        fields = content.split(b"\t")
+        if len(fields) == 2 and fields[0] == b"qw/ktx.pk3":
+            fields[1] = old_digest.encode("ascii")
+            replaced = True
+        inventory_lines.append(b"\t".join(fields) + ending)
+    if not replaced:
+        raise CandidateCaseError("inventário canônico do KTX não declara qw/ktx.pk3")
+    inventory_payload = b"".join(inventory_lines)
+    inventory_digest = hashlib.sha256(inventory_payload).hexdigest()
+    receipt_payload = (
+        "format\t1\n"
+        "component\tktx\n"
+        "selection\t0.7.13\n"
+        "source\thttps://example.invalid/x86qw-0.7.13-ktx.zip\n"
+        f"inventory_sha256\t{inventory_digest}\n"
+    ).encode("ascii")
+    _write_target_bytes(
+        Path(target) / ".x86qw/ktx.inventory", inventory_payload,
+        "inventário legado do KTX para update",
+    )
+    _write_target_bytes(
+        Path(target) / ".x86qw/ktx.receipt", receipt_payload,
+        "recibo legado do KTX para update",
+    )
+    return context
+
+
+def _prepare_repair_corruption(target: Path) -> dict[str, object]:
+    preserved = _preserve_native_user_files(target)
+    candidates = ("mvdsv", "qtv/qtv", "qwfwd/qwfwd")
+    for relative in candidates:
+        path = Path(target) / relative
+        if path.is_symlink() or not path.is_file():
+            continue
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if not mode & stat.S_IXUSR:
+            continue
+        _target_digest(path, f"runtime {relative}")
+        os.chmod(path, mode & ~0o111)
+        if stat.S_IMODE(path.stat().st_mode) & 0o111:
+            raise CandidateCaseError(f"não foi possível corromper permissão nativa: {relative}")
+        return {
+            "path": relative,
+            "payload_sha256": _target_digest(path, f"runtime {relative}"),
+            "corrupted_mode": mode & ~0o111,
+            **preserved,
+        }
+    raise CandidateCaseError("nenhum runtime executável disponível para o caso de repair")
+
+
+def _prepare_uninstall_context(target: Path) -> dict[str, object]:
+    return _preserve_native_user_files(target)
+
+
+def _prepare_purge_context(
+    candidate: Candidate,
+    target: Path,
+    scratch: Path,
+    state_root: Path,
+    environment: Mapping[str, str],
+) -> dict[str, object]:
+    """Rehydrate ownership with the candidate before exercising purge.
+
+    A previous lifecycle sequence can leave modified managed files behind after
+    uninstall.  Reinstall into a fresh target, then restore only the explicit
+    disposable personal/PAK fixture, so purge tests ownership removal rather
+    than depending on stale component metadata from the preceding cases.
+    """
+
+    target = Path(target).absolute()
+    state_root = Path(state_root).absolute()
+    scratch = Path(scratch).absolute()
+    if target.parent != state_root or target.name != _INSTALLATION_TARGET:
+        raise CandidateCaseError("destino de purge não pertence ao estado nativo")
+    if target.is_symlink() or not target.is_dir():
+        raise CandidateCaseError("destino original do purge ausente ou inseguro")
+    backup = scratch / "purge-original-target"
+    if backup.exists() or backup.is_symlink():
+        raise CandidateCaseError("backup descartável do purge já existe")
+    rehydrate_scratch = Path(scratch) / "purge-rehydrate"
+    prepared = _installer_command(
+        candidate, ("install",), rehydrate_scratch, state_root,
+    )
+    preserved = _preserve_native_user_files(target)
+    target.rename(backup)
+    try:
+        result = subprocess.run(
+            prepared.argv,
+            cwd=prepared.cwd,
+            env=dict(environment),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=prepared.shell,
+            timeout=300,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        if target.exists() or target.is_symlink():
+            if target.is_symlink() or not target.is_dir():
+                raise CandidateCaseError("reinstalação deixou destino descartável inseguro") from error
+            shutil.rmtree(target)
+        backup.rename(target)
+        raise CandidateCaseError("reinstalação de ownership para purge falhou") from error
+    if result.returncode != 0:
+        if target.exists() or target.is_symlink():
+            if target.is_symlink() or not target.is_dir():
+                raise CandidateCaseError("reinstalação deixou destino descartável inseguro")
+            shutil.rmtree(target)
+        backup.rename(target)
+        detail = "\n".join(
+            part.decode("utf-8", errors="replace").strip()
+            for part in (result.stderr, result.stdout)
+            if part
+        ).strip()
+        raise CandidateCaseError(
+            "reinstalação de ownership para purge falhou: " + (detail[-512:] or "sem diagnóstico")
+        )
+    if not Path(target).is_dir() or not (Path(target) / ".x86qw/state.json").is_file():
+        if target.is_symlink() or not target.is_dir():
+            raise CandidateCaseError("reinstalação deixou destino descartável inseguro")
+        shutil.rmtree(target)
+        backup.rename(target)
+        raise CandidateCaseError("reinstalação de ownership não publicou estado gerenciado")
+    for group in ("personal", "paks"):
+        entries = preserved.get(group)
+        if not isinstance(entries, Mapping):
+            raise CandidateCaseError("preservação descartável de purge inválida")
+        for relative in entries:
+            if not isinstance(relative, str):
+                raise CandidateCaseError("caminho pessoal de purge inválido")
+            source = _regular_target_file(backup / relative, "fixture pessoal de purge")
+            _write_target_bytes(
+                target / relative,
+                source.read_bytes(),
+                "restauração do fixture pessoal de purge",
+            )
+    return {"rehydrated": True, **preserved}
+
+
+def _validate_uninstall_apply(target: Path, context: Mapping[str, object]) -> dict[str, object]:
+    personal_ok, pak_ok = _validate_preserved_files(target, context)
+    managed_paths = (
+        "mvdsv", "qtv/qtv", "qwfwd/qwfwd", "ezQuake Stable.app", "ezQuake Nightly.app",
+        "x86qw.sh", "x86qw.cmd", "x86qw.pyz",
+    )
+    leftovers = [
+        relative for relative in managed_paths
+        if (Path(target) / relative).exists() or (Path(target) / relative).is_symlink()
+    ]
+    installation_removed = not leftovers
+    if not installation_removed or not personal_ok or not pak_ok:
+        raise CandidateCaseError(
+            "uninstall não removeu os gerenciados ou alterou dados pessoais: "
+            f"leftovers={leftovers!r}; personal={personal_ok}; pak={pak_ok}"
+        )
+    return {
+        "installation_removed": True,
+        "personal_preserved": personal_ok,
+        "pak_preserved": pak_ok,
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
+
+
+def _validate_purge_apply(target: Path, context: Mapping[str, object]) -> dict[str, object]:
+    if os.path.lexists(target):
+        raise CandidateCaseError("purge deixou o destino de instalação existente")
+    personal = context.get("personal")
+    if not isinstance(personal, Mapping):
+        raise CandidateCaseError("contexto de purge nativo inválido")
+    personal_removed = all(
+        isinstance(relative, str) and not os.path.lexists(Path(target) / relative)
+        for relative in personal
+    )
+    if not personal_removed:
+        raise CandidateCaseError("purge preservou dados pessoais que deveriam ser removidos")
+    return {
+        "installation_removed": True,
+        "personal_removed": True,
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
+
+
+def _validate_preserved_files(target: Path, context: Mapping[str, object]) -> tuple[bool, bool]:
+    personal = context.get("personal")
+    paks = context.get("paks")
+    if not isinstance(personal, Mapping) or not isinstance(paks, Mapping):
+        raise CandidateCaseError("contexto de preservação nativo inválido")
+    personal_ok = True
+    for relative, identity in personal.items():
+        if not isinstance(relative, str) or not isinstance(identity, Mapping):
+            personal_ok = False
+            continue
+        path = Path(target) / relative
+        try:
+            personal_ok = personal_ok and _target_digest(path, "arquivo pessoal nativo") == identity.get("sha256")
+        except CandidateCaseError:
+            personal_ok = False
+    pak_ok = True
+    for relative, identity in paks.items():
+        if not isinstance(relative, str) or not isinstance(identity, Mapping):
+            pak_ok = False
+            continue
+        try:
+            pak_ok = pak_ok and _target_digest(Path(target) / relative, "PAK nativo") == identity.get("sha256")
+        except CandidateCaseError:
+            pak_ok = False
+    return personal_ok, pak_ok
+
+
+def _state_document(target: Path) -> tuple[Path, dict[str, object], str]:
+    path = _regular_target_file(Path(target) / ".x86qw/state.json", "estado de instalação")
+    try:
+        payload = path.read_bytes()
+        value = json.loads(payload.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CandidateCaseError("estado de instalação não é JSON válido") from error
+    if not isinstance(value, dict):
+        raise CandidateCaseError("estado de instalação não é objeto JSON")
+    return path, value, hashlib.sha256(payload).hexdigest()
+
+
+def _component_selection(target: Path, component: str) -> str | None:
+    """Read the authenticated selection recorded for one migrated component."""
+
+    path = _regular_target_file(
+        Path(target) / f".x86qw/components/{component}/receipt",
+        f"recibo do componente {component}",
+    )
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, separator, value = line.partition("\t")
+        if separator and key == "selection":
+            return value
+    return None
+
+
+def _validate_state_apply(
+    target: Path,
+    context: Mapping[str, object],
+    *,
+    label: str,
+) -> dict[str, object]:
+    _path, state, after_digest = _state_document(target)
+    if state.get("format") != 2:
+        raise CandidateCaseError(f"{label} não convergiu o estado para formato 2")
+    before_digest = context.get("state_before_sha256")
+    if not isinstance(before_digest, str) or before_digest == after_digest:
+        raise CandidateCaseError(f"{label} não aplicou uma mutação de estado")
+    personal_ok, pak_ok = _validate_preserved_files(target, context)
+    if not personal_ok or not pak_ok:
+        raise CandidateCaseError(f"{label} alterou dados pessoais ou PAKs registrados")
+    return {
+        "state_before_sha256": before_digest,
+        "state_after_sha256": after_digest,
+        "state_converged": True,
+        # The format-2 state intentionally does not duplicate the product
+        # version.  The component receipt is the authoritative post-update
+        # coordinate; the native fixture starts from the 0.7.13 selection.
+        "no_downgrade": (
+            state.get("state_version") == 2
+            and _component_selection(target, "ktx") not in {None, "0.7.13"}
+        ),
+        "profile_preserved": isinstance(state.get("profile"), str),
+        "mutation_applied": True,
+        "personal_preserved": personal_ok,
+        "pak_preserved": pak_ok,
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
+
+
+def _validate_migration_apply(
+    target: Path,
+    context: Mapping[str, object],
+    *,
+    label: str,
+) -> dict[str, object]:
+    result = _validate_state_apply(target, context, label=label)
+    return {
+        "source_version": context.get("source_version"),
+        "fixture_state_sha256": context.get("fixture_state_sha256"),
+        "fixture_version_sha256": context.get("fixture_version_sha256"),
+        "state_before_sha256": result["state_before_sha256"],
+        "state_after_sha256": result["state_after_sha256"],
+        "migration_applied": result["mutation_applied"],
+        "state_converged": result["state_converged"],
+        "personal_preserved": result["personal_preserved"],
+        "pak_preserved": result["pak_preserved"],
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
+
+
+def _validate_repair_apply(target: Path, context: Mapping[str, object]) -> dict[str, object]:
+    relative = context.get("path")
+    payload_digest = context.get("payload_sha256")
+    if not isinstance(relative, str) or not isinstance(payload_digest, str):
+        raise CandidateCaseError("contexto de repair nativo inválido")
+    path = _regular_target_file(Path(target) / relative, "runtime reparado")
+    restored = bool(stat.S_IMODE(path.stat().st_mode) & stat.S_IXUSR)
+    restored = restored and _target_digest(path, "runtime reparado") == payload_digest
+    personal_ok, pak_ok = _validate_preserved_files(target, context)
+    if not restored or not personal_ok or not pak_ok:
+        raise CandidateCaseError("repair nativo não restaurou o runtime preservando dados")
+    return {
+        "path": relative,
+        "repair_applied": True,
+        "corruption_restored": True,
+        "personal_preserved": personal_ok,
+        "pak_preserved": pak_ok,
+        "termination": "controlled",
+        "process_exit_code": 0,
+    }
 
 
 def _cleanup_case_scratch(case_scratch: Path) -> None:
@@ -1668,7 +2263,30 @@ def _run_case(
         "X86QW_TEST_WINDOWED": "1",
         "X86QW_TEST_CONSOLE_LOG": "1",
     }
+    target = Path(state_root) / _INSTALLATION_TARGET
+    case_context: dict[str, object] | None = None
+    if case == "migration-0.7.13-real":
+        case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+    elif case == "lifecycle-update-apply":
+        case_context = _prepare_update_apply_state(candidate, target)
+    elif case == "lifecycle-upgrade-apply":
+        case_context = _prepare_update_apply_state(candidate, target)
+    elif case == "lifecycle-migrate-apply":
+        case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+    elif case == "lifecycle-repair-corruption":
+        case_context = _prepare_repair_corruption(target)
+    elif case == "lifecycle-uninstall":
+        case_context = _prepare_uninstall_context(target)
+    elif case == "lifecycle-purge":
+        case_context = None
+    native_frogbot_config: Path | None = None
     try:
+        if case == "lifecycle-purge":
+            case_context = _prepare_purge_context(
+                candidate, target, scratch, state_root, environment,
+            )
+        if case == "game-ktx-frogbot":
+            native_frogbot_config = _prepare_native_frogbot_config(target)
         observation: dict[str, object] | None = None
         if case in _CLIENT_CASES and sys.platform == "darwin":
             prepared = _isolate_macos_app(prepared, case, scratch)
@@ -1702,19 +2320,40 @@ def _run_case(
         if case == CANONICAL_CASES[0] and exit_code == 0:
             observation = _run_installed_launcher_contract(
                 candidate=candidate,
-                target=Path(state_root) / _INSTALLATION_TARGET,
+                target=target,
                 environment=environment,
             )
+        if exit_code == 0 and case_context is not None:
+            if case in {"migration-0.7.13-real", "lifecycle-migrate-apply"}:
+                observation = _validate_migration_apply(
+                    target, case_context, label=case,
+                )
+            elif case == "lifecycle-repair-corruption":
+                observation = _validate_repair_apply(target, case_context)
+            elif case == "lifecycle-uninstall":
+                observation = _validate_uninstall_apply(target, case_context)
+            elif case == "lifecycle-purge":
+                observation = _validate_purge_apply(target, case_context)
+            else:
+                observation = _validate_state_apply(
+                    target, case_context, label=case,
+                )
     except (OSError, subprocess.SubprocessError) as error:
         print(f"[ERRO] execução nativa falhou: {case}: {error}", file=sys.stderr)
         exit_code = 127
         result = subprocess.CompletedProcess(prepared.argv, exit_code, b"", str(error).encode())
     finally:
+        if native_frogbot_config is not None:
+            _remove_native_frogbot_config(native_frogbot_config)
         _cleanup_case_scratch(scratch)
     sys.stdout.buffer.write(result.stdout)
     sys.stderr.buffer.write(result.stderr)
     passed = exit_code == 0
-    state_after = "uninstalled" if case == CANONICAL_CASES[-1] and passed else "installed"
+    state_after = (
+        "uninstalled"
+        if case in {"lifecycle-uninstall", "lifecycle-purge"} and passed
+        else "installed"
+    )
     if passed:
         _write_state(state_root, status=state_after, case=case)
     value: dict[str, object] = {

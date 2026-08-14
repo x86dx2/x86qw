@@ -23,9 +23,11 @@ class PublishedReleaseTests(unittest.TestCase):
     def test_public_identity_accepts_semver_release_candidates(self):
         MODULE._validate_identity("example/project", "1.0.0-rc.1", "a" * 40)
 
-    def test_public_release_metadata_excludes_optional_native_evidence(self):
-        self.assertNotIn("release-evidence.json", MODULE.PUBLIC_METADATA_NAMES)
-        self.assertEqual(5, len(MODULE.PUBLIC_METADATA_NAMES))
+    def test_public_release_metadata_requires_durable_native_evidence(self):
+        self.assertIn("release-evidence.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertIn("evidence-root.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertIn("release-receipt.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertEqual(8, len(MODULE.PUBLIC_METADATA_NAMES))
 
     def metadata_payloads(self) -> dict[str, bytes]:
         return {
@@ -95,22 +97,86 @@ class PublishedReleaseTests(unittest.TestCase):
             }, *metadata_assets],
         }
 
-    def classify(self, payloads: dict[str, object], *, manifest: dict[str, object] | None = None, **kwargs: object) -> str:
+    def durable_receipt(self) -> dict[str, object]:
+        return {
+            "tuf_operation": {
+                "workflow": ".github/workflows/tuf-operation-drill.yml",
+                "run_id": "31752738004",
+                "artifact_id": "9005",
+                "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+                "report_sha256": "a" * 64,
+                "operator": "release-operator",
+                "custody_host": "offline-signer-01",
+                "timestamp_sla_hours": "6",
+            },
+            "public_acceptance": {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
+            },
+        }
+
+    def classify(
+        self,
+        payloads: dict[str, object],
+        *,
+        manifest: dict[str, object] | None = None,
+        durable_receipt: dict[str, object] | None = None,
+        **kwargs: object,
+    ) -> str:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = Path(temporary)
             for name, payload in self.metadata_payloads().items():
                 (candidate / name).write_bytes(payload)
             fetch_json = kwargs.pop("fetch_json", None) or self.fetcher(payloads)
-            return MODULE.classify_published_release(
-                candidate,
-                trust_root=Path(temporary) / "root.json",
-                repository="example/project",
-                version="1.0.0",
-                commit="a" * 40,
-                verify=lambda *_args, **_kwargs: manifest or self.manifest(),
-                fetch_json=fetch_json,
-                **kwargs,
-            )
+            with mock.patch.object(
+                MODULE,
+                "validate_durable_assets",
+                return_value=self.durable_receipt() if durable_receipt is None else durable_receipt,
+            ):
+                return MODULE.classify_published_release(
+                    candidate,
+                    trust_root=Path(temporary) / "root.json",
+                    repository="example/project",
+                    version="1.0.0",
+                    commit="a" * 40,
+                    verify=lambda *_args, **_kwargs: manifest or self.manifest(),
+                    fetch_json=fetch_json,
+                    **kwargs,
+                )
+
+    def test_final_release_requires_public_acceptance_handoff_in_durable_receipt(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "aceitação pública"):
+            self.classify(payloads, durable_receipt={})
+
+    def test_final_release_rejects_malformed_public_acceptance_digest(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        durable = self.durable_receipt()
+        durable["public_acceptance"]["bundle_sha256"] = "not-a-digest"  # type: ignore[index]
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "coordenadas inválidas"):
+            self.classify(payloads, durable_receipt=durable)
+
+    def test_final_release_requires_tuf_operation_handoff(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        durable = self.durable_receipt()
+        del durable["tuf_operation"]
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "operação TUF"):
+            self.classify(payloads, durable_receipt=durable)
 
     def test_both_absent_is_absent(self):
         missing = MODULE.PublishedReleaseNotFound()

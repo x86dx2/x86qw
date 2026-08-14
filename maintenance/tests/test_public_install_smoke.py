@@ -3,7 +3,10 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -40,6 +43,19 @@ class PublicInstallSmokeTests(unittest.TestCase):
             with self.subTest(packages=packages):
                 with self.assertRaises(smoke.PublicInstallSmokeError):
                     smoke._catalog_package({"project": "x86qw", "packages": packages}, "1.0.0")
+
+    def test_catalog_can_select_one_historical_migration_source(self):
+        historical = package(
+            version="0.7.13",
+            current=False,
+            filename="x86qw-installer-0.7.13.zip",
+        )
+        result = smoke._catalog_package(
+            {"project": "x86qw", "packages": [historical]},
+            "0.7.13",
+            current=False,
+        )
+        self.assertEqual("x86qw-installer-0.7.13.zip", result["filename"])
 
     def test_catalog_rejects_http_mirror_and_invalid_digest(self):
         with self.assertRaises(smoke.PublicInstallSmokeError):
@@ -85,6 +101,35 @@ class PublicInstallSmokeTests(unittest.TestCase):
             ])
         self.assertEqual(2, raised.exception.code)
 
+    def test_parser_exposes_the_full_public_acceptance_gate(self):
+        options = smoke._parser().parse_args([
+            "--version", "1.0.0-rc.1", "--platform", "macos",
+            "--channel", "stable", "--release", "latest",
+            "--profile", "complete",
+            "--trust-metadata-url", "https://trust.example.invalid/x86qw",
+            "--full-lifecycle",
+            "--acceptance-scope", "single-user",
+        ])
+        self.assertTrue(options.full_lifecycle)
+        self.assertEqual("single-user", options.acceptance_scope)
+
+    def test_action_response_requires_a_successful_json_contract(self):
+        self.assertEqual(
+            {"action": "verify", "ok": True},
+            smoke._require_action_success(
+                {"action": "verify", "ok": True}, "verify",
+            ),
+        )
+        with self.assertRaises(smoke.PublicInstallSmokeError):
+            smoke._require_action_success(
+                {"action": "verify", "ok": False}, "verify",
+            )
+
+    def test_candidate_version_accepts_the_public_rc_identity(self):
+        self.assertTrue(smoke._is_candidate_version("1.0.0-rc.1"))
+        self.assertTrue(smoke._is_candidate_version("1.0.0"))
+        self.assertFalse(smoke._is_candidate_version("1.0"))
+
     def test_run_smoke_uses_exact_bundle_and_json_verification(self):
         candidate = package()
         runs: list[list[str]] = []
@@ -104,12 +149,22 @@ class PublicInstallSmokeTests(unittest.TestCase):
             return mock.Mock(returncode=0, stdout=output)
 
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch.object(smoke, "_download_catalog", return_value={
-                "project": "x86qw", "packages": [candidate],
-            }))
+            stack.enter_context(mock.patch.object(smoke, "_download_catalog_payload", return_value=(
+                {"project": "x86qw", "packages": [candidate]},
+                b'{"project":"x86qw","packages":[]}',
+            )))
+            stack.enter_context(mock.patch.object(
+                smoke, "_authenticate_public_catalog",
+                return_value={"project": "x86qw", "packages": [candidate]},
+            ))
             stack.enter_context(mock.patch.object(smoke, "download_mirrors"))
             stack.enter_context(mock.patch.object(smoke, "validate_installer_bundle", return_value=mock.sentinel.plan))
-            stack.enter_context(mock.patch.object(smoke, "extract_archive"))
+
+            def fake_extract(_plan: object, destination: Path) -> None:
+                self.assertFalse(destination.exists())
+                destination.mkdir()
+
+            stack.enter_context(mock.patch.object(smoke, "extract_archive", side_effect=fake_extract))
             stack.enter_context(mock.patch.object(smoke.subprocess, "run", side_effect=fake_run))
             # The extracted application and receipt are represented by the
             # mock filesystem; this keeps the test independent of a published
@@ -146,6 +201,175 @@ class PublicInstallSmokeTests(unittest.TestCase):
         self.assertIn("--json", runs[1])
         self.assertIn("--json", runs[2])
         self.assertIn("verify", runs[2])
+        self.assertEqual(64, len(result["catalog_sha256"]))
+
+    def test_legacy_install_uses_the_historical_interactive_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "legacy target"
+            (target / "id1").mkdir(parents=True)
+            (target / "id1/pak0.pak").write_bytes(b"legacy pak")
+            application = root / "x86qw-0.7.13.pyz"
+            completed = subprocess.CompletedProcess(
+                [sys.executable, str(application)], 0, stdout="legacy install\n",
+            )
+            with mock.patch.object(smoke.subprocess, "run", return_value=completed) as run:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    receipt = smoke._install_application(
+                        application,
+                        target,
+                        env={},
+                        platform="macos",
+                        channel="stable",
+                        release="latest",
+                        profile="complete",
+                        version="0.7.13",
+                    )
+
+        self.assertEqual("0.7.13", receipt["version"])
+        command = list(run.call_args.args[0])
+        self.assertEqual(
+            [sys.executable, str(application), "install", str(target)],
+            command,
+        )
+        self.assertEqual("\n1\n2\n", run.call_args.kwargs["input"])
+
+    def test_full_lifecycle_uses_text_for_mutating_launcher_actions(self):
+        text_calls: list[tuple[str, ...]] = []
+        json_calls: list[tuple[str, tuple[str, ...]]] = []
+
+        def run_text(target, arguments, **_kwargs):
+            text_calls.append(tuple(arguments))
+            if tuple(arguments) == ("uninstall", "--purge"):
+                shutil.rmtree(target)
+            stdout = "x86QW 1.0.0-rc.2\n" if tuple(arguments) == ("version",) else ""
+            return subprocess.CompletedProcess(arguments, 0, stdout=stdout)
+
+        def run_json(_target, action, *arguments, **_kwargs):
+            json_calls.append((action, tuple(arguments)))
+            return {"ok": True, "dry_run": action == "update"}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            target = workspace / "target"
+            target.mkdir()
+            application = workspace / "x86qw.pyz"
+
+            def install(_application, destination, **_kwargs):
+                destination.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher", side_effect=run_text))
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher_json", side_effect=run_json))
+                stack.enter_context(mock.patch.object(smoke, "_install_application", side_effect=install))
+                stack.enter_context(mock.patch.object(
+                    smoke, "_download_public_bundle",
+                    return_value=(workspace / "legacy.pyz", {"sha256": "b" * 64}),
+                ))
+                stack.enter_context(mock.patch.object(
+                    smoke, "_run_public_migration",
+                    return_value={
+                        "source_version": "0.7.13",
+                        "source_bundle_sha256": "b" * 64,
+                        "migrate_apply": True,
+                        "target_version": "1.0.0-rc.2",
+                        "upgrade_to_candidate": True,
+                        "verify_after_upgrade": True,
+                        "uninstall_preserved_personal_data": True,
+                        "uninstall_preserved_paks": True,
+                        "uninstall_exit_code": 0,
+                    },
+                ))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    result = smoke._run_full_lifecycle(
+                        application,
+                        target,
+                        workspace=workspace,
+                        catalog={
+                            "project": "x86qw",
+                            "packages": [package(
+                                version="0.7.13",
+                                current=False,
+                                filename="x86qw-installer-0.7.13.zip",
+                            )],
+                        },
+                        env={},
+                        platform="macos",
+                        channel="stable",
+                        release="latest",
+                        profile="complete",
+                        version="1.0.0-rc.2",
+                    )
+
+        self.assertTrue(all(result["operations"].values()))
+        self.assertTrue(result["migration"]["migrate_apply"])
+        self.assertEqual(
+            [
+                ("version",),
+                ("changes",),
+                ("migrate", "--dry-run"),
+                ("update", "--yes"),
+                ("update", "--yes"),
+                ("uninstall",),
+                ("uninstall", "--purge"),
+            ],
+            text_calls,
+        )
+        self.assertEqual(
+            [("update", ("--dry-run",)), ("verify", ())],
+            json_calls,
+        )
+
+    def test_single_user_lifecycle_does_not_require_legacy_migration(self):
+        text_calls: list[tuple[str, ...]] = []
+
+        def run_text(target, arguments, **_kwargs):
+            text_calls.append(tuple(arguments))
+            if tuple(arguments) == ("uninstall", "--purge"):
+                shutil.rmtree(target)
+            stdout = "x86QW 1.0.0-rc.2\n" if tuple(arguments) == ("version",) else ""
+            return subprocess.CompletedProcess(arguments, 0, stdout=stdout)
+
+        def run_json(_target, action, *arguments, **_kwargs):
+            return {"ok": True, "dry_run": action == "update"}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            target = workspace / "target"
+            target.mkdir()
+            application = workspace / "x86qw.pyz"
+
+            def install(_application, destination, **_kwargs):
+                destination.mkdir()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher", side_effect=run_text))
+                stack.enter_context(mock.patch.object(smoke, "_run_launcher_json", side_effect=run_json))
+                stack.enter_context(mock.patch.object(smoke, "_install_application", side_effect=install))
+                stack.enter_context(mock.patch.object(
+                    smoke, "_download_public_bundle",
+                    side_effect=AssertionError("single-user acceptance must not download 0.7.13"),
+                ))
+                stack.enter_context(mock.patch.object(
+                    smoke, "_run_public_migration",
+                    side_effect=AssertionError("single-user acceptance must not migrate"),
+                ))
+                result = smoke._run_full_lifecycle(
+                    application,
+                    target,
+                    workspace=workspace,
+                    catalog={"project": "x86qw", "packages": []},
+                    env={},
+                    platform="macos",
+                    channel="stable",
+                    release="latest",
+                    profile="complete",
+                    version="1.0.0-rc.2",
+                    acceptance_scope="single-user",
+                )
+
+        self.assertNotIn("migration", result)
+        self.assertNotIn(("migrate", "--dry-run"), text_calls)
 
 
 if __name__ == "__main__":
