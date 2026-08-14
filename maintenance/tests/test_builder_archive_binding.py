@@ -560,8 +560,11 @@ class BuilderArchiveBindingTests(unittest.TestCase):
         self.assertGreaterEqual(len(packages), 1)
         self.assertEqual(installer_builder.VERSION, packages[-1]["version"])
         self.assertEqual(
-            {path.name for path in (ROOT / "dist/installer/packages").iterdir()}
-            - {"latest"},
+            {
+                path.name
+                for path in (ROOT / "dist/installer/packages").iterdir()
+                if path.name != ".DS_Store"
+            } - {"latest"},
             {str(package["version"]) for package in packages},
         )
 

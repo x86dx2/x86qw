@@ -572,6 +572,8 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
     if not package_root.is_dir() or package_root.is_symlink():
         raise ValueError(f"installer package directory is missing or unsafe: {package_root}")
     for directory in package_root.iterdir():
+        if directory.name == ".DS_Store":
+            continue
         if directory.name == "latest" and directory.is_symlink():
             continue
         if not directory.is_dir() or directory.is_symlink():
@@ -582,7 +584,7 @@ def package_results(package_root: Path) -> list[dict[str, object]]:
         archive = directory / filename
         if not archive.is_file() or archive.is_symlink():
             raise ValueError(f"installer package is missing or unsafe: {archive}")
-        if any(entry.name != filename for entry in directory.iterdir()):
+        if any(entry.name not in {filename, ".DS_Store"} for entry in directory.iterdir()):
             raise ValueError(f"installer version directory contains an unexpected file: {directory}")
         try:
             plan = validate_installer_history_bundle(archive, version)
