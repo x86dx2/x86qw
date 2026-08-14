@@ -45,10 +45,11 @@ root v1, timestamp v16, snapshot v16 e targets v16; autenticou o catálogo com
 [`docs/releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json).
 Esta é uma fotografia do endpoint público em 2026-08-14 05:04 UTC; não
 constitui evidência de custódia humana independente nem substitui a cerimônia
-TUF do candidato. A execução seguinte do monitor, run `31791717871` às
-10:19 UTC, falhou porque a mesma lease de `timestamp` entrou na janela de
-alerta de seis horas; a issue automática [#152](https://github.com/x86dx2/x86qw/issues/152)
-permanece aberta. O registro está em
+TUF do candidato. As execuções seguintes do monitor, runs `31791717871` às
+10:19 UTC e `31798419309` às 11:59 UTC, falharam porque a mesma lease de
+`timestamp` entrou na janela de alerta de seis horas; a issue automática
+[#152](https://github.com/x86dx2/x86qw/issues/152) permanece aberta. O registro
+do primeiro alerta está em
 [`1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json).
 Enquanto a renovação/recuperação manual não for concluída e verificada, o gate
 TUF público está `NO-GO`.

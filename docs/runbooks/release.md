@@ -184,7 +184,8 @@ cerimônia autorizada do mantenedor deve fornecer `metadata/` e `targets/`; o
 processo de publicação do site recebe somente o staging validado.
 
 A renovação operacional, neste repositório de mantenedor único, requer custódia
-explicitamente sob o ADR 0007, monitor de expiração e um signer agendado.
+explicitamente sob o ADR 0007, monitor de expiração e uma cerimônia manual
+protegida (modo B deste ciclo); não há signer online agendado implementado.
 `.github/workflows/tuf-monitor.yml` executa a
 verificação autenticada de hora em hora, falha 6 horas antes do vencimento e
 abre/atualiza uma única issue acionável quando o monitor falha; ele é somente
