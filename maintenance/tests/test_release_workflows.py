@@ -361,6 +361,38 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertRegex(block, r"(?m)^\s+merge-multiple:\s*true\s*$")
             self.assertIn("path:", block)
 
+    def test_candidate_artifacts_preserve_hidden_files(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        lines = source.splitlines()
+        starts = [
+            index
+            for index, line in enumerate(lines)
+            if "uses: actions/upload-artifact@" in line
+        ]
+        blocks = []
+        for start in starts:
+            indent = len(lines[start]) - len(lines[start].lstrip())
+            end = next(
+                (
+                    index
+                    for index in range(start + 1, len(lines))
+                    if lines[index].startswith(" " * indent + "- ")
+                ),
+                len(lines),
+            )
+            blocks.append("\n".join(lines[start:end]))
+
+        self.assertEqual(3, len(blocks))
+        for block in blocks:
+            self.assertRegex(
+                block,
+                r"(?m)^\s+path:\s+(?:release-work/candidate|candidate-with-m3|promoted)\s*$",
+            )
+            self.assertRegex(
+                block,
+                r"(?m)^\s+include-hidden-files:\s*true\s*$",
+            )
+
     def test_candidate_binds_native_runtime_bytes_before_any_smoke(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("for runtime_root in clients servers services; do", source)
