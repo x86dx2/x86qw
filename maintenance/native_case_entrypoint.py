@@ -104,16 +104,6 @@ _CLIENT_CASES = {
     "game-ktx": ("stable", (), "dm6"),
     "game-ktx-frogbot": (
         "stable", (
-            "+set", "x86qw_ruleset", "1",
-            "+exec", "x86qw-ruleset.cfg",
-            "+sb_listcache", "0",
-            "+spectator", "0",
-            "+bind", "F12", "quit",
-            "+maxclients", "32",
-            "+sv_mintic", "0.01",
-            "+sv_maxtic", "0.03",
-            "+pm_ktjump", "1",
-            "+set", "k_x86qw_quadcoach", "1",
             "+set", "k_fb_enabled", "1",
             "+set", "k_fb_skill", "5",
             "+set", "k_fb_name_0", "/x86QW",
@@ -121,6 +111,7 @@ _CLIENT_CASES = {
             "+set", "k_fb_name_enemy_0", "/x86QW",
             "+set", "k_defmap", "dm6",
             "+set", "k_defmode", "1on1",
+            "+exec", "x86qw-native-smoke-frogbot.cfg",
         ), "dm6",
     ),
     "game-final-arena": (
@@ -169,16 +160,17 @@ for window in windows {
 
 
 def _native_frogbot_config_payload() -> bytes:
-    """Return the derived KTX config used by the real post-map smoke."""
+    """Return the top-level event config used by the real post-map smoke."""
 
     return (
-        'tempalias x86qw_native_frogbot "wait;wait;cmd botcmd skill 5;cmd botcmd addbot 5"\n'
-        'tempalias on_enter "x86qw_native_frogbot"\n'
+        "echo x86qw_native_frogbot_config\n"
+        'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+        'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n'
     ).encode("ascii")
 
 
-def _prepare_native_frogbot_config(target: Path) -> tuple[Path, Path, bytes]:
-    """Inject a reversible on-enter hook through the real KTX user config."""
+def _prepare_native_frogbot_config(target: Path) -> Path:
+    """Materialize a reversible top-level on-enter hook for the KTX smoke."""
 
     target = Path(target).absolute()
     if target.is_symlink() or not target.is_dir():
@@ -187,37 +179,22 @@ def _prepare_native_frogbot_config(target: Path) -> tuple[Path, Path, bytes]:
     if config_directory.is_symlink() or not config_directory.is_dir():
         raise CandidateCaseError("diretório qw ausente ou inseguro para Frogbot")
     config = config_directory / "x86qw-native-smoke-frogbot.cfg"
-    user_config = config_directory / "x86qw-ktx-user.cfg"
-    if user_config.is_symlink() or not user_config.is_file():
-        raise CandidateCaseError("configuração pessoal KTX ausente ou insegura")
-    original = user_config.read_bytes()
-    try:
-        _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
-        _write_target_bytes(
-            user_config,
-            original + b"\nexec x86qw-native-smoke-frogbot.cfg\n",
-            "configuração pessoal KTX temporária",
-        )
-    except BaseException:
-        if config.is_file() and not config.is_symlink():
-            config.unlink()
-        raise
-    return config, user_config, original
+    if config.exists() or config.is_symlink():
+        raise CandidateCaseError("configuração nativa de Frogbot já existe")
+    _write_target_bytes(config, _native_frogbot_config_payload(), "configuração nativa de Frogbot")
+    return config
 
 
-def _remove_native_frogbot_config(state: tuple[Path, Path, bytes]) -> None:
-    """Restore the personal config and remove only the derived smoke file."""
+def _remove_native_frogbot_config(config: Path) -> None:
+    """Remove only the derived smoke config."""
 
-    config, user_config, original = state
+    config = Path(config)
     if config.is_symlink():
         raise CandidateCaseError("configuração nativa de Frogbot foi trocada por symlink")
     if config.exists():
         if not config.is_file():
             raise CandidateCaseError("configuração nativa de Frogbot não é arquivo regular")
         config.unlink()
-    if user_config.is_symlink() or not user_config.is_file():
-        raise CandidateCaseError("configuração pessoal KTX foi trocada durante o smoke")
-    _write_target_bytes(user_config, original, "restauração da configuração pessoal KTX")
 _SERVICE_SUFFIXES = {
     "mvdsv-mvd": ("runtime/servers/mvdsv/", "runtime/macos-arm64/mvdsv"),
     "qtv-stream": ("runtime/services/qtv/", "runtime/macos-arm64/qtv"),
@@ -233,7 +210,7 @@ _INSTALLER_CASES = {
     "install-existing-space-unicode": ("install",),
     "migration-0.7.13-real": ("migrate",),
     "lifecycle-update": ("--dry-run", "update"),
-    "lifecycle-update-apply": ("update",),
+    "lifecycle-update-apply": ("--yes", "update"),
     "lifecycle-upgrade": ("--dry-run", "--yes", "upgrade"),
     "lifecycle-upgrade-apply": ("--yes", "upgrade"),
     "lifecycle-verify": ("--json", "verify"),
@@ -795,11 +772,18 @@ def _frogbot_log_evidence(target: Path) -> dict[str, object]:
         # "Frogbot".  The command is therefore the stable runtime evidence;
         # the map/window/gamecode assertions establish that it ran in the
         # candidate-owned KTX process.
-        "frogbot_spawned": "botcmd addbot" in lowered,
-        "frogbot_skill": bool(re.search(r"botcmd\s+skill\s+5\b", lowered)),
+        "frogbot_spawned": (
+            "botcmd addbot" in lowered
+            or bool(re.search(r"/?x86qw\s+entered\s+the\s+game", lowered))
+        ),
+        "frogbot_skill": (
+            bool(re.search(r"botcmd\s+skill\s+5\b", lowered))
+            or bool(re.search(r"skill\b[^\n]{0,32}(?:\b5\b|cf005)", lowered))
+        ),
         "frogbot_named": "x86qw" in lowered and (
             "k_fb_name_0" in lowered or "/x86qw" in lowered
         ),
+        "frogbot_config_loaded": "x86qw_native_frogbot_config" in lowered,
         "frogbot_log": log[-2048:],
     }
 
@@ -848,6 +832,7 @@ def _run_client_process(
             frogbot_ready = (
                 all(_frogbot_log_evidence(target).get(field) is True for field in (
                     "frogbot_spawned", "frogbot_skill", "frogbot_named",
+                    "frogbot_config_loaded",
                 ))
                 if case == "game-ktx-frogbot" else True
             )
@@ -866,6 +851,7 @@ def _run_client_process(
                     f"frogbot_spawned={frogbot['frogbot_spawned']}",
                     f"frogbot_skill={frogbot['frogbot_skill']}",
                     f"frogbot_named={frogbot['frogbot_named']}",
+                    f"frogbot_config_loaded={frogbot['frogbot_config_loaded']}",
                     f"frogbot_log={str(frogbot['frogbot_log'])[-512:]!r}",
                 ])
             raise CandidateCaseError(
@@ -894,6 +880,7 @@ def _run_client_process(
             frogbot = _frogbot_log_evidence(target)
             if not all(frogbot.get(field) is True for field in (
                 "frogbot_spawned", "frogbot_skill", "frogbot_named",
+                "frogbot_config_loaded",
             )):
                 raise CandidateCaseError("KTX não comprovou o Frogbot nomeado no log")
             observation.update(frogbot)
@@ -1863,6 +1850,51 @@ def _prepare_legacy_state(
     }
 
 
+def _prepare_update_apply_state(candidate: Candidate, target: Path) -> dict[str, object]:
+    """Seed a valid old component inventory whose update has one real mutation."""
+
+    canonical_inventory = _regular_target_file(
+        Path(target) / ".x86qw/components/ktx/inventory",
+        "inventário canônico do KTX",
+    )
+    current_inventory = canonical_inventory.read_bytes()
+    context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+    old_payload = b"x86qw-native-0.7.13-ktx-fixture\n"
+    ktx_payload = _regular_target_file(Path(target) / "qw/ktx.pk3", "PAK KTX")
+    _write_target_bytes(ktx_payload, old_payload, "payload legado do KTX")
+    old_digest = hashlib.sha256(old_payload).hexdigest()
+    inventory_lines: list[bytes] = []
+    replaced = False
+    for line in current_inventory.splitlines(keepends=True):
+        content = line.rstrip(b"\r\n")
+        ending = line[len(content):]
+        fields = content.split(b"\t")
+        if len(fields) == 2 and fields[0] == b"qw/ktx.pk3":
+            fields[1] = old_digest.encode("ascii")
+            replaced = True
+        inventory_lines.append(b"\t".join(fields) + ending)
+    if not replaced:
+        raise CandidateCaseError("inventário canônico do KTX não declara qw/ktx.pk3")
+    inventory_payload = b"".join(inventory_lines)
+    inventory_digest = hashlib.sha256(inventory_payload).hexdigest()
+    receipt_payload = (
+        "format\t1\n"
+        "component\tktx\n"
+        "selection\t0.7.13\n"
+        "source\thttps://example.invalid/x86qw-0.7.13-ktx.zip\n"
+        f"inventory_sha256\t{inventory_digest}\n"
+    ).encode("ascii")
+    _write_target_bytes(
+        Path(target) / ".x86qw/ktx.inventory", inventory_payload,
+        "inventário legado do KTX para update",
+    )
+    _write_target_bytes(
+        Path(target) / ".x86qw/ktx.receipt", receipt_payload,
+        "recibo legado do KTX para update",
+    )
+    return context
+
+
 def _prepare_repair_corruption(target: Path) -> dict[str, object]:
     preserved = _preserve_native_user_files(target)
     candidates = ("mvdsv", "qtv/qtv", "qwfwd/qwfwd")
@@ -1897,12 +1929,30 @@ def _prepare_purge_context(
     state_root: Path,
     environment: Mapping[str, str],
 ) -> dict[str, object]:
-    """Rehydrate ownership with the candidate before exercising purge."""
+    """Rehydrate ownership with the candidate before exercising purge.
 
+    A previous lifecycle sequence can leave modified managed files behind after
+    uninstall.  Reinstall into a fresh target, then restore only the explicit
+    disposable personal/PAK fixture, so purge tests ownership removal rather
+    than depending on stale component metadata from the preceding cases.
+    """
+
+    target = Path(target).absolute()
+    state_root = Path(state_root).absolute()
+    scratch = Path(scratch).absolute()
+    if target.parent != state_root or target.name != _INSTALLATION_TARGET:
+        raise CandidateCaseError("destino de purge não pertence ao estado nativo")
+    if target.is_symlink() or not target.is_dir():
+        raise CandidateCaseError("destino original do purge ausente ou inseguro")
+    backup = scratch / "purge-original-target"
+    if backup.exists() or backup.is_symlink():
+        raise CandidateCaseError("backup descartável do purge já existe")
     rehydrate_scratch = Path(scratch) / "purge-rehydrate"
     prepared = _installer_command(
         candidate, ("install",), rehydrate_scratch, state_root,
     )
+    preserved = _preserve_native_user_files(target)
+    target.rename(backup)
     try:
         result = subprocess.run(
             prepared.argv,
@@ -1916,26 +1966,64 @@ def _prepare_purge_context(
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as error:
+        if target.exists() or target.is_symlink():
+            if target.is_symlink() or not target.is_dir():
+                raise CandidateCaseError("reinstalação deixou destino descartável inseguro") from error
+            shutil.rmtree(target)
+        backup.rename(target)
         raise CandidateCaseError("reinstalação de ownership para purge falhou") from error
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
+        if target.exists() or target.is_symlink():
+            if target.is_symlink() or not target.is_dir():
+                raise CandidateCaseError("reinstalação deixou destino descartável inseguro")
+            shutil.rmtree(target)
+        backup.rename(target)
+        detail = "\n".join(
+            part.decode("utf-8", errors="replace").strip()
+            for part in (result.stderr, result.stdout)
+            if part
+        ).strip()
         raise CandidateCaseError(
             "reinstalação de ownership para purge falhou: " + (detail[-512:] or "sem diagnóstico")
         )
     if not Path(target).is_dir() or not (Path(target) / ".x86qw/state.json").is_file():
+        if target.is_symlink() or not target.is_dir():
+            raise CandidateCaseError("reinstalação deixou destino descartável inseguro")
+        shutil.rmtree(target)
+        backup.rename(target)
         raise CandidateCaseError("reinstalação de ownership não publicou estado gerenciado")
-    return {"rehydrated": True, **_preserve_native_user_files(target)}
+    for group in ("personal", "paks"):
+        entries = preserved.get(group)
+        if not isinstance(entries, Mapping):
+            raise CandidateCaseError("preservação descartável de purge inválida")
+        for relative in entries:
+            if not isinstance(relative, str):
+                raise CandidateCaseError("caminho pessoal de purge inválido")
+            source = _regular_target_file(backup / relative, "fixture pessoal de purge")
+            _write_target_bytes(
+                target / relative,
+                source.read_bytes(),
+                "restauração do fixture pessoal de purge",
+            )
+    return {"rehydrated": True, **preserved}
 
 
 def _validate_uninstall_apply(target: Path, context: Mapping[str, object]) -> dict[str, object]:
     personal_ok, pak_ok = _validate_preserved_files(target, context)
     managed_paths = (
-        "mvdsv", "qtv", "qwfwd", "ezQuake Stable.app", "ezQuake Nightly.app",
+        "mvdsv", "qtv/qtv", "qwfwd/qwfwd", "ezQuake Stable.app", "ezQuake Nightly.app",
         "x86qw.sh", "x86qw.cmd", "x86qw.pyz",
     )
-    installation_removed = not any((Path(target) / relative).exists() for relative in managed_paths)
+    leftovers = [
+        relative for relative in managed_paths
+        if (Path(target) / relative).exists() or (Path(target) / relative).is_symlink()
+    ]
+    installation_removed = not leftovers
     if not installation_removed or not personal_ok or not pak_ok:
-        raise CandidateCaseError("uninstall não removeu os gerenciados ou alterou dados pessoais")
+        raise CandidateCaseError(
+            "uninstall não removeu os gerenciados ou alterou dados pessoais: "
+            f"leftovers={leftovers!r}; personal={personal_ok}; pak={pak_ok}"
+        )
     return {
         "installation_removed": True,
         "personal_preserved": personal_ok,
@@ -2004,8 +2092,25 @@ def _state_document(target: Path) -> tuple[Path, dict[str, object], str]:
     return path, value, hashlib.sha256(payload).hexdigest()
 
 
+def _component_selection(target: Path, component: str) -> str | None:
+    """Read the authenticated selection recorded for one migrated component."""
+
+    path = _regular_target_file(
+        Path(target) / f".x86qw/components/{component}/receipt",
+        f"recibo do componente {component}",
+    )
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, separator, value = line.partition("\t")
+        if separator and key == "selection":
+            return value
+    return None
+
+
 def _validate_state_apply(
-    target: Path, context: Mapping[str, object], *, label: str,
+    target: Path,
+    context: Mapping[str, object],
+    *,
+    label: str,
 ) -> dict[str, object]:
     _path, state, after_digest = _state_document(target)
     if state.get("format") != 2:
@@ -2020,7 +2125,13 @@ def _validate_state_apply(
         "state_before_sha256": before_digest,
         "state_after_sha256": after_digest,
         "state_converged": True,
-        "no_downgrade": state.get("installation_version") in {"1.0.0", "1.0.0-rc.1"},
+        # The format-2 state intentionally does not duplicate the product
+        # version.  The component receipt is the authoritative post-update
+        # coordinate; the native fixture starts from the 0.7.13 selection.
+        "no_downgrade": (
+            state.get("state_version") == 2
+            and _component_selection(target, "ktx") not in {None, "0.7.13"}
+        ),
         "profile_preserved": isinstance(state.get("profile"), str),
         "mutation_applied": True,
         "personal_preserved": personal_ok,
@@ -2031,7 +2142,10 @@ def _validate_state_apply(
 
 
 def _validate_migration_apply(
-    target: Path, context: Mapping[str, object], *, label: str,
+    target: Path,
+    context: Mapping[str, object],
+    *,
+    label: str,
 ) -> dict[str, object]:
     result = _validate_state_apply(target, context, label=label)
     return {
@@ -2154,9 +2268,9 @@ def _run_case(
     if case == "migration-0.7.13-real":
         case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
     elif case == "lifecycle-update-apply":
-        case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+        case_context = _prepare_update_apply_state(candidate, target)
     elif case == "lifecycle-upgrade-apply":
-        case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
+        case_context = _prepare_update_apply_state(candidate, target)
     elif case == "lifecycle-migrate-apply":
         case_context = _prepare_legacy_state(candidate, target, source_version="0.7.13")
     elif case == "lifecycle-repair-corruption":
@@ -2165,7 +2279,7 @@ def _run_case(
         case_context = _prepare_uninstall_context(target)
     elif case == "lifecycle-purge":
         case_context = None
-    native_frogbot_config: tuple[Path, Path, bytes] | None = None
+    native_frogbot_config: Path | None = None
     try:
         if case == "lifecycle-purge":
             case_context = _prepare_purge_context(
@@ -2221,7 +2335,9 @@ def _run_case(
             elif case == "lifecycle-purge":
                 observation = _validate_purge_apply(target, case_context)
             else:
-                observation = _validate_state_apply(target, case_context, label=case)
+                observation = _validate_state_apply(
+                    target, case_context, label=case,
+                )
     except (OSError, subprocess.SubprocessError) as error:
         print(f"[ERRO] execução nativa falhou: {case}: {error}", file=sys.stderr)
         exit_code = 127

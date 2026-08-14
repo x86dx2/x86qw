@@ -356,6 +356,7 @@ elif case == "game-ktx-frogbot":
             "gamecode_package": "qw/ktx.pk3",
         },
         "frogbot_spawned": True, "frogbot_skill": True, "frogbot_named": True,
+        "frogbot_config_loaded": True,
         "frogbot_log": "cmd botcmd skill 5; cmd botcmd addbot 5; k_fb_name_0 x86QW",
         "termination": "controlled", "process_exit_code": 0,
     }
@@ -408,7 +409,11 @@ receipt_value = {
     },
     "execution": {"status": "passed", "exit_code": 0},
     "state": {
-        "before": "clean" if case == "install-clean-space-unicode" else "installed",
+        "before": (
+            "clean" if case == "install-clean-space-unicode"
+            else "uninstalled" if case == "lifecycle-purge"
+            else "installed"
+        ),
         "after": "uninstalled" if case in {"lifecycle-uninstall", "lifecycle-purge"} else "installed",
     },
 }

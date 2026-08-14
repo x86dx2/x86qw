@@ -106,7 +106,11 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
                     },
                     "execution": {"status": "passed", "exit_code": 0},
                     "state": {
-                        "before": "clean" if index == 1 else "installed",
+                        "before": (
+                            "clean" if index == 1
+                            else "uninstalled" if name == "lifecycle-purge"
+                            else "installed"
+                        ),
                         "after": (
                             "uninstalled"
                             if name in {"lifecycle-uninstall", "lifecycle-purge"}
@@ -202,6 +206,7 @@ class NativeHandoffEvidenceTests(unittest.TestCase):
                     "frogbot_spawned": True,
                     "frogbot_skill": True,
                     "frogbot_named": True,
+                    "frogbot_config_loaded": True,
                     "frogbot_log": "cmd botcmd skill 5; cmd botcmd addbot 5; k_fb_name_0 x86QW",
                     "termination": "controlled",
                     "process_exit_code": 0,

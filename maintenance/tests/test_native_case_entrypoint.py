@@ -73,29 +73,34 @@ class NativeCaseEntrypointTests(unittest.TestCase):
         with self.assertRaises(CandidateCaseError):
             validate_case_name("unknown-case")
 
-    def test_frogbot_observation_accepts_ktx_runtime_command_and_name(self) -> None:
+    def test_frogbot_observation_accepts_ktx_runtime_entry_and_name(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             log = Path(temporary) / "qw" / "qconsole.log"
             log.parent.mkdir()
             log.write_text(
-                "cmd botcmd skill 5\ncmd botcmd addbot 5\nspawned /x86QW\n",
+                "x86qw_native_frogbot_config\n/x86QW entered the game\n"
+                "skill &cf005&r\n",
                 encoding="utf-8",
             )
             evidence = _frogbot_log_evidence(Path(temporary))
             self.assertTrue(evidence["frogbot_spawned"])
             self.assertTrue(evidence["frogbot_skill"])
             self.assertTrue(evidence["frogbot_named"])
+            self.assertTrue(evidence["frogbot_config_loaded"])
 
     def test_frogbot_case_uses_an_exec_config_for_post_map_commands(self) -> None:
         _channel, arguments, _map_name = _CLIENT_CASES["game-ktx-frogbot"]
         self.assertNotIn("+tempalias", arguments)
+        self.assertIn("+exec", arguments)
+        self.assertIn("x86qw-native-smoke-frogbot.cfg", arguments)
         self.assertEqual(
-            'tempalias x86qw_native_frogbot "wait;wait;cmd botcmd skill 5;cmd botcmd addbot 5"\n'
-            'tempalias on_enter "x86qw_native_frogbot"\n',
+            "echo x86qw_native_frogbot_config\n"
+            'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
+            'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n',
             _native_frogbot_config_payload().decode("ascii"),
         )
 
-    def test_frogbot_fixture_restores_the_personal_ktx_config(self) -> None:
+    def test_frogbot_fixture_preserves_the_personal_ktx_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             user_config = target / "qw/x86qw-ktx-user.cfg"
@@ -103,14 +108,11 @@ class NativeCaseEntrypointTests(unittest.TestCase):
             original = b"seta name x86QW-native-test\n"
             user_config.write_bytes(original)
             state = _prepare_native_frogbot_config(target)
-            self.assertEqual(
-                original + b"\nexec x86qw-native-smoke-frogbot.cfg\n",
-                user_config.read_bytes(),
-            )
-            self.assertEqual(_native_frogbot_config_payload(), state[0].read_bytes())
+            self.assertEqual(original, user_config.read_bytes())
+            self.assertEqual(_native_frogbot_config_payload(), state.read_bytes())
             _remove_native_frogbot_config(state)
             self.assertEqual(original, user_config.read_bytes())
-            self.assertFalse(state[0].exists())
+            self.assertFalse(state.exists())
 
     def test_candidate_artifacts_are_hash_checked_before_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

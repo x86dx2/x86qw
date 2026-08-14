@@ -313,8 +313,10 @@ def _expected_state(case: str) -> tuple[str, str]:
         return "clean", "installed"
     if case == CANONICAL_CASES[1]:
         return "installed", "installed"
-    if case in {"lifecycle-uninstall", "lifecycle-purge"}:
+    if case == "lifecycle-uninstall":
         return "installed", "uninstalled"
+    if case == "lifecycle-purge":
+        return "uninstalled", "uninstalled"
     return "installed", "installed"
 
 
@@ -460,7 +462,10 @@ def validate_case_observations(expected_case: str, value: object) -> dict[str, o
             "window_title", "map", "gamecode_log", "content", "termination", "process_exit_code",
         }
         if expected_case == "game-ktx-frogbot":
-            required |= {"frogbot_spawned", "frogbot_skill", "frogbot_named", "frogbot_log"}
+            required |= {
+                "frogbot_spawned", "frogbot_skill", "frogbot_named",
+                "frogbot_config_loaded", "frogbot_log",
+            }
         if set(value) != required:
             raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
         if (
@@ -485,6 +490,7 @@ def validate_case_observations(expected_case: str, value: object) -> dict[str, o
             raise NativeHandoffError(f"conteúdo nativo inválido: {expected_case}")
         if expected_case == "game-ktx-frogbot" and not all(value.get(field) is True for field in (
             "frogbot_spawned", "frogbot_skill", "frogbot_named",
+            "frogbot_config_loaded",
         )):
             raise NativeHandoffError(f"Frogbot não comprovado: {expected_case}")
     else:
