@@ -55,15 +55,21 @@ TUF do candidato.
   de uma instalação pessoal em `quake-world/`;
 - o harness Mac M3 executa plano candidato-owned e registra handoff, smoke
   normalizado e agregado unsigned pendente;
-- o candidato local mais recente `1.0.0-rc.4`, construído no commit
+- o checkpoint local histórico `1.0.0-rc.4`, construído no commit
   `76a73f9b50919010fc13730514d2c73ceced2fde`, passou o harness Apple M3 Pro
   com `25/25` casos; seu `candidate.json` tem SHA-256
   `487d844aa4de66667bf26a375011b1c8b1c5baede5450cca9fee3bfd0c329d2e` e o
   instalador local tem 600931 bytes, SHA-256
-  `94de20fa7f1efe61b1d5f93aeee936362e3ea8f2abcb1c83c62658d81cbd0b03`.
-  O handoff foi normalizado, o corpo unsigned e o agregado pending foram
-  preparados; isso é um checkpoint local não promotable, não evidência pública
-  assinada nem publicação;
+  `94de20fa7f1efe61b1d5f93aeee936362e3ea8f2abcb1c83c62658d81cbd0b03`;
+- o preflight privado mais recente de `1.0.0`, construído na HEAD
+  `f2cadeff3261ce07f7c9490313db1aa69e417fa2`, passou os mesmos `25/25` casos
+  no Apple M3 Pro. Seu `candidate.json` tem SHA-256
+  `c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7` e o
+  instalador tem 600825 bytes, SHA-256
+  `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8`.
+  Handoff, corpo unsigned e agregado pending foram preparados; continua sendo
+  preflight privado não promotable, sem assinatura autorizada, publicação ou
+  aceitação pública;
 - o catálogo separa `supported`, `conditional` e `preview`: stable macOS
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
@@ -114,8 +120,9 @@ Actions.
 3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
    ainda precisa de execução M3 e recibo anexado;
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
-   lifecycle estão comprovados no candidato local `1.0.0-rc.4`; ainda precisam
-   de execução protegida e aceitação pública desse candidato;
+   lifecycle estão comprovados nos preflights locais `1.0.0-rc.4` e `1.0.0`;
+   ainda precisam de execução protegida e aceitação pública de um candidato
+   publicado;
 5. a operação TUF tem monitor público verde, drill offline implementado e agora
    um workflow protegido que vincula o relatório ao recibo final; ainda faltam
    custódia de produção sustentada, renovação observada, alerta, expiração
