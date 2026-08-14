@@ -123,8 +123,11 @@ TUF público está `NO-GO`.
   caminho de signer limitado: aceita somente uma chave da role `timestamp`,
   autentica a saída e recusa qualquer mudança fora de
   `metadata/timestamp.json`. Ela produz apenas um handoff não publicado; não
-  há ainda signer configurado nem renovação observada no endpoint público, por
-  isso o gate operacional TUF permanece pendente;
+  há ainda signer configurado nem renovação observada no endpoint público. A
+  última leitura somente-leitura do ambiente protegido `release` confirmou que
+  `TUF_TIMESTAMP_KEY_B64` ainda não existe; o workflow deve falhar fechado até
+  que a custódia seja configurada ou o modo manual B seja comprovado. Por isso,
+  o gate operacional TUF permanece pendente;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
   confere a issue canônica fechada, valida sete dias de observações verdes com
