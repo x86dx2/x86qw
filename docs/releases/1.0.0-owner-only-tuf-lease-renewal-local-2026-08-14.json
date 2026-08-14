@@ -1,0 +1,42 @@
+{
+  "checked_at": "2026-08-14T20:16:11Z",
+  "format": "x86qw-owner-only-tuf-lease-renewal-v1",
+  "project": "x86qw",
+  "scope": "owner-only",
+  "status": "verified-local-not-published",
+  "reason": "A matriz portátil recusou o candidato porque a timestamp pública versionada expirou antes do build final.",
+  "operation": {
+    "mode": "timestamp-only",
+    "changed_files": ["metadata/timestamp.json"],
+    "key_id": "8f3a8e69081921035aa455c06293a3d8690af66f6814cff078fb0e4809518b5e",
+    "lease_hours": 24,
+    "published": false,
+    "root_sha256": "660af63e52a033290adf8899d2078a779c04e04cf5d1fac465b4aa2e04937201"
+  },
+  "source": {
+    "timestamp_version": 14,
+    "expires": "2026-08-14T18:54:56Z",
+    "sha256": "5b5cf0f52319327cd69d344714b137d421de1ef16e1f6f1113ec8a432ca929a2"
+  },
+  "renewed": {
+    "timestamp_version": 15,
+    "expires": "2026-08-15T20:16:11Z",
+    "sha256": "c1dbcd251c5627fac2a92e0195984b4f915ea8f4611593a8702a2c9bf00608ea"
+  },
+  "target": {
+    "path": "catalog/4364a1750cc0959ce471604007f7d787eb2ced34fe96dce79d06adbe9520069b.catalog.json",
+    "sha256": "4364a1750cc0959ce471604007f7d787eb2ced34fe96dce79d06adbe9520069b",
+    "size": 207153
+  },
+  "verification": {
+    "renewal_tool": "maintenance/tools/tuf_timestamp_renewal.py",
+    "portable_contract": "maintenance/manage.py verify --no-tests",
+    "portable_contract_result": "passed",
+    "private_key_material": "local ignored 0600 timestamp signer; not committed or printed"
+  },
+  "limitations": [
+    "This record does not publish the renewed timestamp to the public site.",
+    "The protected timestamp renewal/publication workflow must renew the live RC lease before public acceptance.",
+    "The final candidate requires a new TUF handoff bound to its exact catalog."
+  ]
+}
