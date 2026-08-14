@@ -3,6 +3,10 @@ name: Protected TUF timestamp renewal handoff
 on:
   workflow_dispatch:
     inputs:
+      release_code_commit:
+        description: "SHA exato da revisão que contém este workflow e os gates"
+        required: true
+        type: string
       source_workflow_commit:
         description: "SHA da revisão que executou o handoff TUF de origem"
         required: true
@@ -53,9 +57,18 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: main
+          ref: ${{ inputs.release_code_commit }}
           lfs: false
           fetch-depth: 1
+      - name: Validate the pinned renewal-code checkout
+        shell: bash
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"

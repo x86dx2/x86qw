@@ -122,12 +122,16 @@ TUF público está `NO-GO`.
 - a ferramenta `maintenance/tools/tuf_timestamp_renewal.py` implementa o
   caminho de signer limitado: aceita somente uma chave da role `timestamp`,
   autentica a saída e recusa qualquer mudança fora de
-  `metadata/timestamp.json`. Ela produz apenas um handoff não publicado; não
-  há ainda signer configurado nem renovação observada no endpoint público. A
+  `metadata/timestamp.json`; `verify_tuf_timestamp_renewal.py` repete essa
+  prova antes da publicação. O workflow
+  `.github/workflows/tuf-timestamp-publish.yml` então monta e implanta somente
+  essa geração timestamp-only sob aprovação protegida e verifica TUF,
+  bootstraps e product públicos, produzindo um recibo de publicação. Não há
+  ainda signer configurado nem renovação observada no endpoint público. A
   última leitura somente-leitura do ambiente protegido `release` confirmou que
-  `TUF_TIMESTAMP_KEY_B64` ainda não existe; o workflow deve falhar fechado até
-  que a custódia seja configurada ou o modo manual B seja comprovado. Por isso,
-  o gate operacional TUF permanece pendente;
+  `TUF_TIMESTAMP_KEY_B64` ainda não existe; os workflows devem falhar fechado
+  até que a custódia seja configurada ou o modo manual B seja comprovado. Por
+  isso, o gate operacional TUF permanece pendente;
 - o período de uso agora possui um workflow protegido em
   `.github/workflows/rc-soak.yml`: ele exige a ref do commit exato do RC,
   confere a issue canônica fechada, valida sete dias de observações verdes com
@@ -190,9 +194,10 @@ Na verificação somente-leitura de 2026-08-14 11:24 UTC, o GitHub confirmou a
 release RC pública como prerelease não draft, mas ainda sem imutabilidade
 host-level. As issues canônicas abertas eram:
 
-Uma rechecagem somente-leitura às 13:09 UTC confirmou que os workflows locais
-de aceitação pública, soak, drill operacional TUF e renovação limitada de
-timestamp ainda não estão presentes no remoto. O ambiente protegido `release`
+Uma rechecagem somente-leitura às 13:22 UTC confirmou que os workflows locais
+de aceitação pública, soak, drill operacional TUF, renovação limitada de
+timestamp e publicação timestamp-only ainda não estão presentes no remoto. O
+ambiente protegido `release`
 continua sem o secret `TUF_TIMESTAMP_KEY_B64`; o monitor público mais recente
 continua sendo o run `31798419309`, concluído com falha por lease dentro da
 janela de alerta. Esse snapshot está registrado em

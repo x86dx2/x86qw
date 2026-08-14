@@ -37,6 +37,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_tuf_operation_report.py",
             "maintenance/tools/tuf_operation_drill.py",
             "maintenance/tools/tuf_timestamp_renewal.py",
+            "maintenance/tools/verify_tuf_timestamp_renewal.py",
             "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/materialize_lfs.py",
@@ -63,6 +64,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/rc-soak.yml",
             ROOT / ".github/workflows/tuf-operation-drill.yml",
             ROOT / ".github/workflows/tuf-timestamp-renewal.yml",
+            ROOT / ".github/workflows/tuf-timestamp-publish.yml",
         ]
         for path in workflows:
             source = path.read_text(encoding="utf-8")
@@ -127,11 +129,37 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("tuf_timestamp_renewal.py", source)
         self.assertIn("verify_external_handoff.py", source)
         self.assertIn("tuf-metadata-handoff.yml", source)
+        self.assertIn("release_code_commit:", source)
+        self.assertIn("ref: ${{ inputs.release_code_commit }}", source)
+        self.assertIn("Validate the pinned renewal-code checkout", source)
+        self.assertNotIn("ref: main", source)
         self.assertIn("overwrite: false", source)
         self.assertIn("published=false", source)
         self.assertIn("tuf-timestamp-renewal-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
         self.assertNotIn("publish_tuf_metadata.py", source)
         self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
+
+    def test_timestamp_publication_is_protected_and_binds_renewal_before_deploy(self):
+        source = (ROOT / ".github/workflows/tuf-timestamp-publish.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("tuf-timestamp-renewal.yml", source)
+        self.assertIn("verify_tuf_timestamp_renewal.py", source)
+        self.assertIn('"changed_files": ["metadata/timestamp.json"]', source)
+        self.assertIn("publish_tuf_metadata.py", source)
+        self.assertIn("assemble_site_release.py", source)
+        self.assertIn("CLOUDFLARE_API_TOKEN", source)
+        self.assertIn("verify_public_tuf.py", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn(
+            "tuf-timestamp-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}",
+            source,
+        )
+        self.assertNotIn("generate_trust_metadata.py", source)
 
     def test_public_acceptance_runs_inside_the_protected_release_environment(self):
         source = (ROOT / ".github/workflows/public-acceptance.yml").read_text(

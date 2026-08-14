@@ -224,9 +224,16 @@ def renew_timestamp(
         raise TimestampRenewalError("timestamp.json não contém a role timestamp")
 
     now = datetime.now(UTC)
-    expires = now + timedelta(hours=lease_hours)
+    requested_expires = now + timedelta(hours=lease_hours)
+    expires = max(
+        requested_expires,
+        current.signed.expires + timedelta(seconds=1),
+    ).replace(microsecond=0)
+    # TUF serializes expiration timestamps at second precision.  A requested
+    # lease that is only fractions of a second beyond the current expiry would
+    # otherwise serialize to the same value and fail to renew the lease.
     if expires <= current.signed.expires:
-        raise TimestampRenewalError("a renovação encurtaria a lease corrente")
+        expires = current.signed.expires.replace(microsecond=0) + timedelta(seconds=1)
     renewed = Metadata(
         Timestamp(version=current.signed.version + 1, expires=expires),
     )

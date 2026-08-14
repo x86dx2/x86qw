@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-14T13:09:10Z",
+  "checked_at": "2026-08-14T13:22:39Z",
   "format": "x86qw-remote-gates-v1",
   "project": "x86qw",
   "release": {
@@ -55,6 +55,7 @@
     ".github/workflows/public-acceptance.yml",
     ".github/workflows/rc-soak.yml",
     ".github/workflows/tuf-operation-drill.yml",
+    ".github/workflows/tuf-timestamp-publish.yml",
     ".github/workflows/tuf-timestamp-renewal.yml"
   ],
   "release_environment": {

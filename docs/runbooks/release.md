@@ -254,9 +254,10 @@ Além disso, `release.yml` executa `monitor_public_tuf.py` com janela de alerta 
 seis horas imediatamente antes da promoção final. Uma lease dentro dessa janela
 exige renovação/recuperação manual e mantém a promoção em `NO-GO`.
 
-O caminho de signer limitado está preparado como handoff protegido, mas não é
-agendado nem publica sozinho. Com `TUF_TIMESTAMP_KEY_B64` configurada somente no
-ambiente protegido `release`, o operador pode despachar:
+O caminho de signer limitado está preparado como duas etapas manuais protegidas;
+ele não é agendado e nunca publica sem aprovação do ambiente `release`. Com
+`TUF_TIMESTAMP_KEY_B64` configurada somente nesse ambiente, o operador pode
+despachar a renovação:
 
 ```sh
 TUF_SOURCE_WORKFLOW_COMMIT=335d9a062f8ce33b226a9892de82979828a0fd1b
@@ -267,6 +268,7 @@ TUF_SOURCE_ARTIFACT_DIGEST=sha256:6d4c5b560283ecf7b688ecd9320e20ed7c508d301de09a
 TUF_TIMESTAMP_KEY_ID=<uma-das-duas-chaves-timestamp-da-root>
 
 gh workflow run tuf-timestamp-renewal.yml --repo "$REPO" --ref "$CODE_COMMIT" \
+  -f release_code_commit="$CODE_COMMIT" \
   -f source_workflow_commit="$TUF_SOURCE_WORKFLOW_COMMIT" \
   -f source_run_id="$TUF_SOURCE_RUN_ID" \
   -f source_artifact_id="$TUF_SOURCE_ARTIFACT_ID" \
@@ -278,7 +280,43 @@ gh workflow run tuf-timestamp-renewal.yml --repo "$REPO" --ref "$CODE_COMMIT" \
 
 Esse workflow valida a procedência do artifact TUF, renova somente
 `metadata/timestamp.json` e grava um artifact `published: false`; a publicação
-continua exigindo uma cerimônia separada, mirrors convergentes e metadata-last.
+continua bloqueada até que o operador confira o resumo do run e tenha os IDs e
+digests exatos do handoff. Em seguida, despache a etapa protegida de publicação:
+
+```sh
+RENEWAL_WORKFLOW_COMMIT="$CODE_COMMIT"
+RENEWAL_RUN_ID=<run-da-renovacao>
+RENEWAL_ARTIFACT_ID=<artifact-id-da-renovacao>
+RENEWAL_ARTIFACT_NAME=tuf-timestamp-renewal-${RC_COMMIT}-${RENEWAL_RUN_ID}-<attempt>
+RENEWAL_REPORT_SHA256=<sha256-do-renewal-report.json>
+
+gh workflow run tuf-timestamp-publish.yml --repo "$REPO" --ref "$CODE_COMMIT" \
+  -f release_code_commit="$CODE_COMMIT" \
+  -f renewal_workflow_commit="$RENEWAL_WORKFLOW_COMMIT" \
+  -f renewal_run_id="$RENEWAL_RUN_ID" \
+  -f renewal_artifact_id="$RENEWAL_ARTIFACT_ID" \
+  -f renewal_artifact_name="$RENEWAL_ARTIFACT_NAME" \
+  -f source_workflow_commit="$TUF_SOURCE_WORKFLOW_COMMIT" \
+  -f source_run_id="$TUF_SOURCE_RUN_ID" \
+  -f source_artifact_id="$TUF_SOURCE_ARTIFACT_ID" \
+  -f source_artifact_name="$TUF_SOURCE_ARTIFACT_NAME" \
+  -f candidate_commit="$RC_COMMIT" \
+  -f candidate_run_id="$RC_CANDIDATE_RUN_ID" \
+  -f candidate_artifact_id="$RC_CANDIDATE_ARTIFACT_ID" \
+  -f candidate_artifact_name="$RC_CANDIDATE_ARTIFACT_NAME" \
+  -f candidate_sha256="$RC_CANDIDATE_SHA256" \
+  -f timestamp_key_id="$TUF_TIMESTAMP_KEY_ID" \
+  -f renewal_report_sha256="$RENEWAL_REPORT_SHA256"
+```
+
+`.github/workflows/tuf-timestamp-publish.yml` verifica novamente a procedência
+do candidato, do TUF de origem e do handoff de renovação; exige que o único
+arquivo alterado seja `metadata/timestamp.json`, autentica o catálogo, monta
+uma geração única do site, executa o deploy protegido e verifica TUF,
+bootstraps e product públicos após o deploy. O artifact
+`tuf-timestamp-publication-<commit>-<run_id>-<attempt>` é o recibo durável da
+operação. Sem o secret, a aprovação ou qualquer verificação pública, nenhum
+deploy ocorre.
 
 ## Rollback e publicação
 

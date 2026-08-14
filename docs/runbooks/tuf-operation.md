@@ -58,8 +58,19 @@ python3 maintenance/tools/tuf_timestamp_renewal.py \
 O diretório de saída deve diferir do repositório corrente e não pode existir.
 O relatório marca `published: false`, registra a role/key id, a versão anterior
 e a nova, e falha se qualquer byte além de `metadata/timestamp.json` mudar.
-Esse handoff ainda precisa passar pela aprovação protegida e pelo publicador;
-executar a ferramenta não atualiza o endpoint público.
+O handoff pode ser conferido localmente antes do despacho com
+`maintenance/tools/verify_tuf_timestamp_renewal.py`; esse verificador autentica
+timestamp/snapshot/targets, compara o TUF de origem byte a byte e rejeita
+qualquer mudança além de `metadata/timestamp.json`. Executar a ferramenta não
+atualiza o endpoint público.
+
+Na operação protegida, o workflow
+`.github/workflows/tuf-timestamp-publish.yml` baixa por IDs o candidato, o TUF
+de origem e o handoff `published: false`, repete essa verificação, faz staging
+da metadata, executa o deploy sob o ambiente `release` e verifica o endpoint
+público. Ele publica um recibo `timestamp-published` somente depois de TUF,
+bootstraps e product passarem; sem aprovação, secret ou verificação pós-deploy,
+não há publicação.
 
 Novos relatórios usam `format: 2` e devem conter `role_versions` para as três
 roles (`timestamp`, `snapshot` e `targets`), com `current` e `renewed` em cada

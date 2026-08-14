@@ -8,8 +8,10 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from maintenance.tests import trust_support  # Loads the pinned TUF wheels.
+from maintenance.tools import tuf_timestamp_renewal
 from tuf.api.metadata import Metadata, Timestamp
 
 from maintenance.tools.publish_tuf_metadata import stage_tuf_metadata
@@ -127,6 +129,7 @@ class TufTimestampRenewalTests(unittest.TestCase):
             self.assertIsInstance(renewed.signed, Timestamp)
             self.assertEqual(current.signed.version + 1, renewed.signed.version)
             self.assertEqual(current.signed.snapshot_meta, renewed.signed.snapshot_meta)
+            self.assertGreater(renewed.signed.expires, current.signed.expires)
             self.assertGreater(
                 renewed.signed.expires,
                 datetime.now(timezone.utc) + timedelta(hours=23),
@@ -184,6 +187,35 @@ class TufTimestampRenewalTests(unittest.TestCase):
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("timestamp", completed.stderr.lower())
             self.assertFalse(output.exists())
+
+    def test_serialized_renewal_always_extends_the_existing_lease(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            key_dir, root, catalog, key_id, repository = self._make_repository(workspace)
+            current = Metadata.from_bytes(
+                (repository / "metadata/timestamp.json").read_bytes(),
+            ).signed
+            output = workspace / "renewed"
+            report_path = workspace / "renewal.json"
+            fake_now = current.expires - timedelta(hours=24) + timedelta(microseconds=500_000)
+            with mock.patch.object(tuf_timestamp_renewal, "datetime") as clock:
+                clock.now.return_value = fake_now
+                completed = tuf_timestamp_renewal.renew_timestamp(
+                    repository=repository,
+                    root=root,
+                    catalog=catalog,
+                    timestamp_key=key_dir / "timestamp-1.pem",
+                    key_id=key_id,
+                    output=output,
+                    report=report_path,
+                    lease_hours=24,
+                )
+            renewed = Metadata.from_bytes(
+                (output / "metadata/timestamp.json").read_bytes(),
+            ).signed
+            self.assertGreater(renewed.expires, current.expires)
+            self.assertEqual(2, renewed.version)
+            self.assertEqual(completed["renewed"]["expires"], renewed.expires.isoformat().replace("+00:00", "Z"))
 
     def test_refuses_output_inside_the_source_repository(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
