@@ -236,6 +236,13 @@ O workflow final também consulta a lease pública atual com
 essa verificação: enquanto a issue de alerta #152 estiver aberta ou a lease
 estiver dentro da janela, a promoção permanece `NO-GO`.
 
+O caminho de renovação limitada está preparado em
+`.github/workflows/tuf-timestamp-renewal.yml`: ele consome um artifact TUF já
+verificado, exige `TUF_TIMESTAMP_KEY_B64` no ambiente protegido e produz apenas
+um handoff não publicado com `timestamp.json` renovado. A existência do workflow
+não prova custódia nem saúde pública; sem secret configurada e execução verde,
+o gate TUF continua pendente.
+
 O gate final também exige o período de uso do RC por
 `.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.
 O relatório precisa comprovar sete dias completos, observações diárias verdes,
