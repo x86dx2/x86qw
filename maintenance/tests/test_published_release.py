@@ -97,13 +97,35 @@ class PublishedReleaseTests(unittest.TestCase):
             }, *metadata_assets],
         }
 
-    def classify(self, payloads: dict[str, object], *, manifest: dict[str, object] | None = None, **kwargs: object) -> str:
+    def durable_receipt(self) -> dict[str, object]:
+        return {
+            "public_acceptance": {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+            },
+        }
+
+    def classify(
+        self,
+        payloads: dict[str, object],
+        *,
+        manifest: dict[str, object] | None = None,
+        durable_receipt: dict[str, object] | None = None,
+        **kwargs: object,
+    ) -> str:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = Path(temporary)
             for name, payload in self.metadata_payloads().items():
                 (candidate / name).write_bytes(payload)
             fetch_json = kwargs.pop("fetch_json", None) or self.fetcher(payloads)
-            with mock.patch.object(MODULE, "validate_durable_assets", return_value={}):
+            with mock.patch.object(
+                MODULE,
+                "validate_durable_assets",
+                return_value=self.durable_receipt() if durable_receipt is None else durable_receipt,
+            ):
                 return MODULE.classify_published_release(
                     candidate,
                     trust_root=Path(temporary) / "root.json",
@@ -114,6 +136,14 @@ class PublishedReleaseTests(unittest.TestCase):
                     fetch_json=fetch_json,
                     **kwargs,
                 )
+
+    def test_final_release_requires_public_acceptance_handoff_in_durable_receipt(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "aceitação pública"):
+            self.classify(payloads, durable_receipt={})
 
     def test_both_absent_is_absent(self):
         missing = MODULE.PublishedReleaseNotFound()

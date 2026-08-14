@@ -70,6 +70,19 @@ FetchJson = Callable[[str, float], Mapping[str, object]]
 VerifyCandidate = Callable[..., dict[str, object]]
 
 
+def _require_final_public_acceptance(receipt: Mapping[str, object], version: str) -> None:
+    if version != "1.0.0":
+        return
+    acceptance = receipt.get("public_acceptance")
+    if (
+        not isinstance(acceptance, Mapping)
+        or set(acceptance) != {"commit", "run_id", "artifact_id", "artifact_name", "version"}
+    ):
+        raise PublishedReleaseError(
+            "recibo durável da versão final não contém o handoff de aceitação pública"
+        )
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     value: dict[str, object] = {}
     for key, item in pairs:
@@ -315,7 +328,8 @@ def classify_published_release(
     if manifest.get("version") != version or manifest.get("commit") != commit:
         raise PublishedReleaseError("manifest verificado diverge da identidade solicitada")
     try:
-        validate_durable_assets(Path(candidate), trust_root=trust_root)
+        durable_receipt = validate_durable_assets(Path(candidate), trust_root=trust_root)
+        _require_final_public_acceptance(durable_receipt, version)
     except ReleaseReceiptError as error:
         raise PublishedReleaseError(f"evidência durável pública inválida: {error}") from error
     expected_assets = _candidate_assets(manifest, Path(candidate))

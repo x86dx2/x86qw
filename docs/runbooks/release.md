@@ -147,8 +147,10 @@ stale se ela aparecer no staging.
     catálogo, bootstrap, mirrors e metadata TUF públicos. O recibo produzido é
     baixado por ID e validado por
     `maintenance/tools/verify_public_acceptance.py`; sem esse handoff a etapa
-    `verify-public-acceptance` mantém a promoção final bloqueada. A aceitação de
-    um RC não pode ser fabricada pelo próprio workflow de promoção.
+    `verify-public-acceptance` mantém a promoção final bloqueada. O verificador
+    pós-publicação também exige a seção `public_acceptance` no recibo durável
+    quando a versão é `1.0.0`. A aceitação de um RC não pode ser fabricada pelo
+    próprio workflow de promoção.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,
