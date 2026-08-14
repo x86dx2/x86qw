@@ -259,13 +259,20 @@ agendado nem publica sozinho. Com `TUF_TIMESTAMP_KEY_B64` configurada somente no
 ambiente protegido `release`, o operador pode despachar:
 
 ```sh
+TUF_SOURCE_WORKFLOW_COMMIT=335d9a062f8ce33b226a9892de82979828a0fd1b
+TUF_SOURCE_RUN_ID=31750740500
+TUF_SOURCE_ARTIFACT_ID=9200820996
+TUF_SOURCE_ARTIFACT_NAME=tuf-metadata-a8758ee27bebd7c72c24a31dc19335652e260c0a-31750740500-1
+TUF_SOURCE_ARTIFACT_DIGEST=sha256:6d4c5b560283ecf7b688ecd9320e20ed7c508d301de09a86db44765c7aeb98ac
+TUF_TIMESTAMP_KEY_ID=<uma-das-duas-chaves-timestamp-da-root>
+
 gh workflow run tuf-timestamp-renewal.yml --repo "$REPO" --ref "$CODE_COMMIT" \
-  -f source_workflow_commit="$CODE_COMMIT" \
-  -f source_run_id=<tuf-metadata-run-id> \
-  -f source_artifact_id=<tuf-metadata-artifact-id> \
-  -f source_artifact_name=<tuf-metadata-artifact-name> \
+  -f source_workflow_commit="$TUF_SOURCE_WORKFLOW_COMMIT" \
+  -f source_run_id="$TUF_SOURCE_RUN_ID" \
+  -f source_artifact_id="$TUF_SOURCE_ARTIFACT_ID" \
+  -f source_artifact_name="$TUF_SOURCE_ARTIFACT_NAME" \
   -f candidate_commit="$RC_COMMIT" \
-  -f timestamp_key_id=<timestamp-key-id> \
+  -f timestamp_key_id="$TUF_TIMESTAMP_KEY_ID" \
   -f lease_hours=24
 ```
 
