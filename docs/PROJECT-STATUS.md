@@ -190,6 +190,15 @@ Na verificação somente-leitura de 2026-08-14 11:24 UTC, o GitHub confirmou a
 release RC pública como prerelease não draft, mas ainda sem imutabilidade
 host-level. As issues canônicas abertas eram:
 
+Uma rechecagem somente-leitura às 13:09 UTC confirmou que os workflows locais
+de aceitação pública, soak, drill operacional TUF e renovação limitada de
+timestamp ainda não estão presentes no remoto. O ambiente protegido `release`
+continua sem o secret `TUF_TIMESTAMP_KEY_B64`; o monitor público mais recente
+continua sendo o run `31798419309`, concluído com falha por lease dentro da
+janela de alerta. Esse snapshot está registrado em
+[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json);
+nenhuma mutação remota foi executada nesta rechecagem.
+
 - [#143 — RC soak](https://github.com/x86dx2/x86qw/issues/143);
 - [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144);
 - [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145);

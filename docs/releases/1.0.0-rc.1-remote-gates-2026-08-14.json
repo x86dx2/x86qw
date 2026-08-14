@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-14T12:34:00Z",
+  "checked_at": "2026-08-14T13:09:10Z",
   "format": "x86qw-remote-gates-v1",
   "project": "x86qw",
   "release": {
@@ -13,6 +13,53 @@
     "conclusion": "failure",
     "run_id": 31798419309,
     "url": "https://github.com/x86dx2/x86qw/actions/runs/31798419309"
+  },
+  "remote_workflows": [
+    {
+      "name": "Native M3 candidate evidence",
+      "id": 332608714,
+      "state": "active"
+    },
+    {
+      "name": "Immutable candidate release",
+      "id": 324676896,
+      "state": "active"
+    },
+    {
+      "name": "Assemble signed M3 evidence",
+      "id": 332608716,
+      "state": "active"
+    },
+    {
+      "name": "Assemble signed TUF metadata",
+      "id": 333547080,
+      "state": "active"
+    },
+    {
+      "name": "Monitor public TUF lease",
+      "id": 332608717,
+      "state": "active"
+    },
+    {
+      "name": "Validate",
+      "id": 324642698,
+      "state": "active"
+    },
+    {
+      "name": "Dependabot Updates",
+      "id": 329369041,
+      "state": "active"
+    }
+  ],
+  "local_workflows_not_present_remotely": [
+    ".github/workflows/public-acceptance.yml",
+    ".github/workflows/rc-soak.yml",
+    ".github/workflows/tuf-operation-drill.yml",
+    ".github/workflows/tuf-timestamp-renewal.yml"
+  ],
+  "release_environment": {
+    "timestamp_signer_secret": "TUF_TIMESTAMP_KEY_B64",
+    "timestamp_signer_secret_present": false
   },
   "open_issues": [
     {
