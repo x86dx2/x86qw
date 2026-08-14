@@ -1,0 +1,100 @@
+{
+  "format": 1,
+  "record_type": "release-workflow-rehearsal",
+  "recorded_at": "2026-08-14T15:39:05Z",
+  "repository": "x86dx2/x86qw",
+  "scope": "owner-only",
+  "product_release": "1.0.0",
+  "release_status": "rehearsal-only",
+  "summary": "A release rehearsal exposed that GitHub Actions upload-artifact v4 omitted hidden .x86qw fixture files. The workflow was corrected and a new rehearsal passed exact candidate verification on Ubuntu, macOS and Windows.",
+  "initial_failure": {
+    "run_id": 31812423703,
+    "candidate_commit": "410aca3dd96ffc7264f6ceebab68c990ec4943bd",
+    "artifact_id": 9223980862,
+    "artifact_name": "candidate-410aca3dd96ffc7264f6ceebab68c990ec4943bd-31812423703-1",
+    "artifact_size_bytes": 649286543,
+    "artifact_digest": "sha256:c260332dac0db9f41f9a21653267e915ff780855a065fcd1576dd9e0fa10791e",
+    "failed_job_id": 94809188611,
+    "failed_job": "Verify exact candidate / ubuntu-latest",
+    "failure": "release_candidate.py verify rejected the downloaded artifact because runtime/native-smoke/macos-arm64/fixtures/migrations/0.7.13/.x86qw/cli.receipt was absent.",
+    "root_cause": "actions/upload-artifact v4 defaults to excluding hidden files when include-hidden-files is not enabled.",
+    "artifact_disposition": "immutable historical failure; not reused or overwritten"
+  },
+  "correction": {
+    "commit": "3e18468ac57853be0663800c8fd796f31b1441a4",
+    "pull_request": 156,
+    "pull_request_url": "https://github.com/x86dx2/x86qw/pull/156",
+    "change": "Set include-hidden-files: true on candidate, evidence-bound candidate and promoted candidate uploads in .github/workflows/release.yml.",
+    "regression_test": "maintenance.tests.test_release_workflows.ReleaseWorkflowTests.test_candidate_artifacts_preserve_hidden_files",
+    "protected_checks_run_id": 31813840286,
+    "protected_checks": {
+      "native-contract": "success",
+      "portable-contract-lfs-seed": "success",
+      "portable-contract-macos-python-3.10": "success",
+      "portable-contract-macos-python-3.13": "success",
+      "portable-contract-ubuntu-python-3.10": "success",
+      "portable-contract-ubuntu-python-3.13": "success",
+      "portable-contract-windows-python-3.10": "success",
+      "portable-contract-windows-python-3.13": "success"
+    },
+    "merge_commit": "e516e4201d00100bb93584059f48095afb40247b",
+    "merged_at": "2026-08-14T15:25:20Z"
+  },
+  "local_validation": {
+    "focused_release_workflow_tests": "50 passed",
+    "maintenance_suite": "1827 passed, 39 skipped",
+    "workflow_yaml_parse_ruby_2_6": "all .github/workflows/*.yml parsed successfully",
+    "git_diff_check": "passed"
+  },
+  "successful_rehearsal": {
+    "run_id": 31814440038,
+    "run_url": "https://github.com/x86dx2/x86qw/actions/runs/31814440038",
+    "head_commit": "e516e4201d00100bb93584059f48095afb40247b",
+    "mode": "rehearsal",
+    "release_audience": "owner-only",
+    "conclusion": "success",
+    "validate_handoffs_job_id": 94814223246,
+    "build_job_id": 94814259322,
+    "portable_verify_jobs": {
+      "macos-latest": 94815437450,
+      "ubuntu-latest": 94815437482,
+      "windows-latest": 94815437574
+    },
+    "rehearsal_gate_job_id": 94815668388,
+    "candidate_artifact": {
+      "artifact_id": 9224735402,
+      "artifact_name": "candidate-e516e4201d00100bb93584059f48095afb40247b-31814440038-1",
+      "size_bytes": 649287873,
+      "digest": "sha256:d7ee93914edd21b441903d95b4802e8fc34759f9f282547834a5ff7a4286fc81",
+      "created_at": "2026-08-14T15:36:10Z",
+      "expires_at": "2026-11-12T15:25:49Z",
+      "expired": false
+    },
+    "observed_results": [
+      "build-once succeeded",
+      "exact candidate verification succeeded on macOS, Ubuntu and Windows",
+      "downloaded candidate included the hidden .x86qw receipt required by release_candidate.py verify",
+      "evidence-free rehearsal gate succeeded",
+      "protected M3, public acceptance, soak, TUF operation and publication jobs were skipped because mode=rehearsal"
+    ]
+  },
+  "release_boundary": {
+    "public_assets_changed": false,
+    "github_release_changed": false,
+    "gitlab_mirror_changed": false,
+    "tuf_metadata_changed": false,
+    "m3_evidence_claimed": false,
+    "rehearsal_is_authorization_for_1_0": false,
+    "owner_only_policy": {
+      "migration_is_blocker": false,
+      "external_user_soak_is_blocker": false,
+      "sustained_external_tuf_operation_is_blocker": false
+    },
+    "still_required_for_final": [
+      "protected M3 evidence artifact",
+      "durable public release evidence",
+      "protected owner-only public acceptance run, if retained by the final workflow gate",
+      "final candidate and final promotion gates"
+    ]
+  }
+}
