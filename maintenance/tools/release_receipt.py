@@ -420,6 +420,19 @@ def build_receipt(
         validate_final_soak(normalized_coordinates, version)
         validate_final_tuf_operation(normalized_coordinates, version)
         validate_final_public_acceptance(normalized_coordinates, version)
+        soak = normalized_coordinates["soak"]
+        if manifest_identity["sha256"] == soak["candidate_json_sha256"]:
+            raise ReleaseReceiptError(
+                "recibo final reutiliza o candidate.json do RC sob soak"
+            )
+        installer_name = f"x86qw-installer-{version}.zip"
+        installer_identity = assets.get(installer_name)
+        if not isinstance(installer_identity, Mapping):
+            raise ReleaseReceiptError("recibo final não possui o instalador candidato")
+        if installer_identity.get("sha256") == soak["bundle_sha256"]:
+            raise ReleaseReceiptError(
+                "recibo final reutiliza o instalador do RC sob soak"
+            )
     receipt: dict[str, object] = {
         "format": FORMAT,
         "project": PROJECT,

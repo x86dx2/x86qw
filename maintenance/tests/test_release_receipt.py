@@ -86,6 +86,31 @@ class ReleaseReceiptTests(unittest.TestCase):
             "minimum_days": "7",
         }
 
+    def _final_coordinates(self) -> dict[str, object]:
+        coordinates = self._coordinates()
+        coordinates["soak"] = self._soak_coordinates()
+        coordinates["tuf_operation"] = {
+            "workflow": ".github/workflows/tuf-operation-drill.yml",
+            "run_id": "31752738004",
+            "artifact_id": "9005",
+            "artifact_name": "tuf-operation-" + "a" * 40 + "-31752738004-1",
+            "report_sha256": "a" * 64,
+            "operator": "release-operator",
+            "custody_host": "offline-signer-01",
+            "timestamp_sla_hours": "6",
+        }
+        coordinates["public_acceptance"] = {
+            "commit": "c" * 40,
+            "run_id": "31752738003",
+            "artifact_id": "9004",
+            "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+            "version": "1.0.0-rc.2",
+            "receipt_sha256": "d" * 64,
+            "bundle_sha256": "e" * 64,
+            "catalog_sha256": "f" * 64,
+        }
+        return coordinates
+
     def test_materializes_root_and_receipt_bound_to_candidate_and_m3_observations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -291,6 +316,26 @@ class ReleaseReceiptTests(unittest.TestCase):
             self.assertEqual(coordinates["soak"], receipt["soak"])
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
+
+    def test_final_receipt_rejects_reusing_soaked_candidate_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root, version="1.0.0")
+            coordinates = self._final_coordinates()
+            coordinates["soak"]["candidate_json_sha256"] = hashlib.sha256(  # type: ignore[index]
+                (candidate / "candidate.json").read_bytes()
+            ).hexdigest()
+            coordinates["soak"]["bundle_sha256"] = hashlib.sha256(  # type: ignore[index]
+                (candidate / "x86qw-installer-1.0.0.zip").read_bytes()
+            ).hexdigest()
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaisesRegex(release_receipt.ReleaseReceiptError, "reutiliza"):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
 
     def test_final_receipt_requires_public_acceptance_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
