@@ -93,6 +93,7 @@ class NativeCaseEntrypointTests(unittest.TestCase):
             for index in range(len(arguments) - 1)
         ))
         self.assertNotIn("+tempalias", arguments)
+        self.assertNotIn("+map", arguments)
         self.assertEqual(
             "tempalias x86qw_native_frogbot \"cmd botcmd skill 5;cmd botcmd addbot 5\"\n"
             "tempalias on_enter \"exec x86qw-ktx.cfg;x86qw_native_frogbot\"\n",

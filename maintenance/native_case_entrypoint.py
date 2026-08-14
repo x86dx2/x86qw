@@ -112,7 +112,6 @@ _CLIENT_CASES = {
             "+set", "k_defmap", "dm6",
             "+set", "k_defmode", "1on1",
             "+exec", "x86qw-native-smoke-frogbot.cfg",
-            "+map", "dm6",
         ), "dm6",
     ),
     "game-final-arena": (
