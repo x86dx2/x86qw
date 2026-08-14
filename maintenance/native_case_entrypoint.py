@@ -104,6 +104,16 @@ _CLIENT_CASES = {
     "game-ktx": ("stable", (), "dm6"),
     "game-ktx-frogbot": (
         "stable", (
+            "+set", "x86qw_ruleset", "1",
+            "+exec", "x86qw-ruleset.cfg",
+            "+sb_listcache", "0",
+            "+spectator", "0",
+            "+bind", "F12", "quit",
+            "+maxclients", "32",
+            "+sv_mintic", "0.01",
+            "+sv_maxtic", "0.03",
+            "+pm_ktjump", "1",
+            "+set", "k_x86qw_quadcoach", "1",
             "+set", "k_fb_enabled", "1",
             "+set", "k_fb_skill", "5",
             "+set", "k_fb_name_0", "/x86QW",
