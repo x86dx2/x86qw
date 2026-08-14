@@ -41,6 +41,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_tuf_timestamp_publication.py",
             "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
+            "maintenance/tools/validate_release_inputs.py",
             "maintenance/tools/materialize_lfs.py",
         )
         for relative in scripts:
@@ -181,6 +182,30 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("inputs.release_audience == 'external-public'", source)
         self.assertIn("acceptance_scope", source)
 
+    def test_release_dispatch_stays_within_github_input_limit(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        dispatch = source.split("    inputs:\n", 1)[1].split("\n\nconcurrency:", 1)[0]
+        names = re.findall(r"^      ([a-z0-9_-]+):$", dispatch, re.MULTILINE)
+        self.assertLessEqual(len(names), 25)
+        for group in (
+            "candidate_handoff",
+            "native_evidence_handoff",
+            "tuf_metadata_handoff",
+            "public_acceptance_handoff",
+            "tuf_operation_handoff",
+            "soak_handoff",
+        ):
+            self.assertIn(group, names)
+        for legacy in (
+            "candidate_run_id",
+            "candidate_artifact_id",
+            "native_evidence_run_id",
+            "public_acceptance_run_id",
+            "tuf_operation_run_id",
+            "soak_run_id",
+        ):
+            self.assertNotIn(legacy, names)
+
     def test_release_gates_require_success_of_all_mandatory_upstream_jobs(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         attach = source.split("  attach-native-evidence:\n", 1)[1].split(
@@ -254,13 +279,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_promotion_reuses_a_verified_prebuilt_candidate_without_rebuild(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         build = source.split("  build-once:\n", 1)[1].split("\n  portable-verify:\n", 1)[0]
-        for input_name in (
-            "candidate_run_id:",
-            "candidate_artifact_id:",
-            "candidate_artifact_name:",
-            "candidate_sha256:",
-        ):
-            self.assertIn(input_name, source)
+        self.assertIn("candidate_handoff:", source)
+        self.assertIn("fromJSON(inputs.candidate_handoff)", build)
         self.assertIn("Validate prebuilt candidate provenance", build)
         self.assertIn("maintenance/tools/verify_external_handoff.py", build)
         self.assertIn("Download immutable candidate artifact", build)
@@ -464,8 +484,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_promotion_attaches_authorized_m3_evidence_without_rebuild(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("native_evidence_run_id", source)
-        self.assertIn("native_evidence_artifact_id", source)
+        self.assertIn("native_evidence_handoff:", source)
+        self.assertIn("fromJSON(inputs.native_evidence_handoff)", source)
         self.assertIn("attach-native-evidence:", source)
         self.assertIn("actions: read", source)
         self.assertIn("maintenance/tools/attach_release_evidence.py", source)
@@ -478,8 +498,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_promotion_materializes_and_verifies_durable_evidence_receipt(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("native_evidence_artifact_name:", source)
-        self.assertIn("tuf_operation_artifact_name:", source)
+        self.assertIn("native_evidence_handoff:", source)
+        self.assertIn("tuf_operation_handoff:", source)
         self.assertIn("maintenance/tools/release_receipt.py", source)
         self.assertIn("evidence-root.json", source)
         self.assertIn("release-receipt.json", source)
@@ -514,16 +534,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_final_promotion_requires_tuf_operation_handoff(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        for field in (
-            "tuf_operation_run_id:",
-            "tuf_operation_artifact_id:",
-            "tuf_operation_artifact_name:",
-            "tuf_operation_report_sha256:",
-            "tuf_operation_operator:",
-            "tuf_operation_custody_host:",
-            "tuf_operation_sla_hours:",
-        ):
-            self.assertIn(field, source)
+        self.assertIn("tuf_operation_handoff:", source)
+        self.assertIn("fromJSON(inputs.tuf_operation_handoff)", source)
         block = source.split("  attach-native-evidence:\n", 1)[1]
         block = block.split("  promotion-gate:\n", 1)[0]
         self.assertIn("tuf-operation-drill.yml", block)
@@ -543,8 +555,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_metadata_last_verifies_the_external_tuf_artifact_provenance(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         metadata_step = source.split("  metadata-last:\n", 1)[1]
-        self.assertIn("tuf_metadata_artifact_name:", source)
-        self.assertIn("tuf_metadata_workflow:", source)
+        self.assertIn("tuf_metadata_handoff:", source)
+        self.assertIn("fromJSON(inputs.tuf_metadata_handoff)", source)
         self.assertIn("maintenance/tools/verify_external_handoff.py", metadata_step)
         self.assertIn('--artifact "$TUF_ARTIFACT_NAME"', metadata_step)
         self.assertIn('--artifact-id "$TUF_ARTIFACT_ID"', metadata_step)
@@ -593,13 +605,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_final_promotion_requires_a_proven_public_rc_acceptance(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("public_acceptance_run_id:", source)
-        self.assertIn("public_acceptance_artifact_id:", source)
-        self.assertIn("public_acceptance_artifact_name:", source)
-        self.assertIn("public_acceptance_version:", source)
-        self.assertIn("public_acceptance_receipt_sha256:", source)
-        self.assertIn("public_acceptance_bundle_sha256:", source)
-        self.assertIn("public_acceptance_catalog_sha256:", source)
+        self.assertIn("public_acceptance_handoff:", source)
+        self.assertIn("fromJSON(inputs.public_acceptance_handoff)", source)
         self.assertIn("verify-public-acceptance:", source)
         gate = source.split("  verify-public-acceptance:\n", 1)[1]
         self.assertIn("verify_external_handoff.py", gate)
@@ -611,18 +618,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_final_promotion_requires_a_proven_completed_rc_soak(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        for field in (
-            "soak_commit:",
-            "soak_version:",
-            "soak_candidate_json_sha256:",
-            "soak_bundle_sha256:",
-            "soak_run_id:",
-            "soak_artifact_id:",
-            "soak_artifact_name:",
-            "soak_report_sha256:",
-            "soak_issue_number:",
-        ):
-            self.assertIn(field, source)
+        self.assertIn("soak_handoff:", source)
+        self.assertIn("fromJSON(inputs.soak_handoff)", source)
         self.assertIn("verify-soak:", source)
         soak = source.split("  verify-soak:\n", 1)[1].split("\n  attach-native-evidence:\n", 1)[0]
         self.assertIn("verify_external_handoff.py", soak)
