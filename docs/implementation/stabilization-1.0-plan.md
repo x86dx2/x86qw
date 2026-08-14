@@ -2,13 +2,13 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | plano operacional; implementação incremental integrada, sem publicação do candidato |
+| Estado | plano operacional atualizado; `1.0.0-rc.1` público, soak e gates finais em andamento |
 | Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | snapshot `origin/main` registrado pelo comando da auditoria; rehearsal `31600754928`; M3 `31604145989` pendente |
+| Checkpoint auditável | `main@335d9a062f8ce33b226a9892de82979828a0fd1b`; RC `a8758ee27bebd7c72c24a31dc19335652e260c0a`; promoção `31752738047` |
 | Versão alvo | `1.0.0` |
-| Data da auditoria | 2026-08-12 |
-| Escopo desta entrega | correções incrementais de contratos, TUF, candidate, CI, migração e harness; publicação ainda bloqueada por M3 e operação protegida |
+| Data da auditoria | 2026-08-13, verificações finais em 2026-08-14 UTC |
+| Escopo desta entrega | documentação, evidência durável, aceitação pública, cobertura M3, operação TUF e gates de promoção |
 
 Este documento registra a sequência aprovada para transformar a baseline pública
 `0.7.13` em uma `1.0` verificável. O estado corrente fica em
@@ -24,9 +24,13 @@ os bundles públicos anteriores permanecem imutáveis. O checkpoint é somente u
 fonte de consulta para extração seletiva: **checkpoint para extração, nunca
 merge**. Nenhum commit de `codex/stabilize-1.0` será incorporado como unidade.
 
-Durante este checkpoint não se publica nem se altera estado remoto. As
-correções locais podem alterar código, workflows, fixtures e documentação, mas
-não autorizam tag, release, catálogo público, metadata TUF ou branch remota.
+O checkpoint histórico que originou este plano não autorizava publicação. A
+fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
+plano continua sem autorizar a promoção final, alteração dos bytes publicados
+ou publicação de metadata TUF fora do workflow protegido. A implementação local
+do fechamento dos gates está no commit `1c484d7` da branch
+`agent/rc-1.0-completion`; ela ainda precisa passar pelo fluxo remoto e pelo
+runner M3 antes de ser considerada evidência do candidato.
 
 As invariantes para todas as fases são:
 
@@ -135,8 +139,9 @@ smoke nativo.
 
 Os workflows agora existem como gates executáveis: a validação portável é
 separada do runner self-hosted M3, e nenhum job portável afirma execução
-gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors e
-metadata-last; ausência de configuração externa falha fechada.
+gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors,
+evidência durável, aceitação pública para a final e metadata-last; ausência de
+configuração externa falha fechada.
 
 ## 5. Sequência A–H
 
@@ -214,7 +219,7 @@ por digest imutável.
 preparação e promoção; nenhum destino é sobrescrito; trust não é importado
 implicitamente.
 
-### PR G — Mac M3/arm64 e RC (`issue #54`)
+### PR G — Mac M3/arm64 e RC (`issue #54`; fechamento operacional `#147`)
 
 O executor `native_macos_harness.py` e o workflow
 `.github/workflows/native-m3.yml` exigem um plano fechado fornecido para o
@@ -223,13 +228,16 @@ candidato exato, executar o
 conjunto completo de clientes, jogos, serviços e lifecycle. Linux, Windows e
 macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
 
-Após o merge de G, abrir uma PR de release separada para `1.0.0-rc.1`, produzir
-a evidência e iniciar o período de uso.
+O RC público foi produzido e promovido no run `31752738047`. A implementação
+do fechamento desta frente adiciona os casos M3 restantes, a aceitação pública
+e a evidência durável; a execução protegida do candidato exato ainda é
+pendente.
 
-**Gate:** evidência M3 autenticada para o candidato exato, bytes reprodutíveis,
-smokes registrados e período de uso iniciado sem promover 1.0.
+**Gate:** implementação fechada localmente; evidência M3 autenticada para um
+novo candidato, smokes registrados e período de uso concluído sem promover
+`1.0.0`.
 
-### PR H — promoção `1.0.0`
+### PR H — promoção `1.0.0` (`issue #149`)
 
 Criar a issue própria somente depois de o RC cumprir o período de uso e todos os
 gates. A PR faz apenas promoção/release, sem correção funcional. Exigir trust
@@ -245,31 +253,35 @@ reversão documentada e nenhum claim de plataforma além da evidência existente
 |---|---|---|
 | nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
 | `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
-| `1.0.0-rc.1` | F e G aprovadas; evidência M3 | RC e período de uso |
+| `1.0.0-rc.1` | F e G executadas; evidência pública e soak | RC público e período de uso em andamento |
 | `1.0.0` | H e todos os gates | promoção sem correção funcional |
 
-Nenhuma dessas versões é criada, tagueada ou publicada durante a
-materialização documental. O mirror `gitlab/main` não é tratado como espelho
-confirmado antes de uma decisão explícita.
+O RC `1.0.0-rc.1` já foi criado, tagueado e publicado; a materialização desta
+implementação não altera seus bytes. Qualquer alteração de produto exige novo
+RC e reinício do soak. O mirror `gitlab/main` não é tratado como espelho
+confirmado fora da verificação registrada do RC.
 
-## 7. Fase 0 — controle e autorização futura
+## 7. Governança atual e limpeza futura
 
-As ações desta seção exigem nova autorização e nova verificação; elas não fazem
-parte desta entrega:
+As instruções históricas de controle abaixo foram substituídas pelo estado
+operacional do RC. As ações de limpeza continuam exigindo nova verificação e
+não podem remover evidência:
 
-1. criar a tag anotada `audit/stabilize-1.0-2026-08-06` em `30e9d5b`, sem GitHub
-   Release;
-2. revalidar ancestralidade e apagar somente as quatro refs listadas na
-   auditoria (`agent/bounded-downloader`, `agent/archive-boundary`,
-   `agent/runtime-boundaries` e
-   `origin/x86dx2/audit-ezquake-tournament-gameplay`);
-3. criar o label `post-1.0`, abrir backlog para os mapas visuais e fechar a
-   [PR 43](https://github.com/x86dx2/x86qw/pull/43) apontando para essa issue;
-4. manter `codex/control-maps`, congelar `codex/stabilize-1.0` e apagá-la apenas
-   após todas as extrações aceitas.
+1. não criar a tag histórica `audit/stabilize-1.0-2026-08-06` nem tratá-la como
+   autoridade;
+2. revalidar ancestralidade e apagar somente refs já integradas, depois de
+   registrar os SHAs e preservar refs ligadas ao RC, à evidência e ao TUF;
+3. manter o backlog operacional nas issues [#143–#149](https://github.com/x86dx2/x86qw/issues/143),
+   com a limpeza de branches em [#150](https://github.com/x86dx2/x86qw/issues/150)
+   e a avaliação de imutabilidade host-level em
+   [#151](https://github.com/x86dx2/x86qw/issues/151);
+4. manter `codex/control-maps` e os checkpoints históricos fora da linha de
+   release até decisão própria.
 
-Nenhuma tag, branch, issue, label, PR ou release deve ser criada para cumprir
-este documento agora.
+As issues históricas #68 e #70 foram encerradas por já estarem concluídas; não
+devem voltar a ser usadas como backlog de 1.0.
+
+
 
 ## 8. Riscos, rollback e fronteiras de aprovação
 
@@ -303,11 +315,14 @@ A jornada só pode ser declarada concluída quando:
 Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
 o publisher não recompila, a fixture pública 0.7.13 existe, os workflows não
 possuem placeholders deliberados e o harness M3 falha fechado sem plano ou
-evidência. Isso não é aprovação de RC nem de publicação.
+evidência. O RC público já foi promovido, mas a implementação local ainda não
+é aprovação de `1.0.0`: faltam execução pública M3, operação TUF de produção,
+soak e novo candidato final.
 
 ## 10. Validação desta materialização
 
-O gate desta entrega é executado no worktree sem criar estado remoto:
+O gate da implementação local é executado no worktree; ele não substitui os
+gates remotos e nativos:
 
 1. confirmar que a base canônica ainda resolve para
    `origin/main`; registrar o SHA retornado no relatório da auditoria; se avançar, repetir a
@@ -319,9 +334,9 @@ O gate desta entrega é executado no worktree sem criar estado remoto:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o diff local contra `origin/main`, mantendo separado o trabalho
-   histórico já commitado do checkpoint.
+5. revisar o commit local `1c484d7` contra `origin/main`, mantendo separado o
+   trabalho histórico já publicado do candidato atual.
 
-Esse gate não cria tag, branch, issue, label, PR, release ou publicação. A
-execução nativa M3, a custódia TUF e o catálogo da próxima release continuam
-dependentes de entradas protegidas e não são inferidos localmente.
+Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
+nativa M3, a custódia TUF, o catálogo público e o soak continuam dependentes de
+entradas protegidas e não são inferidos localmente.
