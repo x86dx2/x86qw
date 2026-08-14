@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-14T11:24:00Z",
+  "checked_at": "2026-08-14T12:34:00Z",
   "format": "x86qw-remote-gates-v1",
   "project": "x86qw",
   "release": {
@@ -11,8 +11,8 @@
   },
   "latest_tuf_monitor": {
     "conclusion": "failure",
-    "run_id": 31791717871,
-    "url": "https://github.com/x86dx2/x86qw/actions/runs/31791717871"
+    "run_id": 31798419309,
+    "url": "https://github.com/x86dx2/x86qw/actions/runs/31798419309"
   },
   "open_issues": [
     {
