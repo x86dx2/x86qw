@@ -10,14 +10,29 @@ commit, SHA do `candidate.json` e digest do artifact — é sempre a registrada
 pelo próprio workflow e pelo checkpoint do PR, nunca por uma cópia manual neste
 documento.
 
-## Versão pública
+## Versões públicas
 
-O último release público confirmado no GitHub é `0.7.13`: instalador de
+A versão estável-fonte continua em `dist/installer/VERSION = 0.7.13` e o
+último release estável continua sendo `x86qw-installer-0.7.13`: instalador de
 581883 bytes, SHA-256
 `114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32`.
-A versão-fonte de `dist/installer/VERSION` acompanha essa geração pública.
-O candidato local `1.0.0-rc.1` é uma geração separada e não promove a versão
-pública por si só.
+
+O Release Candidate público é `x86qw-installer-1.0.0-rc.1`, uma prerelease
+deliberadamente separada da versão-fonte estável. Ele aponta para o commit de
+produto `a8758ee27bebd7c72c24a31dc19335652e260c0a` e foi promovido pelo run
+`31752738047`, a partir da linha canônica `main@335d9a062f8ce33b226a9892de82979828a0fd1b`.
+
+Identidade pública do RC:
+
+- instalador: 600431 bytes,
+  SHA-256 `9600be7eb2ed14e23b2eeb079bd6aa0e4611f996be0c89741fda12587eb7fed8`;
+- `candidate.json`: 14474 bytes,
+  SHA-256 `1552a896a0076dd2e347ed5b732b6dd31ba892292e1f9fb8c97fe9111f755bcb`;
+- release GitHub: [x86qw-installer-1.0.0-rc.1](https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0-rc.1).
+
+O RC é público e não é GitHub Latest. A imutabilidade host-level da release
+GitHub ainda aparece como indisponível (`immutable=false`); o publisher mantém
+imutabilidade lógica recusando overwrite, divergência de digest e assets extras.
 
 ## Estado de confiança
 
@@ -43,48 +58,62 @@ de custódia humana independente nem substitui a cerimônia TUF do candidato.
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
 - a instalação pessoal temporária não é usada pelos testes de release.
+- a aceitação pública completa está implementada em
+  `maintenance/tools/public_install_smoke.py --full-lifecycle` e no workflow
+  M3 manual; execução real e recibo público ainda estão pendentes;
+- o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
+  por corrupção e purge; os contratos e testes locais estão verdes, mas isso
+  não substitui um run nativo do candidato exato;
+- o drill TUF offline está implementado em
+  `maintenance/tools/tuf_operation_drill.py`; chaves de produção, custódia e
+  execução operacional ainda não foram comprovadas nesta sessão.
 
-## Candidato oficial
+## Candidato oficial e promoção
 
-O último candidato de rehearsal observado foi o commit
-`7a4bf3cf6442082e18aded3cfb712dd4a1bf651e`, com run
-`31699271135` e versão `1.0.0-rc.1`; a rehearsal não publica nada. O workflow
-oficial `native-m3.yml` já foi executado em Apple M3 para esse candidato; a
-evidência permanece `signed=false`/`promotable=false` até a assinatura do
-mantenedor único sob o waiver do ADR 0007. As alterações deste checkpoint
-exigem uma nova geração exata antes de qualquer promoção.
-Nenhum artifact de uma instalação pessoal é usado.
+O RC foi construído uma vez, validado por artifacts imutáveis, executado no
+runner Apple M3 e promovido sem reconstrução. O fluxo final confirmou:
 
-## Bloqueios atuais
+1. candidato exato e `candidate.json` por digest;
+2. evidência M3 assinada e vinculada ao candidato;
+3. aprovação protegida e ausência de blockers;
+4. publicação GitHub e GitLab com mirrors convergentes;
+5. metadata TUF e site implantados por último;
+6. verificação pública pós-deploy.
 
-1. a execução M3 exata já foi reproduzida no runner Apple M3; o agregado ainda
-   precisa da assinatura do mantenedor único sob o waiver do ADR 0007. O
-   agregado `pending` não é promotable;
-2. o ambiente GitHub `release` não possui os secrets `M3_TRUST_ROOT_B64` e
-   `CLOUDFLARE_API_TOKEN` (a leitura dos nomes expõe somente `GITLAB_TOKEN`);
-3. a configuração de reviewer aponta para o próprio `x86dx2`; não existe outro
-   colaborador no projeto. O waiver registra a ausência de revisão independente
-   e não a simula;
-4. a operação TUF sustentável ainda depende de signer agendado e drill de
-   recuperação; a lease pública v15 está saudável até
-   `2026-08-14T13:11:16Z`, com monitor corrigido para alertar dentro de 6 horas;
-5. o candidato exato ainda não foi publicado no GitHub/GitLab; depois da
-   assinatura do mantenedor, assets imutáveis, mirrors convergentes e metadata-last precisam
-   passar pelo workflow protegido;
-6. Linux, Windows e macOS Intel continuam preview; nenhum resultado portátil é
-   apresentado como smoke nativo dessas plataformas;
-7. o RC ainda precisa do período de uso definido antes da promoção final.
+A evidência assinada foi usada pela promoção, mas ainda precisa ser publicada
+de forma durável como asset (`release-evidence.json`, `evidence-root.json` e
+`release-receipt.json`) para que a prova não dependa da retenção de artifacts de
+Actions.
+
+## Gaps e gates restantes
+
+1. o período de uso do RC está registrado em
+   `docs/releases/1.0.0-rc.1-soak.md`, mas ainda precisa de diário, issue
+   canônica e encerramento explícito;
+2. a evidência M3 deste RC ainda depende da retenção de 90 dias dos artifacts até
+   que os três assets duráveis sejam publicados;
+3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
+   ainda precisa de execução M3 e recibo anexado;
+4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
+   lifecycle estão implementados no candidato local, mas ainda precisam de run
+   nativo do candidato exato;
+5. a operação TUF tem monitor e drill offline implementados; ainda faltam
+   custódia de produção, renovação observada, alerta, expiração simulada e
+   recuperação registrados;
+6. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
+   `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
+   upstream original não forem comprovados.
 
 ## Veredito
 
-A implementação local pode avançar para um candidato `1.0.0-rc.1`, mas não há
-autorização técnica para declarar RC publicado ou promover `1.0.0`. O release
-público `0.7.13` não foi alterado por este checkpoint; a renovação TUF v15 foi
-publicada e validada nos endpoints públicos.
+O RC público é um marco legítimo e está em `GO` para uso operacional. A
+promoção de `1.0.0` permanece `NO-GO` até que todos os gates acima tenham
+evidência pública e o candidato final seja novo. Nenhum novo `0.7.x` deve ser
+publicado salvo regressão crítica.
 
 ## Próxima ação
 
-Disponibilizar os secrets operacionais, manter a operação TUF sustentável antes
-da próxima janela de 6 horas, e só então concluir a evidência nativa, obter a
-assinatura do mantenedor único e iniciar o fluxo
-protegido de promoção contra o artifact fixado.
+Manter o soak do RC, fechar a aceitação pública e as lacunas M3, publicar a
+evidência durável e provar a operação TUF. Depois disso, congelar a linha,
+gerar um novo candidato `1.0.0`, repetir todos os gates sobre seus bytes e só
+então promover a versão final.

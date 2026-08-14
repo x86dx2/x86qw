@@ -335,6 +335,54 @@ elif case == "mvdsv-mvd":
         "mvd_size": 64, "mvd_sha256": "a" * 64,
         "termination": "controlled", "process_exit_code": -15,
     }
+elif case == "migration-0.7.13-real" or case == "lifecycle-migrate-apply":
+    observations = {
+        "source_version": "0.7.13",
+        "fixture_state_sha256": "a" * 64,
+        "fixture_version_sha256": "b" * 64,
+        "state_before_sha256": "c" * 64,
+        "state_after_sha256": "d" * 64,
+        "migration_applied": True, "state_converged": True,
+        "personal_preserved": True, "pak_preserved": True,
+        "termination": "controlled", "process_exit_code": 0,
+    }
+elif case == "game-ktx-frogbot":
+    observations = {
+        "window_title": "x86QW dm6",
+        "map": "dm6",
+        "gamecode_log": "Loading vm file qwprogs.qvm...",
+        "content": {
+            "gamedir": "qw", "map": "dm6", "map_source": "qw/ktx.pk3",
+            "gamecode_package": "qw/ktx.pk3",
+        },
+        "frogbot_spawned": True, "frogbot_skill": True, "frogbot_named": True,
+        "frogbot_log": "cmd botcmd skill 5; cmd botcmd addbot 5; k_fb_name_0 x86QW",
+        "termination": "controlled", "process_exit_code": 0,
+    }
+elif case in {"lifecycle-update-apply", "lifecycle-upgrade-apply"}:
+    observations = {
+        "state_before_sha256": "a" * 64, "state_after_sha256": "b" * 64,
+        "state_converged": True, "no_downgrade": True,
+        "profile_preserved": True, "mutation_applied": True,
+        "personal_preserved": True, "pak_preserved": True,
+        "termination": "controlled", "process_exit_code": 0,
+    }
+elif case == "lifecycle-repair-corruption":
+    observations = {
+        "path": "mvdsv", "repair_applied": True, "corruption_restored": True,
+        "personal_preserved": True, "pak_preserved": True,
+        "termination": "controlled", "process_exit_code": 0,
+    }
+elif case == "lifecycle-uninstall":
+    observations = {
+        "installation_removed": True, "personal_preserved": True,
+        "pak_preserved": True, "termination": "controlled", "process_exit_code": 0,
+    }
+elif case == "lifecycle-purge":
+    observations = {
+        "installation_removed": True, "personal_removed": True,
+        "termination": "controlled", "process_exit_code": 0,
+    }
 elif case == "qtv-stream":
     observations = {
         "service": "qtv", "http_ready": True, "http_status": 200,
@@ -361,7 +409,7 @@ receipt_value = {
     "execution": {"status": "passed", "exit_code": 0},
     "state": {
         "before": "clean" if case == "install-clean-space-unicode" else "installed",
-        "after": "uninstalled" if case == "lifecycle-uninstall" else "installed",
+        "after": "uninstalled" if case in {"lifecycle-uninstall", "lifecycle-purge"} else "installed",
     },
 }
 if observations is not None:

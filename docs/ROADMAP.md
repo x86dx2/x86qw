@@ -5,7 +5,7 @@ Este é o índice estratégico da jornada da baseline pública `0.7.13` até
 [PROJECT-STATUS.md](PROJECT-STATUS.md); a execução detalhada, a auditoria das
 branches e os gates estão em
 [implementation/stabilization-1.0-plan.md](implementation/stabilization-1.0-plan.md).
-As notas de release históricas e o rascunho de `1.0.0` ficam em
+As notas de release históricas, o RC público e o rascunho de `1.0.0` ficam em
 [releases/](releases/).
 
 ## Autoridade e baseline
@@ -39,10 +39,13 @@ só.
    implementar a cadeia de confiança; alvo sugerido `0.9.0`.
 6. **PR F — candidato imutável (`#51`):** construir uma vez, fixar Actions,
    conferir ownership/SBOM/provenance/mirrors e falhar fechado sem evidência.
-7. **PR G — Mac M3/arm64 (`#54`):** executar o candidato exato e abrir uma PR
-   de release separada para `1.0.0-rc.1`.
-8. **PR H — `1.0.0`:** promover somente após o período de uso do RC, com trust,
-   evidência M3, bytes idênticos e mirrors convergentes.
+7. **RC `1.0.0-rc.1` — concluído:** candidato imutável executado no M3,
+   evidência assinada, publicação GitHub/GitLab e metadata-last verificados.
+8. **Soak do RC — em andamento:** aceitação pelos endpoints públicos, migração
+   real, lifecycle apply, Frogbot, evidência durável e operação TUF sustentável.
+9. **PR H — `1.0.0`:** gerar um candidato final novo e promover somente após o
+   período de uso do RC, com trust, evidência M3, bytes idênticos e mirrors
+   convergentes.
 
 Cada item exige issue antes da branch, uma frente estrutural por vez e release
 separada da implementação. O plano é a autoridade para dependências, extração
@@ -58,6 +61,8 @@ seletiva e limites de aprovação.
   são smokes nativos;
 - trust de produção, evidência M3, hashes, SBOM, provenance e mirrors são
   gates independentes e falham fechados;
+- o RC publicado não autoriza a promoção final; qualquer alteração nos bytes de
+  produto exige `1.0.0-rc.2` e reinício do soak;
 - nenhuma promoção ou publicação `1.0` ocorre antes dos gates; releases
   corretivas permanecem separadas das PRs de implementação.
 

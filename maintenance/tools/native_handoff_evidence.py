@@ -226,7 +226,11 @@ def _validate_aggregate(value: object, *, identity: dict[str, str]) -> dict[str,
         ):
             raise NativeHandoffError(f"recibo redigido não prova o caso: {expected_name}")
         expected_before = "clean" if expected_name == CANONICAL_CASES[0] else "installed"
-        expected_after = "uninstalled" if expected_name == CANONICAL_CASES[-1] else "installed"
+        expected_after = (
+            "uninstalled"
+            if expected_name in {"lifecycle-uninstall", "lifecycle-purge"}
+            else "installed"
+        )
         if state != {"before": expected_before, "after": expected_after}:
             raise NativeHandoffError(f"estado redigido inválido: {expected_name}")
         if expected_name in OBSERVATION_CASES:

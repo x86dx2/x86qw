@@ -19,6 +19,7 @@ from maintenance.native_case_entrypoint import (
     _qwfwd_remote_ready_packet,
     _materialize_qwfwd_config,
     _cleanup_case_scratch,
+    _frogbot_log_evidence,
     _run_installed_launcher_contract,
     _start_tcp_service,
     build_case_command,
@@ -52,12 +53,32 @@ class NativeCaseEntrypointTests(unittest.TestCase):
         )
         return candidate
 
-    def test_only_the_closed_eighteen_case_protocol_is_accepted(self) -> None:
-        self.assertEqual(18, len(CANONICAL_CASES))
+    def test_only_the_closed_functional_case_protocol_is_accepted(self) -> None:
+        self.assertEqual(25, len(CANONICAL_CASES))
+        self.assertIn("game-ktx-frogbot", CANONICAL_CASES)
+        self.assertIn("migration-0.7.13-real", CANONICAL_CASES)
+        self.assertIn("lifecycle-update-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-upgrade-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-repair-corruption", CANONICAL_CASES)
+        self.assertIn("lifecycle-migrate-apply", CANONICAL_CASES)
+        self.assertIn("lifecycle-purge", CANONICAL_CASES)
         for name in CANONICAL_CASES:
             self.assertEqual(name, validate_case_name(name))
         with self.assertRaises(CandidateCaseError):
             validate_case_name("unknown-case")
+
+    def test_frogbot_observation_accepts_ktx_runtime_command_and_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            log = Path(temporary) / "qw" / "qconsole.log"
+            log.parent.mkdir()
+            log.write_text(
+                "cmd botcmd skill 5\ncmd botcmd addbot 5\nspawned /x86QW\n",
+                encoding="utf-8",
+            )
+            evidence = _frogbot_log_evidence(Path(temporary))
+            self.assertTrue(evidence["frogbot_spawned"])
+            self.assertTrue(evidence["frogbot_skill"])
+            self.assertTrue(evidence["frogbot_named"])
 
     def test_candidate_artifacts_are_hash_checked_before_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

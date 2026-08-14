@@ -85,6 +85,33 @@ class PublicInstallSmokeTests(unittest.TestCase):
             ])
         self.assertEqual(2, raised.exception.code)
 
+    def test_parser_exposes_the_full_public_acceptance_gate(self):
+        options = smoke._parser().parse_args([
+            "--version", "1.0.0-rc.1", "--platform", "macos",
+            "--channel", "stable", "--release", "latest",
+            "--profile", "complete",
+            "--trust-metadata-url", "https://trust.example.invalid/x86qw",
+            "--full-lifecycle",
+        ])
+        self.assertTrue(options.full_lifecycle)
+
+    def test_action_response_requires_a_successful_json_contract(self):
+        self.assertEqual(
+            {"action": "verify", "ok": True},
+            smoke._require_action_success(
+                {"action": "verify", "ok": True}, "verify",
+            ),
+        )
+        with self.assertRaises(smoke.PublicInstallSmokeError):
+            smoke._require_action_success(
+                {"action": "verify", "ok": False}, "verify",
+            )
+
+    def test_candidate_version_accepts_the_public_rc_identity(self):
+        self.assertTrue(smoke._is_candidate_version("1.0.0-rc.1"))
+        self.assertTrue(smoke._is_candidate_version("1.0.0"))
+        self.assertFalse(smoke._is_candidate_version("1.0"))
+
     def test_run_smoke_uses_exact_bundle_and_json_verification(self):
         candidate = package()
         runs: list[list[str]] = []
@@ -104,9 +131,14 @@ class PublicInstallSmokeTests(unittest.TestCase):
             return mock.Mock(returncode=0, stdout=output)
 
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch.object(smoke, "_download_catalog", return_value={
-                "project": "x86qw", "packages": [candidate],
-            }))
+            stack.enter_context(mock.patch.object(smoke, "_download_catalog_payload", return_value=(
+                {"project": "x86qw", "packages": [candidate]},
+                b'{"project":"x86qw","packages":[]}',
+            )))
+            stack.enter_context(mock.patch.object(
+                smoke, "_authenticate_public_catalog",
+                return_value={"project": "x86qw", "packages": [candidate]},
+            ))
             stack.enter_context(mock.patch.object(smoke, "download_mirrors"))
             stack.enter_context(mock.patch.object(smoke, "validate_installer_bundle", return_value=mock.sentinel.plan))
             stack.enter_context(mock.patch.object(smoke, "extract_archive"))
@@ -146,6 +178,7 @@ class PublicInstallSmokeTests(unittest.TestCase):
         self.assertIn("--json", runs[1])
         self.assertIn("--json", runs[2])
         self.assertIn("verify", runs[2])
+        self.assertEqual(64, len(result["catalog_sha256"]))
 
 
 if __name__ == "__main__":

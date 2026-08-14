@@ -13,9 +13,11 @@ from maintenance.tools.native_plan_adapter import PlanNotRun, generate_native_pl
 EXPECTED_CASES = (
     "install-clean-space-unicode",
     "install-existing-space-unicode",
+    "migration-0.7.13-real",
     "client-stable-window-map-exit",
     "client-nightly-window-map-exit",
     "game-ktx",
+    "game-ktx-frogbot",
     "game-final-arena",
     "game-pro-x",
     "game-team-fortress",
@@ -24,11 +26,16 @@ EXPECTED_CASES = (
     "qtv-stream",
     "qwfwd-forward",
     "lifecycle-update",
+    "lifecycle-update-apply",
     "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
     "lifecycle-verify",
     "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
     "lifecycle-cleanup",
     "lifecycle-uninstall",
+    "lifecycle-purge",
 )
 CONTRACT_PATH = "runtime/native-smoke/macos-arm64/entrypoint.json"
 ENTRYPOINT_PATH = "runtime/native-smoke/macos-arm64/x86qw-native-smoke"
@@ -131,7 +138,7 @@ class NativePlanAdapterTests(unittest.TestCase):
                 ],
                 [case["arguments"] for case in plan["cases"]],
             )
-            self.assertEqual(18, len(validate_plan(plan, candidate=first_candidate)))
+            self.assertEqual(25, len(validate_plan(plan, candidate=first_candidate)))
 
     def test_current_f_shape_without_contract_is_not_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

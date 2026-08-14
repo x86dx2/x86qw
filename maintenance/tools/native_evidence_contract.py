@@ -31,9 +31,11 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 CANONICAL_CASES = (
     "install-clean-space-unicode",
     "install-existing-space-unicode",
+    "migration-0.7.13-real",
     "client-stable-window-map-exit",
     "client-nightly-window-map-exit",
     "game-ktx",
+    "game-ktx-frogbot",
     "game-final-arena",
     "game-pro-x",
     "game-team-fortress",
@@ -42,11 +44,16 @@ CANONICAL_CASES = (
     "qtv-stream",
     "qwfwd-forward",
     "lifecycle-update",
+    "lifecycle-update-apply",
     "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
     "lifecycle-verify",
     "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
     "lifecycle-cleanup",
     "lifecycle-uninstall",
+    "lifecycle-purge",
 )
 
 CASE_ASSERTIONS = {
@@ -55,9 +62,17 @@ CASE_ASSERTIONS = {
         "launcher-changes", "launcher-migrate",
     }),
     "install-existing-space-unicode": frozenset({"existing-install", "path-space-unicode"}),
+    "migration-0.7.13-real": frozenset({
+        "legacy-0.7.13", "migration-applied", "personal-preserved",
+        "pak-preserved", "process-exited",
+    }),
     "client-stable-window-map-exit": frozenset({"window-created", "map-loaded", "process-exited"}),
     "client-nightly-window-map-exit": frozenset({"window-created", "map-loaded", "process-exited"}),
     "game-ktx": frozenset({"gamecode-loaded", "map-loaded", "process-exited"}),
+    "game-ktx-frogbot": frozenset({
+        "gamecode-loaded", "map-loaded", "frogbot-spawned", "frogbot-skill",
+        "frogbot-named", "process-exited",
+    }),
     "game-final-arena": frozenset({"gamecode-loaded", "map-loaded", "process-exited"}),
     "game-pro-x": frozenset({"gamecode-loaded", "map-loaded", "process-exited"}),
     "game-team-fortress": frozenset({"gamecode-loaded", "map-loaded", "process-exited"}),
@@ -66,11 +81,24 @@ CASE_ASSERTIONS = {
     "qtv-stream": frozenset({"http-ready", "stream-readable", "process-exited"}),
     "qwfwd-forward": frozenset({"udp-forwarded", "process-exited"}),
     "lifecycle-update": frozenset({"state-converged", "no-downgrade", "process-exited"}),
+    "lifecycle-update-apply": frozenset({
+        "state-converged", "no-downgrade", "mutation-applied", "process-exited",
+    }),
     "lifecycle-upgrade": frozenset({"state-converged", "profile-preserved", "process-exited"}),
+    "lifecycle-upgrade-apply": frozenset({
+        "state-converged", "profile-preserved", "mutation-applied", "process-exited",
+    }),
     "lifecycle-verify": frozenset({"integrity-verified", "no-mutation"}),
     "lifecycle-repair": frozenset({"repair-planned", "personal-preserved", "process-exited"}),
+    "lifecycle-repair-corruption": frozenset({
+        "repair-applied", "corruption-restored", "personal-preserved", "process-exited",
+    }),
+    "lifecycle-migrate-apply": frozenset({
+        "migration-applied", "state-converged", "process-exited",
+    }),
     "lifecycle-cleanup": frozenset({"no-residual-processes", "no-residual-ports", "no-residual-temporaries"}),
     "lifecycle-uninstall": frozenset({"installation-removed", "personal-preserved", "process-exited"}),
+    "lifecycle-purge": frozenset({"installation-removed", "personal-removed", "process-exited"}),
 }
 
 ENVIRONMENT_FIELDS = frozenset({

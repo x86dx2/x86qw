@@ -138,6 +138,13 @@ stale se ela aparecer no staging.
    disponibiliza para staging depois dos assets;
    a verificação final de TUF, produto e bootstraps públicos ocorre no mesmo job
    após o deploy; o produto é comparado byte a byte com o candidato aprovado.
+10. antes da promoção final `1.0.0`, o workflow manual
+    `.github/workflows/public-acceptance.yml` deve executar no Apple M3 contra o
+    catálogo, bootstrap, mirrors e metadata TUF públicos. O recibo produzido é
+    baixado por ID e validado por
+    `maintenance/tools/verify_public_acceptance.py`; sem esse handoff a etapa
+    `verify-public-acceptance` mantém a promoção final bloqueada. A aceitação de
+    um RC não pode ser fabricada pelo próprio workflow de promoção.
 
 O artifact fica retido por 90 dias, acima do período mínimo de soak do RC. Não
 há etapa de rebuild após a aprovação. Plano ausente, candidato divergente,
@@ -159,6 +166,10 @@ abre/atualiza uma única issue acionável quando o monitor falha; ele é somente
 observabilidade e não substitui a cerimônia autorizada de renovação. Sem signer,
 alertas entregues e um drill de recuperação observados, a 1.0 permanece NO-GO
 mesmo que a validação técnica da TUF passe.
+O drill operacional está em
+[`docs/runbooks/tuf-operation.md`](tuf-operation.md) e usa
+`maintenance/tools/tuf_operation_drill.py` em um diretório temporário; ele não
+publica metadata e não aceita overwrite do relatório.
 
 ## Rollback e publicação
 

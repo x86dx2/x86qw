@@ -31,6 +31,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/verify_public_tuf.py",
             "maintenance/tools/verify_public_bootstraps.py",
             "maintenance/tools/verify_public_product.py",
+            "maintenance/tools/public_install_smoke.py",
+            "maintenance/tools/verify_public_acceptance.py",
+            "maintenance/tools/tuf_operation_drill.py",
             "maintenance/tools/materialize_lfs.py",
         )
         for relative in scripts:
@@ -51,6 +54,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/sign-native-evidence.yml",
             ROOT / ".github/workflows/tuf-metadata-handoff.yml",
             ROOT / ".github/workflows/tuf-monitor.yml",
+            ROOT / ".github/workflows/public-acceptance.yml",
         ]
         for path in workflows:
             source = path.read_text(encoding="utf-8")
@@ -158,7 +162,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_jobs_fetch_candidate_sha_after_main_checkout(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertEqual(6, source.count("name: Checkout immutable candidate commit"))
-        self.assertEqual(10, source.count("ref: main"))
+        self.assertEqual(11, source.count("ref: main"))
         self.assertNotIn("ref: ${{ inputs.candidate_commit }}", source)
         self.assertEqual(6, source.count('git fetch --no-tags origin "$CANDIDATE_COMMIT"'))
         self.assertEqual(6, source.count('git checkout --detach "$CANDIDATE_COMMIT"'))
@@ -222,7 +226,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             )
             blocks.append("\n".join(lines[start:end]))
 
-        self.assertEqual(11, len(blocks))
+        self.assertEqual(12, len(blocks))
         for block in blocks:
             self.assertIn("artifact-ids:", block)
             self.assertRegex(block, r"(?m)^\s+merge-multiple:\s*true\s*$")
@@ -363,6 +367,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("--trust-root m3/root.json", source)
         self.assertIn("needs.attach-native-evidence.outputs.artifact-id", source)
 
+    def test_promotion_materializes_and_verifies_durable_evidence_receipt(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("native_evidence_artifact_name:", source)
+        self.assertIn("maintenance/tools/release_receipt.py", source)
+        self.assertIn("evidence-root.json", source)
+        self.assertIn("release-receipt.json", source)
+        self.assertIn("release-evidence.json", source)
+        self.assertIn("release_receipt.py verify", source)
+        self.assertIn("release-receipt-coordinates.json", source)
+
     def test_metadata_last_uses_the_publish_tuf_metadata_cli_contract(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         metadata_step = source.split("      - name: Authenticate signed TUF against the exact candidate catalog", 1)[1]
@@ -403,6 +417,35 @@ class ReleaseWorkflowTests(unittest.TestCase):
             source.index("verify_public_product.py"),
             source.index("Record metadata-last post-publish result"),
         )
+
+    def test_public_acceptance_runs_the_full_disposable_m3_lifecycle(self):
+        path = ROOT / ".github/workflows/public-acceptance.yml"
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", source)
+        self.assertIn("public_install_smoke.py", source)
+        self.assertIn("--full-lifecycle", source)
+        self.assertIn(
+            "python -m pip install --no-index --find-links maintenance/vendor/wheels "
+            "--require-hashes -r maintenance/requirements-trust.txt",
+            source,
+        )
+        self.assertIn("--online-only", (ROOT / "maintenance/tools/public_install_smoke.py").read_text(encoding="utf-8"))
+        self.assertIn("overwrite: false", source)
+        self.assertIn("retention-days: 90", source)
+
+    def test_final_promotion_requires_a_proven_public_rc_acceptance(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("public_acceptance_run_id:", source)
+        self.assertIn("public_acceptance_artifact_id:", source)
+        self.assertIn("public_acceptance_artifact_name:", source)
+        self.assertIn("public_acceptance_version:", source)
+        self.assertIn("verify-public-acceptance:", source)
+        gate = source.split("  verify-public-acceptance:\n", 1)[1]
+        self.assertIn("verify_external_handoff.py", gate)
+        self.assertIn(".github/workflows/public-acceptance.yml", gate)
+        self.assertIn("verify_public_acceptance.py", gate)
+        self.assertIn("needs.verify-public-acceptance.result", source)
 
 
 if __name__ == "__main__":

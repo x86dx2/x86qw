@@ -23,9 +23,11 @@ class PublishedReleaseTests(unittest.TestCase):
     def test_public_identity_accepts_semver_release_candidates(self):
         MODULE._validate_identity("example/project", "1.0.0-rc.1", "a" * 40)
 
-    def test_public_release_metadata_excludes_optional_native_evidence(self):
-        self.assertNotIn("release-evidence.json", MODULE.PUBLIC_METADATA_NAMES)
-        self.assertEqual(5, len(MODULE.PUBLIC_METADATA_NAMES))
+    def test_public_release_metadata_requires_durable_native_evidence(self):
+        self.assertIn("release-evidence.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertIn("evidence-root.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertIn("release-receipt.json", MODULE.PUBLIC_METADATA_NAMES)
+        self.assertEqual(8, len(MODULE.PUBLIC_METADATA_NAMES))
 
     def metadata_payloads(self) -> dict[str, bytes]:
         return {
@@ -101,16 +103,17 @@ class PublishedReleaseTests(unittest.TestCase):
             for name, payload in self.metadata_payloads().items():
                 (candidate / name).write_bytes(payload)
             fetch_json = kwargs.pop("fetch_json", None) or self.fetcher(payloads)
-            return MODULE.classify_published_release(
-                candidate,
-                trust_root=Path(temporary) / "root.json",
-                repository="example/project",
-                version="1.0.0",
-                commit="a" * 40,
-                verify=lambda *_args, **_kwargs: manifest or self.manifest(),
-                fetch_json=fetch_json,
-                **kwargs,
-            )
+            with mock.patch.object(MODULE, "validate_durable_assets", return_value={}):
+                return MODULE.classify_published_release(
+                    candidate,
+                    trust_root=Path(temporary) / "root.json",
+                    repository="example/project",
+                    version="1.0.0",
+                    commit="a" * 40,
+                    verify=lambda *_args, **_kwargs: manifest or self.manifest(),
+                    fetch_json=fetch_json,
+                    **kwargs,
+                )
 
     def test_both_absent_is_absent(self):
         missing = MODULE.PublishedReleaseNotFound()

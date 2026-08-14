@@ -25,9 +25,11 @@ M3_CHIP = re.compile(r"^Apple M3(?:\s.*)?$")
 CANONICAL_CASES = (
     "install-clean-space-unicode",
     "install-existing-space-unicode",
+    "migration-0.7.13-real",
     "client-stable-window-map-exit",
     "client-nightly-window-map-exit",
     "game-ktx",
+    "game-ktx-frogbot",
     "game-final-arena",
     "game-pro-x",
     "game-team-fortress",
@@ -36,11 +38,16 @@ CANONICAL_CASES = (
     "qtv-stream",
     "qwfwd-forward",
     "lifecycle-update",
+    "lifecycle-update-apply",
     "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
     "lifecycle-verify",
     "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
     "lifecycle-cleanup",
     "lifecycle-uninstall",
+    "lifecycle-purge",
 )
 
 IDENTITY_FIELDS = frozenset({"version", "commit", "manifest_sha256"})
@@ -75,10 +82,16 @@ RECEIPT_EXECUTION_FIELDS = frozenset({"status", "exit_code"})
 RECEIPT_STATE_FIELDS = frozenset({"before", "after"})
 NATIVE_STATES = frozenset({"clean", "installed", "uninstalled"})
 SERVICE_CASES = frozenset({"mvdsv-mvd", "qtv-stream", "qwfwd-forward"})
-OBSERVATION_CASES = SERVICE_CASES | {"install-clean-space-unicode"}
+OBSERVATION_CASES = SERVICE_CASES | {
+    "install-clean-space-unicode", "migration-0.7.13-real", "game-ktx-frogbot",
+    "lifecycle-update-apply", "lifecycle-upgrade-apply",
+    "lifecycle-repair-corruption", "lifecycle-migrate-apply", "lifecycle-purge",
+    "lifecycle-uninstall",
+}
 CLIENT_CASES = frozenset({
     "client-stable-window-map-exit", "client-nightly-window-map-exit",
-    "game-ktx", "game-final-arena", "game-pro-x", "game-team-fortress", "game-td2",
+    "game-ktx", "game-ktx-frogbot", "game-final-arena", "game-pro-x",
+    "game-team-fortress", "game-td2",
 })
 
 
@@ -300,7 +313,7 @@ def _expected_state(case: str) -> tuple[str, str]:
         return "clean", "installed"
     if case == CANONICAL_CASES[1]:
         return "installed", "installed"
-    if case == CANONICAL_CASES[-1]:
+    if case in {"lifecycle-uninstall", "lifecycle-purge"}:
         return "installed", "uninstalled"
     return "installed", "installed"
 
@@ -379,10 +392,75 @@ def validate_case_observations(expected_case: str, value: object) -> dict[str, o
             raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
         if value.get("udp_forwarded") is not True or value.get("response_returned") is not True:
             raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "migration-0.7.13-real" or expected_case == "lifecycle-migrate-apply":
+        required = {
+            "source_version", "fixture_state_sha256", "fixture_version_sha256",
+            "state_before_sha256", "state_after_sha256", "migration_applied",
+            "state_converged", "personal_preserved", "pak_preserved",
+            "termination", "process_exit_code",
+        }
+        if set(value) != required:
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if (
+            value.get("source_version") not in {"0.7.13"}
+            or not isinstance(value.get("fixture_state_sha256"), str)
+            or not isinstance(value.get("fixture_version_sha256"), str)
+            or not isinstance(value.get("state_before_sha256"), str)
+            or not isinstance(value.get("state_after_sha256"), str)
+            or value.get("state_before_sha256") == value.get("state_after_sha256")
+            or value.get("migration_applied") is not True
+            or value.get("state_converged") is not True
+            or value.get("personal_preserved") is not True
+            or value.get("pak_preserved") is not True
+        ):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case in {
+        "lifecycle-update-apply", "lifecycle-upgrade-apply",
+    }:
+        required = {
+            "state_before_sha256", "state_after_sha256", "state_converged",
+            "no_downgrade", "profile_preserved", "mutation_applied",
+            "personal_preserved", "pak_preserved", "termination", "process_exit_code",
+        }
+        if set(value) != required:
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if not all(value.get(field) is True for field in (
+            "state_converged", "no_downgrade", "profile_preserved",
+            "mutation_applied", "personal_preserved", "pak_preserved",
+        )):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "lifecycle-repair-corruption":
+        required = {
+            "path", "repair_applied", "corruption_restored", "personal_preserved",
+            "pak_preserved", "termination", "process_exit_code",
+        }
+        if set(value) != required or not isinstance(value.get("path"), str):
+            raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
+        if not all(value.get(field) is True for field in (
+            "repair_applied", "corruption_restored", "personal_preserved", "pak_preserved",
+        )):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "lifecycle-uninstall":
+        required = {
+            "installation_removed", "personal_preserved", "pak_preserved",
+            "termination", "process_exit_code",
+        }
+        if set(value) != required or not all(value.get(field) is True for field in (
+            "installation_removed", "personal_preserved", "pak_preserved",
+        )):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
+    elif expected_case == "lifecycle-purge":
+        required = {"installation_removed", "personal_removed", "termination", "process_exit_code"}
+        if set(value) != required or not all(value.get(field) is True for field in (
+            "installation_removed", "personal_removed",
+        )):
+            raise NativeHandoffError(f"observações nativas inválidas: {expected_case}")
     elif expected_case in CLIENT_CASES:
         required = {
             "window_title", "map", "gamecode_log", "content", "termination", "process_exit_code",
         }
+        if expected_case == "game-ktx-frogbot":
+            required |= {"frogbot_spawned", "frogbot_skill", "frogbot_named", "frogbot_log"}
         if set(value) != required:
             raise NativeHandoffError(f"observações nativas incompletas: {expected_case}")
         if (
@@ -405,6 +483,10 @@ def validate_case_observations(expected_case: str, value: object) -> dict[str, o
             or not isinstance(content["gamecode_package"], (str, type(None)))
         ):
             raise NativeHandoffError(f"conteúdo nativo inválido: {expected_case}")
+        if expected_case == "game-ktx-frogbot" and not all(value.get(field) is True for field in (
+            "frogbot_spawned", "frogbot_skill", "frogbot_named",
+        )):
+            raise NativeHandoffError(f"Frogbot não comprovado: {expected_case}")
     else:
         raise NativeHandoffError(f"observações nativas não suportadas: {expected_case}")
     if value.get("termination") != "controlled" or type(value.get("process_exit_code")) is not int:
