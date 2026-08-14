@@ -76,10 +76,12 @@ TUF do candidato.
 - a instalação pessoal temporária não é usada pelos testes de release.
 - a aceitação pública completa está implementada em
   `maintenance/tools/public_install_smoke.py --full-lifecycle` e no workflow
-  M3 manual; a execução de 2026-08-14 autenticou catálogo/TUF e baixou o RC.1,
-  mas falhou na etapa macOS `directory-preferences`. O registro está em
-  `docs/releases/1.0.0-rc.1-public-acceptance.md`; a correção local exige novo
-  RC e novo recibo público;
+  M3 manual; a execução protegida histórica de 2026-08-14 falhou na etapa
+  macOS `directory-preferences`, enquanto a rechecagem local posterior dos
+  mesmos bytes públicos passou catálogo/TUF, instalação completa e todo o
+  lifecycle. O recibo local está em
+  `docs/releases/1.0.0-rc.1-public-acceptance-local-2026-08-14.json`; ele não
+  substitui o artifact do workflow protegido nem inicia o soak;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
   candidato exato estão verdes, mas isso não substitui o handoff M3 assinado
@@ -117,8 +119,9 @@ Actions.
    aceitação pública do RC.1 e precisa reiniciar com um novo candidato;
 2. a evidência M3 deste RC ainda depende da retenção de 90 dias dos artifacts até
    que os três assets duráveis sejam publicados;
-3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
-   ainda precisa de execução M3 e recibo anexado;
+3. a aceitação pública pós-deploy tem uma rechecagem local verde e workflow/
+   verificador implementados, mas ainda precisa do artifact e handoff do run
+   M3 protegido;
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
    lifecycle estão comprovados nos preflights locais `1.0.0-rc.4` e `1.0.0`;
    ainda precisam de execução protegida e aceitação pública de um candidato

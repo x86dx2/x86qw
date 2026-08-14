@@ -304,9 +304,11 @@ docs/           arquitetura, hosting, decisões e roadmaps
 ## Estado do projeto
 
 A baseline estável continua em `0.7.13` e as referências às versões anteriores
-permanecem históricas e imutáveis. O `1.0.0-rc.1` é um Release Candidate público
-com o soak interrompido após a falha de aceitação pública; a `1.0.0` final ainda
-não foi aprovada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
+permanecem históricas e imutáveis. O `1.0.0-rc.1` é um Release Candidate público;
+o workflow protegido de aceitação falhou, embora uma rechecagem local posterior
+dos mesmos bytes públicos tenha passado o lifecycle completo. O soak ainda não
+foi aberto formalmente e a `1.0.0` final ainda não foi aprovada. Consulte o
+[status operacional](docs/PROJECT-STATUS.md),
 o [roadmap estratégico](docs/ROADMAP.md) e o
 [plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
 para distinguir baseline, sequência, evidência e gates de aprovação.
