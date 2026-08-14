@@ -305,7 +305,8 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 A baseline estável continua em `0.7.13` e as referências às versões anteriores
 permanecem históricas e imutáveis. O `1.0.0-rc.1` é um Release Candidate público
-em soak; a `1.0.0` final ainda não foi aprovada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
+com o soak interrompido após a falha de aceitação pública; a `1.0.0` final ainda
+não foi aprovada. Consulte o [status operacional](docs/PROJECT-STATUS.md),
 o [roadmap estratégico](docs/ROADMAP.md) e o
 [plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
 para distinguir baseline, sequência, evidência e gates de aprovação.

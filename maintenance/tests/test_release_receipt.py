@@ -102,6 +102,51 @@ class ReleaseReceiptTests(unittest.TestCase):
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
                 self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
 
+    def test_final_receipt_binds_public_acceptance_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            coordinates = self._coordinates()
+            coordinates["public_acceptance"] = {
+                "commit": "c" * 40,
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                receipt = release_receipt.write_durable_assets(
+                    candidate=candidate,
+                    evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                    coordinates=coordinates,
+                )
+
+            self.assertEqual(coordinates["public_acceptance"], receipt["public_acceptance"])
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                self.assertEqual(receipt, release_receipt.validate_durable_assets(candidate))
+
+    def test_public_acceptance_handoff_rejects_malformed_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            coordinates = self._coordinates()
+            coordinates["public_acceptance"] = {
+                "commit": "not-a-commit",
+                "run_id": "31752738003",
+                "artifact_id": "9004",
+                "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
+                "version": "1.0.0-rc.2",
+            }
+            manifest = json.loads((candidate / "candidate.json").read_text())
+            with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
+                with self.assertRaises(release_receipt.ReleaseReceiptError):
+                    release_receipt.write_durable_assets(
+                        candidate=candidate,
+                        evidence_root=ROOT / "maintenance/trust/m3-root.json",
+                        coordinates=coordinates,
+                    )
+
     def test_validation_rejects_receipt_asset_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

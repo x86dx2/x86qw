@@ -16,7 +16,8 @@ As notas de release históricas, o RC público e o rascunho de `1.0.0` ficam em
 alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
 os cinco jogos, os runtimes declarados e a distinção entre contratos portáveis e
 execução nativa. O Release Candidate público separado é
-`x86qw-installer-1.0.0-rc.1`; ele está em soak e não autoriza a promoção final.
+`x86qw-installer-1.0.0-rc.1`; seu soak está interrompido pela aceitação pública
+falha e ele não autoriza a promoção final.
 O checkpoint
 `codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
 aprovação nem release.

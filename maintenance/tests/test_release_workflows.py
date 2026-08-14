@@ -377,6 +377,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("release_receipt.py verify", source)
         self.assertIn("release-receipt-coordinates.json", source)
 
+    def test_final_receipt_binds_public_acceptance_handoff(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        receipt_step = source.split("      - name: Create durable evidence root and release receipt", 1)[1]
+        receipt_step = receipt_step.split("      - name: Upload evidence-bound candidate without overwrite", 1)[0]
+        self.assertIn("public_acceptance", receipt_step)
+        self.assertIn("ACCEPTANCE_COMMIT", receipt_step)
+        self.assertIn("ACCEPTANCE_RUN_ID", receipt_step)
+        self.assertIn("ACCEPTANCE_ARTIFACT_ID", receipt_step)
+        self.assertIn("ACCEPTANCE_ARTIFACT_NAME", receipt_step)
+        self.assertIn("ACCEPTANCE_VERSION", receipt_step)
+        self.assertIn("inputs.mode == 'promote-1.0'", receipt_step)
+
     def test_metadata_last_uses_the_publish_tuf_metadata_cli_contract(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         metadata_step = source.split("      - name: Authenticate signed TUF against the exact candidate catalog", 1)[1]

@@ -129,7 +129,11 @@ stale se ela aparecer no staging.
    fechado se houver issue P0/P1 aberta ou se a resposta não puder ser
    validada;
 6. `attach-native-evidence` baixa o candidato e a evidência assinada por IDs,
-   sem rebuild; `promotion-gate` valida a root de trust e a cobertura M3;
+   sem rebuild; a etapa também materializa `release-evidence.json`,
+   `evidence-root.json` e `release-receipt.json` sem overwrite. No modo
+   `promote-1.0`, o recibo inclui o handoff do acceptance público; no modo
+   `promote-rc`, essa seção permanece ausente por desenho. `promotion-gate`
+   valida a root de trust e a cobertura M3;
 7. `publish-assets` consulta o estado remoto, recusa overwrite e publica os
    assets exatos já transportados pelo candidato promovido, sem rebuild ou
    overwrite;

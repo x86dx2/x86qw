@@ -644,6 +644,12 @@ jobs:
           TUF_ARTIFACT_ID: ${{ inputs.tuf_metadata_artifact_id }}
           TUF_ARTIFACT_NAME: ${{ inputs.tuf_metadata_artifact_name }}
           TUF_WORKFLOW: ${{ inputs.tuf_metadata_workflow }}
+          ACCEPTANCE_REQUIRED: ${{ inputs.mode == 'promote-1.0' }}
+          ACCEPTANCE_COMMIT: ${{ inputs.public_acceptance_commit }}
+          ACCEPTANCE_RUN_ID: ${{ inputs.public_acceptance_run_id }}
+          ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
+          ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
+          ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
           RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -692,6 +698,14 @@ jobs:
                   "verification": "tuf,bootstraps,product,public-install",
               },
           }
+          if os.environ["ACCEPTANCE_REQUIRED"].lower() == "true":
+              coordinates["public_acceptance"] = {
+                  "commit": os.environ["ACCEPTANCE_COMMIT"],
+                  "run_id": os.environ["ACCEPTANCE_RUN_ID"],
+                  "artifact_id": os.environ["ACCEPTANCE_ARTIFACT_ID"],
+                  "artifact_name": os.environ["ACCEPTANCE_ARTIFACT_NAME"],
+                  "version": os.environ["ACCEPTANCE_VERSION"],
+              }
           Path(sys.argv[1]).write_text(json.dumps(coordinates, sort_keys=True) + "\n", encoding="utf-8")
           PY
           python3 maintenance/tools/release_receipt.py write \

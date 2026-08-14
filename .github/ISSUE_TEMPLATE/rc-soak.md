@@ -1,19 +1,19 @@
 ---
 name: RC soak
 about: Registrar o período de uso e a aceitação operacional de um release candidate
-title: "[P1] RC soak — x86QW 1.0.0-rc.1"
+title: "[P1] RC soak — x86QW 1.0.0-rc.x"
 labels: "release"
 assignees: ""
 ---
 
 ## Identidade
 
-- release: `x86qw-installer-1.0.0-rc.1`
-- commit do produto: `a8758ee27bebd7c72c24a31dc19335652e260c0a`
-- início UTC: `2026-08-13`
+- release: `x86qw-installer-1.0.0-rc.x`
+- commit do produto: `<SHA completo>`
+- início UTC: `<YYYY-MM-DD>`
 - período mínimo recomendado: sete dias completos
-- registro: [`docs/releases/1.0.0-rc.1-soak.md`](../../docs/releases/1.0.0-rc.1-soak.md)
-- issue criada para este ciclo: [#143](https://github.com/x86dx2/x86qw/issues/143)
+- registro: `docs/releases/<versão>-soak.md`
+- issue criada para este ciclo: `<número>`
 
 ## Checklist
 

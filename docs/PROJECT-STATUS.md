@@ -55,6 +55,12 @@ TUF do candidato.
   de uma instalação pessoal em `quake-world/`;
 - o harness Mac M3 executa plano candidato-owned e registra handoff, smoke
   normalizado e agregado unsigned pendente;
+- o candidato local `1.0.0-rc.2` do commit `3172a4864f8ae0cea7d24efedf261223da8e19f4`
+  passou o harness Apple M3 Pro com `25/25` casos; seu `candidate.json` tem
+  SHA-256 `f6c3deeee1819436c4af9f23741069ebfab0971dd2a6be5fcc2ae815229479d9`
+  e o instalador local tem SHA-256
+  `a3bed90a44e6f229987ddee2ad08391096b60f5af86e91e25b4844d5afe1b236`.
+  Isso é um checkpoint local, não evidência pública assinada nem publicação;
 - o catálogo separa `supported`, `conditional` e `preview`: stable macOS
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
@@ -66,8 +72,9 @@ TUF do candidato.
   `docs/releases/1.0.0-rc.1-public-acceptance.md`; a correção local exige novo
   RC e novo recibo público;
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
-  por corrupção e purge; os contratos e testes locais estão verdes, mas isso
-  não substitui um run nativo do candidato exato;
+  por corrupção e purge; os contratos, testes locais e o run nativo local do
+  candidato exato estão verdes, mas isso não substitui o handoff M3 assinado
+  pelo workflow protegido nem a aceitação pelos endpoints públicos;
 - o drill TUF offline está implementado em
   `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
   a visão corrente temporária; o recibo está em
@@ -101,8 +108,8 @@ Actions.
 3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
    ainda precisa de execução M3 e recibo anexado;
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
-   lifecycle estão implementados no candidato local, mas ainda precisam de run
-   nativo do candidato exato;
+   lifecycle estão comprovados no candidato local `1.0.0-rc.2`; ainda precisam
+   de execução protegida e aceitação pública desse candidato;
 5. a operação TUF tem monitor público verde e drill offline implementados; ainda
    faltam custódia de produção sustentada, renovação observada, alerta,
    expiração simulada e recuperação registrados no ambiente público;

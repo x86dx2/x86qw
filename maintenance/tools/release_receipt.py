@@ -28,6 +28,9 @@ PROJECT = "x86qw"
 FORMAT = "x86qw-release-receipt-v1"
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+POSITIVE_ID = re.compile(r"^[1-9][0-9]{0,19}$")
+PUBLIC_ACCEPTANCE_ARTIFACT = re.compile(r"^public-acceptance-[A-Za-z0-9._-]{1,180}$")
+PUBLIC_ACCEPTANCE_VERSION = re.compile(r"^1\.0\.0-rc\.[0-9]+$")
 MAX_JSON_BYTES = 2 * 1024 * 1024
 PUBLIC_METADATA_NAMES = (
     "candidate.json",
@@ -50,6 +53,9 @@ SECTION_FIELDS = {
     "tuf": frozenset({"workflow", "run_id", "artifact_id", "artifact_name"}),
     "deployment": frozenset({"endpoint", "verification"}),
 }
+PUBLIC_ACCEPTANCE_FIELDS = frozenset({
+    "commit", "run_id", "artifact_id", "artifact_name", "version",
+})
 
 
 class ReleaseReceiptError(RuntimeError):
@@ -115,7 +121,10 @@ def _validate_asset(value: object, *, label: str) -> dict[str, object]:
 
 
 def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
-    if not isinstance(value, Mapping) or set(value) != set(SECTIONS):
+    if not isinstance(value, Mapping):
+        raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
+    allowed_sections = set(SECTIONS) | {"public_acceptance"}
+    if set(value) - allowed_sections or not set(SECTIONS).issubset(value):
         raise ReleaseReceiptError("coordenadas do recibo possuem seções inválidas")
     result: dict[str, dict[str, str]] = {}
     secret_words = ("token", "secret", "password", "private", "credential", "key")
@@ -134,6 +143,25 @@ def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
                 raise ReleaseReceiptError(f"valor inválido nas coordenadas: {section}.{key}")
             normalized[key] = item
         result[section] = normalized
+    if "public_acceptance" in value:
+        raw_acceptance = value["public_acceptance"]
+        if not isinstance(raw_acceptance, Mapping) or set(raw_acceptance) != PUBLIC_ACCEPTANCE_FIELDS:
+            raise ReleaseReceiptError("coordenadas inválidas na seção public_acceptance")
+        acceptance = {key: raw_acceptance[key] for key in PUBLIC_ACCEPTANCE_FIELDS}
+        if (
+            not isinstance(acceptance["commit"], str)
+            or HEX40.fullmatch(acceptance["commit"]) is None
+            or not isinstance(acceptance["run_id"], str)
+            or POSITIVE_ID.fullmatch(acceptance["run_id"]) is None
+            or not isinstance(acceptance["artifact_id"], str)
+            or POSITIVE_ID.fullmatch(acceptance["artifact_id"]) is None
+            or not isinstance(acceptance["artifact_name"], str)
+            or PUBLIC_ACCEPTANCE_ARTIFACT.fullmatch(acceptance["artifact_name"]) is None
+            or not isinstance(acceptance["version"], str)
+            or PUBLIC_ACCEPTANCE_VERSION.fullmatch(acceptance["version"]) is None
+        ):
+            raise ReleaseReceiptError("coordenadas inválidas na seção public_acceptance")
+        result["public_acceptance"] = acceptance
     return result
 
 
@@ -330,6 +358,8 @@ def validate_durable_assets(
     if document.get("format") != FORMAT or document.get("project") != PROJECT or document.get("status") != "authorized":
         raise ReleaseReceiptError("identidade do recibo inválida")
     coordinates = {section: document.get(section) for section in SECTIONS}
+    if "public_acceptance" in document:
+        coordinates["public_acceptance"] = document["public_acceptance"]
     expected = build_receipt(candidate=candidate, evidence_root=root, coordinates=coordinates)
     if expected != document:
         raise ReleaseReceiptError("release-receipt.json diverge dos bytes públicos")

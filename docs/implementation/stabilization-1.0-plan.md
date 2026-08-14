@@ -28,9 +28,12 @@ O checkpoint histórico que originou este plano não autorizava publicação. A
 fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
 plano continua sem autorizar a promoção final, alteração dos bytes publicados
 ou publicação de metadata TUF fora do workflow protegido. A implementação local
-do fechamento dos gates está no commit `1c484d7` da branch
-`agent/rc-1.0-completion`; ela ainda precisa passar pelo fluxo remoto e pelo
-runner M3 antes de ser considerada evidência do candidato.
+do fechamento dos gates está no commit
+`3172a4864f8ae0cea7d24efedf261223da8e19f4` da branch
+`agent/rc-1.0-completion`. O candidato local `1.0.0-rc.2` desse commit passou
+`25/25` casos no Apple M3 Pro; isso ainda precisa passar pelo fluxo remoto,
+handoff assinado e endpoint público antes de ser considerado evidência de
+release.
 
 As invariantes para todas as fases são:
 
@@ -230,8 +233,9 @@ macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
 
 O RC público foi produzido e promovido no run `31752738047`. A implementação
 do fechamento desta frente adiciona os casos M3 restantes, a aceitação pública
-e a evidência durável; a execução protegida do candidato exato ainda é
-pendente.
+e a evidência durável. O candidato local `1.0.0-rc.2` passou os 25 casos no M3;
+o handoff assinado, a publicação e a aceitação pelo endpoint público ainda são
+pendentes.
 
 **Gate:** implementação fechada localmente; evidência M3 autenticada para um
 novo candidato, smokes registrados e período de uso concluído sem promover
@@ -314,10 +318,10 @@ A jornada só pode ser declarada concluída quando:
 
 Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
 o publisher não recompila, a fixture pública 0.7.13 existe, os workflows não
-possuem placeholders deliberados e o harness M3 falha fechado sem plano ou
-evidência. O RC público já foi promovido, mas a implementação local ainda não
-é aprovação de `1.0.0`: faltam execução pública M3, operação TUF de produção,
-soak e novo candidato final.
+possuem placeholders deliberados e o harness M3 local passou `25/25` no
+candidato `1.0.0-rc.2`. O RC público já foi promovido, mas a implementação
+local ainda não é aprovação de `1.0.0`: faltam handoff protegido, execução
+pública M3, operação TUF de produção, soak e novo candidato final.
 
 ## 10. Validação desta materialização
 
@@ -334,7 +338,7 @@ gates remotos e nativos:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o commit local `1c484d7` contra `origin/main`, mantendo separado o
+5. revisar o commit local `3172a48` contra `origin/main`, mantendo separado o
    trabalho histórico já publicado do candidato atual.
 
 Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
