@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -50,10 +51,42 @@ class VerifyPublicAcceptanceTests(unittest.TestCase):
         return path
 
     def test_accepts_complete_record_for_the_expected_rc(self):
+        path = self.write(record())
         result = verify_public_acceptance.verify_record(
-            self.write(record()), expected_version="1.0.0-rc.1",
+            path,
+            expected_version="1.0.0-rc.1",
+            expected_receipt_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+            expected_bundle_sha256="a" * 64,
+            expected_catalog_sha256="b" * 64,
         )
         self.assertEqual("verified-public-acceptance", result["status"])
+        self.assertEqual("a" * 64, result["bundle_sha256"])
+        self.assertEqual("b" * 64, result["catalog_sha256"])
+
+    def test_rejects_public_bytes_that_do_not_match_the_handoff(self):
+        path = self.write(record())
+        with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):
+            verify_public_acceptance.verify_record(
+                path,
+                expected_version="1.0.0-rc.1",
+                expected_receipt_sha256="c" * 64,
+                expected_bundle_sha256="a" * 64,
+                expected_catalog_sha256="b" * 64,
+            )
+        with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):
+            verify_public_acceptance.verify_record(
+                path,
+                expected_version="1.0.0-rc.1",
+                expected_bundle_sha256="c" * 64,
+                expected_catalog_sha256="b" * 64,
+            )
+        with self.assertRaises(verify_public_acceptance.PublicAcceptanceError):
+            verify_public_acceptance.verify_record(
+                path,
+                expected_version="1.0.0-rc.1",
+                expected_bundle_sha256="a" * 64,
+                expected_catalog_sha256="c" * 64,
+            )
 
     def test_rejects_missing_or_false_lifecycle_operation(self):
         value = record()

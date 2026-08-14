@@ -105,6 +105,9 @@ class PublishedReleaseTests(unittest.TestCase):
                 "artifact_id": "9004",
                 "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
                 "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
             },
         }
 
@@ -144,6 +147,16 @@ class PublishedReleaseTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(MODULE.PublishedReleaseError, "aceitação pública"):
             self.classify(payloads, durable_receipt={})
+
+    def test_final_release_rejects_malformed_public_acceptance_digest(self):
+        payloads = {
+            "https://api.github.com/repos/example/project/git/ref/tags/x86qw-installer-1.0.0": self.ref(),
+            "https://api.github.com/repos/example/project/releases/tags/x86qw-installer-1.0.0": self.release(),
+        }
+        durable = self.durable_receipt()
+        durable["public_acceptance"]["bundle_sha256"] = "not-a-digest"  # type: ignore[index]
+        with self.assertRaisesRegex(MODULE.PublishedReleaseError, "coordenadas inválidas"):
+            self.classify(payloads, durable_receipt=durable)
 
     def test_both_absent_is_absent(self):
         missing = MODULE.PublishedReleaseNotFound()

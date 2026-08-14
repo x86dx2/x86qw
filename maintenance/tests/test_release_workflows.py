@@ -437,6 +437,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("runs-on: [self-hosted, macOS, arm64, M3]", source)
         self.assertIn("public_install_smoke.py", source)
         self.assertIn("--full-lifecycle", source)
+        self.assertIn("Record exact public bytes for the final handoff", source)
+        self.assertIn("receipt_sha256=", source)
+        self.assertIn("bundle_sha256=", source)
+        self.assertIn("catalog_sha256=", source)
         self.assertIn(
             "python -m pip install --no-index --find-links maintenance/vendor/wheels "
             "--require-hashes -r maintenance/requirements-trust.txt",
@@ -452,12 +456,26 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("public_acceptance_artifact_id:", source)
         self.assertIn("public_acceptance_artifact_name:", source)
         self.assertIn("public_acceptance_version:", source)
+        self.assertIn("public_acceptance_receipt_sha256:", source)
+        self.assertIn("public_acceptance_bundle_sha256:", source)
+        self.assertIn("public_acceptance_catalog_sha256:", source)
         self.assertIn("verify-public-acceptance:", source)
         gate = source.split("  verify-public-acceptance:\n", 1)[1]
         self.assertIn("verify_external_handoff.py", gate)
         self.assertIn(".github/workflows/public-acceptance.yml", gate)
         self.assertIn("verify_public_acceptance.py", gate)
+        self.assertIn("--expected-bundle-sha256", gate)
+        self.assertIn("--expected-catalog-sha256", gate)
         self.assertIn("needs.verify-public-acceptance.result", source)
+
+    def test_native_evidence_waits_for_public_acceptance_before_final_receipt(self):
+        source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        block = source.split("  attach-native-evidence:\n", 1)[1]
+        block = block.split("  promotion-gate:\n", 1)[0]
+        self.assertIn("verify-public-acceptance", block)
+        self.assertIn("ACCEPTANCE_RECEIPT_SHA256", block)
+        self.assertIn("ACCEPTANCE_BUNDLE_SHA256", block)
+        self.assertIn("ACCEPTANCE_CATALOG_SHA256", block)
 
 
 if __name__ == "__main__":

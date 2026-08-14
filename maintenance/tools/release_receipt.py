@@ -55,6 +55,7 @@ SECTION_FIELDS = {
 }
 PUBLIC_ACCEPTANCE_FIELDS = frozenset({
     "commit", "run_id", "artifact_id", "artifact_name", "version",
+    "receipt_sha256", "bundle_sha256", "catalog_sha256",
 })
 
 
@@ -159,6 +160,11 @@ def _validate_coordinates(value: object) -> dict[str, dict[str, str]]:
             or PUBLIC_ACCEPTANCE_ARTIFACT.fullmatch(acceptance["artifact_name"]) is None
             or not isinstance(acceptance["version"], str)
             or PUBLIC_ACCEPTANCE_VERSION.fullmatch(acceptance["version"]) is None
+            or any(
+                not isinstance(acceptance[field], str)
+                or HEX64.fullmatch(acceptance[field]) is None
+                for field in ("receipt_sha256", "bundle_sha256", "catalog_sha256")
+            )
         ):
             raise ReleaseReceiptError("coordenadas inválidas na seção public_acceptance")
         result["public_acceptance"] = acceptance

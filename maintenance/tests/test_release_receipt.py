@@ -113,6 +113,9 @@ class ReleaseReceiptTests(unittest.TestCase):
                 "artifact_id": "9004",
                 "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
                 "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
             }
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):
@@ -137,6 +140,9 @@ class ReleaseReceiptTests(unittest.TestCase):
                 "artifact_id": "9004",
                 "artifact_name": "public-acceptance-1.0.0-rc.2-31752738003-1",
                 "version": "1.0.0-rc.2",
+                "receipt_sha256": "d" * 64,
+                "bundle_sha256": "e" * 64,
+                "catalog_sha256": "f" * 64,
             }
             manifest = json.loads((candidate / "candidate.json").read_text())
             with mock.patch.object(release_receipt, "verify_candidate", return_value=manifest):

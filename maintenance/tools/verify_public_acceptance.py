@@ -52,7 +52,23 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def verify_record(path: Path, *, expected_version: str) -> dict[str, object]:
+def _require_expected_digest(value: str | None, actual: str, label: str) -> None:
+    if value is None:
+        return
+    if HEX64.fullmatch(value) is None:
+        raise PublicAcceptanceError(f"digest esperado inválido: {label}")
+    if value != actual:
+        raise PublicAcceptanceError(f"{label} diverge do recibo público")
+
+
+def verify_record(
+    path: Path,
+    *,
+    expected_version: str,
+    expected_receipt_sha256: str | None = None,
+    expected_bundle_sha256: str | None = None,
+    expected_catalog_sha256: str | None = None,
+) -> dict[str, object]:
     if not _is_candidate_version(expected_version):
         raise PublicAcceptanceError("versão esperada do recibo não é SemVer válida")
     record = _read_json(Path(path))
@@ -72,6 +88,10 @@ def verify_record(path: Path, *, expected_version: str) -> dict[str, object]:
     catalog_digest = record.get("catalog_sha256")
     if not isinstance(catalog_digest, str) or HEX64.fullmatch(catalog_digest) is None:
         raise PublicAcceptanceError("recibo público não possui digest do catálogo TUF")
+    receipt_digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    _require_expected_digest(expected_receipt_sha256, receipt_digest, "receipt_sha256")
+    _require_expected_digest(expected_bundle_sha256, digest, "bundle_sha256")
+    _require_expected_digest(expected_catalog_sha256, catalog_digest, "catalog_sha256")
 
     lifecycle = record.get("full_lifecycle")
     if not isinstance(lifecycle, dict):
@@ -93,7 +113,9 @@ def verify_record(path: Path, *, expected_version: str) -> dict[str, object]:
         "project": "x86qw",
         "status": "verified-public-acceptance",
         "candidate_version": expected_version,
-        "receipt_sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+        "receipt_sha256": receipt_digest,
+        "bundle_sha256": digest,
+        "catalog_sha256": catalog_digest,
         "operations": list(REQUIRED_OPERATIONS),
     }
 
@@ -102,9 +124,18 @@ def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--record", type=Path, required=True)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--expected-receipt-sha256")
+    parser.add_argument("--expected-bundle-sha256")
+    parser.add_argument("--expected-catalog-sha256")
     options = parser.parse_args(arguments)
     try:
-        result = verify_record(options.record, expected_version=options.version)
+        result = verify_record(
+            options.record,
+            expected_version=options.version,
+            expected_receipt_sha256=options.expected_receipt_sha256,
+            expected_bundle_sha256=options.expected_bundle_sha256,
+            expected_catalog_sha256=options.expected_catalog_sha256,
+        )
     except (OSError, PublicAcceptanceError) as error:
         print(f"[ERRO] Aceitação pública inválida: {error}", file=sys.stderr)
         return 1

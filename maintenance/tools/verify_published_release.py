@@ -43,6 +43,9 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 DEADLINE_SECONDS = 30.0
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+POSITIVE_ID = re.compile(r"^[1-9][0-9]{0,19}$")
+PUBLIC_ACCEPTANCE_ARTIFACT = re.compile(r"^public-acceptance-[A-Za-z0-9._-]{1,180}$")
+PUBLIC_ACCEPTANCE_VERSION = re.compile(r"^1\.0\.0-rc\.[0-9]+$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 ASSET_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 # Native evidence and its public root/receipt are release assets.  The
@@ -74,13 +77,32 @@ def _require_final_public_acceptance(receipt: Mapping[str, object], version: str
     if version != "1.0.0":
         return
     acceptance = receipt.get("public_acceptance")
-    if (
-        not isinstance(acceptance, Mapping)
-        or set(acceptance) != {"commit", "run_id", "artifact_id", "artifact_name", "version"}
-    ):
+    fields = {
+        "commit", "run_id", "artifact_id", "artifact_name", "version",
+        "receipt_sha256", "bundle_sha256", "catalog_sha256",
+    }
+    if not isinstance(acceptance, Mapping) or set(acceptance) != fields:
         raise PublishedReleaseError(
             "recibo durável da versão final não contém o handoff de aceitação pública"
         )
+    if (
+        not isinstance(acceptance["commit"], str)
+        or HEX40.fullmatch(acceptance["commit"]) is None
+        or not isinstance(acceptance["run_id"], str)
+        or POSITIVE_ID.fullmatch(acceptance["run_id"]) is None
+        or not isinstance(acceptance["artifact_id"], str)
+        or POSITIVE_ID.fullmatch(acceptance["artifact_id"]) is None
+        or not isinstance(acceptance["artifact_name"], str)
+        or PUBLIC_ACCEPTANCE_ARTIFACT.fullmatch(acceptance["artifact_name"]) is None
+        or not isinstance(acceptance["version"], str)
+        or PUBLIC_ACCEPTANCE_VERSION.fullmatch(acceptance["version"]) is None
+        or any(
+            not isinstance(acceptance[field], str)
+            or HEX64.fullmatch(acceptance[field]) is None
+            for field in ("receipt_sha256", "bundle_sha256", "catalog_sha256")
+        )
+    ):
+        raise PublishedReleaseError("handoff de aceitação pública possui coordenadas inválidas")
 
 
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:

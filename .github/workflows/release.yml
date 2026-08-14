@@ -109,6 +109,21 @@ on:
         required: false
         default: "1.0.0-rc.1"
         type: string
+      public_acceptance_receipt_sha256:
+        description: "SHA-256 do recibo JSON de aceitação pública"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_bundle_sha256:
+        description: "SHA-256 do instalador público aceito"
+        required: false
+        default: ""
+        type: string
+      public_acceptance_catalog_sha256:
+        description: "SHA-256 do catálogo TUF público aceito"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: x86qw-candidate-${{ inputs.candidate_commit }}
@@ -505,12 +520,18 @@ jobs:
           ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
           ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
           ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
         run: |
           [[ "$ACCEPTANCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$ACCEPTANCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
           [[ "$ACCEPTANCE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
           [[ "$ACCEPTANCE_ARTIFACT_NAME" =~ ^public-acceptance-[A-Za-z0-9._-]{1,180}$ ]]
           [[ "$ACCEPTANCE_VERSION" =~ ^1\.0\.0-rc\.[0-9]+$ ]]
+          [[ "$ACCEPTANCE_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ACCEPTANCE_CATALOG_SHA256" =~ ^[0-9a-f]{64}$ ]]
       - name: Verify the protected acceptance run provenance
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -539,17 +560,23 @@ jobs:
       - name: Verify the public acceptance contract and exact RC version
         env:
           ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
         run: |
           test -f public-acceptance/public-acceptance.json
           python3 maintenance/tools/verify_public_acceptance.py \
             --record public-acceptance/public-acceptance.json \
-            --version "$ACCEPTANCE_VERSION"
+            --version "$ACCEPTANCE_VERSION" \
+            --expected-receipt-sha256 "$ACCEPTANCE_RECEIPT_SHA256" \
+            --expected-bundle-sha256 "$ACCEPTANCE_BUNDLE_SHA256" \
+            --expected-catalog-sha256 "$ACCEPTANCE_CATALOG_SHA256"
           echo "public RC acceptance verified for $ACCEPTANCE_VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   attach-native-evidence:
     name: Attach authorized M3 evidence without rebuild
-    if: ${{ inputs.mode != 'rehearsal' }}
-    needs: [build-once, portable-verify, approval, release-blockers]
+    if: ${{ always() && inputs.mode != 'rehearsal' && (needs.verify-public-acceptance.result == 'success' || needs.verify-public-acceptance.result == 'skipped') }}
+    needs: [build-once, portable-verify, approval, release-blockers, verify-public-acceptance]
     # The signed artifact comes from .github/workflows/sign-native-evidence.yml;
     # its .github/workflows/native-m3.yml input was verified against the
     # native run. Under ADR 0007 the signer may be the sole maintainer; the
@@ -650,6 +677,9 @@ jobs:
           ACCEPTANCE_ARTIFACT_ID: ${{ inputs.public_acceptance_artifact_id }}
           ACCEPTANCE_ARTIFACT_NAME: ${{ inputs.public_acceptance_artifact_name }}
           ACCEPTANCE_VERSION: ${{ inputs.public_acceptance_version }}
+          ACCEPTANCE_RECEIPT_SHA256: ${{ inputs.public_acceptance_receipt_sha256 }}
+          ACCEPTANCE_BUNDLE_SHA256: ${{ inputs.public_acceptance_bundle_sha256 }}
+          ACCEPTANCE_CATALOG_SHA256: ${{ inputs.public_acceptance_catalog_sha256 }}
           RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -705,6 +735,9 @@ jobs:
                   "artifact_id": os.environ["ACCEPTANCE_ARTIFACT_ID"],
                   "artifact_name": os.environ["ACCEPTANCE_ARTIFACT_NAME"],
                   "version": os.environ["ACCEPTANCE_VERSION"],
+                  "receipt_sha256": os.environ["ACCEPTANCE_RECEIPT_SHA256"],
+                  "bundle_sha256": os.environ["ACCEPTANCE_BUNDLE_SHA256"],
+                  "catalog_sha256": os.environ["ACCEPTANCE_CATALOG_SHA256"],
               }
           Path(sys.argv[1]).write_text(json.dumps(coordinates, sort_keys=True) + "\n", encoding="utf-8")
           PY
