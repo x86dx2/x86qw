@@ -55,14 +55,15 @@ TUF do candidato.
   de uma instalação pessoal em `quake-world/`;
 - o harness Mac M3 executa plano candidato-owned e registra handoff, smoke
   normalizado e agregado unsigned pendente;
-- o candidato local mais recente `1.0.0-rc.3`, construído no commit
-  `f4da1c4a4547617e1217e35148ce55b2960b5557`, passou o harness Apple M3 Pro
+- o candidato local mais recente `1.0.0-rc.4`, construído no commit
+  `76a73f9b50919010fc13730514d2c73ceced2fde`, passou o harness Apple M3 Pro
   com `25/25` casos; seu `candidate.json` tem SHA-256
-  `e69519ab33efd7e469f8f9e53481c2254e042e25f1bf82c730287a63bba1d667` e o
+  `487d844aa4de66667bf26a375011b1c8b1c5baede5450cca9fee3bfd0c329d2e` e o
   instalador local tem 600931 bytes, SHA-256
-  `af4c7911c3a1761fc5d8904973e3b3939118e028acc78f295997c93dae326114`.
-  O handoff foi normalizado e o corpo unsigned de evidência foi preparado;
-  isso é um checkpoint local, não evidência pública assinada nem publicação;
+  `94de20fa7f1efe61b1d5f93aeee936362e3ea8f2abcb1c83c62658d81cbd0b03`.
+  O handoff foi normalizado, o corpo unsigned e o agregado pending foram
+  preparados; isso é um checkpoint local não promotable, não evidência pública
+  assinada nem publicação;
 - o catálogo separa `supported`, `conditional` e `preview`: stable macOS
   permanece condicional, nightly e Linux/Windows/macOS Intel permanecem preview
   quando não há evidência nativa do candidato exato;
@@ -113,7 +114,7 @@ Actions.
 3. a aceitação pública pós-deploy tem workflow e verificador implementados, mas
    ainda precisa de execução M3 e recibo anexado;
 4. a migração real de uma instalação `0.7.13`, Frogbot e mutações reais de
-   lifecycle estão comprovados no candidato local `1.0.0-rc.3`; ainda precisam
+   lifecycle estão comprovados no candidato local `1.0.0-rc.4`; ainda precisam
    de execução protegida e aceitação pública desse candidato;
 5. a operação TUF tem monitor público verde e drill offline implementados; ainda
    faltam custódia de produção sustentada, renovação observada, alerta,
