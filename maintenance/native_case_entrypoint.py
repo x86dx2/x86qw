@@ -111,7 +111,6 @@ _CLIENT_CASES = {
             "+set", "k_fb_name_enemy_0", "/x86QW",
             "+set", "k_defmap", "dm6",
             "+set", "k_defmode", "1on1",
-            "+exec", "x86qw-native-smoke-frogbot.cfg",
         ), "dm6",
     ),
     "game-final-arena": (
@@ -125,6 +124,11 @@ _CLIENT_CASES = {
     ),
     "game-td2": (
         "stable", ("-game", "td2", "+sv_gamedir", "td2", "+sv_progtype", "0"), "dm6",
+    ),
+}
+_CLIENT_POST_MAP_ARGUMENTS = {
+    "game-ktx-frogbot": (
+        "+wait", "+exec", "x86qw-native-smoke-frogbot.cfg",
     ),
 }
 _CLIENT_CONTENT = {
@@ -163,13 +167,13 @@ def _native_frogbot_config_payload() -> bytes:
     """Return the derived KTX config used by the real post-map smoke."""
 
     return (
-        'tempalias x86qw_native_frogbot "cmd botcmd skill 5;cmd botcmd addbot 5"\n'
-        'tempalias on_enter "exec x86qw-ktx.cfg;x86qw_native_frogbot"\n'
+        "cmd botcmd skill 5\n"
+        "cmd botcmd addbot 5\n"
     ).encode("ascii")
 
 
 def _prepare_native_frogbot_config(target: Path) -> Path:
-    """Materialize the same top-level KTX event alias used by the launcher."""
+    """Materialize the post-map commands for the real KTX smoke."""
 
     target = Path(target).absolute()
     if target.is_symlink() or not target.is_dir():
@@ -1482,6 +1486,7 @@ def _client_command(
     map_name: str,
     scratch: Path,
     state_root: Path,
+    post_map_arguments: tuple[str, ...] = (),
 ) -> PreparedCase:
     archive = _artifact_matching(
         candidate,
@@ -1499,7 +1504,7 @@ def _client_command(
         "-nosound", "-window", "-width", "1280", "-height", "720",
         "-clientport", "0", "-condebug", *game_arguments,
         "+cfg_save_onquit", "0", "+sb_findroutes", "0", "+sb_autoupdate", "0",
-        "+map", map_name,
+        "+map", map_name, *post_map_arguments,
     )
     return PreparedCase(
         executable=binary, argv=(str(binary), *args), cwd=target, artifact=archive,
@@ -1658,6 +1663,7 @@ def build_case_command(
         channel, game_arguments, map_name = _CLIENT_CASES[case]
         return _client_command(
             candidate, channel, game_arguments, map_name, scratch, state_root,
+            _CLIENT_POST_MAP_ARGUMENTS.get(case, ()),
         )
     if case in _INSTALLER_CASES:
         arguments = _INSTALLER_CASES[case]

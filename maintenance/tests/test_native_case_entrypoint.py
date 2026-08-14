@@ -11,6 +11,8 @@ from pathlib import Path
 
 from maintenance.native_case_entrypoint import (
     CANONICAL_CASES,
+    _CLIENT_CASES,
+    _CLIENT_POST_MAP_ARGUMENTS,
     Candidate,
     CandidateArtifact,
     CandidateCaseError,
@@ -84,19 +86,14 @@ class NativeCaseEntrypointTests(unittest.TestCase):
             self.assertTrue(evidence["frogbot_named"])
 
     def test_frogbot_case_uses_an_exec_config_for_post_map_commands(self) -> None:
-        _channel, arguments, _map_name = __import__(
-            "maintenance.native_case_entrypoint",
-            fromlist=("_CLIENT_CASES",),
-        )._CLIENT_CASES["game-ktx-frogbot"]
-        self.assertIn(("+exec", "x86qw-native-smoke-frogbot.cfg"), tuple(
-            arguments[index:index + 2]
-            for index in range(len(arguments) - 1)
-        ))
+        _channel, arguments, _map_name = _CLIENT_CASES["game-ktx-frogbot"]
         self.assertNotIn("+tempalias", arguments)
-        self.assertNotIn("+map", arguments)
         self.assertEqual(
-            "tempalias x86qw_native_frogbot \"cmd botcmd skill 5;cmd botcmd addbot 5\"\n"
-            "tempalias on_enter \"exec x86qw-ktx.cfg;x86qw_native_frogbot\"\n",
+            ("+wait", "+exec", "x86qw-native-smoke-frogbot.cfg"),
+            _CLIENT_POST_MAP_ARGUMENTS["game-ktx-frogbot"],
+        )
+        self.assertEqual(
+            "cmd botcmd skill 5\ncmd botcmd addbot 5\n",
             _native_frogbot_config_payload().decode("ascii"),
         )
 
