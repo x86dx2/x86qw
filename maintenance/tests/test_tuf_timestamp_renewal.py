@@ -185,6 +185,41 @@ class TufTimestampRenewalTests(unittest.TestCase):
             self.assertIn("timestamp", completed.stderr.lower())
             self.assertFalse(output.exists())
 
+    def test_refuses_output_inside_the_source_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            key_dir, root, catalog, key_id, repository = self._make_repository(workspace)
+            output = repository / "renewed"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--repository",
+                    str(repository),
+                    "--root",
+                    str(root),
+                    "--catalog",
+                    str(catalog),
+                    "--timestamp-key",
+                    str(key_dir / "timestamp-1.pem"),
+                    "--key-id",
+                    key_id,
+                    "--output",
+                    str(output),
+                    "--report",
+                    str(workspace / "renewal.json"),
+                    "--lease-hours",
+                    "24",
+                ],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("fonte", completed.stderr.lower())
+            self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -166,6 +166,14 @@ def _write_new(path: Path, payload: bytes) -> None:
         raise
 
 
+def _inside(path: Path, parent: Path) -> bool:
+    try:
+        Path(path).resolve(strict=False).relative_to(Path(parent).resolve(strict=False))
+    except (FileNotFoundError, ValueError):
+        return False
+    return True
+
+
 def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
@@ -188,6 +196,12 @@ def renew_timestamp(
     repository = Path(repository)
     output = Path(output)
     report = Path(report)
+    if _inside(output, repository):
+        raise TimestampRenewalError("destino de saída não pode ficar dentro do repositório-fonte")
+    if _inside(report, repository):
+        raise TimestampRenewalError("relatório não pode ficar dentro do repositório-fonte")
+    if _inside(report, output):
+        raise TimestampRenewalError("relatório não pode ficar dentro do destino TUF")
     if output.exists() or output.is_symlink():
         raise TimestampRenewalError(f"destino TUF já existe: {output}")
     if report.exists() or report.is_symlink():
