@@ -199,8 +199,10 @@ host de custódia e SLA de timestamp, registrados no campo não secreto
 `operation`; isso documenta a responsabilidade do exercício, mas não substitui
 a prova de custódia independente nem a operação sustentada em produção. Para a
 promoção final, `.github/workflows/tuf-operation-drill.yml` registra o relatório
-validado e `release-receipt.json` vincula seu artifact, digest, operador, host e
-SLA; sem esse handoff a promoção permanece fail-closed.
+validado em `format: 2`, incluindo as versões `current`/`renewed` de
+`timestamp`, `snapshot` e `targets`; `release-receipt.json` vincula seu
+artifact, digest, operador, host e SLA. Sem esse handoff a promoção permanece
+fail-closed.
 Além disso, `release.yml` executa `monitor_public_tuf.py` com janela de alerta de
 seis horas imediatamente antes da promoção final. Uma lease dentro dessa janela
 exige renovação/recuperação manual e mantém a promoção em `NO-GO`.

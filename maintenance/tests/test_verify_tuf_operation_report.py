@@ -32,7 +32,7 @@ class VerifyTufOperationReportTests(unittest.TestCase):
             "checked_at": "2026-08-14T08:10:11.227270Z",
             "current_metadata_version": 1,
             "expiry_failure_detected": True,
-            "format": 1,
+            "format": 2,
             "mode": "offline-renewal-expiry-recovery",
             "operation": {
                 "custody_host": "offline-signer-01",
@@ -44,6 +44,10 @@ class VerifyTufOperationReportTests(unittest.TestCase):
             "published": False,
             "recovery_verified": True,
             "renewed_metadata_version": 2,
+            "role_versions": {
+                role: {"current": 1, "renewed": 2}
+                for role in ("timestamp", "snapshot", "targets")
+            },
             "root_unchanged": True,
             "status": "drill-passed",
             "target": {
@@ -107,6 +111,65 @@ class VerifyTufOperationReportTests(unittest.TestCase):
                 "futuro",
             ):
                 verify_tuf_operation_report.verify_report(candidate=candidate, report=report)
+
+    def test_accepts_format_two_report_with_each_role_version_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            value = self._report(candidate)
+            value["role_versions"] = {
+                role: {"current": 14, "renewed": 15}
+                for role in ("timestamp", "snapshot", "targets")
+            }
+            value["current_metadata_version"] = 14
+            value["renewed_metadata_version"] = 15
+            report = root / "report.json"
+            report.write_text(json.dumps(value), encoding="utf-8")
+
+            result = verify_tuf_operation_report.verify_report(
+                candidate=candidate,
+                report=report,
+            )
+
+            self.assertEqual(2, result["format"])
+            self.assertEqual(15, result["role_versions"]["timestamp"]["renewed"])
+
+    def test_rejects_format_two_report_without_one_role(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            value = self._report(candidate)
+            del value["role_versions"]["snapshot"]  # type: ignore[index]
+            report = root / "report.json"
+            report.write_text(json.dumps(value), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                verify_tuf_operation_report.TufOperationReportError,
+                "por role",
+            ):
+                verify_tuf_operation_report.verify_report(
+                    candidate=candidate,
+                    report=report,
+                )
+
+    def test_rejects_aggregate_versions_that_do_not_match_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            value = self._report(candidate)
+            value["current_metadata_version"] = 2
+            value["renewed_metadata_version"] = 3
+            report = root / "report.json"
+            report.write_text(json.dumps(value), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                verify_tuf_operation_report.TufOperationReportError,
+                "agregadas",
+            ):
+                verify_tuf_operation_report.verify_report(
+                    candidate=candidate,
+                    report=report,
+                )
 
 
 if __name__ == "__main__":

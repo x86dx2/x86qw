@@ -6,6 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from maintenance.tests import trust_support  # Loads the pinned TUF wheels.
 from maintenance.tools import tuf_operation_drill
 
 
@@ -75,6 +76,45 @@ class TufOperationDrillTests(unittest.TestCase):
             with self.subTest(kwargs=kwargs):
                 with self.assertRaises(tuf_operation_drill.TufDrillError):
                     tuf_operation_drill.operation_context(**kwargs)
+
+    def test_run_drill_records_each_role_version(self) -> None:
+        from maintenance.tools.generate_trust_metadata import (
+            generate_repository,
+            initialize_root,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            key_dir = workspace / "keys"
+            root = workspace / "root.json"
+            catalog = workspace / "catalog.json"
+            repository = workspace / "repository"
+            output = workspace / "report.json"
+            catalog.write_bytes(
+                (Path(__file__).resolve().parents[2] / "site/public/api/v1/catalog.json").read_bytes()
+            )
+            initialize_root(key_dir, root)
+            generate_repository(key_dir, root, catalog, repository, version=1)
+
+            report = tuf_operation_drill.run_drill(
+                key_dir=key_dir,
+                root=root,
+                catalog=catalog,
+                repository=repository,
+                output=output,
+                operator="release-operator",
+                custody_host="offline-signer-01",
+                sla_hours=6,
+            )
+
+            self.assertEqual(2, report["format"])
+            self.assertEqual(
+                {
+                    role: {"current": 1, "renewed": 2}
+                    for role in ("timestamp", "snapshot", "targets")
+                },
+                report["role_versions"],
+            )
 
 
 if __name__ == "__main__":

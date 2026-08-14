@@ -18,13 +18,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from maintenance.tools.tuf_operation_drill import (  # noqa: E402
+    ROLES,
     TufDrillError,
     operation_context,
 )
 
 
 PROJECT = "x86qw"
-FORMAT = 1
+FORMAT = 2
 MAX_REPORT_BYTES = 2 * 1024 * 1024
 MAX_CATALOG_BYTES = 2 * 1024 * 1024
 UTC = timezone.utc
@@ -44,12 +45,14 @@ REPORT_FIELDS = frozenset({
     "published",
     "recovery_verified",
     "renewed_metadata_version",
+    "role_versions",
     "root_unchanged",
     "status",
     "target",
     "target_unchanged",
 })
 TARGET_FIELDS = frozenset({"path", "sha256", "size"})
+ROLE_VERSION_FIELDS = frozenset({"current", "renewed"})
 OPERATION_FIELDS = frozenset({
     "custody_host",
     "key_scope",
@@ -149,6 +152,33 @@ def verify_report(*, candidate: Path, report: Path) -> dict[str, object]:
         or renewed <= current
     ):
         raise TufOperationReportError("versões de metadata TUF não avançaram monotonicamente")
+
+    role_versions = report_value.get("role_versions")
+    if not isinstance(role_versions, Mapping) or set(role_versions) != set(ROLES):
+        raise TufOperationReportError("versões TUF por role ausentes ou inválidas")
+    normalized_role_versions: dict[str, dict[str, int]] = {}
+    for role in ROLES:
+        values = role_versions.get(role)
+        if not isinstance(values, Mapping) or set(values) != ROLE_VERSION_FIELDS:
+            raise TufOperationReportError(f"versões TUF inválidas para {role}")
+        role_current = values.get("current")
+        role_renewed = values.get("renewed")
+        if (
+            type(role_current) is not int
+            or role_current < 1
+            or type(role_renewed) is not int
+            or role_renewed <= role_current
+        ):
+            raise TufOperationReportError(f"versões TUF não avançaram para {role}")
+        normalized_role_versions[role] = {
+            "current": role_current,
+            "renewed": role_renewed,
+        }
+    if (
+        current != max(values["current"] for values in normalized_role_versions.values())
+        or renewed != max(values["renewed"] for values in normalized_role_versions.values())
+    ):
+        raise TufOperationReportError("versões agregadas divergem das versões por role")
 
     operation = report_value.get("operation")
     if not isinstance(operation, Mapping) or set(operation) != OPERATION_FIELDS:

@@ -258,8 +258,8 @@ e a evidência durável. A rechecagem local v2 baixou os mesmos bytes pelos
 endpoints públicos, completou o lifecycle e comprovou a migração real
 `0.7.13 → 1.0.0-rc.1`; o recibo está em
 [`1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`](../releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json).
-O drill técnico TUF local também passou renovação, expiração simulada e
-recuperação, com contexto de operador/host/SLA e chaves efêmeras, em
+O drill técnico TUF local formato 2 também passou renovação, expiração simulada e
+recuperação, com contexto de operador/host/SLA, versões por role e chaves efêmeras, em
 [`1.0.0-tuf-drill-local-2026-08-14.json`](../releases/1.0.0-tuf-drill-local-2026-08-14.json).
 O candidato local `1.0.0-rc.2`, distinto dos bytes do RC público, também passou
 os 25 casos M3 reais no Apple M3 Pro; o recibo unsigned/pending está em

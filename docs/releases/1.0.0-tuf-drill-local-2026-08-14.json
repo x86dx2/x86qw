@@ -1,8 +1,8 @@
 {
-  "checked_at": "2026-08-14T10:23:15.589695Z",
+  "checked_at": "2026-08-14T12:12:46.884797Z",
   "current_metadata_version": 1,
   "expiry_failure_detected": true,
-  "format": 1,
+  "format": 2,
   "mode": "offline-renewal-expiry-recovery",
   "operation": {
     "custody_host": "ephemeral-offline-drill",
@@ -14,6 +14,20 @@
   "published": false,
   "recovery_verified": true,
   "renewed_metadata_version": 2,
+  "role_versions": {
+    "snapshot": {
+      "current": 1,
+      "renewed": 2
+    },
+    "targets": {
+      "current": 1,
+      "renewed": 2
+    },
+    "timestamp": {
+      "current": 1,
+      "renewed": 2
+    }
+  },
   "root_unchanged": true,
   "status": "drill-passed",
   "target": {

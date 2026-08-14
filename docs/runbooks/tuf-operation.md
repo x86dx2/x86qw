@@ -36,6 +36,11 @@ online. Root e targets permanecem offline. Se for adotado um signer online,
 ele deve possuir somente a autoridade de timestamp, host isolado, auditoria,
 rotação, kill switch e alertas; a política criptográfica não muda.
 
+Novos relatórios usam `format: 2` e devem conter `role_versions` para as três
+roles (`timestamp`, `snapshot` e `targets`), com `current` e `renewed` em cada
+uma. O verificador rejeita o formato histórico sem esse vínculo individual;
+isso evita que um `max` agregado esconda uma role que não avançou.
+
 Para registrar o exercício no gate final, o relatório aprovado deve ser enviado
 ao workflow protegido
 `.github/workflows/tuf-operation-drill.yml`. Esse workflow vincula o relatório

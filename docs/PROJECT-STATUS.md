@@ -108,11 +108,11 @@ TUF público está `NO-GO`.
   candidato `1.0.0-rc.2` estão verdes em `25/25`, mas isso não substitui o
   handoff M3 assinado pelo workflow protegido nem a aceitação pelos endpoints
   públicos;
-- o drill TUF offline está implementado em
+- o drill TUF offline formato 2 está implementado em
   `maintenance/tools/tuf_operation_drill.py` e foi executado com sucesso sobre
   uma visão corrente temporária; o recibo histórico está em
   `docs/releases/1.0.0-rc.1-tuf-drill.json` e a execução local com operador,
-  host e SLA explícitos está em
+  host, SLA e versões individuais por role está em
   `docs/releases/1.0.0-tuf-drill-local-2026-08-14.json`. O drill não publicou
   metadata. Esta execução usou chaves efêmeras e o catálogo local do checkout:
   prova o contrato técnico e o contexto não secreto, mas não prova custódia

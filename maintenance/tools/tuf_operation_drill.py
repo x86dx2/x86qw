@@ -275,13 +275,20 @@ def run_drill(
         recovery = lease_status(renewed, warning_hours=warning_hours, now=now)
 
     report = {
-        "format": 1,
+        "format": 2,
         "project": "x86qw",
         "status": "drill-passed",
         "mode": "offline-renewal-expiry-recovery",
         "operation": operation,
         "current_metadata_version": current_version,
         "renewed_metadata_version": current_version + 1,
+        "role_versions": {
+            role: {
+                "current": current_lease["versions"][role],
+                "renewed": renewed_lease["versions"][role],
+            }
+            for role in ROLES
+        },
         "target": renewed_target,
         "target_unchanged": target_unchanged(current_target, renewed_target),
         "root_unchanged": True,
