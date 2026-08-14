@@ -29,7 +29,7 @@ fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
 plano continua sem autorizar a promoção final, alteração dos bytes publicados
 ou publicação de metadata TUF fora do workflow protegido. A implementação local
 do fechamento dos gates está na branch `agent/rc-1.0-completion`, atualmente no
-commit `9ff3bfc8ccf23a26384ff90d89db99ec5cca3834`. O preflight privado `1.0.0`
+commit `3555def`. O preflight privado `1.0.0`
 da revisão de produto `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passou `25/25`
 casos no Apple M3 Pro, com `candidate.json` SHA-256
 `c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; isso
@@ -306,7 +306,7 @@ não podem remover evidência:
    autoridade;
 2. revalidar ancestralidade e apagar somente refs já integradas, depois de
    registrar os SHAs e preservar refs ligadas ao RC, à evidência e ao TUF;
-3. manter o backlog operacional nas issues [#143–#149](https://github.com/x86dx2/x86qw/issues/143),
+3. manter o backlog operacional nas issues [#143–#152](https://github.com/x86dx2/x86qw/issues/143),
    com a limpeza de branches em [#150](https://github.com/x86dx2/x86qw/issues/150)
    e a avaliação de imutabilidade host-level em
    [#151](https://github.com/x86dx2/x86qw/issues/151);
@@ -375,7 +375,7 @@ gates remotos e nativos:
    operação TUF;
 4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
    portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o commit local `9ff3bfc` contra `origin/main`, mantendo separado o
+5. revisar o commit local `3555def` contra `origin/main`, mantendo separado o
    trabalho histórico já publicado do candidato atual; registrar os recibos
    locais de aceitação pública e drill TUF sem tratá-los como handoffs
    protegidos.
