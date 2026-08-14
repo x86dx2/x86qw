@@ -33,6 +33,9 @@ Identidade pública do RC:
 O RC é público e não é GitHub Latest. A imutabilidade host-level da release
 GitHub ainda aparece como indisponível (`immutable=false`); o publisher mantém
 imutabilidade lógica recusando overwrite, divergência de digest e assets extras.
+A avaliação de compatibilidade e rollback está em
+[`1.0.0-github-immutable-release-evaluation.md`](releases/1.0.0-github-immutable-release-evaluation.md);
+a release RC não será alterada para experimentar essa configuração.
 
 ## Estado de confiança
 
