@@ -46,6 +46,10 @@ só.
    evidência assinada, publicação GitHub/GitLab e metadata-last verificados.
 8. **Soak do RC — em andamento:** aceitação pelos endpoints públicos, migração
    real, lifecycle apply, Frogbot, evidência durável e operação TUF sustentável.
+   O registro operacional é a [issue #143](https://github.com/x86dx2/x86qw/issues/143);
+   os gates de evidência, aceitação, migração, M3 e TUF estão nas issues
+   [#144–#148](https://github.com/x86dx2/x86qw/issues/144), enquanto a promoção
+   final está em [#149](https://github.com/x86dx2/x86qw/issues/149).
 9. **PR H — `1.0.0`:** gerar um candidato final novo e promover somente após o
    período de uso do RC, com trust, evidência M3, bytes idênticos e mirrors
    convergentes.
