@@ -88,6 +88,26 @@ class BuildSoakReportTests(unittest.TestCase):
                 gates=self._gates(),
             )
 
+    def test_rejects_a_failed_operational_gate_before_building_passed_report(self) -> None:
+        gates = self._gates()
+        gates["hosting"] = False
+        with self.assertRaisesRegex(build_soak_report.SoakReportBuildError, "gate"):
+            build_soak_report.build_report(
+                candidate_commit="a" * 40,
+                candidate_version="1.0.0-rc.2",
+                candidate_sha256="b" * 64,
+                bundle_sha256="c" * 64,
+                started_at="2026-08-01T00:00:00Z",
+                completed_at="2026-08-08T00:00:00Z",
+                issue_number="143",
+                issue_state="closed",
+                issue_url="https://github.com/x86dx2/x86qw/issues/143",
+                observed_dates="2026-08-01,2026-08-02",
+                hardware="MacBook Pro Mac15,6 / Apple M3 Pro",
+                observation_evidence_b64=self._evidence(),
+                gates=gates,
+            )
+
     def test_cli_writes_the_same_canonical_report_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "report.json"

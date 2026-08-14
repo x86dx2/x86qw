@@ -118,6 +118,8 @@ def build_report(
         )
     if set(gates) != GATE_NAMES or any(type(value) is not bool for value in gates.values()):
         raise SoakReportBuildError("gates do soak possuem campos ou valores inválidos")
+    if any(value is not True for value in gates.values()):
+        raise SoakReportBuildError("gate operacional do soak não está verde")
     hardware = _hardware(hardware)
     return {
         "format": FORMAT,
