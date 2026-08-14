@@ -1101,7 +1101,7 @@ jobs:
 
   publish-assets:
     name: Publish exact candidate assets to GitHub
-    if: ${{ inputs.mode != 'rehearsal' }}
+    if: ${{ always() && (inputs.mode == 'promote-rc' || inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' }}
     # Promotion-gate is the single dependency that carries the exact,
     # evidence-bound candidate into publication.
     needs: promotion-gate
@@ -1139,7 +1139,7 @@ jobs:
 
   publish-gitlab:
     name: Publish exact installer mirror to GitLab
-    if: ${{ inputs.mode != 'rehearsal' }}
+    if: ${{ always() && (inputs.mode == 'promote-rc' || inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' && needs.publish-assets.result == 'success' }}
     needs: [promotion-gate, publish-assets]
     runs-on: ubuntu-latest
     environment: release
@@ -1174,7 +1174,7 @@ jobs:
 
   verify-release-mirrors:
     name: Verify every public mirror after publication
-    if: ${{ inputs.mode != 'rehearsal' }}
+    if: ${{ always() && (inputs.mode == 'promote-rc' || inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' && needs.publish-assets.result == 'success' && needs.publish-gitlab.result == 'success' }}
     # verify-mirrors is the public mirror gate.
     needs: [promotion-gate, publish-assets, publish-gitlab]
     runs-on: ubuntu-latest
@@ -1212,7 +1212,7 @@ jobs:
 
   metadata-last:
     name: Publish the verified site generation last
-    if: ${{ inputs.mode != 'rehearsal' }}
+    if: ${{ always() && (inputs.mode == 'promote-rc' || inputs.mode == 'promote-1.0') && needs.promotion-gate.result == 'success' && needs.verify-release-mirrors.result == 'success' }}
     needs: [promotion-gate, verify-release-mirrors]
     runs-on: ubuntu-latest
     environment: release
