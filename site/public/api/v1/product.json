@@ -17,6 +17,7 @@
     "version"
   ],
   "component_count": 21,
+  "external_public": false,
   "format": 1,
   "games": [
     {
@@ -107,6 +108,7 @@
   },
   "package_count": 74,
   "project": "x86qw",
+  "release_audience": "owner-only",
   "release_truth_url": "/api/v1/release-truth.json",
   "runtimes": [
     {
@@ -366,7 +368,5 @@
       ]
     }
   ],
-  "version": "0.7.13",
-  "release_audience": "owner-only",
-  "external_public": false
+  "version": "0.7.13"
 }
