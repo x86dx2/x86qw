@@ -44,7 +44,7 @@ produto.
 
 | Gate | Entrada | Saída exigida | Estado |
 | --- | --- | --- | --- |
-| 0A — main verde | run `31888249914` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
+| 0A — main verde | run `31890091394` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
 | 0B — TUF sustentável | TUF v2/v18 saudável | custódia, renovação, recuperação e SLO observados em produção | BLOCKED |
 | 0C — release truth/audience | hashes E2/E3 e receipt | autoridades reconciliadas, receipt aponta evidência final, audiência explícita | BLOCKED |
 | 0D — backlog/governance | registers e Maker/Checker | issues locais completas, decisão e rollback registrados | PROPOSAL |
@@ -66,11 +66,13 @@ desbloqueia feature work enquanto 0A–0E permanecerem abertas.
 
 1. Reconstruir a verdade a partir da [baseline](AUDIT-BASELINE.md), do
    [registro de release](RELEASE-TRUTH.md) e do [health de CI](CI-HEALTH.md).
-2. Fechar 0A com uma mudança mínima de teste/protocolo, se a investigação
-   confirmar a inferência; não abrir `1.0.1` por documentação/teste apenas.
+2. Gate 0A está fechado em `7d5eb94a`; a correção foi test-only/documental e
+   não exige `1.0.1`.
 3. Fechar 0B com custódia e recovery aprovados, sem colocar chaves ou secrets
    no repositório.
-4. Fechar 0C–0D com um único conjunto de autoridades e backlog local completo.
+4. Fechar 0C–0D com um único conjunto de autoridades e backlog local completo;
+   a source projection foi mesclada no PR #169, mas o deployment live ainda
+   não foi publicado/verificado.
 5. Observar owner-only em 0E; só então pedir a decisão EP-0.
 6. Se EP-0 for external, executar EP-1→EP-5 na ordem. Se permanecer
    owner-only, estacionar os gates externos e manter `NO-GO` para qualquer claim
@@ -99,15 +101,15 @@ Nenhuma mutação remota foi executada por esta frente.
 
 ## Itens bloqueados e próxima ação
 
-**BLOCKED:** main verde; matriz Windows; custódia/recovery TUF de produção;
+**BLOCKED:** custódia/recovery TUF de produção;
 receipt final ligado à aceitação final; ownership/SBOM; drift de audiência;
 observação owner-only; migração/soak/aceitação externa; plataformas sem E3;
 contrato QWLeague; revisão humana independente.
 
-**Próxima ação recomendada:** fechar Gate 0A com relógio controlado e
-protocolo de processo explícito, executar Windows 3.10/3.13 e a matriz sem
-usar rerun como prova; em paralelo somente como operação crítica, confirmar a
-cadeia TUF por segundo vantage e registrar a lease. Nenhuma feature começa.
+**Próxima ação recomendada:** concluir custódia/SLO/RTO do TUF e decidir a
+projeção de deployment do Gate 0C; a source projection já está mesclada, mas
+nenhum site, catálogo ou metadata foi publicado por este plano. Nenhuma
+feature começa.
 
 ## Artefatos deste pacote
 
