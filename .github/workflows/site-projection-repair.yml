@@ -305,12 +305,14 @@ jobs:
           PY
       - name: Assemble verified site generation from current source overlay
         run: |
+          mkdir -p release-work/site
+          cp site/wrangler.jsonc release-work/site/wrangler.jsonc
           python3 maintenance/tools/assemble_site_release.py \
             --site-source release-work/site-source \
             --catalog candidate/catalog.json \
             --product candidate/product.json \
             --trust-repository release-work/trust \
-            --output release-work/public
+            --output release-work/site/public
       - name: Dry-run the exact site generation
         working-directory: site
         run: |
@@ -325,7 +327,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
-          site/node_modules/.bin/wrangler deploy --config site/wrangler.jsonc --assets release-work/public
+          site/node_modules/.bin/wrangler deploy --config release-work/site/wrangler.jsonc
       - name: Verify public projection, TUF and owner-only audience
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
