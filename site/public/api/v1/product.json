@@ -366,5 +366,7 @@
       ]
     }
   ],
-  "version": "0.7.13"
+  "version": "0.7.13",
+  "release_audience": "owner-only",
+  "external_public": false
 }
