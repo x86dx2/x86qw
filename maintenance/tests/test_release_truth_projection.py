@@ -15,11 +15,11 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual(authority.read_bytes(), projection.read_bytes())
         document = json.loads(authority.read_text(encoding="utf-8"))
         self.assertEqual("GREEN", document["status"]["main"])
-        self.assertEqual("HEALTHY", document["status"]["tuf"])
+        self.assertEqual("WARNING", document["status"]["tuf"])
         self.assertEqual("owner-only", document["authorities"]["candidate_release"]["audience"])
         self.assertFalse(document["authorities"]["candidate_release"]["external_public_authorized"])
         self.assertEqual("NO-GO", document["status"]["external_public"])
-        self.assertIn("0B-production-custody-recovery", document["open_gates"])
+        self.assertIn("0B-warning-renewal-custody-recovery", document["open_gates"])
 
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(
