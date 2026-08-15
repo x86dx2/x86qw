@@ -19,13 +19,13 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("owner-only", document["authorities"]["candidate_release"]["audience"])
         self.assertFalse(document["authorities"]["candidate_release"]["external_public_authorized"])
         self.assertEqual("NO-GO", document["status"]["external_public"])
-        self.assertIn("0B-sustainable-custody-backup-RTO", document["open_gates"])
+        self.assertIn("0B-sustainable-custody-backup-RTO", document["open_gates"])\n        self.assertEqual("200", document["authorities"]["deployment"]["live_observation"]["release_truth_endpoint"])\n        self.assertEqual("CONVERGED_CANDIDATE_DEPLOYMENT", document["authorities"]["deployment"]["live_observation"]["state"])
 
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(
             (ROOT / "site/public/api/v1/product.json").read_text(encoding="utf-8")
         )
-        self.assertEqual("/api/v1/release-truth.json", product["release_truth_url"])
+        self.assertEqual("/api/v1/release-truth.json", product["release_truth_url"])\n        self.assertEqual("owner-only", product["release_audience"])\n        self.assertFalse(product["external_public"])
 
     def test_user_facing_surfaces_explain_owner_only(self) -> None:
         surfaces = (
