@@ -51,7 +51,7 @@
       },
       "package_mirrors": {
         "github_gitlab_installer": "byte_equal",
-        "evidence_level": "E1",
+        "evidence_level": "E2",
         "independent_rebuild": false,
         "scope": "installer_only"
       },
