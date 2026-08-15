@@ -1,0 +1,1368 @@
+{
+  "schema": "x86qw-post-1.0-backlog-v1",
+  "issue": 164,
+  "snapshot_commit": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
+  "status": "proposed_local_only",
+  "feature_work": "blocked_until_0A_to_0E_and_EP-0",
+  "items": [
+    {
+      "id": "POST-001",
+      "priority": "NOW/P0",
+      "title": "Determinizar o protocolo de deadline DNS",
+      "problem": "o teste Windows/Python 3.10 usa fake incompleto e janela real de 10 ms",
+      "outcome": "separar deadline pré-I/O e TimeoutExpired com clock/protocolo determinísticos",
+      "scope": [
+        "DNS resolver fake process protocol",
+        "deadline-before-I/O branch",
+        "communicate TimeoutExpired branch",
+        "kill/wait/poll/detach"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0A"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "Windows Python 3.10",
+        "Windows Python 3.13",
+        "portable matrix"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "CI maintainer",
+      "target_version": "sem release if test-only; 1.0.x if runtime",
+      "audience": "owner-only",
+      "checker": "Test Determinism Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. o teste Windows/Python 3.10 usa fake incompleto e janela real de 10 ms",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P0",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-002",
+      "priority": "NOW/P0",
+      "title": "Fechar matriz protegida e restaurar main verde",
+      "problem": "um required context está vermelho no HEAD auditado",
+      "outcome": "7/7 contexts verdes sem depender de rerun",
+      "scope": [
+        "protected contexts",
+        "focal test then full matrix",
+        "no rerun as proof"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-001"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0A"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "GitHub Actions Windows/Linux/macOS"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Release Engineering Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Independent CI Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. um required context está vermelho no HEAD auditado",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P0",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-003",
+      "priority": "NOW/P1",
+      "title": "Ledger único de release e audiência",
+      "problem": "source, release, deployment e development respondem diferente",
+      "outcome": "ledger machine-readable e projeções sem contradição",
+      "scope": [
+        "machine-readable ledger",
+        "source/candidate/deployment/development authorities",
+        "audience and support fields"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-002",
+        "POST-017"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "README",
+        "site",
+        "product",
+        "catalog",
+        "CLI",
+        "release"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Release Truth Maker",
+      "target_version": "documental",
+      "audience": "owner-only",
+      "checker": "Documentation Truth Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. source, release, deployment e development respondem diferente",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-004",
+      "priority": "NOW/P1",
+      "title": "Receipt final bound ao candidato exato",
+      "problem": "public_acceptance do receipt final ainda aponta RC1",
+      "outcome": "receipt final referencia tag, candidato, digest e aceitação final",
+      "scope": [
+        "final release receipt",
+        "candidate digest binding",
+        "final acceptance references"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-003"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "release assets",
+        "receipts"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Supply Chain Maker",
+      "target_version": "1.0.x if bytes or contract change",
+      "audience": "owner-only",
+      "checker": "Release Integrity Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. public_acceptance do receipt final ainda aponta RC1",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-005",
+      "priority": "NEXT/P1",
+      "title": "Classificar ownership e SBOM",
+      "problem": "87/87 itens publicados estão unclassified/NOASSERTION",
+      "outcome": "cada componente tem proveniência/licença ou exceção aprovada",
+      "scope": [
+        "ownership manifest",
+        "SBOM",
+        "license/provenance classification",
+        "87 unresolved items"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-003"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "all published components"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Provenance Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Licensing Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. 87/87 itens publicados estão unclassified/NOASSERTION",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-006",
+      "priority": "NOW/P1",
+      "title": "Resolver contrato de cleanup e dados pessoais",
+      "problem": "promessa de cleanup inclui qw/demos, mas implementação observada não",
+      "outcome": "decisão explícita, teste e documentação de preservação/purge",
+      "scope": [
+        "cleanup personal-data contract",
+        "qw/demos behavior",
+        "preservation and purge tests"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-003"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C",
+        "EP-1 if migration"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "Apple M3 first; other platforms only when tested"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Lifecycle Maker",
+      "target_version": "no release if docs-only; 1.0.1 if runtime changes",
+      "audience": "owner-only",
+      "checker": "Data Preservation Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. promessa de cleanup inclui qw/demos, mas implementação observada não",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-007",
+      "priority": "NEXT/P2",
+      "title": "Confirmar controles de segurança e resposta",
+      "problem": "settings remotos não são verificáveis anonimamente",
+      "outcome": "evidência autenticada datada ou risco aceito com owner",
+      "scope": [
+        "authenticated settings evidence",
+        "Actions pinning",
+        "CodeQL/Dependabot/secret-scanning posture"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-020"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0D"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "GitHub repository controls"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Security Governance Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Adversarial Security Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. settings remotos não são verificáveis anonimamente",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P2",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-008",
+      "priority": "NEXT/P1",
+      "title": "Resolver convergência e redundância de mirror",
+      "problem": "igualdade de pacote existe, mas redundância operacional não",
+      "outcome": "segundo mirror verificado ou exceção de risco com fallback",
+      "scope": [
+        "mirror inventory",
+        "byte equality",
+        "fallback and convergence",
+        "EP-3 revalidation against the exact external-public candidate digest"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-003",
+        "POST-011"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED",
+        "Gate 0C registra a convergência operacional do owner-only",
+        "EP-3 repete igualdade, fallback e disponibilidade contra o digest exato do candidato external-public; mudança de bytes reinicia a verificação"
+      ],
+      "hard_gates": [
+        "Gate 0C",
+        "EP-3"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "GitHub",
+        "GitLab",
+        "public endpoint"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Distribution Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Mirror Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. igualdade de pacote existe, mas redundância operacional não",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-009",
+      "priority": "NOW/P1",
+      "title": "Nomear custódia TUF e backup independente",
+      "problem": "produção não possui owner/backup/custódia independente comprovados",
+      "outcome": "responsáveis e armazenamento de recuperação documentados",
+      "scope": [
+        "TUF owner and backup",
+        "key custody",
+        "least-privilege access",
+        "receipt reutilizável para revalidação EP-3"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-011"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED",
+        "EP-3 posterior revalida este receipt contra o candidato external-public, sem reabrir a ordem de 0B"
+      ],
+      "hard_gates": [
+        "Gate 0B"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "authorized trust environment"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "TUF Operations Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Independent Trust Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. produção não possui owner/backup/custódia independente comprovados",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-010",
+      "priority": "NOW/P1",
+      "title": "Executar drill de recuperação TUF e medir RTO",
+      "problem": "há drill técnico local, mas não drill de produção/custódia/RTO",
+      "outcome": "exercício offline/online com RTO e evidência sem expor chaves",
+      "scope": [
+        "offline/online recovery drill",
+        "expiry simulation",
+        "RTO evidence",
+        "repetição/Checker independente na entrada EP-3"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-009"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED",
+        "EP-3 posterior revalida este receipt contra o candidato external-public, sem reabrir a ordem de 0B"
+      ],
+      "hard_gates": [
+        "Gate 0B"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "approved recovery environment"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Recovery Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Supply Chain Recovery Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. há drill técnico local, mas não drill de produção/custódia/RTO",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-011",
+      "priority": "NOW/P1",
+      "title": "Formalizar SLO, alerta e lease TUF",
+      "problem": "monitor verde não substitui operação recorrente",
+      "outcome": "SLO, warning de 6 h, alerta, owner e runbook verificados",
+      "scope": [
+        "lease SLO",
+        "6-hour warning",
+        "monitor and alert route",
+        "runbook"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0B"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "public TUF endpoint and monitor"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "TUF SLO Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "TUF Operations Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. monitor verde não substitui operação recorrente",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-012",
+      "priority": "EP-1/P1",
+      "title": "Migrar baseline publicada real",
+      "problem": "external-public exige migração de versão suportada",
+      "outcome": "fixtures reais 0.7.0–0.7.13 preservam dados byte a byte e permitem rollback",
+      "scope": [
+        "real 0.7.x fixtures",
+        "byte-preserving migration",
+        "idempotent update and rollback"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "EP-0",
+        "POST-003"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "EP-1"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "Apple M3 initially; platform scope set by EP-5"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Migration Maker",
+      "target_version": "external-public candidate exact",
+      "audience": "external-public",
+      "checker": "Data Preservation Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. external-public exige migração de versão suportada",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "external-public-readiness"
+      ]
+    },
+    {
+      "id": "POST-013",
+      "priority": "EP-2/P1",
+      "title": "Soak consecutivo de sete dias",
+      "problem": "RC1 histórico não aprova candidato final",
+      "outcome": "sete dias completos do candidato exato sem P0/P1 e com TUF observado",
+      "scope": [
+        "seven consecutive days",
+        "exact candidate digest",
+        "daily TUF and incident receipts"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-012"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "EP-2"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "declared hardware and public endpoints"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Soak Maker",
+      "target_version": "external-public candidate exact",
+      "audience": "external-public",
+      "checker": "Release Observation Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. RC1 histórico não aprova candidato final",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "external-public-readiness"
+      ]
+    },
+    {
+      "id": "POST-014",
+      "priority": "EP-4/P1",
+      "title": "Aceitação por usuário externo",
+      "problem": "nenhum usuário externo foi autorizado/testado nesta fotografia",
+      "outcome": "usuário não mantenedor instala, joga, atualiza, diagnostica e remove",
+      "scope": [
+        "non-maintainer clean machine",
+        "install/play/update/diagnostics/uninstall",
+        "structured feedback"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-013",
+        "POST-010"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "EP-4"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "clean machine in declared platform scope"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "External Acceptance Maker",
+      "target_version": "external-public candidate exact",
+      "audience": "external-public",
+      "checker": "New Player Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. nenhum usuário externo foi autorizado/testado nesta fotografia",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "external-public-readiness"
+      ]
+    },
+    {
+      "id": "POST-015",
+      "priority": "EP-5/P1",
+      "title": "Decisão de plataforma com evidência nativa",
+      "problem": "apenas M3 possui E3; outras plataformas são preview",
+      "outcome": "cada plataforma promovida tem evidência nativa do candidato exato",
+      "scope": [
+        "native evidence matrix",
+        "signing/notarization where applicable",
+        "support status per platform"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-014"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "EP-5"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "macOS arm64",
+        "macOS x64",
+        "Linux x86_64",
+        "Windows x64"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Native Labs Maker",
+      "target_version": "external-public by platform",
+      "audience": "external-public",
+      "checker": "Per-Platform Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. apenas M3 possui E3; outras plataformas são preview",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "external-public-readiness"
+      ]
+    },
+    {
+      "id": "POST-016",
+      "priority": "1.3/BLOCKED_EXTERNAL",
+      "title": "RFC de adapter QWLeague",
+      "problem": "não há API/OAuth/webhook/autorização oficial verificados",
+      "outcome": "contrato oficial, fallback e privacy review antes de qualquer adapter",
+      "scope": [
+        "public discovery only",
+        "capability contract",
+        "privacy/legal/abuse review"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "official provider contract"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "partnership gate",
+        "1.3"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "public fixtures only"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "External Integration Maker",
+      "target_version": "1.3 optional",
+      "audience": "optional; never a dependency",
+      "checker": "Legal and Privacy Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. não há API/OAuth/webhook/autorização oficial verificados",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "blocked-external"
+      ]
+    },
+    {
+      "id": "POST-017",
+      "priority": "NOW/P1",
+      "title": "Reconciliar source, deployment e conteúdo projetado",
+      "problem": "source/site/README ainda refletem 0.7.13/RC1 em conflito com Latest owner-only",
+      "outcome": "projeções geradas e claims de audiência/suporte coerentes",
+      "scope": [
+        "source/deployment comparison",
+        "projection generation",
+        "0.7.13/RC1 drift"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-002"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "source tree",
+        "live deployment if reachable",
+        "product",
+        "CLI"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Documentation Maker",
+      "target_version": "documental",
+      "audience": "owner-only",
+      "checker": "Release Truth Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. source/site/README ainda refletem 0.7.13/RC1 em conflito com Latest owner-only",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-018",
+      "priority": "NEXT/P1",
+      "title": "Observação operacional owner-only",
+      "problem": "publicação final ainda não tem janela de observação fechada",
+      "outcome": "período definido com reinstall, update, verify, repair, TUF e incident log",
+      "scope": [
+        "owner-only observation window",
+        "fresh reinstall",
+        "update/verify/repair/TUF",
+        "incident log"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-002",
+        "POST-003",
+        "POST-011",
+        "POST-020"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0E"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "Apple M3 and public endpoints"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Operations Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only",
+      "checker": "Maintainer Support Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. publicação final ainda não tem janela de observação fechada",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "POST-019",
+      "priority": "NEXT/P2",
+      "title": "Lint de drift do release-truth ledger",
+      "problem": "projeções manuais podem divergir novamente",
+      "outcome": "lint detecta versão, audiência, digest e claim incompatíveis",
+      "scope": [
+        "drift lint",
+        "version/audience/digest checks",
+        "projection tests"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-003",
+        "POST-017"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0C"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "README",
+        "site",
+        "release",
+        "CLI",
+        "JSON"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Contracts Maker",
+      "target_version": "1.0.x",
+      "audience": "owner-only and external-public",
+      "checker": "Documentation Truth Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. projeções manuais podem divergir novamente",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P2"
+      ]
+    },
+    {
+      "id": "POST-020",
+      "priority": "NOW/P1",
+      "title": "Reconciliar backlog RC e governança",
+      "problem": "issues históricas misturam RC1, final e trabalho futuro",
+      "outcome": "cada issue aberta representa bytes, audiência e trabalho atuais; owner/Checker definidos",
+      "scope": [
+        "RC issue disposition",
+        "CODEOWNERS and collaborator review",
+        "milestone and waiver"
+      ],
+      "non_scope": [
+        "não alterar engine/gamecode fora do escopo",
+        "não publicar release, metadata TUF ou site",
+        "não criar integração obrigatória externa"
+      ],
+      "dependencies": [
+        "POST-002",
+        "POST-003"
+      ],
+      "acceptance_criteria": [
+        "critérios reproduzidos pelo Checker independente",
+        "evidência ligada ao commit, run, digest ou endpoint exato",
+        "estado final explícito: PASS, BLOCKED ou ESCALATED"
+      ],
+      "hard_gates": [
+        "Gate 0D"
+      ],
+      "tests": [
+        "teste focal reproduzível",
+        "git diff --check",
+        "evidência vinculada ao commit/run/digest"
+      ],
+      "platform": [
+        "GitHub issues",
+        "CODEOWNERS",
+        "branch protection"
+      ],
+      "security": [
+        "fail closed em dúvida de integridade",
+        "nenhum segredo em logs, argv ou documento público"
+      ],
+      "privacy": [
+        "preservar dados pessoais",
+        "sanitizar diagnósticos e fixtures"
+      ],
+      "rollback": [
+        "reverter somente a mudança aprovada",
+        "preservar release, receipt e snapshot históricos"
+      ],
+      "documentation": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "maker": "Governance Maker",
+      "target_version": "documental",
+      "audience": "owner-only",
+      "checker": "Single-Maintainer Sustainability Checker",
+      "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. issues históricas misturam RC1, final e trabalho futuro",
+      "docs": [
+        "atualizar documento/receipt de autoridade",
+        "registrar limitações e evidência"
+      ],
+      "labels": [
+        "post-1.0",
+        "P1",
+        "owner-only"
+      ]
+    }
+  ]
+}
