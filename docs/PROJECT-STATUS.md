@@ -26,8 +26,10 @@ Ela aponta para o commit de produto
 O registro detalhado, incluindo os hashes e a aceitação pública no M3, está em
 [`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md).
 
-Estado atual: `1.0.0 owner-only = GO`; `external-public = NO-GO` até que o
-mantenedor declare usuários externos e reative os gates condicionais.
+Estado atual: `1.0.0 owner-only = AT-RISK`; `external-public = NO-GO` até que o
+mantenedor declare usuários externos e reative os gates condicionais. A lease
+TUF pública está saudável, mas custódia independente, backup, RTO e a
+convergência do deployment ainda permanecem gates abertos.
 
 ## Baseline real
 
