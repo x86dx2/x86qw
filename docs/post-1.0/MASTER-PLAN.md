@@ -1,12 +1,12 @@
 # Master plan pós-1.0
 
-MAIN: RED
+MAIN: GREEN
 TUF: HEALTHY
 1.0.0 OWNER-ONLY: AT-RISK
 EXTERNAL-PUBLIC: NO-GO
 FEATURE WORK: BLOCKED
 
-**Veredito atual:** MAIN `RED`; TUF técnico `HEALTHY`, mas custódia e
+**Veredito atual:** MAIN `GREEN`; TUF técnico `HEALTHY`, mas custódia e
 recuperação de produção ausentes; `1.0.0 owner-only` `AT-RISK` na fotografia;
 `external-public` `NO-GO`; feature work `BLOCKED`.
 
@@ -44,7 +44,7 @@ produto.
 
 | Gate | Entrada | Saída exigida | Estado |
 | --- | --- | --- | --- |
-| 0A — main verde | run `31853649373` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | BLOCKED |
+| 0A — main verde | run `31888249914` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
 | 0B — TUF sustentável | TUF v2/v18 saudável | custódia, renovação, recuperação e SLO observados em produção | BLOCKED |
 | 0C — release truth/audience | hashes E2/E3 e receipt | autoridades reconciliadas, receipt aponta evidência final, audiência explícita | BLOCKED |
 | 0D — backlog/governance | registers e Maker/Checker | issues locais completas, decisão e rollback registrados | PROPOSAL |

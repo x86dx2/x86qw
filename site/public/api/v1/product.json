@@ -107,6 +107,7 @@
   },
   "package_count": 74,
   "project": "x86qw",
+  "release_truth_url": "/api/v1/release-truth.json",
   "runtimes": [
     {
       "capabilities": [

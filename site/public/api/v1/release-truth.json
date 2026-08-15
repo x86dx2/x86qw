@@ -1,0 +1,73 @@
+{
+  "schema": "x86qw-release-truth-v1",
+  "observed_at_utc": "2026-08-15T13:49:37Z",
+  "snapshot_commit": "2749d6b37f07c8b6568dcc9a114543f2e80d9527",
+  "status": {
+    "main": "GREEN",
+    "tuf": "HEALTHY",
+    "owner_only_release": "AT-RISK",
+    "external_public": "NO-GO",
+    "feature_work": "BLOCKED"
+  },
+  "authorities": {
+    "source": {
+      "meaning": "estado versionado que preserva a baseline histórica",
+      "baseline": "0.7.13",
+      "version_file": "dist/installer/VERSION"
+    },
+    "candidate_release": {
+      "meaning": "bytes construídos uma vez e promovidos por digest",
+      "tag": "x86qw-installer-1.0.0",
+      "version": "1.0.0",
+      "audience": "owner-only",
+      "external_public_authorized": false,
+      "installer_sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8",
+      "candidate_sha256": "0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21",
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0"
+    },
+    "deployment": {
+      "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
+      "source_projection_baseline": "0.7.13",
+      "audience_claim": "owner-only",
+      "live_observation": {
+        "observed_at_utc": "2026-08-15T14:05:00Z",
+        "product_version": "1.0.0",
+        "catalog_current_installer": "1.0.0",
+        "product_has_release_truth_url": false,
+        "site_hero_contains_source_baseline": true,
+        "site_hero_contains_owner_only": false,
+        "state": "DRIFT_PENDING_DEPLOYMENT"
+      },
+      "tuf": {
+        "root_version": 2,
+        "timestamp_version": 18,
+        "snapshot_version": 18,
+        "targets_version": 18,
+        "timestamp_expiry": "2026-08-15T21:09:01Z",
+        "warning_hours": 6,
+        "technical_lease": "healthy",
+        "production_custody_recovery": "not_proven"
+      }
+    },
+    "development": {
+      "meaning": "HEAD atual e seus checks",
+      "head": "2749d6b37f07c8b6568dcc9a114543f2e80d9527",
+      "validate_run": 31888249914,
+      "required_contexts": 7,
+      "required_contexts_status": "green"
+    }
+  },
+  "platform_support": {
+    "macos-arm64-m3": {"artifact": true, "portable_contract": true, "native_exact_candidate": "E3", "status": "conditional"},
+    "macos-x64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"},
+    "linux-x86_64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"},
+    "windows-x64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"}
+  },
+  "projection_policy": {
+    "source_of_truth": "docs/post-1.0/release-truth-current.json",
+    "public_projection": "/api/v1/release-truth.json",
+    "product_reference": "/api/v1/release-truth.json",
+    "rule": "nenhuma superfície pode elevar audiência, suporte ou evidência; artifact availability não equivale a external-public"
+  },
+  "open_gates": ["0B-production-custody-recovery", "0C-final-projection-drift", "0D-governance", "0E-owner-only-observation", "EP-0", "EP-1", "EP-2", "EP-3", "EP-4", "EP-5"]
+}

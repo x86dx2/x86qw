@@ -76,6 +76,11 @@ def build_product_catalog(project_root: Path) -> dict[str, object]:
     return {
         "format": 1,
         "project": "x86qw",
+        # Audience and release authority live in one projection so clients do
+        # not infer support from the package version alone.  Candidate builds
+        # carry the same link and may replace the endpoint as part of their
+        # explicit release projection.
+        "release_truth_url": "/api/v1/release-truth.json",
         "version": version,
         "package_count": package_count,
         "component_count": len(components["components"]),
