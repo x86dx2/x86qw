@@ -2725,17 +2725,62 @@ class DownloaderTests(unittest.TestCase):
             peer.close()
             client.close()
 
-    def test_dns_resolver_process_is_killed_and_collected_at_deadline(self) -> None:
-        class BlockingResolver:
+    def test_dns_resolver_deadline_expired_before_communicate_is_collected(self) -> None:
+        class ExpiredResolver:
+            args = ["python", "resolver"]
+            returncode: int | None = None
+
             def __init__(self) -> None:
-                self.returncode = None
-                self.calls = 0
+                self.killed = False
+                self.calls: list[tuple[bytes | None, float | None]] = []
+
+            def communicate(
+                self,
+                input: bytes | None = None,
+                timeout: float | None = None,
+            ) -> tuple[bytes, bytes]:
+                self.calls.append((input, timeout))
+                self.returncode = -9
+                return b"", b""
+
+            def kill(self) -> None:
+                self.killed = True
+
+        process = ExpiredResolver()
+        with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
+            with mock.patch.object(
+                downloader.time,
+                "monotonic",
+                side_effect=[100.0, 101.0, 101.0, 101.0],
+            ):
+                with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                    downloader._resolve_addresses("example.invalid", 443, 1.0)
+
+        self.assertTrue(process.killed)
+        self.assertEqual(1, len(process.calls))
+        self.assertIsNone(process.calls[0][0])
+        self.assertAlmostEqual(
+            downloader.RESOLVER_REAP_TIMEOUT_SECONDS,
+            process.calls[0][1] or 0,
+        )
+
+    def test_dns_resolver_communicate_timeout_is_killed_and_collected(self) -> None:
+        class BlockingResolver:
+            args = ["python", "resolver"]
+            returncode: int | None = None
+
+            def __init__(self) -> None:
+                self.calls: list[tuple[bytes | None, float | None]] = []
                 self.killed = False
 
-            def communicate(self, input: bytes | None = None, timeout: float | None = None):
-                self.calls += 1
-                if self.calls == 1:
-                    raise subprocess.TimeoutExpired(["python"], timeout)
+            def communicate(
+                self,
+                input: bytes | None = None,
+                timeout: float | None = None,
+            ) -> tuple[bytes, bytes]:
+                self.calls.append((input, timeout))
+                if len(self.calls) == 1:
+                    raise subprocess.TimeoutExpired(self.args, timeout)
                 self.returncode = -9
                 return b"", b""
 
@@ -2744,11 +2789,72 @@ class DownloaderTests(unittest.TestCase):
 
         process = BlockingResolver()
         with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
-            with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
-                downloader._resolve_addresses("example.invalid", 443, 0.01)
+            with mock.patch.object(
+                downloader.time,
+                "monotonic",
+                side_effect=[100.0, 100.1, 100.1, 100.1],
+            ):
+                with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                    downloader._resolve_addresses("example.invalid", 443, 1.0)
 
         self.assertTrue(process.killed)
-        self.assertEqual(2, process.calls)
+        self.assertEqual(2, len(process.calls))
+        self.assertEqual(b"G", process.calls[0][0])
+        self.assertAlmostEqual(0.9, process.calls[0][1] or 0)
+        self.assertIsNone(process.calls[1][0])
+        self.assertAlmostEqual(
+            downloader.RESOLVER_REAP_TIMEOUT_SECONDS,
+            process.calls[1][1] or 0,
+        )
+
+    def test_dns_resolver_detaches_from_transport_controller_after_timeout(self) -> None:
+        class TimeoutResolver:
+            args = ["python", "resolver"]
+            returncode: int | None = None
+
+            def communicate(
+                self,
+                input: bytes | None = None,
+                timeout: float | None = None,
+            ) -> tuple[bytes, bytes]:
+                if input == b"G":
+                    raise subprocess.TimeoutExpired(self.args, timeout)
+                self.returncode = -9
+                return b"", b""
+
+            def kill(self) -> None:
+                pass
+
+        class Controller:
+            def __init__(self) -> None:
+                self.attached: list[object] = []
+                self.detached: list[object] = []
+
+            def attach_resolver(self, process: object) -> bool:
+                self.attached.append(process)
+                return True
+
+            def detach_resolver(self, process: object) -> None:
+                self.detached.append(process)
+
+        process = TimeoutResolver()
+        controller = Controller()
+        with mock.patch.object(downloader.subprocess, "Popen", return_value=process):
+            with mock.patch.object(
+                downloader.time,
+                "monotonic",
+                side_effect=[100.0, 100.1, 100.1, 100.1],
+            ):
+                with self.assertRaisesRegex(TimeoutError, "resolver example.invalid"):
+                    downloader._resolve_addresses(
+                        "example.invalid",
+                        443,
+                        1.0,
+                        transport_controller=controller,
+                    )
+
+        self.assertEqual([process], controller.attached)
+        self.assertEqual([process], controller.detached)
 
     def test_dns_resolver_reap_never_uses_unbounded_communicate_after_kill(self) -> None:
         class KillableResolver:
