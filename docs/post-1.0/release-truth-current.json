@@ -86,7 +86,7 @@
     "final_cli_version": "1.0.0",
     "result": "BLOCKED",
     "message": "A migração foi bloqueada por conflitos preservados: .x86qw: the historical installer version is not authenticated",
-    "evidence_level": "E2",
+    "evidence_level": "E1",
     "qualification": "public exact-installer reproduction; not an external-public approval"
   },
   "conflicts": [
