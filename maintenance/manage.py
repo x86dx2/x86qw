@@ -238,7 +238,7 @@ def verify_local_tuf_catalog() -> str:
             for targets_path in sorted(PUBLIC_TRUST_METADATA.glob("*.targets.json")):
                 metadata = Metadata.from_bytes(targets_path.read_bytes())
                 try:
-                    root_metadata.verify_delegate(
+                    root_metadata.signed.verify_delegate(
                         "targets", metadata.signed_bytes, metadata.signatures,
                     )
                 except Exception:
