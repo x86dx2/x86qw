@@ -240,7 +240,6 @@ jobs:
             > "$RUNNER_TEMP/timestamp-renewal.json"
       - name: Stage existing authenticated TUF v20 without publishing new metadata
         run: |
-          mkdir -p release-work/trust
           python3 maintenance/tools/publish_tuf_metadata.py \
             --metadata-dir renewal/repository \
             --root maintenance/trust/root.json \
