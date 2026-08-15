@@ -16,6 +16,19 @@ Quando o produto for declarado aberto a usuários externos, a promoção deverá
 usar `release_audience=external-public`; esse valor reativa explicitamente os
 gates de migração, soak e operação TUF externa.
 
+## Publicação final owner-only
+
+Em 2026-08-15, a primeira release final foi publicada para o escopo
+`owner-only`: [`x86qw-installer-1.0.0`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0).
+Ela aponta para o commit de produto
+`e12ed081b968f820f47200e4be954a4f444056a1`, foi promovida no run
+`31849932133` e teve o `metadata-last` concluído na tentativa 2 do mesmo run.
+O registro detalhado, incluindo os hashes e a aceitação pública no M3, está em
+[`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md).
+
+Estado atual: `1.0.0 owner-only = GO`; `external-public = NO-GO` até que o
+mantenedor declare usuários externos e reative os gates condicionais.
+
 ## Baseline real
 
 A linha canônica é `origin/main`. A revisão exata de um snapshot deve ser
@@ -28,47 +41,35 @@ documento.
 
 ## Versões públicas
 
-A versão estável-fonte continua em `dist/installer/VERSION = 0.7.13` e o
-último release estável continua sendo `x86qw-installer-0.7.13`: instalador de
-581883 bytes, SHA-256
-`114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32`.
+A versão estável-fonte continua em `dist/installer/VERSION = 0.7.13`; ela é a
+baseline histórica preservada para a futura audiência externa.
 
-O Release Candidate público é `x86qw-installer-1.0.0-rc.1`, uma prerelease
-deliberadamente separada da versão-fonte estável. Ele aponta para o commit de
-produto `a8758ee27bebd7c72c24a31dc19335652e260c0a` e foi promovido pelo run
-`31752738047`, a partir da linha canônica `main@335d9a062f8ce33b226a9892de82979828a0fd1b`.
+A release final atual é `x86qw-installer-1.0.0`, owner-only, com instalador de
+600825 bytes e SHA-256
+`d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8`.
+O `candidate.json` público tem 17405 bytes e SHA-256
+`0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21`.
 
-Identidade pública do RC:
+O `1.0.0-rc.1` permanece publicado como prerelease histórica, deliberadamente
+separada da linha estável-fonte e da release final. Sua identidade e seus
+gates estão preservados em [`1.0.0-rc.1.md`](releases/1.0.0-rc.1.md).
 
-- instalador: 600431 bytes,
-  SHA-256 `9600be7eb2ed14e23b2eeb079bd6aa0e4611f996be0c89741fda12587eb7fed8`;
-- `candidate.json`: 14474 bytes,
-  SHA-256 `1552a896a0076dd2e347ed5b732b6dd31ba892292e1f9fb8c97fe9111f755bcb`;
-- release GitHub: [x86qw-installer-1.0.0-rc.1](https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0-rc.1).
-
-O RC é público e não é GitHub Latest. A imutabilidade host-level da release
-GitHub ainda aparece como indisponível (`immutable=false`); o publisher mantém
-imutabilidade lógica recusando overwrite, divergência de digest e assets extras.
-A avaliação de compatibilidade e rollback está em
-[`1.0.0-github-immutable-release-evaluation.md`](releases/1.0.0-github-immutable-release-evaluation.md);
-a release RC não será alterada para experimentar essa configuração.
+A imutabilidade host-level da release GitHub continua `immutable=false`; o
+publisher mantém imutabilidade lógica recusando overwrite, divergência de
+digest e assets extras. A avaliação está em
+[`1.0.0-github-immutable-release-evaluation.md`](releases/1.0.0-github-immutable-release-evaluation.md).
 
 ## Estado de confiança
 
-A root Ed25519 incorporada é validada localmente. A fotografia inicial do
-monitor encontrou root v1, timestamp v16, snapshot v16 e targets v16; depois,
-o workflow de renovação publicou timestamp v17, com validade até
-`2026-08-15T20:43:28Z` (run `31839143732`). O handoff público foi implantado e
-verificado pelo run `31845099782`; TUF, bootstraps e product passaram na
-verificação pós-deploy. Os recibos históricos estão em
-[`docs/releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-2026-08-14.json).
-Esta é uma fotografia do endpoint público em 2026-08-14; não constitui
-evidência de custódia humana independente nem substitui a cerimônia TUF do
-candidato. Os alertas anteriores de lease estão preservados em
-[`1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json`](releases/1.0.0-rc.1-tuf-monitor-alert-2026-08-14.json).
+A root Ed25519 incorporada autenticou o catálogo público final. Na verificação
+de 2026-08-15, o endpoint serviu timestamp, snapshot e targets na versão 18;
+timestamp expirava em `2026-08-15T21:09:01Z` e snapshot em
+`2026-08-21T21:09:01Z`. TUF, bootstraps e product passaram tanto no job
+`metadata-last` retomado quanto na verificação independente local.
+
+O handoff usado pela release foi o run `31849830873`, artifact `9237154449`.
 A operação contínua e a custódia independente continuam pendência
-`external-public` (#152); a validação da cadeia ainda é exigida para qualquer
-instalação que use endpoints públicos.
+`external-public` (#152); isso não bloqueia o uso owner-only publicado.
 
 ## Estado local
 
@@ -88,15 +89,12 @@ instalação que use endpoints públicos.
   `487d844aa4de66667bf26a375011b1c8b1c5baede5450cca9fee3bfd0c329d2e` e o
   instalador local tem 600931 bytes, SHA-256
   `94de20fa7f1efe61b1d5f93aeee936362e3ea8f2abcb1c83c62658d81cbd0b03`;
-- o preflight privado mais recente de `1.0.0`, construído na HEAD
+- o preflight privado histórico de `1.0.0`, construído na HEAD
   `f2cadeff3261ce07f7c9490313db1aa69e417fa2`, passou os mesmos `25/25` casos
-  no Apple M3 Pro. Seu `candidate.json` tem SHA-256
-  `c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7` e o
-  instalador tem 600825 bytes, SHA-256
-  `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8`.
-  Handoff, corpo unsigned e agregado pending foram preparados; continua sendo
-  preflight privado não promotable, sem assinatura autorizada, publicação ou
-  aceitação pública;
+  no Apple M3 Pro. Seus bytes foram posteriormente promovidos como o candidato
+  oficial `e12ed081b968f820f47200e4be954a4f444056a1` após as verificações
+  protegidas; o registro final está em
+  [`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md);
 - um novo candidato local `1.0.0-rc.2`, construído na HEAD documental
   `12df4557fbc2d5b0efb3eb445ad922e4c2cf414a`, passou `25/25` casos M3 reais
   em cache limpo no Apple M3 Pro. Seu `candidate.json` tem SHA-256
@@ -120,6 +118,9 @@ instalação que use endpoints públicos.
   `492fdc4995ceb187ed738ca44a129192c3a9743607567ffdef4821f5299c2bdc`. O
   recibo histórico de migração continua arquivado como evidência opcional, não
   como bloqueio do owner-only;
+- a aceitação pública final independente foi executada no M3 usando o endpoint
+  público e o instalador `1.0.0`; seu recibo durável está em
+  [`1.0.0-owner-only-public-acceptance-m3-2026-08-15.json`](releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
 - o harness M3 agora contém migração 0.7.13, Frogbot, lifecycle apply, reparo
   por corrupção e purge; os contratos, testes locais e o run nativo local do
   candidato `1.0.0-rc.2` estão verdes em `25/25`, mas isso não substitui o
@@ -159,53 +160,35 @@ instalação que use endpoints públicos.
 
 ## Candidato oficial e promoção
 
-O RC foi construído uma vez, validado por artifacts imutáveis, executado no
-runner Apple M3 e promovido sem reconstrução. O fluxo final confirmou:
+O candidato final `1.0.0` foi construído uma vez no commit
+`e12ed081b968f820f47200e4be954a4f444056a1`, validado pelos contratos portáveis,
+executado no Apple M3, aprovado no limite protegido e promovido sem
+reconstrução. A cadeia final confirmou:
 
 1. candidato exato e `candidate.json` por digest;
 2. evidência M3 assinada e vinculada ao candidato;
-3. aprovação protegida e ausência de blockers;
+3. aceitação pública RC e handoff TUF autenticados;
 4. publicação GitHub e GitLab com mirrors convergentes;
-5. metadata TUF e site implantados por último;
-6. verificação pública pós-deploy.
+5. `release-evidence.json`, `evidence-root.json` e `release-receipt.json` como
+   assets duráveis;
+6. metadata TUF e site implantados por último;
+7. verificação pública pós-deploy, repetida independentemente no M3.
 
-A evidência assinada foi usada pela promoção, mas ainda precisa ser publicada
-de forma durável como asset (`release-evidence.json`, `evidence-root.json` e
-`release-receipt.json`) para que a prova não dependa da retenção de artifacts de
-Actions. Os três artifacts do run final ainda estavam retidos na última
-verificação somente-leitura; suas IDs, digests e tamanhos estão registrados em
-[`1.0.0-rc.1-promotion-artifacts-2026-08-14.json`](releases/1.0.0-rc.1-promotion-artifacts-2026-08-14.json).
-
-## Preflight atual da promoção owner-only
-
-O candidato final `1.0.0` foi construído uma vez no commit
-`e12ed081b968f820f47200e4be954a4f444056a1`, com `candidate.json` SHA-256
-`0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21` e
-artifact `9233462439`. A evidência nativa protegida passou `25/25` casos no M3
-no run `31844022503`; a assinatura correspondente está no run `31844580590`,
-artifact `9235453104`. O handoff TUF está no run `31841473209`, artifact
-`9234407500`. A aceitação pública protegida está no run `31845951477`, artifact
-`9235987853`, com escopo `single-user`.
-
-Os quatro handoffs foram revalidados por `verify_external_handoff.py`, e a
-evidência assinada foi validada para `macOS-ARM64`. A promoção final ainda não
-foi despachada: o gate remoto retorna somente a issue P1 #149, que representa a
-própria tarefa de promoção e precisa ser resolvida no fluxo de governança antes
-do despacho.
+O registro completo está em
+[`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md).
+O run `31849932133` começou com falha transitória no `metadata-last`; a
+tentativa 2 repetiu somente esse job e encerrou o workflow com sucesso.
 
 ## Gaps e gates restantes
 
 ### Gates do modo owner-only
 
-1. a evidência M3 do candidato final precisa ser assinada, vinculada e
-   publicada de forma durável; artifacts de Actions com retenção de 90 dias não
-   bastam como único registro;
-2. a aceitação `single-user` do candidato exato precisa ser executada no runner
-   M3 protegido, com instalação limpa, lifecycle, uninstall e purge — concluído
-   no run `31845951477`;
-3. a branch que contém os workflows precisa estar no GitHub remoto e passar a
-   validação protegida; o checkout local não executa Actions;
-4. nenhum blocker P0/P1 pode permanecer aberto;
+1. evidência M3 assinada, vinculada e publicada de forma durável — concluído;
+2. aceitação `single-user` pública do candidato exato, com instalação limpa,
+   lifecycle, uninstall e purge — concluído no M3 local em
+   [`1.0.0-owner-only-public-acceptance-m3-2026-08-15.json`](releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
+3. branch dos workflows remota e validação protegida — concluído;
+4. nenhum blocker P0/P1 — concluído após o encerramento da issue #149;
 5. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
@@ -218,9 +201,8 @@ do despacho.
 4. lease TUF sustentável durante uso externo e resolução da issue #152;
 5. aceitação `external-users` pelos endpoints públicos.
 
-Essas pendências não autorizam alegar compatibilidade externa, mas não impedem
-o uso e a promoção no modo `owner-only` quando os gates da seção anterior
-estiverem verdes.
+Essas pendências não autorizam alegar compatibilidade externa. Elas não
+bloqueiam o uso da release já publicada no modo `owner-only`.
 
 ## Registro remoto de governança
 
@@ -235,12 +217,12 @@ histórico em
 deve ser lido como fotografia anterior, não como estado atual.
 
 - [#143 — RC soak](https://github.com/x86dx2/x86qw/issues/143);
-- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144) (P2, aberto até a final);
+- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144) (P2, capacidade concluída para owner-only; externo pendente);
 - [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145) (fechada após o run protegido);
 - [#146 — real 0.7.13 migration](https://github.com/x86dx2/x86qw/issues/146);
 - [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147) (fechada após 25/25);
 - [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148);
-- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (P1, gate atual);
+- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (fechada após o run `31849932133`, tentativa 2);
 - [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
 - [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
 - [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152).
@@ -255,16 +237,14 @@ está em
 
 ## Veredito
 
-O RC público é um marco legítimo e está em `GO` para uso do mantenedor. A
-promoção de `1.0.0` em modo `owner-only` fica bloqueada somente pelos gates
-owner-only acima; migração, soak externo e operação TUF sustentável não são
-pré-requisitos desta fase. A promoção `external-public` continua `NO-GO` até
-que todas as pendências externas sejam comprovadas. Nenhum novo `0.7.x` deve
-ser publicado salvo regressão crítica.
+`1.0.0 owner-only`: `GO`, publicado e verificado. Migração, soak externo e
+operação TUF sustentável não são pré-requisitos desta fase. A promoção
+`external-public` continua `NO-GO` até que todas as pendências externas sejam
+comprovadas. Nenhum novo `0.7.x` deve ser publicado salvo regressão crítica.
 
 ## Próxima ação
 
-Publicar a alteração de política, executar a aceitação `single-user` no M3,
-publicar a evidência durável e repetir o candidato final sobre os bytes exatos.
-Quando o mantenedor declarar usuários externos, reabrir o plano de migração,
-soak e operação TUF usando `release_audience=external-public`.
+Usar a release `1.0.0` no escopo owner-only e registrar qualquer regressão com
+o commit e os hashes acima. Quando o mantenedor declarar usuários externos,
+reabrir o plano de migração, soak e operação TUF usando
+`release_audience=external-public`.
