@@ -367,7 +367,7 @@ jobs:
           if deployment.get("release_truth_endpoint") != "200":
               raise SystemExit("live release-truth does not record its verified endpoint")
           PY
-          curl --fail --silent --show-error --max-time 30 https://x86qw.x86.com.br/ | grep -F "owner-only"
+          curl --fail --silent --show-error --max-time 30 -A "x86qw-site-projection-repair/1" -H "Cache-Control: no-cache" "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}" | grep -F "owner-only"
       - name: Write immutable projection-repair receipt
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
