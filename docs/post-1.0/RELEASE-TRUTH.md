@@ -36,7 +36,7 @@ Nenhuma release note ou issue substitui uma autoridade de bytes. O
 | audiência owner-only | AT-RISK na fotografia | receipt e P1s precisam ser reconciliados |
 | audiência external-public | NO-GO | exige EP-1–EP-5 |
 | TUF técnico | HEALTHY no intervalo auditado | lease e recovery continuam pendentes |
-| release operacional | BLOCKED | Gate 0A e release truth não fechados |
+| release operacional | AT-RISK | Gate 0A verde; Gate 0C ainda aguarda projeção live e receipt final |
 
 ## Contradições abertas
 

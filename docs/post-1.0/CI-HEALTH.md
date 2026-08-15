@@ -1,10 +1,16 @@
 # CI health e Gate 0A
 
-**Estado:** `RED`; o Gate 0A não está fechado.
+**Estado corrente:** `GREEN`; Gate 0A fechado na main em
+`2749d6b37f07c8b6568dcc9a114543f2e80d9527`, Validate run `31888249914`, com
+os 7 contexts protegidos verdes. O bloco abaixo preserva a fotografia que
+motivou o gate.
+
+**Snapshot histórico:** `RED` no run `31853649373`; não use esse resultado
+histórico para classificar a main atual.
 
 ## Observação
 
-O run principal `31853649373` falhou somente em
+O run histórico `31853649373` falhou somente em
 `portable-contract / Windows / Python 3.10`. Linux, macOS e os demais jobs
 registrados no snapshot não são a causa deste bloqueio. O diagnóstico de que o
 fake não aceita os argumentos usados pelo contrato e de que há um atraso não
@@ -26,8 +32,9 @@ Para fechar o gate, o Checker precisa anexar:
 - teste de timeout, cancelamento e cleanup;
 - diff mínimo restrito ao contrato/testes caso a inferência seja confirmada.
 
-O run vermelho permanece uma limitação pré-existente desta entrega; este
-documento não modifica `.github/workflows` nem testes.
+O run vermelho permanece uma evidência histórica; o Gate 0A foi corrigido por
+`maintenance/tests/test_downloader.py` e validado sem mudança de runtime. Este
+documento não altera workflows.
 
 ## Camadas de validação
 
