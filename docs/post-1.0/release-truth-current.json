@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T18:25:49Z",
-  "snapshot_commit": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
+  "observed_at_utc": "2026-08-15T19:58:26Z",
+  "snapshot_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -41,14 +41,14 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T18:25:49Z",
+        "observed_at_utc": "2026-08-15T19:58:26Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
-        "release_truth_endpoint": "404",
-        "product_release_audience": null,
-        "root_site_hero": "Distribuição 0.7.13 pública e verificável",
-        "root_mentions_owner_only": false,
-        "state": "SOURCE_DEPLOYMENT_DRIFT"
+        "release_truth_endpoint": "200",
+        "product_release_audience": "owner-only",
+        "root_site_hero": "x86QW 1.0.0 publicada para owner-only · baseline fonte 0.7.13",
+        "root_mentions_owner_only": true,
+        "state": "CONVERGED_CANDIDATE_DEPLOYMENT"
       },
       "package_mirrors": {
         "github_gitlab_installer": "byte_equal",
@@ -58,27 +58,30 @@
       },
       "tuf": {
         "root_version": 2,
-        "timestamp_version": 19,
+        "timestamp_version": 20,
         "snapshot_version": 18,
         "targets_version": 18,
         "packages_observed": 75,
-        "timestamp_expiry": "2026-08-16T18:15:26Z",
-        "seconds_to_expiry_at_observation": 85800,
+        "timestamp_expiry": "2026-08-16T19:54:14Z",
+        "seconds_to_expiry_at_observation": 86148,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
         "technical_chain": "authenticated",
         "operational_status": "HEALTHY",
         "production_custody_recovery": "drill-registered; independent custody/RTO pending",
-        "renewal_run_id": 31900570555,
+        "renewal_run_id": 31905189013,
         "recovery_drill_run_id": 31900793093,
-        "publication_run_id": 31900914825
+        "publication_run_id": 31905297742,
+        "publication_artifact_id": 9252174837,
+        "publication_artifact_sha256": "07bfc91e59b254ac29db6fa24903f56ef8205447c3655db673e54fc23f614102",
+        "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
-      "validate_run": 31896128822,
+      "head": "f2e9ad30670d0041d6487856daba620a4c1db71b",
+      "validate_run": 31902729730,
       "required_protected_contexts": 7,
       "protected_contexts_green": "7/7",
       "validate_jobs": "8/8"
@@ -104,9 +107,9 @@
     {
       "id": "RT-02",
       "severity": "P1",
-      "statement": "site live preserva claim 0.7.13 e não projeta owner-only; product/catalog servem 1.0.0",
+      "statement": "site live, release-truth, product e catálogo refletem a projeção owner-only do candidato",
       "gate": "0C",
-      "state": "BLOCKED"
+      "state": "RESOLVED_DEPLOYMENT_VERIFIED"
     },
     {
       "id": "RT-03",
@@ -139,16 +142,16 @@
     {
       "id": "RT-07",
       "severity": "P1",
-      "statement": "product.json live não expõe release_audience e /api/v1/release-truth.json continua 404",
+      "statement": "product.json live expõe release_audience e /api/v1/release-truth.json responde 200",
       "gate": "0C",
-      "state": "BLOCKED"
+      "state": "RESOLVED_DEPLOYMENT_VERIFIED"
     }
   ],
   "evidence": {
     "main_green": {
       "level": "E2",
-      "run_id": 31896128822,
-      "commit": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
+      "run_id": 31902729730,
+      "commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
       "result": "pass"
     },
     "m3_exact_candidate": {
@@ -174,10 +177,10 @@
     },
     "tuf_renewal": {
       "level": "E2",
-      "run_id": 31900570555,
-      "artifact_id": 9250972708,
-      "artifact_sha256": "02ebf0134579cc736b7200516986ca428e78f917c5ea7918be0bb6a7723175b0",
-      "timestamp_version": "18->19",
+      "run_id": 31905189013,
+      "artifact_id": 9252145236,
+      "artifact_sha256": "05183232d2aff68fe99436fbe007da8c19382d6e4621d1ed1ba1a446386ef895",
+      "timestamp_version": "19->20",
       "published": false
     },
     "tuf_recovery_drill": {
@@ -191,13 +194,28 @@
     },
     "tuf_publication": {
       "level": "E2",
-      "run_id": 31900914825,
-      "artifact_id": 9251063517,
-      "artifact_sha256": "1dbd59b777f8e22b1d944ad707f0f2f47038bef1f2084e97c5d622295e3a5612",
+      "run_id": 31905297742,
+      "artifact_id": 9252174837,
+      "artifact_sha256": "07bfc91e59b254ac29db6fa24903f56ef8205447c3655db673e54fc23f614102",
       "changed_files": [
         "metadata/timestamp.json"
       ],
-      "result": "verified-timestamp-publication"
+      "result": "verified-timestamp-publication",
+      "timestamp_version": 20,
+      "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
+    },
+    "deployment_projection": {
+      "level": "E2",
+      "result": "verified-candidate-deployment",
+      "run_id": 31905297742,
+      "artifact_id": 9252174837,
+      "candidate_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
+      "candidate_run_id": 31904237018,
+      "candidate_artifact_id": 9252054354,
+      "candidate_json_sha256": "9a8417d4d0bd801e087f429931a7005b432f981978e2b34877cf390041dccebf",
+      "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b",
+      "release_truth_sha256": "ead2ffd43dfccfe8e7fcee04895ff3c39bb8189c29dad7d486ecc95e0c060f99",
+      "observed_endpoint_status": 200
     }
   },
   "projection_policy": {
@@ -207,7 +225,6 @@
   },
   "open_gates": [
     "0B-sustainable-custody-backup-RTO",
-    "0C-final-projection-drift",
     "0D-governance",
     "0E-owner-only-observation",
     "EP-0",

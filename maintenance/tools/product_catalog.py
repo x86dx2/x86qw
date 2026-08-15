@@ -80,6 +80,8 @@ def build_product_catalog(project_root: Path) -> dict[str, object]:
         # not infer support from the package version alone.  Candidate builds
         # carry the same link and may replace the endpoint as part of their
         # explicit release projection.
+        "release_audience": "owner-only",
+        "external_public": False,
         "release_truth_url": "/api/v1/release-truth.json",
         "version": version,
         "package_count": package_count,

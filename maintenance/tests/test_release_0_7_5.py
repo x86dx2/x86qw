@@ -149,7 +149,7 @@ class Release0713Tests(unittest.TestCase):
         self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertIn("baseline fonte 0.7.13", index)
-        self.assertIn('data-product-version>0.7.13</span>', index)
+        self.assertIn('data-product-version>1.0.0</span>', index)
         self.assertIn('data-package-count>74</span>', index)
 
 

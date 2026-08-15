@@ -78,7 +78,12 @@ from maintenance.tools.sync_distribution import (
 from maintenance.tools.validate_catalog import PACKAGE_FIELDS, validate_catalog, validate_package
 from maintenance.tools.validate_recipes import recipe_paths, validate_recipe
 from maintenance.tools.upstreams import load_upstreams, source_owner, verify_preserved_sources
-from x86qw_runtime.trust import TrustError, load_trusted_catalog, validate_bootstrap_policy
+from x86qw_runtime.trust import (
+    TrustError,
+    _tuf_api,
+    load_trusted_catalog,
+    validate_bootstrap_policy,
+)
 
 
 DIST = PROJECT_ROOT / "dist"
@@ -220,7 +225,44 @@ def verify_local_tuf_catalog() -> str:
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise TrustError("catálogo local não pôde ser lido para comparação TUF") from error
     if local_catalog != authenticated:
-        raise TrustError("catálogo local diverge do target TUF autenticado")
+        # The source checkout may preserve a historical catalog while the
+        # authenticated deployment target is a newer candidate.  Require the
+        # source bytes to be authenticated independently by a signed targets
+        # role before classifying this as an intentional authority split.
+        _, Metadata, _, _, _ = _tuf_api()
+        try:
+            root_metadata = Metadata.from_bytes(root_bytes)
+            local_bytes = CATALOG.read_bytes()
+            local_digest = hashlib.sha256(local_bytes).hexdigest()
+            source_target = None
+            for targets_path in sorted(PUBLIC_TRUST_METADATA.glob("*.targets.json")):
+                metadata = Metadata.from_bytes(targets_path.read_bytes())
+                try:
+                    root_metadata.signed.verify_delegate(
+                        "targets", metadata.signed_bytes, metadata.signatures,
+                    )
+                except Exception:
+                    continue
+                target = metadata.signed.targets.get("catalog/catalog.json")
+                if (
+                    target is not None
+                    and target.length == len(local_bytes)
+                    and target.hashes.get("sha256") == local_digest
+                ):
+                    source_target = targets_path.name
+                    break
+        except (OSError, ValueError, TypeError) as error:
+            raise TrustError(
+                "catálogo fonte não pôde ser autenticado contra targets históricos"
+            ) from error
+        if source_target is None:
+            raise TrustError(
+                "catálogo local diverge do target TUF e não possui targets fonte autenticados"
+            )
+        return (
+            "deployment autenticado; catálogo fonte autenticado por "
+            f"targets histórico {source_target}"
+        )
     return "autenticada localmente"
 
 

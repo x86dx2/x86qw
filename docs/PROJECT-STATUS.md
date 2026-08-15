@@ -69,7 +69,7 @@ timestamp expirava em `2026-08-15T21:09:01Z` e snapshot em
 `2026-08-21T21:09:01Z`. TUF, bootstraps e product passaram tanto no job
 `metadata-last` retomado quanto na verificação independente local.
 
-O handoff usado pela release foi o run `31849830873`, artifact `9237154449`.
+O handoff TUF da geração pública convergente foi o run `31905077494`, artifact `9252124476`; a renovação foi `31905189013`/`9252145236` e a publicação timestamp-only `31905297742`/`9252174837`.
 A custódia independente, backup humano, RTO de produção e sucessão continuam pendência P1 em #148; a lease técnica imediata foi renovada e #152 foi encerrada.
 
 ## Estado local
@@ -189,7 +189,7 @@ tentativa 2 repetiu somente esse job e encerrou o workflow com sucesso.
    lifecycle, uninstall e purge — concluído no M3 local em
    [`1.0.0-owner-only-public-acceptance-m3-2026-08-15.json`](releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
 3. branch dos workflows remota e validação protegida — concluído;
-4. nenhuma falha P0 de integridade — concluído; P1 de verdade de deployment permanece aberto em Gate 0C;
+4. nenhuma falha P0 de integridade — concluído; P1 de verdade de deployment foi resolvido por Gate 0C;
 5. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
@@ -199,7 +199,7 @@ tentativa 2 repetiu somente esse job e encerrou o workflow com sucesso.
 1. migração real de `0.7.13` e preservação de instalações antigas;
 2. soak protegido de sete dias;
 3. drill operacional TUF com custódia e renovação observadas;
-4. lease TUF sustentável durante uso externo e resolução da issue #152;
+4. lease TUF sustentável durante uso externo; #152 foi encerrada após a publicação v20;
 5. aceitação `external-users` pelos endpoints públicos.
 
 Essas pendências não autorizam alegar compatibilidade externa. Elas não
@@ -226,7 +226,7 @@ deve ser lido como fotografia anterior, não como estado atual.
 - [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (fechada após o run `31849932133`, tentativa 2);
 - [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
 - [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
-- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152) (closed after v19 publication).
+- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152) (closed after v20 publication).
 
 O último monitor TUF incluído nessa leitura foi o run
 [31791717871](https://github.com/x86dx2/x86qw/actions/runs/31791717871), com
