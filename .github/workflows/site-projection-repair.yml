@@ -318,9 +318,8 @@ jobs:
         run: |
           npm ci
           node_modules/.bin/wrangler deploy \
-            --config ../site/wrangler.jsonc \
-            --dry-run \
-            --assets ../release-work/public
+            --config ../release-work/site/wrangler.jsonc \
+            --dry-run
       - name: Deploy the projection repair (no release or TUF metadata publication)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
