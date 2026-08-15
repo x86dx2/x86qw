@@ -4,7 +4,7 @@ Esta é a observação corrente da autoridade machine-readable
 [release-truth-current.json](release-truth-current.json). Source tree,
 candidate/release, deployment e development são autoridades separadas.
 
-## Estado observado em 2026-08-15T18:25:49Z
+## Estado observado em 2026-08-15T19:58:26Z
 
 - **MAIN=GREEN:** main@493cedb2344085b4f5d1f4a04b2217247e8f945d; Validate
   31896128822, com 7/7 contexts protegidos verdes e 8/8 jobs concluídos.
@@ -30,7 +30,7 @@ candidate/release, deployment e development são autoridades separadas.
 | --- | --- | --- |
 | source | baseline versionada 0.7.13 e projeções owner-only na main | release Latest |
 | candidate/release | 1.0.0, digest do instalador/candidato, audience owner-only | HEAD atual |
-| deployment | product/catalog/TUF servidos; site e release-truth ainda em drift | source tree |
+| deployment | product/catalog/TUF servidos; geração candidata verificada e convergente | source tree |
 | development | main@493cedb…, Validate verde | bytes publicados |
 
 ## TUF e recuperação
@@ -51,7 +51,7 @@ de produção ou sucessão; esses pontos permanecem em #148.
 | RT-04 | cleanup --personal-data não cobre qw/demos prometidos | 0C/EP-1 | BLOCKED |
 | RT-05 | migração do instalador público 0.7.13 exato não substitui o harness M3 | EP-1 | BLOCKED |
 | RT-06 | renovação/recovery/publicação TUF passaram; custódia independente/RTO faltam | 0B | RESOLVED_TECHNICAL |
-| RT-07 | product.json live omite release_audience e release-truth retorna 404 | 0C | BLOCKED |
+| RT-07 | product.json live expõe release_audience e release-truth responde 200 | 0C | BLOCKED |
 
 ## Regra de projeção
 
