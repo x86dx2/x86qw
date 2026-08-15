@@ -31,7 +31,9 @@ abertos, atribuídos ou aprovados remotamente.
 
 ## Disposição proposta das issues existentes
 
-Nenhuma alteração remota foi feita nesta execução:
+Somente comentários de evidência foram adicionados às issues existentes nesta
+execução. Nenhuma issue foi fechada/retargetada, nenhum label foi alterado e
+nenhuma issue do backlog foi criada automaticamente:
 
 - `#143`: preservar como histórico/superseded e abrir soak para o candidato
   external-public exato;

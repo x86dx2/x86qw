@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T13:49:37Z",
-  "snapshot_commit": "2749d6b37f07c8b6568dcc9a114543f2e80d9527",
+  "observed_at_utc": "2026-08-15T14:38:25Z",
+  "snapshot_commit": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -30,13 +30,20 @@
       "source_projection_baseline": "0.7.13",
       "audience_claim": "owner-only",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T14:05:00Z",
+        "observed_at_utc": "2026-08-15T14:43:32Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "product_has_release_truth_url": false,
         "site_hero_contains_source_baseline": true,
         "site_hero_contains_owner_only": false,
+        "site_install_owner_only": false,
         "state": "DRIFT_PENDING_DEPLOYMENT"
+      },
+      "source_projection_merge": {
+        "commit": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
+        "pull_request": 169,
+        "validated_run": 31890091394,
+        "state": "MERGED_SOURCE_NOT_DEPLOYED"
       },
       "tuf": {
         "root_version": 2,
@@ -45,14 +52,15 @@
         "targets_version": 18,
         "timestamp_expiry": "2026-08-15T21:09:01Z",
         "warning_hours": 6,
+        "last_authenticated_at_utc": "2026-08-15T14:38:25Z",
         "technical_lease": "healthy",
         "production_custody_recovery": "not_proven"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "2749d6b37f07c8b6568dcc9a114543f2e80d9527",
-      "validate_run": 31888249914,
+      "head": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
+      "validate_run": 31890091394,
       "required_contexts": 7,
       "required_contexts_status": "green"
     }
