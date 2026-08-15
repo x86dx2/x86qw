@@ -2,3 +2,13 @@
   Cache-Control: no-store, no-cache, must-revalidate
   CDN-Cache-Control: no-store
   Access-Control-Allow-Origin: *
+
+/api/v1/product.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *
+
+/api/v1/release-truth.json
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *

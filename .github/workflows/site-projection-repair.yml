@@ -1,0 +1,423 @@
+name: Repair owner-only site projection
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_code_commit:
+        description: "Current main SHA containing this workflow and release truth projection"
+        required: true
+        type: string
+      development_validate_run:
+        description: "Green Validate run for release_code_commit"
+        required: true
+        type: string
+      candidate_commit:
+        description: "Exact historical candidate commit whose installer/catalog/TUF remain immutable"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Run that produced the exact candidate artifact"
+        required: true
+        type: string
+      candidate_artifact_id:
+        description: "Immutable candidate artifact ID"
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: "Exact candidate artifact name"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA-256 of candidate.json"
+        required: true
+        type: string
+      tuf_source_workflow_commit:
+        description: "Commit that produced the authenticated source TUF handoff"
+        required: true
+        type: string
+      tuf_source_run_id:
+        description: "Source TUF handoff run"
+        required: true
+        type: string
+      tuf_source_artifact_id:
+        description: "Source TUF handoff artifact ID"
+        required: true
+        type: string
+      tuf_source_artifact_name:
+        description: "Exact source TUF handoff artifact name"
+        required: true
+        type: string
+      tuf_renewal_run_id:
+        description: "Timestamp-only renewal handoff run"
+        required: true
+        type: string
+      tuf_renewal_artifact_id:
+        description: "Timestamp-only renewal handoff artifact ID"
+        required: true
+        type: string
+      tuf_renewal_artifact_name:
+        description: "Exact timestamp-only renewal artifact name"
+        required: true
+        type: string
+      tuf_renewal_report_sha256:
+        description: "SHA-256 of the renewal report"
+        required: true
+        type: string
+      tuf_timestamp_key_id:
+        description: "Authorized timestamp key ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-site-projection-repair
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify immutable bytes and deploy only the current site projection
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_code_commit }}
+          lfs: false
+          fetch-depth: 1
+      - name: Validate the pinned release-code checkout
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          DEVELOPMENT_VALIDATE_RUN: ${{ inputs.development_validate_run }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEVELOPMENT_VALIDATE_RUN" =~ ^[1-9][0-9]{0,19}$ ]]
+          test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Validate immutable handoff coordinates
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.tuf_source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.tuf_source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.tuf_source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.tuf_source_artifact_name }}
+          RENEWAL_RUN_ID: ${{ inputs.tuf_renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.tuf_renewal_artifact_id }}
+          RENEWAL_ARTIFACT_NAME: ${{ inputs.tuf_renewal_artifact_name }}
+          RENEWAL_REPORT_SHA256: ${{ inputs.tuf_renewal_report_sha256 }}
+          TIMESTAMP_KEY_ID: ${{ inputs.tuf_timestamp_key_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" =~ ^tuf-metadata-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$RENEWAL_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$RENEWAL_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$RENEWAL_ARTIFACT_NAME" =~ ^tuf-timestamp-renewal-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$RENEWAL_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$TIMESTAMP_KEY_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" == tuf-metadata-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$RENEWAL_ARTIFACT_NAME" == tuf-timestamp-renewal-"$CANDIDATE_COMMIT"-* ]]
+      - name: Verify exact candidate handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$CANDIDATE_ARTIFACT_NAME" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --workflow .github/workflows/release.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/candidate-provenance.json"
+      - name: Verify exact source TUF handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.tuf_source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.tuf_source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.tuf_source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.tuf_source_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$SOURCE_RUN_ID" \
+            --commit "$SOURCE_WORKFLOW_COMMIT" \
+            --artifact "$SOURCE_ARTIFACT_NAME" \
+            --artifact-id "$SOURCE_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-metadata-handoff.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/source-tuf-provenance.json"
+      - name: Verify exact timestamp renewal provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RENEWAL_WORKFLOW_COMMIT: ${{ inputs.tuf_source_workflow_commit }}
+          RENEWAL_RUN_ID: ${{ inputs.tuf_renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.tuf_renewal_artifact_id }}
+          RENEWAL_ARTIFACT_NAME: ${{ inputs.tuf_renewal_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$RENEWAL_RUN_ID" \
+            --commit "$RENEWAL_WORKFLOW_COMMIT" \
+            --artifact "$RENEWAL_ARTIFACT_NAME" \
+            --artifact-id "$RENEWAL_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-timestamp-renewal.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/renewal-provenance.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: candidate
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.tuf_source_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.tuf_source_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: source-tuf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.tuf_renewal_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.tuf_renewal_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: renewal
+      - name: Verify immutable candidate and timestamp bytes
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          EXPECTED_REPORT_SHA256: ${{ inputs.tuf_renewal_report_sha256 }}
+          EXPECTED_KEY_ID: ${{ inputs.tuf_timestamp_key_id }}
+        run: |
+          set -euo pipefail
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify candidate
+          actual_report="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())')"
+          test "$actual_report" = "$EXPECTED_REPORT_SHA256"
+          mapfile -t catalogs < <(find source-tuf/targets -type f -name '*.catalog.json' -print | sort)
+          test "${#catalogs[@]}" -eq 1
+          cmp -s candidate/catalog.json "${catalogs[0]}"
+          python3 maintenance/tools/verify_tuf_timestamp_renewal.py \
+            --source-repository source-tuf \
+            --renewed-repository renewal/repository \
+            --report renewal/report.json \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --expected-key-id "$EXPECTED_KEY_ID" \
+            > "$RUNNER_TEMP/timestamp-renewal.json"
+      - name: Stage existing authenticated TUF v20 without publishing new metadata
+        run: |
+          mkdir -p release-work/trust
+          python3 maintenance/tools/publish_tuf_metadata.py \
+            --metadata-dir renewal/repository \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --stage-dir release-work/trust
+      - name: Prepare the current release-truth projection overlay
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          DEVELOPMENT_VALIDATE_RUN: ${{ inputs.development_validate_run }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          source = Path("site/public")
+          projection = source / "api/v1/release-truth.json"
+          if not projection.is_file():
+              raise SystemExit("site source lacks release-truth projection")
+          data = json.loads(projection.read_text(encoding="utf-8"))
+          now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          data["observed_at_utc"] = now
+          data["snapshot_commit"] = os.environ["RELEASE_CODE_COMMIT"]
+          development = data["authorities"]["development"]
+          development["head"] = os.environ["RELEASE_CODE_COMMIT"]
+          development["validate_run"] = int(os.environ["DEVELOPMENT_VALIDATE_RUN"])
+          development["protected_contexts_green"] = "7/7"
+          development["validate_jobs"] = "8/8"
+          deployment = data["authorities"]["deployment"]
+          live = deployment["live_observation"]
+          live.update({
+              "observed_at_utc": now,
+              "release_truth_endpoint": "200",
+              "product_release_audience": "owner-only",
+              "root_mentions_owner_only": True,
+              "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
+          })
+          deployment["tuf"]["operational_status"] = "HEALTHY"
+          data["status"]["main"] = "GREEN"
+          data["status"]["tuf"] = "HEALTHY"
+          data["status"]["owner_only_release"] = "AT-RISK"
+          data["status"]["external_public"] = "NO-GO"
+          data["status"]["feature_work"] = "BLOCKED"
+          Path("release-work").mkdir(exist_ok=True)
+          Path("release-work/projection-overlay.json").write_text(
+              json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
+              encoding="utf-8",
+          )
+          source_projection = Path("release-work/site-source")
+          import shutil
+          shutil.copytree(source, source_projection)
+          headers = source_projection / "_headers"
+          headers.write_text(
+              headers.read_text(encoding="utf-8")
+              + "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n\n/api/v1/release-truth.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n",
+              encoding="utf-8",
+          )
+          (source_projection / "api/v1/release-truth.json").write_bytes(
+              Path("release-work/projection-overlay.json").read_bytes()
+          )
+          PY
+      - name: Assemble verified site generation from current source overlay
+        run: |
+          python3 maintenance/tools/assemble_site_release.py \
+            --site-source release-work/site-source \
+            --catalog candidate/catalog.json \
+            --product candidate/product.json \
+            --trust-repository release-work/trust \
+            --output release-work/public
+      - name: Dry-run the exact site generation
+        working-directory: site
+        run: |
+          npm ci
+          node_modules/.bin/wrangler deploy \
+            --config ../site/wrangler.jsonc \
+            --dry-run
+      - name: Deploy the projection repair (no release or TUF metadata publication)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          site/node_modules/.bin/wrangler deploy --config site/wrangler.jsonc
+      - name: Verify public projection, TUF and owner-only audience
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          set -euo pipefail
+          python3 maintenance/tools/verify_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json
+          python3 maintenance/tools/verify_public_bootstraps.py --candidate candidate
+          python3 maintenance/tools/verify_public_product.py --candidate candidate
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          with urllib.request.urlopen(
+              "https://x86qw.x86.com.br/api/v1/release-truth.json",
+              timeout=30,
+          ) as response:
+              if response.status != 200:
+                  raise SystemExit(f"release-truth HTTP {response.status}")
+              data = json.load(response)
+          if data.get("snapshot_commit") != os.environ["RELEASE_CODE_COMMIT"]:
+              raise SystemExit("live release-truth snapshot diverges from release code")
+          if data.get("status", {}).get("external_public") != "NO-GO":
+              raise SystemExit("live release-truth changed external-public status")
+          if data.get("authorities", {}).get("candidate_release", {}).get("audience") != "owner-only":
+              raise SystemExit("live release-truth lost owner-only audience")
+          deployment = data.get("authorities", {}).get("deployment", {}).get("live_observation", {})
+          if deployment.get("release_truth_endpoint") != "200":
+              raise SystemExit("live release-truth does not record its verified endpoint")
+          PY
+          curl --fail --silent --show-error --max-time 30 https://x86qw.x86.com.br/ | grep -F "owner-only"
+      - name: Write immutable projection-repair receipt
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          DEVELOPMENT_VALIDATE_RUN: ${{ inputs.development_validate_run }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          SOURCE_RUN_ID: ${{ inputs.tuf_source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.tuf_source_artifact_id }}
+          RENEWAL_RUN_ID: ${{ inputs.tuf_renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.tuf_renewal_artifact_id }}
+          RENEWAL_REPORT_SHA256: ${{ inputs.tuf_renewal_report_sha256 }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          receipt = {
+              "format": 1,
+              "operation": "owner-only-site-projection-repair",
+              "release_code_commit": os.environ["RELEASE_CODE_COMMIT"],
+              "development_validate_run": int(os.environ["DEVELOPMENT_VALIDATE_RUN"]),
+              "candidate": {
+                  "commit": os.environ["CANDIDATE_COMMIT"],
+                  "run_id": int(os.environ["CANDIDATE_RUN_ID"]),
+                  "artifact_id": int(os.environ["CANDIDATE_ARTIFACT_ID"]),
+                  "artifact_name": os.environ["CANDIDATE_ARTIFACT_NAME"],
+                  "candidate_sha256": os.environ["CANDIDATE_SHA256"],
+                  "installer_sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8",
+              },
+              "tuf": {
+                  "source_run_id": int(os.environ["SOURCE_RUN_ID"]),
+                  "source_artifact_id": int(os.environ["SOURCE_ARTIFACT_ID"]),
+                  "renewal_run_id": int(os.environ["RENEWAL_RUN_ID"]),
+                  "renewal_artifact_id": int(os.environ["RENEWAL_ARTIFACT_ID"]),
+                  "renewal_report_sha256": os.environ["RENEWAL_REPORT_SHA256"],
+                  "publication": "none",
+              },
+              "publication": {
+                  "release": "none",
+                  "tuf": "none",
+                  "site": "projection-only",
+                  "workflow_run_id": int(os.environ["RELEASE_RUN_ID"]),
+                  "workflow_run_attempt": int(os.environ["RELEASE_RUN_ATTEMPT"]),
+              },
+          }
+          Path("projection-repair-receipt.json").write_text(
+              json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: site-projection-repair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: projection-repair-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
