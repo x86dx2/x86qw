@@ -1,0 +1,146 @@
+{
+  "schema": "x86qw-release-truth-v1",
+  "observed_at_utc_start": "2026-08-15T01:28:37Z",
+  "observed_at_utc_end": "2026-08-15T01:55:48Z",
+  "snapshot_commit": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
+  "status": {
+    "main": "RED",
+    "tuf": "HEALTHY",
+    "owner_only_release": "AT-RISK",
+    "external_public": "NO-GO",
+    "feature_work": "BLOCKED"
+  },
+  "authorities": {
+    "source": {
+      "meaning": "estado versionado na main",
+      "baseline": "0.7.13",
+      "observed_version_file": "dist/installer/VERSION"
+    },
+    "candidate_release": {
+      "meaning": "bytes construídos uma vez e promovidos por digest",
+      "tag": "x86qw-installer-1.0.0",
+      "version": "1.0.0",
+      "product_commit": "e12ed081b968f820f47200e4be954a4f444056a1",
+      "audience": "owner-only",
+      "release_latest": true,
+      "installer": {
+        "size_bytes": 600825,
+        "sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8"
+      },
+      "candidate_json": {
+        "size_bytes": 17405,
+        "sha256": "0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21"
+      }
+    },
+    "deployment": {
+      "meaning": "site, catálogo, product, bootstraps e TUF realmente servidos",
+      "tuf": {
+        "root_version": 2,
+        "timestamp_version": 18,
+        "snapshot_version": 18,
+        "targets_version": 18,
+        "packages_observed": 75,
+        "timestamp_expiry": "2026-08-15T21:09:01Z",
+        "warning_hours": 6,
+        "technical_lease": "healthy",
+        "production_custody_and_recovery": "not_proven"
+      },
+      "mirror_evidence": {
+        "github_gitlab_installer": "byte_equal",
+        "evidence_level": "E2",
+        "independent_rebuild": false
+      }
+    },
+    "development": {
+      "meaning": "HEAD atual e seus checks",
+      "head": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
+      "required_contexts": 7,
+      "green_contexts": 6,
+      "red_context": "portable-contract / windows-latest / Python 3.10",
+      "validate_run": 31853649373
+    }
+  },
+  "platform_support": {
+    "macos-arm64-m3": {
+      "artifact": true,
+      "portable_contract": true,
+      "native_exact_candidate": "E3",
+      "status": "conditional"
+    },
+    "macos-x64": {
+      "artifact": true,
+      "portable_contract": true,
+      "native_exact_candidate": false,
+      "status": "preview"
+    },
+    "linux-x86_64": {
+      "artifact": true,
+      "portable_contract": true,
+      "native_exact_candidate": false,
+      "status": "preview"
+    },
+    "windows-x64": {
+      "artifact": true,
+      "portable_contract": true,
+      "native_exact_candidate": false,
+      "status": "preview"
+    }
+  },
+  "conflicts": [
+    {
+      "id": "RT-01",
+      "statement": "release receipt public_acceptance aponta RC1 enquanto evidência final está separada",
+      "severity": "P1",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-02",
+      "statement": "README/site source/product/CLI não projetam a mesma audiência e baseline",
+      "severity": "P1",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-03",
+      "statement": "ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION",
+      "severity": "P1",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-04",
+      "statement": "cleanup --personal-data não cobre qw/demos como prometido",
+      "severity": "P1",
+      "gate": "0C/EP-1",
+      "state": "BLOCKED"
+    }
+  ],
+  "evidence": {
+    "m3_exact_candidate": {
+      "level": "E3",
+      "cases": 25,
+      "result": "pass"
+    },
+    "mirror_byte_equality": {
+      "level": "E2",
+      "result": "pass"
+    },
+    "independent_rebuild": {
+      "level": "E4",
+      "result": "not_observed"
+    }
+  },
+  "projection_policy": {
+    "user_facing_surfaces": [
+      "README",
+      "site",
+      "release page",
+      "PROJECT-STATUS",
+      "product.json",
+      "catalog.json",
+      "CLI status/version"
+    ],
+    "rule": "projeções devem derivar do ledger e nunca elevar audiência, suporte ou evidência"
+  }
+}

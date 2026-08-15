@@ -8,6 +8,16 @@ permitida. A política está formalizada no
 para usuários externos e operação TUF sustentável continuam no roadmap, mas
 não bloqueiam a primeira instalação desta fase.
 
+## Índice pós-1.0
+
+A auditoria Gauntlet pós-publicação e o Master Plan executável estão em
+[`docs/post-1.0/MASTER-PLAN.md`](post-1.0/MASTER-PLAN.md), vinculados à
+[issue #164](https://github.com/x86dx2/x86qw/issues/164). O estado atual é
+`MAIN=RED`, `TUF=HEALTHY`, `1.0.0 owner-only=AT-RISK` e
+`external-public=NO-GO`. A sequência obrigatória é 0A main verde, 0B TUF,
+0C verdade/audiência, 0D governança, 0E observação owner-only e só então
+EP-0–EP-5. A história pré-1.0 abaixo permanece preservada.
+
 Este é o índice estratégico da jornada da baseline pública `0.7.13` até
 `1.0.0`. O estado operacional presente está em
 [PROJECT-STATUS.md](PROJECT-STATUS.md); a execução detalhada, a auditoria das

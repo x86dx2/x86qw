@@ -1,0 +1,148 @@
+{
+  "schema": "x86qw-post-1.0-risk-register-v1",
+  "snapshot_commit": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
+  "observed_at": "2026-08-15T01:28:37Z/2026-08-15T01:55:48Z",
+  "scoring": "qualitative probability x impact; no high risk closes without evidence or accepted exception",
+  "risks": [
+    {
+      "id": "R-001",
+      "severity": "P0",
+      "statement": "CI required context red masks a contract regression",
+      "evidence": "31853649373 / Windows Python 3.10",
+      "gate": "0A",
+      "owner": "mantenedor",
+      "mitigation": "deterministic protocol and full matrix",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-002",
+      "severity": "P1",
+      "statement": "receipt or authority mismatch promotes wrong evidence",
+      "evidence": "release-receipt.json points RC1",
+      "gate": "0C",
+      "owner": "release owner",
+      "mitigation": "bind final receipt to exact candidate",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-003",
+      "severity": "P1",
+      "statement": "TUF lease expires without sustainable renewal",
+      "evidence": "timestamp expiry and unresolved custody",
+      "gate": "0B",
+      "owner": "TUF owner to assign",
+      "mitigation": "6 h alert, owner/backup, recovery drill",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-004",
+      "severity": "P1",
+      "statement": "transient endpoint reachability interrupts update",
+      "evidence": "independent probe timeout observed",
+      "gate": "0B",
+      "owner": "TUF operations",
+      "mitigation": "multi-vantage observation and fail-closed fallback",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-005",
+      "severity": "P1",
+      "statement": "87/87 ownership/SBOM entries remain unclassified",
+      "evidence": "published ownership.json/SBOM",
+      "gate": "0C",
+      "owner": "supply chain",
+      "mitigation": "classify each item or approve expiring exception",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-006",
+      "severity": "P1",
+      "statement": "cleanup leaves personal data or removes too much",
+      "evidence": "manager.py:1513-1522 versus promise",
+      "gate": "0C/EP-1",
+      "owner": "lifecycle owner",
+      "mitigation": "explicit contract, fixture, preservation and rollback",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-007",
+      "severity": "P1",
+      "statement": "single maintainer self-review misses release/trust error",
+      "evidence": "CODEOWNERS and collaborator snapshot",
+      "gate": "0D/0B",
+      "owner": "governance owner",
+      "mitigation": "independent Checker and custodian",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-008",
+      "severity": "P1",
+      "statement": "single package mirror becomes outage point",
+      "evidence": "GitHub/GitLab equality without redundancy proof",
+      "gate": "0C/EP-3",
+      "owner": "distribution owner",
+      "mitigation": "second mirror or accepted residual risk",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-009",
+      "severity": "P1",
+      "statement": "preview is communicated as supported without native evidence",
+      "evidence": "only M3 exact-candidate E3",
+      "gate": "EP-5",
+      "owner": "platform owner",
+      "mitigation": "per-platform E3 matrix",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-010",
+      "severity": "P1",
+      "statement": "external migration or soak fails after opening",
+      "evidence": "EP-1/EP-2 not executed",
+      "gate": "EP-1/EP-2",
+      "owner": "release owner",
+      "mitigation": "exact candidate, fixtures, seven-day reset rule",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-011",
+      "severity": "P1",
+      "statement": "QWLeague adapter uses unauthorized protocol or data",
+      "evidence": "no official API/OAuth/webhook contract",
+      "gate": "1.3",
+      "owner": "external integration owner",
+      "mitigation": "remain BLOCKED_EXTERNAL",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-012",
+      "severity": "P2",
+      "statement": "source/deployment drift misleads users",
+      "evidence": "0.7.13/RC1 source claims versus Latest",
+      "gate": "0C",
+      "owner": "documentation owner",
+      "mitigation": "ledger projections and drift lint",
+      "state": "AT-RISK"
+    },
+    {
+      "id": "R-013",
+      "severity": "P2",
+      "statement": "GitHub security controls are assumed from anonymous API gaps",
+      "evidence": "settings not independently authenticated",
+      "gate": "0D",
+      "owner": "security owner",
+      "mitigation": "dated authenticated evidence or explicit exception",
+      "state": "AT-RISK"
+    },
+    {
+      "id": "R-014",
+      "severity": "P2",
+      "statement": "roadmap process exceeds single-maintainer capacity",
+      "evidence": "many gates and no named owners",
+      "gate": "0D/EP-0",
+      "owner": "mantenedor",
+      "mitigation": "minutes budget, ranges, staged backlog",
+      "state": "AT-RISK"
+    }
+  ]
+}
