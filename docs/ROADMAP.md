@@ -24,9 +24,10 @@ As notas de release históricas, o RC público e o rascunho de `1.0.0` ficam em
 alinha os metadados compartilhados. A baseline preserva os bundles anteriores,
 os cinco jogos, os runtimes declarados e a distinção entre contratos portáveis e
 execução nativa. O Release Candidate público separado é
-`x86qw-installer-1.0.0-rc.1`; ele pode ser usado pelo mantenedor. O soak
-externo permanece estacionado e só volta a ser gate quando a audiência mudar
-para `external-public`.
+`x86qw-installer-1.0.0-rc.1`; a release final owner-only
+`x86qw-installer-1.0.0` também está publicada e pode ser usada pelo
+mantenedor. O soak externo permanece estacionado e só volta a ser gate quando
+a audiência mudar para `external-public`.
 O checkpoint
 `codex/stabilize-1.0@30e9d5b` é somente material de extração; não é merge,
 aprovação nem release.
@@ -57,10 +58,11 @@ só.
 8. **Aceitação owner-only — concluída:** instalação limpa no M3, lifecycle
    descartável, Frogbot, update, repair, purge e aceitação pública protegida
    pelo endpoint; evidência M3 e candidato imutável estão vinculados aos runs
-   registrados. A evidência durável será materializada pela promoção final.
-9. **PR H — `1.0.0` owner-only — em execução:** promover o candidato final
-   já preparado após o gate de promoção, com mirrors convergentes, assets de
-   evidência duráveis e metadata consistente.
+   registrados. A evidência durável foi materializada pela promoção final.
+9. **PR H — `1.0.0` owner-only — concluído:** o candidato final foi promovido
+   sem rebuild, com mirrors convergentes, assets de evidência duráveis,
+   metadata consistente e aceitação pública no M3. O registro está em
+   [`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md).
 10. **Transição external-public:** quando declarada pelo mantenedor, reativar
     migração, aceitação de usuários externos, soak protegido e operação TUF
     sustentável antes da promoção pública.

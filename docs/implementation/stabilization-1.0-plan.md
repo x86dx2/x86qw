@@ -7,12 +7,18 @@
 > migração e operação TUF sustentável abaixo são condicionais a
 > `release_audience=external-public`.
 
+> **Atualização de 2026-08-15:** o gate owner-only foi concluído e a release
+> `x86qw-installer-1.0.0` foi publicada. As seções abaixo preservam o plano e
+> as decisões da fase de preparação; o estado corrente está em
+> [PROJECT-STATUS.md](../PROJECT-STATUS.md) e o fechamento auditável está em
+> [1.0.0-owner-only-publication-2026-08-15.md](../releases/1.0.0-owner-only-publication-2026-08-15.md).
+
 | Campo | Valor |
 |---|---|
-| Estado | `1.0.0-rc.1` público; owner-only ativo; aceitação limpa, evidência M3 e gates de bytes em fechamento; gates externos estacionados |
+| Estado | `1.0.0` owner-only publicado e verificado; gates externos estacionados |
 | Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
 | Base canônica | `origin/main` |
-| Checkpoint auditável | `main@335d9a062f8ce33b226a9892de82979828a0fd1b`; RC `a8758ee27bebd7c72c24a31dc19335652e260c0a`; promoção `31752738047` |
+| Checkpoint auditável | produto `e12ed081b968f820f47200e4be954a4f444056a1`; promoção `31849932133` (tentativa 2 concluída) |
 | Versão alvo | `1.0.0` |
 | Data da auditoria | 2026-08-13, verificações finais em 2026-08-14 UTC |
 | Escopo desta entrega | política owner-only, evidência durável, aceitação limpa, cobertura M3 e gates de promoção; operação externa condicionada |
@@ -32,11 +38,11 @@ fonte de consulta para extração seletiva: **checkpoint para extração, nunca
 merge**. Nenhum commit de `codex/stabilize-1.0` será incorporado como unidade.
 
 O checkpoint histórico que originou este plano não autorizava publicação. A
-fotografia atual confirma que `1.0.0-rc.1` já é uma prerelease pública; este
-plano continua sem autorizar a promoção final, alteração dos bytes publicados
-ou publicação de metadata TUF fora do workflow protegido. A implementação local
-do fechamento dos gates está na branch `agent/rc-1.0-completion`, no `HEAD`
-verificável dessa branch. O preflight privado `1.0.0`
+fotografia de preparação confirmava que `1.0.0-rc.1` era uma prerelease
+pública; essa limitação foi superada pelo workflow protegido de promoção
+owner-only. O fechamento auditável está em
+[`1.0.0-owner-only-publication-2026-08-15.md`](../releases/1.0.0-owner-only-publication-2026-08-15.md).
+O preflight privado `1.0.0`
 da revisão de produto `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passou `25/25`
 casos no Apple M3 Pro, com `candidate.json` SHA-256
 `c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; isso
@@ -310,17 +316,19 @@ migração, operação TUF sustentável e handoffs externos.
 | nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
 | `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
 | `1.0.0-rc.1` | F e G executadas; aceitação pública v2 e evidência operacional registradas | RC público disponível; soak ainda não formalmente aberto |
-| `1.0.0` | H e gates da audiência escolhida | promoção sem correção funcional |
+| `1.0.0` | H e gates owner-only | publicada; gates external-public estacionados |
 
-O RC `1.0.0-rc.1` já foi criado, tagueado e publicado; a materialização desta
-implementação não altera seus bytes. Qualquer alteração de produto exige novo
-RC e reinício do soak. O mirror `gitlab/main` não é tratado como espelho
-confirmado fora da verificação registrada do RC.
+O RC `1.0.0-rc.1` foi criado, tagueado e publicado; a release final
+`1.0.0` também foi publicada para `owner-only`. A materialização desta
+documentação não altera bytes publicados. Qualquer alteração de produto exige
+novo candidato; o soak volta a ser gate quando a audiência for
+`external-public`. O mirror GitLab da release final foi confirmado no run
+`31849932133`.
 
 ## 7. Governança atual e limpeza futura
 
 As instruções históricas de controle abaixo foram substituídas pelo estado
-operacional do RC. As ações de limpeza continuam exigindo nova verificação e
+operacional da release final owner-only. As ações de limpeza continuam exigindo nova verificação e
 não podem remover evidência:
 
 1. não criar a tag histórica `audit/stabilize-1.0-2026-08-06` nem tratá-la como
@@ -370,17 +378,12 @@ A jornada só pode ser declarada concluída quando:
   coordenadas conferidas no recibo durável final;
 - nenhuma alteração funcional é escondida em uma PR de promoção.
 
-Para este checkpoint, a conclusão é mais estreita: os contratos locais passam,
-o publisher não recompila, a fixture pública 0.7.13 permanece arquivada, os
-workflows não possuem placeholders deliberados, a aceitação local limpa
-percorreu os endpoints públicos e o drill técnico TUF local
-passou renovação, expiração simulada e recuperação. O harness M3 local passou
-`25/25` no preflight privado `1.0.0` da revisão de produto
-`f2cadeff3261ce07f7c9490313db1aa69e417fa2`. O RC público já foi promovido,
-mas a implementação local ainda não é aprovação de `1.0.0`: faltam artifact e
-handoff protegido da aceitação limpa, evidência durável e novo candidato final.
-Operação TUF de produção, soak e migração permanecem estacionados para
-`external-public`.
+Para o escopo `owner-only`, a conclusão foi atingida: os contratos locais
+passam, o publisher não recompila, a fixture pública 0.7.13 permanece
+arquivada, a aceitação pública limpa percorreu os endpoints públicos, a
+evidência durável foi publicada, o candidato final foi promovido e a release
+foi verificada no M3. Operação TUF sustentável, soak externo e migração
+histórica permanecem estacionados para `external-public`.
 
 ## 10. Validação desta materialização
 

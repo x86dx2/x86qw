@@ -1,0 +1,29 @@
+{
+  "acceptance_scope": "single-user",
+  "bundle_sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8",
+  "candidate_version": "1.0.0",
+  "catalog_sha256": "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a",
+  "channel": "stable",
+  "format": 2,
+  "full_lifecycle": {
+    "acceptance_scope": "single-user",
+    "launcher": "x86qw.sh",
+    "operations": {
+      "changes": true,
+      "uninstall": true,
+      "uninstall_purge": true,
+      "update_apply": true,
+      "update_dry_run": true,
+      "update_idempotent": true,
+      "verify": true,
+      "version": true
+    },
+    "personal_data_preserved_by_uninstall": true,
+    "purge_removed_personal_data": true
+  },
+  "platform": "macos",
+  "profile": "complete",
+  "project": "x86qw",
+  "release": "latest",
+  "verified": true
+}
