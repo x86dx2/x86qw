@@ -88,7 +88,9 @@ repetição documental.
 
 ## Disposição das issues históricas
 
-Nenhuma mutação remota foi executada por esta frente.
+Foram publicados somente comentários de evidência em #148, #152 e #164.
+Nenhuma issue foi fechada/retargetada, nenhum label foi alterado e nenhuma
+issue do backlog foi criada automaticamente.
 
 - `#143`: tratar como soak histórico/superseded e abrir soak do candidato
   external-public exato;
