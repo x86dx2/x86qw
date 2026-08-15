@@ -342,10 +342,18 @@ jobs:
           import os
           import urllib.request
 
-          with urllib.request.urlopen(
-              "https://x86qw.x86.com.br/api/v1/release-truth.json",
-              timeout=30,
-          ) as response:
+          probe_url = (
+              "https://x86qw.x86.com.br/api/v1/release-truth.json?probe="
+              + os.environ["GITHUB_RUN_ID"]
+          )
+          request = urllib.request.Request(
+              probe_url,
+              headers={
+                  "Cache-Control": "no-cache",
+                  "User-Agent": "x86qw-site-projection-repair/1",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
               if response.status != 200:
                   raise SystemExit(f"release-truth HTTP {response.status}")
               data = json.load(response)
