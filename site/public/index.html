@@ -46,7 +46,7 @@
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="launch-note"><span aria-hidden="true"></span> Distribuição 0.7.13 pública e verificável</p>
+          <p class="launch-note"><span aria-hidden="true"></span> x86QW 1.0.0 publicada para owner-only · baseline fonte 0.7.13</p>
           <h1 id="hero-title">QuakeWorld,<br><strong>pronto para rodar.</strong></h1>
           <p class="hero-lead">O x86QW está reunindo o ezQuake mais recente, as customizações que fizeram o nQuake essencial e uma instalação verificável para três sistemas — sem esconder de onde cada arquivo veio.</p>
 
@@ -183,9 +183,9 @@
 
         <div class="install-now" id="instalar">
           <div class="install-now-copy">
-            <p>Instalação pública</p>
+            <p>Instalação owner-only</p>
             <h3>Um comando. Nenhum clone.</h3>
-            <p>Requer Python 3.10 ou mais recente, curl e unzip. O bootstrap limita e valida o script antes de executá-lo — um prefixo produzido por pipeline com falha nunca é aceito —, baixa a CLI enxuta, confere seu SHA-256, pergunta onde instalar e obtém cada conteúdo separadamente pelo catálogo publicado.</p>
+            <p>A release final baixável é owner-only; external-public continua NO-GO. Requer Python 3.10 ou mais recente, curl e unzip. O bootstrap limita e valida o script antes de executá-lo — um prefixo produzido por pipeline com falha nunca é aceito —, baixa a CLI enxuta, confere seu SHA-256, pergunta onde instalar e obtém cada conteúdo separadamente pelo catálogo publicado.</p>
           </div>
           <div class="install-command">
             <code data-install-command>/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2&gt;/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 &gt;"$f"; s=$?; n=$(wc -c &lt;"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." &gt;&amp;2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw</code>
@@ -217,6 +217,7 @@
           <p>Nesta fase, os pacotes vivem em GitHub Releases. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado.</p>
           <a href="/api/v1/catalog.json">Abrir catálogo de pacotes <span aria-hidden="true">↗</span></a>
           <a href="/api/v1/product.json">Abrir catálogo do produto <span aria-hidden="true">↗</span></a>
+          <a href="/api/v1/release-truth.json">Abrir verdade de release e audiência <span aria-hidden="true">↗</span></a>
         </div>
 
         <dl class="trust-ledger">

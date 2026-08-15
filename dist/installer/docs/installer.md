@@ -4,8 +4,11 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle público corrente é `0.7.13`, com 74 pacotes e 21 componentes
-registrados no catálogo. Essa versão confere o requisito Python por
+O bundle da árvore-fonte é a baseline `0.7.13`, com 74 pacotes e 21 componentes
+registrados no catálogo. A release final publicada é `1.0.0` e permanece
+`owner-only`: disponibilidade do artefato e GitHub Latest não autorizam
+usuários externos nem transformam as plataformas preview em suporte. Essa
+versão confere o requisito Python por
 `sys.version_info` antes de qualquer download ou mutação: macOS/Linux testam
 `python3` e `python`, nessa ordem; Windows testa `py -3`, `python3` e `python`.
 A instalação grava no launcher o executável validado e o launcher repete a
@@ -17,7 +20,13 @@ imutável no histórico.
 O instalador usa apenas a biblioteca padrão do Python.
 Esses fatos públicos são validados contra os inventários canônicos.
 
-## Instalação pública
+## Instalação owner-only
+
+O comando abaixo pertence ao fluxo publicado para o escopo `owner-only`. Antes
+de compartilhar ou automatizar o fluxo, consulte a [verdade de release e
+audiência](../../../docs/post-1.0/RELEASE-TRUTH-CURRENT.md). A transição para
+`external-public` exige decisão e os gates EP-0–EP-5; ela não é implícita pela
+existência do bootstrap.
 
 Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
 

@@ -86,8 +86,13 @@ o contrato de preview sem alegação de suporte nativo, porque os casos que
 dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
 O bootstrap público valida o instalador corrente por SHA-256, consulta o
-catálogo TUF público e pergunta onde instalar. A baseline estável é `0.7.13`;
-o candidato público separado é `1.0.0-rc.1`. O sistema atual é detectado
+catálogo TUF público e pergunta onde instalar. A árvore-fonte preserva a
+baseline `0.7.13`; a release final publicada é `1.0.0`, explicitamente
+`owner-only`. Ela é baixável e aparece como GitHub Latest, mas isso não é
+autorização `external-public` nem promessa de suporte para usuários externos.
+O candidato `1.0.0-rc.1` permanece apenas como histórico. Consulte a
+[verdade de release projetada](docs/post-1.0/RELEASE-TRUTH-CURRENT.md) antes de
+interpretar versão, audiência ou plataforma. O sistema atual é detectado
 automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
@@ -108,7 +113,8 @@ posterior. A baseline estável indicada acima é a `0.7.13`; o RC público não
 substitui seus bytes estáveis nem é tratado como GitHub Latest.
 Esta árvore de desenvolvimento ainda materializa a base local `0.7.3` para
 reprodução histórica; ela não substitui nem republica os bytes públicos
-`0.7.13`.
+`0.7.13`. Nenhum conteúdo desta árvore muda os bytes da release final
+`1.0.0 owner-only` sem um novo candidato promovido por digest.
 
 ## O que vem no x86QW
 
