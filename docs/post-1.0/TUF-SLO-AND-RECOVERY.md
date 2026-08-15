@@ -2,20 +2,29 @@
 
 ## Estado corrente
 
-Em 2026-08-15T15:38:43Z, a cadeia pública autenticou root v2,
-timestamp/snapshot/targets v18 e 75 pacotes. O timestamp expira em
-2026-08-15T21:09:01Z (aproximadamente 5,5 horas no momento da observação).
-Isso é **TUF=WARNING**, porque o workflow e o monitor usam janela de alerta de
-6 horas; a cadeia técnica ainda está íntegra. Uma consulta com limiar de 1 hora
-retornou saudável.
+Em 2026-08-15T18:25:49Z, a cadeia pública autenticou root v2, timestamp v19,
+snapshot/targets v18 e 75 pacotes. O timestamp expira em
+2026-08-16T18:15:26Z, fora da janela operacional de alerta de 6 horas.
+Verificações públicas independentes com limiares de 6h e 1h retornaram
+saudável.
 
-O alerta não foi renovado automaticamente. Nenhum signer, secret, workflow de
-publicação, endpoint, catálogo ou TUF foi alterado pela auditoria. A renovação
-precisa do operador/custódia autorizados.
+A renovação limitada foi executada sem alterar catálogo, root ou targets:
 
-## SLO proposto
+- renewal run: 31900570555;
+- renewal artifact: 9250972708;
+- timestamp: v18 → v19;
+- renewal report SHA-256:
+  7df96eee233384a0b5ea9e903c8c36ebfef62f79f05b91e4bef0ad8f6bb63a40.
 
-Os números abaixo continuam PROPOSAL até decisão operacional:
+O recovery drill técnico foi registrado no run 31900793093, artifact 9251029392,
+com status drill-passed, expiry failure detected e recovery verified. A
+publicação timestamp-only passou no run 31900914825, artifact 9251063517, e a
+verificação pública confirmou TUF, bootstraps e product. A issue #152 foi
+encerrada como alerta operacional resolvido.
+
+## SLO vigente/proposto
+
+Os números abaixo continuam PROPOSAL até decisão operacional formal:
 
 | Sinal | Meta proposta | Alerta | Ação |
 | --- | --- | --- | --- |
@@ -24,21 +33,24 @@ Os números abaixo continuam PROPOSAL até decisão operacional:
 | reachability do endpoint | medir por vantage independente | falha transitória | observar, registrar e usar fallback previsto |
 | recovery | exercício periódico com custódia independente | ausência de evidência | manter external-public=NO-GO |
 | divergência de bytes | zero | primeira divergência | não sobrescrever; preservar receipts |
+| recuperação de produção | RTO definido e exercitado | ausência de owner/backup | manter #148 aberto |
 
-## Gap operacional
+## Gap operacional residual
 
-Existe um drill técnico/local com chaves efêmeras e cinco testes aprovados
-(maintenance.tests.test_tuf_operation_drill). Isso não prova drill de
-produção, custódia independente, owner de backup ou RTO. O workflow
-tuf-operation-drill ainda não tem execução registrada. O run agendado imediatamente anterior à observação, 31893247113
-(15:37:38Z–15:37:55Z), falhou no limiar de 6 horas; o run anterior
-31890612670 foi bem-sucedido. A issue #152 continua aberta e não registra
-recuperação como estado.
+O drill técnico/local e o drill protegido provaram o protocolo de expiração,
+renovação limitada e recuperação sem publicação indevida. Eles não provam ainda
+custódia humana independente, backup custodian, owner de RTO de produção,
+cadência recorrente de exercícios ou sucessão. Esses gaps permanecem em #148 e
+mantêm external-public=NO-GO.
 
-## Runbook
+Os monitores agendados 31893247113 e 31898859941 falharam porque observaram a
+lease antiga dentro da janela de 6 horas; isso foi resolvido pela renovação v19.
+A publicação corrente foi verificada de forma independente após o deploy.
 
-1. Confirmar o alerta em uma rede independente e salvar timestamp, endpoint,
-   root usada e hora UTC.
+## Runbook resumido
+
+1. Confirmar alerta em uma rede independente e salvar timestamp, endpoint, root
+   e hora UTC.
 2. Colocar promoção/publicação em freeze; não trocar URL nem desabilitar TUF.
 3. Comparar timestamp, snapshot, targets e root com o receipt custodiado.
 4. Se apenas a lease expirou, executar o caminho limitado aprovado para
@@ -46,9 +58,9 @@ recuperação como estado.
 5. Restaurar metadata a partir do artefato custodiado, verificar assinaturas,
    versões e expirações antes de publicar.
 6. Repetir a verificação pública, registrar Checker, incidente e RTO.
-7. Manter NO-GO até a revisão pós-incidente fechar causas e prevenção.
+7. Manter external-public=NO-GO até a revisão pós-incidente e a custódia
+   independente fecharem as causas.
 
-**Não execute a renovação a partir desta auditoria.** O próximo passo operacional
-é um operador autorizado executar a cerimônia de renovação e recovery, ou
-retirar explicitamente o install claim antes do expiry se a operação não puder
-ser sustentada.
+Nenhuma renovação deve ser executada fora do workflow protegido sem autorização
+operacional equivalente. O próximo trabalho é sustentabilidade e recuperação
+repetível, não novas features.
