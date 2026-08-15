@@ -6,7 +6,7 @@ mais amplo. Nenhuma linha é uma issue remota criada por esta entrega.
 
 | ID | Prioridade | Gap | Estado | Evidência | Gate | Próxima prova |
 | --- | --- | --- | --- | --- | --- | --- |
-| G-001 | P1 | contrato Windows 3.10 vermelho; fake/protocolo e 10 ms não determinísticos | BLOCKED / INFERENCE | run `31853649373` | 0A | reproduzir com clock controlado e matriz 3.10/3.13 |
+| G-001 | P1 | contrato Windows 3.10 vermelho; fake/protocolo e 10 ms não determinísticos | RESOLVED — Gate 0A PASS | runs `31889777779`, `31891151438` | 0A | manter zero-flake e regressões determinísticas |
 | G-002 | P1 | source/release/deployment/development e audiência em drift | BLOCKED | auditoria | 0C | matriz de autoridade reconciliada |
 | G-003 | P1 | receipt final aponta public acceptance para RC1 | BLOCKED | receipt versus evidência final | 0C | receipt final coerente com tag/candidato |
 | G-004 | P1 | ownership/SBOM `87/87` `unclassified`/`NOASSERTION` | BLOCKED | relatório de release | 0C | classificação ou exceção aprovada por item |

@@ -9,8 +9,8 @@ prova de deploy live.
 ## Estado observado
 
 - `MAIN=GREEN` após o merge do Gate 0A e do Master Plan; o run
-  `31890091394` concluiu os sete contexts protegidos com sucesso no SHA
-  `7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747`.
+  `31891151438` concluiu os sete contexts protegidos com sucesso no SHA
+  `aca90abc352dee1c30e842afb591da33870d0ca5`.
 - `TUF=HEALTHY` é a saúde técnica da lease observada, não prova de custódia,
   backup ou recovery de produção. #148 e #152 permanecem abertos.
 - `1.0.0 owner-only=AT-RISK`: os bytes e digests publicados permanecem
@@ -25,7 +25,7 @@ prova de deploy live.
 | source | baseline versionada `0.7.13` | release Latest |
 | candidate/release | `1.0.0`, digest do instalador/candidato e audiência `owner-only` | HEAD atual |
 | deployment | site/catalog/product/TUF servidos; deploy live ainda exige verificação | source tree |
-| development | `main@7d5eb94a…`, Validate `31890091394` | bytes publicados |
+| development | `main@aca90aba…`, Validate `31891151438` | bytes publicados |
 
 Na observação live de `2026-08-15T14:43:32Z`, o product e o catálogo já
 serviam `1.0.0`, mas o product ainda não tinha `release_truth_url`, o hero

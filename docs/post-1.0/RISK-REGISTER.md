@@ -6,7 +6,7 @@ fechado.
 
 | ID | Risco | P | I | Score | Estado | Gate | Mitigação |
 | --- | --- | ---: | ---: | --- | --- | --- | --- |
-| R-001 | CI vermelho mascara regressão no contrato Windows | alta | alta | high | BLOCKED | 0A | protocolo determinístico e matriz 3.10/3.13 |
+| R-001 | CI vermelho mascara regressão no contrato Windows | alta | alta | high | MITIGATED | 0A | protocolo determinístico, matriz verde e orçamento de flake zero |
 | R-002 | receipt/autoridade errada promove ou comunica bytes incorretos | média | crítica | high | BLOCKED | 0C | reconciliação candidate/receipt/evidência final |
 | R-003 | lease TUF expira sem renovação ou recovery | média | crítica | high | BLOCKED | 0B | alerta 6 h, custódia independente, drill |
 | R-004 | reachability transitória interrompe update público | média | alta | high | AT-RISK | 0B | observação independente, freeze e mirror |

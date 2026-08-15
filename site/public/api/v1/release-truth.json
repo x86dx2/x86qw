@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T14:38:25Z",
-  "snapshot_commit": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
+  "observed_at_utc": "2026-08-15T15:01:22Z",
+  "snapshot_commit": "aca90abc352dee1c30e842afb591da33870d0ca5",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -52,15 +52,15 @@
         "targets_version": 18,
         "timestamp_expiry": "2026-08-15T21:09:01Z",
         "warning_hours": 6,
-        "last_authenticated_at_utc": "2026-08-15T14:38:25Z",
+        "last_authenticated_at_utc": "2026-08-15T15:01:22Z",
         "technical_lease": "healthy",
         "production_custody_recovery": "not_proven"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
-      "validate_run": 31890091394,
+      "head": "aca90abc352dee1c30e842afb591da33870d0ca5",
+      "validate_run": 31891151438,
       "required_contexts": 7,
       "required_contexts_status": "green"
     }

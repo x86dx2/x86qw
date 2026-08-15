@@ -67,7 +67,7 @@ para em `acceptance`; não se “corrige” por copiar um hash em um documento.
 | L05 | distribuição e composição | catálogo/licenças existem; matriz única pendente | 0D | Distribution |
 | L06 | proveniência, licença e marca | ownership/SBOM 87/87 sem classificação | 0C | Licensing |
 | L07 | bootstrap/instalação/first run | claims e endpoint precisam reconciliar | 0C | Fresh Machine |
-| L08 | download/cache/mirrors/TUF | main/teste e operação TUF bloqueiam | 0A–0B | Network/TUF |
+| L08 | download/cache/mirrors/TUF | DNS determinístico e main verdes; custódia/recovery e drift de deployment bloqueiam | 0B–0C | Network/TUF |
 | L09 | lifecycle da instalação | migração/preservação externa pendentes | EP-1 | Data Preservation |
 | L10 | CLI/TUI | contrato público preservado; tarefas a mapear | 1.1 | Terminal UX |
 | L11 | UI local | somente plano read-only, sem servidor nesta fase | 1.1/ADR | Local Web Security |
@@ -83,7 +83,7 @@ para em `acceptance`; não se “corrige” por copiar um hash em um documento.
 | L21 | plataformas/empacotamento | somente M3 tem E3 do candidato | EP-5 | Native Platform |
 | L22 | segurança/privacidade/abuso | settings remotos exigem evidência autenticada | 0D | Adversarial Security |
 | L23 | supply chain/release engineering | build-once forte; receipt/SBOM gaps | 0B/0C | Supply Chain |
-| L24 | qualidade/determinismo/testes | required context vermelho | 0A | Test Strategy |
+| L24 | qualidade/determinismo/testes | matriz protegida verde; zero-flake e regressões temporais mantidos | 0A | Test Strategy |
 | L25 | performance/confiabilidade | baseline de medição pendente | após 0C | Performance |
 | L26 | acessibilidade/i18n | pt-BR/en e gates futuros | 1.1 | Accessibility/I18n |
 | L27 | comunidade/sustentabilidade | suporte, bus factor e carga pendentes | 0D/EP-0 | Community |

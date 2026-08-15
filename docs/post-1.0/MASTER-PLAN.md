@@ -44,7 +44,7 @@ produto.
 
 | Gate | Entrada | Saída exigida | Estado |
 | --- | --- | --- | --- |
-| 0A — main verde | run `31890091394` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
+| 0A — main verde | run `31891151438` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
 | 0B — TUF sustentável | TUF v2/v18 saudável | custódia, renovação, recuperação e SLO observados em produção | BLOCKED |
 | 0C — release truth/audience | hashes E2/E3 e receipt | autoridades reconciliadas, receipt aponta evidência final, audiência explícita | BLOCKED |
 | 0D — backlog/governance | registers e Maker/Checker | issues locais completas, decisão e rollback registrados | PROPOSAL |
