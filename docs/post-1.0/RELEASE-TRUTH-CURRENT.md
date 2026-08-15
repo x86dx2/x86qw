@@ -26,6 +26,12 @@ prova de deploy live.
 | deployment | site/catalog/product/TUF servidos; deploy live ainda exige verificação | source tree |
 | development | `main@2749d6b…`, Validate `31888249914` | bytes publicados |
 
+Na observação live de `2026-08-15T14:05:00Z`, o product e o catálogo já
+serviam `1.0.0`, mas o product ainda não tinha `release_truth_url`, o hero
+continha a claim `0.7.13` e não dizia `owner-only`. Isso é
+`DRIFT_PENDING_DEPLOYMENT`: o PR corrige a source projection, mas nenhum site,
+catálogo ou TUF foi publicado nesta etapa.
+
 `owner-only` significa que o fluxo publicado é destinado ao mantenedor/escopo
 single-user documentado. Não significa que o artefato esteja privado, que o
 GitHub Latest seja um canal de suporte externo ou que as plataformas preview

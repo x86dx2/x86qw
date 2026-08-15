@@ -29,6 +29,15 @@
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "source_projection_baseline": "0.7.13",
       "audience_claim": "owner-only",
+      "live_observation": {
+        "observed_at_utc": "2026-08-15T14:05:00Z",
+        "product_version": "1.0.0",
+        "catalog_current_installer": "1.0.0",
+        "product_has_release_truth_url": false,
+        "site_hero_contains_source_baseline": true,
+        "site_hero_contains_owner_only": false,
+        "state": "DRIFT_PENDING_DEPLOYMENT"
+      },
       "tuf": {
         "root_version": 2,
         "timestamp_version": 18,
