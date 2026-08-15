@@ -225,7 +225,7 @@ jobs:
           actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
           test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
           python3 maintenance/tools/release_candidate.py verify candidate
-          actual_report="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())'")
+          actual_report="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())')"
           test "$actual_report" = "$EXPECTED_REPORT_SHA256"
           mapfile -t catalogs < <(find source-tuf/targets -type f -name '*.catalog.json' -print | sort)
           test "${#catalogs[@]}" -eq 1
