@@ -138,8 +138,8 @@ jobs:
           [[ "$RENEWAL_ARTIFACT_NAME" =~ ^tuf-timestamp-renewal-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
           [[ "$RENEWAL_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$TIMESTAMP_KEY_ID" =~ ^[0-9a-f]{64}$ ]]
-          test "$SOURCE_ARTIFACT_NAME" = "tuf-metadata-$CANDIDATE_COMMIT-"*
-          test "$RENEWAL_ARTIFACT_NAME" = "tuf-timestamp-renewal-$CANDIDATE_COMMIT-"*
+          [[ "$SOURCE_ARTIFACT_NAME" == tuf-metadata-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$RENEWAL_ARTIFACT_NAME" == tuf-timestamp-renewal-"$CANDIDATE_COMMIT"-* ]]
       - name: Verify exact candidate handoff provenance
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -222,12 +222,10 @@ jobs:
           EXPECTED_KEY_ID: ${{ inputs.tuf_timestamp_key_id }}
         run: |
           set -euo pipefail
-          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())"
-          )"
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
           test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
           python3 maintenance/tools/release_candidate.py verify candidate
-          actual_report="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())"
-          )"
+          actual_report="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())'")
           test "$actual_report" = "$EXPECTED_REPORT_SHA256"
           mapfile -t catalogs < <(find source-tuf/targets -type f -name '*.catalog.json' -print | sort)
           test "${#catalogs[@]}" -eq 1
@@ -296,6 +294,12 @@ jobs:
           source_projection = Path("release-work/site-source")
           import shutil
           shutil.copytree(source, source_projection)
+          headers = source_projection / "_headers"
+          headers.write_text(
+              headers.read_text(encoding="utf-8")
+              + "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n\n/api/v1/release-truth.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n",
+              encoding="utf-8",
+          )
           (source_projection / "api/v1/release-truth.json").write_bytes(
               Path("release-work/projection-overlay.json").read_bytes()
           )
