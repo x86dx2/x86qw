@@ -30,12 +30,13 @@
       "source_projection_baseline": "0.7.13",
       "audience_claim": "owner-only",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T14:05:00Z",
+        "observed_at_utc": "2026-08-15T14:43:32Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "product_has_release_truth_url": false,
         "site_hero_contains_source_baseline": true,
         "site_hero_contains_owner_only": false,
+        "site_install_owner_only": false,
         "state": "DRIFT_PENDING_DEPLOYMENT"
       },
       "source_projection_merge": {

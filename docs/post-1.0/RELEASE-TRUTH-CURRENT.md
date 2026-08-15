@@ -27,7 +27,7 @@ prova de deploy live.
 | deployment | site/catalog/product/TUF servidos; deploy live ainda exige verificação | source tree |
 | development | `main@7d5eb94a…`, Validate `31890091394` | bytes publicados |
 
-Na observação live de `2026-08-15T14:05:00Z`, o product e o catálogo já
+Na observação live de `2026-08-15T14:43:32Z`, o product e o catálogo já
 serviam `1.0.0`, mas o product ainda não tinha `release_truth_url`, o hero
 continha a claim `0.7.13` e não dizia `owner-only`. Isso é
 `DRIFT_PENDING_DEPLOYMENT`: o PR #169 corrigiu e mesclou a source projection,
