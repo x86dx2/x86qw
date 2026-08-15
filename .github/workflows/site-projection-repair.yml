@@ -317,14 +317,15 @@ jobs:
           npm ci
           node_modules/.bin/wrangler deploy \
             --config ../site/wrangler.jsonc \
-            --dry-run
+            --dry-run \
+            --assets ../release-work/public
       - name: Deploy the projection repair (no release or TUF metadata publication)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
-          site/node_modules/.bin/wrangler deploy --config site/wrangler.jsonc
+          site/node_modules/.bin/wrangler deploy --config site/wrangler.jsonc --assets release-work/public
       - name: Verify public projection, TUF and owner-only audience
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
