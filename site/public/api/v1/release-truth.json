@@ -1,10 +1,10 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T15:38:43Z",
-  "snapshot_commit": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
+  "observed_at_utc": "2026-08-15T18:25:49Z",
+  "snapshot_commit": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
   "status": {
     "main": "GREEN",
-    "tuf": "WARNING",
+    "tuf": "HEALTHY",
     "owner_only_release": "AT-RISK",
     "external_public": "NO-GO",
     "feature_work": "BLOCKED"
@@ -41,10 +41,11 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T15:23:00Z",
+        "observed_at_utc": "2026-08-15T18:25:49Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "404",
+        "product_release_audience": null,
         "root_site_hero": "Distribuição 0.7.13 pública e verificável",
         "root_mentions_owner_only": false,
         "state": "SOURCE_DEPLOYMENT_DRIFT"
@@ -57,24 +58,27 @@
       },
       "tuf": {
         "root_version": 2,
-        "timestamp_version": 18,
+        "timestamp_version": 19,
         "snapshot_version": 18,
         "targets_version": 18,
         "packages_observed": 75,
-        "timestamp_expiry": "2026-08-15T21:09:01Z",
-        "seconds_to_expiry_at_observation": 19818,
+        "timestamp_expiry": "2026-08-16T18:15:26Z",
+        "seconds_to_expiry_at_observation": 85800,
         "warning_hours": 6,
-        "monitor_warning_6h": "failed_threshold",
+        "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
         "technical_chain": "authenticated",
-        "operational_status": "WARNING",
-        "production_custody_recovery": "not_proven"
+        "operational_status": "HEALTHY",
+        "production_custody_recovery": "drill-registered; independent custody/RTO pending",
+        "renewal_run_id": 31900570555,
+        "recovery_drill_run_id": 31900793093,
+        "publication_run_id": 31900914825
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
-      "validate_run": 31891985767,
+      "head": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
+      "validate_run": 31896128822,
       "required_protected_contexts": 7,
       "protected_contexts_green": "7/7",
       "validate_jobs": "8/8"
@@ -127,17 +131,24 @@
     },
     {
       "id": "RT-06",
-      "severity": "P0_OPERATIONAL",
-      "statement": "timestamp TUF autenticado entrou na janela operacional de alerta de 6h",
+      "severity": "P1_OPERATIONAL",
+      "statement": "timestamp v19 foi renovado, publicado e verificado; sustentabilidade independente permanece em #148",
       "gate": "0B",
-      "state": "AT-RISK"
+      "state": "RESOLVED_TECHNICAL_RESIDUAL_SUSTAINABILITY"
+    },
+    {
+      "id": "RT-07",
+      "severity": "P1",
+      "statement": "product.json live não expõe release_audience e /api/v1/release-truth.json continua 404",
+      "gate": "0C",
+      "state": "BLOCKED"
     }
   ],
   "evidence": {
     "main_green": {
       "level": "E2",
-      "run_id": 31891985767,
-      "commit": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
+      "run_id": 31896128822,
+      "commit": "493cedb2344085b4f5d1f4a04b2217247e8f945d",
       "result": "pass"
     },
     "m3_exact_candidate": {
@@ -160,6 +171,33 @@
     "harness_qualification": {
       "level": "E1",
       "statement": "native_case_entrypoint.py injects installation_version into the fixture before invoking migration"
+    },
+    "tuf_renewal": {
+      "level": "E2",
+      "run_id": 31900570555,
+      "artifact_id": 9250972708,
+      "artifact_sha256": "02ebf0134579cc736b7200516986ca428e78f917c5ea7918be0bb6a7723175b0",
+      "timestamp_version": "18->19",
+      "published": false
+    },
+    "tuf_recovery_drill": {
+      "level": "E2",
+      "run_id": 31900793093,
+      "artifact_id": 9251029392,
+      "artifact_sha256": "22a207a2ee2b46cf7bf88d81d0c6ab8c94fd4d90b4a5a7f49f9747d0c3150e6d",
+      "report_sha256": "7df96eee233384a0b5ea9e903c8c36ebfef62f79f05b91e4bef0ad8f6bb63a40",
+      "result": "drill-passed",
+      "published": false
+    },
+    "tuf_publication": {
+      "level": "E2",
+      "run_id": 31900914825,
+      "artifact_id": 9251063517,
+      "artifact_sha256": "1dbd59b777f8e22b1d944ad707f0f2f47038bef1f2084e97c5d622295e3a5612",
+      "changed_files": [
+        "metadata/timestamp.json"
+      ],
+      "result": "verified-timestamp-publication"
     }
   },
   "projection_policy": {
@@ -168,7 +206,7 @@
     "rule": "nenhuma superfície pode elevar audiência, suporte ou evidência; artifact availability não equivale a external-public"
   },
   "open_gates": [
-    "0B-warning-renewal-custody-recovery",
+    "0B-sustainable-custody-backup-RTO",
     "0C-final-projection-drift",
     "0D-governance",
     "0E-owner-only-observation",
