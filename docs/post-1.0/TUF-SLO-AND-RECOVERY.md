@@ -30,9 +30,10 @@ Os números abaixo continuam PROPOSAL até decisão operacional:
 Existe um drill técnico/local com chaves efêmeras e cinco testes aprovados
 (maintenance.tests.test_tuf_operation_drill). Isso não prova drill de
 produção, custódia independente, owner de backup ou RTO. O workflow
-tuf-operation-drill ainda não tem execução registrada. O monitor agendado
-teve última execução observada com sucesso, mas a issue #152 continua aberta e
-não registra recuperação como estado.
+tuf-operation-drill ainda não tem execução registrada. O run agendado imediatamente anterior à observação, 31893247113
+(15:37:38Z–15:37:55Z), falhou no limiar de 6 horas; o run anterior
+31890612670 foi bem-sucedido. A issue #152 continua aberta e não registra
+recuperação como estado.
 
 ## Runbook
 

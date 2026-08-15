@@ -39,8 +39,8 @@ o instalador (E2); convergência de todas as superfícies permanece desconhecida
 O instalador público exato x86qw-installer-0.7.13.zip
 (SHA-256 11460440…) foi instalado em destino descartável e submetido ao CLI
 final 1.0.0. A operação migrate foi bloqueada porque o estado histórico não
-possui uma versão autenticada. Isso é uma reprodução E2 do caminho público,
-não uma falha de bytes automaticamente atribuída ao runtime.
+possui uma versão autenticada. Isso é uma observação local E1 do caminho público; nenhum log ou receipt durável desta execução foi anexado,
+não uma falha de bytes automaticamente atribuída ao runtime nem uma aprovação de migração.
 
 A evidência nativa final declara migration-0.7.13-real como aprovada, mas o
 harness versionado em maintenance/native_case_entrypoint.py injeta

@@ -51,7 +51,7 @@
       },
       "package_mirrors": {
         "github_gitlab_installer": "byte_equal",
-        "evidence_level": "E2",
+        "evidence_level": "E1",
         "independent_rebuild": false,
         "scope": "installer_only"
       },
@@ -154,7 +154,7 @@
       "result": "not_observed"
     },
     "public_legacy_migration": {
-      "level": "E2",
+      "level": "E1",
       "result": "blocked"
     },
     "harness_qualification": {
