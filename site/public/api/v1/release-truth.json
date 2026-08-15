@@ -1,10 +1,10 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T15:01:22Z",
-  "snapshot_commit": "aca90abc352dee1c30e842afb591da33870d0ca5",
+  "observed_at_utc": "2026-08-15T15:38:43Z",
+  "snapshot_commit": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
   "status": {
     "main": "GREEN",
-    "tuf": "HEALTHY",
+    "tuf": "WARNING",
     "owner_only_release": "AT-RISK",
     "external_public": "NO-GO",
     "feature_work": "BLOCKED"
@@ -19,63 +19,164 @@
       "meaning": "bytes construídos uma vez e promovidos por digest",
       "tag": "x86qw-installer-1.0.0",
       "version": "1.0.0",
+      "target_commit": "e12ed081b968f820f47200e4be954a4f444056a1",
       "audience": "owner-only",
       "external_public_authorized": false,
+      "installer_size_bytes": 600825,
       "installer_sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8",
       "candidate_sha256": "0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21",
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-installer-1.0.0"
+      "receipt_public_acceptance": {
+        "version": "1.0.0-rc.1",
+        "run_id": 31845951477,
+        "artifact_id": 9235987853,
+        "bundle_sha256": "9600be7eb2ed14e23b2eeb079bd6aa0e4611f996be0c89741fda12587eb7fed8"
+      },
+      "exact_native_evidence": {
+        "level": "E3",
+        "platform": "macOS-ARM64",
+        "hardware": "Apple M3 Pro",
+        "cases": 25
+      }
     },
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
-      "source_projection_baseline": "0.7.13",
-      "audience_claim": "owner-only",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T14:43:32Z",
+        "observed_at_utc": "2026-08-15T15:23:00Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
-        "product_has_release_truth_url": false,
-        "site_hero_contains_source_baseline": true,
-        "site_hero_contains_owner_only": false,
-        "site_install_owner_only": false,
-        "state": "DRIFT_PENDING_DEPLOYMENT"
+        "release_truth_endpoint": "404",
+        "root_site_hero": "Distribuição 0.7.13 pública e verificável",
+        "root_mentions_owner_only": false,
+        "state": "SOURCE_DEPLOYMENT_DRIFT"
       },
-      "source_projection_merge": {
-        "commit": "7d5eb94a0cc5a26f52d2caae77f69ecfbb9fa747",
-        "pull_request": 169,
-        "validated_run": 31890091394,
-        "state": "MERGED_SOURCE_NOT_DEPLOYED"
+      "package_mirrors": {
+        "github_gitlab_installer": "byte_equal",
+        "evidence_level": "E1",
+        "independent_rebuild": false,
+        "scope": "installer_only"
       },
       "tuf": {
         "root_version": 2,
         "timestamp_version": 18,
         "snapshot_version": 18,
         "targets_version": 18,
+        "packages_observed": 75,
         "timestamp_expiry": "2026-08-15T21:09:01Z",
+        "seconds_to_expiry_at_observation": 19818,
         "warning_hours": 6,
-        "last_authenticated_at_utc": "2026-08-15T15:01:22Z",
-        "technical_lease": "healthy",
+        "monitor_warning_6h": "failed_threshold",
+        "monitor_warning_1h": "healthy",
+        "technical_chain": "authenticated",
+        "operational_status": "WARNING",
         "production_custody_recovery": "not_proven"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "aca90abc352dee1c30e842afb591da33870d0ca5",
-      "validate_run": 31891151438,
-      "required_contexts": 7,
-      "required_contexts_status": "green"
+      "head": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
+      "validate_run": 31891985767,
+      "required_protected_contexts": 7,
+      "protected_contexts_green": "7/7",
+      "validate_jobs": "8/8"
     }
   },
-  "platform_support": {
-    "macos-arm64-m3": {"artifact": true, "portable_contract": true, "native_exact_candidate": "E3", "status": "conditional"},
-    "macos-x64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"},
-    "linux-x86_64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"},
-    "windows-x64": {"artifact": true, "portable_contract": true, "native_exact_candidate": false, "status": "preview"}
+  "migration_observation": {
+    "exact_legacy_installer_version": "0.7.13",
+    "exact_legacy_installer_sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
+    "final_cli_version": "1.0.0",
+    "result": "BLOCKED",
+    "message": "A migração foi bloqueada por conflitos preservados: .x86qw: the historical installer version is not authenticated",
+    "evidence_level": "E1",
+    "qualification": "public exact-installer reproduction; not an external-public approval"
+  },
+  "conflicts": [
+    {
+      "id": "RT-01",
+      "severity": "P1",
+      "statement": "receipt public_acceptance aponta RC1 enquanto a evidência M3 final está separada",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-02",
+      "severity": "P1",
+      "statement": "site live preserva claim 0.7.13 e não projeta owner-only; product/catalog servem 1.0.0",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-03",
+      "severity": "P1",
+      "statement": "ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION",
+      "gate": "0C",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-04",
+      "severity": "P1",
+      "statement": "cleanup --personal-data não cobre qw/demos prometidos",
+      "gate": "0C/EP-1",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-05",
+      "severity": "P1",
+      "statement": "migração do instalador público 0.7.13 exato não reproduz a aprovação do harness M3",
+      "gate": "EP-1",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "RT-06",
+      "severity": "P0_OPERATIONAL",
+      "statement": "timestamp TUF autenticado entrou na janela operacional de alerta de 6h",
+      "gate": "0B",
+      "state": "AT-RISK"
+    }
+  ],
+  "evidence": {
+    "main_green": {
+      "level": "E2",
+      "run_id": 31891985767,
+      "commit": "fdd5a7267ec85674db70344b546ffc6a56417cb2",
+      "result": "pass"
+    },
+    "m3_exact_candidate": {
+      "level": "E3",
+      "cases": 25,
+      "result": "pass"
+    },
+    "mirror_byte_equality": {
+      "level": "E2",
+      "result": "pass"
+    },
+    "independent_rebuild": {
+      "level": "E4",
+      "result": "not_observed"
+    },
+    "public_legacy_migration": {
+      "level": "E1",
+      "result": "blocked"
+    },
+    "harness_qualification": {
+      "level": "E1",
+      "statement": "native_case_entrypoint.py injects installation_version into the fixture before invoking migration"
+    }
   },
   "projection_policy": {
     "source_of_truth": "docs/post-1.0/release-truth-current.json",
     "public_projection": "/api/v1/release-truth.json",
-    "product_reference": "/api/v1/release-truth.json",
     "rule": "nenhuma superfície pode elevar audiência, suporte ou evidência; artifact availability não equivale a external-public"
   },
-  "open_gates": ["0B-production-custody-recovery", "0C-final-projection-drift", "0D-governance", "0E-owner-only-observation", "EP-0", "EP-1", "EP-2", "EP-3", "EP-4", "EP-5"]
+  "open_gates": [
+    "0B-warning-renewal-custody-recovery",
+    "0C-final-projection-drift",
+    "0D-governance",
+    "0E-owner-only-observation",
+    "EP-0",
+    "EP-1",
+    "EP-2",
+    "EP-3",
+    "EP-4",
+    "EP-5"
+  ]
 }
