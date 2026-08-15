@@ -11,7 +11,7 @@ smoke M3 não remove esses pré-requisitos.
 
 | Gate | Exigência | Evidência atual | Estado |
 | --- | --- | --- | --- |
-| 0A | main verde e matriz Windows 3.10/3.13 | `31853649373` vermelho em Windows/Python 3.10 | BLOCKED |
+| 0A | main verde e matriz Windows 3.10/3.13 | `31891151438` verde em todos os 7 contexts protegidos | PASS |
 | 0B | TUF sustentável, custódia e recovery | TUF v2/v18 saudável; custódia/recovery ausentes | BLOCKED |
 | 0C | receipt, candidate, audiência e digests coerentes | `public_acceptance` aponta RC1; evidência final separada | BLOCKED |
 | 0D | backlog, Maker/Checker e rollback completos | este pacote propõe os registros; aprovação pendente | PROPOSAL |

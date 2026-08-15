@@ -5,7 +5,7 @@
 | Estação | Conteúdo | Gate de saída | Estado |
 | --- | --- | --- | --- |
 | T0 | `origin/main`, baseline e audit snapshot | baseline datada | VERIFIED FACT |
-| T1 | CI portátil e contrato Windows | 0A verde | BLOCKED |
+| T1 | CI portátil e contrato Windows | 0A verde | PASS |
 | T2 | TUF operação/recovery | 0B sustentável | BLOCKED |
 | T3 | release truth, receipt e audiência | 0C coerente | BLOCKED |
 | T4 | backlog, Maker/Checker e riscos | 0D fechado | PROPOSAL |
@@ -34,7 +34,7 @@
 A carga observada é a tag `x86qw-installer-1.0.0`, commit de produto
 `e12ed081...`, instalador `d3274e...`, candidate `0bde05...`, E2 GitHub/GitLab
 e E3 M3 `25/25`; não há E4. Ela não pode ser tratada como uma carga externa
-pronta porque T1–T6 estão incompletos na fotografia.
+pronta porque T2–T6 estão incompletos na fotografia corrente.
 
 ## Handoff entre estações
 
