@@ -257,7 +257,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          source = Path("site/public")
+          source = Path("candidate/site/public")
           projection = source / "api/v1/release-truth.json"
           if not projection.is_file():
               raise SystemExit("site source lacks release-truth projection")
