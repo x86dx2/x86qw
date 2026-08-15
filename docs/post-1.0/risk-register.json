@@ -1,0 +1,154 @@
+{
+  "schema": "x86qw-post-1.0-risk-register-v1",
+  "snapshot_commit": "1c5609f5027611f54be73d0df23042020464de01",
+  "observed_at": "2026-08-15T23:00:00Z",
+  "scoring": "qualitative probability x impact; no high risk closes without evidence or accepted exception",
+  "risks": [
+    {
+      "id": "R-001",
+      "severity": "P0",
+      "statement": "CI required context red masks a contract regression",
+      "evidence": "31853649373 / Windows Python 3.10",
+      "gate": "S0-M3",
+      "owner": "mantenedor",
+      "mitigation": "deterministic protocol and full matrix",
+      "state": "MITIGATED"
+    },
+    {
+      "id": "R-002",
+      "severity": "P1",
+      "statement": "receipt or authority mismatch promotes wrong evidence",
+      "evidence": "release-receipt.json points RC1",
+      "gate": "S0-M3",
+      "owner": "release owner",
+      "mitigation": "bind final receipt to exact candidate",
+      "state": "IN_PROGRESS"
+    },
+    {
+      "id": "R-003",
+      "severity": "P1",
+      "statement": "TUF lease expires without sustainable renewal",
+      "evidence": "timestamp expiry and unresolved custody",
+      "gate": "owner-only",
+      "owner": "TUF owner to assign",
+      "mitigation": "6 h alert, owner/backup, recovery drill",
+      "state": "CONTROLLED"
+    },
+    {
+      "id": "R-004",
+      "severity": "P1",
+      "statement": "transient endpoint reachability interrupts update",
+      "evidence": "independent probe timeout observed",
+      "gate": "owner-only",
+      "owner": "TUF operations",
+      "mitigation": "multi-vantage observation and fail-closed fallback",
+      "state": "CONTROLLED"
+    },
+    {
+      "id": "R-005",
+      "severity": "P1",
+      "statement": "87/87 ownership/SBOM entries remain unclassified",
+      "evidence": "published ownership.json/SBOM",
+      "gate": "external-public",
+      "owner": "supply chain",
+      "mitigation": "classify each item or approve expiring exception",
+      "state": "DEFERRED_EXTERNAL"
+    },
+    {
+      "id": "R-006",
+      "severity": "P1",
+      "statement": "cleanup leaves personal data or removes too much",
+      "evidence": "manager.py:1513-1522 versus promise",
+      "gate": "owner-only",
+      "owner": "lifecycle owner",
+      "mitigation": "explicit contract, fixture, preservation and rollback",
+      "state": "CONTROLLED"
+    },
+    {
+      "id": "R-007",
+      "severity": "P1",
+      "statement": "single maintainer self-review misses release/trust error",
+      "evidence": "CODEOWNERS and collaborator snapshot",
+      "gate": "external-public",
+      "owner": "governance owner",
+      "mitigation": "independent Checker and custodian",
+      "state": "DEFERRED_EXTERNAL"
+    },
+    {
+      "id": "R-008",
+      "severity": "P1",
+      "statement": "single package mirror becomes outage point",
+      "evidence": "GitHub/GitLab equality without redundancy proof",
+      "gate": "owner-only",
+      "owner": "distribution owner",
+      "mitigation": "second mirror or accepted residual risk",
+      "state": "CONTROLLED"
+    },
+    {
+      "id": "R-009",
+      "severity": "P1",
+      "statement": "preview is communicated as supported without native evidence",
+      "evidence": "only M3 exact-candidate E3",
+      "gate": "external-public",
+      "owner": "platform owner",
+      "mitigation": "per-platform E3 matrix",
+      "state": "DEFERRED_EXTERNAL"
+    },
+    {
+      "id": "R-010",
+      "severity": "P1",
+      "statement": "external migration or soak fails after opening",
+      "evidence": "EP-1/EP-2 not executed",
+      "gate": "external-public",
+      "owner": "release owner",
+      "mitigation": "exact candidate, fixtures, seven-day reset rule",
+      "state": "DEFERRED_EXTERNAL"
+    },
+    {
+      "id": "R-011",
+      "severity": "P1",
+      "statement": "QWLeague adapter uses unauthorized protocol or data",
+      "evidence": "no official API/OAuth/webhook contract",
+      "gate": "1.3",
+      "owner": "external integration owner",
+      "mitigation": "remain BLOCKED_EXTERNAL",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "R-012",
+      "severity": "P2",
+      "statement": "source/deployment drift misleads users",
+      "evidence": "0.7.13/RC1 source claims versus Latest",
+      "gate": "S0-M3",
+      "owner": "documentation owner",
+      "mitigation": "ledger projections and drift lint",
+      "state": "IN_PROGRESS"
+    },
+    {
+      "id": "R-013",
+      "severity": "P2",
+      "statement": "GitHub security controls are assumed from anonymous API gaps",
+      "evidence": "settings not independently authenticated",
+      "gate": "external-public",
+      "owner": "security owner",
+      "mitigation": "dated authenticated evidence or explicit exception",
+      "state": "DEFERRED_EXTERNAL"
+    },
+    {
+      "id": "R-014",
+      "severity": "P2",
+      "statement": "roadmap process exceeds single-maintainer capacity",
+      "evidence": "many gates and no named owners",
+      "gate": "S0-M3",
+      "owner": "mantenedor",
+      "mitigation": "minutes budget, ranges, staged backlog",
+      "state": "MITIGATED"
+    }
+  ],
+  "scope": {
+    "users": 1,
+    "native_lab": "Apple M3",
+    "feature_gate": "S0-M3",
+    "external_gates": "deferred"
+  }
+}
