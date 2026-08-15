@@ -1,37 +1,35 @@
-# Gap register
+# Gap register — M3-first
 
-Registro consolidado da fotografia corrente. P1 indica impacto de
-release/governança; P2 indica risco controlável que ainda impede um claim
-mais amplo. Nenhuma linha é uma issue remota criada por esta entrega.
+Registro do que impede estabilidade no único ambiente suportado agora e do que só impede uma futura audiência external-public.
 
-| ID | Prioridade | Gap | Estado | Evidência | Gate | Próxima prova |
+| ID | Prioridade | Gap | Estado | Evidência | Escopo | Próxima prova |
 | --- | --- | --- | --- | --- | --- | --- |
-| G-001 | P1 | contrato Windows 3.10 vermelho; fake/protocolo e 10 ms não determinísticos | RESOLVED — Gate 0A PASS | Validate 31891985767, SHA fdd5a726… | 0A | manter zero-flake |
-| G-002 | P1 | source/release/deployment/development e audiência em drift | BLOCKED | product/catalog/site live | 0C | matriz reconciliada e deploy verificado |
-| G-003 | P1 | receipt final aponta public acceptance para RC1 | BLOCKED | release-receipt final | 0C | receipt coerente com tag/candidato |
-| G-004 | P1 | ownership/SBOM 87/87 unclassified/NOASSERTION | BLOCKED | relatório de release | 0C | classificação ou exceção aprovada |
-| G-005 | P1 | cleanup personal-data não cobre qw/demos prometidos | BLOCKED | promessa versus cobertura | 0C/EP-1 | escopo, teste, docs e rollback |
-| G-006 | P1 | single maintainer/self-review | BLOCKED | auditoria | 0D/0B | Checker e custodian separado |
-| G-007 | P1 | custódia e recovery TUF de produção ausentes | BLOCKED | #148/#152; drill local somente | 0B/EP-3 | cerimônia e drill reprodutível |
-| G-008 | P0_OPERATIONAL | lease TUF autenticada dentro do alerta de 6 h | AT-RISK | monitor 6h falha; expiry 21:09Z | 0B | renovação autorizada ou retirar claim |
-| G-009 | P2 | convergência verificada só para installer GitHub/GitLab | BLOCKED | comparação E2 | 0C/EP-3 | todas as superfícies/mirrors |
-| G-010 | P1 | plataformas não-M3 apenas preview; native não demonstrado | BLOCKED | E3 M3 25/25 | EP-5 | evidência nativa por plataforma |
-| G-011 | P1 | external-public sem soak/aceitação | BLOCKED | gates condicionais | EP-1/EP-2 | candidato exato e sete dias |
-| G-012 | P1 | QWLeague sem API/OAuth/webhook oficial verificado | BLOCKED_EXTERNAL | discovery público | 1.3 | contrato escrito e autorização |
-| G-013 | P2 | controles de segurança GitHub precisam confirmação independente | BLOCKED | estado anônimo | 0D | evidência autenticada |
-| G-014 | P1 | feature work bloqueado enquanto 0B/0C estão abertos | BLOCKED | stop conditions | 0A–EP-0 | gate assinado |
-| G-015 | P1 | migração do instalador público 0.7.13 exato bloqueada por versão histórica não autenticada | BLOCKED | installer SHA 11460440…; CLI 1.0.0; harness fixture injeta installation_version | EP-1 | corrigir contrato/receipt ou aceitar decisão de produto |
-| G-016 | P1 | release-truth source/projection live ausente e site root mantém 0.7.13 | BLOCKED | /api/v1/release-truth.json 404; live hero | 0C | deploy verificável ou manter claim claramente owner-only |
+| G-001 | P0 | contrato DNS Windows/Python 3.10 dependia de relógio real e fake incompleto | RESOLVED | Gate 0A, 30.000 repetições focais sem falha | owner-only | manter zero-flake |
+| G-002 | P1 | projeção live ainda precisa confirmar árvore assembled | IN_PROGRESS | reparo protegido em execução | owner-only | bootstraps, product e release-truth 200 |
+| G-003 | P1 | receipt público histórico referencia RC1 | ACCEPTED_RESIDUAL | receipt M3 final separado e bytes bound ao candidato | external-public | substituir apenas se audiência mudar |
+| G-004 | P1 | ownership/SBOM contém itens sem classificação upstream | DEFERRED | relatório de release | external-public/licensing | classificar antes de redistribuição ampla |
+| G-005 | P1 | cleanup de dados pessoais não cobre toda promessa histórica | DEFERRED | contrato atual single-user | condicional a upgrade | ampliar somente se migração for prometida |
+| G-006 | P1 | single maintainer e self-review | ACCEPTED_OWNER_ONLY | limitação conhecida | external-public | reviewer/custodian antes de abrir |
+| G-007 | P1 | custódia independente e RTO de produção TUF | DEFERRED | drill técnico local existe | external-public | custódia, backup e drill de produção |
+| G-008 | P0_OPERATIONAL | lease TUF precisa continuar renovável | HEALTHY_WITH_OPERATION | timestamp autenticado e monitor técnico | owner-only | manter alerta e renovar antes da janela |
+| G-009 | P2 | mirrors fora do installer exigem verificação contínua | IN_PROGRESS | installer GitHub/GitLab E2 | owner-only/external | convergência após cada projeção |
+| G-010 | P1 | somente M3 possui evidência nativa E3 | ACCEPTED_SCOPE | 25/25 no Apple M3 | owner-only | não promover outras plataformas por inferência |
+| G-011 | P1 | soak e aceite externo inexistentes | DEFERRED | audiência atual owner-only | external-public | reabrir em EP-2/EP-4 |
+| G-012 | P1 | QWLeague sem contrato oficial | BLOCKED_EXTERNAL | nenhuma API/OAuth/webhook autorizado | opcional | contato e documentação oficiais |
+| G-013 | P2 | flags remotas de segurança não verificadas anonimamente | DEFERRED | acesso autenticado necessário | external-public | revisão autenticada |
+| G-014 | P1 | processo antigo bloqueava funcionalidade por gates externos | RESOLVED_BY_REBASELINE | S0 M3 é o único bloqueio funcional | owner-only | manter S0 verde |
+| G-015 | P1 | migração histórica de 0.7.13 não reproduzida | NOT_REQUIRED_FOR_FRESH_BASELINE | baseline nova planejada | external-public condicional | reabrir se upgrade antigo for prometido |
+| G-016 | P1 | source/projection live não confirmada no novo caminho assembled | IN_PROGRESS | workflow #180 integrado | owner-only | executar reparo e registrar receipt |
 
 ## Ordem de tratamento
 
-G-001 fechou 0A. G-008 e G-007 têm precedência operacional imediata; G-002,
-G-003, G-004 e G-016 formam 0C/0D. G-015 é pré-condição de EP-1; G-010 e G-011
-formam EP-1–EP-5. G-012 pertence a 1.3 e permanece BLOCKED_EXTERNAL. Nenhum
-gap autoriza feature work enquanto os gates de parada estiverem abertos.
+1. G-001 já está resolvido.
+2. G-002 e G-016 fecham a convergência da projeção owner-only.
+3. G-008 permanece operacional e recorrente, mas não bloqueia funcionalidades quando saudável.
+4. Com S0 confirmado, FUNC-001 em diante pode avançar no M3.
+5. G-004, G-006, G-007, G-011, G-013 e G-015 só viram bloqueadores quando a audiência mudar.
+6. G-012 permanece `BLOCKED_EXTERNAL` em qualquer cenário.
 
-## Limite desta entrega
+## Regra de honestidade
 
-Não há alteração de código, workflow, chave, endpoint, release ou issue
-remota. O registro é documentação vinculada à #164; os hashes e observações são
-datados para impedir que uma fotografia seja apresentada como estado permanente.
+Um gap pode estar aceito no escopo owner-only sem ser resolvido para external-public. O status e a audiência devem aparecer juntos; nenhum preview ou artifact availability vira suporte por inferência.
