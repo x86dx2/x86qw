@@ -68,8 +68,7 @@ timestamp expirava em `2026-08-15T21:09:01Z` e snapshot em
 `metadata-last` retomado quanto na verificação independente local.
 
 O handoff usado pela release foi o run `31849830873`, artifact `9237154449`.
-A operação contínua e a custódia independente continuam pendência
-`external-public` (#152); isso não bloqueia o uso owner-only publicado.
+A custódia independente, backup humano, RTO de produção e sucessão continuam pendência P1 em #148; a lease técnica imediata foi renovada e #152 foi encerrada.
 
 ## Estado local
 
@@ -188,7 +187,7 @@ tentativa 2 repetiu somente esse job e encerrou o workflow com sucesso.
    lifecycle, uninstall e purge — concluído no M3 local em
    [`1.0.0-owner-only-public-acceptance-m3-2026-08-15.json`](releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
 3. branch dos workflows remota e validação protegida — concluído;
-4. nenhum blocker P0/P1 — concluído após o encerramento da issue #149;
+4. nenhuma falha P0 de integridade — concluído; P1 de verdade de deployment permanece aberto em Gate 0C;
 5. Linux, Windows e macOS Intel continuam `preview`; stable macOS continua
    `conditional` enquanto Gatekeeper, notarização e primeira abertura do bundle
    upstream original não forem comprovados.
@@ -216,16 +215,16 @@ histórico em
 [`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json)
 deve ser lido como fotografia anterior, não como estado atual.
 
-- [#143 — RC soak](https://github.com/x86dx2/x86qw/issues/143);
+- [#143 — RC soak histórico](https://github.com/x86dx2/x86qw/issues/143) (superseded/closed);
 - [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144) (P2, capacidade concluída para owner-only; externo pendente);
 - [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145) (fechada após o run protegido);
 - [#146 — real 0.7.13 migration](https://github.com/x86dx2/x86qw/issues/146);
 - [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147) (fechada após 25/25);
-- [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148);
+- [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148) (custody/RTO/backup ainda abertos);
 - [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (fechada após o run `31849932133`, tentativa 2);
 - [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
 - [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
-- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152).
+- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152) (closed after v19 publication).
 
 O último monitor TUF incluído nessa leitura foi o run
 [31791717871](https://github.com/x86dx2/x86qw/actions/runs/31791717871), com
@@ -237,14 +236,15 @@ está em
 
 ## Veredito
 
-`1.0.0 owner-only`: `GO`, publicado e verificado. Migração, soak externo e
-operação TUF sustentável não são pré-requisitos desta fase. A promoção
-`external-public` continua `NO-GO` até que todas as pendências externas sejam
-comprovadas. Nenhum novo `0.7.x` deve ser publicado salvo regressão crítica.
+`1.0.0 owner-only`: `AT-RISK` até o deployment live refletir a projeção
+owner-only atual. `MAIN=GREEN` e `TUF=HEALTHY`; `external-public=NO-GO` até
+EP-0..EP-5, custódia TUF sustentável e aceitação externa. Nenhuma feature 1.1+
+começa antes de Gate 0C/0D/0E.
 
 ## Próxima ação
 
-Usar a release `1.0.0` no escopo owner-only e registrar qualquer regressão com
-o commit e os hashes acima. Quando o mantenedor declarar usuários externos,
-reabrir o plano de migração, soak e operação TUF usando
-`release_audience=external-public`.
+Concluir Gate 0C com uma geração site única e verificável, incluindo
+`/api/v1/release-truth.json`, audiência owner-only em `product.json`, e root
+sem claim público 0.7.13. Depois reconciliar Gate 0D e iniciar a observação
+owner-only; não publicar uma nova release de produto por correção exclusivamente
+documental.
