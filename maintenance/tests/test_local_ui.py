@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from x86qw_runtime.library import LIBRARY_PATH, add_favorite
-from x86qw_runtime.local_ui import render_local_ui, write_local_ui
+from x86qw_runtime.ui.local import render_local_ui, write_local_ui
 
 
 CLOCK = datetime(2026, 8, 16, 18, 0, tzinfo=timezone.utc)

@@ -81,6 +81,8 @@ class VerifySiteRootProbeTests(unittest.TestCase):
         )
         self.assertIn("verify_site_root_probe.py", source)
         self.assertIn("release-work/site/public/index.html", source)
+        self.assertIn("root-probe.json", source)
+        self.assertIn('"root_probe": probe', source)
         self.assertNotIn("| grep -F \"owner-only\"", source)
 
 

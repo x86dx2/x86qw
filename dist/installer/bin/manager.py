@@ -186,7 +186,7 @@ from x86qw_runtime.library import (
     remove_favorite,
     render_library_report,
 )
-from x86qw_runtime.local_ui import write_local_ui
+from x86qw_runtime.ui.local import write_local_ui
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,

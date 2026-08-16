@@ -5,8 +5,8 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from .doctor import diagnose
-from .library import load_library
+from ..doctor import diagnose
+from ..library import load_library
 
 
 def render_local_ui(target: Path) -> str:

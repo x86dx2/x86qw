@@ -371,6 +371,7 @@ jobs:
             --assembled release-work/site/public/index.html \
             --live-url "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --report "$RUNNER_TEMP/root-probe.json"
+          cp "$RUNNER_TEMP/root-probe.json" root-probe.json
       - name: Write immutable projection-repair receipt
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
@@ -392,11 +393,13 @@ jobs:
           import json
           import os
           from pathlib import Path
+          probe = json.loads(Path("root-probe.json").read_text(encoding="utf-8"))
           receipt = {
               "format": 1,
               "operation": "owner-only-site-projection-repair",
               "release_code_commit": os.environ["RELEASE_CODE_COMMIT"],
               "development_validate_run": int(os.environ["DEVELOPMENT_VALIDATE_RUN"]),
+              "root_probe": probe,
               "candidate": {
                   "commit": os.environ["CANDIDATE_COMMIT"],
                   "run_id": int(os.environ["CANDIDATE_RUN_ID"]),
@@ -429,7 +432,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: site-projection-repair-${{ github.run_id }}-${{ github.run_attempt }}
-          path: projection-repair-receipt.json
+          path: |
+            projection-repair-receipt.json
+            root-probe.json
           if-no-files-found: error
           overwrite: false
           retention-days: 90

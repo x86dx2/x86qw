@@ -6,11 +6,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import urllib.error
-import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from x86qw_runtime.io.downloader import (  # noqa: E402
+    BoundedMetadata,
+    DownloadHTTPError,
+    RetryPolicy,
+    download,
+)
 
 
 AUDIENCE_MARKER = "owner-only"
@@ -50,22 +59,21 @@ def verify_root_probe(
 
 
 def _fetch(url: str) -> tuple[int, bytes]:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Cache-Control": "no-cache",
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml",
-        },
-    )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return int(response.status), response.read(MAX_BODY_BYTES + 1)
-    except urllib.error.HTTPError as error:
-        return int(error.code), error.read(MAX_BODY_BYTES + 1)
+        result = download(BoundedMetadata(
+            url=url,
+            maximum_size=MAX_BODY_BYTES,
+            deadline_seconds=30,
+            retry=RetryPolicy(attempts=1),
+            headers={"User-Agent": "x86qw-site-projection-repair/1"},
+            label="raiz pública",
+        ))
+    except DownloadHTTPError as error:
+        return int(error.status), b""
+    payload = result.data
+    if payload is None:
+        raise RootProbeError("download da raiz pública não retornou bytes")
+    return 200, payload
 
 
 def main(
