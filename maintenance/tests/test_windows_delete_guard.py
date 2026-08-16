@@ -176,7 +176,9 @@ try { Invoke-Expression $Source } catch { }
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                # Deadlock watchdog, not a timing oracle; busy Windows runners may
+                # spend more than 30 seconds parsing the embedded bootstrap sources.
+                timeout=120,
             )
             self.assertEqual(0, completed.returncode, completed.stderr)
             observed = json.loads(report.read_text(encoding="utf-8"))
