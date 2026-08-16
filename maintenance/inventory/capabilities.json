@@ -13,6 +13,7 @@
     "update",
     "upgrade",
     "verify",
+    "doctor",
     "changes",
     "migrate",
     "repair",

@@ -28,6 +28,7 @@ JSON_COMMANDS = frozenset({
     "status",
     "hub",
     "verify",
+    "doctor",
     "repair",
     "update",
     "upgrade",
@@ -70,6 +71,28 @@ COMMAND_DATA_SCHEMAS = MappingProxyType({
         "required": frozenset({"target", "verified"}),
         "properties": MappingProxyType({"target": "string", "verified": True}),
     }),
+    "doctor": MappingProxyType({
+        "kind": "object",
+        "closed": True,
+        "required": frozenset({"target", "audience", "healthy", "checks"}),
+        "properties": MappingProxyType({
+            "target": "string",
+            "audience": "owner-only",
+            "healthy": True,
+            "checks": "array",
+        }),
+        "check_fields": frozenset({"id", "status", "summary"}),
+        "check_ids": (
+            "installation",
+            "catalog",
+            "trust",
+            "runtime",
+            "network",
+            "disk",
+            "permissions",
+        ),
+        "check_statuses": frozenset({"ok", "warn", "fail", "skip"}),
+    }),
     "repair": MappingProxyType({
         "kind": "object", "closed": True, "dry_run": True,
         "required": frozenset({"target", "status", "operations"}),
@@ -95,6 +118,16 @@ _MAX_STATUS_SESSIONS = 1024
 _MAX_HUB_SERVERS = 20
 _MAX_HUB_PLAYERS = 10000
 _MAX_DRY_RUN_OPERATIONS = 4096
+_DOCTOR_CHECK_IDS = (
+    "installation",
+    "catalog",
+    "trust",
+    "runtime",
+    "network",
+    "disk",
+    "permissions",
+)
+_DOCTOR_CHECK_STATUSES = frozenset({"ok", "warn", "fail", "skip"})
 _HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 _REDACTED = "[REDACTED]"
@@ -371,6 +404,44 @@ def _validate_verify_data(value: object) -> dict[str, object]:
     return {"target": _output_text(document["target"], "verify.target"), "verified": True}
 
 
+def _validate_doctor_data(value: object) -> dict[str, object]:
+    document = _closed_object(
+        value,
+        frozenset({"target", "audience", "healthy", "checks"}),
+        "doctor data",
+    )
+    if document["audience"] != "owner-only":
+        raise JsonOutputError("doctor data has an invalid audience", code="data")
+    if type(document["healthy"]) is not bool:
+        raise JsonOutputError("doctor.healthy must be boolean", code="data")
+    checks = document["checks"]
+    if not isinstance(checks, list) or len(checks) != len(_DOCTOR_CHECK_IDS):
+        raise JsonOutputError("doctor.checks must contain the closed check set", code="data")
+    normalized: list[dict[str, str]] = []
+    for index, item in enumerate(checks):
+        check = _closed_object(item, frozenset({"id", "status", "summary"}), "doctor check")
+        check_id = _output_text(check["id"], "doctor.check.id")
+        if check_id != _DOCTOR_CHECK_IDS[index]:
+            raise JsonOutputError("doctor.checks must follow the closed id order", code="data")
+        status = check["status"]
+        if not isinstance(status, str) or status not in _DOCTOR_CHECK_STATUSES:
+            raise JsonOutputError("doctor check has an invalid status", code="data")
+        normalized.append({
+            "id": check_id,
+            "status": status,
+            "summary": _output_text(check["summary"], "doctor.check.summary"),
+        })
+    healthy = not any(item["status"] == "fail" for item in normalized)
+    if document["healthy"] is not healthy:
+        raise JsonOutputError("doctor.healthy does not match check statuses", code="data")
+    return {
+        "target": _output_text(document["target"], "doctor.target"),
+        "audience": "owner-only",
+        "healthy": healthy,
+        "checks": normalized,
+    }
+
+
 def _validate_command_data(command: str, value: object, *, ok: bool) -> object:
     if not ok:
         if value != {}:
@@ -384,6 +455,8 @@ def _validate_command_data(command: str, value: object, *, ok: bool) -> object:
         return _validate_hub_data(value)
     if command == "verify":
         return _validate_verify_data(value)
+    if command == "doctor":
+        return _validate_doctor_data(value)
     return _validate_dry_run_data(value, required=True)
 
 

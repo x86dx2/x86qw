@@ -327,6 +327,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 (["help"], ["--version"]),
                 (["play", "--help"], ["play", "--help", "--target", str(root)]),
                 (["verify"], ["--online-only", "--installed-cli", "verify", str(root)]),
+                (["doctor"], ["doctor", "--target", str(root)]),
                 (["uninstall", "--help"], ["--online-only", "--installed-cli", "uninstall", str(root), "--help"]),
             ):
                 with self.subTest(arguments=arguments):
@@ -457,6 +458,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 (["help"], ["--version"], False),
                 (["play", "--help"], ["play", "--help", "--target"], True),
                 (["verify"], ["--online-only", "--installed-cli", "verify"], True),
+                (["doctor"], ["doctor", "--target"], True),
                 (["uninstall", "--help"], ["--online-only", "--installed-cli", "uninstall", "--help"], True),
             ):
                 with self.subTest(arguments=arguments):

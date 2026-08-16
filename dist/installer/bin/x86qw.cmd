@@ -18,6 +18,7 @@ if /I "%~1"=="host" goto service
 if /I "%~1"=="proxy" goto service
 if /I "%~1"=="qtv" goto service
 if /I "%~1"=="status" goto service
+if /I "%~1"=="doctor" goto service
 if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
@@ -71,6 +72,7 @@ echo Manutencao:
 echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
+echo   doctor               diagnostica a instalacao sem alterar arquivos
 echo   changes [--sync-gitignore] compara mudancas locais com a instalacao registrada
 echo   migrate [--dry-run]   migra metadados para o contrato 1.0
 echo   repair [--dry-run]   diagnostica e repara conteudo gerenciado

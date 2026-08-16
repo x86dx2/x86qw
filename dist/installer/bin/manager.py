@@ -162,6 +162,7 @@ from x86qw_runtime.io.remote import (
     https_url_filename,
     validate_https_url,
 )
+from x86qw_runtime.doctor import diagnose, render_doctor_report
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,
@@ -8395,7 +8396,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, changes, uninstall ou cleanup"
+            "verify, doctor, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
@@ -8471,10 +8472,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair", "migrate"}:
         parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
     if namespace.json and namespace.action not in {
-        "version", "status", "hub", "verify", "repair", "update", "upgrade",
+        "version", "status", "hub", "verify", "doctor", "repair", "update", "upgrade",
     }:
         parser.error(
-            "--json só pode ser usado com version, status, hub, verify, repair, update ou upgrade"
+            "--json só pode ser usado com version, status, hub, verify, doctor, repair, update ou upgrade"
         )
     if namespace.json and namespace.action in {"repair", "update", "upgrade"} and not namespace.dry_run:
         parser.error(f"{namespace.action} --json exige --dry-run para não ocultar mutações")
@@ -8545,7 +8546,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8648,6 +8649,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("update", "Atualizar", "atualizar somente o que já está instalado"),
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
+                    navigation.MenuOption("doctor", "Diagnosticar instalação", "somente leitura, sem alterar arquivos"),
                     navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
                     navigation.MenuOption("migrate", "Migrar metadados", "converter o estado legado para o contrato 1.0"),
                     navigation.MenuOption("repair", "Diagnosticar e reparar", "preserva arquivos pessoais"),
@@ -8760,7 +8762,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -8802,6 +8804,30 @@ def _json_status_data(target: Path) -> dict[str, object]:
         "state": "present" if state_path.is_file() else "missing",
         "sessions": sessions,
     }
+
+
+def _doctor_trust_timestamp() -> Path | None:
+    try:
+        cache_root = host_adapter.user_cache_directory(CACHE_DIR_NAME)
+    except Exception:
+        return None
+    path = cache_root / "trust" / "metadata" / "timestamp.json"
+    if path.is_file() and not path.is_symlink():
+        return path
+    return None
+
+
+def _doctor_report(target: Path) -> dict[str, object]:
+    commands: tuple[str, ...] | None
+    try:
+        commands = public_command_names()
+    except Exception:
+        commands = None
+    return diagnose(
+        target,
+        catalog_commands=commands,
+        trust_timestamp_path=_doctor_trust_timestamp(),
+    )
 
 
 def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
@@ -8928,6 +8954,9 @@ def execute_json_action(options: argparse.Namespace, project_root: Path) -> int:
                 installer.reject_target_symlinks()
                 installer.verify_installation()
                 data = {"target": str(target), "verified": True}
+            elif command == "doctor":
+                assert target is not None
+                data = _doctor_report(target)
             else:
                 # Dry-run maintenance goes through the same lock/plan path as
                 # the human CLI, but rows are projected directly from the
@@ -9286,6 +9315,10 @@ def main(arguments: list[str] | None = None) -> int:
             return execute_json_action(options, project_root)
         if options.action == "version":
             print(f"x86QW {application_version()}")
+            return 0
+        if options.action == "doctor":
+            target = options.target.expanduser().resolve()
+            print(render_doctor_report(_doctor_report(target)), end="")
             return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()

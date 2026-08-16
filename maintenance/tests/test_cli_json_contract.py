@@ -459,6 +459,25 @@ class CliJsonContractTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             manager.parse_arguments(["play", "--json"], ROOT)
 
+    def test_doctor_json_reports_missing_target_without_creating_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "installation"
+            result, document, errors = self.invoke([
+                "doctor", "--json", str(target),
+            ])
+        self.assertEqual(0, result)
+        self.assertEqual("doctor", document.command)
+        self.assertTrue(document.ok)
+        self.assertFalse(document.data["healthy"])
+        self.assertEqual(str(target.resolve()), document.data["target"])
+        self.assertEqual("fail", document.data["checks"][0]["status"])
+        self.assertFalse(target.exists())
+        self.assertEqual("", errors)
+
+    def test_doctor_rejects_dry_run(self) -> None:
+        with self.assertRaises(SystemExit):
+            manager.parse_arguments(["doctor", "--dry-run"], ROOT)
+
     def test_migrate_dry_run_is_an_explicit_maintenance_action(self) -> None:
         namespace = manager.parse_arguments(["migrate", "--dry-run"], ROOT)
         self.assertEqual("migrate", namespace.action)

@@ -137,7 +137,7 @@ pública `0.7.2` contém a mudança. Consulte o
 
 Ao concluir, a raiz da instalação contém `x86qw.sh` e `x86qw.cmd`. Esses comandos
 usam a aplicação única `.x86qw/cli/x86qw.pyz`; as ações públicas são `play`,
-`host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`, `repair`,
+`host`, `proxy`, `qtv`, `status`, `hub`, `update`, `upgrade`, `verify`, `doctor`, `repair`,
 `cleanup`, `uninstall` e `version`. Sem argumento, a CLI
 abre o navegador interativo e não inicia instalação alguma até uma ação ser
 confirmada. Setas ou `j`/`k` navegam, Enter seleciona, `←` volta, Esc sai e
@@ -803,6 +803,14 @@ O instalador já aplica a permissão executável no AppImage. Se o método usado
 
 ```sh
 ./dist/installer/bin/manager.py verify
+```
+
+Para um diagnóstico somente leitura da instalação, catálogo, TUF local, runtime,
+disco e permissões, sem alterar arquivos:
+
+```sh
+./dist/installer/bin/manager.py doctor
+./dist/installer/bin/manager.py doctor --json
 ```
 
 No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\installer\bin\manager.py` nos exemplos.
