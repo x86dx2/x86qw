@@ -210,7 +210,7 @@ x86qw play                    x86qw host                    x86qw update
 x86qw play ktx --mode ctf     x86qw proxy                   x86qw upgrade
 x86qw hub                     x86qw qtv                     x86qw verify
                               x86qw status                  x86qw doctor
-                                                             x86qw repair
+                              x86qw profile                 x86qw repair
 ```
 
 | Comando | Faz o quê |
@@ -225,6 +225,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | `upgrade` | Também incorpora novidades do perfil escolhido |
 | `verify` | Compara a instalação com os recibos registrados |
 | `doctor` | Diagnostica a instalação sem alterar arquivos; `--bundle` gera um zip sanitizado |
+| `profile` | Mostra a fronteira perfil/cache/pessoal; `--backup` / `--restore` as configs user-owned |
 | `changes` | Mostra arquivos novos, alterados ou removidos localmente |
 | `migrate` | Converte metadados legados para o contrato 1.0 |
 | `repair` | Recompõe somente conteúdo gerenciado ausente ou incorreto |
