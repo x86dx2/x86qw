@@ -186,6 +186,7 @@ from x86qw_runtime.library import (
     remove_favorite,
     render_library_report,
 )
+from x86qw_runtime.local_ui import write_local_ui
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,
@@ -8396,6 +8397,11 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="emite uma resposta JSON estável (sem prompts ou ANSI)",
     )
     parser.add_argument(
+        "--output",
+        metavar="ARQUIVO",
+        help="com ui, grava o HTML de diagnóstico fora da instalação",
+    )
+    parser.add_argument(
         "--bundle",
         nargs="?",
         const=DEFAULT_BUNDLE_NAME,
@@ -8450,7 +8456,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, doctor, profile, library, changes, uninstall ou cleanup"
+            "verify, doctor, ui, profile, library, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
@@ -8527,6 +8533,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
     if namespace.bundle is not None and namespace.action != "doctor":
         parser.error("--bundle só pode ser usado com doctor")
+    if namespace.output is not None and namespace.action != "ui":
+        parser.error("--output só pode ser usado com ui")
     if (namespace.backup is not None or namespace.restore is not None) and namespace.action != "profile":
         parser.error("--backup e --restore só podem ser usados com profile")
     if namespace.backup is not None and namespace.restore is not None:
@@ -8610,7 +8618,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8714,6 +8722,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
                     navigation.MenuOption("doctor", "Diagnosticar instalação", "somente leitura, sem alterar arquivos"),
+                    navigation.MenuOption("ui", "Painel local", "HTML somente leitura sobre doctor e library"),
                     navigation.MenuOption("profile", "Perfil pessoal", "backup e restore das configurações user-owned"),
                     navigation.MenuOption("library", "Favoritos e recentes", "servidores locais com origem e freshness"),
                     navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
@@ -8828,7 +8837,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -9426,6 +9435,17 @@ def main(arguments: list[str] | None = None) -> int:
             print(render_doctor_report(report), end="")
             if options.bundle is not None:
                 print(f"Bundle sanitizado: {_write_doctor_bundle(report, options.bundle, target)}")
+            return 0
+        if options.action == "ui":
+            target = options.target.expanduser().resolve()
+            if options.output is None:
+                handle, name = tempfile.mkstemp(prefix="x86qw-ui-", suffix=".html")
+                os.close(handle)
+                os.unlink(name)
+                destination = Path(name)
+            else:
+                destination = Path(options.output)
+            print(write_local_ui(target, destination))
             return 0
         if options.action == "profile":
             target = options.target.expanduser().resolve()

@@ -10,6 +10,7 @@
     "upgrade",
     "verify",
     "doctor",
+    "ui",
     "profile",
     "library",
     "changes",
