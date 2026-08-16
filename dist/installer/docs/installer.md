@@ -832,6 +832,20 @@ Configurações pessoais ficam na classe `profile` (`config.cfg`, `preset.cfg`,
 ./dist/installer/bin/manager.py profile --restore x86qw-profile.zip
 ```
 
+Favoritos e recentes ficam em `qw/x86qw-library.json` (classe `profile`, entra
+no backup). Cada entrada guarda endereço, origem (`user`/`hub`/`local`) e
+freshness UTC:
+
+```sh
+./dist/installer/bin/manager.py library
+./dist/installer/bin/manager.py library --add quake.example:27500
+./dist/installer/bin/manager.py library --remove quake.example:27500
+```
+
+`hub` consulta o QuakeWorld Hub; se a rede falhar, usa favoritos e recentes
+locais. Entrar em um servidor grava um recente com origem e freshness. Sem
+dependência de QWLeague.
+
 No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\installer\bin\manager.py` nos exemplos.
 
 ## Saída e diagnóstico

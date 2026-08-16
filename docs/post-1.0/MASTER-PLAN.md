@@ -113,9 +113,9 @@ Somente após uso real justificar: biblioteca de demos, treinamento, UI local re
 
 ## Prioridades
 
-**NOW:** F2 perfis e fronteira de dados pessoais no M3.
+**NOW:** F3 hosting presets no M3.
 
-**NEXT:** favoritos/recentes, descoberta local e hosting presets.
+**NEXT:** readiness/logs/stop de servidor local.
 
 **LATER:** demos, UI local read-only, adapters externos e novas plataformas.
 
@@ -135,4 +135,4 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-Executar F2 no M3: FUNC-003 (fronteira e backup de perfil) e, em seguida, favoritos/recentes. Não iniciar EP-1 nem contato externo sem decisão de audiência nova.
+Executar F3 no M3: FUNC-006 (presets de hospedagem local). Não iniciar EP-1 nem contato externo sem decisão de audiência nova.

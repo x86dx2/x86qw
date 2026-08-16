@@ -178,6 +178,14 @@ from x86qw_runtime.profiles import (
     render_profile_report,
     restore_user_profile,
 )
+from x86qw_runtime.library import (
+    add_favorite,
+    discover_servers,
+    load_library,
+    record_recent,
+    remove_favorite,
+    render_library_report,
+)
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,
@@ -6121,37 +6129,42 @@ class Installer:
 
     def hub_servers(self) -> list[dict[str, object]]:
         console.info("Consultando servidores ativos no QuakeWorld Hub...")
+        remote: list[dict[str, object]] | None = None
         try:
             servers = json.loads(self.remote.get(
                 HUB_SERVERS_API,
                 maximum_size=HUB_MAX_BYTES,
                 timeout=CATALOG_TIMEOUT,
             ))
-        except (json.JSONDecodeError, TypeError) as error:
-            raise InstallerError("O Hub retornou um catálogo de servidores inválido.") from error
-        if not isinstance(servers, list):
-            raise InstallerError("O Hub retornou um catálogo de servidores inválido.")
-        valid = []
-        for server in servers:
-            if not isinstance(server, dict):
-                continue
-            address = server.get("address")
-            if not isinstance(address, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", address):
-                continue
-            port = int(address.rsplit(":", 1)[1])
-            if not 1 <= port <= 65535:
-                continue
-            valid.append(server)
-        if not valid:
-            raise InstallerError("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
-        return sorted(
-            valid,
-            key=lambda item: sum(
-                1 for player in item.get("players", [])
-                if isinstance(player, dict) and not player.get("is_bot")
-            ),
-            reverse=True,
-        )
+        except (json.JSONDecodeError, TypeError, InstallerError):
+            servers = None
+        if isinstance(servers, list):
+            valid = []
+            for server in servers:
+                if not isinstance(server, dict):
+                    continue
+                address = server.get("address")
+                if not isinstance(address, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", address):
+                    continue
+                port = int(address.rsplit(":", 1)[1])
+                if not 1 <= port <= 65535:
+                    continue
+                valid.append(server)
+            if valid:
+                remote = sorted(
+                    valid,
+                    key=lambda item: sum(
+                        1 for player in item.get("players", [])
+                        if isinstance(player, dict) and not player.get("is_bot")
+                    ),
+                    reverse=True,
+                )
+        discovered = discover_servers(remote, load_library(self.target))
+        if discovered:
+            if remote is None:
+                console.info("Hub indisponível; usando favoritos e recentes locais.")
+            return list(discovered)
+        raise InstallerError("Hub indisponível e não há favoritos ou recentes locais.")
 
     def host_runtimes(self) -> list[tuple[str, Path]]:
         platform_key = HOST_PLATFORMS.get(host_platform.system())
@@ -6370,6 +6383,13 @@ class Installer:
                 return
             break
         self.launch_runtime(runtime, quake_arguments)
+        title = str(server_options[int(selected)].label)
+        origin = server.get("origin")
+        origin = origin if origin in {"user", "hub", "local"} else "hub"
+        try:
+            record_recent(self.target, address, title=title, origin=str(origin))
+        except (OSError, ValueError) as error:
+            console.warning(f"Não foi possível gravar o recente local: {error}")
         console.success(f"{label} aberto para {operation} em {address}.")
 
     def verify_ezquake_variants(self) -> int:
@@ -8397,6 +8417,16 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help="com profile, restaura o zip de configurações pessoais",
     )
     parser.add_argument(
+        "--add",
+        metavar="ENDEREÇO",
+        help="com library, grava um favorito local",
+    )
+    parser.add_argument(
+        "--remove",
+        metavar="ENDEREÇO",
+        help="com library, remove um favorito local",
+    )
+    parser.add_argument(
         "--yes", action="store_true",
         help="confirma automaticamente o plano de update ou upgrade",
     )
@@ -8420,7 +8450,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, doctor, profile, changes, uninstall ou cleanup"
+            "verify, doctor, profile, library, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
@@ -8501,6 +8531,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--backup e --restore só podem ser usados com profile")
     if namespace.backup is not None and namespace.restore is not None:
         parser.error("--backup e --restore não podem ser combinados")
+    if (namespace.add is not None or namespace.remove is not None) and namespace.action != "library":
+        parser.error("--add e --remove só podem ser usados com library")
+    if namespace.add is not None and namespace.remove is not None:
+        parser.error("--add e --remove não podem ser combinados")
     if namespace.json and namespace.action not in {
         "version", "status", "hub", "verify", "doctor", "repair", "update", "upgrade",
     }:
@@ -8576,7 +8610,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, profile, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8681,6 +8715,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
                     navigation.MenuOption("doctor", "Diagnosticar instalação", "somente leitura, sem alterar arquivos"),
                     navigation.MenuOption("profile", "Perfil pessoal", "backup e restore das configurações user-owned"),
+                    navigation.MenuOption("library", "Favoritos e recentes", "servidores locais com origem e freshness"),
                     navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
                     navigation.MenuOption("migrate", "Migrar metadados", "converter o estado legado para o contrato 1.0"),
                     navigation.MenuOption("repair", "Diagnosticar e reparar", "preserva arquivos pessoais"),
@@ -8793,7 +8828,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, profile, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, profile, library, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -8880,6 +8915,16 @@ def _restore_profile_backup(target: Path, archive: str) -> tuple[str, ...]:
     try:
         return restore_user_profile(path, target)
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        raise InstallerError(str(error)) from error
+
+
+def _mutate_library(target: Path, *, add: str | None, remove: str | None) -> None:
+    try:
+        if add is not None:
+            add_favorite(target, add)
+        if remove is not None:
+            remove_favorite(target, remove)
+    except (OSError, ValueError) as error:
         raise InstallerError(str(error)) from error
 
 
@@ -9391,6 +9436,11 @@ def main(arguments: list[str] | None = None) -> int:
             if options.restore is not None:
                 restored = _restore_profile_backup(target, options.restore)
                 print("Arquivos restaurados: " + (", ".join(restored) if restored else "(nenhum)"))
+            return 0
+        if options.action == "library":
+            target = options.target.expanduser().resolve()
+            _mutate_library(target, add=options.add, remove=options.remove)
+            print(render_library_report(load_library(target)), end="")
             return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()

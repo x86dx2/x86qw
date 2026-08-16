@@ -211,6 +211,7 @@ x86qw play ktx --mode ctf     x86qw proxy                   x86qw upgrade
 x86qw hub                     x86qw qtv                     x86qw verify
                               x86qw status                  x86qw doctor
                               x86qw profile                 x86qw repair
+                              x86qw library
 ```
 
 | Comando | Faz o quê |
@@ -220,12 +221,13 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | `proxy` | Executa o proxy de rota QWFWD |
 | `qtv` | Inicia o relay/espectador QTV |
 | `status` | Mostra a stack ativa; `--stop` solicita encerramento coordenado |
-| `hub` | Abre o hub local da instalação |
+| `hub` | Lista servidores públicos; se o Hub falhar, usa favoritos/recentes locais |
 | `update` | Atualiza a CLI e o que já está instalado |
 | `upgrade` | Também incorpora novidades do perfil escolhido |
 | `verify` | Compara a instalação com os recibos registrados |
 | `doctor` | Diagnostica a instalação sem alterar arquivos; `--bundle` gera um zip sanitizado |
 | `profile` | Mostra a fronteira perfil/cache/pessoal; `--backup` / `--restore` as configs user-owned |
+| `library` | Favoritos e recentes locais com origem e freshness; `--add` / `--remove` |
 | `changes` | Mostra arquivos novos, alterados ou removidos localmente |
 | `migrate` | Converte metadados legados para o contrato 1.0 |
 | `repair` | Recompõe somente conteúdo gerenciado ausente ou incorreto |
