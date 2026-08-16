@@ -59,7 +59,7 @@ class CatalogTests(unittest.TestCase):
             "component": "installer", "package": "x86qw-installer",
             "version": "0.2.2", "filename": "x86qw-installer-0.2.2.zip",
         }
-        with patch.dict(os.environ, {"GLAB_TOKEN": "private-token"}, clear=False):
+        with patch.dict(os.environ, {"GLAB_TOKEN": "glpat-test-token"}, clear=False):
             upload(Path("bundle.zip"), package)
         arguments = run.call_args.args[0]
         self.assertEqual(["curl", "--disable"], arguments[:2])
@@ -73,9 +73,23 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("--write-out", arguments)
         self.assertNotIn("--location", arguments)
         self.assertIn("@-", arguments)
-        self.assertNotIn("private-token", repr(arguments))
-        self.assertEqual("PRIVATE-TOKEN: private-token\n", run.call_args.kwargs["input"])
+        self.assertNotIn("glpat-test-token", repr(arguments))
+        self.assertEqual("PRIVATE-TOKEN: glpat-test-token\n", run.call_args.kwargs["input"])
         self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+
+    @patch("publish_gitlab_packages.subprocess.run")
+    def test_gitlab_upload_uses_bearer_for_glab_oauth_tokens(self, run) -> None:
+        run.return_value.returncode = 0
+        run.return_value.stdout = "201"
+        package = {
+            "component": "installer", "package": "x86qw-installer",
+            "version": "0.2.2", "filename": "x86qw-installer-0.2.2.zip",
+        }
+        oauth = "a" * 64
+        with patch.dict(os.environ, {"GLAB_TOKEN": oauth}, clear=False):
+            upload(Path("bundle.zip"), package)
+        self.assertEqual(f"Authorization: Bearer {oauth}\n", run.call_args.kwargs["input"])
+        self.assertNotIn(oauth, repr(run.call_args.args[0]))
 
     @patch("publish_gitlab_packages.subprocess.run")
     def test_gitlab_upload_rejects_redirect_without_capturing_response_body(self, run) -> None:
@@ -85,7 +99,7 @@ class CatalogTests(unittest.TestCase):
             "component": "installer", "package": "x86qw-installer",
             "version": "0.2.2", "filename": "x86qw-installer-0.2.2.zip",
         }
-        with patch.dict(os.environ, {"GLAB_TOKEN": "private-token"}, clear=False):
+        with patch.dict(os.environ, {"GLAB_TOKEN": "glpat-test-token"}, clear=False):
             with self.assertRaisesRegex(ValueError, "HTTP status 302"):
                 upload(Path("bundle.zip"), package)
         arguments = run.call_args.args[0]
