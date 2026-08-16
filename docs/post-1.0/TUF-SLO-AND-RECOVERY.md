@@ -2,19 +2,19 @@
 
 ## Estado corrente
 
-Em 2026-08-15T19:58:26Z, a cadeia pública autenticou root v2, timestamp v20,
-snapshot/targets v18 e 75 pacotes. O timestamp expira em
-2026-08-16T19:54:14Z, fora da janela operacional de alerta de 6 horas.
-Verificações públicas independentes com limiares de 6h e 1h retornaram
-saudável.
+Em 2026-08-16T18:01:03Z, a cadeia pública autenticou root v2, timestamp v22,
+snapshot/targets v19 e 75 pacotes. O timestamp expira em
+2026-08-23T17:56:54Z (~7 dias, política owner-only), fora da janela de alerta
+de 6 horas. O monitor público retornou saudável.
 
 A renovação limitada foi executada sem alterar catálogo, root ou targets:
 
-- renewal run: 31905189013;
-- renewal artifact: 9252145236;
-- timestamp: v19 → v20;
+- handoff run: 31962999249; artifact 9267728705;
+- renewal run: 31963102361; artifact 9267748878;
+- publication run: 31963192991; artifact 9267779828;
+- timestamp: v21 → v22;
 - renewal report SHA-256:
-  28d1e9826c0ae4776ad515b37caca4e390fa97eedcf4be10a79966a0403b8027.
+  94621a3e2083ac7d3e00788814e1080449d4a5ee65d8d98359d1d5d5a2b57aa2.
 
 O recovery drill técnico foi registrado no run 31900793093, artifact 9251029392,
 com status drill-passed, expiry failure detected e recovery verified. A
