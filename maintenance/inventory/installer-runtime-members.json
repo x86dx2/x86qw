@@ -25,6 +25,7 @@
     {"member": "x86qw_runtime/ui/menu.py", "source": "x86qw_runtime/ui/menu.py", "consumer": "manager, gameplay e services", "contract": "navegação interativa canônica"},
     {"member": "x86qw_runtime/catalogs.py", "source": "x86qw_runtime/catalogs.py", "consumer": "manager.py", "contract": "modelos e loaders declarativos"},
     {"member": "x86qw_runtime/doctor.py", "source": "x86qw_runtime/doctor.py", "consumer": "manager.py", "contract": "diagnóstico read-only da instalação"},
+    {"member": "x86qw_runtime/ui/local.py", "source": "x86qw_runtime/ui/local.py", "consumer": "manager.py", "contract": "painel HTML local somente leitura"},
     {"member": "x86qw_runtime/profiles.py", "source": "x86qw_runtime/profiles.py", "consumer": "manager.py", "contract": "fronteira e backup/restore do perfil user-owned"},
     {"member": "x86qw_runtime/library.py", "source": "x86qw_runtime/library.py", "consumer": "manager.py", "contract": "favoritos e recentes locais com origem e freshness"},
     {"member": "x86qw_runtime/host_presets.py", "source": "x86qw_runtime/host_presets.py", "consumer": "services.py", "contract": "presets declarativos de hospedagem sem segredos"},

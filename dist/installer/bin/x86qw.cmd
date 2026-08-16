@@ -19,6 +19,7 @@ if /I "%~1"=="proxy" goto service
 if /I "%~1"=="qtv" goto service
 if /I "%~1"=="status" goto service
 if /I "%~1"=="doctor" goto service
+if /I "%~1"=="ui" goto service
 if /I "%~1"=="update" goto maintenance
 if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
@@ -77,6 +78,7 @@ echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
 echo   doctor [--bundle]    diagnostica a instalacao sem alterar arquivos
+echo   ui                   painel HTML local somente leitura
 echo   profile [--backup|--restore]  configuracoes pessoais, fora de cache e demos
 echo   library [--add|--remove]  favoritos e recentes locais, com origem e freshness
 echo   changes [--sync-gitignore] compara mudancas locais com a instalacao registrada

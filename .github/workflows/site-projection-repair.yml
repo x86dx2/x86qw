@@ -238,7 +238,7 @@ jobs:
             --catalog candidate/catalog.json \
             --expected-key-id "$EXPECTED_KEY_ID" \
             > "$RUNNER_TEMP/timestamp-renewal.json"
-      - name: Stage existing authenticated TUF v20 without publishing new metadata
+      - name: Stage authenticated TUF from the renewal handoff without publishing new metadata
         run: |
           python3 maintenance/tools/publish_tuf_metadata.py \
             --metadata-dir renewal/repository \
@@ -367,7 +367,11 @@ jobs:
           if deployment.get("release_truth_endpoint") != "200":
               raise SystemExit("live release-truth does not record its verified endpoint")
           PY
-          curl --location --http1.1 --fail --silent --show-error --compressed --retry 4 --retry-all-errors --retry-delay 2 --max-time 30 -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" -H "Accept: text/html,application/xhtml+xml" -H "Accept-Language: en-US,en;q=0.9" -H "Cache-Control: no-cache" "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" | grep -F "owner-only"
+          python3 maintenance/tools/verify_site_root_probe.py \
+            --assembled release-work/site/public/index.html \
+            --live-url "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --report "$RUNNER_TEMP/root-probe.json"
+          cp "$RUNNER_TEMP/root-probe.json" root-probe.json
       - name: Write immutable projection-repair receipt
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
@@ -389,11 +393,13 @@ jobs:
           import json
           import os
           from pathlib import Path
+          probe = json.loads(Path("root-probe.json").read_text(encoding="utf-8"))
           receipt = {
               "format": 1,
               "operation": "owner-only-site-projection-repair",
               "release_code_commit": os.environ["RELEASE_CODE_COMMIT"],
               "development_validate_run": int(os.environ["DEVELOPMENT_VALIDATE_RUN"]),
+              "root_probe": probe,
               "candidate": {
                   "commit": os.environ["CANDIDATE_COMMIT"],
                   "run_id": int(os.environ["CANDIDATE_RUN_ID"]),
@@ -426,7 +432,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: site-projection-repair-${{ github.run_id }}-${{ github.run_attempt }}
-          path: projection-repair-receipt.json
+          path: |
+            projection-repair-receipt.json
+            root-probe.json
           if-no-files-found: error
           overwrite: false
           retention-days: 90
