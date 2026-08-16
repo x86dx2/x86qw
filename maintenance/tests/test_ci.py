@@ -195,7 +195,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("os workflows de candidato rejeitam prereleases", stabilization)
         self.assertNotIn("publicação da `1.0.0` sem os gates nativos", roadmap)
         self.assertIn("sem gates nativos", roadmap)
-        self.assertIn("versão pública continua sendo `0.7.13`", draft)
+        self.assertIn("baseline-fonte no Git continua `0.7.13`", draft)
         self.assertIn("smoke nativo M3", draft)
         self.assertNotIn("versão pública continua sendo `0.7.3`", draft)
         self.assertNotIn("sem smokes nativos ou runners externos", draft)
@@ -257,13 +257,18 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("Reserved mirror gate", release)
         self.assertNotIn("No metadata publisher", release)
 
-    def test_windows_preview_job_does_not_claim_posix_or_native_suite(self):
+    def test_required_portable_contract_is_macos_only(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
-        self.assertIn("if: matrix.os != 'windows-latest'", workflow)
-        self.assertIn("if: matrix.os == 'windows-latest'", workflow)
+        self.assertIn('- os: macos-latest\n            python: "3.10"', workflow)
+        self.assertIn('- os: macos-latest\n            python: "3.13"', workflow)
+        self.assertIn("preview-other-os:", workflow)
+        self.assertIn("if: github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("Windows preview contract", workflow)
         self.assertIn("windows_preview_excluded", workflow)
         self.assertNotIn("continue-on-error", workflow)
+        portable_block = workflow.split("preview-other-os:")[0]
+        self.assertNotIn("- os: ubuntu-latest", portable_block)
+        self.assertNotIn("- os: windows-latest", portable_block)
 
     def test_portable_contract_seeds_one_shared_lfs_cache_before_other_matrix_jobs(self):
         workflow = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")

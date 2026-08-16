@@ -16,6 +16,13 @@ from x86qw_runtime import receipts, state
 from x86qw_runtime.io.archive import scan_archive
 
 
+def setUpModule() -> None:
+    if os.environ.get("X86QW_CI_PORTABLE") == "1":
+        raise unittest.SkipTest(
+            "migração histórica não é gate do contrato portátil owner-only/M3"
+        )
+
+
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "maintenance" / "tests" / "fixtures" / "migrations"
 PUBLIC_ARCHIVES = {

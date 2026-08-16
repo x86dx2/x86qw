@@ -309,15 +309,12 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A baseline estável continua em `0.7.13` e as referências às versões anteriores
-permanecem históricas e imutáveis. O `1.0.0-rc.1` é um Release Candidate público;
-o workflow protegido de aceitação falhou, embora uma rechecagem local posterior
-dos mesmos bytes públicos tenha passado o lifecycle completo. O soak ainda não
-foi aberto formalmente e a `1.0.0` final ainda não foi aprovada. Consulte o
-[status operacional](docs/PROJECT-STATUS.md),
-o [roadmap estratégico](docs/ROADMAP.md) e o
-[plano detalhado de estabilização](docs/implementation/stabilization-1.0-plan.md)
-para distinguir baseline, sequência, evidência e gates de aprovação.
+A release publicada é `1.0.0` owner-only: um usuário, válida no Apple M3.
+Os instaladores de macOS, Windows e Linux continuam no site e no catálogo;
+o **gate** obrigatório é macOS/M3. Windows e Linux ficam catalogados até a
+evidência nativa da fase correspondente. A baseline-fonte no Git permanece
+`0.7.13`. Soak, migração histórica e audiência `external-public` não bloqueiam
+desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
 
 ## Compatibilidade
 
@@ -330,7 +327,7 @@ para distinguir baseline, sequência, evidência e gates de aprovação.
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> A matriz de CI valida catálogos, schemas, caminhos e a CLI em macOS, Linux e Windows com Python 3.10 e 3.13 sob o contrato `portable-contract`; no Windows, o job é explicitamente preview e exclui casos POSIX/macOS ou nativos. Isso não equivale a um smoke gráfico nativo de cada runtime em cada plataforma; o [roadmap](docs/ROADMAP.md) mantém essa distinção explícita.
+> O contrato `portable-contract` obrigatório roda em macOS com Python 3.10 e 3.13. Jobs Linux/Windows existem como preview manual (`workflow_dispatch`) e não bloqueiam merge. Isso não equivale a smoke nativo fora do Apple M3.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso

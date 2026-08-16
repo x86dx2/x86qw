@@ -134,8 +134,8 @@ class RemoteClient:
         ), None)
         if error.status == 403 and remaining == "0":
             raise InstallerError(
-                "O limite temporário de consultas do GitHub foi atingido. Aguarde a "
-                "renovação ou defina GITHUB_TOKEN para ampliar o limite."
+                "O limite temporário de consultas do GitHub foi atingido. "
+                "Aguarde a renovação e tente novamente."
             ) from error
 
     def get(
