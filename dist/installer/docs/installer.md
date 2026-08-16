@@ -811,7 +811,17 @@ disco e permissões, sem alterar arquivos:
 ```sh
 ./dist/installer/bin/manager.py doctor
 ./dist/installer/bin/manager.py doctor --json
+./dist/installer/bin/manager.py doctor --bundle
 ```
+
+`--bundle` grava `x86qw-doctor.zip` fora da instalação, com `NOTICE.txt` e um
+`doctor.json` sanitizado. Não há upload. Revise o zip antes de partilhar. Com
+`--json --bundle`, o envelope JSON permanece inalterado no stdout e o caminho
+do zip vai para o stderr.
+
+A primeira instalação e o próprio `doctor` lembram o modo owner-only: um
+usuário, Apple M3, instalação limpa permitida; Windows e Linux continuam
+preview.
 
 No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\installer\bin\manager.py` nos exemplos.
 

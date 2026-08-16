@@ -60,7 +60,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnóstico sanitizado
-      description: Inclua o comando exato, a saída relevante e o resultado de x86qw verify. Não inclua segredos.
+      description: Anexe ou descreva o resultado de `x86qw doctor --bundle`. O zip contém NOTICE.txt e doctor.json já redigidos. Não inclua senhas, tokens ou caminhos pessoais extras.
       render: shell
   - type: dropdown
     id: channel

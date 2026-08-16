@@ -224,7 +224,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | `update` | Atualiza a CLI e o que já está instalado |
 | `upgrade` | Também incorpora novidades do perfil escolhido |
 | `verify` | Compara a instalação com os recibos registrados |
-| `doctor` | Diagnostica a instalação sem alterar arquivos |
+| `doctor` | Diagnostica a instalação sem alterar arquivos; `--bundle` gera um zip sanitizado |
 | `changes` | Mostra arquivos novos, alterados ou removidos localmente |
 | `migrate` | Converte metadados legados para o contrato 1.0 |
 | `repair` | Recompõe somente conteúdo gerenciado ausente ou incorreto |

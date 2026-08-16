@@ -287,6 +287,7 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
         for source in (shell, batch):
             self.assertIn("changes [--sync-gitignore]", source)
             self.assertIn("migrate [--dry-run]", source)
+            self.assertIn("doctor [--bundle]", source)
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
     def test_unix_launcher_forwards_repair_and_long_play_arguments_exactly(self):

@@ -3,11 +3,19 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from x86qw_runtime.contracts import JsonOutputError, make_json_output, redact_json
-from x86qw_runtime.doctor import CHECK_IDS, diagnose, render_doctor_report
+from x86qw_runtime.doctor import (
+    CHECK_IDS,
+    DEFAULT_BUNDLE_NAME,
+    diagnose,
+    render_doctor_report,
+    resolve_bundle_destination,
+    write_doctor_bundle,
+)
 
 
 def _check(report: dict[str, object], check_id: str) -> dict[str, object]:
@@ -123,4 +131,64 @@ class DoctorContractTests(unittest.TestCase):
             text = render_doctor_report(diagnose(Path(temporary) / "missing"))
         self.assertIn("installation", text)
         self.assertIn("Problemas encontrados", text)
+        self.assertIn("owner-only", text)
+        self.assertIn("Apple M3", text)
         self.assertNotIn("password", text)
+
+    def test_bundle_is_sanitized_reviewable_and_outside_the_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / "Users" / "alice"
+            target = home / "Games" / "x86qw"
+            bundle = Path(temporary) / "out" / "x86qw-doctor.zip"
+            bundle.parent.mkdir()
+            report = diagnose(
+                target,
+                network=("skip", "token=super-secret"),
+            )
+            written = write_doctor_bundle(report, bundle, home=home)
+            self.assertEqual(bundle, written)
+            self.assertFalse(target.exists())
+
+            with zipfile.ZipFile(bundle) as archive:
+                names = set(archive.namelist())
+                self.assertEqual({"NOTICE.txt", "doctor.json"}, names)
+                notice = archive.read("NOTICE.txt").decode("utf-8")
+                payload = archive.read("doctor.json").decode("utf-8")
+            self.assertIn("owner-only", notice)
+            self.assertIn("Apple M3", notice)
+            self.assertNotIn("super-secret", payload)
+            self.assertNotIn("alice", payload)
+            self.assertIn("[REDACTED]", payload)
+            document = json.loads(payload)
+            self.assertTrue(document["data"]["target"].startswith("~/"))
+            with self.assertRaises(OSError):
+                write_doctor_bundle(report, bundle, home=home)
+
+    def test_bundle_path_stays_outside_the_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "install"
+            target.mkdir()
+            home = root / "home"
+            home.mkdir()
+            with self.assertRaises(OSError):
+                resolve_bundle_destination(
+                    str(target / "inside.zip"),
+                    target,
+                    cwd=target,
+                    home=home,
+                )
+            fallback = resolve_bundle_destination(
+                DEFAULT_BUNDLE_NAME,
+                target,
+                cwd=target,
+                home=home,
+            )
+            self.assertEqual((home / DEFAULT_BUNDLE_NAME).resolve(), fallback)
+            outside = resolve_bundle_destination(
+                "report.zip",
+                target,
+                cwd=root,
+                home=home,
+            )
+            self.assertEqual((root / "report.zip").resolve(), outside)

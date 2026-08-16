@@ -162,7 +162,14 @@ from x86qw_runtime.io.remote import (
     https_url_filename,
     validate_https_url,
 )
-from x86qw_runtime.doctor import diagnose, render_doctor_report
+from x86qw_runtime.doctor import (
+    DEFAULT_BUNDLE_NAME,
+    OWNER_ONLY_FIRST_RUN,
+    diagnose,
+    render_doctor_report,
+    resolve_bundle_destination,
+    write_doctor_bundle,
+)
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,
@@ -8291,6 +8298,7 @@ class Installer:
 
         shell_launcher = self.target / "x86qw.sh"
         console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
+        console.info(OWNER_ONLY_FIRST_RUN)
 
 
 def platform_argument(value: str) -> str:
@@ -8371,6 +8379,14 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     parser.add_argument(
         "--json", action="store_true",
         help="emite uma resposta JSON estável (sem prompts ou ANSI)",
+    )
+    parser.add_argument(
+        "--bundle",
+        nargs="?",
+        const=DEFAULT_BUNDLE_NAME,
+        default=None,
+        metavar="ARQUIVO",
+        help=f"com doctor, grava um zip sanitizado para revisão (padrão: {DEFAULT_BUNDLE_NAME})",
     )
     parser.add_argument(
         "--yes", action="store_true",
@@ -8471,6 +8487,8 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--skip-cli-update é reservado ao processo interno de atualização da CLI")
     if namespace.dry_run and namespace.action not in {"update", "upgrade", "repair", "migrate"}:
         parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
+    if namespace.bundle is not None and namespace.action != "doctor":
+        parser.error("--bundle só pode ser usado com doctor")
     if namespace.json and namespace.action not in {
         "version", "status", "hub", "verify", "doctor", "repair", "update", "upgrade",
     }:
@@ -8830,6 +8848,13 @@ def _doctor_report(target: Path) -> dict[str, object]:
     )
 
 
+def _write_doctor_bundle(report: dict[str, object], bundle: str, target: Path) -> Path:
+    try:
+        return write_doctor_bundle(report, resolve_bundle_destination(bundle, target))
+    except OSError as error:
+        raise InstallerError(str(error)) from error
+
+
 def _json_plan_row(row: UpdatePlanRow) -> dict[str, object]:
     """Project one maintenance row into the stable dry-run wire shape."""
 
@@ -8974,6 +8999,12 @@ def execute_json_action(options: argparse.Namespace, project_root: Path) -> int:
             data=data,
             dry_run=bool(options.dry_run),
         )
+        if command == "doctor" and options.bundle is not None:
+            assert target is not None
+            print(
+                f"Bundle sanitizado: {_write_doctor_bundle(data, options.bundle, target)}",
+                file=sys.stderr,
+            )
         print(render_json_output(output), end="")
         return int(ExitCode.SUCCESS)
     except KeyboardInterrupt as error:
@@ -9318,7 +9349,10 @@ def main(arguments: list[str] | None = None) -> int:
             return 0
         if options.action == "doctor":
             target = options.target.expanduser().resolve()
-            print(render_doctor_report(_doctor_report(target)), end="")
+            report = _doctor_report(target)
+            print(render_doctor_report(report), end="")
+            if options.bundle is not None:
+                print(f"Bundle sanitizado: {_write_doctor_bundle(report, options.bundle, target)}")
             return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()

@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import sys
+import zipfile
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,15 @@ CHECK_IDS = (
 )
 CHECK_STATUSES = frozenset({"ok", "warn", "fail", "skip"})
 AUDIENCE = "owner-only"
+OWNER_ONLY_FIRST_RUN = (
+    "Modo owner-only: um usuário, Apple M3. Instalação limpa permitida. "
+    "Windows e Linux continuam preview."
+)
+DEFAULT_BUNDLE_NAME = "x86qw-doctor.zip"
+_BUNDLE_NOTICE = (
+    OWNER_ONLY_FIRST_RUN
+    + "\nSem upload automático. Revise o conteúdo antes de partilhar.\n"
+)
 _LOW_DISK_BYTES = 512 * 1024 * 1024
 _CRITICAL_DISK_BYTES = 64 * 1024 * 1024
 _TRUST_WARNING = timedelta(hours=6)
@@ -65,6 +75,7 @@ def diagnose(
 def render_doctor_report(report: Mapping[str, object]) -> str:
     lines = [
         f"x86QW doctor — {report['audience']}",
+        OWNER_ONLY_FIRST_RUN,
         f"Destino: {report['target']}",
         "",
     ]
@@ -77,6 +88,79 @@ def render_doctor_report(report: Mapping[str, object]) -> str:
         else "Problemas encontrados."
     )
     return "\n".join(lines) + "\n"
+
+
+def sanitize_doctor_report(
+    report: Mapping[str, object],
+    *,
+    home: Path | None = None,
+) -> dict[str, object]:
+    """Return a shareable copy with home paths and secrets removed."""
+
+    from .contracts.output import redact_json
+
+    payload = json.dumps(dict(report), ensure_ascii=False)
+    home_text = str(home or Path.home())
+    if home_text:
+        payload = payload.replace(home_text, "~")
+    sanitized = redact_json(json.loads(payload))
+    if not isinstance(sanitized, dict):
+        raise ValueError("doctor report must remain an object after sanitization")
+    return sanitized
+
+
+def resolve_bundle_destination(
+    raw: str,
+    target: Path,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Resolve a zip path that is never written inside the installation."""
+
+    requested = Path(raw).expanduser()
+    destination = requested if requested.is_absolute() else (Path(cwd or Path.cwd()) / requested)
+    destination = destination.resolve()
+    root = Path(target).expanduser().resolve()
+    try:
+        destination.relative_to(root)
+    except ValueError:
+        return destination
+    if requested.parent != Path("."):
+        raise OSError("o bundle não pode ser gravado dentro da instalação")
+    fallback = (Path(home or Path.home()) / requested.name).resolve()
+    try:
+        fallback.relative_to(root)
+    except ValueError:
+        return fallback
+    raise OSError("o bundle não pode ser gravado dentro da instalação")
+
+
+def write_doctor_bundle(
+    report: Mapping[str, object],
+    destination: Path,
+    *,
+    home: Path | None = None,
+) -> Path:
+    """Write a reviewable zip that does not touch the installation target."""
+
+    from .contracts.output import make_json_output
+
+    destination = Path(destination)
+    if destination.exists() or destination.is_symlink():
+        raise OSError("bundle destination already exists")
+    document = make_json_output("doctor", data=sanitize_doctor_report(report, home=home))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = destination.with_name(destination.name + ".tmp")
+    try:
+        with zipfile.ZipFile(staging, "w") as archive:
+            archive.writestr("NOTICE.txt", _BUNDLE_NOTICE)
+            archive.writestr("doctor.json", document.to_json())
+        staging.replace(destination)
+    except BaseException:
+        staging.unlink(missing_ok=True)
+        raise
+    return destination
 
 
 def _check(check_id: str, status: str, summary: str) -> dict[str, str]:

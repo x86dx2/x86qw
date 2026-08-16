@@ -478,6 +478,44 @@ class CliJsonContractTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             manager.parse_arguments(["doctor", "--dry-run"], ROOT)
 
+    def test_bundle_is_rejected_outside_doctor(self) -> None:
+        with self.assertRaises(SystemExit):
+            manager.parse_arguments(["verify", "--bundle"], ROOT)
+
+    def test_doctor_bundle_json_keeps_schema_and_writes_outside_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "installation"
+            bundle = root / "x86qw-doctor.zip"
+            result, document, errors = self.invoke([
+                "doctor", "--json", "--bundle", str(bundle), str(target),
+            ])
+            self.assertEqual(0, result)
+            self.assertEqual("doctor", document.command)
+            self.assertTrue(document.ok)
+            self.assertNotIn("bundle", document.to_json())
+            self.assertIn(str(bundle.resolve()), errors)
+            self.assertTrue(bundle.is_file())
+            self.assertFalse(target.exists())
+
+    def test_doctor_human_bundle_prints_sanitized_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "installation"
+            bundle = root / "diag.zip"
+            output = io.StringIO()
+            errors = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                result = manager.main([
+                    "doctor", "--bundle", str(bundle), str(target),
+                ])
+            text = output.getvalue()
+            self.assertEqual(0, result)
+            self.assertIn("owner-only", text)
+            self.assertIn(f"Bundle sanitizado: {bundle.resolve()}", text)
+            self.assertTrue(bundle.is_file())
+            self.assertFalse(target.exists())
+
     def test_migrate_dry_run_is_an_explicit_maintenance_action(self) -> None:
         namespace = manager.parse_arguments(["migrate", "--dry-run"], ROOT)
         self.assertEqual("migrate", namespace.action)

@@ -77,7 +77,7 @@ para em `acceptance`; não se “corrige” por copiar um hash em um documento.
 | L15 | integrações externas | QWLeague `BLOCKED_EXTERNAL` | 1.3/parceria | External Integration |
 | L16 | hospedagem local | presets declarativos planejados | 1.2 | Server Operator |
 | L17 | operação remota/fleet | agentless/SSH somente após ADR | 1.2/ADR | Remote Ops Security |
-| L18 | observabilidade/doctor | diagnóstico sanitizado planejado | 1.1 | Supportability |
+| L18 | observabilidade/doctor | `doctor` read-only e bundle sanitizado | 1.1 | Supportability |
 | L19 | demos/MVD/QWD | parsing seguro e fuzzing ainda não priorizados | 1.3 | Untrusted File |
 | L20 | site/documentação/status | source e deployment em drift | 0C | Web/Documentation |
 | L21 | plataformas/empacotamento | somente M3 tem E3 do candidato | EP-5 | Native Platform |

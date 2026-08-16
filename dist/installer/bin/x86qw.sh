@@ -59,7 +59,7 @@ Manutenção:
   update [--yes]       atualiza somente clientes e componentes já instalados
   upgrade [--yes]      incorpora novidades do perfil da instalação
   verify               verifica a integridade da instalação
-  doctor               diagnostica a instalação sem alterar arquivos
+  doctor [--bundle]    diagnostica a instalação sem alterar arquivos
   changes [--sync-gitignore] compara mudanças locais com a instalação registrada
   migrate [--dry-run]   migra metadados para o contrato 1.0
   repair [--dry-run]   diagnostica e repara conteúdo gerenciado
