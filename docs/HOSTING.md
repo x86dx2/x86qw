@@ -20,6 +20,14 @@ Sem argumentos, `host` lista os mesmos jogos instalados apresentados por
 ./x86qw.sh host td2 --map dm6
 ```
 
+Layouts locais (sem senhas) ficam em `qw/x86qw-host-presets.json` e entram no
+backup de perfil:
+
+```sh
+./x86qw.sh host ktx --mode duel --map dm6 --save-preset local-duel
+./x86qw.sh host --preset local-duel
+```
+
 No menu principal, a hospedagem pergunta primeiro jogo, modo/regras e mapa. Em
 seguida há dois caminhos:
 

@@ -135,4 +135,4 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-Executar F3 no M3: FUNC-006 (presets de hospedagem local). Não iniciar EP-1 nem contato externo sem decisão de audiência nova.
+Executar F3 no M3: FUNC-006 (presets) e FUNC-007 (readiness/logs/stop). Não iniciar EP-1 nem contato externo sem decisão de audiência nova.

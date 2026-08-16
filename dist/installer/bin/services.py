@@ -48,6 +48,7 @@ from x86qw_runtime.io.managed_files import (
     unlink_sensitive_temporary,
 )
 from x86qw_runtime.errors import ExitCode, InstallerError
+from x86qw_runtime.host_presets import apply_host_preset, load_host_presets, save_host_preset
 from x86qw_runtime.platform import host as host_adapter
 from x86qw_runtime.ui.arguments import FriendlyArgumentParser
 from x86qw_runtime.ui.console import Console as RuntimeConsole
@@ -2209,6 +2210,16 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     host.add_argument("--with-proxy", action="store_true", help="inicia também o QWFWD")
     host.add_argument("--proxy-bind", type=bind_address, default="127.0.0.1")
     host.add_argument("--proxy-port", type=bounded_integer(1024, 65535), default=30000)
+    host.add_argument(
+        "--preset",
+        metavar="NOME",
+        help="carrega um preset local de hospedagem, sem senhas",
+    )
+    host.add_argument(
+        "--save-preset",
+        metavar="NOME",
+        help="grava um preset local de hospedagem e não inicia o servidor",
+    )
 
     proxy = subparsers.add_parser("proxy", help="inicia o proxy QWFWD")
     add_target(proxy, project_root)
@@ -2230,6 +2241,19 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
     )
     namespace = parser.parse_args(arguments)
     if namespace.action == "host":
+        if namespace.preset and namespace.save_preset:
+            parser.error("--preset e --save-preset não podem ser combinados")
+        if namespace.preset:
+            if namespace.selection is not None:
+                parser.error("--preset não pode ser combinado com o jogo na linha de comando")
+            try:
+                presets = load_host_presets(namespace.target)
+                preset = presets[namespace.preset]
+            except (OSError, ValueError) as error:
+                parser.error(str(error))
+            except KeyError:
+                parser.error(f"preset de hospedagem não encontrado: {namespace.preset}")
+            apply_host_preset(namespace, preset)
         namespace.game = None
         if namespace.selection is not None:
             game_keys = {game.key for game in gameplay.load_local_games(project_root)}
@@ -2292,6 +2316,14 @@ def main(
             resources.installer = installer
             installer.validate_target("verify", purge=False)
             installer.reject_target_symlinks()
+
+            if options.action == "host" and options.save_preset:
+                try:
+                    saved = save_host_preset(target, options.save_preset, options)
+                except (OSError, ValueError) as error:
+                    raise InstallerError(str(error)) from error
+                console.success(f"Preset de hospedagem gravado: {saved['name']}")
+                return 0
 
             if options.action == "status":
                 active = show_service_status(target)

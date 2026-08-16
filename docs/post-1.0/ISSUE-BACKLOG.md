@@ -16,7 +16,7 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | FUNC-003 | NOW/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.1 / owner-only (PR #193) |
 | FUNC-004 | NOW/P1 | Favoritos e recentes locais com origem e freshness | FUNC-003 | 1.1 / owner-only |
 | FUNC-005 | NOW/P1 | Descoberta e entrada em partidas com fallback local | FUNC-004 | 1.1 / owner-only |
-| FUNC-006 | NEXT/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only |
+| FUNC-006 | NOW/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only |
 | FUNC-007 | NEXT/P1 | Readiness, logs, stop e crash recovery de servidor | FUNC-006 | 1.2 / owner-only |
 | FUNC-008 | LATER/P2 | UI local read-only sobre os contratos do runtime | FUNC-001, FUNC-005 | 1.2 / owner-only |
 | OPS-001 | LATER/P1 | Custódia independente, backup e RTO TUF | S0-004 | external-public only |
