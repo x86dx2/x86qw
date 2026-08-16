@@ -258,9 +258,9 @@ jobs:
           from pathlib import Path
 
           source = Path("candidate/site/public")
-          projection = source / "api/v1/release-truth.json"
+          projection = Path("site/public/api/v1/release-truth.json")
           if not projection.is_file():
-              raise SystemExit("site source lacks release-truth projection")
+              raise SystemExit("release code lacks the versioned release-truth projection")
           data = json.loads(projection.read_text(encoding="utf-8"))
           now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
           data["observed_at_utc"] = now
