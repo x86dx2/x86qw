@@ -14,10 +14,10 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | FUNC-001 | NOW/P1 | Implementar `x86qw doctor` read-only | S0-003 | 1.1 / owner-only (PR #191) |
 | FUNC-002 | NOW/P1 | Gerar bundle de diagnóstico sanitizado e revisável | FUNC-001 | 1.1 / owner-only (PR #191) |
 | FUNC-003 | NOW/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.1 / owner-only (PR #193) |
-| FUNC-004 | NOW/P1 | Favoritos e recentes locais com origem e freshness | FUNC-003 | 1.1 / owner-only |
-| FUNC-005 | NOW/P1 | Descoberta e entrada em partidas com fallback local | FUNC-004 | 1.1 / owner-only |
-| FUNC-006 | NOW/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only |
-| FUNC-007 | NEXT/P1 | Readiness, logs, stop e crash recovery de servidor | FUNC-006 | 1.2 / owner-only |
+| FUNC-004 | NOW/P1 | Favoritos e recentes locais com origem e freshness | FUNC-003 | 1.1 / owner-only (PR #194) |
+| FUNC-005 | NOW/P1 | Descoberta e entrada em partidas com fallback local | FUNC-004 | 1.1 / owner-only (PR #194) |
+| FUNC-006 | NOW/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only (PR #195) |
+| FUNC-007 | NOW/P1 | Readiness, logs, stop e crash recovery de servidor | FUNC-006 | 1.2 / owner-only (`status` / `--stop` / journal) |
 | FUNC-008 | LATER/P2 | UI local read-only sobre os contratos do runtime | FUNC-001, FUNC-005 | 1.2 / owner-only |
 | OPS-001 | LATER/P1 | Custódia independente, backup e RTO TUF | S0-004 | external-public only |
 | OPS-002 | LATER/P1 | Soak de sete dias do candidato external-public exato | decisão EP-0 | external-public only |
