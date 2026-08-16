@@ -98,13 +98,30 @@ jobs:
 
   site:
     name: portable-contract / site
+    needs: lfs-seed
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           lfs: false
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: lfs-cache
+        with:
+          path: .git/lfs/objects
+          key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
+          enableCrossOsArchive: true
+      - name: Restore or fetch the single LFS materialization
+        shell: bash
+        run: |
+          if [ "${{ steps.lfs-cache.outputs.cache-hit }}" != "true" ]; then
+            echo "[ERRO] cache LFS ausente fora do job seed" >&2
+            exit 1
+          fi
+          git lfs checkout
+          git lfs fsck --pointers
+          python3 maintenance/tools/check_lfs.py
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
