@@ -1341,6 +1341,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         ], direct_close_calls)
 
         class BlockingResolver:
+            args = ["python", "resolver"]
             def __init__(self):
                 self.returncode = None
                 self.calls = 0
@@ -1349,7 +1350,7 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
             def communicate(self, input=None, timeout=None):
                 self.calls += 1
                 if self.calls == 1:
-                    raise namespace["subprocess"].TimeoutExpired(["python"], timeout)
+                    raise namespace["subprocess"].TimeoutExpired(self.args, timeout)
                 self.returncode = -9
                 return b"", b""
 
@@ -1359,8 +1360,12 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         blocked_resolver = BlockingResolver()
         with mock.patch.object(
             namespace["subprocess"], "Popen", return_value=blocked_resolver,
+        ), mock.patch.object(
+            namespace["time"],
+            "monotonic",
+            side_effect=[100.0, 100.1, 100.1, 100.1],
         ), self.assertRaisesRegex(TimeoutError, "resolucao DNS"):
-            namespace["resolve_addresses"]("example.invalid", 443, 0.01)
+            namespace["resolve_addresses"]("example.invalid", 443, 1.0)
         self.assertTrue(blocked_resolver.killed)
         self.assertEqual(2, blocked_resolver.calls)
 
