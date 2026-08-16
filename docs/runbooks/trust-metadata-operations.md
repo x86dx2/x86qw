@@ -49,8 +49,9 @@ python3 maintenance/tools/generate_trust_metadata.py generate \
 ```
 
 Renovações usam uma saída nova e `--version N+1`. Targets vence em até 90 dias,
-snapshot em 7 dias, timestamp em 24 horas e root em 365 dias. Nunca reutilize
-uma versão para bytes diferentes.
+snapshot em 7 dias, timestamp em 7 dias no modo owner-only (24 horas antes de
+catálogo público) e root em 365 dias. Nunca reutilize uma versão para bytes
+diferentes.
 
 ## Papéis humanos do modelo-alvo
 
@@ -145,12 +146,13 @@ confere que nenhum segredo entrou na ata antes de anexá-la à evidência da iss
 
 ## Renovação normal
 
-### Timestamp, no máximo a cada 12 horas
+### Timestamp, antes de 48 horas restantes (owner-only)
 
 - [ ] monitor confirma mais de 6 horas restantes antes de iniciar;
 - [ ] snapshot referenciado ainda é o último aprovado e está válido;
 - [ ] versão de timestamp é exatamente a anterior mais um;
-- [ ] nova expiração não passa de 24 horas;
+- [ ] nova expiração não passa de 7 dias; antes de catálogo público, o teto
+      volta a 24 horas;
 - [ ] assinatura é verificada localmente;
 - [ ] bytes são comparados em todos os mirrors;
 - [ ] `timestamp.json` é promovido por último.

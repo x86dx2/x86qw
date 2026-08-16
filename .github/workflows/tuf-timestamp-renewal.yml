@@ -32,9 +32,9 @@ on:
         required: true
         type: string
       lease_hours:
-        description: "Duração da nova lease timestamp"
+        description: "Duração da nova lease timestamp em horas (owner-only: 168)"
         required: false
-        default: "24"
+        default: "168"
         type: string
 
 permissions:

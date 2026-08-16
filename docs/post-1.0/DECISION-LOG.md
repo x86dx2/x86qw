@@ -21,6 +21,7 @@
 | D-17 | migração pública 0.7.13 exata não é aprovada por inferência do harness | decidido | instalador SHA 11460440… bloqueado; harness injeta metadado histórico |
 | D-18 | timestamp dentro da warning window bloqueia feature work | decidido | stop condition; monitor 6h em 2026-08-15T15:38:22Z |
 | D-19 | fonte e deployment não podem responder versões/audiência incompatíveis | decidido | product/catalog 1.0.0; site root 0.7.13; release-truth endpoint 404 |
+| D-20 | timestamp owner-only expira no máximo em 7 dias | decidido | emenda ADR 0006; teto 24 h volta antes de catálogo público |
 
 ## Decisões humanas pendentes
 

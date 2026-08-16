@@ -129,6 +129,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("actions: read", source)
         self.assertIn("TUF_TIMESTAMP_KEY_B64", source)
         self.assertIn("tuf_timestamp_renewal.py", source)
+        self.assertIn('default: "168"', source)
         self.assertIn("verify_external_handoff.py", source)
         self.assertIn("tuf-metadata-handoff.yml", source)
         self.assertIn("release_code_commit:", source)

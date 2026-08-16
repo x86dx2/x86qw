@@ -42,7 +42,7 @@ from x86qw_runtime.trust import (  # noqa: E402
 )
 
 
-ROLE_EXPIRY_DAYS = {"root": 365, "targets": 90, "snapshot": 7, "timestamp": 1}
+ROLE_EXPIRY_DAYS = {"root": 365, "targets": 90, "snapshot": 7, "timestamp": 7}
 ED25519_PRIVATE_DER_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
 
 
