@@ -24,6 +24,7 @@ if /I "%~1"=="upgrade" goto maintenance
 if /I "%~1"=="hub" goto maintenance
 if /I "%~1"=="verify" goto maintenance
 if /I "%~1"=="changes" goto maintenance
+if /I "%~1"=="profile" goto maintenance
 if /I "%~1"=="migrate" goto maintenance
 if /I "%~1"=="repair" goto maintenance
 if /I "%~1"=="cleanup" goto maintenance
@@ -73,6 +74,7 @@ echo   update [--yes]       atualiza o conteudo ja instalado
 echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
 echo   doctor [--bundle]    diagnostica a instalacao sem alterar arquivos
+echo   profile [--backup|--restore]  configuracoes pessoais, fora de cache e demos
 echo   changes [--sync-gitignore] compara mudancas locais com a instalacao registrada
 echo   migrate [--dry-run]   migra metadados para o contrato 1.0
 echo   repair [--dry-run]   diagnostica e repara conteudo gerenciado

@@ -170,6 +170,14 @@ from x86qw_runtime.doctor import (
     resolve_bundle_destination,
     write_doctor_bundle,
 )
+from x86qw_runtime.profiles import (
+    DEFAULT_PROFILE_BUNDLE,
+    backup_user_profile,
+    classify_install_data,
+    is_user_profile_path,
+    render_profile_report,
+    restore_user_profile,
+)
 from x86qw_runtime.installation_changes import (
     InstallationChange,
     ManagedInstallationFile,
@@ -2791,21 +2799,8 @@ class Installer:
         return path
 
     def validate_personal_baseline_path(self, value: str) -> None:
-        path = self.validate_safe_inventory_path(value)
-        exact = {
-            "ezquake/configs/config.cfg",
-            "ezquake/configs/preset.cfg",
-            "qtv/qtv.cfg",
-            "qwfwd/qwfwd.cfg",
-        }
-        profile_roots = {"arena", "fortress", "prox", "qw", "td2"}
-        is_profile = (
-            len(path.parts) == 2
-            and path.parts[0] in profile_roots
-            and path.name.startswith("x86qw-")
-            and path.suffix in {".cfg", ".json"}
-        )
-        if value not in exact and not is_profile:
+        self.validate_safe_inventory_path(value)
+        if not is_user_profile_path(value):
             raise InstallerError(f"unexpected path in personal baseline: {value}")
 
     def validate_managed_path(self, value: str) -> None:
@@ -8389,6 +8384,19 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         help=f"com doctor, grava um zip sanitizado para revisão (padrão: {DEFAULT_BUNDLE_NAME})",
     )
     parser.add_argument(
+        "--backup",
+        nargs="?",
+        const=DEFAULT_PROFILE_BUNDLE,
+        default=None,
+        metavar="ARQUIVO",
+        help=f"com profile, grava um zip das configurações pessoais (padrão: {DEFAULT_PROFILE_BUNDLE})",
+    )
+    parser.add_argument(
+        "--restore",
+        metavar="ARQUIVO",
+        help="com profile, restaura o zip de configurações pessoais",
+    )
+    parser.add_argument(
         "--yes", action="store_true",
         help="confirma automaticamente o plano de update ou upgrade",
     )
@@ -8412,7 +8420,7 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         "action", nargs="?", default="install",
         help=(
             "install, menu, play, host, proxy, qtv, status, version, update, upgrade, repair, migrate, components, presets, hub, "
-            "verify, doctor, changes, uninstall ou cleanup"
+            "verify, doctor, profile, changes, uninstall ou cleanup"
         ),
     )
     parser.add_argument(
@@ -8489,6 +8497,10 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         parser.error("--dry-run só pode ser usado com update, upgrade, repair ou migrate")
     if namespace.bundle is not None and namespace.action != "doctor":
         parser.error("--bundle só pode ser usado com doctor")
+    if (namespace.backup is not None or namespace.restore is not None) and namespace.action != "profile":
+        parser.error("--backup e --restore só podem ser usados com profile")
+    if namespace.backup is not None and namespace.restore is not None:
+        parser.error("--backup e --restore não podem ser combinados")
     if namespace.json and namespace.action not in {
         "version", "status", "hub", "verify", "doctor", "repair", "update", "upgrade",
     }:
@@ -8564,7 +8576,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
             launcher = public_launcher_name()
             print(f"\nUso: {launcher} <comando> [opções]")
             print(f"Exemplo: {launcher} play")
-            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, profile, changes, migrate, repair, cleanup, uninstall e version.")
             return 0
         if selected in (None, "exit"):
             print("\nAté a próxima partida.")
@@ -8668,6 +8680,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
                     navigation.MenuOption("upgrade", "Incorporar novidades", "convergir com o perfil atual"),
                     navigation.MenuOption("verify", "Verificar integridade", "operação somente leitura"),
                     navigation.MenuOption("doctor", "Diagnosticar instalação", "somente leitura, sem alterar arquivos"),
+                    navigation.MenuOption("profile", "Perfil pessoal", "backup e restore das configurações user-owned"),
                     navigation.MenuOption("changes", "Ver mudanças locais", "comparar a instalação com o baseline registrado"),
                     navigation.MenuOption("migrate", "Migrar metadados", "converter o estado legado para o contrato 1.0"),
                     navigation.MenuOption("repair", "Diagnosticar e reparar", "preserva arquivos pessoais"),
@@ -8780,7 +8793,7 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
         if selected == "info":
             print(f"\nx86QW {application_version()}")
             print(f"Instalação: {target}")
-            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, changes, migrate, repair, cleanup, uninstall e version.")
+            print("Comandos: play, host, hub, qtv, proxy, status, update, upgrade, verify, doctor, profile, changes, migrate, repair, cleanup, uninstall e version.")
             launcher = public_launcher_name()
             print(f"Use {launcher} <comando> --help para ver todas as opções avançadas.")
             print("No menu: ↑↓ navega, →/Enter seleciona, ← volta e Esc sai; / busca quando aparecer na legenda.")
@@ -8852,6 +8865,21 @@ def _write_doctor_bundle(report: dict[str, object], bundle: str, target: Path) -
     try:
         return write_doctor_bundle(report, resolve_bundle_destination(bundle, target))
     except OSError as error:
+        raise InstallerError(str(error)) from error
+
+
+def _write_profile_backup(target: Path, bundle: str) -> Path:
+    try:
+        return backup_user_profile(target, resolve_bundle_destination(bundle, target))
+    except OSError as error:
+        raise InstallerError(str(error)) from error
+
+
+def _restore_profile_backup(target: Path, archive: str) -> tuple[str, ...]:
+    path = Path(archive).expanduser()
+    try:
+        return restore_user_profile(path, target)
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         raise InstallerError(str(error)) from error
 
 
@@ -9353,6 +9381,16 @@ def main(arguments: list[str] | None = None) -> int:
             print(render_doctor_report(report), end="")
             if options.bundle is not None:
                 print(f"Bundle sanitizado: {_write_doctor_bundle(report, options.bundle, target)}")
+            return 0
+        if options.action == "profile":
+            target = options.target.expanduser().resolve()
+            print(render_profile_report(classify_install_data(target)), end="")
+            if options.backup is not None:
+                path = _write_profile_backup(target, options.backup)
+                print(f"Perfil gravado: {path}")
+            if options.restore is not None:
+                restored = _restore_profile_backup(target, options.restore)
+                print("Arquivos restaurados: " + (", ".join(restored) if restored else "(nenhum)"))
             return 0
         if options.online_only and options.target is None:
             options.target = choose_public_target()

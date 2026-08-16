@@ -823,6 +823,15 @@ A primeira instalação e o próprio `doctor` lembram o modo owner-only: um
 usuário, Apple M3, instalação limpa permitida; Windows e Linux continuam
 preview.
 
+Configurações pessoais ficam na classe `profile` (`config.cfg`, `preset.cfg`,
+`x86qw-user.cfg` e equivalentes). Cache e demos não entram no zip:
+
+```sh
+./dist/installer/bin/manager.py profile
+./dist/installer/bin/manager.py profile --backup
+./dist/installer/bin/manager.py profile --restore x86qw-profile.zip
+```
+
 No Windows, substitua `./dist/installer/bin/manager.py` por `py -3 .\dist\installer\bin\manager.py` nos exemplos.
 
 ## Saída e diagnóstico

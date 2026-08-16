@@ -13,7 +13,7 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only |
 | FUNC-001 | NOW/P1 | Implementar `x86qw doctor` read-only | S0-003 | 1.1 / owner-only (PR #191) |
 | FUNC-002 | NOW/P1 | Gerar bundle de diagnóstico sanitizado e revisável | FUNC-001 | 1.1 / owner-only (PR #191) |
-| FUNC-003 | NEXT/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.1 / owner-only |
+| FUNC-003 | NOW/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.1 / owner-only |
 | FUNC-004 | NEXT/P1 | Favoritos e recentes locais com origem e freshness | FUNC-003 | 1.1 / owner-only |
 | FUNC-005 | NEXT/P1 | Descoberta e entrada em partidas com fallback local | FUNC-004 | 1.1 / owner-only |
 | FUNC-006 | NEXT/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only |

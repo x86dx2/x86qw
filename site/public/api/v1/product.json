@@ -10,6 +10,7 @@
     "upgrade",
     "verify",
     "doctor",
+    "profile",
     "changes",
     "migrate",
     "repair",

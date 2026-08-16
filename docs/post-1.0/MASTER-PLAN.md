@@ -113,9 +113,9 @@ Somente após uso real justificar: biblioteca de demos, treinamento, UI local re
 
 ## Prioridades
 
-**NOW:** S0, convergência da projeção, observação M3, doctor/diagnostics.
+**NOW:** F2 perfis e fronteira de dados pessoais no M3.
 
-**NEXT:** perfis, favoritos/recentes, descoberta local e hosting presets.
+**NEXT:** favoritos/recentes, descoberta local e hosting presets.
 
 **LATER:** demos, UI local read-only, adapters externos e novas plataformas.
 
@@ -135,4 +135,4 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-Concluir a verificação protegida da projeção. Com S0 confirmado, abrir o primeiro issue funcional F1 e executar somente no M3. Não iniciar EP-1 nem qualquer contato externo sem decisão de audiência nova.
+Executar F2 no M3: FUNC-003 (fronteira e backup de perfil) e, em seguida, favoritos/recentes. Não iniciar EP-1 nem contato externo sem decisão de audiência nova.
