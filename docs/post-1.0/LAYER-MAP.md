@@ -71,9 +71,9 @@ para em `acceptance`; não se “corrige” por copiar um hash em um documento.
 | L09 | lifecycle da instalação | migração/preservação externa pendentes | EP-1 | Data Preservation |
 | L10 | CLI/TUI | contrato público preservado; tarefas a mapear | 1.1 | Terminal UX |
 | L11 | UI local | somente plano read-only, sem servidor nesta fase | 1.1/ADR | Local Web Security |
-| L12 | perfis/configuração/identidade local | fronteira profile/cache/personal e backup/restore | 1.1 | User Data |
+| L12 | perfis/configuração/identidade local | fronteira profile/cache/personal, backup/restore e library local | 1.1 | User Data |
 | L13 | gameplay launch | sem mudança de engine; aceitação posterior | 1.1 | Veteran Player |
-| L14 | descoberta/entrada em partidas | provider não deve ser autoridade única | 1.1 | New Player/Network |
+| L14 | descoberta/entrada em partidas | hub com fallback para library local; QWLeague não é autoridade | 1.1 | New Player/Network |
 | L15 | integrações externas | QWLeague `BLOCKED_EXTERNAL` | 1.3/parceria | External Integration |
 | L16 | hospedagem local | presets declarativos planejados | 1.2 | Server Operator |
 | L17 | operação remota/fleet | agentless/SSH somente após ADR | 1.2/ADR | Remote Ops Security |

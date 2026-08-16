@@ -9,7 +9,7 @@
 | S0.3 | TUF técnico e projeção live | timestamp saudável; bootstraps/product/release-truth convergentes | IN_PROGRESS |
 | S0.4 | observação owner-only | incidentes e recibos do mantenedor | RUN IN PARALLEL |
 | F1 | doctor e diagnostics | contratos JSON, sanitização e testes M3 | PASS |
-| F2 | perfis, favoritos e descoberta local | dados pessoais preservados e fallback | IN_PROGRESS |
+| F2 | perfis, favoritos e descoberta local | dados pessoais preservados e fallback | PASS |
 | F3 | hosting presets e health | readiness, logs e rollback | LATER |
 | EP-0 | decisão de audiência | ADR external-public explícito | DEFERRED |
 | EP-1 | migração histórica | somente se upgrade antigo for prometido | CONDITIONAL |
