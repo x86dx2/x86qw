@@ -1,9 +1,9 @@
 {
   "schema": "x86qw-post-1.0-backlog-v1",
   "issue": 164,
-  "snapshot_commit": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
+  "snapshot_commit": "1c5609f5027611f54be73d0df23042020464de01",
   "status": "proposed_local_only",
-  "feature_work": "blocked_until_0A_to_0E_and_EP-0",
+  "feature_work": "allowed_after_S0_m3_owner_only_stability",
   "items": [
     {
       "id": "POST-001",
@@ -552,7 +552,7 @@
     },
     {
       "id": "POST-009",
-      "priority": "NOW/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Nomear custódia TUF e backup independente",
       "problem": "produção não possui owner/backup/custódia independente comprovados",
       "outcome": "responsáveis e armazenamento de recuperação documentados",
@@ -577,7 +577,7 @@
         "EP-3 posterior revalida este receipt contra o candidato external-public, sem reabrir a ordem de 0B"
       ],
       "hard_gates": [
-        "Gate 0B"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -605,7 +605,7 @@
       ],
       "maker": "TUF Operations Maker",
       "target_version": "1.0.x",
-      "audience": "owner-only",
+      "audience": "external-public conditional",
       "checker": "Independent Trust Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. produção não possui owner/backup/custódia independente comprovados",
       "docs": [
@@ -620,7 +620,7 @@
     },
     {
       "id": "POST-010",
-      "priority": "NOW/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Executar drill de recuperação TUF e medir RTO",
       "problem": "há drill técnico local, mas não drill de produção/custódia/RTO",
       "outcome": "exercício offline/online com RTO e evidência sem expor chaves",
@@ -645,7 +645,7 @@
         "EP-3 posterior revalida este receipt contra o candidato external-public, sem reabrir a ordem de 0B"
       ],
       "hard_gates": [
-        "Gate 0B"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -673,7 +673,7 @@
       ],
       "maker": "Recovery Maker",
       "target_version": "1.0.x",
-      "audience": "owner-only",
+      "audience": "external-public conditional",
       "checker": "Supply Chain Recovery Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. há drill técnico local, mas não drill de produção/custódia/RTO",
       "docs": [
@@ -753,7 +753,7 @@
     },
     {
       "id": "POST-012",
-      "priority": "EP-1/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Migrar baseline publicada real",
       "problem": "external-public exige migração de versão suportada",
       "outcome": "fixtures reais 0.7.0–0.7.13 preservam dados byte a byte e permitem rollback",
@@ -777,7 +777,7 @@
         "estado final explícito: PASS, BLOCKED ou ESCALATED"
       ],
       "hard_gates": [
-        "EP-1"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -805,7 +805,7 @@
       ],
       "maker": "Migration Maker",
       "target_version": "external-public candidate exact",
-      "audience": "external-public",
+      "audience": "external-public conditional",
       "checker": "Data Preservation Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. external-public exige migração de versão suportada",
       "docs": [
@@ -820,7 +820,7 @@
     },
     {
       "id": "POST-013",
-      "priority": "EP-2/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Soak consecutivo de sete dias",
       "problem": "RC1 histórico não aprova candidato final",
       "outcome": "sete dias completos do candidato exato sem P0/P1 e com TUF observado",
@@ -843,7 +843,7 @@
         "estado final explícito: PASS, BLOCKED ou ESCALATED"
       ],
       "hard_gates": [
-        "EP-2"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -871,7 +871,7 @@
       ],
       "maker": "Soak Maker",
       "target_version": "external-public candidate exact",
-      "audience": "external-public",
+      "audience": "external-public conditional",
       "checker": "Release Observation Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. RC1 histórico não aprova candidato final",
       "docs": [
@@ -886,7 +886,7 @@
     },
     {
       "id": "POST-014",
-      "priority": "EP-4/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Aceitação por usuário externo",
       "problem": "nenhum usuário externo foi autorizado/testado nesta fotografia",
       "outcome": "usuário não mantenedor instala, joga, atualiza, diagnostica e remove",
@@ -910,7 +910,7 @@
         "estado final explícito: PASS, BLOCKED ou ESCALATED"
       ],
       "hard_gates": [
-        "EP-4"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -938,7 +938,7 @@
       ],
       "maker": "External Acceptance Maker",
       "target_version": "external-public candidate exact",
-      "audience": "external-public",
+      "audience": "external-public conditional",
       "checker": "New Player Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. nenhum usuário externo foi autorizado/testado nesta fotografia",
       "docs": [
@@ -953,7 +953,7 @@
     },
     {
       "id": "POST-015",
-      "priority": "EP-5/P1",
+      "priority": "LATER/EXTERNAL_ONLY",
       "title": "Decisão de plataforma com evidência nativa",
       "problem": "apenas M3 possui E3; outras plataformas são preview",
       "outcome": "cada plataforma promovida tem evidência nativa do candidato exato",
@@ -976,7 +976,7 @@
         "estado final explícito: PASS, BLOCKED ou ESCALATED"
       ],
       "hard_gates": [
-        "EP-5"
+        "EP-0"
       ],
       "tests": [
         "teste focal reproduzível",
@@ -1007,7 +1007,7 @@
       ],
       "maker": "Native Labs Maker",
       "target_version": "external-public by platform",
-      "audience": "external-public",
+      "audience": "external-public conditional",
       "checker": "Per-Platform Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. apenas M3 possui E3; outras plataformas são preview",
       "docs": [
@@ -1022,7 +1022,7 @@
     },
     {
       "id": "POST-016",
-      "priority": "1.3/BLOCKED_EXTERNAL",
+      "priority": "BLOCKED_EXTERNAL",
       "title": "RFC de adapter QWLeague",
       "problem": "não há API/OAuth/webhook/autorização oficial verificados",
       "outcome": "contrato oficial, fallback e privacy review antes de qualquer adapter",
@@ -1074,7 +1074,7 @@
       ],
       "maker": "External Integration Maker",
       "target_version": "1.3 optional",
-      "audience": "optional; never a dependency",
+      "audience": "optional external",
       "checker": "Legal and Privacy Checker",
       "context": "Meta-issue #164; snapshot dc080acacba7d70ced0cb311f08a81259bf5a9bd. não há API/OAuth/webhook/autorização oficial verificados",
       "docs": [
@@ -1157,7 +1157,7 @@
     },
     {
       "id": "POST-018",
-      "priority": "NEXT/P1",
+      "priority": "NEXT/OWNER_ONLY",
       "title": "Observação operacional owner-only",
       "problem": "publicação final ainda não tem janela de observação fechada",
       "outcome": "período definido com reinstall, update, verify, repair, TUF e incident log",
@@ -1227,7 +1227,7 @@
     },
     {
       "id": "POST-019",
-      "priority": "NEXT/P2",
+      "priority": "NEXT/OWNER_ONLY",
       "title": "Lint de drift do release-truth ledger",
       "problem": "projeções manuais podem divergir novamente",
       "outcome": "lint detecta versão, audiência, digest e claim incompatíveis",
@@ -1297,7 +1297,7 @@
     },
     {
       "id": "POST-020",
-      "priority": "NOW/P1",
+      "priority": "NEXT/OWNER_ONLY",
       "title": "Reconciliar backlog RC e governança",
       "problem": "issues históricas misturam RC1, final e trabalho futuro",
       "outcome": "cada issue aberta representa bytes, audiência e trabalho atuais; owner/Checker definidos",
@@ -1363,6 +1363,183 @@
         "P1",
         "owner-only"
       ]
+    },
+    {
+      "id": "FUNC-001",
+      "priority": "NOW/P1",
+      "title": "x86qw doctor read-only",
+      "problem": "capacidade funcional ainda não existe como contrato estável",
+      "outcome": "entregar capacidade pequena e reproduzível no M3",
+      "scope": [
+        "doctor read-only"
+      ],
+      "non_scope": [
+        "sem daemon persistente",
+        "sem conta online",
+        "sem integração QWLeague obrigatória"
+      ],
+      "dependencies": [
+        "S0 M3"
+      ],
+      "acceptance_criteria": [
+        "teste determinístico",
+        "aceitação no Apple M3",
+        "rollback documentado",
+        "main verde"
+      ],
+      "hard_gates": [
+        "S0-M3"
+      ],
+      "tests": [
+        "unit/contract",
+        "native M3"
+      ],
+      "platform": [
+        "macOS arm64 Apple M3"
+      ],
+      "security": [
+        "sem segredos em logs"
+      ],
+      "privacy": [
+        "dados pessoais separados"
+      ],
+      "rollback": [
+        "reverter PR sem apagar dados"
+      ],
+      "documentation": [
+        "docs e ajuda atualizados"
+      ],
+      "maker": "Feature Maker",
+      "target_version": "1.1",
+      "audience": "owner-only",
+      "checker": "Feature Checker",
+      "context": "M3-first rebaseline",
+      "docs": [
+        "Master Plan"
+      ],
+      "labels": [
+        "feature",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "FUNC-002",
+      "priority": "NOW/P1",
+      "title": "sanitized diagnostic bundle",
+      "problem": "suporte ainda exige inspeção manual",
+      "outcome": "bundle revisável e sem segredos",
+      "scope": [
+        "doctor diagnostics"
+      ],
+      "non_scope": [
+        "telemetria obrigatória",
+        "upload automático"
+      ],
+      "dependencies": [
+        "FUNC-001"
+      ],
+      "acceptance_criteria": [
+        "sanitização testada",
+        "aceitação M3",
+        "main verde"
+      ],
+      "hard_gates": [
+        "S0-M3"
+      ],
+      "tests": [
+        "contract",
+        "native M3"
+      ],
+      "platform": [
+        "macOS arm64 Apple M3"
+      ],
+      "security": [
+        "redação de segredos"
+      ],
+      "privacy": [
+        "minimização"
+      ],
+      "rollback": [
+        "reverter PR"
+      ],
+      "documentation": [
+        "docs e ajuda"
+      ],
+      "maker": "Feature Maker",
+      "target_version": "1.1",
+      "audience": "owner-only",
+      "checker": "Feature Checker",
+      "context": "M3-first rebaseline",
+      "docs": [
+        "Master Plan"
+      ],
+      "labels": [
+        "feature",
+        "owner-only"
+      ]
+    },
+    {
+      "id": "FUNC-003",
+      "priority": "NEXT/P1",
+      "title": "local profiles and personal-data boundaries",
+      "problem": "defaults e dados pessoais ainda precisam de fronteira operacional",
+      "outcome": "perfis user-owned sem perda de dados",
+      "scope": [
+        "profiles",
+        "backup/import"
+      ],
+      "non_scope": [
+        "conta online"
+      ],
+      "dependencies": [
+        "S0 M3"
+      ],
+      "acceptance_criteria": [
+        "preservação byte a byte",
+        "rollback",
+        "main verde"
+      ],
+      "hard_gates": [
+        "S0-M3"
+      ],
+      "tests": [
+        "migration contract",
+        "native M3"
+      ],
+      "platform": [
+        "macOS arm64 Apple M3"
+      ],
+      "security": [
+        "sem segredos em presets"
+      ],
+      "privacy": [
+        "dados pessoais user-owned"
+      ],
+      "rollback": [
+        "backup e restore"
+      ],
+      "documentation": [
+        "docs"
+      ],
+      "maker": "Feature Maker",
+      "target_version": "1.1",
+      "audience": "owner-only",
+      "checker": "Feature Checker",
+      "context": "M3-first rebaseline",
+      "docs": [
+        "Master Plan"
+      ],
+      "labels": [
+        "feature",
+        "owner-only"
+      ]
     }
-  ]
+  ],
+  "operating_scope": {
+    "users": 1,
+    "native_lab": "Apple M3",
+    "external_public": "deferred",
+    "migration": "conditional_only_if_historical_upgrade_is_promised",
+    "history_reset": "separate_destructive_decision"
+  }
 }

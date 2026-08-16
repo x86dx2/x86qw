@@ -26,10 +26,8 @@ Ela aponta para o commit de produto
 O registro detalhado, incluindo os hashes e a aceitação pública no M3, está em
 [`1.0.0-owner-only-publication-2026-08-15.md`](releases/1.0.0-owner-only-publication-2026-08-15.md).
 
-Estado atual: `1.0.0 owner-only = AT-RISK`; `external-public = NO-GO` até que o
-mantenedor declare usuários externos e reative os gates condicionais. A lease
-TUF pública está saudável, mas custódia independente, backup, RTO e a
-convergência do deployment ainda permanecem gates abertos.
+Estado operacional rebaselineado: o escopo corrente é um único usuário no Apple M3. `owner-only` é válido somente para esse escopo; `external-public = NO-GO`. A lease TUF técnica continua necessária para instalar e atualizar o ambiente do mantenedor, mas custódia independente, backup e RTO são requisitos condicionais de uma abertura para terceiros.
+
 
 ## Baseline real
 
@@ -238,15 +236,8 @@ está em
 
 ## Veredito
 
-`1.0.0 owner-only`: `AT-RISK` até o deployment live refletir a projeção
-owner-only atual. `MAIN=GREEN` e `TUF=HEALTHY`; `external-public=NO-GO` até
-EP-0..EP-5, custódia TUF sustentável e aceitação externa. Nenhuma feature 1.1+
-começa antes de Gate 0C/0D/0E.
+`1.0.0 owner-only`: válido para o único usuário no M3 após a verificação protegida da projeção; `MAIN=GREEN`; `TUF=HEALTHY`; `external-public=NO-GO`. A funcionalidade pode avançar depois de S0-M3. EP-0..EP-5 ficam estacionados até existir decisão de audiência externa.
 
 ## Próxima ação
 
-Concluir Gate 0C com uma geração site única e verificável, incluindo
-`/api/v1/release-truth.json`, audiência owner-only em `product.json`, e root
-sem claim público 0.7.13. Depois reconciliar Gate 0D e iniciar a observação
-owner-only; não publicar uma nova release de produto por correção exclusivamente
-documental.
+Concluir a verificação protegida da projeção e registrar o receipt. Com S0-M3 verde, iniciar FUNC-001 (`x86qw doctor`) em uma PR pequena. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.

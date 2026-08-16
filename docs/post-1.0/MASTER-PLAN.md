@@ -1,121 +1,138 @@
-# Master plan pós-1.0
+# Master Plan pós-1.0 — M3-first
 
 MAIN: GREEN
 TUF: HEALTHY
-1.0.0 OWNER-ONLY: AT-RISK
+1.0.0 OWNER-ONLY: VALID_FOR_SINGLE_USER_M3
 EXTERNAL-PUBLIC: NO-GO
-FEATURE WORK: BLOCKED
+FEATURE WORK: ALLOWED_AFTER_S0_M3
 
-**Veredito atual:** MAIN `GREEN`; TUF técnico `HEALTHY`, mas custódia e
-recuperação de produção ausentes; `1.0.0 owner-only` `AT-RISK` na fotografia;
-`external-public` `NO-GO`; feature work `BLOCKED`.
+## Decisão de escopo
 
-## Decisão de impacto da 1.0.0
+**VERIFIED FACT:** existe um único usuário e o único laboratório nativo disponível é o Apple M3 do mantenedor. A aceitação protegida do candidato 1.0.0 no M3 passou 25/25 casos. A main passou os sete contextos protegidos após a correção determinística do resolver DNS.
 
-**PROPOSAL:** não criar `1.0.1` para mudança exclusivamente de teste,
-documentação ou projeção. A falha Windows/Python 3.10 está classificada como
-`INFERENCE test-only` de alta confiança, mas o Checker ainda deve fechar os
-dois branches temporais com relógio controlado e matriz Windows 3.10/3.13.
-Se a correção exigir mudança em runtime, pacote ou bytes, criar candidato
-`1.0.1-owner-only` com novo digest, evidência e observação; não reutilizar a
-aceitação RC1.
+**DECISION:** o objetivo corrente não é preparar external-public. É manter uma linha owner-only estável no M3 e liberar capacidade funcional em incrementos pequenos. Migração de instalações de terceiros, soak de sete dias, aceite por usuário externo, custódia independente e suporte de outras plataformas deixam de bloquear o trabalho owner-only.
 
-## Objetivo
+**PROPOSAL:** a futura primeira publicação aberta poderá começar com uma baseline nova e limpa. Migração só volta a ser requisito se a comunicação prometer upgrade de uma instalação histórica. Não apagar o histórico agora: reset de histórico é uma operação destrutiva separada, com backup, export de evidências e rollback.
 
-Transformar a publicação owner-only em uma linha de release verdadeira,
-observável e governável antes de reabrir trabalho de produto ou audiência
-externa. O plano trata documentação, evidência, gates e decisões. Não cria
-issues remotas, não publica metadata, não muda workflows e não altera bytes de
-produto.
+## Estado e autoridades
 
-## Invariantes
+- `source`: baseline histórica 0.7.13 preservada até a decisão de uma nova baseline.
+- `candidate/release`: bytes imutáveis de 1.0.0, installer SHA-256 `d3274e6a...`, audiência `owner-only`.
+- `deployment`: site, bootstraps, product, catálogo e TUF servidos; deve convergir com o candidato exato.
+- `development`: HEAD atual e seus checks; a main verde é pré-condição de qualquer mudança.
 
-- `origin/main` continua a única autoridade de integração;
-- o candidato é build-once: o instalador e `candidate.json` publicados não
-  podem ser reconstruídos silenciosamente;
-- release, audiência, suporte e validação são dimensões separadas;
-- `E3` significa candidato exato executado no M3; não representa outras
-  plataformas;
-- `E4` só pode ser declarado com rebuild independente comprovado;
-- qualquer dúvida de segurança, trust, privacidade ou bytes falha fechada;
-- backlog e RFCs desta entrega são propostas locais e documentais.
+A projeção machine-readable é a autoridade para audiência, suporte, estado de CI e estado funcional. README, site, product, catálogo, CLI e PROJECT-STATUS são projeções testadas, não cópias manuais.
 
-## Gates ordenados
+## S0 — estabilidade owner-only no M3
 
-| Gate | Entrada | Saída exigida | Estado |
+S0 é o único gate que bloqueia funcionalidade:
+
+1. `main` verde, sete contextos protegidos, sem depender de rerun;
+2. teste DNS determinístico com relógio controlado nos dois branches de timeout;
+3. candidato exato aceito no M3, incluindo install, update, verify, changes, repair, cleanup e uninstall;
+4. TUF técnico autenticado, timestamp fora da janela de alerta e renovação executável;
+5. deployment convergente: bootstraps, product, catálogo, trust e release-truth respondem pelos mesmos bytes e audiência;
+6. nenhum claim de suporte maior que a evidência M3.
+
+**Saída:** `owner-only` válido para o mantenedor, feature work permitido, external-public ainda `NO-GO`.
+
+A observação owner-only continua como operação leve e recorrente. Ela não precisa ser um soak externo nem impedir o próximo incremento funcional quando S0 permanece verde.
+
+## Gates condicionais external-public
+
+Estes gates ficam estacionados até existir decisão explícita de abrir para terceiros:
+
+| Gate | Quando reabre | Critério | Estado atual |
 | --- | --- | --- | --- |
-| 0A — main verde | run `31891151438` | Windows Python 3.10/3.13 e matriz portátil verdes, relógio/protocolo determinísticos | PASS |
-| 0B — TUF sustentável | TUF v2/v18 saudável | custódia, renovação, recuperação e SLO observados em produção | BLOCKED |
-| 0C — release truth/audience | hashes E2/E3 e receipt | autoridades reconciliadas, receipt aponta evidência final, audiência explícita | BLOCKED |
-| 0D — backlog/governance | registers e Maker/Checker | issues locais completas, decisão e rollback registrados | PROPOSAL |
-| 0E — owner-only observation | publicação final | período de observação do mantenedor sem regressão e com recibos | PROPOSAL |
-| EP-0 — decisão de abertura | 0A–0E | mantenedor registra `external-public` ou mantém owner-only | BLOCKED |
-| EP-1 — migração exata | decisão external | fixtures reais `0.7.0–0.7.13`, rollback e preservação verificados | BLOCKED |
-| EP-2 — soak exato | EP-1 | sete dias consecutivos, hardware e referências diárias | BLOCKED |
-| EP-3 — TUF/recovery | EP-2 | custódia independente, drill e lease sustentável | BLOCKED |
-| EP-4 — usuário externo | EP-3 | aceitação pública do candidato exato por usuário externo | BLOCKED |
-| EP-5 — decisão de plataforma | EP-4 | suporte por plataforma só com evidência nativa correspondente | BLOCKED |
-| external-public | EP-0–EP-5 | declaração e promoção separadas, com receipt coerente | BLOCKED |
+| EP-0 decisão de audiência | intenção de publicar para terceiros | ADR com baseline, suporte, contato e SLO | DEFERRED |
+| EP-1 migração | promessa de upgrade da baseline antiga | preservação byte a byte e rollback | NOT REQUIRED FOR FRESH BASELINE |
+| EP-2 soak | candidato que será external-public | sete dias do digest exato | DEFERRED |
+| EP-3 TUF sustentável | audiência externa | custódia, backup, RTO e recuperação | EXTERNAL_ONLY |
+| EP-4 aceite externo | audiência externa | usuário não mantenedor em máquina limpa | DEFERRED |
+| EP-5 plataformas | cada plataforma promovida | evidência nativa do candidato exato | M3 ONLY |
 
-Após os gates de disponibilidade, a sequência de produto é deliberadamente
-estreita: `1.1 diagnostics/discovery/profiles`, `1.2 hosting/ops`, `1.3
-ecosystem`, e `2.0` somente após ADR e evidência de uso. Nenhuma dessas fases
-desbloqueia feature work enquanto 0A–0E permanecerem abertas.
+QWLeague permanece `BLOCKED_EXTERNAL`: sem contato, autorização ou contrato público não existe integração nativa.
 
-## Trilha de execução
+## Trem de entrega owner-only
 
-1. Reconstruir a verdade a partir da [baseline](AUDIT-BASELINE.md), do
-   [registro de release](RELEASE-TRUTH.md) e do [health de CI](CI-HEALTH.md).
-2. Gate 0A está fechado em `7d5eb94a`; a correção foi test-only/documental e
-   não exige `1.0.1`.
-3. Fechar 0B com custódia e recovery aprovados, sem colocar chaves ou secrets
-   no repositório.
-4. Fechar 0C–0D com um único conjunto de autoridades e backlog local completo;
-   a source projection foi mesclada no PR #169, mas o deployment live ainda
-   não foi publicado/verificado.
-5. Observar owner-only em 0E; só então pedir a decisão EP-0.
-6. Se EP-0 for external, executar EP-1→EP-5 na ordem. Se permanecer
-   owner-only, estacionar os gates externos e manter `NO-GO` para qualquer claim
-   público.
+### O0 — estabilização imediata
 
-## Critério de parada
+- manter a main verde e não reabrir a falha temporal;
+- concluir e registrar a correção da projeção live;
+- executar uma aceitação M3 após a projeção convergir;
+- manter TUF renovável e monitorado tecnicamente;
+- fechar drift de audiência e de bytes;
+- preservar releases, recibos e histórico até decisão destrutiva separada.
 
-Parar e devolver para decisão humana quando houver mudança de produto,
-workflow, dependência, chave, contrato de plataforma, audiência ou endpoint.
-Parar também quando uma evidência contradisser bytes ou autoridade sem um
-responsável definido. O plano não converte `INFERENCE` em `VERIFIED FACT` por
-repetição documental.
+### F1 — diagnostics e first-run
 
-## Disposição das issues históricas
+Primeira capacidade funcional após S0:
 
-Foram publicados somente comentários de evidência em #148, #152 e #164.
-Nenhuma issue foi fechada/retargetada, nenhum label foi alterado e nenhuma
-issue do backlog foi criada automaticamente.
+- `x86qw doctor` read-only;
+- bundle de diagnóstico sanitizado, revisável e sem segredos;
+- status de instalação, catálogo, TUF, runtime, rede, disco e permissões;
+- mensagens de first-run que explicam owner-only sem ritual desnecessário.
 
-- `#143`: tratar como soak histórico/superseded e abrir soak do candidato
-  external-public exato;
-- `#146`: retarget para migração real `0.7.13` → candidato exato;
-- `#148`: manter como operação estrutural, com custódia, owner, backup, SLO
-  e RTO;
-- `#150`: executar somente preservando as referências de evidência;
-- `#151`: retarget para uma decisão futura de hosting;
-- `#152`: manter como incidente/SLO e acrescentar transição de recuperação.
+### F2 — perfis e descoberta local
 
-## Itens bloqueados e próxima ação
+- perfis user-owned separados de defaults gerenciados, cache e dados efêmeros;
+- favoritos e recentes locais;
+- busca e entrada em partidas usando contratos do runtime;
+- fallback offline e origem/freshness do dado;
+- nenhuma dependência obrigatória de QWLeague.
 
-**BLOCKED:** custódia/recovery TUF de produção;
-receipt final ligado à aceitação final; ownership/SBOM; drift de audiência;
-observação owner-only; migração/soak/aceitação externa; plataformas sem E3;
-contrato QWLeague; revisão humana independente.
+### F3 — hospedagem local
 
-**Próxima ação recomendada:** concluir custódia/SLO/RTO do TUF e decidir a
-projeção de deployment do Gate 0C; a source projection já está mesclada, mas
-nenhum site, catálogo ou metadata foi publicado por este plano. Nenhuma
-feature começa.
+- presets declarativos sem segredos versionados;
+- readiness, logs, stop, restart e crash recovery;
+- MVDSV, QTV e QWFWD conforme evidência M3;
+- rollback e preservação de dados pessoais.
 
-## Artefatos deste pacote
+### F4 — expansão opcional
 
-O índice completo está no [ROADMAP](../ROADMAP.md). Os registers machine-readable
-são [release-truth.json](release-truth.json), [backlog.json](backlog.json) e
-[risk-register.json](risk-register.json). A operação de qualidade está em
-[GAUNTLET-OPERATING-MODEL.md](GAUNTLET-OPERATING-MODEL.md).
+Somente após uso real justificar: biblioteca de demos, treinamento, UI local read-only, adapters externos oficiais e evidência nativa adicional. Daemon persistente, conta online, telemetria, marketplace e fleet control plane não entram por entusiasmo.
+
+## Regras de versão
+
+- teste, documentação ou projeção apenas: sem release artificial;
+- correção de runtime, pacote ou bytes compatível: 1.0.x;
+- nova capacidade compatível: 1.1;
+- alteração incompatível comprovada: 2.0;
+- reset de histórico: decisão operacional destrutiva fora do SemVer do produto.
+
+## Definition of Done de cada funcionalidade
+
+- issue separa outcome, não escopo, dependências, segurança, privacidade, rollback e docs;
+- runtime concentra semântica reutilizável; CLI, TUI e UI não duplicam regras;
+- teste determinístico cobre sucesso, timeout, interrupção e recuperação;
+- execução real no M3 registra versão, candidato, digest e resultado;
+- dados pessoais permanecem fora de managed defaults e caches;
+- feature indisponível não impede instalação, jogo local ou hospedagem;
+- documentação não eleva preview a supported;
+- main permanece verde.
+
+## Prioridades
+
+**NOW:** S0, convergência da projeção, observação M3, doctor/diagnostics.
+
+**NEXT:** perfis, favoritos/recentes, descoberta local e hosting presets.
+
+**LATER:** demos, UI local read-only, adapters externos e novas plataformas.
+
+**NOT PLANNED agora:** migração histórica para terceiros, QWLeague transacional, daemon persistente, contas online, telemetria obrigatória e reset destrutivo sem backup.
+
+## Métricas mínimas sem telemetria de usuário
+
+Medir em harness e recibos locais: fresh install success, lifecycle success, update/repair success, preservation incidents, time to first verified match, host readiness, diagnostic resolution, native evidence coverage, release reproducibility, mirror convergence, TUF lease reliability e minutos humanos por release.
+
+## Riscos aceitos e controles
+
+- **Processo grande demais:** S0 é curto; gates externos são condicionais.
+- **Custo de mantenedor único:** releases pequenas, rollback explícito e issue templates.
+- **TUF sem sucessor:** operação técnica continua agora; custódia independente é requisito apenas antes de external-public.
+- **Reset destrutivo:** preservar backup e recibos antes de apagar qualquer histórico.
+- **Integração externa indisponível:** adapters opcionais e fallback local completo.
+
+## Próxima ação
+
+Concluir a verificação protegida da projeção. Com S0 confirmado, abrir o primeiro issue funcional F1 e executar somente no M3. Não iniciar EP-1 nem qualquer contato externo sem decisão de audiência nova.

@@ -1,62 +1,70 @@
-# Release truth — projeção corrente
+# Release truth — escopo corrente M3-first
 
-Esta é a observação corrente da autoridade machine-readable
-[release-truth-current.json](release-truth-current.json). Source tree,
-candidate/release, deployment e development são autoridades separadas.
+Esta projeção separa source, candidate/release, deployment e development. O
+contrato corrente cobre um único usuário e um único laboratório nativo: Apple
+M3.
 
-## Estado observado em 2026-08-15T19:58:26Z
+## Estado verificado em 2026-08-16T00:36:49Z
 
-- **MAIN=GREEN:** main@493cedb2344085b4f5d1f4a04b2217247e8f945d; Validate
-  31896128822, com 7/7 contexts protegidos verdes e 8/8 jobs concluídos.
-- **TUF=HEALTHY:** root v2 autenticou timestamp v19, snapshot/targets v18 e
-  75 pacotes. O timestamp expira em 2026-08-16T18:15:26Z, fora da janela de
-  alerta de 6 horas. A renovação protegida foi executada no run 31900570555,
-  o recovery drill foi registrado no run 31900793093 e a publicação
-  timestamp-only foi verificada no run 31900914825.
-- **1.0.0 owner-only=AT-RISK:** os bytes finais continuam ligados ao candidato
-  e12ed081b968f820f47200e4be954a4f444056a1, instalador SHA
-  d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8 e
-  candidate SHA
-  0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21. O
-  deployment ainda serve uma geração anterior do site: release-truth retorna
-  404, product.json não expõe release_audience e o hero mantém o claim
-  histórico 0.7.13.
-- **EXTERNAL-PUBLIC=NO-GO; FEATURE WORK=BLOCKED.** A verdade de deployment
-  precisa convergir e os gates 0D/0E e EP-0..EP-5 continuam abertos.
+- MAIN=GREEN: main@e0a8418201c3521af9e1f2aed714c82115a5ad6c; Validate
+  31917327277 passou na primeira tentativa com 7/7 contexts protegidos e 8/8
+  jobs.
+- TUF=HEALTHY: root v2, timestamp v20, snapshot/targets v18 e 75 pacotes foram
+  autenticados; a operação técnica continua obrigatória enquanto o instalador
+  owner-only usar os endpoints públicos.
+- 1.0.0 OWNER-ONLY=VALID_FOR_SINGLE_USER_M3: o candidato exato passou 25/25
+  casos no Apple M3 e o instalador publicado permanece bound ao SHA-256
+  d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8.
+- EXTERNAL-PUBLIC=NO-GO.
+- FEATURE WORK=ALLOWED enquanto S0-M3 permanecer verde.
 
-## Quatro autoridades
+## S0-M3 — único gate funcional
 
-| Autoridade | Verdade atual | Não deve ser confundida com |
-| --- | --- | --- |
-| source | baseline versionada 0.7.13 e projeções owner-only na main | release Latest |
-| candidate/release | 1.0.0, digest do instalador/candidato, audience owner-only | HEAD atual |
-| deployment | product/catalog/TUF servidos; geração candidata verificada e convergente | source tree |
-| development | main@493cedb…, Validate verde | bytes publicados |
+S0 exige main verde, cadeia TUF técnica saudável, evidência nativa do candidato
+exato no M3 e lifecycle owner-only recuperável. Migração histórica, usuário
+externo, plataformas não-M3, custódia TUF independente e QWLeague não fazem
+parte desse gate.
 
-## TUF e recuperação
+## Migração e futura publicação
 
-A cadeia pública está autenticada e saudável após a renovação limitada de
-timestamp. O drill técnico passou e foi registrado com operator
-release-operator, custody host offline-signer-01 e SLA de 6 horas. Isso fecha o
-gap técnico imediato, mas não prova custódia independente, backup humano, RTO
-de produção ou sucessão; esses pontos permanecem em #148.
+A migração de 0.7.13 não é necessária se a primeira publicação para terceiros
+declarar uma baseline nova e instalação limpa, sem prometer upgrade de
+instalações históricas. Ela volta a ser requisito somente se o produto oferecer
+esse upgrade. Apagar histórico, tags, releases ou evidências é uma decisão
+destrutiva separada; não é requisito para desenvolver funcionalidades.
 
-## Contradições abertas
+## Projeção pública
 
-| ID | Contradição | Gate | Estado |
-| --- | --- | --- | --- |
-| RT-01 | receipt public_acceptance aponta RC1; evidência M3 final está separada | 0C | BLOCKED |
-| RT-02 | deployment root e endpoint não refletem a projeção owner-only da main | 0C | BLOCKED |
-| RT-03 | ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION | 0C | BLOCKED |
-| RT-04 | cleanup --personal-data não cobre qw/demos prometidos | 0C/EP-1 | BLOCKED |
-| RT-05 | migração do instalador público 0.7.13 exato não substitui o harness M3 | EP-1 | BLOCKED |
-| RT-06 | renovação/recovery/publicação TUF passaram; custódia independente/RTO faltam | 0B | RESOLVED_TECHNICAL |
-| RT-07 | product.json live expõe release_audience e release-truth responde 200 | 0C | BLOCKED |
+O run 31917579279 verificou os handoffs imutáveis, autenticou TUF, validou os
+bootstraps e product, publicou a projeção e confirmou release-truth HTTP 200 com
+a audiência owner-only. A etapa final recebeu HTTP 403 ao consultar a raiz a
+partir do IP do GitHub runner; por isso o workflow terminou sem receipt. Esse é
+um false negative do verificador de vantage Cloudflare, não falha dos bytes,
+TUF, produto ou runtime. O gate da raiz permanece estrito até receber uma
+solução que não transforme 403 em sucesso.
 
-## Regra de projeção
+## Autoridades
 
-README, site, product, catálogo, release page, CLI e status devem apontar para
-esta autoridade ou para uma projeção gerada dela. Nenhuma projeção pode elevar
-audiência, suporte ou evidência. Artifact availability não equivale a
-external-public. O próximo deploy deve ser uma geração única, verificada e
-rollbackável; não é uma nova release de produto por si só.
+| Autoridade | Verdade corrente |
+| --- | --- |
+| source | baseline histórica 0.7.13, sem representar a audiência corrente |
+| candidate/release | 1.0.0 owner-only, bytes imutáveis e digest verificado |
+| deployment | candidate site, product, catálogo, bootstraps e TUF públicos |
+| development | main@e0a8418..., Validate 31917327277 verde |
+| scope | um usuário, Apple M3, funcionalidades liberadas após S0 |
+
+## Residuais não bloqueantes de funcionalidades
+
+- receipt histórico aponta RC1; a evidência final M3 permanece separada;
+- ownership/SBOM precisa de classificação antes de redistribuição ampla;
+- custódia independente, backup humano e RTO TUF pertencem a external-public;
+- Windows, Linux e macOS Intel continuam preview/not-run;
+- a raiz do site precisa de um probe compatível com a política Cloudflare sem
+  relaxar a verificação;
+- QWLeague permanece BLOCKED_EXTERNAL.
+
+## Próxima capacidade
+
+Com S0-M3 verde, a primeira frente é FUNC-001: doctor read-only, seguida por um
+bundle diagnóstico sanitizado. Cada PR mantém main verde e recebe aceitação
+nativa no M3 quando houver mudança de comportamento.
