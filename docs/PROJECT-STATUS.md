@@ -240,4 +240,4 @@ está em
 
 ## Próxima ação
 
-Concluir a verificação protegida da projeção e registrar o receipt. Com S0-M3 verde, iniciar FUNC-001 (`x86qw doctor`) em uma PR pequena. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
+Concluir F1 (`doctor` + bundle sanitizado) na PR #191 e manter a main verde. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.

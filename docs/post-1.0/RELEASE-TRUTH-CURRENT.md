@@ -65,6 +65,7 @@ solução que não transforme 403 em sucesso.
 
 ## Próxima capacidade
 
-Com S0-M3 verde, a primeira frente é FUNC-001: doctor read-only, seguida por um
-bundle diagnóstico sanitizado. Cada PR mantém main verde e recebe aceitação
-nativa no M3 quando houver mudança de comportamento.
+F1 (`doctor` read-only + bundle sanitizado) está na PR #191. Depois do merge,
+a frente seguinte é F2 (perfis, favoritos e descoberta local). Cada PR mantém
+main verde e recebe aceitação nativa no M3 quando houver mudança de
+comportamento.

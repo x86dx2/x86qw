@@ -24,6 +24,7 @@
     {"member": "x86qw_runtime/ui/console.py", "source": "x86qw_runtime/ui/console.py", "consumer": "manager, gameplay e services", "contract": "saída humana e redaction"},
     {"member": "x86qw_runtime/ui/menu.py", "source": "x86qw_runtime/ui/menu.py", "consumer": "manager, gameplay e services", "contract": "navegação interativa canônica"},
     {"member": "x86qw_runtime/catalogs.py", "source": "x86qw_runtime/catalogs.py", "consumer": "manager.py", "contract": "modelos e loaders declarativos"},
+    {"member": "x86qw_runtime/doctor.py", "source": "x86qw_runtime/doctor.py", "consumer": "manager.py", "contract": "diagnóstico read-only da instalação"},
     {"member": "x86qw_runtime/gameplay/__init__.py", "source": "x86qw_runtime/gameplay/__init__.py", "consumer": "gameplay.py", "contract": "pacote de gameplay canônico"},
     {"member": "x86qw_runtime/gameplay/catalogs.py", "source": "x86qw_runtime/gameplay/catalogs.py", "consumer": "gameplay.py", "contract": "catálogos de jogos e modos"},
     {"member": "x86qw_runtime/gameplay/models.py", "source": "x86qw_runtime/gameplay/models.py", "consumer": "gameplay.py", "contract": "modelos tipados de jogo"},
