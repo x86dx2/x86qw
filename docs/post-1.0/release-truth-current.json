@@ -1,13 +1,13 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-15T19:58:26Z",
-  "snapshot_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
+  "observed_at_utc": "2026-08-16T00:36:49Z",
+  "snapshot_commit": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
-    "owner_only_release": "AT-RISK",
+    "owner_only_release": "VALID_FOR_SINGLE_USER_M3",
     "external_public": "NO-GO",
-    "feature_work": "BLOCKED"
+    "feature_work": "ALLOWED"
   },
   "authorities": {
     "source": {
@@ -41,14 +41,15 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-15T19:58:26Z",
+        "observed_at_utc": "2026-08-16T00:36:49Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
         "root_site_hero": "x86QW 1.0.0 publicada para owner-only · baseline fonte 0.7.13",
         "root_mentions_owner_only": true,
-        "state": "CONVERGED_CANDIDATE_DEPLOYMENT"
+        "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
+        "root_runner_probe": "403_CLOUDFLARE_POLICY"
       },
       "package_mirrors": {
         "github_gitlab_installer": "byte_equal",
@@ -80,8 +81,8 @@
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "f2e9ad30670d0041d6487856daba620a4c1db71b",
-      "validate_run": 31902729730,
+      "head": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
+      "validate_run": 31917327277,
       "required_protected_contexts": 7,
       "protected_contexts_green": "7/7",
       "validate_jobs": "8/8"
@@ -91,10 +92,10 @@
     "exact_legacy_installer_version": "0.7.13",
     "exact_legacy_installer_sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
     "final_cli_version": "1.0.0",
-    "result": "BLOCKED",
+    "result": "NOT_REQUIRED_FOR_FRESH_PUBLIC_BASELINE",
     "message": "A migração foi bloqueada por conflitos preservados: .x86qw: the historical installer version is not authenticated",
     "evidence_level": "E1",
-    "qualification": "public exact-installer reproduction; not an external-public approval"
+    "qualification": "não bloqueia funcionalidades nem a primeira publicação limpa; reabrir somente se houver promessa de upgrade histórico"
   },
   "conflicts": [
     {
@@ -102,7 +103,7 @@
       "severity": "P1",
       "statement": "receipt public_acceptance aponta RC1 enquanto a evidência M3 final está separada",
       "gate": "0C",
-      "state": "BLOCKED"
+      "state": "ACCEPTED_OWNER_ONLY"
     },
     {
       "id": "RT-02",
@@ -116,28 +117,28 @@
       "severity": "P1",
       "statement": "ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION",
       "gate": "0C",
-      "state": "BLOCKED"
+      "state": "DEFERRED_EXTERNAL"
     },
     {
       "id": "RT-04",
       "severity": "P1",
       "statement": "cleanup --personal-data não cobre qw/demos prometidos",
       "gate": "0C/EP-1",
-      "state": "BLOCKED"
+      "state": "DEFERRED_CONDITIONAL_UPGRADE"
     },
     {
       "id": "RT-05",
       "severity": "P1",
       "statement": "migração do instalador público 0.7.13 exato não reproduz a aprovação do harness M3",
       "gate": "EP-1",
-      "state": "BLOCKED"
+      "state": "NOT_REQUIRED_FOR_FRESH_PUBLIC_BASELINE"
     },
     {
       "id": "RT-06",
       "severity": "P1_OPERATIONAL",
       "statement": "timestamp v19 foi renovado, publicado e verificado; sustentabilidade independente permanece em #148",
       "gate": "0B",
-      "state": "RESOLVED_TECHNICAL_RESIDUAL_SUSTAINABILITY"
+      "state": "HEALTHY_TECHNICAL_DEFERRED_EXTERNAL_CUSTODY"
     },
     {
       "id": "RT-07",
@@ -150,8 +151,8 @@
   "evidence": {
     "main_green": {
       "level": "E2",
-      "run_id": 31902729730,
-      "commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
+      "run_id": 31917327277,
+      "commit": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
       "result": "pass"
     },
     "m3_exact_candidate": {
@@ -169,7 +170,7 @@
     },
     "public_legacy_migration": {
       "level": "E1",
-      "result": "blocked"
+      "result": "not_required_for_fresh_public_baseline"
     },
     "harness_qualification": {
       "level": "E1",
@@ -206,8 +207,8 @@
     },
     "deployment_projection": {
       "level": "E2",
-      "result": "verified-candidate-deployment",
-      "run_id": 31905297742,
+      "result": "public_tuf_bootstraps_product_and_release_truth_verified; root denied only to GitHub runner by Cloudflare",
+      "run_id": 31917579279,
       "artifact_id": 9252174837,
       "candidate_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
       "candidate_run_id": 31904237018,
@@ -215,7 +216,9 @@
       "candidate_json_sha256": "9a8417d4d0bd801e087f429931a7005b432f981978e2b34877cf390041dccebf",
       "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b",
       "release_truth_sha256": "ead2ffd43dfccfe8e7fcee04895ff3c39bb8189c29dad7d486ecc95e0c060f99",
-      "observed_endpoint_status": 200
+      "observed_endpoint_status": 200,
+      "workflow_conclusion": "failure_after_successful_deploy_on_root_403_probe",
+      "receipt_artifact_id": null
     }
   },
   "projection_policy": {
@@ -225,13 +228,34 @@
   },
   "open_gates": [
     "0B-sustainable-custody-backup-RTO",
-    "0D-governance",
-    "0E-owner-only-observation",
     "EP-0",
     "EP-1",
     "EP-2",
     "EP-3",
     "EP-4",
     "EP-5"
-  ]
+  ],
+  "stability_scope": {
+    "users": 1,
+    "native_lab": "Apple M3",
+    "status": "PASS",
+    "feature_work": "ALLOWED",
+    "requires": [
+      "main green",
+      "TUF technical chain healthy",
+      "exact-candidate M3 acceptance",
+      "recoverable owner-only lifecycle"
+    ],
+    "does_not_require": [
+      "historical migration",
+      "external-user acceptance",
+      "non-M3 native evidence",
+      "independent TUF custody"
+    ]
+  },
+  "gate_scope": {
+    "feature_blocker": "none while S0-M3 remains green",
+    "0B-sustainable-custody-backup-RTO": "external-public only",
+    "EP-0..EP-5": "deferred until explicit external-public decision"
+  }
 }
