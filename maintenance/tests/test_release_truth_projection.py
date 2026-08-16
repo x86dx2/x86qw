@@ -20,14 +20,11 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertFalse(document["authorities"]["candidate_release"]["external_public_authorized"])
         self.assertEqual("NO-GO", document["status"]["external_public"])
         self.assertIn("0B-sustainable-custody-backup-RTO", document["open_gates"])
-        self.assertEqual(
-            "200",
-            document["authorities"]["deployment"]["live_observation"]["release_truth_endpoint"],
-        )
-        self.assertEqual(
-            "CONVERGED_CANDIDATE_DEPLOYMENT",
-            document["authorities"]["deployment"]["live_observation"]["state"],
-        )
+        live = document["authorities"]["deployment"]["live_observation"]
+        self.assertEqual("200", live["release_truth_endpoint"])
+        self.assertEqual("1.0.1", live["product_version"])
+        self.assertEqual("1.0.1", live["catalog_current_installer"])
+        self.assertEqual("CONVERGED_SOURCE_1_0_1", live["state"])
 
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(
