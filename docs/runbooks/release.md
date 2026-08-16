@@ -279,7 +279,8 @@ seis horas imediatamente antes da promoção final. Uma lease dentro dessa janel
 exige renovação/recuperação manual e mantém a promoção em `NO-GO`.
 
 O caminho de signer limitado está preparado como duas etapas manuais protegidas;
-ele não é agendado e nunca publica sem aprovação do ambiente `release`. Com
+ele não é agendado e nunca publica sem aprovação do ambiente `release`. No modo
+owner-only o default de `lease_hours` é 168 (7 dias). Com
 `TUF_TIMESTAMP_KEY_B64` configurada somente nesse ambiente, o operador pode
 despachar a renovação:
 
@@ -299,7 +300,7 @@ gh workflow run tuf-timestamp-renewal.yml --repo "$REPO" --ref "$CODE_COMMIT" \
   -f source_artifact_name="$TUF_SOURCE_ARTIFACT_NAME" \
   -f candidate_commit="$RC_COMMIT" \
   -f timestamp_key_id="$TUF_TIMESTAMP_KEY_ID" \
-  -f lease_hours=24
+  -f lease_hours=168
 ```
 
 Esse workflow valida a procedência do artifact TUF, renova somente

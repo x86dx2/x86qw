@@ -6,6 +6,9 @@
 - **Baseline analisada:** `3bbc7a01faf8d472c5ccbab9233e05e9abadc379`
 - **Implementação:** E2 mesclada na PR #69; root e metadata de produção entram
   pelo hotfix `0.7.5`, sob o waiver solo-maintainer do ADR 0007
+- **Emenda owner-only (2026-08-16):** expiração máxima de `timestamp` = 7 dias
+  enquanto a audiência for um mantenedor e `external-public=NO-GO`. O teto de
+  24 horas volta a valer antes de qualquer anúncio de catálogo público.
 
 ## Contexto
 
@@ -56,7 +59,7 @@ mudança de major, algoritmo ou formato exige nova aprovação deste ADR.
 | root | 3 | 2 | três custodians distintos; chaves offline e não exportáveis | 365 dias |
 | targets | 3 | 2 | três autoridades de release; uso offline e aprovação humana | 90 dias |
 | snapshot | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias |
-| timestamp | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 24 horas |
+| timestamp | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias |
 
 Cada chave pertence a uma única role. Nenhuma chave privada entra em Git, no
 bundle, em logs, artefatos de CI ou secrets de jobs de pull request. Root e
@@ -72,8 +75,12 @@ fingerprints e evidência sem segredo.
 
 ### Janelas operacionais
 
-- `timestamp` é renovado no máximo a cada 12 horas; alerta crítico começa quando
-  restarem 6 horas;
+- no modo owner-only, `timestamp` é renovado antes de restarem 48 horas; alerta
+  crítico começa quando restarem 6 horas. A expiração máxima é 7 dias, igual ao
+  snapshot: com um operador, sem custódia 2-de-3 e sem clientes na rede, a
+  cadência de 12 horas só gerava cerimônia manual. O teto de 24 horas e a
+  renovação no máximo a cada 12 horas voltam a valer antes de autorizar
+  catálogo público, para limitar o freeze da chave online;
 - `snapshot` é renovado a cada mudança de targets e, sem mudança, antes de
   restarem 48 horas;
 - `targets` é renovado a cada promoção e, sem promoção, antes de restarem 30

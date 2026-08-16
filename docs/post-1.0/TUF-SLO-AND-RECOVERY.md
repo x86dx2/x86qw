@@ -22,6 +22,10 @@ publicação timestamp-only passou no run 31900914825, artifact 9251063517, e a
 verificação pública confirmou TUF, bootstraps e product. A issue #152 foi
 encerrada como alerta operacional resolvido.
 
+No modo owner-only a expiração máxima de timestamp é 7 dias (emenda do ADR
+0006 em 2026-08-16). O alerta de 6 horas e o fail-closed para mutação remota
+não mudam. O teto de 24 horas volta a valer antes de catálogo público.
+
 ## SLO vigente/proposto
 
 Os números abaixo continuam PROPOSAL até decisão operacional formal:

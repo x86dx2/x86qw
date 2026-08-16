@@ -107,7 +107,7 @@ class GenerateTrustMetadataTests(unittest.TestCase):
             limits = {
                 "1.targets.json": timedelta(days=90, minutes=1),
                 "1.snapshot.json": timedelta(days=7, minutes=1),
-                "timestamp.json": timedelta(days=1, minutes=1),
+                "timestamp.json": timedelta(days=7, minutes=1),
             }
             for name, limit in limits.items():
                 metadata = Metadata.from_bytes((output / "metadata" / name).read_bytes())
