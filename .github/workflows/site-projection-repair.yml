@@ -268,8 +268,6 @@ jobs:
           development = data["authorities"]["development"]
           development["head"] = os.environ["RELEASE_CODE_COMMIT"]
           development["validate_run"] = int(os.environ["DEVELOPMENT_VALIDATE_RUN"])
-          development["protected_contexts_green"] = "7/7"
-          development["validate_jobs"] = "8/8"
           deployment = data["authorities"]["deployment"]
           live = deployment["live_observation"]
           live.update({
@@ -337,7 +335,8 @@ jobs:
             --catalog candidate/catalog.json
           python3 maintenance/tools/verify_public_bootstraps.py --candidate candidate
           python3 maintenance/tools/verify_public_product.py --candidate candidate
-          python3 - <<'PY'
+          for attempt in 1 2 3 4 5; do
+            if python3 - <<'PY'
           import json
           import os
           import urllib.request
@@ -367,6 +366,17 @@ jobs:
           if deployment.get("release_truth_endpoint") != "200":
               raise SystemExit("live release-truth does not record its verified endpoint")
           PY
+            then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "live release-truth did not converge after ${attempt}/5 attempts" >&2
+              exit 1
+            fi
+            delay=$((attempt * 5))
+            echo "live release-truth not ready; retrying in ${delay}s (attempt ${attempt}/5)" >&2
+            sleep "$delay"
+          done
           python3 maintenance/tools/verify_site_root_probe.py \
             --assembled release-work/site/public/index.html \
             --live-url "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \

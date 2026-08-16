@@ -58,7 +58,7 @@ QWLeague permanece `BLOCKED_EXTERNAL`: sem contato, autorização ou contrato p�
 ### O0 — estabilização imediata
 
 - manter a main verde e não reabrir a falha temporal;
-- concluir e registrar a correção da projeção live;
+- concluir e registrar a correção da projeção live (PASS, receipt 31965901520);
 - executar uma aceitação M3 após a projeção convergir;
 - manter TUF renovável e monitorado tecnicamente;
 - fechar drift de audiência e de bytes;

@@ -7,10 +7,10 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | ID | Classe | Título | Dependências | Versão/audiência |
 | --- | --- | --- | --- | --- |
 | S0-001 | NOW/P0 | Manter main verde e preservar o contrato DNS determinístico | nenhuma | sem release se test-only / owner-only |
-| S0-002 | NOW/P1 | Verificar convergência da projeção site, bootstraps, product e release-truth | S0-001 | documental/deploy protegido / owner-only |
+| S0-002 | DONE/P1 | Verificar convergência da projeção site, bootstraps, product e release-truth | S0-001 | documental/deploy protegido / owner-only (receipt 31965901520) |
 | S0-003 | NOW/P1 | Aceitação do candidato exato no Apple M3 | S0-001, S0-002 | 1.0.x se bytes mudarem / owner-only |
 | S0-004 | NOW/P1 | Renovação e monitor técnico da lease TUF | nenhuma | operação contínua / owner-only |
-| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only |
+| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only (primeira observação 2026-08-16) |
 | FUNC-001 | NOW/P1 | Implementar `x86qw doctor` read-only | S0-003 | 1.1 / owner-only (PR #191) |
 | FUNC-002 | NOW/P1 | Gerar bundle de diagnóstico sanitizado e revisável | FUNC-001 | 1.1 / owner-only (PR #191) |
 | FUNC-003 | NOW/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.1 / owner-only (PR #193) |
@@ -18,7 +18,7 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | FUNC-005 | NOW/P1 | Descoberta e entrada em partidas com fallback local | FUNC-004 | 1.1 / owner-only (PR #194) |
 | FUNC-006 | NOW/P1 | Presets declarativos de hospedagem local | S0-003 | 1.2 / owner-only (PR #195) |
 | FUNC-007 | NOW/P1 | Readiness, logs, stop e crash recovery de servidor | FUNC-006 | 1.2 / owner-only (`status` / `--stop` / journal) |
-| FUNC-008 | LATER/P2 | UI local read-only sobre os contratos do runtime | FUNC-001, FUNC-005 | 1.2 / owner-only |
+| FUNC-008 | DONE/P2 | UI local read-only sobre os contratos do runtime | FUNC-001, FUNC-005 | 1.2 / owner-only (PR #199) |
 | OPS-001 | LATER/P1 | Custódia independente, backup e RTO TUF | S0-004 | external-public only |
 | OPS-002 | LATER/P1 | Soak de sete dias do candidato external-public exato | decisão EP-0 | external-public only |
 | OPS-003 | LATER/P1 | Aceitação por usuário não mantenedor | OPS-002 | external-public only |
@@ -28,9 +28,9 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 
 ## Ordem de execução
 
-1. Fechar S0 no M3.
-2. Iniciar FUNC-001 e FUNC-002 em pequenas PRs, mantendo main verde.
-3. Seguir para perfis, descoberta e hospedagem local.
+1. S0 está PASS no M3; manter main verde e a lease TUF.
+2. F1–F3 e FUNC-008 já estão na main.
+3. Continuar a observação owner-only (S0-005) sem transformá-la em soak.
 4. Só reabrir OPS-001 a OPS-005 quando a audiência mudar para external-public.
 
 ## Regra sobre migração

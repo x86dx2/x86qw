@@ -6,8 +6,8 @@
 | --- | --- | --- | --- |
 | S0.1 | main e contrato DNS determinístico | sete contextos protegidos verdes | PASS |
 | S0.2 | candidato exato em instalação single-user M3 | install/lifecycle/verify/repair/cleanup/uninstall | PASS |
-| S0.3 | TUF técnico e projeção live | timestamp saudável; bootstraps/product/release-truth convergentes | IN_PROGRESS |
-| S0.4 | observação owner-only | incidentes e recibos do mantenedor | RUN IN PARALLEL |
+| S0.3 | TUF técnico e projeção live | timestamp saudável; bootstraps/product/release-truth convergentes | PASS |
+| S0.4 | observação owner-only | incidentes e recibos do mantenedor | OBSERVED |
 | F1 | doctor e diagnostics | contratos JSON, sanitização e testes M3 | PASS |
 | F2 | perfis, favoritos e descoberta local | dados pessoais preservados e fallback | PASS |
 | F3 | hosting presets e health | readiness, logs e rollback | PASS |
