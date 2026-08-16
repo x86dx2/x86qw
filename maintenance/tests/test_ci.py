@@ -195,7 +195,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("os workflows de candidato rejeitam prereleases", stabilization)
         self.assertNotIn("publicação da `1.0.0` sem os gates nativos", roadmap)
         self.assertIn("sem gates nativos", roadmap)
-        self.assertIn("baseline-fonte no Git continua `0.7.13`", draft)
+        self.assertIn("baseline-fonte no Git", draft)
         self.assertIn("smoke nativo M3", draft)
         self.assertNotIn("versão pública continua sendo `0.7.3`", draft)
         self.assertNotIn("sem smokes nativos ou runners externos", draft)

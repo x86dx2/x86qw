@@ -22,9 +22,9 @@ A auditoria Gauntlet pós-publicação e o Master Plan executável estão em
 [issue #164](https://github.com/x86dx2/x86qw/issues/164). O snapshot histórico
 começou em `MAIN=RED`; o estado corrente é
 `MAIN=GREEN`, `TUF=HEALTHY`, `1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3` e
-`external-public=NO-GO`. F1–F3 e FUNC-008 já estão na main como 1.1 não publicado.
-O conserto in-tree de `host`/launcher é classe 1.0.1; nenhum zipapp 1.0.1 ou 1.1
-é construído ou promovido nesta frente. EP-0–EP-5 só reabrem com decisão
+`external-public=NO-GO`. A fonte current é `1.0.1`; `0.7.13` está aposentada
+como current e permanece histórica. F1–F3 e o conserto de `host` entram em
+1.0.x; não há linha 1.1 nesta fase. EP-0–EP-5 só reabrem com decisão
 explícita de audiência. A história pré-1.0 abaixo permanece preservada.
 
 Este é o índice estratégico da jornada da baseline pública `0.7.13` até

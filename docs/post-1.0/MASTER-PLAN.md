@@ -16,7 +16,7 @@ FEATURE WORK: ALLOWED_AFTER_S0_M3
 
 ## Estado e autoridades
 
-- `source`: baseline histórica 0.7.13 preservada até a decisão de uma nova baseline.
+- `source`: baseline current `1.0.1`; `0.7.13` permanece histórica no catálogo.
 - `candidate/release`: bytes imutáveis de 1.0.0, installer SHA-256 `d3274e6a...`, audiência `owner-only`.
 - `deployment`: site, bootstraps, product, catálogo e TUF servidos; deve convergir com o candidato exato.
 - `development`: HEAD atual e seus checks; a main verde é pré-condição de qualquer mudança.
@@ -96,7 +96,7 @@ Somente após uso real justificar: biblioteca de demos, treinamento, UI local re
 
 - teste, documentação ou projeção apenas: sem release artificial;
 - correção de runtime, pacote ou bytes compatível: 1.0.x;
-- nova capacidade compatível: 1.1;
+- nova capacidade compatível nesta fase: 1.0.x (1.1 aposentado até nova decisão);
 - alteração incompatível comprovada: 2.0;
 - reset de histórico: decisão operacional destrutiva fora do SemVer do produto.
 
@@ -135,8 +135,7 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-O conserto in-tree de `host`/launcher/não-KTX é classe **1.0.1** (runtime
-compatível); F1–F3 e FUNC-008 ficam **1.1 não publicado**. Nenhum zipapp ou
-candidato é construído nesta frente. Manter a lease TUF fora da janela de 6 h
-e a observação owner-only no M3. F4 e EP só com uso real ou decisão de
-audiência.
+A fonte current é **1.0.1**; `0.7.13` está aposentada como current. F1–F3 e o
+conserto de `host`/launcher ficam em 1.0.x. Manter a lease TUF fora da janela
+de 6 h. Promoção pública ainda exige TUF assinado e evidência M3. F4 e EP só
+com uso real ou decisão de audiência.

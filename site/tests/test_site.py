@@ -278,6 +278,7 @@ class SiteTests(unittest.TestCase):
             {
                 f"{prefix}/installer.json", f"{prefix}/x86qw.pyz",
                 f"{prefix}/VERSION",
+                f"{prefix}/LICENSE", f"{prefix}/NOTICE",
                 f"{prefix}/x86qw.sh", f"{prefix}/x86qw.cmd",
                 f"{prefix}/dist/installer/bin/manager.py",
                 f"{prefix}/_x86qw/installer.json",

@@ -240,4 +240,4 @@ está em
 
 ## Próxima ação
 
-Manter a main verde e a lease TUF fora da janela de 6 h. O conserto in-tree de `host`/launcher/não-KTX é classe 1.0.1; F1–F3 e FUNC-008 ficam 1.1 não publicado. Nenhum zipapp ou candidato é construído nesta frente. A observação owner-only (S0-005) continua. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
+Fonte current `1.0.1`; `0.7.13` aposentada como current. F1–F3 e o conserto de `host` ficam em 1.0.x. Manter a lease TUF fora da janela de 6 h. Promoção pública ainda exige TUF assinado e evidência M3 do candidato. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.

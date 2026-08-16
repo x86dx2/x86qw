@@ -101,7 +101,7 @@ desinstalada. Uninstall/purge não foram exercitados neste destino.
 
 | Autoridade | Verdade corrente |
 | --- | --- |
-| source | baseline histórica 0.7.13, sem representar a audiência corrente |
+| source | baseline current 1.0.1; 0.7.13 histórica no catálogo |
 | candidate/release | 1.0.0 owner-only, bytes imutáveis e digest verificado |
 | deployment | candidate site, product, catálogo, bootstraps e TUF públicos |
 | development | main@fedb79d…, Validate 31965464008 verde |
@@ -118,10 +118,9 @@ desinstalada. Uninstall/purge não foram exercitados neste destino.
 ## Próxima capacidade
 
 S0, F1–F3 e FUNC-008 estão na main. Há instalação persistente 1.0.0 complete
-em `~/Games/x86qw`. O conserto in-tree do `host` (token MVDSV 1.11, `--target`
-do launcher, não-KTX sem cancelar no EOF) é correção de runtime/launcher
-classe **1.0.1**; nenhum zipapp, candidato ou GitHub Latest 1.0.1 é construído
-ou promovido nesta frente. F1–F3 e FUNC-008 permanecem **1.1 não publicado**
-(só na árvore). A frente contínua é a lease TUF (renovar antes de
-2026-08-23T11:56:54Z) e o uso real do destino. EP-0 a EP-5 e QWLeague
-permanecem fora do caminho funcional.
+em `~/Games/x86qw`. A fonte current é **1.0.1**. A `0.7.13` permanece histórica. F1–F3, FUNC-008 e
+o conserto do `host`/launcher entram nessa linha 1.0.x; não há 1.1 nesta fase.
+A promoção pública (TUF assinado, GitHub Latest, evidência M3 do candidato
+exato) continua um gate separado. A frente contínua é a lease TUF (renovar
+antes de 2026-08-23T11:56:54Z). EP-0 a EP-5 e QWLeague permanecem fora do
+caminho funcional.
