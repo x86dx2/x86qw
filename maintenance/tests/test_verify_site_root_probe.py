@@ -84,6 +84,10 @@ class VerifySiteRootProbeTests(unittest.TestCase):
         self.assertIn("root-probe.json", source)
         self.assertIn('"root_probe": probe', source)
         self.assertNotIn("| grep -F \"owner-only\"", source)
+        self.assertIn("for attempt in 1 2 3 4 5", source)
+        self.assertIn("attempt ${attempt}/5", source)
+        self.assertNotIn('development["protected_contexts_green"] = "7/7"', source)
+        self.assertNotIn('development["validate_jobs"] = "8/8"', source)
 
 
 if __name__ == "__main__":

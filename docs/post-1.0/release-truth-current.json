@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-16T00:36:49Z",
-  "snapshot_commit": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
+  "observed_at_utc": "2026-08-16T18:53:51Z",
+  "snapshot_commit": "fedb79dd7d4df05572007153afb505ebefe0a151",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -41,7 +41,7 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-16T00:36:49Z",
+        "observed_at_utc": "2026-08-16T18:53:51Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "200",
@@ -49,7 +49,7 @@
         "root_site_hero": "x86QW 1.0.0 publicada para owner-only · baseline fonte 0.7.13",
         "root_mentions_owner_only": true,
         "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
-        "root_runner_probe": "403_CLOUDFLARE_POLICY"
+        "root_runner_probe": "200_OWNER_ONLY"
       },
       "package_mirrors": {
         "github_gitlab_installer": "byte_equal",
@@ -59,33 +59,33 @@
       },
       "tuf": {
         "root_version": 2,
-        "timestamp_version": 20,
-        "snapshot_version": 18,
-        "targets_version": 18,
+        "timestamp_version": 22,
+        "snapshot_version": 19,
+        "targets_version": 19,
         "packages_observed": 75,
-        "timestamp_expiry": "2026-08-16T19:54:14Z",
-        "seconds_to_expiry_at_observation": 86148,
+        "timestamp_expiry": "2026-08-23T17:56:54Z",
+        "seconds_to_expiry_at_observation": 601383,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
         "technical_chain": "authenticated",
         "operational_status": "HEALTHY",
         "production_custody_recovery": "drill-registered; independent custody/RTO pending",
-        "renewal_run_id": 31905189013,
+        "renewal_run_id": 31963102361,
         "recovery_drill_run_id": 31900793093,
-        "publication_run_id": 31905297742,
-        "publication_artifact_id": 9252174837,
-        "publication_artifact_sha256": "07bfc91e59b254ac29db6fa24903f56ef8205447c3655db673e54fc23f614102",
+        "publication_run_id": 31963192991,
+        "publication_artifact_id": 9267779828,
+        "publication_artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
         "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
-      "validate_run": 31917327277,
-      "required_protected_contexts": 7,
-      "protected_contexts_green": "7/7",
-      "validate_jobs": "8/8"
+      "head": "fedb79dd7d4df05572007153afb505ebefe0a151",
+      "validate_run": 31965464008,
+      "required_protected_contexts": 3,
+      "protected_contexts_green": "3/3",
+      "validate_jobs": "5/5"
     }
   },
   "migration_observation": {
@@ -136,7 +136,7 @@
     {
       "id": "RT-06",
       "severity": "P1_OPERATIONAL",
-      "statement": "timestamp v19 foi renovado, publicado e verificado; sustentabilidade independente permanece em #148",
+      "statement": "timestamp v22 foi renovado, publicado e verificado; sustentabilidade independente permanece em #148",
       "gate": "0B",
       "state": "HEALTHY_TECHNICAL_DEFERRED_EXTERNAL_CUSTODY"
     },
@@ -151,8 +151,8 @@
   "evidence": {
     "main_green": {
       "level": "E2",
-      "run_id": 31917327277,
-      "commit": "e0a8418201c3521af9e1f2aed714c82115a5ad6c",
+      "run_id": 31965464008,
+      "commit": "fedb79dd7d4df05572007153afb505ebefe0a151",
       "result": "pass"
     },
     "m3_exact_candidate": {
@@ -178,10 +178,10 @@
     },
     "tuf_renewal": {
       "level": "E2",
-      "run_id": 31905189013,
-      "artifact_id": 9252145236,
-      "artifact_sha256": "05183232d2aff68fe99436fbe007da8c19382d6e4621d1ed1ba1a446386ef895",
-      "timestamp_version": "19->20",
+      "run_id": 31963102361,
+      "artifact_id": 9267748878,
+      "artifact_sha256": "4476abae5feb919b979e1e90a47f010642504536df236daec63693f9537faa43",
+      "timestamp_version": "21->22",
       "published": false
     },
     "tuf_recovery_drill": {
@@ -195,30 +195,35 @@
     },
     "tuf_publication": {
       "level": "E2",
-      "run_id": 31905297742,
-      "artifact_id": 9252174837,
-      "artifact_sha256": "07bfc91e59b254ac29db6fa24903f56ef8205447c3655db673e54fc23f614102",
+      "run_id": 31963192991,
+      "artifact_id": 9267779828,
+      "artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
       "changed_files": [
         "metadata/timestamp.json"
       ],
       "result": "verified-timestamp-publication",
-      "timestamp_version": 20,
+      "timestamp_version": 22,
       "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
     },
     "deployment_projection": {
       "level": "E2",
-      "result": "public_tuf_bootstraps_product_and_release_truth_verified; root denied only to GitHub runner by Cloudflare",
-      "run_id": 31917579279,
-      "artifact_id": 9252174837,
+      "result": "public_tuf_bootstraps_product_release_truth_and_root_verified",
+      "run_id": 31965901520,
+      "artifact_id": 9268487003,
       "candidate_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
       "candidate_run_id": 31904237018,
       "candidate_artifact_id": 9252054354,
       "candidate_json_sha256": "9a8417d4d0bd801e087f429931a7005b432f981978e2b34877cf390041dccebf",
       "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b",
-      "release_truth_sha256": "ead2ffd43dfccfe8e7fcee04895ff3c39bb8189c29dad7d486ecc95e0c060f99",
+      "release_truth_sha256": "bc1c75e986ad9eb594cd06cd566dae31334e8018730bd446ad691d563719edcd",
       "observed_endpoint_status": 200,
-      "workflow_conclusion": "failure_after_successful_deploy_on_root_403_probe",
-      "receipt_artifact_id": null
+      "workflow_conclusion": "success",
+      "receipt_artifact_id": 9268487003,
+      "root_probe": {
+        "live_root": "owner-only",
+        "live_status": 200,
+        "status": "verified"
+      }
     }
   },
   "projection_policy": {

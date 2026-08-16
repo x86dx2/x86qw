@@ -5,7 +5,7 @@ Registro do que impede estabilidade no único ambiente suportado agora e do que 
 | ID | Prioridade | Gap | Estado | Evidência | Escopo | Próxima prova |
 | --- | --- | --- | --- | --- | --- | --- |
 | G-001 | P0 | contrato DNS Windows/Python 3.10 dependia de relógio real e fake incompleto | RESOLVED | Gate 0A, 30.000 repetições focais sem falha | owner-only | manter zero-flake |
-| G-002 | P1 | projeção live ainda precisa confirmar árvore assembled | IN_PROGRESS | reparo protegido em execução | owner-only | bootstraps, product e release-truth 200 |
+| G-002 | P1 | projeção live ainda precisa confirmar árvore assembled | RESOLVED | receipt 31965901520; root 200 owner-only | owner-only | manter convergência após cada overlay |
 | G-003 | P1 | receipt público histórico referencia RC1 | ACCEPTED_RESIDUAL | receipt M3 final separado e bytes bound ao candidato | external-public | substituir apenas se audiência mudar |
 | G-004 | P1 | ownership/SBOM contém itens sem classificação upstream | DEFERRED | relatório de release | external-public/licensing | classificar antes de redistribuição ampla |
 | G-005 | P1 | cleanup de dados pessoais não cobre toda promessa histórica | DEFERRED | contrato atual single-user | condicional a upgrade | ampliar somente se migração for prometida |
@@ -19,14 +19,14 @@ Registro do que impede estabilidade no único ambiente suportado agora e do que 
 | G-013 | P2 | flags remotas de segurança não verificadas anonimamente | DEFERRED | acesso autenticado necessário | external-public | revisão autenticada |
 | G-014 | P1 | processo antigo bloqueava funcionalidade por gates externos | RESOLVED_BY_REBASELINE | S0 M3 é o único bloqueio funcional | owner-only | manter S0 verde |
 | G-015 | P1 | migração histórica de 0.7.13 não reproduzida | NOT_REQUIRED_FOR_FRESH_BASELINE | baseline nova planejada | external-public condicional | reabrir se upgrade antigo for prometido |
-| G-016 | P1 | source/projection live não confirmada no novo caminho assembled | IN_PROGRESS | workflow #180 integrado | owner-only | executar reparo e registrar receipt |
+| G-016 | P1 | source/projection live não confirmada no novo caminho assembled | RESOLVED | workflow #199; receipt 31965901520 artifact 9268487003 | owner-only | overlay seguinte deve preservar TUF v22 e 3/3 contexts |
 
 ## Ordem de tratamento
 
 1. G-001 já está resolvido.
-2. G-002 e G-016 fecham a convergência da projeção owner-only.
+2. G-002 e G-016 fecharam a convergência da projeção owner-only no receipt 31965901520.
 3. G-008 permanece operacional e recorrente, mas não bloqueia funcionalidades quando saudável.
-4. Com S0 confirmado, FUNC-001 em diante pode avançar no M3.
+4. S0 está PASS no M3; F1–F3 e FUNC-008 já estão na main.
 5. G-004, G-006, G-007, G-011, G-013 e G-015 só viram bloqueadores quando a audiência mudar.
 6. G-012 permanece `BLOCKED_EXTERNAL` em qualquer cenário.
 
