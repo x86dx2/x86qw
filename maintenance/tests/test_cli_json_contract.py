@@ -192,6 +192,33 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertEqual(str(target.resolve()), document.data["target"])
         self.assertEqual("", errors)
 
+    def test_status_json_accepts_launcher_injected_target_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "installation"
+            result, document, errors = self.invoke([
+                "status", "--json", "--target", str(target),
+            ])
+        self.assertEqual(0, result)
+        self.assertEqual("status", document.command)
+        self.assertTrue(document.ok)
+        self.assertEqual("missing", document.data["installation"])
+        self.assertEqual(str(target.resolve()), document.data["target"])
+        self.assertEqual("", errors)
+        self.assertNotIn("unrecognized arguments", errors)
+        self.assertNotIn("--target", errors)
+
+    def test_doctor_accepts_launcher_injected_target_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "installation"
+            output = io.StringIO()
+            errors = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                result = manager.main(["doctor", "--target", str(target)])
+        self.assertEqual(0, result)
+        self.assertNotIn("unrecognized arguments", errors.getvalue())
+        self.assertNotIn("--target", errors.getvalue())
+        self.assertIn("installation", output.getvalue())
+
     def test_status_json_preserves_closed_session_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "installation"

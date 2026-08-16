@@ -1159,6 +1159,20 @@ def select_hosted_game(
         return HostedGame(game, mode, map_name, assets, launch_options)
 
 
+def suppress_mvdsv_autoexec(materialized: MaterializedKtx, gamedir: Path) -> MaterializedKtx:
+    """Drop gamedir/server.cfg so MVDSV does not autoexec before the session cfg."""
+
+    autoexec = gamedir / "server.cfg"
+    kept: list[MaterializedFile] = []
+    for entry in materialized.files:
+        if entry.path == autoexec and entry.created_by_session and not entry.existed:
+            if autoexec.is_file() and not autoexec.is_symlink():
+                autoexec.unlink()
+            continue
+        kept.append(entry)
+    return MaterializedKtx(tuple(kept), materialized.directories, materialized.root)
+
+
 def materialize_hosted_game(
     player: gameplay.Player,
     selection: HostedGame,
@@ -1167,11 +1181,10 @@ def materialize_hosted_game(
     package = player.game_marker_path(selection.game)
     if package.suffix.casefold() != ".pk3":
         return None
-    return materialize_dedicated_pk3(
-        package,
-        player.target / selection.game.gamedir,
-        selection.game.label,
-        journal,
+    gamedir = player.target / selection.game.gamedir
+    return suppress_mvdsv_autoexec(
+        materialize_dedicated_pk3(package, gamedir, selection.game.label, journal),
+        gamedir,
     )
 
 
@@ -1268,7 +1281,9 @@ def host_spec(
             and is_external_bind(options.bind)
         ):
             post_map_settings = (*post_map_settings, ("k_fb_admin_only", "1"))
-    bootstrap_password = secrets.token_urlsafe(24)
+    # MVDSV command tokens longer than 35 characters are dropped. Hex keeps
+    # the bootstrap RCON inside that bound and avoids '-' splitting.
+    bootstrap_password = secrets.token_hex(12)
     initial_rcon_password = bootstrap_password
     lines = [
         f"exec {user_config}",
@@ -1277,6 +1292,7 @@ def host_spec(
         f"password {q(options.password)}",
         f"spectator_password {q(options.spectator_password)}",
         f"rcon_password {q(initial_rcon_password)}",
+        "sv_crypt_rcon 0",
         f"set demo_tmp_record {0 if options.no_mvd else 1}",
     ]
     if game.mode_catalog is not None:
@@ -1314,20 +1330,28 @@ def host_spec(
         ))
     lines.append(f"map {q(map_name)}")
     game_directory = installer.target / game.gamedir
-    session = temporary_config(game_directory, "x86qw_host_", lines, journal)
+    # MVDSV 1.11 silently drops +exec / rcon exec when the cfg basename is
+    # longer than 35 characters. Keep these prefixes short so
+    # prefix + token_hex(12) + ".cfg" stays at 31 characters.
+    session = temporary_config(game_directory, "xh_", lines, journal)
     session_paths.append(session)
+    post_map_lines: list[str | bytes] = [
+        *(
+            b"set " + name.encode("ascii") + b' "' + value + b'"'
+            if isinstance(value, bytes)
+            else f"set {name} {value}"
+            for name, value in post_map_settings
+        ),
+        f"rcon_password {q(options.rcon_password)}",
+    ]
+    if is_external_bind(options.bind):
+        # Bootstrap RCON is plaintext; restore crypt after the session cfg
+        # so an externally reachable host is not left with sv_crypt_rcon 0.
+        post_map_lines.append("sv_crypt_rcon 1")
     post_map = temporary_config(
         game_directory,
-        "x86qw_host_post_",
-        [
-            *(
-                b"set " + name.encode("ascii") + b' "' + value + b'"'
-                if isinstance(value, bytes)
-                else f"set {name} {value}"
-                for name, value in post_map_settings
-            ),
-            f"rcon_password {q(options.rcon_password)}",
-        ],
+        "xp_",
+        post_map_lines,
         journal,
     )
     session_paths.append(post_map)

@@ -331,6 +331,10 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 (["play", "--help"], ["play", "--help", "--target", str(root)]),
                 (["verify"], ["--online-only", "--installed-cli", "verify", str(root)]),
                 (["doctor"], ["doctor", "--target", str(root)]),
+                (["status", "--json"], ["status", "--json", "--target", str(root)]),
+                (["ui", "--output", "/tmp/x86qw-ui.html"], [
+                    "ui", "--output", "/tmp/x86qw-ui.html", "--target", str(root),
+                ]),
                 (["uninstall", "--help"], ["--online-only", "--installed-cli", "uninstall", str(root), "--help"]),
             ):
                 with self.subTest(arguments=arguments):
@@ -462,6 +466,8 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                 (["play", "--help"], ["play", "--help", "--target"], True),
                 (["verify"], ["--online-only", "--installed-cli", "verify"], True),
                 (["doctor"], ["doctor", "--target"], True),
+                (["status", "--json"], ["status", "--json", "--target"], True),
+                (["ui"], ["ui", "--target"], True),
                 (["uninstall", "--help"], ["--online-only", "--installed-cli", "uninstall", "--help"], True),
             ):
                 with self.subTest(arguments=arguments):

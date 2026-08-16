@@ -49,12 +49,53 @@ TUF.
 
 ## Observação owner-only (S0.4)
 
-Em 2026-08-16T18:54Z neste host: `doctor` no destino default `quake-world`
-reportou instalação ausente, cache TUF local v18 expirado (não é o TUF
-público v22), runtime macOS arm64 ok e `healthy=false`. Não existe
-`~/Games/x86qw`. `x86qw ui --output /tmp/x86qw-s04-ui.html` escreveu o
-painel read-only fora da instalação. Isso não é soak, M3 gameplay nem
-aceitação de usuário externo.
+Primeira leitura em 2026-08-16T18:54Z: `doctor` no destino default
+`quake-world` do clone reportou instalação ausente, cache TUF local v18
+expirado e `healthy=false`.
+
+Instalação persistente owner-only neste Apple M3 Pro, fora do git:
+
+- 2026-08-16T20:41:04Z: perfil `essential`; 2026-08-16T20:53:26Z: o mesmo
+  destino foi convergido a `complete` (~657 MiB, 21 componentes,
+  fingerprint `650b3596a35ae601f6931a82bab2c86ff09eae15116a8a72fe4956867f73c561`);
+- zipapp público 1.0.0 (`x86qw-installer-1.0.0.zip` SHA-256
+  `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8`);
+  ezQuake stable 3.6.9; `verify --json` continua `ok` depois da matriz.
+
+Matriz 2026-08-16T20:55Z–21:07Z (CLI 1.0.0 salvo onde indicado):
+
+- PASS: `version`, `verify`, `update --dry-run`, `upgrade --dry-run`,
+  `repair --dry-run`, `migrate --dry-run`, `changes`, `update --yes`
+  (noop), `hub --json`;
+- PASS play (ezQuake 3.6.9 windowed, `qconsole` com Initialized / GL 4.1
+  Metal): ktx practice, ktx frogbot, final-arena, pro-x, team-fortress, td2;
+- PASS: `proxy --background`, `qtv --background`, `status --stop --yes`;
+- PASS main@`132a317…`: `doctor` healthy, `ui`, `profile`, `library`
+  add/remove, `host --save-preset s04-complete`;
+- FAIL: `./x86qw.sh status --json` (launcher 1.0.0 injeta `--target`;
+  `status --json` posicional no pyz funciona);
+- FAIL: `host` na CLI 1.0.0 instalada (zipapp imutável): o preflight
+  UDP/RCON de 8 s não recebe `status`.
+- A CLI 1.0.0 não tem `doctor`/`ui`; jogos não-KTX pedem confirmação se
+  `--mode` está ausente (stdin EOF cancela).
+
+Correção in-tree (ainda não no zipapp 1.0.0), exercitada em
+2026-08-16T21:44Z–21:55Z com `python3 dist/installer/bin/manager.py`
+contra `~/Games/x86qw`:
+
+- causa: MVDSV 1.11 descarta `+exec` / `rcon exec` quando o basename do
+  cfg passa de ~35 caracteres (`x86qw_host_` + `token_hex(12)` + `.cfg`
+  = 39); o mapa não carrega e o `status` UDP não responde. Sem
+  `server.cfg` do KTX, `sv_crypt_rcon` fica ligado e o preflight RCON
+  plaintext falha. `token_urlsafe` também pode partir o token no `-`.
+- PASS in-tree: `host ktx --mode practice --map dm6 --bind 127.0.0.1`
+  (`status` UDP com `map\\dm6` e `*gamedir\\qw`); stack
+  `--with-qtv --with-proxy`; `host` final-arena, pro-x, team-fortress e
+  td2; `status --stop --yes`. Prefixo efêmero `xh_`/`xp_` (31 chars),
+  RCON bootstrap `token_hex(12)`, `sv_crypt_rcon 0` na sessão.
+
+Não é soak, 1.0.1, native 25/25 nem external-public. A instalação não foi
+desinstalada. Uninstall/purge não foram exercitados neste destino.
 
 ## Autoridades
 
@@ -76,6 +117,11 @@ aceitação de usuário externo.
 
 ## Próxima capacidade
 
-S0, F1–F3 e FUNC-008 estão na main. A frente contínua é a lease TUF e a
-observação owner-only. EP-0 a EP-5 e QWLeague permanecem fora do caminho
-funcional.
+S0, F1–F3 e FUNC-008 estão na main. Há instalação persistente 1.0.0 complete
+em `~/Games/x86qw`. O conserto in-tree do `host` (token MVDSV 1.11, `--target`
+do launcher, não-KTX sem cancelar no EOF) é correção de runtime/launcher
+classe **1.0.1**; nenhum zipapp, candidato ou GitHub Latest 1.0.1 é construído
+ou promovido nesta frente. F1–F3 e FUNC-008 permanecem **1.1 não publicado**
+(só na árvore). A frente contínua é a lease TUF (renovar antes de
+2026-08-23T11:56:54Z) e o uso real do destino. EP-0 a EP-5 e QWLeague
+permanecem fora do caminho funcional.

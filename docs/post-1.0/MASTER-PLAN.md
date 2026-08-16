@@ -115,9 +115,9 @@ Somente após uso real justificar: biblioteca de demos, treinamento, UI local re
 
 **NOW:** S0 observação owner-only e lease TUF no M3.
 
-**NEXT:** F4 só com uso real (demos, UI local, adapters).
+**NEXT:** F4 só com uso real (demos, adapters). FUNC-008 (UI local read-only) já está na main.
 
-**LATER:** demos, UI local read-only, adapters externos e novas plataformas.
+**LATER:** demos, adapters externos e novas plataformas.
 
 **NOT PLANNED agora:** migração histórica para terceiros, QWLeague transacional, daemon persistente, contas online, telemetria obrigatória e reset destrutivo sem backup.
 
@@ -135,4 +135,8 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-Manter a lease TUF fora da janela de 6 h e a observação owner-only no M3. F4 e EP só com uso real ou decisão de audiência.
+O conserto in-tree de `host`/launcher/não-KTX é classe **1.0.1** (runtime
+compatível); F1–F3 e FUNC-008 ficam **1.1 não publicado**. Nenhum zipapp ou
+candidato é construído nesta frente. Manter a lease TUF fora da janela de 6 h
+e a observação owner-only no M3. F4 e EP só com uso real ou decisão de
+audiência.

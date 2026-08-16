@@ -240,4 +240,4 @@ está em
 
 ## Próxima ação
 
-Concluir F1 (`doctor` + bundle sanitizado) na PR #191 e manter a main verde. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
+Manter a main verde e a lease TUF fora da janela de 6 h. O conserto in-tree de `host`/launcher/não-KTX é classe 1.0.1; F1–F3 e FUNC-008 ficam 1.1 não publicado. Nenhum zipapp ou candidato é construído nesta frente. A observação owner-only (S0-005) continua. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
