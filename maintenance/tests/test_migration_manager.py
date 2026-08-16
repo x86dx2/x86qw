@@ -14,6 +14,13 @@ from pathlib import Path
 from x86qw_runtime import migrations
 
 
+def setUpModule() -> None:
+    if os.environ.get("X86QW_CI_PORTABLE") == "1":
+        raise unittest.SkipTest(
+            "migração histórica não é gate do contrato portátil owner-only/M3"
+        )
+
+
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "x86qw_migration_manager_test", ROOT / "dist/installer/bin/manager.py",
