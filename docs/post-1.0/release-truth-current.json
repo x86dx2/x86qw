@@ -11,8 +11,8 @@
   },
   "authorities": {
     "source": {
-      "meaning": "estado versionado que preserva a baseline histórica",
-      "baseline": "0.7.13",
+      "meaning": "estado versionado da fonte current",
+      "baseline": "1.0.1",
       "version_file": "dist/installer/VERSION"
     },
     "candidate_release": {
@@ -41,14 +41,14 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-16T18:53:51Z",
-        "product_version": "1.0.0",
-        "catalog_current_installer": "1.0.0",
+        "observed_at_utc": "2026-08-16T23:35:00Z",
+        "product_version": "1.0.1",
+        "catalog_current_installer": "1.0.1",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
-        "root_site_hero": "x86QW 1.0.0 publicada para owner-only · baseline fonte 0.7.13",
+        "root_site_hero": "x86QW 1.0.1 fonte current · 0.7.13 histórica · owner-only",
         "root_mentions_owner_only": true,
-        "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
+        "state": "CONVERGED_SOURCE_1_0_1",
         "root_runner_probe": "200_OWNER_ONLY"
       },
       "package_mirrors": {
@@ -59,11 +59,11 @@
       },
       "tuf": {
         "root_version": 2,
-        "timestamp_version": 22,
-        "snapshot_version": 19,
-        "targets_version": 19,
+        "timestamp_version": 21,
+        "snapshot_version": 21,
+        "targets_version": 21,
         "packages_observed": 75,
-        "timestamp_expiry": "2026-08-23T17:56:54Z",
+        "timestamp_expiry": "2026-08-23T23:35:02Z",
         "seconds_to_expiry_at_observation": 601383,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
@@ -76,7 +76,7 @@
         "publication_run_id": 31963192991,
         "publication_artifact_id": 9267779828,
         "publication_artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
-        "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
+        "catalog_sha256": "864e4cc19a921ef1c32e14872979870af1591837e08078fb7d00fce8d3ed9f70"
       }
     },
     "development": {

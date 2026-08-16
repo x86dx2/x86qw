@@ -9,8 +9,8 @@ M3.
 - MAIN=GREEN: main@fedb79dd7d4df05572007153afb505ebefe0a151; Validate
   31965464008 passou na primeira tentativa com 3/3 contexts protegidos
   (macos 3.10, macos 3.13, native-contract) e 5/5 jobs do Validate em push.
-- TUF=HEALTHY: root v2, timestamp v22, snapshot/targets v19 e 75 pacotes foram
-  autenticados; expiry 2026-08-23T17:56:54Z; monitor 6 h 31965691395 healthy.
+- TUF=HEALTHY: root v2, timestamp/snapshot/targets v21 autenticam o catálogo
+  1.0.1 (SHA-256 864e4cc1…); expiry 2026-08-23T23:35:02Z.
   A operação técnica continua obrigatória enquanto o instalador owner-only
   usar os endpoints públicos.
 - 1.0.0 OWNER-ONLY=VALID_FOR_SINGLE_USER_M3: o candidato exato passou 25/25
