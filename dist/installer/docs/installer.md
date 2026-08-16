@@ -698,6 +698,8 @@ Os serviços ficam em loopback por padrão. Podem acompanhar o terminal ou usar
 ```sh
 ./x86qw.sh host --mode 4on4 --map dm3
 ./x86qw.sh host --mode duel --map dm6 --bind 0.0.0.0 --with-qtv
+./x86qw.sh host ktx --mode duel --map dm6 --save-preset local-duel
+./x86qw.sh host --preset local-duel
 ./x86qw.sh proxy --bind 0.0.0.0
 ./x86qw.sh qtv --upstream 127.0.0.1:28501
 ./x86qw.sh proxy --background

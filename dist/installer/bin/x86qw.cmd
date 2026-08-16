@@ -66,6 +66,8 @@ echo.
 echo Servicos:
 echo   host                 escolhe e hospeda somente o servidor de um jogo
 echo   host JOGO            hospeda KTX, Final Arena, Pro-X, TF ou TD2
+echo   host --preset NOME   reutiliza um layout local, sem senhas
+echo   host --save-preset NOME  grava o layout atual e nao inicia o servidor
 echo   proxy                inicia o proxy QWFWD
 echo   qtv                  inicia o relay web/MVD QTV
 echo   status               mostra servicos ativos, PIDs, endpoints e parametros

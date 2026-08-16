@@ -217,7 +217,7 @@ x86qw hub                     x86qw qtv                     x86qw verify
 | Comando | Faz o quê |
 |---|---|
 | `play` | Abre um dos jogos instalados no ezQuake |
-| `host` | Inicia um servidor dedicado MVDSV |
+| `host` | Inicia um servidor dedicado MVDSV; `--save-preset` / `--preset` layouts locais sem senhas |
 | `proxy` | Executa o proxy de rota QWFWD |
 | `qtv` | Inicia o relay/espectador QTV |
 | `status` | Mostra a stack ativa; `--stop` solicita encerramento coordenado |

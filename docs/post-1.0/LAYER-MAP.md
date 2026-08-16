@@ -75,7 +75,7 @@ para em `acceptance`; não se “corrige” por copiar um hash em um documento.
 | L13 | gameplay launch | sem mudança de engine; aceitação posterior | 1.1 | Veteran Player |
 | L14 | descoberta/entrada em partidas | hub com fallback para library local; QWLeague não é autoridade | 1.1 | New Player/Network |
 | L15 | integrações externas | QWLeague `BLOCKED_EXTERNAL` | 1.3/parceria | External Integration |
-| L16 | hospedagem local | presets declarativos planejados | 1.2 | Server Operator |
+| L16 | hospedagem local | presets declarativos sem senhas; readiness existente via status | 1.2 | Server Operator |
 | L17 | operação remota/fleet | agentless/SSH somente após ADR | 1.2/ADR | Remote Ops Security |
 | L18 | observabilidade/doctor | `doctor` read-only e bundle sanitizado | 1.1 | Supportability |
 | L19 | demos/MVD/QWD | parsing seguro e fuzzing ainda não priorizados | 1.3 | Untrusted File |

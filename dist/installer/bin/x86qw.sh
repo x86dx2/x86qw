@@ -51,6 +51,8 @@ Gameplay:
 Serviços:
   host                 escolhe e hospeda somente o servidor de um jogo
   host JOGO            hospeda KTX, Final Arena, Pro-X, Team Fortress ou TD2
+  host --preset NOME   reutiliza um layout local, sem senhas
+  host --save-preset NOME  grava o layout atual e não inicia o servidor
   proxy                inicia o proxy QWFWD
   qtv                  inicia o relay web/MVD QTV
   status               mostra serviços ativos, PIDs, endpoints e parâmetros

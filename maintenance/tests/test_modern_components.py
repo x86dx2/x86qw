@@ -271,6 +271,31 @@ class ModernComponentTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 services_qw.parse_arguments(["host", "td2", "--bots", "1"], ROOT)
 
+    def test_host_cli_saves_and_loads_secret_free_presets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "install"
+            target.mkdir()
+            saved = services_qw.parse_arguments([
+                "host", "ktx", "--target", str(target), "--mode", "duel", "--map", "dm6",
+                "--save-preset", "local-duel", "--with-qtv",
+            ], ROOT)
+            self.assertEqual("local-duel", saved.save_preset)
+            from x86qw_runtime.host_presets import save_host_preset, load_host_presets
+            save_host_preset(target, saved.save_preset, saved)
+            loaded = services_qw.parse_arguments([
+                "host", "--target", str(target), "--preset", "local-duel",
+            ], ROOT)
+            self.assertEqual("ktx", loaded.game)
+            self.assertEqual("duel", loaded.mode)
+            self.assertEqual("dm6", loaded.map)
+            self.assertTrue(loaded.with_qtv)
+            self.assertEqual("local-duel", load_host_presets(target)["local-duel"]["name"])
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    services_qw.parse_arguments([
+                        "host", "ktx", "--target", str(target), "--preset", "local-duel",
+                    ], ROOT)
+
     def test_dedicated_ktx_options_are_translated_to_server_cvars(self):
         modes = {mode.key: mode for mode in play_qw.load_ktx_modes(ROOT)}
         bot_options = play_qw.KtxLaunchOptions(
