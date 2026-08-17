@@ -52,13 +52,18 @@ def configure(*, no_color: bool = False) -> None:
 
 
 def _paint(value: str, code: str) -> str:
-    if not code or _NO_COLOR or not sys.stdout.isatty():
+    if not code or _NO_COLOR or not _isatty(sys.stdout):
         return value
     return f"\033[{code}m{value}\033[0m"
 
 
+def _isatty(stream: object) -> bool:
+    checker = getattr(stream, "isatty", None)
+    return bool(checker is not None and checker())
+
+
 def supports_navigation() -> bool:
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
+    if not _isatty(sys.stdin) or not _isatty(sys.stdout):
         return False
     if os.environ.get("TERM", "").casefold() == "dumb":
         return False
@@ -327,12 +332,12 @@ def _compact_chrome() -> bool:
 
 def _begin_frame() -> None:
     sys.stdout.write(_CLEAR)
-    if sys.stdout.isatty():
+    if _isatty(sys.stdout):
         sys.stdout.write(_HIDE_CURSOR)
 
 
 def _restore_cursor() -> None:
-    if sys.stdout.isatty():
+    if _isatty(sys.stdout):
         sys.stdout.write(_SHOW_CURSOR)
         sys.stdout.flush()
 
@@ -357,7 +362,7 @@ def _render_header(
         print(_paint(breadcrumb, _MUTED))
         if not _compact_chrome():
             print(_rule(width))
-    print(_paint(title, _TITLE if not sys.stdout.isatty() or _NO_COLOR else _ACCENT))
+    print(_paint(title, _TITLE if not _isatty(sys.stdout) or _NO_COLOR else _ACCENT))
     if subtitle:
         print(subtitle)
     if searchable:

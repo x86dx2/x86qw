@@ -1422,7 +1422,7 @@ class ModernComponentTests(unittest.TestCase):
             lines = [line for line in mode_output.splitlines() if re.match(r"^\s+\d+\)", line)]
             self.assertEqual(len(modes), len(lines))
             self.assertIn("Duel (padrão)", lines[0])
-            divider_columns = [line.index("|") for line in lines]
+            divider_columns = [line.index("·") for line in lines]
             self.assertEqual(1, len(set(divider_columns)))
             for line, mode in zip(lines, modes):
                 self.assertIn(mode.description, line)
@@ -1972,7 +1972,7 @@ class ModernComponentTests(unittest.TestCase):
             for line, game in zip(lines, play_qw.LOCAL_GAMES):
                 self.assertIn(f"v{game.version}", line)
                 self.assertIn(game.description, line)
-                divider_columns.append(line.index("|"))
+                divider_columns.append(line.index("·"))
             self.assertEqual(1, len(set(divider_columns)))
             self.assertIn("KTX (padrão)", lines[0])
 
