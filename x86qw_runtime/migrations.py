@@ -279,7 +279,7 @@ _SOURCE_VERSION = re.compile(
     r"|\.x)$"
 )
 _TARGET_VERSION = re.compile(
-    r"^1\.0(?:\.0)?(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"^1\.0(?:\.(0|[1-9][0-9]*))?(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 _COMPONENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$")

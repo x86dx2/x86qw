@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "status": "local-preflight-passed",
+  "candidate": {
+    "version": "1.0.1",
+    "commit": "0b02cc8a05ad393690dc123c5bef075b9b6dce13",
+    "candidate_json_sha256": "6e694522cb09e8d087ac2c5057ee8ce58f2f14b942a93d8c2826b06b1df8ebef",
+    "installer": "x86qw-installer-1.0.1.zip",
+    "installer_size": 615611,
+    "installer_sha256": "28a70a3de1e441b865a02e7f9bf2b0144b873606286cb1ba41f5e087b67bfc6b",
+    "published_1_0_1_zip_sha256": "3dbf041485cd959f3394c9fa96d04b16cb186797230bd005103517b0e2b30d35",
+    "includes_unpublished_fixes": [
+      "authenticate 1.0.1 as 1.0.x for migrate",
+      "cleanup allow_non_regular for TUF root.json symlink"
+    ]
+  },
+  "hardware": {
+    "platform": "macOS-ARM64",
+    "chip": "Apple M3 Pro",
+    "model": "Mac15,6"
+  },
+  "completed_at": "2026-08-17T01:21:29Z",
+  "runtime_executed": true,
+  "case_count": 25,
+  "passed_case_count": 25,
+  "cases": [
+    "install-clean-space-unicode",
+    "install-existing-space-unicode",
+    "migration-0.7.13-real",
+    "client-stable-window-map-exit",
+    "client-nightly-window-map-exit",
+    "game-ktx",
+    "game-ktx-frogbot",
+    "game-final-arena",
+    "game-pro-x",
+    "game-team-fortress",
+    "game-td2",
+    "mvdsv-mvd",
+    "qtv-stream",
+    "qwfwd-forward",
+    "lifecycle-update",
+    "lifecycle-update-apply",
+    "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
+    "lifecycle-verify",
+    "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
+    "lifecycle-cleanup",
+    "lifecycle-uninstall",
+    "lifecycle-purge"
+  ],
+  "derived_artifacts": {
+    "handoff_sha256": "f973a6b068181c4bec6edf41084f19afd5ea778db74d370f08e573a513c39baa",
+    "release_smoke_normalized_sha256": "3e2b4f3b5bc2e4ed486ea3c0bc79e0d7c8e8b55ee52f79dcbc0a4165647a3cae",
+    "signed": false,
+    "promotable": false
+  },
+  "limitations": [
+    "execução local no M3; não é artifact do workflow protegido native-m3.yml",
+    "instalador local inclui correções ainda não publicadas no zip 3dbf0414…",
+    "evidência permanece unsigned/pending e não autoriza promoção",
+    "o zip publicado 1.0.1 falha migrate --dry-run (1.0.1 fora da família 1.0.x)"
+  ]
+}

@@ -1478,6 +1478,7 @@ class Installer:
                     apply=lambda path=path, expected=observations[path]: (
                         quarantine.apply_quarantine_removal(
                             path, expected_observation=expected,
+                            allow_non_regular=True,
                         )
                     ),
                     rollback=quarantine.rollback_quarantine,
