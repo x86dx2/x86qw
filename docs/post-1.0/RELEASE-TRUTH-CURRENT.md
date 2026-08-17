@@ -96,8 +96,8 @@ conserto), exercitada em 2026-08-16T21:44Z–21:55Z com
   td2; `status --stop --yes`. Prefixo efêmero `xh_`/`xp_` (31 chars),
   RCON bootstrap `token_hex(12)`, `sv_crypt_rcon 0` na sessão.
 
-Não é soak, native 25/25 do digest 1.0.1 nem external-public. A instalação não
-foi desinstalada. Uninstall/purge não foram exercitados neste destino.
+Não é soak, native 25/25 do digest 1.0.1 nem external-public. Naquela noite a
+instalação persistente ainda não tinha sido desinstalada.
 
 Observação no zipapp **1.0.1** (2026-08-17T00:35Z–00:36Z), launcher
 `~/Games/x86qw/x86qw.sh`:
@@ -123,6 +123,19 @@ Observação no zipapp **1.0.2** (2026-08-17T01:53Z–01:54Z), launcher
 - PASS: `status --stop --yes` deixa sessões `clean`, sem listener em 28501;
 - PASS: `ui --output` escreve HTML `x86QW owner-only — saudável`.
 
+`uninstall` conservador no mesmo destino (2026-08-17T02:09:09Z–02:09:12Z),
+CLI 1.0.2 pyz `cd37e868…`, sem `--purge`:
+
+- PASS: exit 0; `x86qw.sh`, `x86qw.cmd`, `.x86qw/cli/`, `.x86qw/state.json`,
+  `ezQuake Stable.app`, `mvdsv`, `qtv/qtv` e `qwfwd/qwfwd` removidos;
+- PASS: `id1/pak0.pak` `eec9a020…` e `id1/pak1.pak` `94e35583…` intactos;
+  `ezquake/configs/config.cfg` e os `*-user.cfg` de qw/arena/fortress/prox/td2
+  com o mesmo SHA-256 de antes; `.x86qw/personal/{inventory,receipt}` intactos;
+- PASS: logs e journals de sessão preservados; destino ficou em ~52 MiB
+  (sobram PAKs, pessoais e diretórios vazios);
+- PASS: cache Darwin `x86qw` (marker + components + trust) não foi tocado.
+- `uninstall --purge` não foi exercitado neste destino.
+
 ## Autoridades
 
 | Autoridade | Verdade corrente |
@@ -143,9 +156,9 @@ Observação no zipapp **1.0.2** (2026-08-17T01:53Z–01:54Z), launcher
 
 ## Próxima capacidade
 
-S0, F1–F3 e FUNC-008 estão na main. A instalação persistente complete em
-`~/Games/x86qw` roda o CLI **1.0.2**; `upgrade`, `status --json`, `doctor`,
-`host` e `ui` passaram nessa observação. A fonte current é **1.0.2**. A
-`1.0.1` e a `0.7.13` permanecem históricas. Preflight local 25/25 do digest
-1.0.2 está registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é
-operação contínua. F4 e EP só com uso real ou decisão de audiência.
+S0, F1–F3 e FUNC-008 estão na main. `~/Games/x86qw` foi desinstalada de
+forma conservadora com o CLI **1.0.2**; PAKs e dados pessoais permaneceram.
+`uninstall --purge` não rodou. A fonte current é **1.0.2**. A `1.0.1` e a
+`0.7.13` permanecem históricas. Preflight local 25/25 do digest 1.0.2 está
+registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é operação
+contínua. F4 e EP só com uso real ou decisão de audiência.
