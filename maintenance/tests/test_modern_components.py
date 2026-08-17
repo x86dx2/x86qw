@@ -838,7 +838,7 @@ class ModernComponentTests(unittest.TestCase):
         with mock.patch.object(install_qw.navigation, "select_one", side_effect=choose):
             self.assertEqual(0, install_qw.run_main_menu(target))
         self.assertEqual(
-            ["QuakeWorld moderno", "Gerenciar instalação", "QuakeWorld moderno", "Serviços x86QW", "QuakeWorld moderno"],
+            ["O que você quer fazer?", "Gerenciar instalação", "O que você quer fazer?", "Serviços x86QW", "O que você quer fazer?"],
             [title for title, _entries, _kwargs in calls],
         )
         self.assertTrue(all(kwargs.get("searchable") for _title, _entries, kwargs in calls))
