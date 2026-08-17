@@ -58,9 +58,11 @@ Instalação persistente owner-only neste Apple M3 Pro, fora do git:
 - 2026-08-16T20:41:04Z: perfil `essential`; 2026-08-16T20:53:26Z: o mesmo
   destino foi convergido a `complete` (~657 MiB, 21 componentes,
   fingerprint `650b3596a35ae601f6931a82bab2c86ff09eae15116a8a72fe4956867f73c561`);
-- zipapp público 1.0.0 (`x86qw-installer-1.0.0.zip` SHA-256
-  `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8`);
-  ezQuake stable 3.6.9; `verify --json` continua `ok` depois da matriz.
+- zipapp público **1.0.1** instalado (`x86qw-installer-1.0.1.zip` SHA-256
+  `3dbf041485cd959f3394c9fa96d04b16cb186797230bd005103517b0e2b30d35`;
+  pyz `e35b4bcb85b28cc255a6810d0c4e8c727e34dce1cee5735cb284fa466a827b2e`);
+  ezQuake stable 3.6.9. O zipapp 1.0.0 (`d3274e6a…`) permanece o último
+  candidato E3 25/25, não o CLI desta instalação.
 
 Matriz 2026-08-16T20:55Z–21:07Z (CLI 1.0.0 salvo onde indicado):
 
@@ -79,9 +81,9 @@ Matriz 2026-08-16T20:55Z–21:07Z (CLI 1.0.0 salvo onde indicado):
 - A CLI 1.0.0 não tem `doctor`/`ui`; jogos não-KTX pedem confirmação se
   `--mode` está ausente (stdin EOF cancela).
 
-Correção in-tree (ainda não no zipapp 1.0.0), exercitada em
-2026-08-16T21:44Z–21:55Z com `python3 dist/installer/bin/manager.py`
-contra `~/Games/x86qw`:
+Correção in-tree daquela noite (o zipapp 1.0.0 imutável não recebia o
+conserto), exercitada em 2026-08-16T21:44Z–21:55Z com
+`python3 dist/installer/bin/manager.py` contra `~/Games/x86qw`:
 
 - causa: MVDSV 1.11 descarta `+exec` / `rcon exec` quando o basename do
   cfg passa de ~35 caracteres (`x86qw_host_` + `token_hex(12)` + `.cfg`
@@ -94,8 +96,22 @@ contra `~/Games/x86qw`:
   td2; `status --stop --yes`. Prefixo efêmero `xh_`/`xp_` (31 chars),
   RCON bootstrap `token_hex(12)`, `sv_crypt_rcon 0` na sessão.
 
-Não é soak, 1.0.1, native 25/25 nem external-public. A instalação não foi
-desinstalada. Uninstall/purge não foram exercitados neste destino.
+Não é soak, native 25/25 do digest 1.0.1 nem external-public. A instalação não
+foi desinstalada. Uninstall/purge não foram exercitados neste destino.
+
+Observação no zipapp **1.0.1** (2026-08-17T00:35Z–00:36Z), launcher
+`~/Games/x86qw/x86qw.sh`:
+
+- PASS: `version` = `x86QW 1.0.1`; `status --json` `ok: true` com
+  `target` `/Users/x86/Games/x86qw`; `doctor --json` `healthy: true`;
+- PASS (2/2): `host ktx --mode practice --map dm6 --bind 127.0.0.1 --background`
+  — MVDSV ativo em `127.0.0.1:28501`, mapa `dm6`;
+- PASS (2/2): `host team-fortress --map 2fort5r --bind 127.0.0.1 --background`
+  — MVDSV ativo, mapa `2fort5r`;
+- PASS: `status --stop --yes` deixa sessões `clean`, sem listener em 28501;
+- PASS: `ui --output` escreve HTML `x86QW owner-only — saudável`.
+- O FAIL de `status --json` e de `host` no zipapp 1.0.0 ficou histórico; o
+  conserto está no CLI 1.0.1 publicado, não só in-tree.
 
 ## Autoridades
 
@@ -117,10 +133,9 @@ desinstalada. Uninstall/purge não foram exercitados neste destino.
 
 ## Próxima capacidade
 
-S0, F1–F3 e FUNC-008 estão na main. Há instalação persistente 1.0.0 complete
-em `~/Games/x86qw`. A fonte current é **1.0.1**. A `0.7.13` permanece histórica. F1–F3, FUNC-008 e
-o conserto do `host`/launcher entram nessa linha 1.0.x; não há 1.1 nesta fase.
-A promoção pública (TUF assinado, GitHub Latest, evidência M3 do candidato
-exato) continua um gate separado. A frente contínua é a lease TUF (renovar
-antes de 2026-08-23T11:56:54Z). EP-0 a EP-5 e QWLeague permanecem fora do
-caminho funcional.
+S0, F1–F3 e FUNC-008 estão na main. A instalação persistente complete em
+`~/Games/x86qw` roda o CLI **1.0.1**; `status --json`, `doctor`, `host` e `ui`
+passaram nessa observação. A fonte current é **1.0.1**. A `0.7.13` permanece
+histórica. O candidato E3 25/25 continua sendo a **1.0.0**; evidência nativa
+do digest 1.0.1 e renovação TUF (antes de 2026-08-23T23:35:02Z) são gates
+separados. F4 e EP só com uso real ou decisão de audiência.
