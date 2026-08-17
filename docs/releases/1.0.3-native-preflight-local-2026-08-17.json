@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "status": "local-preflight-passed",
+  "candidate": {
+    "version": "1.0.3",
+    "commit": "d030f716437767efe90577e06223f333f0ea43de",
+    "candidate_json_sha256": "5543948874fdcef0f435f9ae90486e1d886b35c54e9db80ed88f85384029164d",
+    "installer": "x86qw-installer-1.0.3.zip",
+    "installer_size": 616754,
+    "installer_sha256": "5afd32704f27200256eb0519c1da42d32a4aa8034f1332598c71f60271621c3b"
+  },
+  "hardware": {
+    "platform": "macOS-ARM64",
+    "chip": "Apple M3 Pro",
+    "model": "Mac15,6"
+  },
+  "completed_at": "2026-08-17T04:05:44Z",
+  "runtime_executed": true,
+  "case_count": 25,
+  "passed_case_count": 25,
+  "cases": [
+    "install-clean-space-unicode",
+    "install-existing-space-unicode",
+    "migration-0.7.13-real",
+    "client-stable-window-map-exit",
+    "client-nightly-window-map-exit",
+    "game-ktx",
+    "game-ktx-frogbot",
+    "game-final-arena",
+    "game-pro-x",
+    "game-team-fortress",
+    "game-td2",
+    "mvdsv-mvd",
+    "qtv-stream",
+    "qwfwd-forward",
+    "lifecycle-update",
+    "lifecycle-update-apply",
+    "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
+    "lifecycle-verify",
+    "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
+    "lifecycle-cleanup",
+    "lifecycle-uninstall",
+    "lifecycle-purge"
+  ],
+  "derived_artifacts": {
+    "handoff_sha256": "6de414d441b36d0b95b18cefe65be2e8999e569acd5c44ddd7358f3f8af3fb05",
+    "release_smoke_normalized_sha256": "bf7c72c40c388e9e2422169f7f96948af860a4ef627df865af670b2577bc3a09",
+    "signed": false,
+    "promotable": false
+  },
+  "limitations": [
+    "execução local no M3; não é artifact do workflow protegido native-m3.yml",
+    "digest do instalador é o publicado 1.0.3 (5afd3270…)",
+    "evidência permanece unsigned/pending"
+  ]
+}
