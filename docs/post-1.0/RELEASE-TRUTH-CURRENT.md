@@ -134,7 +134,24 @@ CLI 1.0.2 pyz `cd37e868…`, sem `--purge`:
 - PASS: logs e journals de sessão preservados; destino ficou em ~52 MiB
   (sobram PAKs, pessoais e diretórios vazios);
 - PASS: cache Darwin `x86qw` (marker + components + trust) não foi tocado.
-- `uninstall --purge` não foi exercitado neste destino.
+
+`uninstall --purge` no mesmo destino (2026-08-17T02:24:08Z–02:26:16Z),
+zipapp publicado 1.0.2 `cd37e868…`:
+
+- EXPECTED: após o uninstall conservador, `--purge` recusou o destino
+  sem identidade gerenciada (exit 1); PAKs, pessoais e cache Darwin
+  permaneceram;
+- PASS: reinstalação `--non-interactive --profile complete` no mesmo
+  caminho (2026-08-17T02:24:24Z–02:25:56Z) restaurou CLI 1.0.2 e 21
+  componentes; `id1/pak0.pak` `eec9a020…` e `id1/pak1.pak` `94e35583…`
+  sobreviveram à reinstalação;
+- PASS: `./x86qw.sh uninstall --purge` exit 0; destino
+  `/Users/x86/Games/x86qw` deixou de existir; cache Darwin `x86qw`
+  removido; PAKs e pessoais do destino removidos;
+- PASS: segundo `--purge` com destino já ausente exit 0 (noop de
+  instalação e de cache).
+- Cópia local dos restos conservadores ficou fora do destino, em
+  `/Users/x86/x86qw-1.0.2-cut/games-preserve-before-purge`.
 
 ## Autoridades
 
@@ -157,8 +174,8 @@ CLI 1.0.2 pyz `cd37e868…`, sem `--purge`:
 ## Próxima capacidade
 
 S0, F1–F3 e FUNC-008 estão na main. `~/Games/x86qw` foi desinstalada de
-forma conservadora com o CLI **1.0.2**; PAKs e dados pessoais permaneceram.
-`uninstall --purge` não rodou. A fonte current é **1.0.2**. A `1.0.1` e a
-`0.7.13` permanecem históricas. Preflight local 25/25 do digest 1.0.2 está
-registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é operação
+forma conservadora e em seguida com `--purge` no CLI **1.0.2**; o destino
+e o cache Darwin não existem mais. A fonte current é **1.0.2**. A `1.0.1`
+e a `0.7.13` permanecem históricas. Preflight local 25/25 do digest 1.0.2
+está registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é operação
 contínua. F4 e EP só com uso real ou decisão de audiência.
