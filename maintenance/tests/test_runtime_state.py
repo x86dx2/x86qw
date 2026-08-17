@@ -223,6 +223,50 @@ class InstallStateMigrationTests(unittest.TestCase):
         self.assertEqual(migrated_again.to_document(), expected)
         self.assertEqual(original.to_document(), original_document)
 
+    def test_patch_1_0_1_is_an_authenticated_1_0_family_source(self) -> None:
+        """A current 1.0.1 install must not look like an unauthenticated history."""
+
+        migrations = importlib.import_module("x86qw_runtime.migrations")
+        state_module = importlib.import_module("x86qw_runtime.state")
+        self.assertEqual("1.0.x", migrations._version_family("1.0.0"))
+        self.assertEqual("1.0.x", migrations._version_family("1.0.1"))
+        document = {
+            "format": 2,
+            "project": "x86qw",
+            "profile": "complete",
+            "requested_components": [],
+            "recorded_components": [],
+            "known_components": [],
+            "capabilities": [],
+            "component_fingerprint": (
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            ),
+            "installation_version": "1.0.1",
+        }
+        parsed = state_module.parse_install_state(
+            document,
+            allowed_profiles=state_module.INSTALLATION_PROFILES,
+            allowed_capabilities=frozenset(),
+        )
+        self.assertEqual("1.0.1", parsed.installation_version)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metadata = root / ".x86qw"
+            metadata.mkdir()
+            (metadata / "cli.receipt").write_text(
+                json.dumps({"format": 1, "project": "x86qw", "version": "1.0.1"}),
+                encoding="utf-8",
+            )
+            (metadata / "state.json").write_text(
+                json.dumps(document),
+                encoding="utf-8",
+            )
+            source = migrations.inspect_migration_source(root)
+            plan = migrations.plan_migration(root)
+            self.assertEqual("1.0.1", source.version)
+            self.assertEqual("1.0.x", source.family)
+            self.assertFalse(any(item.code == "unknown-source" for item in plan.conflicts))
+
 
 if __name__ == "__main__":
     unittest.main()

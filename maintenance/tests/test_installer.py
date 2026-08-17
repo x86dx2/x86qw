@@ -5539,6 +5539,29 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse(current.exists())
             self.assertFalse(legacy.exists())
 
+    def test_cleanup_removes_owned_cache_that_contains_tuf_root_symlink(self):
+        """Darwin TUF cache keeps root.json as a symlink; cleanup must still finish."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer, _, _ = self.make_installer(root)
+            current = root / "native/x86qw"
+            history = current / "trust/metadata/root_history"
+            history.mkdir(parents=True)
+            (history / "1.root.json").write_text("{}\n", encoding="utf-8")
+            (current / "trust/metadata/root.json").symlink_to("root_history/1.root.json")
+            (current / install_qw.CACHE_MARKER_NAME).write_text(
+                install_qw.CACHE_MARKER_VALUE + "\n", encoding="utf-8",
+            )
+            install_qw.private_fs.protect_private_file(
+                current / install_qw.CACHE_MARKER_NAME,
+            )
+            installer._cache_root = None
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "resolve_cache_root", return_value=current):
+                    installer.cleanup_cache()
+            self.assertFalse(current.exists())
+
     def test_cleanup_restores_owned_cache_when_runtime_cleanup_domain_fails(self):
         """Native cache and installed data must share one cleanup transaction."""
 
