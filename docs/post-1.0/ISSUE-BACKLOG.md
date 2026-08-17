@@ -10,7 +10,7 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | S0-002 | DONE/P1 | Verificar convergência da projeção site, bootstraps, product e release-truth | S0-001 | documental/deploy protegido / owner-only (receipt 31965901520) |
 | S0-003 | DONE/P1 | Aceitação do candidato exato no Apple M3 | S0-001, S0-002 | 1.0.x se bytes mudarem / owner-only (E3 25/25) |
 | S0-004 | NOW/P1 | Renovação e monitor técnico da lease TUF | nenhuma | operação contínua / owner-only |
-| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only (CLI 1.0.1 zipapp `e35b4bcb…` em `~/Games/x86qw` complete; `status --json` ok; `doctor` healthy; `host` ktx practice + team-fortress PASS 2026-08-17T00:35Z; `ui` HTML owner-only; 1.0.0 E3 permanece o último 25/25) |
+| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only (CLI 1.0.2 zipapp `cd37e868…` em `~/Games/x86qw` complete; `upgrade` noop; `status --json` ok; `doctor` healthy; `host` ktx practice + team-fortress PASS 2026-08-17T01:53Z; `ui` HTML owner-only; 25/25 do digest 1.0.2 `35e77723…`) |
 | FUNC-001 | DONE/P1 | Implementar `x86qw doctor` read-only | S0-003 | 1.0.x / owner-only (PR #191) |
 | FUNC-002 | DONE/P1 | Gerar bundle de diagnóstico sanitizado e revisável | FUNC-001 | 1.0.x / owner-only (PR #191) |
 | FUNC-003 | DONE/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.0.x / owner-only (PR #193) |
