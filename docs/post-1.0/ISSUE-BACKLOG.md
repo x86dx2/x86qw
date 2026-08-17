@@ -29,8 +29,8 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 ## Ordem de execução
 
 1. S0 está PASS no M3; manter main verde e a lease TUF.
-2. F1–F3 e FUNC-008 entram na fonte **1.0.1** (sem linha 1.1 nesta fase).
-3. A `0.7.13` deixa de ser current; permanece histórica no catálogo.
+2. F1–F3 e FUNC-008 entram na fonte **1.0.2** (sem linha 1.1 nesta fase).
+3. A `1.0.1` e a `0.7.13` deixam de ser current; permanecem históricas no catálogo.
 4. Continuar a observação owner-only (S0-005) sem transformá-la em soak.
 5. Só reabrir OPS-001 a OPS-005 quando a audiência mudar para external-public.
 

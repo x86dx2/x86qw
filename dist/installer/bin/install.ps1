@@ -2,10 +2,10 @@
 param([object[]]$BootstrapArguments)
 
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "1.0.1"
+$InstallerVersion = "1.0.2"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "3dbf041485cd959f3394c9fa96d04b16cb186797230bd005103517b0e2b30d35"
-$InstallerSize = "615583"
+$InstallerSha256 = "35e77723276c5bfc0d3f52f7d2a009d2eb8bdfc3c02f43c08409005cc61b58a3"
+$InstallerSize = "615611"
 $InstallerConnectTimeoutSeconds = 15
 $InstallerTransferTimeoutSeconds = 120
 $InstallerRetryMaxSeconds = 180
