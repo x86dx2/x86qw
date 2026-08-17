@@ -8609,20 +8609,49 @@ def run_main_menu(target: Path, *, verbose: bool = False, no_color: bool = False
     while True:
         try:
             selected = navigation.select_one(
-                "QuakeWorld moderno",
+                "O que você quer fazer?",
                 (
-                    navigation.MenuOption("play", "Jogar", "mods locais e modos KTX", "Escolha jogo, modo, mapa e regras."),
+                    navigation.MenuOption(
+                        "play", "Jogar", "mods locais e modos KTX",
+                        "Escolha jogo, modo, mapa e regras.", group="Partida",
+                    ),
                     navigation.MenuOption(
                         "experience", "Experiência de jogo",
                         "x86QW Ruleset ou regras competitivas",
                         "Altere a preferência usada ao abrir o cliente.",
+                        group="Partida",
                     ),
-                    navigation.MenuOption("hub", "Encontrar servidor", "jogar, observar ou assistir QTV", "Servidores públicos com busca."),
-                    navigation.MenuOption("host", "Hospedar partida", "MVDSV com QTV e QWFWD opcionais", "Servidor dedicado em primeiro plano."),
-                    navigation.MenuOption("services", "Serviços", "visualizar, transmitir ou usar proxy", "Estado da stack, QTV e QWFWD isolados."),
-                    navigation.MenuOption("manage", "Gerenciar instalação", "atualizar, reparar ou limpar", "Operações seguras sobre conteúdo instalado."),
-                    navigation.MenuOption("info", "Ajuda e informações", "versão, caminhos e comandos", "A CLI por argumentos continua disponível."),
-                    navigation.MenuOption("exit", "Sair", "encerrar o menu"),
+                    navigation.MenuOption(
+                        "hub", "Encontrar servidor",
+                        "jogar, observar ou assistir QTV",
+                        "Servidores públicos com busca.", group="Partida",
+                    ),
+                    navigation.MenuOption(
+                        "host", "Hospedar partida",
+                        "MVDSV com QTV e QWFWD opcionais",
+                        "Servidor dedicado em primeiro plano.", group="Partida",
+                    ),
+                    navigation.MenuOption(
+                        "services", "Serviços",
+                        "visualizar, transmitir ou usar proxy",
+                        "Estado da stack, QTV e QWFWD isolados.",
+                        group="Instalação",
+                    ),
+                    navigation.MenuOption(
+                        "manage", "Gerenciar instalação",
+                        "atualizar, reparar ou limpar",
+                        "Operações seguras sobre conteúdo instalado.",
+                        group="Instalação",
+                    ),
+                    navigation.MenuOption(
+                        "info", "Ajuda e informações",
+                        "versão, caminhos e comandos",
+                        "A CLI por argumentos continua disponível.",
+                        group="Instalação",
+                    ),
+                    navigation.MenuOption(
+                        "exit", "Sair", "encerrar o menu", group="Instalação",
+                    ),
                 ),
                 breadcrumb=breadcrumb,
                 searchable=True,

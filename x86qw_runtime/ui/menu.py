@@ -21,6 +21,7 @@ class MenuOption:
     enabled: bool = True
     aliases: tuple[str, ...] = ()
     disabled_reason: str = ""
+    group: str = ""
 
 
 class MenuCancelled(Exception):
@@ -35,6 +36,14 @@ _NO_COLOR = False
 _ESCAPE_INITIAL_TIMEOUT = 0.12
 _ESCAPE_CONTINUATION_TIMEOUT = 0.04
 _ESCAPE_SEQUENCE_LIMIT = 16
+_CLEAR = "\033[2J\033[H"
+_HIDE_CURSOR = "\033[?25l"
+_SHOW_CURSOR = "\033[?25h"
+_TITLE = "1"
+_ACCENT = "1;36"
+_MUTED = "2"
+_SEARCH = "1;33"
+_OK = "1;32"
 
 
 def configure(*, no_color: bool = False) -> None:
@@ -43,13 +52,18 @@ def configure(*, no_color: bool = False) -> None:
 
 
 def _paint(value: str, code: str) -> str:
-    if _NO_COLOR or not sys.stdout.isatty():
+    if not code or _NO_COLOR or not _isatty(sys.stdout):
         return value
     return f"\033[{code}m{value}\033[0m"
 
 
+def _isatty(stream: object) -> bool:
+    checker = getattr(stream, "isatty", None)
+    return bool(checker is not None and checker())
+
+
 def supports_navigation() -> bool:
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
+    if not _isatty(sys.stdin) or not _isatty(sys.stdout):
         return False
     if os.environ.get("TERM", "").casefold() == "dumb":
         return False
@@ -63,6 +77,7 @@ def _read_windows_key() -> str:  # pragma: no cover - exercised on Windows
     if key in ("\x00", "\xe0"):
         return {
             "H": "up", "P": "down", "K": "left", "M": "right",
+            "I": "pageup", "Q": "pagedown", "G": "home", "O": "end",
         }.get(msvcrt.getwch(), "unknown")
     return {
         "\r": "enter", "\x1b": "escape", "\x08": "backspace",
@@ -74,8 +89,20 @@ def _decode_posix_escape(sequence: bytes) -> str:
     """Decode a complete CSI or SS3 sequence without treating it as bare Esc."""
     if sequence[:1] not in (b"[", b"O"):
         return "unknown"
+    if sequence[:1] == b"O":
+        return {
+            b"A": "up", b"B": "down", b"C": "right", b"D": "left",
+            b"H": "home", b"F": "end",
+        }.get(sequence[-1:], "unknown")
+    body = sequence[1:]
+    if body.endswith(b"~"):
+        code = body[:-1].split(b";", 1)[0]
+        return {
+            b"1": "home", b"4": "end", b"5": "pageup", b"6": "pagedown",
+        }.get(code, "unknown")
     return {
         b"A": "up", b"B": "down", b"C": "right", b"D": "left",
+        b"H": "home", b"F": "end",
     }.get(sequence[-1:], "unknown")
 
 
@@ -138,7 +165,7 @@ def _matching(options: tuple[MenuOption, ...], query: str) -> list[int]:
         index for index, option in enumerate(options)
         if folded in " ".join((
             option.key, option.label, option.description, option.detail,
-            option.disabled_reason, *option.aliases,
+            option.disabled_reason, option.group, *option.aliases,
         )).casefold()
     ]
 
@@ -176,48 +203,61 @@ def _option_lines(
     description_width: int,
     width: int,
     active: bool,
+    group: str = "",
 ) -> list[str]:
-    """Render a responsive row while keeping ANSI outside its width budget."""
+    """Render a responsive row. Color is never the only selected-state signal."""
+    lines: list[str] = []
+    if group:
+        lines.append(_paint(_clip(group, width), _MUTED))
     label = f"{prefix} {option.label:<{label_width}}"
     description = ""
     if description_width:
-        description = f" | {option.description:<{description_width}}"
+        description = f" · {option.description:<{description_width}}"
     explanation = option.detail if active and option.detail else ""
     if not option.enabled:
         explanation = "indisponível" + (
             f": {option.disabled_reason}" if option.disabled_reason else ""
         )
     primary = label + description
-    color = "1;36" if active else "2" if not option.enabled else ""
     if len(primary) <= width:
-        suffix = f" < {explanation}" if explanation else ""
+        suffix = f"  < {explanation}" if explanation else ""
         remaining = max(0, width - len(primary))
-        rendered = _paint(primary, color) if color else primary
+        painted = _row_primary(primary, active=active, enabled=option.enabled)
         if not suffix:
-            return [rendered]
+            return [*lines, painted]
         if len(suffix) <= remaining:
-            return [rendered + _paint(suffix, "2")]
+            return [*lines, painted + _paint(suffix, _MUTED)]
         continuation = " " * min(len(prefix) + 1, max(0, width - 2))
         return [
-            rendered,
+            *lines,
+            painted,
             *(
-                _paint(continuation + part, "2")
+                _paint(continuation + part, _MUTED)
                 for part in _wrapped("< " + explanation, width - len(continuation))
             ),
         ]
 
     first = _clip(label.rstrip(), width)
-    lines = [_paint(first, color) if color else first]
+    body = [_row_primary(first, active=active, enabled=option.enabled)]
     indent = min(len(prefix) + 1, max(0, width - 2))
     continuation = " " * indent
     if option.description:
-        for part in _wrapped("| " + option.description, width - indent):
-            line = continuation + part
-            lines.append(_paint(line, color) if color else line)
+        for part in _wrapped("· " + option.description, width - indent):
+            body.append(_row_primary(
+                continuation + part, active=active, enabled=option.enabled,
+            ))
     if explanation:
         for part in _wrapped("< " + explanation, width - indent):
-            lines.append(_paint(continuation + part, "2"))
-    return lines
+            body.append(_paint(continuation + part, _MUTED))
+    return [*lines, *body]
+
+
+def _row_primary(value: str, *, active: bool, enabled: bool) -> str:
+    if not enabled:
+        return _paint(value, _MUTED)
+    if active:
+        return _paint(value, _ACCENT)
+    return value
 
 
 def _footer_lines(items: list[str], width: int) -> list[str]:
@@ -276,6 +316,132 @@ def _row_window(lengths: list[int], selected: int, budget: int) -> tuple[int, in
     return start, end
 
 
+def _chrome_width() -> int:
+    return max(20, min(shutil.get_terminal_size((88, 24)).columns, 110))
+
+
+def _row_budget() -> int:
+    lines = shutil.get_terminal_size((88, 24)).lines
+    reserved = 8 if lines < 22 else 11
+    return max(3, lines - reserved)
+
+
+def _compact_chrome() -> bool:
+    return shutil.get_terminal_size((88, 24)).lines < 22
+
+
+def _begin_frame() -> None:
+    sys.stdout.write(_CLEAR)
+    if _isatty(sys.stdout):
+        sys.stdout.write(_HIDE_CURSOR)
+
+
+def _restore_cursor() -> None:
+    if _isatty(sys.stdout):
+        sys.stdout.write(_SHOW_CURSOR)
+        sys.stdout.flush()
+
+
+def _rule(width: int) -> str:
+    return _paint("─" * min(width, 42), _MUTED)
+
+
+def _render_header(
+    *,
+    title: str,
+    breadcrumb: str,
+    subtitle: str,
+    query: str,
+    searching: bool,
+    searchable: bool,
+    numeric_buffer: str,
+    numeric_label: str,
+    width: int,
+) -> None:
+    if breadcrumb:
+        print(_paint(breadcrumb, _MUTED))
+        if not _compact_chrome():
+            print(_rule(width))
+    print(_paint(title, _TITLE if not _isatty(sys.stdout) or _NO_COLOR else _ACCENT))
+    if subtitle:
+        print(subtitle)
+    if searchable:
+        if searching or query:
+            field = query + ("_" if searching else "")
+            print(f"\n{_paint('/', _MUTED)} {_paint(field, _SEARCH)}")
+        else:
+            print(_paint("\n/  buscar", _MUTED))
+    if numeric_buffer:
+        print(f"\n{numeric_label}: {_paint(numeric_buffer + '_', _SEARCH)}")
+    print()
+
+
+def _render_rows(
+    *,
+    options: tuple[MenuOption, ...],
+    matches: list[int],
+    selected: int,
+    visible: list[int],
+    start: int,
+    end: int,
+    rendered_rows: list[list[str]],
+    checked: set[str] | None = None,
+) -> None:
+    if not visible:
+        print(_paint("  Nenhum resultado para esta busca.", _MUTED))
+        return
+    for position, option_index in enumerate(visible, start):
+        option = options[option_index]
+        lines = rendered_rows[position]
+        for index, line in enumerate(lines):
+            if (
+                checked is not None
+                and option.key in checked
+                and position != selected
+                and "[✓]" in line
+            ):
+                print(line.replace("[✓]", _paint("[✓]", _OK), 1))
+            else:
+                print(line)
+    if len(matches) > len(visible):
+        print(_paint(
+            f"\n{start + 1}–{end} de {len(matches)}", _MUTED,
+        ))
+
+
+def _build_rows(
+    *,
+    options: tuple[MenuOption, ...],
+    matches: list[int],
+    selected: int,
+    width: int,
+    marker: Callable[[int, MenuOption], str],
+) -> list[list[str]]:
+    index_width = len(str(len(matches)))
+    visible_options = tuple(options[index] for index in matches)
+    label_width = _label_width(visible_options or options)
+    description_width = _description_width(visible_options or options)
+    previous_group = ""
+    rows: list[list[str]] = []
+    for position, option_index in enumerate(matches):
+        option = options[option_index]
+        show_group = bool(option.group) and option.group != previous_group
+        previous_group = option.group or previous_group
+        block = _option_lines(
+            prefix=marker(position, option),
+            option=option,
+            label_width=label_width,
+            description_width=description_width,
+            width=width,
+            active=position == selected,
+            group=option.group if show_group else "",
+        )
+        if show_group and position > 0:
+            block = ["", *block]
+        rows.append(block)
+    return rows
+
+
 def _render_navigation(
     *,
     title: str,
@@ -290,51 +456,32 @@ def _render_navigation(
     allow_back: bool,
     numeric_buffer: str,
 ) -> None:
-    width = max(20, min(shutil.get_terminal_size((88, 24)).columns, 110))
-    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 10)
-    index_width = len(str(len(matches)))
-    label_width = _label_width(options)
-    description_width = _description_width(options)
-    rendered_rows = [
-        _option_lines(
-            prefix=f"{'›' if position == selected else ' '} {position + 1:>{index_width}})",
-            option=options[option_index],
-            label_width=label_width,
-            description_width=description_width,
-            width=width,
-            active=position == selected,
-        )
-        for position, option_index in enumerate(matches)
-    ]
+    width = _chrome_width()
+    row_budget = _row_budget()
+    index_width = len(str(max(len(matches), 1)))
+
+    def marker(position: int, _option: MenuOption) -> str:
+        caret = "▸" if position == selected else " "
+        return f"{caret} {position + 1:>{index_width}})"
+
+    rendered_rows = _build_rows(
+        options=options, matches=matches, selected=selected, width=width,
+        marker=marker,
+    )
     start, end = _row_window(
         [len(lines) for lines in rendered_rows], selected, row_budget,
     )
     visible = matches[start:end]
-    sys.stdout.write("\033[2J\033[H")
-    if breadcrumb:
-        print(_paint(breadcrumb, "2;36"))
-        print()
-    print(_paint(title, "1;36"))
-    if subtitle:
-        print(subtitle)
-    if searchable:
-        marker = "_" if searching else ""
-        print(f"\nBuscar: {_paint(query + marker, '1;33') if query or searching else 'pressione /'}")
-    if numeric_buffer:
-        print(f"\nIr para o item: {_paint(numeric_buffer + '_', '1;33')}")
-    print()
-    if not visible:
-        print("  Nenhum resultado.")
-    for position, option_index in enumerate(visible, start):
-        option = options[option_index]
-        active = position == selected
-        lines = rendered_rows[position]
-        for line in lines:
-            print(line)
-    if len(matches) > len(visible):
-        print(_paint(
-            f"\nExibindo {start + 1}–{end} de {len(matches)}.", "2",
-        ))
+    _begin_frame()
+    _render_header(
+        title=title, breadcrumb=breadcrumb, subtitle=subtitle, query=query,
+        searching=searching, searchable=searchable, numeric_buffer=numeric_buffer,
+        numeric_label="Ir para o item", width=width,
+    )
+    _render_rows(
+        options=options, matches=matches, selected=selected, visible=visible,
+        start=start, end=end, rendered_rows=rendered_rows,
+    )
     if searching:
         footer = ["Digite para buscar", "Enter aplicar busca", "Esc limpar busca"]
     elif numeric_buffer:
@@ -344,10 +491,33 @@ def _render_navigation(
         if searchable:
             footer.append("/ buscar")
         footer.append("← voltar" if allow_back else "← cancelar")
-        footer.append("Esc Sair.")
+        footer.append("esc sair")
     print()
+    if not _compact_chrome():
+        print(_rule(width))
     for line in _footer_lines(footer, width):
-        print(_paint(line, "2"), flush=True)
+        print(_paint(line, _MUTED), flush=True)
+
+
+def _move_selection(
+    selected: int, selectable: list[int], key: str, page: int,
+) -> int:
+    if not selectable:
+        return selected
+    current = selectable.index(selected) if selected in selectable else 0
+    if key in ("up", "k"):
+        return selectable[(current - 1) % len(selectable)]
+    if key in ("down", "j"):
+        return selectable[(current + 1) % len(selectable)]
+    if key == "home":
+        return selectable[0]
+    if key == "end":
+        return selectable[-1]
+    if key == "pageup":
+        return selectable[max(0, current - page)]
+    if key == "pagedown":
+        return selectable[min(len(selectable) - 1, current + page)]
+    return selected
 
 
 def _select_navigation(
@@ -368,70 +538,71 @@ def _select_navigation(
     if not any(option.enabled for option in options):
         raise ValueError("menu has no enabled options")
     selected = _default_position(options, matches, default)
-    while True:
-        _render_navigation(
-            title=title, options=options, matches=matches, selected=selected,
-            breadcrumb=breadcrumb, subtitle=subtitle, query=query,
-            searching=searching, searchable=searchable, allow_back=allow_back,
-            numeric_buffer=numeric_buffer,
-        )
-        key = key_reader()
-        if key == "interrupt":
-            raise KeyboardInterrupt
-        if searching:
-            if key == "enter":
-                searching = False
-            elif key == "escape":
-                query = ""
-                searching = False
-            elif key == "backspace":
-                query = query[:-1]
-            elif len(key) == 1 and key.isprintable():
-                query += key
-            matches = _matching(options, query)
-            selected = _default_position(options, matches, 0)
-            continue
-        selectable = _selectable_positions(options, matches)
-        if numeric_buffer:
-            if key.isdigit():
-                candidate = numeric_buffer + key
-                if int(candidate) <= len(matches):
-                    numeric_buffer = candidate
-            elif key == "backspace":
-                numeric_buffer = numeric_buffer[:-1]
-            elif key in ("enter", "right"):
-                position = int(numeric_buffer) - 1
-                if 0 <= position < len(matches) and options[matches[position]].enabled:
-                    return options[matches[position]].key
-                numeric_buffer = ""
-            elif key == "escape":
-                numeric_buffer = ""
-            else:
-                numeric_buffer = ""
-            continue
-        if key in ("up", "k") and selectable:
-            current = selectable.index(selected) if selected in selectable else 0
-            selected = selectable[(current - 1) % len(selectable)]
-        elif key in ("down", "j") and selectable:
-            current = selectable.index(selected) if selected in selectable else 0
-            selected = selectable[(current + 1) % len(selectable)]
-        elif key in ("enter", "right") and selectable:
-            return options[matches[selected]].key
-        elif key == "left":
-            if allow_back:
-                return None
-            raise MenuCancelled(title)
-        elif key in ("escape", "q"):
-            raise MenuExit(title)
-        elif key == "/" and searchable:
-            searching = True
-        elif key.isdigit() and key != "0":
-            if len(matches) > 9:
-                numeric_buffer = key
-            else:
-                position = int(key) - 1
-                if position < len(matches) and options[matches[position]].enabled:
-                    return options[matches[position]].key
+    try:
+        while True:
+            _render_navigation(
+                title=title, options=options, matches=matches, selected=selected,
+                breadcrumb=breadcrumb, subtitle=subtitle, query=query,
+                searching=searching, searchable=searchable, allow_back=allow_back,
+                numeric_buffer=numeric_buffer,
+            )
+            key = key_reader()
+            if key == "interrupt":
+                raise KeyboardInterrupt
+            if searching:
+                if key == "enter":
+                    searching = False
+                elif key == "escape":
+                    query = ""
+                    searching = False
+                elif key == "backspace":
+                    query = query[:-1]
+                elif len(key) == 1 and key.isprintable():
+                    query += key
+                matches = _matching(options, query)
+                selected = _default_position(options, matches, 0)
+                continue
+            selectable = _selectable_positions(options, matches)
+            if numeric_buffer:
+                if key.isdigit():
+                    candidate = numeric_buffer + key
+                    if int(candidate) <= len(matches):
+                        numeric_buffer = candidate
+                elif key == "backspace":
+                    numeric_buffer = numeric_buffer[:-1]
+                elif key in ("enter", "right"):
+                    position = int(numeric_buffer) - 1
+                    if 0 <= position < len(matches) and options[matches[position]].enabled:
+                        return options[matches[position]].key
+                    numeric_buffer = ""
+                elif key == "escape":
+                    numeric_buffer = ""
+                else:
+                    numeric_buffer = ""
+                continue
+            if key in {"up", "down", "k", "j", "home", "end", "pageup", "pagedown"}:
+                selected = _move_selection(
+                    selected, selectable, key, page=max(1, _row_budget() // 2),
+                )
+            elif key in ("enter", "right") and selectable:
+                return options[matches[selected]].key
+            elif key == "left":
+                if allow_back:
+                    return None
+                raise MenuCancelled(title)
+            elif key in ("escape", "q"):
+                raise MenuExit(title)
+            elif key == "/" and searchable:
+                searching = True
+            elif key.isdigit() and key != "0":
+                if len(matches) > 9:
+                    numeric_buffer = key
+                else:
+                    position = int(key) - 1
+                    if position < len(matches) and options[matches[position]].enabled:
+                        return options[matches[position]].key
+    finally:
+        _restore_cursor()
 
 
 def _select_fallback(
@@ -464,15 +635,19 @@ def _select_fallback(
         index_width = len(str(len(visible)))
         label_width = max(len(label) for label in labels)
         description_width = max(len(item.description) for item in visible)
+        previous_group = ""
         for index, option in enumerate(visible, 1):
+            if option.group and option.group != previous_group:
+                print(f"  {option.group}")
+                previous_group = option.group
             label = labels[index - 1]
             line = f"  {index:>{index_width}}) {label:<{label_width}}"
             if description_width:
-                line += f" | {option.description:<{description_width}}"
+                line += f" · {option.description:<{description_width}}"
             if option.detail:
-                line += f" < {option.detail}"
+                line += f"  < {option.detail}"
             if not option.enabled:
-                line += " < indisponível" + (
+                line += "  < indisponível" + (
                     f": {option.disabled_reason}" if option.disabled_reason else ""
                 )
             print(line)
@@ -518,7 +693,7 @@ def _select_fallback(
                 option for option in visible
                 if answer.casefold() in " ".join((
                     option.key, option.label, option.description, option.detail,
-                    option.disabled_reason, *option.aliases,
+                    option.disabled_reason, option.group, *option.aliases,
                 )).casefold()
             ]
             if len(found) == 1 and found[0].enabled:
@@ -579,60 +754,33 @@ def _render_multiple(
     allow_back: bool,
     numeric_buffer: str,
 ) -> None:
-    width = max(20, min(shutil.get_terminal_size((88, 24)).columns, 110))
-    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 10)
-    index_width = len(str(len(matches)))
-    label_width = _label_width(options)
-    description_width = _description_width(options)
-    rendered_rows = [
-        _option_lines(
-            prefix=(
-                f"{'›' if position == selected else ' '} "
-                f"{position + 1:>{index_width}}) "
-                f"{'[✓]' if options[option_index].key in checked else '[ ]'}"
-            ),
-            option=options[option_index],
-            label_width=label_width,
-            description_width=description_width,
-            width=width,
-            active=position == selected,
-        )
-        for position, option_index in enumerate(matches)
-    ]
+    width = _chrome_width()
+    row_budget = _row_budget()
+    index_width = len(str(max(len(matches), 1)))
+
+    def marker(position: int, option: MenuOption) -> str:
+        caret = "▸" if position == selected else " "
+        box = "[✓]" if option.key in checked else "[ ]"
+        return f"{caret} {position + 1:>{index_width}}) {box}"
+
+    rendered_rows = _build_rows(
+        options=options, matches=matches, selected=selected, width=width,
+        marker=marker,
+    )
     start, end = _row_window(
         [len(lines) for lines in rendered_rows], selected, row_budget,
     )
     visible = matches[start:end]
-    sys.stdout.write("\033[2J\033[H")
-    if breadcrumb:
-        print(_paint(breadcrumb, "2;36"))
-        print()
-    print(_paint(title, "1;36"))
-    if subtitle:
-        print(subtitle)
-    if searchable:
-        marker = "_" if searching else ""
-        print(f"\nBuscar: {_paint(query + marker, '1;33') if query or searching else 'pressione /'}")
-    if numeric_buffer:
-        print(f"\nMarcar item: {_paint(numeric_buffer + '_', '1;33')}")
-    print()
-    if not visible:
-        print("  Nenhum resultado.")
-    for position, option_index in enumerate(visible, start):
-        option = options[option_index]
-        active = position == selected
-        lines = rendered_rows[position]
-        for line in lines:
-            if active:
-                print(line)
-            elif option.key in checked:
-                print(line.replace("[✓]", _paint("[✓]", "1;32"), 1))
-            else:
-                print(line)
-    if len(matches) > len(visible):
-        print(_paint(
-            f"\nExibindo {start + 1}–{end} de {len(matches)}.", "2",
-        ))
+    _begin_frame()
+    _render_header(
+        title=title, breadcrumb=breadcrumb, subtitle=subtitle, query=query,
+        searching=searching, searchable=searchable, numeric_buffer=numeric_buffer,
+        numeric_label="Marcar item", width=width,
+    )
+    _render_rows(
+        options=options, matches=matches, selected=selected, visible=visible,
+        start=start, end=end, rendered_rows=rendered_rows, checked=checked,
+    )
     if searching:
         footer = ["Digite para buscar", "Enter aplicar busca", "Esc limpar busca"]
     elif numeric_buffer:
@@ -642,10 +790,12 @@ def _render_multiple(
         if searchable:
             footer.append("/ buscar")
         footer.append("← voltar" if allow_back else "← cancelar")
-        footer.append("Esc Sair.")
+        footer.append("esc sair")
     print()
+    if not _compact_chrome():
+        print(_rule(width))
     for line in _footer_lines(footer, width):
-        print(_paint(line, "2"), flush=True)
+        print(_paint(line, _MUTED), flush=True)
 
 
 def select_many(
@@ -682,15 +832,19 @@ def select_many(
             if subtitle:
                 print(subtitle)
             description_width = max(len(item.description) for item in enabled)
+            previous_group = ""
             for index, option in enumerate(entries, 1):
+                if option.group and option.group != previous_group:
+                    print(f"  {option.group}")
+                    previous_group = option.group
                 marker = "x" if option.key in checked else " "
                 line = f"  {index:>{index_width}}) [{marker}] {option.label:<{label_width}}"
                 if description_width:
-                    line += f" | {option.description:<{description_width}}"
+                    line += f" · {option.description:<{description_width}}"
                 if option.detail:
-                    line += f" < {option.detail}"
+                    line += f"  < {option.detail}"
                 if not option.enabled:
-                    line += " < indisponível" + (
+                    line += "  < indisponível" + (
                         f": {option.disabled_reason}" if option.disabled_reason else ""
                     )
                 print(line)
@@ -743,79 +897,80 @@ def select_many(
     matches = _matching(entries, query)
     position = _default_position(entries, matches, 0)
     reader = key_reader or read_key
-    while True:
-        _render_multiple(
-            title=title, options=entries, matches=matches, selected=position,
-            checked=checked, breadcrumb=breadcrumb, subtitle=subtitle,
-            query=query, searching=searching, searchable=searchable,
-            allow_back=allow_back, numeric_buffer=numeric_buffer,
-        )
-        key = reader()
-        if key == "interrupt":
-            raise KeyboardInterrupt
-        if searching:
-            if key == "enter":
-                searching = False
-            elif key == "escape":
-                query = ""
-                searching = False
-            elif key == "backspace":
-                query = query[:-1]
-            elif len(key) == 1 and key.isprintable():
-                query += key
-            matches = _matching(entries, query)
-            position = _default_position(entries, matches, 0)
-            continue
-        selectable = _selectable_positions(entries, matches)
-        if numeric_buffer:
-            if key.isdigit():
-                candidate = numeric_buffer + key
-                if int(candidate) <= len(matches):
-                    numeric_buffer = candidate
-            elif key == "backspace":
-                numeric_buffer = numeric_buffer[:-1]
-            elif key in (" ", "enter"):
-                shortcut = int(numeric_buffer) - 1
-                if 0 <= shortcut < len(matches):
-                    option = entries[matches[shortcut]]
-                    if option.enabled:
-                        checked.symmetric_difference_update({option.key})
-                numeric_buffer = ""
-            elif key == "escape":
-                numeric_buffer = ""
-            else:
-                numeric_buffer = ""
-            continue
-        if key in ("up", "k") and selectable:
-            current = selectable.index(position) if position in selectable else 0
-            position = selectable[(current - 1) % len(selectable)]
-        elif key in ("down", "j") and selectable:
-            current = selectable.index(position) if position in selectable else 0
-            position = selectable[(current + 1) % len(selectable)]
-        elif key == " " and selectable:
-            option_key = entries[matches[position]].key
-            checked.symmetric_difference_update({option_key})
-        elif key in ("enter", "right"):
-            result = tuple(option.key for option in enabled if option.key in checked)
-            if result or allow_empty:
-                return result
-        elif key == "left":
-            if allow_back:
-                return None
-            raise MenuCancelled(title)
-        elif key in ("escape", "q"):
-            raise MenuExit(title)
-        elif key == "/" and searchable:
-            searching = True
-        elif key.isdigit() and key != "0":
-            if len(matches) > 9:
-                numeric_buffer = key
-            else:
-                shortcut = int(key) - 1
-                if shortcut < len(matches):
-                    option = entries[matches[shortcut]]
-                    if option.enabled:
-                        checked.symmetric_difference_update({option.key})
+    try:
+        while True:
+            _render_multiple(
+                title=title, options=entries, matches=matches, selected=position,
+                checked=checked, breadcrumb=breadcrumb, subtitle=subtitle,
+                query=query, searching=searching, searchable=searchable,
+                allow_back=allow_back, numeric_buffer=numeric_buffer,
+            )
+            key = reader()
+            if key == "interrupt":
+                raise KeyboardInterrupt
+            if searching:
+                if key == "enter":
+                    searching = False
+                elif key == "escape":
+                    query = ""
+                    searching = False
+                elif key == "backspace":
+                    query = query[:-1]
+                elif len(key) == 1 and key.isprintable():
+                    query += key
+                matches = _matching(entries, query)
+                position = _default_position(entries, matches, 0)
+                continue
+            selectable = _selectable_positions(entries, matches)
+            if numeric_buffer:
+                if key.isdigit():
+                    candidate = numeric_buffer + key
+                    if int(candidate) <= len(matches):
+                        numeric_buffer = candidate
+                elif key == "backspace":
+                    numeric_buffer = numeric_buffer[:-1]
+                elif key in (" ", "enter"):
+                    shortcut = int(numeric_buffer) - 1
+                    if 0 <= shortcut < len(matches):
+                        option = entries[matches[shortcut]]
+                        if option.enabled:
+                            checked.symmetric_difference_update({option.key})
+                    numeric_buffer = ""
+                elif key == "escape":
+                    numeric_buffer = ""
+                else:
+                    numeric_buffer = ""
+                continue
+            if key in {"up", "down", "k", "j", "home", "end", "pageup", "pagedown"}:
+                position = _move_selection(
+                    position, selectable, key, page=max(1, _row_budget() // 2),
+                )
+            elif key == " " and selectable:
+                option_key = entries[matches[position]].key
+                checked.symmetric_difference_update({option_key})
+            elif key in ("enter", "right"):
+                result = tuple(option.key for option in enabled if option.key in checked)
+                if result or allow_empty:
+                    return result
+            elif key == "left":
+                if allow_back:
+                    return None
+                raise MenuCancelled(title)
+            elif key in ("escape", "q"):
+                raise MenuExit(title)
+            elif key == "/" and searchable:
+                searching = True
+            elif key.isdigit() and key != "0":
+                if len(matches) > 9:
+                    numeric_buffer = key
+                else:
+                    shortcut = int(key) - 1
+                    if shortcut < len(matches):
+                        option = entries[matches[shortcut]]
+                        if option.enabled:
+                            checked.symmetric_difference_update({option.key})
+    finally:
+        _restore_cursor()
 
 
 def confirm(
