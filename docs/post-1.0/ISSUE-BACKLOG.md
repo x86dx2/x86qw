@@ -10,7 +10,7 @@ Este backlog é local e executável por um mantenedor único. Ele separa o que e
 | S0-002 | DONE/P1 | Verificar convergência da projeção site, bootstraps, product e release-truth | S0-001 | documental/deploy protegido / owner-only (receipt 31965901520) |
 | S0-003 | DONE/P1 | Aceitação do candidato exato no Apple M3 | S0-001, S0-002 | 1.0.x se bytes mudarem / owner-only (E3 25/25) |
 | S0-004 | NOW/P1 | Renovação e monitor técnico da lease TUF | nenhuma | operação contínua / owner-only |
-| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only (CLI 1.0.2 zipapp `cd37e868…`; host/ui PASS 2026-08-17T01:53Z; `uninstall` conservador PASS 2026-08-17T02:09Z em `~/Games/x86qw` — PAKs/pessoais preservados, cache Darwin intacto; `--purge` não exercitado; 25/25 do digest 1.0.2 `35e77723…`) |
+| S0-005 | NEXT/P1 | Observação operacional owner-only e registro de incidentes | S0-003, S0-004 | 1.0.x / owner-only (CLI 1.0.2 zipapp `cd37e868…`; host/ui PASS; `uninstall` conservador PASS 2026-08-17T02:09Z; `--purge` após leftovers recusou identidade; reinstall complete + `--purge` PASS 2026-08-17T02:26Z — destino e cache Darwin removidos; 25/25 do digest 1.0.2 `35e77723…`) |
 | FUNC-001 | DONE/P1 | Implementar `x86qw doctor` read-only | S0-003 | 1.0.x / owner-only (PR #191) |
 | FUNC-002 | DONE/P1 | Gerar bundle de diagnóstico sanitizado e revisável | FUNC-001 | 1.0.x / owner-only (PR #191) |
 | FUNC-003 | DONE/P1 | Separar perfis, defaults, cache e dados pessoais | S0-003 | 1.0.x / owner-only (PR #193) |
