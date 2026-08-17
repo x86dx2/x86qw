@@ -22,9 +22,9 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertIn("0B-sustainable-custody-backup-RTO", document["open_gates"])
         live = document["authorities"]["deployment"]["live_observation"]
         self.assertEqual("200", live["release_truth_endpoint"])
-        self.assertEqual("1.0.1", live["product_version"])
-        self.assertEqual("1.0.1", live["catalog_current_installer"])
-        self.assertEqual("CONVERGED_SOURCE_1_0_1", live["state"])
+        self.assertEqual("1.0.2", live["product_version"])
+        self.assertEqual("1.0.2", live["catalog_current_installer"])
+        self.assertEqual("CONVERGED_SOURCE_1_0_2", live["state"])
 
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(

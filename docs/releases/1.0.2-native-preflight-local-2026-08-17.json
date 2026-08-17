@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "project": "x86qw",
+  "status": "local-preflight-passed",
+  "candidate": {
+    "version": "1.0.2",
+    "commit": "c49488ffab97908491985c6e0c8f0922e09b5d1e",
+    "candidate_json_sha256": "707a15341f94ec41423375f579f18f80a05a8f08f78d24b006771613ddab88bd",
+    "installer": "x86qw-installer-1.0.2.zip",
+    "installer_size": 615611,
+    "installer_sha256": "35e77723276c5bfc0d3f52f7d2a009d2eb8bdfc3c02f43c08409005cc61b58a3"
+  },
+  "hardware": null,
+  "completed_at": null,
+  "runtime_executed": true,
+  "case_count": 25,
+  "passed_case_count": 25,
+  "cases": [
+    "install-clean-space-unicode",
+    "install-existing-space-unicode",
+    "migration-0.7.13-real",
+    "client-stable-window-map-exit",
+    "client-nightly-window-map-exit",
+    "game-ktx",
+    "game-ktx-frogbot",
+    "game-final-arena",
+    "game-pro-x",
+    "game-team-fortress",
+    "game-td2",
+    "mvdsv-mvd",
+    "qtv-stream",
+    "qwfwd-forward",
+    "lifecycle-update",
+    "lifecycle-update-apply",
+    "lifecycle-upgrade",
+    "lifecycle-upgrade-apply",
+    "lifecycle-verify",
+    "lifecycle-repair",
+    "lifecycle-repair-corruption",
+    "lifecycle-migrate-apply",
+    "lifecycle-cleanup",
+    "lifecycle-uninstall",
+    "lifecycle-purge"
+  ],
+  "derived_artifacts": {
+    "handoff_sha256": "99f783fe97f484056e07e4ab2ff4ed842f7bb00019dbd4478455d01178b04b2d",
+    "release_smoke_normalized_sha256": "785e4348f0c49877f638827bfc85c96b41f5f1647b50fb2c55bff850fe7661af",
+    "signed": false,
+    "promotable": false
+  },
+  "limitations": [
+    "execução local no M3; não é artifact do workflow protegido native-m3.yml",
+    "digest do instalador é o publicado 1.0.2 (35e77723…)",
+    "evidência permanece unsigned/pending"
+  ]
+}
