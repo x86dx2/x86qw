@@ -58,11 +58,11 @@ Instalação persistente owner-only neste Apple M3 Pro, fora do git:
 - 2026-08-16T20:41:04Z: perfil `essential`; 2026-08-16T20:53:26Z: o mesmo
   destino foi convergido a `complete` (~657 MiB, 21 componentes,
   fingerprint `650b3596a35ae601f6931a82bab2c86ff09eae15116a8a72fe4956867f73c561`);
-- zipapp público **1.0.1** instalado (`x86qw-installer-1.0.1.zip` SHA-256
-  `3dbf041485cd959f3394c9fa96d04b16cb186797230bd005103517b0e2b30d35`;
-  pyz `e35b4bcb85b28cc255a6810d0c4e8c727e34dce1cee5735cb284fa466a827b2e`);
-  ezQuake stable 3.6.9. O zipapp 1.0.0 (`d3274e6a…`) permanece o último
-  candidato E3 25/25, não o CLI desta instalação.
+- zipapp público **1.0.2** instalado (`x86qw-installer-1.0.2.zip` SHA-256
+  `35e77723276c5bfc0d3f52f7d2a009d2eb8bdfc3c02f43c08409005cc61b58a3`;
+  pyz `cd37e86885814fe861881a7f86690929046c9b77944ce670a5b886740242f83f`);
+  ezQuake stable 3.6.9. O zipapp 1.0.1 (`3dbf0414…`) permanece histórico.
+  O 1.0.2 tem preflight local 25/25 no digest publicado.
 
 Matriz 2026-08-16T20:55Z–21:07Z (CLI 1.0.0 salvo onde indicado):
 
@@ -111,13 +111,23 @@ Observação no zipapp **1.0.1** (2026-08-17T00:35Z–00:36Z), launcher
 - PASS: `status --stop --yes` deixa sessões `clean`, sem listener em 28501;
 - PASS: `ui --output` escreve HTML `x86QW owner-only — saudável`.
 - O FAIL de `status --json` e de `host` no zipapp 1.0.0 ficou histórico; o
-  conserto está no CLI 1.0.1 publicado, não só in-tree.
+  conserto está no CLI 1.0.2 publicado, não só in-tree.
+
+Observação no zipapp **1.0.2** (2026-08-17T01:53Z–01:54Z), launcher
+`~/Games/x86qw/x86qw.sh`:
+
+- PASS: `version` = `x86QW 1.0.2`; pyz `cd37e868…` = zip publicado;
+  `upgrade` noop; `status --json` `ok: true`; `doctor --json` `healthy: true`;
+- PASS (2/2): `host ktx --mode practice --map dm6 --bind 127.0.0.1 --background`;
+- PASS (2/2): `host team-fortress --map 2fort5r --bind 127.0.0.1 --background`;
+- PASS: `status --stop --yes` deixa sessões `clean`, sem listener em 28501;
+- PASS: `ui --output` escreve HTML `x86QW owner-only — saudável`.
 
 ## Autoridades
 
 | Autoridade | Verdade corrente |
 | --- | --- |
-| source | baseline current 1.0.1; 0.7.13 histórica no catálogo |
+| source | baseline current 1.0.2; 1.0.1 e 0.7.13 históricas no catálogo |
 | candidate/release | 1.0.0 owner-only, bytes imutáveis e digest verificado |
 | deployment | candidate site, product, catálogo, bootstraps e TUF públicos |
 | development | main@fedb79d…, Validate 31965464008 verde |
@@ -134,8 +144,8 @@ Observação no zipapp **1.0.1** (2026-08-17T00:35Z–00:36Z), launcher
 ## Próxima capacidade
 
 S0, F1–F3 e FUNC-008 estão na main. A instalação persistente complete em
-`~/Games/x86qw` roda o CLI **1.0.1**; `status --json`, `doctor`, `host` e `ui`
-passaram nessa observação. A fonte current é **1.0.1**. A `0.7.13` permanece
-histórica. O candidato E3 25/25 continua sendo a **1.0.0**; evidência nativa
-do digest 1.0.1 e renovação TUF (antes de 2026-08-23T23:35:02Z) são gates
-separados. F4 e EP só com uso real ou decisão de audiência.
+`~/Games/x86qw` roda o CLI **1.0.2**; `upgrade`, `status --json`, `doctor`,
+`host` e `ui` passaram nessa observação. A fonte current é **1.0.2**. A
+`1.0.1` e a `0.7.13` permanecem históricas. Preflight local 25/25 do digest
+1.0.2 está registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é
+operação contínua. F4 e EP só com uso real ou decisão de audiência.
