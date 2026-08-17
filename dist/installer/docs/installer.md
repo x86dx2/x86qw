@@ -4,8 +4,9 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle da árvore-fonte é a baseline `0.7.13`, com 74 pacotes e 21 componentes
-registrados no catálogo. A release final publicada é `1.0.0` e permanece
+O bundle da árvore-fonte é a baseline `1.0.1`, com o catálogo current apontando
+para esse instalador e 21 componentes registrados. A `0.7.13` e a `1.0.0`
+owner-only permanecem históricas e imutáveis. A audiência continua
 `owner-only`: disponibilidade do artefato e GitHub Latest não autorizam
 usuários externos nem transformam as plataformas preview em suporte. Essa
 versão confere o requisito Python por

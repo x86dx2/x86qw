@@ -240,4 +240,4 @@ está em
 
 ## Próxima ação
 
-Concluir F1 (`doctor` + bundle sanitizado) na PR #191 e manter a main verde. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
+Fonte current `1.0.1`; `0.7.13` aposentada como current. F1–F3 e o conserto de `host` ficam em 1.0.x. Manter a lease TUF fora da janela de 6 h. Promoção pública ainda exige TUF assinado e evidência M3 do candidato. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.

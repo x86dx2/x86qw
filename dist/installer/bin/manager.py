@@ -8460,6 +8460,14 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         ),
     )
     parser.add_argument(
+        "--target",
+        dest="target_option",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="diretório de instalação (o launcher instalado injeta esta flag)",
+    )
+    parser.add_argument(
         "target", nargs="?", type=Path,
         help="diretório de instalação (o instalador público pergunta antes de iniciar)",
     )
@@ -8473,6 +8481,13 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
         if callable(parse_intermixed)
         else parser.parse_args(arguments)
     )
+    if namespace.target_option is not None:
+        if (
+            namespace.target is not None
+            and Path(namespace.target) != Path(namespace.target_option)
+        ):
+            parser.error("--target e o destino posicional não podem divergir")
+        namespace.target = namespace.target_option
     # version is intentionally usable before any bundled catalog is opened;
     # this is the bootstrap diagnostic path for a damaged or partial bundle.
     if namespace.action == "version":

@@ -2571,6 +2571,31 @@ def resolve_ktx_launch_options(
     )
 
 
+def configure_play_interactively(options: argparse.Namespace) -> bool:
+    """Return whether play should open pickers or a confirmation prompt.
+
+    Missing ``--mode`` means "open the KTX mode picker" only when the game is
+    KTX or still unchosen. Non-KTX games reject ``--mode``; its absence must
+    not force a confirmation that cancels on EOF.
+    """
+
+    if options.menu:
+        return True
+    if options.mode is not None:
+        return False
+    return options.game is None or options.game == "ktx"
+
+
+def choose_play_ruleset_interactively(options: argparse.Namespace) -> bool:
+    """Return whether play should prompt for a client ruleset."""
+
+    if options.ruleset is not None:
+        return False
+    if options.menu:
+        return True
+    return options.game is None or options.game == "ktx"
+
+
 def parse_arguments(arguments: list[str], project_root: Path):
     context = _gameplay_context
     public_cli = bool(context and context.public_cli)
@@ -2676,9 +2701,9 @@ def main(
         console.section("Jogo local")
         player.play_local(
             options.game, options.mode, options.map, options.ktx_options,
-            configure_interactively=options.menu or options.mode is None,
+            configure_interactively=configure_play_interactively(options),
             ruleset=options.ruleset,
-            choose_ruleset_interactively=options.ruleset is None,
+            choose_ruleset_interactively=choose_play_ruleset_interactively(options),
         )
         return int(ExitCode.SUCCESS)
     except KeyboardInterrupt:

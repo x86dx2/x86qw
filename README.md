@@ -86,10 +86,10 @@ o contrato de preview sem alegação de suporte nativo, porque os casos que
 dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
 O bootstrap público valida o instalador corrente por SHA-256, consulta o
-catálogo TUF público e pergunta onde instalar. A árvore-fonte preserva a
-baseline `0.7.13`; a release final publicada é `1.0.0`, explicitamente
-`owner-only`. Ela é baixável e aparece como GitHub Latest, mas isso não é
-autorização `external-public` nem promessa de suporte para usuários externos.
+catálogo TUF público e pergunta onde instalar. A árvore-fonte current é
+`1.0.1`; a `0.7.13` e a release `1.0.0` owner-only permanecem históricas.
+A audiência continua `owner-only`. Isso não é autorização `external-public`
+nem promessa de suporte para usuários externos.
 O candidato `1.0.0-rc.1` permanece apenas como histórico. Consulte a
 [verdade de release projetada](docs/post-1.0/RELEASE-TRUTH-CURRENT.md) antes de
 interpretar versão, audiência ou plataforma. O sistema atual é detectado
@@ -109,12 +109,9 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A baseline estável indicada acima é a `0.7.13`; o RC público não
-substitui seus bytes estáveis nem é tratado como GitHub Latest.
-Esta árvore de desenvolvimento ainda materializa a base local `0.7.3` para
-reprodução histórica; ela não substitui nem republica os bytes públicos
-`0.7.13`. Nenhum conteúdo desta árvore muda os bytes da release final
-`1.0.0 owner-only` sem um novo candidato promovido por digest.
+posterior. A baseline-fonte current é a `1.0.1`; o RC público e a `0.7.13`
+permanecem históricos e imutáveis. Nenhum conteúdo desta árvore muda os
+bytes já publicados sem um novo candidato promovido por digest.
 
 ## O que vem no x86QW
 
@@ -314,11 +311,11 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A release publicada é `1.0.0` owner-only: um usuário, válida no Apple M3.
+A fonte current é `1.0.1` owner-only: um usuário, válida no Apple M3.
 Os instaladores de macOS, Windows e Linux continuam no site e no catálogo;
 o **gate** obrigatório é macOS/M3. Windows e Linux ficam catalogados até a
-evidência nativa da fase correspondente. A baseline-fonte no Git permanece
-`0.7.13`. Soak, migração histórica e audiência `external-public` não bloqueiam
+evidência nativa da fase correspondente. A `0.7.13` permanece histórica.
+Soak, migração histórica e audiência `external-public` não bloqueiam
 desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
 
 ## Compatibilidade

@@ -111,6 +111,12 @@ def upload(path: Path, package: dict[str, object]) -> None:
         raise ValueError("GitLab publication token contains an invalid control character")
     # GitLab's documented generic-package upload uses PUT with --upload-file.
     # Feed the private header over stdin so the token never enters argv or logs.
+    # Personal/deploy tokens use PRIVATE-TOKEN; glab OAuth tokens need Bearer.
+    authorization = (
+        f"PRIVATE-TOKEN: {token}\n"
+        if token.startswith(("glpat-", "gldt-", "glrt-", "glptt-"))
+        else f"Authorization: Bearer {token}\n"
+    )
     result = subprocess.run([
         "curl", "--disable", "--fail", "--silent", "--show-error",
         "--proto", "=https", "--proto-redir", "=https",
@@ -119,7 +125,7 @@ def upload(path: Path, package: dict[str, object]) -> None:
         "--write-out", "%{http_code}",
         "--request", "PUT", "--header", "@-", "--upload-file", str(path),
         artifact_url(package),
-    ], input=f"PRIVATE-TOKEN: {token}\n", text=True, stdout=subprocess.PIPE,
+    ], input=authorization, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, check=False)
     if result.returncode:
         raise ValueError(f"GitLab upload failed with curl exit code {result.returncode}")

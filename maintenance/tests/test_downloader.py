@@ -253,7 +253,7 @@ ALLOWED_NETWORK_PROCESS_CALLS = {
         ("git", "subprocess.run", "git", "subprocess.run(['git', *arguments], cwd=ROOT, input=stdin, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)"),
     }),
     ROOT / "maintenance/tools/publish_gitlab_packages.py": frozenset({
-        ("curl", "subprocess.run", "upload", "subprocess.run(['curl', '--disable', '--fail', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15', '--max-time', '900', '--max-redirs', '0', '--output', os.devnull, '--write-out', '%{http_code}', '--request', 'PUT', '--header', '@-', '--upload-file', str(path), artifact_url(package)], input=f'PRIVATE-TOKEN: {token}\\n', text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)"),
+        ("curl", "subprocess.run", "upload", "subprocess.run(['curl', '--disable', '--fail', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15', '--max-time', '900', '--max-redirs', '0', '--output', os.devnull, '--write-out', '%{http_code}', '--request', 'PUT', '--header', '@-', '--upload-file', str(path), artifact_url(package)], input=authorization, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)"),
     }),
     ROOT / "maintenance/tools/publish_github_candidate.py": frozenset({
         ("gh", "subprocess.run", "_execute_gh", "subprocess.run(['gh', *arguments], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300, check=False)"),

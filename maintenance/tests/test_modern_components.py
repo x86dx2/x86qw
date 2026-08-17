@@ -460,6 +460,217 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual("nenhum", parameters["secrets"])
             self.assertNotIn("password", parameters)
 
+    def test_host_spec_suppresses_pk3_server_cfg_autoexec(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "practice")
+            qw = target / "qw"
+            qw.mkdir()
+            with zipfile.ZipFile(qw / "ktx.pk3", "w") as package:
+                package.writestr("qwprogs.qvm", b"qvm")
+                package.writestr("server.cfg", b"exec mvdsv.cfg\n")
+                package.writestr("mvdsv.cfg", b"sv_getrealip 2\n")
+            options = services_qw.parse_arguments([
+                "host", "ktx", "--mode", "practice", "--map", "dm6",
+                "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            materialized = []
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
+            with mock.patch.object(
+                services_qw, "runtime_launch_target", return_value=launch_target,
+            ):
+                spec = services_qw.host_spec(
+                    player, options, selection, sessions, materialized,
+                )
+            self.assertEqual("MVDSV", spec.label)
+            self.assertFalse((qw / "server.cfg").exists())
+            self.assertEqual(b"qvm", (qw / "qwprogs.qvm").read_bytes())
+            self.assertIn('map "dm6"', sessions[0].read_text(encoding="utf-8"))
+            self.assertTrue(materialized)
+            services_qw.cleanup_dedicated_ktx(materialized[0])
+            self.assertFalse((qw / "qwprogs.qvm").exists())
+            for path in sessions:
+                path.unlink()
+
+    def test_host_spec_exec_filenames_fit_mvdsv_command_token(self):
+        # MVDSV 1.11 drops +exec / rcon exec when the cfg name is longer than
+        # 35 characters, so the map never loads and UDP status never answers.
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "practice")
+            (target / game.gamedir).mkdir()
+            options = services_qw.parse_arguments([
+                "host", "ktx", "--mode", "practice", "--map", "dm6",
+                "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
+            with mock.patch.object(
+                services_qw, "runtime_launch_target", return_value=launch_target,
+            ), mock.patch.object(services_qw, "materialize_hosted_game", return_value=None):
+                spec = services_qw.host_spec(
+                    player, options, selection, sessions, [],
+                )
+            exec_name = spec.arguments[spec.arguments.index("+exec") + 1]
+            self.assertEqual(sessions[0].name, exec_name)
+            self.assertEqual(sessions[1].name, spec.startup_rcon.config_name)
+            self.assertLessEqual(len(exec_name), 32)
+            self.assertLessEqual(len(spec.startup_rcon.config_name), 32)
+            self.assertRegex(spec.startup_rcon.password, r"^[0-9a-f]+$")
+            self.assertLessEqual(len(spec.startup_rcon.password), 32)
+            self.assertIn("sv_crypt_rcon 0", sessions[0].read_text(encoding="utf-8"))
+            self.assertNotIn("sv_crypt_rcon 1", sessions[1].read_text(encoding="utf-8"))
+            for path in sessions:
+                path.unlink()
+
+    def test_host_spec_reenable_crypt_rcon_after_bootstrap_on_external_bind(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "practice")
+            (target / game.gamedir).mkdir()
+            options = services_qw.parse_arguments([
+                "host", "ktx", "--mode", "practice", "--map", "dm6",
+                "--bind", "0.0.0.0", "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
+            with mock.patch.object(
+                services_qw, "runtime_launch_target", return_value=launch_target,
+            ), mock.patch.object(services_qw, "materialize_hosted_game", return_value=None):
+                spec = services_qw.host_spec(
+                    player, options, selection, sessions, [],
+                )
+            self.assertEqual("0.0.0.0", dict(spec.parameters)["bind"])
+            self.assertIn("sv_crypt_rcon 0", sessions[0].read_text(encoding="utf-8"))
+            self.assertIn("sv_crypt_rcon 1", sessions[1].read_text(encoding="utf-8"))
+            for path in sessions:
+                path.unlink()
+
+    def test_host_spec_keeps_preexisting_server_cfg(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            mode = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "practice")
+            qw = target / "qw"
+            qw.mkdir()
+            existing = b"hostname preexisting\n"
+            (qw / "server.cfg").write_bytes(existing)
+            with zipfile.ZipFile(qw / "ktx.pk3", "w") as package:
+                package.writestr("qwprogs.qvm", b"qvm")
+                package.writestr("server.cfg", existing)
+            options = services_qw.parse_arguments([
+                "host", "ktx", "--mode", "practice", "--map", "dm6",
+                "--target", str(target),
+            ], ROOT)
+            selection = services_qw.HostedGame(
+                game, mode, "dm6", frozenset(), options.ktx_options,
+            )
+            sessions = []
+            materialized = []
+            binary = target / "mvdsv"
+            binary.write_bytes(b"fixture\n")
+            binary.chmod(0o755)
+            launch_target = services_qw.host_adapter.executable_launch_target(binary)
+            with mock.patch.object(
+                services_qw, "runtime_launch_target", return_value=launch_target,
+            ):
+                spec = services_qw.host_spec(
+                    player, options, selection, sessions, materialized,
+                )
+            self.assertEqual("MVDSV", spec.label)
+            self.assertEqual(existing, (qw / "server.cfg").read_bytes())
+            self.assertTrue(
+                all(
+                    entry.path != qw / "server.cfg" or not entry.created_by_session
+                    for item in materialized
+                    for entry in item.files
+                )
+            )
+            services_qw.cleanup_dedicated_ktx(materialized[0])
+            self.assertEqual(existing, (qw / "server.cfg").read_bytes())
+            for path in sessions:
+                path.unlink()
+
+    def test_non_ktx_host_without_mode_does_not_cancel_on_eof(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "td2")
+            options = services_qw.parse_arguments([
+                "host", "td2", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            self.assertIsNone(options.mode)
+            with mock.patch.object(sys, "stdin", io.StringIO("")):
+                with mock.patch.object(player, "check_paks"):
+                    with mock.patch.object(player, "available_local_games", return_value=[game]):
+                        with mock.patch.object(player, "installed_component_for_game", return_value=game.component):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(player, "verify_local_play_support"):
+                                    with mock.patch.object(player, "choose_local_map", return_value="dm6"):
+                                        selected = services_qw.select_hosted_game(player, options)
+            self.assertIsNotNone(selected)
+            self.assertEqual("td2", selected.game.key)
+            self.assertIsNone(selected.mode)
+            self.assertEqual("dm6", selected.map_name)
+
+    def test_non_ktx_play_without_mode_is_not_interactive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            parsed = play_qw.parse_arguments([
+                "td2", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            self.assertEqual("td2", parsed.game)
+            self.assertIsNone(parsed.mode)
+            self.assertFalse(play_qw.configure_play_interactively(parsed))
+            self.assertFalse(play_qw.choose_play_ruleset_interactively(parsed))
+            ktx = play_qw.parse_arguments([
+                "ktx", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            self.assertTrue(play_qw.configure_play_interactively(ktx))
+            specified = play_qw.parse_arguments([
+                "ktx", "--mode", "duel", "--map", "dm6", "--target", str(target),
+            ], ROOT)
+            self.assertFalse(play_qw.configure_play_interactively(specified))
+
+    def test_non_ktx_play_main_without_mode_does_not_cancel_on_eof(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "quake-world"
+            target.mkdir()
+            with mock.patch.object(sys, "stdin", io.StringIO("")):
+                with mock.patch.object(play_qw, "show_banner"):
+                    with mock.patch.object(play_qw.Player, "validate_target"):
+                        with mock.patch.object(play_qw.Player, "reject_target_symlinks"):
+                            with mock.patch.object(play_qw.Player, "play_local") as play_local:
+                                code = play_qw.main([
+                                    "td2", "--map", "dm6", "--target", str(target),
+                                ])
+            self.assertEqual(0, code)
+            kwargs = play_local.call_args.kwargs
+            self.assertFalse(kwargs["configure_interactively"])
+            self.assertFalse(kwargs["choose_ruleset_interactively"])
+
     def test_service_runtime_platforms_and_ipv6_endpoints_are_explicit(self):
         self.assertEqual("macos-arm64", services_qw.runtime_variant("Darwin", "arm64"))
         self.assertEqual("linux-amd64", services_qw.runtime_variant("Linux", "x86_64"))
