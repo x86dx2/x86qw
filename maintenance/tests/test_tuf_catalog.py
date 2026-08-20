@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from maintenance.tests.trust_support import (
     METADATA_URL,
@@ -42,6 +44,29 @@ class TrustMetadataTests(unittest.TestCase):
                 json.loads(catalog),
                 self.load(repository, Path(temporary)),
             )
+
+    def test_windows_without_symlink_privilege_uses_a_regular_root_anchor(self) -> None:
+        repository = build_repository(new_keyset(), version=1)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = self.runtime()
+            privilege_error = OSError(
+                1314,
+                "A required privilege is not held by the client",
+            )
+            with mock.patch.object(
+                runtime,
+                "_windows_tuf_root_requires_regular_file",
+                return_value=True,
+                create=True,
+            ), mock.patch.object(os, "symlink", side_effect=privilege_error):
+                self.assertEqual("x86qw", self.load(repository, root)["project"])
+
+            current = root / "metadata/root.json"
+            history = root / "metadata/root_history/1.root.json"
+            self.assertTrue(current.is_file())
+            self.assertFalse(current.is_symlink())
+            self.assertEqual(history.read_bytes(), current.read_bytes())
 
     def test_modified_catalog_is_rejected_before_use(self) -> None:
         repository = build_repository(new_keyset(), version=1)

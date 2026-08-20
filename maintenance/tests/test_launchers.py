@@ -2062,7 +2062,10 @@ shutil.copyfile(os.environ["X86QW_TEST_FIXTURE"], sys.argv[1])
 "@
 $Source = [regex]::Replace($Source, $DownloaderPattern, $DownloaderReplacement)
 $InstallerInvocation = '    & $PythonRuntime.Command @InstallerArguments'
-if (($Source.Split($InstallerInvocation).Count - 1) -ne 1) {
+if ([regex]::Matches(
+  $Source,
+  [regex]::Escape($InstallerInvocation)
+).Count -ne 1) {
   throw "nao foi possivel controlar a execucao final do instalador"
 }
 $Source = $Source.Replace(
