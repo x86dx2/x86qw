@@ -17,8 +17,8 @@ documentação e pacotes imutáveis:
 - `packages/latest`: link simbólico relativo para a versão corrente.
 
 O link `latest` seleciona a versão corrente dentro do Git sem duplicar o bundle.
-O catálogo oficial começa em `0.1.0`. A baseline-fonte no Git é `1.0.3`
-(`packages/latest`). A `1.0.2`, a `0.7.13` e a release GitHub `1.0.0` owner-only
+O catálogo oficial começa em `0.1.0`. A baseline-fonte no Git é `1.0.4`
+(`packages/latest`). A `1.0.3`, a `1.0.2`, a `0.7.13` e a release GitHub `1.0.0` owner-only
 permanecem históricas e imutáveis. A versão de desenvolvimento é sempre lida
 de `VERSION`.
 Os bootstraps públicos continuam gravando versão e SHA-256 concretos: links

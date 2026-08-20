@@ -157,7 +157,7 @@ zipapp publicado 1.0.2 `cd37e868…`:
 
 | Autoridade | Verdade corrente |
 | --- | --- |
-| source | baseline current 1.0.3; 1.0.2, 1.0.1 e 0.7.13 históricas no catálogo |
+| source | baseline current 1.0.4; 1.0.3, 1.0.2, 1.0.1 e 0.7.13 históricas no catálogo |
 | candidate/release | 1.0.0 owner-only, bytes imutáveis e digest verificado |
 | deployment | candidate site, product, catálogo, bootstraps e TUF públicos |
 | development | main@fedb79d…, Validate 31965464008 verde |
@@ -175,7 +175,7 @@ zipapp publicado 1.0.2 `cd37e868…`:
 
 S0, F1–F3 e FUNC-008 estão na main. `~/Games/x86qw` foi desinstalada de
 forma conservadora e em seguida com `--purge` no CLI **1.0.2**; o destino
-e o cache Darwin não existem mais. A fonte current é **1.0.3**. A `1.0.2`,
-a `1.0.1` e a `0.7.13` permanecem históricas. Preflight local 25/25 do digest 1.0.2
+e o cache Darwin não existem mais. A fonte current é **1.0.4**. A `1.0.3`,
+a `1.0.2`, a `1.0.1` e a `0.7.13` permanecem históricas. Preflight local 25/25 do digest 1.0.2
 está registrado. Renovação TUF (antes de 2026-08-24T01:35:49Z) é operação
 contínua. F4 e EP só com uso real ou decisão de audiência.

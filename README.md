@@ -87,7 +87,7 @@ dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
 
 O bootstrap público valida o instalador corrente por SHA-256, consulta o
 catálogo TUF público e pergunta onde instalar. A árvore-fonte current é
-`1.0.3`; a `1.0.2`, a `1.0.1`, a `0.7.13` e a release `1.0.0` owner-only permanecem históricas.
+`1.0.4`; a `1.0.3`, a `1.0.2`, a `1.0.1`, a `0.7.13` e a release `1.0.0` owner-only permanecem históricas.
 A audiência continua `owner-only`. Isso não é autorização `external-public`
 nem promessa de suporte para usuários externos.
 O candidato `1.0.0-rc.1` permanece apenas como histórico. Consulte a
@@ -109,7 +109,7 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A baseline-fonte current é a `1.0.3`; o RC público e a `0.7.13`
+posterior. A baseline-fonte current é a `1.0.4`; o RC público e a `0.7.13`
 permanecem históricos e imutáveis. Nenhum conteúdo desta árvore muda os
 bytes já publicados sem um novo candidato promovido por digest.
 
@@ -311,7 +311,7 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A fonte current é `1.0.3` owner-only: um usuário, válida no Apple M3.
+A fonte current é `1.0.4` owner-only: um usuário, válida no Apple M3.
 Os instaladores de macOS, Windows e Linux continuam no site e no catálogo;
 o **gate** obrigatório é macOS/M3. Windows e Linux ficam catalogados até a
 evidência nativa da fase correspondente. A `0.7.13` permanece histórica.

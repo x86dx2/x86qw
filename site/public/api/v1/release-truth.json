@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-17T03:51:46Z",
-  "snapshot_commit": "fedb79dd7d4df05572007153afb505ebefe0a151",
+  "observed_at_utc": "2026-08-20T16:27:29Z",
+  "snapshot_commit": "5652fbc1f27d742d509132f28c67bfcb457573a3",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -12,7 +12,7 @@
   "authorities": {
     "source": {
       "meaning": "estado versionado da fonte current",
-      "baseline": "1.0.3",
+      "baseline": "1.0.4",
       "version_file": "dist/installer/VERSION"
     },
     "candidate_release": {
@@ -41,14 +41,14 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-17T03:51:46Z",
-        "product_version": "1.0.3",
-        "catalog_current_installer": "1.0.3",
+        "observed_at_utc": "2026-08-20T16:27:29Z",
+        "product_version": "1.0.4",
+        "catalog_current_installer": "1.0.4",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
-        "root_site_hero": "x86QW 1.0.3 fonte current · 0.7.13 histórica · owner-only",
+        "root_site_hero": "x86QW 1.0.4 fonte current · 0.7.13 histórica · owner-only",
         "root_mentions_owner_only": true,
-        "state": "CONVERGED_SOURCE_1_0_3",
+        "state": "CONVERGED_SOURCE_1_0_4",
         "root_runner_probe": "200_OWNER_ONLY"
       },
       "package_mirrors": {
@@ -59,12 +59,12 @@
       },
       "tuf": {
         "root_version": 2,
-        "timestamp_version": 23,
-        "snapshot_version": 23,
-        "targets_version": 23,
-        "packages_observed": 77,
-        "timestamp_expiry": "2026-08-24T03:50:34Z",
-        "seconds_to_expiry_at_observation": 604727,
+        "timestamp_version": 24,
+        "snapshot_version": 24,
+        "targets_version": 24,
+        "packages_observed": 78,
+        "timestamp_expiry": "2026-08-27T16:27:29Z",
+        "seconds_to_expiry_at_observation": 604800,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
@@ -76,13 +76,13 @@
         "publication_run_id": 31963192991,
         "publication_artifact_id": 9267779828,
         "publication_artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
-        "catalog_sha256": "3f79d8e278a1b47a9df433601b24f881b82eec3c0a88863ecaed61ed1c287b8f"
+        "catalog_sha256": "13f085c4a93d41101df5eef4f1be5904acd2815436a3bc341d6c8a418d03008b"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "fedb79dd7d4df05572007153afb505ebefe0a151",
-      "validate_run": 31965464008,
+      "head": "5652fbc1f27d742d509132f28c67bfcb457573a3",
+      "validate_run": 32392328154,
       "required_protected_contexts": 3,
       "protected_contexts_green": "3/3",
       "validate_jobs": "5/5"
