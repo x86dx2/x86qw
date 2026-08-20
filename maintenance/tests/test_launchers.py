@@ -2022,6 +2022,90 @@ printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$X86QW_TEST_SIZE" > "$he
         self.assertEqual(0, completed.returncode, completed.stderr)
 
     @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
+    def test_public_powershell_bootstrap_materializes_archive_helper_with_legacy_native_arguments(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            harness = Path(temporary) / "legacy-native-arguments-harness.ps1"
+            harness.write_text(
+                r'''param(
+  [string]$Bootstrap,
+  [string]$Fixture,
+  [string]$RealPython
+)
+$PSNativeCommandArgumentPassing = "Legacy"
+$global:X86QWInstallerReached = $false
+$env:X86QW_TEST_FIXTURE = $Fixture
+$Source = Get-Content -LiteralPath $Bootstrap -Raw
+$CandidatePattern = '(?ms)  \$PythonCandidates = @\(.*?^  \)\r?\n  foreach'
+if ([regex]::Matches($Source, $CandidatePattern).Count -ne 1) {
+  throw "nao foi possivel controlar o runtime Python do bootstrap"
+}
+$CandidateReplacement = @'
+  $PythonCandidates = @(
+    [pscustomobject]@{ Command = $RealPython; Arguments = @() }
+  )
+  foreach
+'@
+$Source = [regex]::Replace($Source, $CandidatePattern, $CandidateReplacement)
+$DownloaderPattern = "(?ms)    \`$DownloaderSource = @'.*?^'@\r?\n    \[System\.IO\.File\]::WriteAllText\("
+if ([regex]::Matches($Source, $DownloaderPattern).Count -ne 1) {
+  throw "nao foi possivel controlar o downloader do bootstrap"
+}
+$DownloaderReplacement = @"
+    `$DownloaderSource = @'
+import os
+import shutil
+import sys
+
+shutil.copyfile(os.environ["X86QW_TEST_FIXTURE"], sys.argv[1])
+'@
+    [System.IO.File]::WriteAllText(
+"@
+$Source = [regex]::Replace($Source, $DownloaderPattern, $DownloaderReplacement)
+$InstallerInvocation = '    & $PythonRuntime.Command @InstallerArguments'
+if (($Source.Split($InstallerInvocation).Count - 1) -ne 1) {
+  throw "nao foi possivel controlar a execucao final do instalador"
+}
+$Source = $Source.Replace(
+  $InstallerInvocation,
+  '    $global:X86QWInstallerReached = $true; $global:LASTEXITCODE = 0'
+)
+Invoke-Expression $Source
+if (-not $global:X86QWInstallerReached) {
+  throw "o bootstrap nao alcancou o instalador verificado"
+}
+Write-Output "X86QW_LEGACY_MATERIALIZATION_OK"
+''',
+                encoding="utf-8",
+            )
+            for runtime in POWERSHELL_RUNTIMES:
+                for bootstrap in (
+                    ROOT / "dist/installer/bin/install.ps1",
+                    ROOT / "site/public/install.ps1",
+                ):
+                    with self.subTest(runtime=runtime, bootstrap=bootstrap):
+                        completed = subprocess.run(
+                            [
+                                runtime,
+                                "-NoProfile",
+                                "-ExecutionPolicy",
+                                "Bypass",
+                                "-File",
+                                str(harness),
+                                str(bootstrap),
+                                str(CURRENT_BUNDLE),
+                                sys.executable,
+                            ],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(0, completed.returncode, completed.stderr)
+                        self.assertIn(
+                            "X86QW_LEGACY_MATERIALIZATION_OK",
+                            completed.stdout,
+                        )
+
+    @unittest.skipUnless(POWERSHELL, "PowerShell não está disponível neste runner")
     def test_public_powershell_bootstrap_creates_private_workdir_before_content(self):
         bootstrap = ROOT / "site/public/install.ps1"
         for candidate in (
@@ -2180,13 +2264,19 @@ function Get-Command {
 }
 function python {
   if ($args -contains "-c") {
-    if (($args -join "`n") -like "*runpy.run_module*") {
-      $HelperRoot = [string]$args[2]
-      $WorkDir = Split-Path -Parent $HelperRoot
-      $global:X86QWArchiveTempPrivate = (
-        $env:TEMP -eq $WorkDir -and $env:TMP -eq $WorkDir
-      )
-    }
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  if ([string]$args[0] -like "*x86qw-bootstrap-materialize.py") {
+    Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
+    return
+  }
+  if ([string]$args[0] -like "*x86qw-bootstrap-extract.py") {
+    $HelperRoot = [string]$args[1]
+    $WorkDir = Split-Path -Parent $HelperRoot
+    $global:X86QWArchiveTempPrivate = (
+      $env:TEMP -eq $WorkDir -and $env:TMP -eq $WorkDir
+    )
     Set-Variable -Name LASTEXITCODE -Scope 1 -Value 0
     return
   }

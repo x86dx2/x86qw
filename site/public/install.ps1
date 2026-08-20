@@ -1210,8 +1210,14 @@ for path in (package / "__init__.py", module.parent / "__init__.py"):
 module.write_bytes(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))
 os.chmod(module, 0o600)
 '@
+    $MaterializeScript = Join-Path $WorkDir "x86qw-bootstrap-materialize.py"
+    [System.IO.File]::WriteAllText(
+      $MaterializeScript,
+      $MaterializeSource,
+      (New-Object System.Text.UTF8Encoding($false))
+    )
     $MaterializeArguments = @($PythonRuntime.Arguments) + @(
-      "-c", $MaterializeSource, $HelperRoot
+      $MaterializeScript, $HelperRoot
     )
     $Extracted = Join-Path $WorkDir "extracted"
     $Prefix = "x86qw-installer-$InstallerVersion"
@@ -1226,8 +1232,14 @@ sys.path.insert(0, sys.argv.pop(1))
 sys.argv[0] = "x86qw archive"
 runpy.run_module("x86qw_runtime.io.archive", run_name="__main__")
 '@
+    $ExtractScript = Join-Path $WorkDir "x86qw-bootstrap-extract.py"
+    [System.IO.File]::WriteAllText(
+      $ExtractScript,
+      $ExtractSource,
+      (New-Object System.Text.UTF8Encoding($false))
+    )
     $ExtractArguments = @($PythonRuntime.Arguments) + @(
-      "-c", $ExtractSource, $HelperRoot, $Archive, $Extracted,
+      $ExtractScript, $HelperRoot, $Archive, $Extracted,
       "--bundle-version", $InstallerVersion,
       "--required", $Required,
       "--executable", $ShellExecutable,
