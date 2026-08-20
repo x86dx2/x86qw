@@ -357,6 +357,35 @@ def _tuf_api():
     return exceptions, Metadata, Root, Updater, UpdaterConfig
 
 
+def _windows_tuf_root_requires_regular_file() -> bool:
+    """Return whether the TUF root alias must avoid privileged symlinks."""
+
+    return os.name == "nt"
+
+
+def _platform_updater(updater_type: type[Any]) -> type[Any]:
+    """Use a regular root.json alias on Windows without symlink privilege."""
+
+    if not _windows_tuf_root_requires_regular_file():
+        return updater_type
+
+    class WindowsCompatibleUpdater(updater_type):
+        def _update_root_symlink(self) -> None:
+            version = self._trusted_set.root.version
+            current = Path(
+                self._dir,
+                "root_history",
+                f"{version}.root.json",
+            )
+            payload = read_bounded_regular_file(
+                current,
+                maximum_size=self.config.root_max_length,
+            )
+            self._persist_file(os.path.join(self._dir, "root.json"), payload)
+
+    return WindowsCompatibleUpdater
+
+
 def _base_url(value: str, label: str) -> str:
     if not isinstance(value, str):
         raise TrustError(f"{label} de trust inválida")
@@ -494,6 +523,7 @@ def load_trusted_catalog(
     _private_directory(target_dir)
 
     exceptions, _Metadata, _Root, Updater, UpdaterConfig = _tuf_api()
+    Updater = _platform_updater(Updater)
     config = UpdaterConfig(
         root_max_length=512 * 1024,
         timestamp_max_length=64 * 1024,
