@@ -1201,23 +1201,30 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+payload = Path(sys.argv[2]).read_bytes().strip()
 package = root / "x86qw_runtime"
 module = package / "io" / "archive.py"
 module.parent.mkdir(parents=True, mode=0o700)
 for path in (package / "__init__.py", module.parent / "__init__.py"):
     path.write_bytes(b"")
     os.chmod(path, 0o600)
-module.write_bytes(base64.b64decode(sys.stdin.buffer.read().strip(), validate=True))
+module.write_bytes(base64.b64decode(payload, validate=True))
 os.chmod(module, 0o600)
 '@
     $MaterializeScript = Join-Path $WorkDir "x86qw-bootstrap-materialize.py"
+    $ArchiveHelperPayload = Join-Path $WorkDir "x86qw-bootstrap-archive-helper.b64"
     [System.IO.File]::WriteAllText(
       $MaterializeScript,
       $MaterializeSource,
       (New-Object System.Text.UTF8Encoding($false))
     )
+    [System.IO.File]::WriteAllText(
+      $ArchiveHelperPayload,
+      $ArchiveHelperBase64,
+      (New-Object System.Text.UTF8Encoding($false))
+    )
     $MaterializeArguments = @($PythonRuntime.Arguments) + @(
-      $MaterializeScript, $HelperRoot
+      $MaterializeScript, $HelperRoot, $ArchiveHelperPayload
     )
     $Extracted = Join-Path $WorkDir "extracted"
     $Prefix = "x86qw-installer-$InstallerVersion"
@@ -1250,7 +1257,7 @@ runpy.run_module("x86qw_runtime.io.archive", run_name="__main__")
     try {
       [Environment]::SetEnvironmentVariable("TEMP", $WorkDir, "Process")
       [Environment]::SetEnvironmentVariable("TMP", $WorkDir, "Process")
-      $ArchiveHelperBase64 | & $PythonRuntime.Command @MaterializeArguments
+      & $PythonRuntime.Command @MaterializeArguments
       if ($LASTEXITCODE -ne 0) {
         throw "x86QW: nao foi possivel materializar o extrator seguro."
       }
