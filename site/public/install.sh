@@ -351,4 +351,8 @@ runpy.run_module("x86qw_runtime.io.archive", run_name="__main__")
   --executable "$legacy_executable"
 
 root="$extracted/x86qw-installer-$INSTALLER_VERSION"
-"$python_runtime" "$root/x86qw.pyz" --online-only "$@"
+if { exec 3</dev/tty; } 2>/dev/null; then
+  "$python_runtime" "$root/x86qw.pyz" --online-only "$@" <&3
+else
+  "$python_runtime" "$root/x86qw.pyz" --online-only "$@"
+fi

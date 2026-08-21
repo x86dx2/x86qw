@@ -695,6 +695,97 @@ exec /bin/cat "$X86QW_TEST_BUNDLE"
                     self.assertEqual({"python3"}, set(used))
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
+    def test_unix_bootstrap_piped_through_bash_keeps_terminal_input(self):
+        import pty
+        import select
+        import warnings
+
+        for bootstrap in (
+            ROOT / "dist/installer/bin/install.sh",
+            ROOT / "site/public/install.sh",
+        ):
+            with self.subTest(bootstrap=bootstrap), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                binaries = root / "bin"
+                binaries.mkdir()
+                answer_file = root / "answer"
+                expected_answer = os.fspath(root / "instalação escolhida")
+
+                runtime = binaries / "python3"
+                runtime.write_text(
+                    "#!/bin/sh\n"
+                    "case \"${1:-}\" in\n"
+                    "  */x86qw.pyz)\n"
+                    "    if IFS= read -r answer; then\n"
+                    "      printf '%s' \"$answer\" > \"$X86QW_STDIN_RESULT\"\n"
+                    "    else\n"
+                    "      printf '<EOF>' > \"$X86QW_STDIN_RESULT\"\n"
+                    "    fi\n"
+                    "    exit 0\n"
+                    "    ;;\n"
+                    "esac\n"
+                    f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+                    encoding="utf-8",
+                )
+                runtime.chmod(0o755)
+                curl = binaries / "curl"
+                curl.write_text(
+                    "#!/bin/sh\nexec /bin/cat \"$X86QW_TEST_BUNDLE\"\n",
+                    encoding="utf-8",
+                )
+                curl.chmod(0o755)
+                for command in ("mktemp", "rm"):
+                    executable = shutil.which(command)
+                    self.assertIsNotNone(executable, command)
+                    (binaries / command).symlink_to(executable)
+
+                environment = {
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_STDIN_RESULT": os.fspath(answer_file),
+                    "X86QW_TEST_BUNDLE": os.fspath(CURRENT_BUNDLE),
+                    "PYTHONIOENCODING": "utf-8",
+                }
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    pid, descriptor = pty.fork()
+                if pid == 0:
+                    os.execve(
+                        "/bin/bash",
+                        [
+                            "/bin/bash",
+                            "-c",
+                            f"/bin/cat {shlex.quote(os.fspath(bootstrap))} | /bin/bash",
+                        ],
+                        environment,
+                    )
+
+                status = None
+                output = bytearray()
+                try:
+                    os.write(descriptor, f"{expected_answer}\n".encode())
+                    deadline = time.monotonic() + 20
+                    while time.monotonic() < deadline:
+                        ready, _, _ = select.select([descriptor], [], [], 0.1)
+                        if ready:
+                            try:
+                                output.extend(os.read(descriptor, 65536))
+                            except OSError:
+                                pass
+                        finished, status = os.waitpid(pid, os.WNOHANG)
+                        if finished:
+                            break
+                    else:
+                        os.kill(pid, 9)
+                        _, status = os.waitpid(pid, 0)
+                        self.fail("bootstrap não terminou:\n" + output.decode(errors="replace"))
+                finally:
+                    os.close(descriptor)
+
+                self.assertEqual(0, os.waitstatus_to_exitcode(status), output.decode(errors="replace"))
+                self.assertEqual(expected_answer, answer_file.read_text(encoding="utf-8"))
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix é exercitado nos runners POSIX")
     def test_unix_bootstrap_rejects_python_39_before_download(self):
         for bootstrap in (
             ROOT / "dist/installer/bin/install.sh",
