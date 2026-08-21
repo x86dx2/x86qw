@@ -5,6 +5,10 @@
   "workers_dev": false,
   "routes": [
     {
+      "pattern": "qw.x86.com.br",
+      "custom_domain": true
+    },
+    {
       "pattern": "x86qw.x86.com.br",
       "custom_domain": true
     }

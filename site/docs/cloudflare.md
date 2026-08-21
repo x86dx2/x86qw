@@ -1,8 +1,10 @@
 # Publicação na Cloudflare
 
 O `site/wrangler.jsonc` publica `site/public` como Workers Static Assets e registra
-`x86qw.x86.com.br` como Custom Domain. Nenhum Worker JavaScript executa no
-caminho normal: HTML, CSS e o catálogo são arquivos estáticos no edge.
+`qw.x86.com.br` como Custom Domain canônico. O domínio legado
+`x86qw.x86.com.br` permanece ligado ao mesmo Worker como alias de compatibilidade
+para clientes já publicados. Nenhum Worker JavaScript executa no caminho normal:
+HTML, CSS e o catálogo são arquivos estáticos idênticos no edge.
 
 ## Validar sem publicar
 
@@ -20,7 +22,8 @@ julho de 2026. Atualizações devem repetir o dry-run antes do deploy.
 ## Publicar
 
 1. Confirme que `x86.com.br` é uma zona ativa na conta Cloudflare correta.
-2. Confirme que `x86qw.x86.com.br` não possui um CNAME conflitante.
+2. Confirme que `qw.x86.com.br` não possui um CNAME conflitante e preserve o
+   Custom Domain legado `x86qw.x86.com.br`.
 3. Autentique o Wrangler com um token restrito à conta e à zona.
 4. Entre em `site/` e execute `npm ci && npm run deploy:dry-run` para validar o
 bundle; a publicação remota só ocorre após autorização explícita e é executada
@@ -36,13 +39,16 @@ Crie uma Single Redirect Rule na zona `x86.com.br`:
 
 ```text
 Request URL:          https://x86.com.br/x86qw*
-Target URL:           https://x86qw.x86.com.br${1}
+Target URL:           https://qw.x86.com.br${1}
 Status:               308
 Preserve query string: enabled
 ```
 
 O curinga preserva caminhos: `/x86qw/docs` passa a `/docs`. Essa regra pertence
 ao portal geral do domínio e não ao Worker do x86QW.
+
+O alias legado não deve ser redirecionado nem removido enquanto houver versões
+publicadas que o utilizem para catálogo e metadados TUF.
 
 ## Referências oficiais
 

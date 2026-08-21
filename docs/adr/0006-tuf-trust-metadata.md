@@ -100,8 +100,8 @@ catálogo sem assinatura.
 As origens canônicas serão versionadas sob:
 
 ```text
-https://x86qw.x86.com.br/api/v1/trust/metadata/
-https://x86qw.x86.com.br/api/v1/trust/targets/
+https://qw.x86.com.br/api/v1/trust/metadata/
+https://qw.x86.com.br/api/v1/trust/targets/
 ```
 
 Os mirrors aprovados expõem os mesmos caminhos e bytes. O layout é o layout

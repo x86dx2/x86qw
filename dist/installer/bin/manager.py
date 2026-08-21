@@ -207,14 +207,14 @@ from x86qw_runtime.catalogs import (
 
 ID1_PAK0_SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
 ID1_PAK1_SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
-CATALOG_URL = "https://x86qw.x86.com.br/api/v1/catalog.json"
+CATALOG_URL = "https://qw.x86.com.br/api/v1/catalog.json"
 CATALOG_URLS = (
     CATALOG_URL,
     "https://raw.githubusercontent.com/x86dx2/x86qw/main/site/public/api/v1/catalog.json",
     "https://gitlab.com/x86dx2/x86qw/-/raw/main/site/public/api/v1/catalog.json",
 )
-TRUST_METADATA_URL = "https://x86qw.x86.com.br/api/v1/trust/metadata/"
-TRUST_TARGET_URL = "https://x86qw.x86.com.br/api/v1/trust/targets/"
+TRUST_METADATA_URL = "https://qw.x86.com.br/api/v1/trust/metadata/"
+TRUST_TARGET_URL = "https://qw.x86.com.br/api/v1/trust/targets/"
 TRUST_ROOT_MEMBER = "_x86qw/trust/root.json"
 TRUST_ROOT_MAX_BYTES = 512 * 1024
 CATALOG_TIMEOUT = 10.0
@@ -227,7 +227,7 @@ PUBLIC_UNIX_BOOTSTRAP_COMMAND = (
     """abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; """
     """set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" """
     """--connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL """
-    """https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; """
+    """https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; """
     """n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then """
     """printf "%s\\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; """
     """[ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw"""
@@ -236,7 +236,7 @@ PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
     "& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); "
     "$h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); "
     "$c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; "
-    "$r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1')."
+    "$r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1')."
     "GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw \"x86QW: HTTP "
     "$([int]$r.StatusCode).\" }; if ($r.Content.Headers.ContentLength -gt 262144) { "
     "throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync()."

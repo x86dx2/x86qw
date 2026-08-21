@@ -342,7 +342,7 @@ jobs:
           import urllib.request
 
           probe_url = (
-              "https://x86qw.x86.com.br/api/v1/release-truth.json?probe="
+              "https://qw.x86.com.br/api/v1/release-truth.json?probe="
               + os.environ["GITHUB_RUN_ID"]
           )
           request = urllib.request.Request(
@@ -379,7 +379,7 @@ jobs:
           done
           python3 maintenance/tools/verify_site_root_probe.py \
             --assembled release-work/site/public/index.html \
-            --live-url "https://x86qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --live-url "https://qw.x86.com.br/?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --report "$RUNNER_TEMP/root-probe.json"
           cp "$RUNNER_TEMP/root-probe.json" root-probe.json
       - name: Write immutable projection-repair receipt

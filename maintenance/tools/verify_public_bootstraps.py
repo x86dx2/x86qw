@@ -23,7 +23,7 @@ from x86qw_runtime.io.downloader import (  # noqa: E402
 from x86qw_runtime.io.metadata import read_bounded_regular_file  # noqa: E402
 
 
-DEFAULT_BASE_URL = "https://x86qw.x86.com.br/"
+DEFAULT_BASE_URL = "https://qw.x86.com.br/"
 MAX_BOOTSTRAP_BYTES = 16 * 1024 * 1024
 
 
