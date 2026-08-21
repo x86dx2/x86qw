@@ -15,21 +15,22 @@ joga precisa reconhecer transparência técnica, controle e respeito ao ecossist
 
 Divulgar o QuakeWorld e apresentar o x86QW como uma distribuição moderna,
 reproduzível e auditável. O site deve transformar curiosidade em confiança:
-explicar a proposta, tornar o estado real da distribuição visível e conduzir o
-visitante à instalação sem esconder proveniência, suporte efetivo ou limitações.
+mostrar os jogos primeiro, tornar o estado real da distribuição visível e
+conduzir o visitante à instalação sem esconder proveniência, suporte efetivo
+ou limitações.
 
 ## Brand Personality
 
-Direta, competitiva e confiável. A voz é segura e objetiva, com a energia de uma
-partida veloz e a precisão de uma ferramenta bem mantida. O resultado deve parecer
-contemporâneo sem apagar a história do QuakeWorld.
+Direta, precisa e confiável. A voz é objetiva, com a energia de uma ferramenta
+bem mantida e a clareza de um inventário que se pode conferir. O resultado deve
+parecer contemporâneo sem apagar a história do QuakeWorld.
 
 ## Anti-references
 
 Não parecer nostalgia pixelada excessiva, estética gamer neon/cyberpunk ou uma
 landing page SaaS genérica. Evitar também futurismo ornamental, jargão promocional,
-interfaces cheias de cartões iguais e qualquer tentativa de esconder limitações
-de plataforma ou validação.
+interfaces cheias de cartões iguais, metáfora de arena/largada e qualquer tentativa
+de esconder limitações de plataforma ou validação.
 
 ## Fatos públicos
 
@@ -45,11 +46,17 @@ no macOS são arm64. Linux amd64 e Windows x64 possuem cliente e serviços.
 
 ## Design Principles
 
-- Começar pelo jogo: comunicar velocidade, comunidade e longevidade antes da infraestrutura.
-- Provar confiança: transformar versões, hashes, licenças e estado do catálogo em evidência legível.
-- Servir dois níveis de experiência: oferecer uma entrada clara a novatos sem simplificar demais para veteranos.
-- Ser honesto sobre o estágio: distinguir claramente o que já funciona, o que está em auditoria e o que virá depois.
-- Modernizar sem descaracterizar: usar linguagem visual atual sem imitar interfaces retrô ou tendências gamer passageiras.
+- Começar pelo jogo: a primeira dobra nomeia os títulos, o menu de partida e o
+  comando. Infraestrutura vem depois da evidência de que isto joga.
+- Destacar vantagens concretas: cinco jogos numa árvore, `play` / `host` / `hub`,
+  catálogo com SHA-256 e TUF, stable e nightly lado a lado, PAKs que continuam
+  sendo do dono.
+- Provar confiança: versões, hashes, licenças e estado do catálogo são evidência
+  legível, não slogan.
+- Ser honesto sobre o estágio: distinguir claramente o que já funciona, o que
+  está em preview ou auditoria, e o que é owner-only.
+- Modernizar sem descaracterizar: linguagem visual atual sem imitar interfaces
+  retrô, tendências gamer ou cartazes de competição.
 
 ## Accessibility & Inclusion
 
