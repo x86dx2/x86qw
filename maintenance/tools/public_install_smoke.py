@@ -43,7 +43,7 @@ from x86qw_runtime.io.downloader import (  # noqa: E402
 )
 
 
-CATALOG_URL = "https://x86qw.x86.com.br/api/v1/catalog.json"
+CATALOG_URL = "https://qw.x86.com.br/api/v1/catalog.json"
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
 CATALOG_DEADLINE_SECONDS = 60.0
 BUNDLE_MAX_BYTES = 512 * 1024 * 1024

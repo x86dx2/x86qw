@@ -42,6 +42,33 @@ class Page(HTMLParser):
                 self.refs.append(attrs[key])
 
 
+class InstallCommands(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.commands = {}
+        self.copy_targets = []
+        self._command_id = None
+        self._command_text = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "code" and "data-install-command" in attrs:
+            self._command_id = attrs.get("id")
+            self._command_text = []
+        if tag == "button" and "data-copy-install" in attrs:
+            self.copy_targets.append(attrs.get("data-copy-target"))
+
+    def handle_data(self, data):
+        if self._command_id is not None:
+            self._command_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "code" and self._command_id is not None:
+            self.commands[self._command_id] = "".join(self._command_text).strip()
+            self._command_id = None
+            self._command_text = []
+
+
 class SiteTests(unittest.TestCase):
     def parse(self, name):
         page = Page()
@@ -85,6 +112,58 @@ class SiteTests(unittest.TestCase):
         self.assertIn("publicação remota só ocorre após autorização explícita", cloudflare)
         self.assertIn("npm ci && npm run deploy:dry-run", cloudflare)
         self.assertIn("manualmente com o Wrangler local", cloudflare)
+
+    def test_qw_is_canonical_and_the_legacy_hostname_remains_an_alias(self):
+        canonical_origin = "https://qw.x86.com.br"
+        legacy_hostname = "x86qw.x86.com.br"
+        wrangler = json.loads(
+            (PROJECT_ROOT / "site/wrangler.jsonc").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            {"qw.x86.com.br", legacy_hostname},
+            {route["pattern"] for route in wrangler["routes"]},
+        )
+        self.assertTrue(all(route.get("custom_domain") is True for route in wrangler["routes"]))
+
+        manager_tree = ast.parse(
+            (PROJECT_ROOT / "dist/installer/bin/manager.py").read_text(encoding="utf-8")
+        )
+        assignments = {
+            target.id: ast.literal_eval(statement.value)
+            for statement in manager_tree.body
+            if isinstance(statement, ast.Assign)
+            for target in statement.targets
+            if isinstance(target, ast.Name)
+            and target.id in {
+                "CATALOG_URL",
+                "TRUST_METADATA_URL",
+                "TRUST_TARGET_URL",
+                "PUBLIC_UNIX_BOOTSTRAP_COMMAND",
+                "PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND",
+            }
+        }
+        self.assertEqual(f"{canonical_origin}/api/v1/catalog.json", assignments["CATALOG_URL"])
+        self.assertEqual(
+            f"{canonical_origin}/api/v1/trust/metadata/",
+            assignments["TRUST_METADATA_URL"],
+        )
+        self.assertEqual(
+            f"{canonical_origin}/api/v1/trust/targets/",
+            assignments["TRUST_TARGET_URL"],
+        )
+        self.assertIn(f"{canonical_origin}/install.sh", assignments["PUBLIC_UNIX_BOOTSTRAP_COMMAND"])
+        self.assertIn(
+            f"{canonical_origin}/install.ps1",
+            assignments["PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND"],
+        )
+
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        robots = (ROOT / "robots.txt").read_text(encoding="utf-8")
+        sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8")
+        self.assertIn(f'<link rel="canonical" href="{canonical_origin}/">', home)
+        self.assertIn(f'<meta property="og:url" content="{canonical_origin}/">', home)
+        self.assertIn(f"Sitemap: {canonical_origin}/sitemap.xml", robots)
+        self.assertIn(f"<loc>{canonical_origin}/</loc>", sitemap)
 
     def test_public_product_facts_match_the_canonical_catalogs_and_documentation(self):
         product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
@@ -194,7 +273,6 @@ class SiteTests(unittest.TestCase):
         documents = (
             PROJECT_ROOT / "README.md",
             PROJECT_ROOT / "dist/installer/docs/installer.md",
-            ROOT / "index.html",
         )
         for path in documents:
             with self.subTest(path=path.relative_to(PROJECT_ROOT)):
@@ -223,6 +301,22 @@ class SiteTests(unittest.TestCase):
         for path in documents:
             with self.subTest(path=path.relative_to(PROJECT_ROOT), shell="powershell"):
                 self.assertIn(powershell_command, path.read_text(encoding="utf-8"))
+
+    def test_home_offers_one_short_copyable_command_per_shell(self):
+        commands = InstallCommands()
+        commands.feed((ROOT / "index.html").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            {
+                "install-unix-command": "curl -fsSL https://qw.x86.com.br/install.sh | bash",
+                "install-windows-command": "irm https://qw.x86.com.br/install.ps1 | iex",
+            },
+            commands.commands,
+        )
+        self.assertEqual(
+            {"install-unix-command", "install-windows-command"},
+            set(commands.copy_targets),
+        )
 
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
@@ -325,7 +419,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("$global:LASTEXITCODE = $InstallerExitCode", powershell)
         self.assertIn("-ErrorAction Continue", powershell)
         home = (ROOT / "index.html").read_text(encoding="utf-8")
-        self.assertRegex(home, re.escape('https://x86qw.x86.com.br/install.sh'))
+        self.assertRegex(home, re.escape('https://qw.x86.com.br/install.sh'))
         self.assertIn("data-copy-install", home)
 
 
