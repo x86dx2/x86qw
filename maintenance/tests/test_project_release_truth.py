@@ -195,6 +195,36 @@ class ProjectReleaseTruthTests(unittest.TestCase):
                     output=output,
                 )
 
+    def test_projects_historical_candidate_without_release_policy_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, candidate, trust, output = self._fixture(Path(temporary))
+            product_path = candidate / "product.json"
+            product = json.loads(product_path.read_text(encoding="utf-8"))
+            product.pop("release_audience")
+            product.pop("external_public")
+            product_path.write_text(json.dumps(product), encoding="utf-8")
+            candidate_sha = hashlib.sha256((candidate / "candidate.json").read_bytes()).hexdigest()
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    '"candidate_sha256": "candidate"',
+                    f'"candidate_sha256": "{candidate_sha}"',
+                ),
+                encoding="utf-8",
+            )
+
+            result = project_release_truth(
+                source=source,
+                candidate=candidate,
+                trust_repository=trust,
+                site_source=candidate / "site/public",
+                release_code_commit="2" * 40,
+                development_validate_run=123,
+                observed_at="2026-08-27T18:00:00Z",
+                output=output,
+            )
+
+            self.assertEqual("owner-only", result["authorities"]["candidate_release"]["audience"])
+
 
 if __name__ == "__main__":
     unittest.main()

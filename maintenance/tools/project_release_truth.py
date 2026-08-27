@@ -165,7 +165,15 @@ def project_release_truth(
     candidate_version = manifest.get("version")
     if HEX40.fullmatch(candidate_commit or "") is None or not isinstance(candidate_version, str):
         raise ReleaseTruthProjectionError("identidade do candidato inválida")
-    if product.get("release_audience") != "owner-only" or product.get("external_public") is not False:
+    # The policy fields were added after the immutable 1.0.0 candidate was
+    # built.  Newer products must declare them explicitly; historical products
+    # may omit both fields and inherit the already-recorded candidate authority
+    # below.  Never infer owner-only from an arbitrary product omission.
+    policy_fields = {"release_audience", "external_public"}
+    if policy_fields.intersection(product) and (
+        product.get("release_audience") != "owner-only"
+        or product.get("external_public") is not False
+    ):
         raise ReleaseTruthProjectionError("projeção só pode manter a audiência owner-only")
     installer = _current_installer(catalog)
     if installer.get("version") != candidate_version:
@@ -189,6 +197,11 @@ def project_release_truth(
 
     authorities = _require_mapping(truth.get("authorities"), "authorities da verdade de release")
     candidate_release = _require_mapping(authorities.get("candidate_release"), "candidate_release")
+    if (
+        candidate_release.get("audience") != "owner-only"
+        or candidate_release.get("external_public_authorized") is not False
+    ):
+        raise ReleaseTruthProjectionError("fonte candidate_release não é owner-only")
     _immutable_match(candidate_release.get("version"), candidate_version, "versão do candidate_release")
     _immutable_match(candidate_release.get("target_commit"), candidate_commit, "target_commit do candidate_release")
     _immutable_match(candidate_release.get("candidate_sha256"), candidate_sha256, "candidate_sha256")
