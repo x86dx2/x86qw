@@ -42,7 +42,12 @@ from x86qw_runtime.trust import (  # noqa: E402
 )
 
 
-ROLE_EXPIRY_DAYS = {"root": 365, "targets": 90, "snapshot": 7, "timestamp": 7}
+# Bound to the owner-only audience of ADR 0006.  ``snapshot`` must outlive
+# ``timestamp`` or the timestamp-only renewal workflow cannot rescue the chain:
+# a renewed timestamp still points at a snapshot the client rejects.  The tight
+# ceiling returns before external-public, together with the custody split that
+# makes the 2-of-3 thresholds real.
+ROLE_EXPIRY_DAYS = {"root": 365, "targets": 90, "snapshot": 90, "timestamp": 30}
 ED25519_PRIVATE_DER_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
 
 
