@@ -16,7 +16,10 @@ from typing import Any
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
-HERO = re.compile(r'<p\s+class="kicker"[^>]*>(.*?)</p>', re.DOTALL)
+# The historical 1.0.0 candidate uses ``launch-note`` while the current site
+# template uses ``kicker``.  Both are the visible hero identity and must be
+# captured into the deployment observation.
+HERO = re.compile(r'<p\s+class="(?:kicker|launch-note)"[^>]*>(.*?)</p>', re.DOTALL)
 
 
 class ReleaseTruthProjectionError(ValueError):
