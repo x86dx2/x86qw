@@ -381,9 +381,13 @@ class ContinuousIntegrationTests(unittest.TestCase):
         projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
             encoding="utf-8"
         )
+        self.assertIn("maintenance/tools/render_release_site.py", projection)
+        self.assertIn("--source site/public", projection)
+        self.assertIn("--catalog candidate/catalog.json", projection)
+        self.assertIn("--product candidate/product.json", projection)
         self.assertIn(
             'shutil.copyfile(\n'
-            '              Path("site/public/index.html"),\n'
+            '              Path("release-work/current-site/index.html"),\n'
             '              source_projection / "index.html",\n'
             '          )',
             projection,
