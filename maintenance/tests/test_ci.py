@@ -361,6 +361,22 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("issues.create", monitor)
         self.assertIn("issues.update", monitor)
 
+    def test_public_projection_and_timestamp_recovery_verify_all_mirrors_first(self):
+        projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
+            encoding="utf-8"
+        )
+        timestamp = (ROOT / ".github/workflows/tuf-timestamp-publish.yml").read_text(
+            encoding="utf-8"
+        )
+        for source in (projection, timestamp):
+            with self.subTest(workflow="projection" if source is projection else "timestamp"):
+                self.assertIn("maintenance/tools/verify_release_mirrors.py", source)
+                self.assertIn("--expected-release", source)
+        self.assertIn("maintenance/tools/project_release_truth.py", projection)
+        self.assertIn('"product_version": candidate_version', Path(
+            ROOT / "maintenance/tools/project_release_truth.py"
+        ).read_text(encoding="utf-8"))
+
     def test_migration_plan_names_the_complete_public_0_7_fixture_range(self):
         roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
         plan = (ROOT / "docs/implementation/stabilization-1.0-plan.md").read_text(encoding="utf-8")

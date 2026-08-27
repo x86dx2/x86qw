@@ -238,6 +238,14 @@ jobs:
             --catalog candidate/catalog.json \
             --expected-key-id "$EXPECTED_KEY_ID" \
             > "$RUNNER_TEMP/timestamp-renewal.json"
+      - name: Verify every declared installer mirror before deployment
+        run: |
+          set -euo pipefail
+          CANDIDATE_VERSION="$(python3 -c 'import json; print(json.load(open("candidate/candidate.json", encoding="utf-8"))["version"])')"
+          python3 maintenance/tools/verify_release_mirrors.py \
+            --candidate candidate \
+            --catalog candidate/catalog.json \
+            --expected-release "$CANDIDATE_VERSION"
       - name: Stage authenticated TUF from the renewal handoff without publishing new metadata
         run: |
           python3 maintenance/tools/publish_tuf_metadata.py \
@@ -249,48 +257,27 @@ jobs:
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
           DEVELOPMENT_VALIDATE_RUN: ${{ inputs.development_validate_run }}
+          RENEWAL_RUN_ID: ${{ inputs.tuf_renewal_run_id }}
         run: |
           set -euo pipefail
+          now="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"))')"
+          python3 maintenance/tools/project_release_truth.py \
+            --source site/public/api/v1/release-truth.json \
+            --candidate candidate \
+            --trust-repository release-work/trust \
+            --site-source candidate/site/public \
+            --release-code-commit "$RELEASE_CODE_COMMIT" \
+            --development-validate-run "$DEVELOPMENT_VALIDATE_RUN" \
+            --observed-at "$now" \
+            --renewal-run-id "$RENEWAL_RUN_ID" \
+            --publication-run-id "$GITHUB_RUN_ID" \
+            --output release-work/projection-overlay.json
           python3 - <<'PY'
-          import json
-          import os
-          from datetime import datetime, timezone
           from pathlib import Path
-
-          source = Path("candidate/site/public")
-          projection = Path("site/public/api/v1/release-truth.json")
-          if not projection.is_file():
-              raise SystemExit("release code lacks the versioned release-truth projection")
-          data = json.loads(projection.read_text(encoding="utf-8"))
-          now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-          data["observed_at_utc"] = now
-          data["snapshot_commit"] = os.environ["RELEASE_CODE_COMMIT"]
-          development = data["authorities"]["development"]
-          development["head"] = os.environ["RELEASE_CODE_COMMIT"]
-          development["validate_run"] = int(os.environ["DEVELOPMENT_VALIDATE_RUN"])
-          deployment = data["authorities"]["deployment"]
-          live = deployment["live_observation"]
-          live.update({
-              "observed_at_utc": now,
-              "release_truth_endpoint": "200",
-              "product_release_audience": "owner-only",
-              "root_mentions_owner_only": True,
-              "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
-          })
-          deployment["tuf"]["operational_status"] = "HEALTHY"
-          data["status"]["main"] = "GREEN"
-          data["status"]["tuf"] = "HEALTHY"
-          data["status"]["owner_only_release"] = "VALID_FOR_SINGLE_USER_M3"
-          data["status"]["external_public"] = "NO-GO"
-          data["status"]["feature_work"] = "ALLOWED"
-          Path("release-work").mkdir(exist_ok=True)
-          Path("release-work/projection-overlay.json").write_text(
-              json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
-              encoding="utf-8",
-          )
-          source_projection = Path("release-work/site-source")
           import shutil
-          shutil.copytree(source, source_projection)
+
+          source_projection = Path("release-work/site-source")
+          shutil.copytree(Path("candidate/site/public"), source_projection)
           headers = source_projection / "_headers"
           headers.write_text(
               headers.read_text(encoding="utf-8")
