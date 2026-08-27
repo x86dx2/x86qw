@@ -377,6 +377,19 @@ class ContinuousIntegrationTests(unittest.TestCase):
             ROOT / "maintenance/tools/project_release_truth.py"
         ).read_text(encoding="utf-8"))
 
+    def test_site_projection_uses_current_root_for_audience_and_domain(self):
+        projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'shutil.copyfile(\n'
+            '              Path("site/public/index.html"),\n'
+            '              source_projection / "index.html",\n'
+            '          )',
+            projection,
+        )
+        self.assertIn("verify_site_root_probe.py", projection)
+
     def test_migration_plan_names_the_complete_public_0_7_fixture_range(self):
         roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
         plan = (ROOT / "docs/implementation/stabilization-1.0-plan.md").read_text(encoding="utf-8")

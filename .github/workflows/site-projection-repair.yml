@@ -278,6 +278,10 @@ jobs:
 
           source_projection = Path("release-work/site-source")
           shutil.copytree(Path("candidate/site/public"), source_projection)
+          shutil.copyfile(
+              Path("site/public/index.html"),
+              source_projection / "index.html",
+          )
           headers = source_projection / "_headers"
           headers.write_text(
               headers.read_text(encoding="utf-8")
