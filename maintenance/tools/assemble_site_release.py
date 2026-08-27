@@ -89,6 +89,26 @@ def _write_new(path: Path, payload: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _published_root_version(repository: Path) -> int:
+    metadata = Path(repository) / "metadata"
+    versions = []
+    for path in sorted(metadata.glob("*.root.json")):
+        encoded_version = path.name.removesuffix(".root.json")
+        if not encoded_version.isdecimal():
+            raise SiteAssemblyError(f"root TUF possui nome inválido: {path.name}")
+        version = int(encoded_version)
+        document = _json(path, "root TUF versionada")
+        signed = document.get("signed")
+        signed_version = signed.get("version") if isinstance(signed, dict) else None
+        if isinstance(signed_version, bool) or signed_version != version:
+            raise SiteAssemblyError(f"root TUF diverge do nome versionado: {path.name}")
+        versions.append(version)
+    ordered_versions = sorted(versions)
+    if not ordered_versions or ordered_versions != list(range(1, max(ordered_versions) + 1)):
+        raise SiteAssemblyError("cadeia de roots TUF precisa ser contínua a partir da v1")
+    return max(ordered_versions)
+
+
 def assemble_site_release(
     *,
     site_source: Path,
@@ -123,6 +143,7 @@ def assemble_site_release(
         raise SiteAssemblyError("product e catálogo não representam a mesma versão current")
     if trust_repository.is_symlink() or not trust_repository.is_dir():
         raise SiteAssemblyError("repositório TUF staged ausente ou inseguro")
+    root_version = _published_root_version(trust_repository)
 
     parent = output.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -133,6 +154,22 @@ def assemble_site_release(
         (staging / "api/v1/catalog.json.tmp").replace(staging / "api/v1/catalog.json")
         _write_new(staging / "api/v1/product.json.tmp", product_bytes)
         (staging / "api/v1/product.json.tmp").replace(staging / "api/v1/product.json")
+        release_truth_path = staging / "api/v1/release-truth.json"
+        release_truth = _json(release_truth_path, "verdade de release")
+        try:
+            tuf = release_truth["authorities"]["deployment"]["tuf"]
+            projected_root_version = tuf["root_version"]
+        except (KeyError, TypeError) as error:
+            raise SiteAssemblyError("verdade de release não declara a root TUF") from error
+        if isinstance(projected_root_version, bool) or not isinstance(projected_root_version, int):
+            raise SiteAssemblyError("verdade de release declara root TUF inválida")
+        if projected_root_version != root_version:
+            tuf["root_version"] = root_version
+            release_truth_bytes = (
+                json.dumps(release_truth, ensure_ascii=False, indent=2) + "\n"
+            ).encode("utf-8")
+            _write_new(staging / "api/v1/release-truth.json.tmp", release_truth_bytes)
+            (staging / "api/v1/release-truth.json.tmp").replace(release_truth_path)
         trust_destination = staging / "api/v1/trust"
         if trust_destination.is_symlink():
             trust_destination.unlink()
@@ -153,6 +190,7 @@ def assemble_site_release(
         "status": "assembled",
         "catalog_size": len(catalog_bytes),
         "product_size": len(product_bytes),
+        "root_version": root_version,
         "output": os.fspath(output),
     }
 

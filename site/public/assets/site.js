@@ -26,6 +26,8 @@ const applyCatalog = (state, label, value, detail) => {
     box.dataset.state = state;
     if (box.classList.contains('header-status')) {
       box.setAttribute('aria-label', `${label}. ${value}`);
+      const labelNode = box.querySelector('.catalog-label');
+      if (labelNode) labelNode.textContent = label;
       return;
     }
     const labelNode = box.querySelector('.catalog-label');
@@ -38,6 +40,12 @@ const applyCatalog = (state, label, value, detail) => {
 };
 
 if (catalogLive.length) {
+  applyCatalog(
+    'loading',
+    'Verificando catálogo',
+    'Aguardando resposta',
+    'Lendo o contrato público em tempo real.',
+  );
   fetch('/api/v1/catalog.json', { cache: 'no-store' })
     .then((response) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

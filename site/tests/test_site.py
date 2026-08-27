@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import sys
 import tempfile
 import unittest
@@ -29,11 +30,13 @@ class Page(HTMLParser):
         self.ids = set()
         self.refs = []
         self.tags = []
+        self.elements = []
         self.lang = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         self.tags.append(tag)
+        self.elements.append((tag, attrs))
         self.lang = attrs.get("lang", self.lang)
         if "id" in attrs:
             self.ids.add(attrs["id"])
@@ -100,18 +103,21 @@ class SiteTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", home)
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
+        self.assertIn('role="status" aria-live="polite" aria-atomic="true"', home)
+        self.assertIn('<table class="platform-matrix">', home)
+        self.assertNotIn('role="table"', home)
 
     def test_release_documentation_keeps_mac_local_boundary(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
         cloudflare = (PROJECT_ROOT / "site/docs/cloudflare.md").read_text(encoding="utf-8")
 
-        self.assertNotIn("até os smokes nativos", home)
-        self.assertIn("condicionais por essa limitação", home)
-        self.assertIn("smokes nativos não são requisito do fluxo Mac/local", home)
-        self.assertNotIn("workflow protegido", cloudflare)
+        self.assertIn("não possui Developer ID nem notarização comprovada", home)
+        self.assertIn("esse suporte continua condicional", home)
+        self.assertIn("workflows protegidos", cloudflare)
         self.assertIn("publicação remota só ocorre após autorização explícita", cloudflare)
         self.assertIn("npm ci && npm run deploy:dry-run", cloudflare)
-        self.assertIn("manualmente com o Wrangler local", cloudflare)
+        self.assertIn("account_id", cloudflare)
+        self.assertRegex(cloudflare, r"não é uma\s+credencial")
 
     def test_qw_is_canonical_and_the_legacy_hostname_remains_an_alias(self):
         canonical_origin = "https://qw.x86.com.br"
@@ -230,11 +236,12 @@ class SiteTests(unittest.TestCase):
         for document in (home, readme, manual):
             self.assertIn(version, document)
             self.assertIn(f"{product['component_count']} componentes", document)
-        # The home page keeps the numeric value in a data marker so the live
-        # catalog script can refresh it; compare the rendered text rather than
-        # relying on the number and noun being adjacent in raw HTML.
         visible_home = re.sub(r"<[^>]+>", "", home)
         self.assertIn(f"{product['package_count']} pacotes", visible_home)
+        self.assertNotRegex(home, r"data-(?:product-version|package-count|component-count)")
+        for game in product["games"]:
+            self.assertIn(game["label"], visible_home)
+            self.assertIn(game["version"], visible_home)
         for command in product["commands"]:
             self.assertIn(f"`{command}`", readme)
         cli_help = subprocess.run(
@@ -302,14 +309,29 @@ class SiteTests(unittest.TestCase):
             with self.subTest(path=path.relative_to(PROJECT_ROOT), shell="powershell"):
                 self.assertIn(powershell_command, path.read_text(encoding="utf-8"))
 
-    def test_home_offers_one_short_copyable_command_per_shell(self):
+    def test_home_copies_the_hardened_command_for_each_shell(self):
         commands = InstallCommands()
         commands.feed((ROOT / "index.html").read_text(encoding="utf-8"))
 
+        manager_tree = ast.parse(
+            (PROJECT_ROOT / "dist/installer/bin/manager.py").read_text(encoding="utf-8")
+        )
+        assignments = {
+            target.id: ast.literal_eval(statement.value)
+            for statement in manager_tree.body
+            if isinstance(statement, ast.Assign)
+            for target in statement.targets
+            if isinstance(target, ast.Name)
+            and target.id in {
+                "PUBLIC_UNIX_BOOTSTRAP_COMMAND",
+                "PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND",
+            }
+        }
+
         self.assertEqual(
             {
-                "install-unix-command": "curl -fsSL https://qw.x86.com.br/install.sh | bash",
-                "install-windows-command": "irm https://qw.x86.com.br/install.ps1 | iex",
+                "install-unix-command": assignments["PUBLIC_UNIX_BOOTSTRAP_COMMAND"],
+                "install-windows-command": assignments["PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND"],
             },
             commands.commands,
         )
@@ -317,6 +339,96 @@ class SiteTests(unittest.TestCase):
             {"install-unix-command", "install-windows-command"},
             set(commands.copy_targets),
         )
+
+    def test_public_copy_explains_audience_and_prerequisites_plainly(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        self.assertIn("validada para uso do próprio mantenedor", home)
+        self.assertIn("Python 3.10 ou mais recente", home)
+        self.assertIn("ainda não oferece suporte público geral", home)
+        self.assertNotIn("valida o bootstrap", home)
+        self.assertNotIn("NO-GO", home)
+        self.assertNotIn("portable-contract", home)
+
+    def test_social_metadata_and_first_party_links_are_complete(self):
+        page = self.parse("index.html")
+        metas = {
+            attrs.get("property") or attrs.get("name"): attrs.get("content")
+            for tag, attrs in page.elements
+            if tag == "meta" and (attrs.get("property") or attrs.get("name"))
+        }
+        links = {
+            attrs.get("rel"): attrs.get("href")
+            for tag, attrs in page.elements
+            if tag == "link" and attrs.get("rel")
+        }
+        self.assertEqual("summary_large_image", metas["twitter:card"])
+        self.assertEqual(metas["og:title"], metas["twitter:title"])
+        self.assertEqual(metas["og:description"], metas["twitter:description"])
+        self.assertEqual(metas["og:image"], metas["twitter:image"])
+        self.assertEqual("1200", metas["og:image:width"])
+        self.assertEqual("630", metas["og:image:height"])
+        self.assertEqual(metas["og:image:alt"], metas["twitter:image:alt"])
+        self.assertTrue(metas["og:image"].startswith("https://qw.x86.com.br/"))
+
+        image = ROOT / metas["og:image"].removeprefix("https://qw.x86.com.br/")
+        self.assertTrue(image.is_file())
+        data = image.read_bytes()
+        self.assertEqual(b"\x89PNG\r\n\x1a\n", data[:8])
+        self.assertEqual((1200, 630), struct.unpack(">II", data[16:24]))
+        self.assertEqual("/assets/apple-touch-icon.png", links["apple-touch-icon"])
+
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        for url in (
+            "https://github.com/x86dx2/x86qw",
+            "https://github.com/x86dx2/x86qw/releases",
+            "https://github.com/x86dx2/x86qw/issues",
+            "https://github.com/x86dx2/x86qw/security/policy",
+        ):
+            self.assertIn(f'href="{url}"', home)
+
+    def test_static_delivery_declares_security_and_cache_policy(self):
+        headers = (ROOT / "_headers").read_text(encoding="utf-8")
+        for value in (
+            "Content-Security-Policy:",
+            "X-Content-Type-Options: nosniff",
+            "Referrer-Policy: strict-origin-when-cross-origin",
+            "Permissions-Policy:",
+            "Strict-Transport-Security:",
+            "frame-ancestors 'none'",
+            "script-src 'self' 'unsafe-inline'",
+            "/install.sh",
+            "/install.ps1",
+            "/api/v1/trust/metadata/*",
+            "/api/v1/trust/targets/*",
+            "max-age=31536000, immutable",
+        ):
+            self.assertIn(value, headers)
+
+        rules = {}
+        route = None
+        for line in headers.splitlines():
+            if line and not line.startswith(" "):
+                route = line
+                rules[route] = []
+            elif route is not None and line.strip():
+                rules[route].append(line.strip())
+        self.assertFalse(any(value.startswith("Cache-Control:") for value in rules["/*"]))
+        self.assertIn(
+            "Cache-Control: public, max-age=604800, must-revalidate",
+            rules["/assets/social-card.png"],
+        )
+        self.assertEqual(
+            ["Cache-Control: public, max-age=31536000, immutable", "Access-Control-Allow-Origin: *"],
+            rules["/api/v1/trust/targets/*"],
+        )
+
+        package = json.loads((PROJECT_ROOT / "site/package.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            "node --test --test-concurrency=1 tests/*.test.mjs",
+            package["scripts"]["test"],
+        )
+        workflow = (PROJECT_ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        self.assertIn("npm test", workflow)
 
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))

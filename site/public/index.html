@@ -4,15 +4,28 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="x86QW: cinco jogos, um comando, catálogo com SHA-256. Distribuição moderna, reproduzível e auditável de QuakeWorld para macOS, Linux e Windows.">
-    <meta name="theme-color" content="oklch(0.22 0.01 28)">
+    <meta name="theme-color" content="#201e1e">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="x86QW">
     <meta property="og:title" content="x86QW — cinco jogos, um catálogo auditável">
     <meta property="og:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu. Cada pacote com origem, licença e SHA-256.">
     <meta property="og:url" content="https://qw.x86.com.br/">
+    <meta property="og:image" content="https://qw.x86.com.br/assets/social-card.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="x86QW — cinco jogos, um catálogo auditável">
+    <meta name="twitter:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu. Cada pacote com origem, licença e SHA-256.">
+    <meta name="twitter:image" content="https://qw.x86.com.br/assets/social-card.png">
+    <meta name="twitter:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
     <title>x86QW — cinco jogos, um catálogo auditável</title>
     <link rel="canonical" href="https://qw.x86.com.br/">
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
+    <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
     <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-400.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-700.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/site.css">
@@ -32,7 +45,7 @@
 
       <div class="header-actions">
         <a class="header-install" href="#instalar">Instalar</a>
-        <a class="header-status" href="#confianca" data-catalog-live data-state="loading" aria-label="Estado do catálogo">
+        <a class="header-status" href="#confianca" data-catalog-live data-state="pending" aria-label="Catálogo: estado não consultado">
           <span class="catalog-signal" aria-hidden="true"><span></span></span>
           <span class="catalog-label">Catálogo</span>
         </a>
@@ -41,7 +54,7 @@
 
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
-        <p class="kicker">x86QW <span data-product-version>1.0.4</span> · owner-only · 0.7.13 histórica</p>
+        <p class="kicker">x86QW 1.0.4 · validado no Apple M3 · 0.7.13 histórica</p>
         <h1 id="hero-title">Cinco jogos. Um comando. Catálogo com hash.</h1>
         <p class="hero-lead">KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 usam o mesmo ezQuake, o mesmo MVDSV e um menu em português. Você escolhe o que entra no disco; cada pacote traz origem, licença e SHA-256.</p>
         <div class="hero-actions">
@@ -53,7 +66,7 @@
           <li>Final Arena <span>1.20</span></li>
           <li>Pro-X <span>1.1</span></li>
           <li>Team Fortress <span>2.9</span></li>
-          <li>TD2 <span>2.22</span></li>
+          <li>Total Destruction 2 <span>2.22</span></li>
         </ul>
       </section>
 
@@ -114,7 +127,7 @@
           </div>
           <div>
             <dt>PAKs seus</dt>
-            <dd>Quake continua sendo da id Software. Os PAKs originais permanecem seus; o instalador não os empacota.</dd>
+            <dd>Quake continua sendo da id Software. Os PAKs registrados são obtidos separadamente do instalador e permanecem sob os termos da id Software.</dd>
           </div>
         </dl>
       </section>
@@ -122,16 +135,17 @@
       <section class="install" id="instalar" aria-labelledby="install-title">
         <div class="install-inner">
           <div class="install-copy">
-            <p class="install-kicker">Instalação owner-only</p>
+            <p class="install-kicker">Distribuição em validação individual</p>
             <h2 id="install-title">Um comando. Nenhum clone.</h2>
-            <p>A release baixável é owner-only; external-public continua NO-GO. Cole o comando do seu sistema no terminal. O instalador baixa a CLI enxuta, confere o SHA-256, pergunta onde instalar e obtém cada conteúdo pelo catálogo publicado.</p>
+            <p>A versão 1.0.4 foi validada para uso do próprio mantenedor em um Mac Apple M3 e ainda não oferece suporte público geral. A classificação técnica é <code>owner-only</code>; a audiência <code>external-public</code> ainda não foi autorizada.</p>
+            <p class="install-requirements"><strong>Antes de começar:</strong> instale Python 3.10 ou mais recente. macOS e Linux também precisam de <code>curl</code>. O comando exige HTTPS e limita o download do bootstrap antes de executá-lo.</p>
           </div>
           <div class="install-command" aria-label="Comandos de instalação">
             <div class="install-command-row">
               <p>macOS / Linux</p>
               <button class="install-command-control" type="button" data-copy-install data-copy-target="install-unix-command" aria-label="Copiar comando para macOS e Linux">
                 <span class="command-prompt" aria-hidden="true">$</span>
-                <code id="install-unix-command" data-install-command>curl -fsSL https://qw.x86.com.br/install.sh <span class="command-action">| bash</span></code>
+                <code id="install-unix-command" data-install-command>/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2&gt;/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 &gt;"$f"; s=$?; n=$(wc -c &lt;"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." &gt;&amp;2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw</code>
                 <span class="install-copy-icon" aria-hidden="true">
                   <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
                   <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
@@ -143,7 +157,7 @@
               <p>Windows PowerShell</p>
               <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command" aria-label="Copiar comando para Windows PowerShell">
                 <span class="command-prompt" aria-hidden="true">PS&gt;</span>
-                <code id="install-windows-command" data-install-command>irm https://qw.x86.com.br/install.ps1 <span class="command-action">| iex</span></code>
+                <code id="install-windows-command" data-install-command>&amp; { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); &amp; ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }</code>
                 <span class="install-copy-icon" aria-hidden="true">
                   <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
                   <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
@@ -175,12 +189,12 @@
           <p>Nesta fase os pacotes vivem em GitHub Releases e GitLab Generic Packages. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado e a metadados TUF vigentes.</p>
         </header>
 
-        <div class="catalog-status" data-catalog-live data-state="loading" aria-live="polite">
+        <div class="catalog-status" data-catalog-live data-state="pending">
           <div class="catalog-signal" aria-hidden="true"><span></span></div>
-          <div>
-            <p class="catalog-label">Consultando o catálogo</p>
-            <strong class="catalog-value">—</strong>
-            <p class="catalog-detail">Lendo o contrato público em tempo real.</p>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <p class="catalog-label">Estado não consultado</p>
+            <strong class="catalog-value">Catálogo disponível em JSON</strong>
+            <p class="catalog-detail">A verificação em tempo real começa quando o JavaScript é executado.</p>
           </div>
           <a href="/api/v1/catalog.json">JSON <span aria-hidden="true">↗</span></a>
         </div>
@@ -207,46 +221,50 @@
           <h2 id="platforms-title">Três sistemas, com o suporte que realmente existe.</h2>
           <p>O instalador detecta o sistema atual sem perguntar. Para montar a pasta de outro computador, use <code>--platform macos</code>, <code>linux</code> ou <code>windows</code>.</p>
         </header>
-        <div class="platform-matrix" role="table" aria-label="Plataformas, formatos e estado de suporte">
-          <div class="matrix-header" role="row">
-            <span role="columnheader">Sistema</span>
-            <span role="columnheader">Arquitetura</span>
-            <span role="columnheader">Formato</span>
-            <span role="columnheader">Estado</span>
-          </div>
-          <div role="row">
-            <strong role="cell">macOS</strong>
-            <span role="cell">cliente universal; serviços arm64</span>
-            <span role="cell">App universal + binários arm64</span>
-            <span role="cell">stable condicional · nightly preview</span>
-          </div>
-          <div role="row">
-            <strong role="cell">Linux</strong>
-            <span role="cell">x86_64</span>
-            <span role="cell">AppImage</span>
-            <span role="cell">stable / nightly · preview</span>
-          </div>
-          <div role="row">
-            <strong role="cell">Windows</strong>
-            <span role="cell">x64</span>
-            <span role="cell">Executável</span>
-            <span role="cell">stable / nightly · preview</span>
-          </div>
-        </div>
+        <table class="platform-matrix">
+          <caption>Plataformas, formatos e estado de suporte</caption>
+          <thead>
+            <tr>
+              <th scope="col">Sistema</th>
+              <th scope="col">Arquitetura</th>
+              <th scope="col">Formato</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">macOS</th>
+              <td data-label="Arquitetura">cliente universal; serviços arm64</td>
+              <td data-label="Formato">App universal; binários arm64</td>
+              <td data-label="Estado">stable condicional; nightly e serviços preview</td>
+            </tr>
+            <tr>
+              <th scope="row">Linux</th>
+              <td data-label="Arquitetura">cliente x86_64; serviços amd64</td>
+              <td data-label="Formato">AppImage; binários de serviço</td>
+              <td data-label="Estado">stable e nightly preview</td>
+            </tr>
+            <tr>
+              <th scope="row">Windows</th>
+              <td data-label="Arquitetura">cliente e serviços x64</td>
+              <td data-label="Formato">Executável; binários de serviço</td>
+              <td data-label="Estado">stable e nightly preview</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="limits section" id="estado" aria-labelledby="limits-title">
         <header class="section-intro">
-          <h2 id="limits-title">O que já corre, e o que ainda é limite.</h2>
-          <p>Vantagens sem eufemismo. A release só aparece quando pode ser provada.</p>
+          <h2 id="limits-title">O que funciona hoje, e para quem.</h2>
+          <p>Capacidades e limites descritos sem transformar evidência interna em promessa pública.</p>
         </header>
         <div class="readiness">
-          <p><strong>Já funciona:</strong> release owner-only <span data-product-version>1.0.4</span> (fonte current; 0.7.13 histórica), <span data-package-count>78</span> pacotes, <span data-component-count>21</span> componentes, cinco jogos, KTX com 24 modos, Frogbots, ruleset assistido e Coach de Quad opt-in, MVDSV, QTV e QWFWD. A CLI oferece <code>play</code>, <code>host</code>, <code>proxy</code>, <code>qtv</code>, <code>status</code>, <code>hub</code>, <code>update</code>, <code>upgrade</code>, <code>verify</code>, <code>doctor</code>, <code>ui</code>, <code>profile</code>, <code>library</code>, <code>changes</code>, <code>migrate</code>, <code>repair</code>, <code>cleanup</code>, <code>uninstall</code> e <code>version</code>.</p>
-          <p><strong>Runtime previsível:</strong> a release owner-only autentica o catálogo com TUF e mantém downloads, arquivos, transações, UI, gameplay, plataforma e supervisor em fronteiras reutilizáveis. O contrato <code>portable-contract</code> passou nos sete checks protegidos; isso não é smoke nativo de runtime.</p>
-          <p><strong>Confiança macOS explícita:</strong> o stable preserva o bundle upstream sem re-assinatura local. O artefato continua ad hoc, sem Developer ID ou notarização comprovada; stable e nightly permanecem condicionais por essa limitação, e smokes nativos não são requisito do fluxo Mac/local.</p>
-          <p><strong>Execução conservadora:</strong> gameplay e serviços não instalam payload permanente. Senhas podem ser lidas sem eco ou por arquivo privado; preflight, readiness e journal protegem primeiro ou segundo plano. A stack ativa pode ser inspecionada e encerrada coordenadamente pelo menu.</p>
-          <p><strong>Atualização independente:</strong> KTX 1.47, Pro-X 1.1 e Team Fortress 2.9 avançam sem renomear os outros componentes. Coleções sem release própria continuam fixadas no commit nQuake auditado.</p>
-          <p><strong>Dois mirrors:</strong> o catálogo aponta para GitHub Releases e GitLab Generic Packages, sempre com tamanho e SHA-256. Em andamento: novos adaptadores por upstream. A audiência continua owner-only; external-public permanece NO-GO.</p>
+          <p><strong>Uso validado:</strong> versão 1.0.4 para o próprio mantenedor em Apple M3. Linux, Windows e os serviços permanecem em preview até receberem evidência nativa equivalente.</p>
+          <p><strong>Conteúdo disponível:</strong> 78 pacotes, 21 componentes, cinco jogos, KTX com 24 modos e Frogbots, além de MVDSV, QTV e QWFWD. Stable e nightly podem coexistir.</p>
+          <p><strong>Integridade verificável:</strong> o instalador autentica o catálogo com TUF e só aceita arquivos que correspondem ao tamanho e ao SHA-256 publicados. GitHub Releases e GitLab Generic Packages funcionam como mirrors.</p>
+          <p><strong>Limite do macOS:</strong> o cliente stable preserva o bundle upstream, que não possui Developer ID nem notarização comprovada. Por isso, esse suporte continua condicional.</p>
+          <p><strong>Operação conservadora:</strong> senhas não entram na linha de comando; serviços usam loopback por padrão e a stack ativa pode ser inspecionada e encerrada de forma coordenada.</p>
         </div>
       </section>
     </main>
@@ -255,6 +273,10 @@
       <a class="brand brand-footer" href="#topo" aria-label="x86QW, voltar ao início">x86QW</a>
       <p>Distribuição independente de QuakeWorld mantida por x86dx2.<br>Quake é marca da id Software. Seus PAKs originais permanecem seus.</p>
       <nav aria-label="Links do rodapé">
+        <a href="https://github.com/x86dx2/x86qw">Código</a>
+        <a href="https://github.com/x86dx2/x86qw/releases">Releases</a>
+        <a href="https://github.com/x86dx2/x86qw/issues">Issues</a>
+        <a href="https://github.com/x86dx2/x86qw/security/policy">Segurança</a>
         <a href="/api/v1/catalog.json">Catálogo</a>
         <a href="/api/v1/product.json">Produto</a>
         <a href="/legal/fonts/Atkinson-Hyperlegible-OFL.txt">Licença Atkinson</a>

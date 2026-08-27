@@ -6,7 +6,11 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from maintenance.tools.assemble_site_release import SiteAssemblyError, assemble_site_release
+from maintenance.tools.assemble_site_release import (
+    SiteAssemblyError,
+    _published_root_version,
+    assemble_site_release,
+)
 from maintenance.tools.publish_tuf_metadata import stage_tuf_repository
 from maintenance.tests.trust_support import build_repository, new_keyset, signed_root
 
@@ -15,6 +19,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class AssembleSiteReleaseTests(unittest.TestCase):
+    def test_published_root_versions_are_ordered_numerically(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            metadata = Path(temporary) / "metadata"
+            metadata.mkdir()
+            for version in range(1, 11):
+                (metadata / f"{version}.root.json").write_text(
+                    json.dumps({"signed": {"version": version}}), encoding="utf-8"
+                )
+            self.assertEqual(10, _published_root_version(metadata.parent))
+
     def test_assembles_catalog_product_and_verified_tuf_without_touching_source(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -64,6 +78,13 @@ class AssembleSiteReleaseTests(unittest.TestCase):
                 json.loads((output / "api/v1/product.json").read_text()),
             )
             self.assertTrue((output / "api/v1/trust/metadata/timestamp.json").is_file())
+            release_truth = json.loads(
+                (output / "api/v1/release-truth.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                2,
+                release_truth["authorities"]["deployment"]["tuf"]["root_version"],
+            )
 
     def test_refuses_existing_output(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

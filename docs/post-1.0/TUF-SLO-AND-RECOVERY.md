@@ -2,10 +2,11 @@
 
 ## Estado corrente
 
-Em 2026-08-16T18:01:03Z, a cadeia pública autenticou root v2, timestamp v22,
+Em 2026-08-16T18:01:03Z, a cadeia pública autenticou root v1, timestamp v22,
 snapshot/targets v19 e 75 pacotes. O timestamp expira em
 2026-08-23T17:56:54Z (~7 dias, política owner-only), fora da janela de alerta
-de 6 horas. O monitor público retornou saudável.
+de 6 horas. O monitor público retornou saudável. A correção de root v2 para v1
+está registrada na [errata TUF](ERRATA-TUF-ROOT-VERSION.md).
 
 A renovação limitada foi executada sem alterar catálogo, root ou targets:
 

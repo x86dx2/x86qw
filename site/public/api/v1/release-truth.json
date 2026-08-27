@@ -41,12 +41,12 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-20T16:27:29Z",
+        "observed_at_utc": "2026-08-27T10:15:18Z",
         "product_version": "1.0.4",
         "catalog_current_installer": "1.0.4",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
-        "root_site_hero": "x86QW 1.0.4 fonte current · 0.7.13 histórica · owner-only",
+        "root_site_hero": "x86QW 1.0.4 · validado no Apple M3 · 0.7.13 histórica",
         "root_mentions_owner_only": true,
         "state": "CONVERGED_SOURCE_1_0_4",
         "root_runner_probe": "200_OWNER_ONLY"
@@ -58,7 +58,7 @@
         "scope": "installer_only"
       },
       "tuf": {
-        "root_version": 2,
+        "root_version": 1,
         "timestamp_version": 24,
         "snapshot_version": 24,
         "targets_version": 24,

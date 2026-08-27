@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -25,6 +26,9 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("1.0.4", live["product_version"])
         self.assertEqual("1.0.4", live["catalog_current_installer"])
         self.assertEqual("CONVERGED_SOURCE_1_0_4", live["state"])
+        home = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
+        visible_home = re.sub(r"<[^>]+>", "", home)
+        self.assertIn(live["root_site_hero"], visible_home)
 
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(
@@ -33,6 +37,24 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("/api/v1/release-truth.json", product["release_truth_url"])
         self.assertEqual("owner-only", product["release_audience"])
         self.assertFalse(product["external_public"])
+
+    def test_release_truth_reports_the_highest_published_root(self) -> None:
+        projection = json.loads(
+            (ROOT / "site/public/api/v1/release-truth.json").read_text(encoding="utf-8")
+        )
+        metadata = ROOT / "site/public/api/v1/trust/metadata"
+        versions = []
+        for path in metadata.glob("*.root.json"):
+            version = int(path.name.removesuffix(".root.json"))
+            signed = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(version, signed["signed"]["version"])
+            versions.append(version)
+        self.assertTrue(versions)
+        self.assertEqual(list(range(1, max(versions) + 1)), sorted(versions))
+        self.assertEqual(
+            max(versions),
+            projection["authorities"]["deployment"]["tuf"]["root_version"],
+        )
 
     def test_user_facing_surfaces_explain_owner_only(self) -> None:
         surfaces = (
@@ -45,6 +67,23 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("owner-only", text)
                 self.assertIn("external-public", text)
+
+    def test_historical_root_version_claims_link_to_the_errata(self) -> None:
+        errata = (ROOT / "docs/post-1.0/ERRATA-TUF-ROOT-VERSION.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "660af63e52a033290adf8899d2078a779c04e04cf5d1fac465b4aa2e04937201",
+            errata,
+        )
+        for path in (
+            ROOT / "docs/post-1.0/AUDIT-BASELINE.md",
+            ROOT / "docs/post-1.0/LAYER-MAP.md",
+            ROOT / "docs/post-1.0/RELEASE-TRUTH-CURRENT.md",
+            ROOT / "docs/post-1.0/TUF-SLO-AND-RECOVERY.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("ERRATA-TUF-ROOT-VERSION.md", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

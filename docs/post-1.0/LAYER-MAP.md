@@ -27,6 +27,9 @@ assets GitHub/GitLab (E2)   evidência M3 (E3)
  preview/conditional       owner-only/external-public
 ```
 
+A indicação histórica de root v2 no diagrama foi corrigida pela
+[errata TUF](ERRATA-TUF-ROOT-VERSION.md); os bytes publicados eram root v1.
+
 ## Contratos por camada
 
 | Camada | Autoridade | Evidência mínima | Limite |

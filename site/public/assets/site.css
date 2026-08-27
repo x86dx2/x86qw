@@ -446,7 +446,7 @@ footer nav a:hover {
 }
 
 .install-copy {
-  max-width: 58ch;
+  max-width: 70ch;
   margin-bottom: clamp(2rem, 5vw, 3.5rem);
 }
 
@@ -465,10 +465,18 @@ footer nav a:hover {
   line-height: 1.15;
 }
 
-.install-copy > p:last-of-type {
+.install-copy > p:not(.install-kicker) {
   margin-bottom: 0;
   color: var(--band-muted);
   line-height: 1.7;
+}
+
+.install-copy > p + p {
+  margin-top: 1rem;
+}
+
+.install-requirements strong {
+  color: var(--band-ink);
 }
 
 .install-command {
@@ -532,10 +540,6 @@ footer nav a:hover {
   color: var(--band-muted);
   font: 0.82rem/1.5 var(--mono);
   white-space: nowrap;
-}
-
-.command-action {
-  color: oklch(0.86 0.06 70);
 }
 
 .install-copy-icon {
@@ -746,29 +750,48 @@ footer nav a:hover {
 }
 
 .platform-matrix {
+  width: 100%;
+  border-collapse: collapse;
   border-top: 1px solid var(--line);
 }
 
-.platform-matrix > div {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr 1.3fr 1.2fr;
-  gap: 1rem;
-  align-items: center;
-  min-height: 4.4rem;
-  padding: 0.85rem 0;
-  border-bottom: 1px solid var(--line);
+.platform-matrix caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.platform-matrix strong {
+.platform-matrix th,
+.platform-matrix td {
+  padding: 0.85rem 1rem 0.85rem 0;
+  min-height: 4.4rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.platform-matrix tbody th {
+  width: 18%;
   font-size: 1.15rem;
   font-weight: 700;
 }
 
-.matrix-header {
-  min-height: 2.75rem !important;
+.platform-matrix thead th {
+  height: 2.75rem;
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.platform-matrix td:nth-child(2) {
+  width: 28%;
+}
+
+.platform-matrix td:nth-child(3) {
+  width: 27%;
 }
 
 .readiness {
@@ -901,18 +924,50 @@ footer nav {
     overflow-wrap: anywhere;
   }
 
-  .platform-matrix > div {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.35rem 1rem;
-    padding: 1rem 0;
+  .platform-matrix,
+  .platform-matrix tbody,
+  .platform-matrix tr {
+    display: block;
   }
 
-  .platform-matrix .matrix-header {
-    display: none;
+  .platform-matrix thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .platform-matrix [role="cell"]:nth-child(3),
-  .platform-matrix [role="cell"]:nth-child(4) {
+  .platform-matrix tbody th,
+  .platform-matrix td {
+    display: grid;
+    width: 100%;
+    min-height: auto;
+    grid-template-columns: minmax(6.5rem, 0.7fr) minmax(0, 1.3fr);
+    gap: 1rem;
+    padding: 0.45rem 0;
+    border-bottom: 0;
+  }
+
+  .platform-matrix tbody th {
+    display: block;
+    padding-top: 1.1rem;
+  }
+
+  .platform-matrix tbody tr {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .platform-matrix td::before {
+    color: var(--ink);
+    content: attr(data-label);
+    font-size: 0.86rem;
+    font-weight: 700;
+  }
+
+  .platform-matrix td {
     color: var(--muted);
     font-size: 0.86rem;
   }
@@ -939,6 +994,21 @@ footer nav {
     grid-column: auto;
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-header,
+  .header-actions {
+    gap: 0.45rem;
+  }
+
+  .header-status {
+    padding-inline: 0.55rem;
+  }
+
+  .header-status .catalog-label {
+    font-size: 0.82rem;
   }
 }
 
