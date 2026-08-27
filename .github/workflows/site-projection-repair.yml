@@ -260,12 +260,17 @@ jobs:
           RENEWAL_RUN_ID: ${{ inputs.tuf_renewal_run_id }}
         run: |
           set -euo pipefail
+          python3 maintenance/tools/render_release_site.py \
+            --source site/public \
+            --catalog candidate/catalog.json \
+            --product candidate/product.json \
+            --output release-work/current-site
           now="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"))')"
           python3 maintenance/tools/project_release_truth.py \
             --source site/public/api/v1/release-truth.json \
             --candidate candidate \
             --trust-repository release-work/trust \
-            --site-source candidate/site/public \
+            --site-source release-work/current-site \
             --release-code-commit "$RELEASE_CODE_COMMIT" \
             --development-validate-run "$DEVELOPMENT_VALIDATE_RUN" \
             --observed-at "$now" \
@@ -279,7 +284,7 @@ jobs:
           source_projection = Path("release-work/site-source")
           shutil.copytree(Path("candidate/site/public"), source_projection)
           shutil.copyfile(
-              Path("site/public/index.html"),
+              Path("release-work/current-site/index.html"),
               source_projection / "index.html",
           )
           headers = source_projection / "_headers"
