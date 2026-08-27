@@ -149,8 +149,8 @@
   "evidence": {
     "main_green": {
       "level": "E2",
-      "run_id": 31965464008,
-      "commit": "fedb79dd7d4df05572007153afb505ebefe0a151",
+      "run_id": 33116886265,
+      "commit": "9ec18b6355790ef9f797783ebe3ab86036a36cd8",
       "result": "pass"
     },
     "m3_exact_candidate": {
@@ -176,10 +176,11 @@
     },
     "tuf_renewal": {
       "level": "E2",
-      "run_id": 31963102361,
-      "artifact_id": 9267748878,
-      "artifact_sha256": "4476abae5feb919b979e1e90a47f010642504536df236daec63693f9537faa43",
-      "timestamp_version": "21->22",
+      "run_id": 33107505069,
+      "artifact_id": 9661074451,
+      "artifact_sha256": "aca967e442e0234508cbf5d30721f1ce723fd4bbd26fc011145910bf50f43132",
+      "report_sha256": "eb68c1448e6fe6a0d2aa8df6ca9531710927fd4498b37fc854fb43db122be811",
+      "timestamp_version": "27->28",
       "published": false
     },
     "tuf_recovery_drill": {
@@ -193,30 +194,35 @@
     },
     "tuf_publication": {
       "level": "E2",
+      "historical": true,
       "run_id": 31963192991,
       "artifact_id": 9267779828,
       "artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
       "changed_files": [
         "metadata/timestamp.json"
       ],
-      "result": "verified-timestamp-publication",
+      "result": "historical-verified-timestamp-publication",
       "timestamp_version": 22,
       "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b"
     },
     "deployment_projection": {
       "level": "E2",
       "result": "public_tuf_bootstraps_product_release_truth_and_root_verified",
-      "run_id": 31965901520,
-      "artifact_id": 9268487003,
-      "candidate_commit": "f2e9ad30670d0041d6487856daba620a4c1db71b",
-      "candidate_run_id": 31904237018,
-      "candidate_artifact_id": 9252054354,
-      "candidate_json_sha256": "9a8417d4d0bd801e087f429931a7005b432f981978e2b34877cf390041dccebf",
-      "catalog_sha256": "a45cdb9c3eaf5e731bf5cab595266d1a436906781360481e6d39d6b32c93a45b",
+      "run_id": 33115777739,
+      "artifact_id": 9664449974,
+      "artifact_sha256": "66239cd25ef4e972a6e8c35c246d919a1acb2a86f61afefda521808b55f0c727",
+      "candidate_commit": "e12ed081b968f820f47200e4be954a4f444056a1",
+      "candidate_run_id": 31837973322,
+      "candidate_artifact_id": 9233462439,
+      "candidate_json_sha256": "0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21",
+      "catalog_sha256": "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a",
       "release_truth_sha256": "bc1c75e986ad9eb594cd06cd566dae31334e8018730bd446ad691d563719edcd",
+      "tuf_source_run_id": 33107300472,
+      "tuf_renewal_run_id": 33107505069,
+      "tuf_publication": "none; authenticated TUF served by the projection",
       "observed_endpoint_status": 200,
       "workflow_conclusion": "success",
-      "receipt_artifact_id": 9268487003,
+      "receipt_artifact_id": 9664449974,
       "root_probe": {
         "live_root": "owner-only",
         "live_status": 200,

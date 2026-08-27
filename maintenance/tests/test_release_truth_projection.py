@@ -26,6 +26,19 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("1.0.0", live["product_version"])
         self.assertEqual("1.0.0", live["catalog_current_installer"])
         self.assertEqual("CONVERGED_CANDIDATE_DEPLOYMENT", live["state"])
+        evidence = document["evidence"]
+        self.assertEqual(33116886265, evidence["main_green"]["run_id"])
+        self.assertEqual(
+            "9ec18b6355790ef9f797783ebe3ab86036a36cd8",
+            evidence["main_green"]["commit"],
+        )
+        self.assertEqual(33107505069, evidence["tuf_renewal"]["run_id"])
+        self.assertEqual("27->28", evidence["tuf_renewal"]["timestamp_version"])
+        self.assertEqual(33115777739, evidence["deployment_projection"]["run_id"])
+        self.assertEqual(
+            "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a",
+            evidence["deployment_projection"]["catalog_sha256"],
+        )
         home = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         visible_home = re.sub(r"<[^>]+>", "", home)
         self.assertIn("owner-only", visible_home)
@@ -70,6 +83,62 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("owner-only", text)
                 self.assertIn("external-public", text)
+
+    def test_current_status_surfaces_match_the_verified_snapshot(self) -> None:
+        status = (ROOT / "docs/PROJECT-STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        release_note = (ROOT / "docs/releases/1.0.4.md").read_text(encoding="utf-8")
+        current_truth = (ROOT / "docs/post-1.0/RELEASE-TRUTH-CURRENT.md").read_text(
+            encoding="utf-8"
+        )
+
+        for path, text in (
+            (ROOT / "docs/PROJECT-STATUS.md", status),
+            (ROOT / "docs/ROADMAP.md", roadmap),
+            (ROOT / "README.md", readme),
+            (ROOT / "docs/releases/1.0.4.md", release_note),
+            (ROOT / "docs/post-1.0/RELEASE-TRUTH-CURRENT.md", current_truth),
+        ):
+            with self.subTest(path=path):
+                self.assertIn("1.0.4", text)
+                self.assertIn("owner-only", text)
+                self.assertIn("external-public", text)
+
+        for marker in (
+            "MAIN=GREEN",
+            "TUF=HEALTHY",
+            "external-public=NO-GO",
+            "33115777739",
+            "33115287498",
+            "timestamp v28",
+            "snapshot/targets v27",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, status)
+                self.assertIn(marker, current_truth)
+
+        operational_records = {
+            ROOT / "docs/post-1.0/CI-HEALTH.md": ("MAIN=GREEN", "33116886265"),
+            ROOT / "docs/post-1.0/TUF-SLO-AND-RECOVERY.md": (
+                "timestamp v28",
+                "snapshot/targets v27",
+                "external-public=NO-GO",
+            ),
+            ROOT / "docs/post-1.0/RELEASE-AUDIENCE.md": (
+                "VALID_FOR_SINGLE_USER_M3",
+                "external-public",
+            ),
+            ROOT / "docs/post-1.0/EXTERNAL-PUBLIC-READINESS.md": (
+                "33115777739",
+                "NO-GO",
+            ),
+        }
+        for path, markers in operational_records.items():
+            text = path.read_text(encoding="utf-8")
+            for marker in markers:
+                with self.subTest(path=path, marker=marker):
+                    self.assertIn(marker, text)
 
     def test_historical_root_version_claims_link_to_the_errata(self) -> None:
         errata = (ROOT / "docs/post-1.0/ERRATA-TUF-ROOT-VERSION.md").read_text(
