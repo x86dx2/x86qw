@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-27T20:57:31Z",
-  "snapshot_commit": "64b083e4cc11ffc435a6baaba0feaa0a2bf72399",
+  "observed_at_utc": "2026-08-27T23:18:37Z",
+  "snapshot_commit": "adf83f9f01a8601ed22676525d215b2d00f86592",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -41,7 +41,7 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-27T20:57:31Z",
+        "observed_at_utc": "2026-08-27T23:18:37Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "200",
@@ -64,7 +64,7 @@
         "targets_version": 27,
         "packages_observed": 75,
         "timestamp_expiry": "2026-09-03T19:15:09Z",
-        "seconds_to_expiry_at_observation": 598658,
+        "seconds_to_expiry_at_observation": 590192,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
@@ -73,14 +73,14 @@
         "production_custody_recovery": "drill-registered; independent custody/RTO pending",
         "renewal_run_id": 33107505069,
         "recovery_drill_run_id": 31900793093,
-        "publication_run_id": 33115777739,
+        "publication_run_id": 33125534974,
         "catalog_sha256": "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "64b083e4cc11ffc435a6baaba0feaa0a2bf72399",
-      "validate_run": 33115287498,
+      "head": "adf83f9f01a8601ed22676525d215b2d00f86592",
+      "validate_run": 33124929611,
       "required_protected_contexts": 3,
       "protected_contexts_green": "3/3",
       "validate_jobs": "5/5"

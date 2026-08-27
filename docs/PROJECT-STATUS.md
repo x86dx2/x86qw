@@ -32,11 +32,10 @@ Estado operacional rebaselineado: o escopo corrente é um único usuário no App
 
 `MAIN=GREEN`; `TUF=HEALTHY`; `external-public=NO-GO`; a release
 `1.0.0 owner-only` continua `VALID_FOR_SINGLE_USER_M3`. A projeção pública
-convergente foi verificada no run [33115777739](https://github.com/x86dx2/x86qw/actions/runs/33115777739),
+convergente foi verificada no run [33125534974](https://github.com/x86dx2/x86qw/actions/runs/33125534974),
 com o catálogo, product, bootstraps, site e release-truth servindo os bytes do
-candidato exato. O Validate posterior da linha documental é o run
-[33116886265](https://github.com/x86dx2/x86qw/actions/runs/33116886265); o
-checkpoint de validação do candidato é o run `33115287498`.
+candidato exato. O Validate corrente da linha `main` é o run
+[33124929611](https://github.com/x86dx2/x86qw/actions/runs/33124929611).
 
 O TUF público atual é root v1, timestamp v28 e snapshot/targets v27, com
 75 pacotes e timestamp válido até `2026-09-03T19:15:09Z`. A renovação técnica
@@ -81,7 +80,7 @@ digest e assets extras. A avaliação está em
 ## Estado de confiança
 
 A root Ed25519 incorporada autentica o catálogo público final. Na observação
-viva de `2026-08-27T20:57:31Z`, o endpoint serviu root v1, timestamp v28 e
+viva de `2026-08-27T23:18:37Z`, o endpoint serviu root v1, timestamp v28 e
 snapshot/targets v27; timestamp expira em `2026-09-03T19:15:09Z`, com 75
 pacotes e catálogo SHA-256
 `a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a`.
@@ -89,8 +88,8 @@ TUF, bootstraps, product e release-truth passaram a verificação independente
 nos domínios canônico e alias.
 
 O run de renovação timestamp-only atual é `33107505069`, artifact
-`9661074451`; o run de publicação/verificação da projeção é `33115777739`,
-artifact `9664449974`. A custódia independente, backup humano e RTO continuam
+`9661074451`; o run de publicação/verificação da projeção é `33125534974`,
+artifact `9668294484`. A custódia independente, backup humano e RTO continuam
 pendência condicional de `external-public`; a lease técnica do owner-only está
 saudável.
 
@@ -231,8 +230,8 @@ bloqueiam o uso da release já publicada no modo `owner-only`.
 
 Na rechecagem remota de `2026-08-27`, os workflows de aceitação, renovação
 timestamp-only, monitoramento e projeção estavam presentes no remoto. A
-projeção foi reparada e verificada no run `33115777739`; o Validate da linha
-`main` passou no run `33116886265`. A promoção owner-only permanece imutável;
+projeção foi reparada e verificada no run `33125534974`; o Validate da linha
+`main` passou no run `33124929611`. A promoção owner-only permanece imutável;
 `external-public` continua `NO-GO` sem nova autorização de audiência.
 
 As issues históricas [#143–#152](https://github.com/x86dx2/x86qw/issues/143)

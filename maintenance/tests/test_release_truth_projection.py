@@ -17,6 +17,10 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         document = json.loads(authority.read_text(encoding="utf-8"))
         self.assertEqual("GREEN", document["status"]["main"])
         self.assertEqual("HEALTHY", document["status"]["tuf"])
+        self.assertEqual(
+            "adf83f9f01a8601ed22676525d215b2d00f86592",
+            document["snapshot_commit"],
+        )
         self.assertEqual("owner-only", document["authorities"]["candidate_release"]["audience"])
         self.assertFalse(document["authorities"]["candidate_release"]["external_public_authorized"])
         self.assertEqual("NO-GO", document["status"]["external_public"])
@@ -26,6 +30,15 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("1.0.0", live["product_version"])
         self.assertEqual("1.0.0", live["catalog_current_installer"])
         self.assertEqual("CONVERGED_CANDIDATE_DEPLOYMENT", live["state"])
+        self.assertEqual(
+            33125534974,
+            document["authorities"]["deployment"]["tuf"]["publication_run_id"],
+        )
+        self.assertEqual(
+            "adf83f9f01a8601ed22676525d215b2d00f86592",
+            document["authorities"]["development"]["head"],
+        )
+        self.assertEqual(33124929611, document["authorities"]["development"]["validate_run"])
         evidence = document["evidence"]
         self.assertEqual(33116886265, evidence["main_green"]["run_id"])
         self.assertEqual(
@@ -109,8 +122,8 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
             "MAIN=GREEN",
             "TUF=HEALTHY",
             "external-public=NO-GO",
-            "33115777739",
-            "33115287498",
+            "33125534974",
+            "33124929611",
             "timestamp v28",
             "snapshot/targets v27",
         ):
@@ -119,7 +132,7 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
                 self.assertIn(marker, current_truth)
 
         operational_records = {
-            ROOT / "docs/post-1.0/CI-HEALTH.md": ("MAIN=GREEN", "33116886265"),
+            ROOT / "docs/post-1.0/CI-HEALTH.md": ("MAIN=GREEN", "33124929611"),
             ROOT / "docs/post-1.0/TUF-SLO-AND-RECOVERY.md": (
                 "timestamp v28",
                 "snapshot/targets v27",
@@ -130,7 +143,7 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
                 "external-public",
             ),
             ROOT / "docs/post-1.0/EXTERNAL-PUBLIC-READINESS.md": (
-                "33115777739",
+                "33125534974",
                 "NO-GO",
             ),
         }

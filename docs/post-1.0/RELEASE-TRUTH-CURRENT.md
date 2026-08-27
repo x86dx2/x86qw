@@ -5,11 +5,11 @@ Esta é a projeção legível da autoridade machine-readable em
 candidate/release, deployment e development; não transforma disponibilidade de
 artefato em suporte ou autorização de audiência.
 
-## Estado verificado em 2026-08-27T20:57:31Z
+## Estado verificado em 2026-08-27T23:18:37Z
 
-- `MAIN=GREEN`: a linha `main` passou o Validate posterior no run
-  [33116886265](https://github.com/x86dx2/x86qw/actions/runs/33116886265). O
-  checkpoint de validação do candidato exato é o run `33115287498`.
+- `MAIN=GREEN`: a linha `main` passou o Validate no run
+  [33124929611](https://github.com/x86dx2/x86qw/actions/runs/33124929611), no
+  commit `adf83f9f01a8601ed22676525d215b2d00f86592`.
 - `TUF=HEALTHY`: root v1, timestamp v28 e snapshot/targets v27 autenticam o
   catálogo público de 75 pacotes. O timestamp expira em
   `2026-09-03T19:15:09Z`, fora da janela de alerta de seis horas no momento da
@@ -29,12 +29,12 @@ artefato em suporte ou autorização de audiência.
 | source | baseline current `1.0.4` em `dist/installer/VERSION` |
 | candidate/release | `x86qw-installer-1.0.0`, commit `e12ed081b968f820f47200e4be954a4f444056a1`, audiência `owner-only` |
 | deployment | site, bootstraps, product, catálogo, trust e release-truth convergentes |
-| development | `main` verde no Validate `33116886265`; validação do candidato no run `33115287498` |
+| development | `main` verde no Validate `33124929611`; candidato exato preservado pelo receipt e pela evidência M3 |
 | scope | um usuário, um mantenedor e laboratório nativo Apple M3 |
 
 ## Deployment público
 
-O run [33115777739](https://github.com/x86dx2/x86qw/actions/runs/33115777739)
+O run [33125534974](https://github.com/x86dx2/x86qw/actions/runs/33125534974)
 reparou e verificou a projeção owner-only. O candidato carregado é o mesmo
 nos endpoints canônico `https://qw.x86.com.br/` e alias
 `https://x86qw.x86.com.br/`: product e catálogo reportam `1.0.0`, a raiz HTTP
@@ -43,16 +43,17 @@ nos endpoints canônico `https://qw.x86.com.br/` e alias
 O catálogo público tem SHA-256
 `a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a`; a
 projeção de release-truth tem SHA-256
-`a7b96241c521b87bfeb10c5d0f7d65ceaac0a06cd31b324a6a1e9ffa2404de4a`.
+`f6ba7574505b2ab5272711844faae849b4a8c9f428dbdeb6454a06b7e8cb4bff` na
+observação pública corrente.
 GitHub e GitLab continuam byte-equal para o instalador owner-only. A release
 final tem 600825 bytes e candidate SHA-256
 `0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21`.
 
 O receipt da projeção registra o mesmo estado: `CONVERGED_CANDIDATE_DEPLOYMENT`,
-root probe `200_OWNER_ONLY`, repair artifact `9664449974` e publicação de site
-`projection-only`. A fonte do código de deployment é o commit
-`64b083e4cc11ffc435a6baaba0feaa0a2bf72399`; atualizações documentais
-posteriores não reconstruíram nem alteraram os bytes publicados.
+root probe `200_OWNER_ONLY`, repair artifact `9668294484` e publicação de site
+`projection-only`. A execução usou o commit corrente
+`adf83f9f01a8601ed22676525d215b2d00f86592`; ela não reconstruiu o candidato nem
+alterou seus bytes imutáveis.
 
 ## TUF técnico e operação
 
