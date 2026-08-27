@@ -233,10 +233,12 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(
             {"macos-arm64", "linux-amd64", "windows-x64"}, service_variants,
         )
-        for document in (home, readme, manual):
+        for document in (readme, manual):
             self.assertIn(version, document)
             self.assertIn(f"{product['component_count']} componentes", document)
         visible_home = re.sub(r"<[^>]+>", "", home)
+        self.assertIn(version, visible_home)
+        self.assertIn(f"{product['component_count']} componentes", visible_home)
         self.assertIn(f"{product['package_count']} pacotes", visible_home)
         self.assertNotRegex(home, r"data-(?:product-version|package-count|component-count)")
         for game in product["games"]:

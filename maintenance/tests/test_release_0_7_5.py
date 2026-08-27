@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import unittest
 import zipfile
 from pathlib import Path
@@ -162,8 +163,9 @@ class Release0713Tests(unittest.TestCase):
         self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertIn("0.7.13 histórica", index)
-        self.assertIn("x86QW 1.0.4", index)
-        self.assertIn("78 pacotes", index)
+        visible_index = re.sub(r"<[^>]+>", "", index)
+        self.assertIn("x86QW 1.0.4", visible_index)
+        self.assertIn("78 pacotes", visible_index)
 
 
 if __name__ == "__main__":
