@@ -150,6 +150,36 @@ class ProjectReleaseTruthTests(unittest.TestCase):
             self.assertEqual(result, json.loads(output.read_text(encoding="utf-8")))
             self.assertNotEqual(source.read_bytes(), output.read_bytes())
 
+    def test_projects_historical_launch_note_hero(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, candidate, trust, output = self._fixture(Path(temporary))
+            candidate_sha = hashlib.sha256((candidate / "candidate.json").read_bytes()).hexdigest()
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    '"candidate_sha256": "candidate"',
+                    f'"candidate_sha256": "{candidate_sha}"',
+                ),
+                encoding="utf-8",
+            )
+            (candidate / "site/public/index.html").write_text(
+                '<p class="launch-note"><span aria-hidden="true"></span> Distribuição 0.7.13 pública e verificável</p>',
+                encoding="utf-8",
+            )
+            result = project_release_truth(
+                source=source,
+                candidate=candidate,
+                trust_repository=trust,
+                site_source=candidate / "site/public",
+                release_code_commit="2" * 40,
+                development_validate_run=123,
+                observed_at="2026-08-27T18:00:00Z",
+                output=output,
+            )
+            self.assertEqual(
+                "Distribuição 0.7.13 pública e verificável",
+                result["authorities"]["deployment"]["live_observation"]["root_site_hero"],
+            )
+
     def test_refuses_candidate_that_would_reuse_other_release_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             source, candidate, trust, output = self._fixture(Path(temporary))
