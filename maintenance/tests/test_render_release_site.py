@@ -63,6 +63,47 @@ class RenderReleaseSiteTests(unittest.TestCase):
             self.assertEqual(catalog.read_bytes(), (output / "api/v1/catalog.json").read_bytes())
             self.assertEqual(product.read_bytes(), (output / "api/v1/product.json").read_bytes())
 
+    def test_current_public_source_is_a_renderable_release_template(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer = root / "installer.zip"
+            installer.write_bytes(b"candidate")
+            catalog = root / "catalog.json"
+            catalog_value = build_candidate_catalog(
+                source=ROOT / "site/public/api/v1/catalog.json",
+                installer=installer,
+                output=catalog,
+                version="1.0.0-rc.1",
+            )
+            product = root / "product.json"
+            build_candidate_product(
+                source=ROOT / "site/public/api/v1/product.json",
+                catalog=catalog_value,
+                output=product,
+            )
+            product_value = json.loads(product.read_text(encoding="utf-8"))
+            output = root / "rendered"
+            result = render_release_site(
+                source=ROOT / "site/public",
+                catalog=catalog,
+                product=product,
+                output=output,
+            )
+            self.assertEqual("1.0.0-rc.1", result["version"])
+            rendered = (output / "index.html").read_text(encoding="utf-8")
+            self.assertRegex(
+                rendered,
+                r'x86QW\s+<span class="release-product-version">1\.0\.0-rc\.1</span>',
+            )
+            self.assertIn(
+                f'<span class="release-package-count">{len(catalog_value["packages"])}</span> pacotes',
+                rendered,
+            )
+            self.assertIn(
+                f'<span class="release-component-count">{product_value["component_count"]}</span> componentes',
+                rendered,
+            )
+
     def test_bootstraps_are_bound_to_candidate_installer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
