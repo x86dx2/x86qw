@@ -5,7 +5,19 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      run_preview:
+        description: "Executa o preview opcional em outros sistemas operacionais"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
+    inputs:
+      run_preview:
+        description: "Executa o preview opcional em outros sistemas operacionais"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -141,7 +153,7 @@ jobs:
 
   preview-other-os:
     name: preview-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.run_preview == true
     needs: lfs-seed
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
