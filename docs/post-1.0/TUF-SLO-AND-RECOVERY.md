@@ -2,20 +2,20 @@
 
 ## Estado corrente
 
-Em 2026-08-16T18:01:03Z, a cadeia pública autenticou root v1, timestamp v22,
-snapshot/targets v19 e 75 pacotes. O timestamp expira em
-2026-08-23T17:56:54Z (~7 dias, política owner-only), fora da janela de alerta
-de 6 horas. O monitor público retornou saudável. A correção de root v2 para v1
-está registrada na [errata TUF](ERRATA-TUF-ROOT-VERSION.md).
+Em 2026-08-27T20:57:31Z, a cadeia pública autenticou root v1, timestamp v28,
+snapshot/targets v27 e 75 pacotes. O timestamp expira em
+2026-09-03T19:15:09Z, fora da janela de alerta de 6 horas. O monitor público
+retornou saudável nos domínios canônico e alias. A correção histórica da
+versão da root está registrada na [errata TUF](ERRATA-TUF-ROOT-VERSION.md).
 
 A renovação limitada foi executada sem alterar catálogo, root ou targets:
 
-- handoff run: 31962999249; artifact 9267728705;
-- renewal run: 31963102361; artifact 9267748878;
-- publication run: 31963192991; artifact 9267779828;
-- timestamp: v21 → v22;
+- handoff/source run: 33107300472; artifact 9661014418;
+- renewal run: 33107505069; artifact 9661074451;
+- projection verification run: 33115777739; artifact 9664449974;
+- timestamp: v27 → v28;
 - renewal report SHA-256:
-  94621a3e2083ac7d3e00788814e1080449d4a5ee65d8d98359d1d5d5a2b57aa2.
+  eb68c1448e6fe6a0d2aa8df6ca9531710927fd4498b37fc854fb43db122be811.
 
 O recovery drill técnico foi registrado no run 31900793093, artifact 9251029392,
 com status drill-passed, expiry failure detected e recovery verified. A
@@ -38,19 +38,21 @@ Os números abaixo continuam PROPOSAL até decisão operacional formal:
 | reachability do endpoint | medir por vantage independente | falha transitória | observar, registrar e usar fallback previsto |
 | recovery | exercício periódico com custódia independente | ausência de evidência | manter external-public=NO-GO |
 | divergência de bytes | zero | primeira divergência | não sobrescrever; preservar receipts |
-| recuperação de produção | RTO definido e exercitado | ausência de owner/backup | manter #148 aberto |
+| recuperação de produção | RTO definido e exercitado | ausência de owner/backup | manter external-public=NO-GO |
 
 ## Gap operacional residual
 
 O drill técnico/local e o drill protegido provaram o protocolo de expiração,
 renovação limitada e recuperação sem publicação indevida. Eles não provam ainda
 custódia humana independente, backup custodian, owner de RTO de produção,
-cadência recorrente de exercícios ou sucessão. Esses gaps permanecem em #148 e
-mantêm external-public=NO-GO.
+cadência recorrente de exercícios ou sucessão. Esses gaps continuam sendo
+requisitos de EP-3 e mantêm external-public=NO-GO; o issue #148 foi encerrado
+após registrar a capacidade técnica, sem provar custódia independente ou
+autorização para abrir a audiência.
 
-Os monitores agendados 31893247113 e 31898859941 falharam porque observaram a
-lease antiga dentro da janela de 6 horas; isso foi resolvido pela renovação v19.
-A publicação corrente foi verificada de forma independente após o deploy.
+Os monitores que observaram leases antigas dentro da janela de 6 horas ficam
+arquivados como histórico. A lease v28 atual e a projeção corrente foram
+verificadas de forma independente após o deploy.
 
 ## Runbook resumido
 
@@ -67,5 +69,6 @@ A publicação corrente foi verificada de forma independente após o deploy.
    independente fecharem as causas.
 
 Nenhuma renovação deve ser executada fora do workflow protegido sem autorização
-operacional equivalente. O próximo trabalho é sustentabilidade e recuperação
-repetível, não novas features.
+operacional equivalente. Sustentabilidade e recuperação repetível continuam
+gates external-public; o trabalho owner-only pode avançar enquanto S0-M3
+permanecer verde.

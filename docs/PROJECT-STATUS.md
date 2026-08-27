@@ -28,6 +28,24 @@ O registro detalhado, incluindo os hashes e a aceitação pública no M3, está 
 
 Estado operacional rebaselineado: o escopo corrente é um único usuário no Apple M3. `owner-only` é válido somente para esse escopo; `external-public = NO-GO`. A lease TUF técnica continua necessária para instalar e atualizar o ambiente do mantenedor, mas custódia independente, backup e RTO são requisitos condicionais de uma abertura para terceiros.
 
+## Snapshot corrente verificado
+
+`MAIN=GREEN`; `TUF=HEALTHY`; `external-public=NO-GO`; a release
+`1.0.0 owner-only` continua `VALID_FOR_SINGLE_USER_M3`. A projeção pública
+convergente foi verificada no run [33115777739](https://github.com/x86dx2/x86qw/actions/runs/33115777739),
+com o catálogo, product, bootstraps, site e release-truth servindo os bytes do
+candidato exato. O Validate posterior da linha documental é o run
+[33116886265](https://github.com/x86dx2/x86qw/actions/runs/33116886265); o
+checkpoint de validação do candidato é o run `33115287498`.
+
+O TUF público atual é root v1, timestamp v28 e snapshot/targets v27, com
+75 pacotes e timestamp válido até `2026-09-03T19:15:09Z`. A renovação técnica
+foi registrada no run `33107505069`/artifact `9661074451`; custódia
+independente, backup humano e RTO continuam condicionais a `external-public`.
+Os detalhes machine-readable estão em
+[`release-truth-current.json`](post-1.0/release-truth-current.json) e a
+projeção legível em [`RELEASE-TRUTH-CURRENT.md`](post-1.0/RELEASE-TRUTH-CURRENT.md).
+
 
 ## Baseline real
 
@@ -41,8 +59,9 @@ documento.
 
 ## Versões públicas
 
-A versão estável-fonte continua em `dist/installer/VERSION = 0.7.13`; ela é a
-baseline histórica preservada para a futura audiência externa.
+A versão-fonte current em `dist/installer/VERSION` é `1.0.4`. A release pública
+`0.7.13` é a baseline histórica preservada para a futura audiência externa;
+`1.0.0` é a release owner-only publicada e verificada.
 
 A release final atual é `x86qw-installer-1.0.0`, owner-only, com instalador de
 600825 bytes e SHA-256
@@ -61,14 +80,19 @@ digest e assets extras. A avaliação está em
 
 ## Estado de confiança
 
-A root Ed25519 incorporada autenticou o catálogo público final. Na verificação
-de 2026-08-15, o endpoint serviu timestamp, snapshot e targets na versão 18;
-timestamp expirava em `2026-08-15T21:09:01Z` e snapshot em
-`2026-08-21T21:09:01Z`. TUF, bootstraps e product passaram tanto no job
-`metadata-last` retomado quanto na verificação independente local.
+A root Ed25519 incorporada autentica o catálogo público final. Na observação
+viva de `2026-08-27T20:57:31Z`, o endpoint serviu root v1, timestamp v28 e
+snapshot/targets v27; timestamp expira em `2026-09-03T19:15:09Z`, com 75
+pacotes e catálogo SHA-256
+`a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a`.
+TUF, bootstraps, product e release-truth passaram a verificação independente
+nos domínios canônico e alias.
 
-O handoff TUF da geração pública convergente foi o run `31905077494`, artifact `9252124476`; a renovação foi `31905189013`/`9252145236` e a publicação timestamp-only `31905297742`/`9252174837`.
-A custódia independente, backup humano, RTO de produção e sucessão continuam pendência P1 em #148; a lease técnica imediata foi renovada e #152 foi encerrada.
+O run de renovação timestamp-only atual é `33107505069`, artifact
+`9661074451`; o run de publicação/verificação da projeção é `33115777739`,
+artifact `9664449974`. A custódia independente, backup humano e RTO continuam
+pendência condicional de `external-public`; a lease técnica do owner-only está
+saudável.
 
 ## Estado local
 
@@ -205,34 +229,23 @@ bloqueiam o uso da release já publicada no modo `owner-only`.
 
 ## Registro remoto de governança
 
-Uma rechecagem remota posterior confirmou que os workflows de aceitação,
-renovação timestamp-only e publicação estão presentes no remoto. O workflow
-protegido de aceitação `31845951477` passou no M3 e o runner efêmero foi
-removido. O timestamp público foi renovado e o deploy `31845099782` passou a
-verificação pós-deploy. A release RC continua sem imutabilidade host-level;
-isso é uma pendência P2, não uma alteração a ser feita no RC. O snapshot
-histórico em
-[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json)
-deve ser lido como fotografia anterior, não como estado atual.
+Na rechecagem remota de `2026-08-27`, os workflows de aceitação, renovação
+timestamp-only, monitoramento e projeção estavam presentes no remoto. A
+projeção foi reparada e verificada no run `33115777739`; o Validate da linha
+`main` passou no run `33116886265`. A promoção owner-only permanece imutável;
+`external-public` continua `NO-GO` sem nova autorização de audiência.
 
-- [#143 — RC soak histórico](https://github.com/x86dx2/x86qw/issues/143) (superseded/closed);
-- [#144 — durable signed release evidence](https://github.com/x86dx2/x86qw/issues/144) (P2, capacidade concluída para owner-only; externo pendente);
-- [#145 — public RC acceptance](https://github.com/x86dx2/x86qw/issues/145) (fechada após o run protegido);
-- [#146 — real 0.7.13 migration](https://github.com/x86dx2/x86qw/issues/146);
-- [#147 — remaining M3 functional coverage](https://github.com/x86dx2/x86qw/issues/147) (fechada após 25/25);
-- [#148 — sustainable TUF operation](https://github.com/x86dx2/x86qw/issues/148) (custody/RTO/backup ainda abertos);
-- [#149 — final 1.0.0 promotion](https://github.com/x86dx2/x86qw/issues/149) (fechada após o run `31849932133`, tentativa 2);
-- [#150 — remote branch cleanup](https://github.com/x86dx2/x86qw/issues/150);
-- [#151 — GitHub immutable release evaluation](https://github.com/x86dx2/x86qw/issues/151);
-- [#152 — TUF public lease attention](https://github.com/x86dx2/x86qw/issues/152) (closed after v20 publication).
+As issues históricas [#143–#152](https://github.com/x86dx2/x86qw/issues/143)
+estão fechadas no GitHub. O encerramento registra a capacidade ou o gate
+owner-only correspondente; não converte migração externa, soak, custódia
+independente ou RTO em autorização para abrir a audiência. A avaliação de
+imutabilidade host-level (#151) e a limpeza de refs (#150) também permanecem
+preservadas como decisões históricas, sem alterar os bytes publicados.
 
-O último monitor TUF incluído nessa leitura foi o run
-[31791717871](https://github.com/x86dx2/x86qw/actions/runs/31791717871), com
-falha por lease dentro da janela de alerta. Depois desse snapshot histórico,
-o run [31798419309](https://github.com/x86dx2/x86qw/actions/runs/31798419309)
-falhou pela mesma causa. O snapshot completo, incluindo os limites da leitura,
-está em
-[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json).
+Os runs anteriores `31791717871`, `31798419309`, `31845099782` e
+`31849932133` continuam arquivados como fotografias históricas em
+[`1.0.0-rc.1-remote-gates-2026-08-14.json`](releases/1.0.0-rc.1-remote-gates-2026-08-14.json);
+eles não são a autoridade do deployment corrente.
 
 ## Veredito
 
@@ -240,4 +253,7 @@ está em
 
 ## Próxima ação
 
-Fonte current `1.0.2`; `1.0.1` e `0.7.13` históricas. F1–F3 e o conserto de `host` ficam em 1.0.x. Manter a lease TUF fora da janela de 6 h. Migração histórica, outras plataformas e QWLeague não bloqueiam esse fluxo.
+Fonte current `1.0.4`; `1.0.3`, `1.0.2`, `1.0.1`, `1.0.0` e `0.7.13`
+históricas conforme seus papéis no catálogo. F1–F3 e o conserto de `host`
+ficam em 1.0.x. Manter a lease TUF fora da janela de 6 h. Migração histórica,
+outras plataformas e QWLeague não bloqueiam esse fluxo owner-only.

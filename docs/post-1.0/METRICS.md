@@ -4,20 +4,20 @@ As métricas abaixo medem gates, não vaidade de produto. Cada valor precisa de
 timestamp UTC, commit, run/artefacto, origem e Checker. Ausência de medição é
 `BLOCKED`, não zero.
 
-## Snapshot atual
+## Snapshot atual — 2026-08-27T20:57:31Z
 
 | Métrica | Valor na auditoria | Nível | Próximo limiar |
 | --- | --- | --- | --- |
-| main CI | `RED`; 1 job vermelho | E1 | zero vermelhos em 0A |
-| Windows portable-contract | Python 3.10 vermelho; 3.13 exigido | E1 | 3.10 e 3.13 verdes |
+| main CI | `GREEN`; Validate `33116886265`, 5/5 jobs exigidos | E2 | manter zero vermelhos em 0A |
+| Windows portable-contract | Python 3.10 e 3.13 verdes | E2 | manter matriz protegida |
 | installer mirror equality | `E2`, GitHub/GitLab iguais | E2 | manter e adicionar redundância |
 | exact native candidate | `25/25` Apple M3 | E3 | não extrapolar para não-M3 |
 | independent rebuild | não executado | E0 | E4 explícito ou exceção |
-| TUF root | v2 | E1/E2 | rotação/recovery observável |
-| TUF timestamp/snapshot/targets | v18 | E1/E2 | lease sem alerta crítico |
-| timestamp expiry | `2026-08-15T21:09:01Z` | E1 | alerta 6 h e renovação comprovada |
+| TUF root | v1 | E2 | rotação/recovery observável |
+| TUF timestamp/snapshot/targets | v28/v27/v27 | E2 | lease sem alerta crítico |
+| timestamp expiry | `2026-09-03T19:15:09Z` | E2 | alerta 6 h e renovação comprovada |
 | SBOM/ownership classified | `0/87` classificados; `87/87` unclassified/NOASSERTION | E1 | 87/87 classificados ou exceções |
-| package mirrors | 1 observado | E1 | 2 ou risco aceito |
+| package mirrors | GitHub/GitLab byte-equal para o instalador | E2 | manter verificação após cada projeção |
 | QWLeague contract | nenhum API/OAuth/webhook verificado | E1 | contrato oficial |
 | site headers/CWV | não medidos | E0 | medição independente antes de claim |
 
