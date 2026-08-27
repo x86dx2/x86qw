@@ -852,6 +852,41 @@ class ReleaseCandidateTests(unittest.TestCase):
                 evidence_path.write_text(json.dumps(evidence) + "\n", encoding="utf-8")
                 module.verify_candidate(candidate)
 
+    def test_verify_accepts_legacy_sbom_namespace_for_pre_migration_candidates(self):
+        module = self._candidate_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "build"
+            source.mkdir()
+            (source / "artifact.zip").write_bytes(b"candidate")
+            candidate = root / "candidate"
+            module.prepare_candidate(
+                source=source,
+                output=candidate,
+                version="1.0.0",
+                commit="1" * 40,
+                generated_at="2026-08-04T00:00:00Z",
+            )
+
+            sbom_path = candidate / "sbom.spdx.json"
+            sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+            sbom["documentNamespace"] = (
+                "https://x86qw.x86.com.br/release/1.0.0/" + "1" * 40
+            )
+            sbom_path.write_bytes(module._json_bytes(sbom))
+
+            manifest_path = candidate / "candidate.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["metadata"]["sbom.spdx.json"] = {
+                "size": sbom_path.stat().st_size,
+                "sha256": hashlib.sha256(sbom_path.read_bytes()).hexdigest(),
+            }
+            manifest["candidate_sha256"] = module._candidate_digest(manifest)
+            manifest_path.write_bytes(module._json_bytes(manifest))
+
+            verified = module.verify_candidate(candidate)
+            self.assertEqual(verified["version"], "1.0.0")
+
     def test_verify_binds_sbom_and_provenance_to_manifest(self):
         module = self._candidate_module()
         with tempfile.TemporaryDirectory() as temporary:
