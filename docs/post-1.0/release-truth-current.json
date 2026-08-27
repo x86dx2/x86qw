@@ -1,7 +1,7 @@
 {
   "schema": "x86qw-release-truth-v1",
-  "observed_at_utc": "2026-08-20T16:27:29Z",
-  "snapshot_commit": "5652fbc1f27d742d509132f28c67bfcb457573a3",
+  "observed_at_utc": "2026-08-27T20:57:31Z",
+  "snapshot_commit": "64b083e4cc11ffc435a6baaba0feaa0a2bf72399",
   "status": {
     "main": "GREEN",
     "tuf": "HEALTHY",
@@ -41,14 +41,14 @@
     "deployment": {
       "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
       "live_observation": {
-        "observed_at_utc": "2026-08-27T10:15:18Z",
-        "product_version": "1.0.4",
-        "catalog_current_installer": "1.0.4",
+        "observed_at_utc": "2026-08-27T20:57:31Z",
+        "product_version": "1.0.0",
+        "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
-        "root_site_hero": "x86QW 1.0.4 · validado no Apple M3 · 0.7.13 histórica",
+        "root_site_hero": "x86QW 1.0.0 · validado no Apple M3 · 0.7.13 histórica",
         "root_mentions_owner_only": true,
-        "state": "CONVERGED_SOURCE_1_0_4",
+        "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
         "root_runner_probe": "200_OWNER_ONLY"
       },
       "package_mirrors": {
@@ -59,30 +59,28 @@
       },
       "tuf": {
         "root_version": 1,
-        "timestamp_version": 24,
-        "snapshot_version": 24,
-        "targets_version": 24,
-        "packages_observed": 78,
-        "timestamp_expiry": "2026-08-27T16:27:29Z",
-        "seconds_to_expiry_at_observation": 604800,
+        "timestamp_version": 28,
+        "snapshot_version": 27,
+        "targets_version": 27,
+        "packages_observed": 75,
+        "timestamp_expiry": "2026-09-03T19:15:09Z",
+        "seconds_to_expiry_at_observation": 598658,
         "warning_hours": 6,
         "monitor_warning_6h": "healthy",
         "monitor_warning_1h": "healthy",
         "technical_chain": "authenticated",
         "operational_status": "HEALTHY",
         "production_custody_recovery": "drill-registered; independent custody/RTO pending",
-        "renewal_run_id": 31963102361,
+        "renewal_run_id": 33107505069,
         "recovery_drill_run_id": 31900793093,
-        "publication_run_id": 31963192991,
-        "publication_artifact_id": 9267779828,
-        "publication_artifact_sha256": "b74064ab0817f0922944e8545171dec8335af3ca3a0ac5522552ee748be7f905",
-        "catalog_sha256": "13f085c4a93d41101df5eef4f1be5904acd2815436a3bc341d6c8a418d03008b"
+        "publication_run_id": 33115777739,
+        "catalog_sha256": "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a"
       }
     },
     "development": {
       "meaning": "HEAD atual e seus checks",
-      "head": "5652fbc1f27d742d509132f28c67bfcb457573a3",
-      "validate_run": 32392328154,
+      "head": "64b083e4cc11ffc435a6baaba0feaa0a2bf72399",
+      "validate_run": 33115287498,
       "required_protected_contexts": 3,
       "protected_contexts_green": "3/3",
       "validate_jobs": "5/5"
