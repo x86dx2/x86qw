@@ -2,10 +2,10 @@
 
 **Veredito:** NO-GO.
 
-Snapshot vivo: `2026-08-27T20:57:31Z`; `MAIN=GREEN`, `TUF=HEALTHY` e
+Snapshot vivo: `2026-08-27T23:18:37Z`; `MAIN=GREEN`, `TUF=HEALTHY` e
 `1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3`. A projeção pública convergente
-foi verificada no run `33115777739`; o Validate da linha `main` passou no run
-`33116886265`. Esses fatos fecham o escopo owner-only, mas não substituem os
+foi verificada no run `33125534974`; o Validate da linha `main` passou no run
+`33124929611`. Esses fatos fecham o escopo owner-only, mas não substituem os
 gates condicionais de abertura para terceiros.
 
 A tag x86qw-installer-1.0.0 e o smoke M3 não removem os pré-requisitos de
@@ -16,9 +16,9 @@ plataforma.
 
 | Gate | Exigência | Evidência atual | Estado |
 | --- | --- | --- | --- |
-| 0A | main verde e matriz Windows 3.10/3.13 | Validate 33116886265, 5/5 jobs exigidos | PASS |
+| 0A | main verde e matriz Windows 3.10/3.13 | Validate 33124929611, 5/5 jobs exigidos | PASS |
 | 0B | TUF sustentável, custódia e recovery | root v1, timestamp v28, snapshot/targets v27; custódia/RTO independentes ausentes | BLOCKED_EXTERNAL |
-| 0C | receipt, candidate, audiência e digests coerentes | projeção 33115777739; site/product/catalog/release-truth convergentes | PASS_OWNER_ONLY |
+| 0C | receipt, candidate, audiência e digests coerentes | projeção 33125534974; site/product/catalog/release-truth convergentes | PASS_OWNER_ONLY |
 | 0D | backlog, Maker/Checker e rollback completos | documentação vinculada à #164; limites externos registrados | PASS_OWNER_ONLY |
 | 0E | observação owner-only | aceitação single-user e lifecycle completo no M3 | PASS_OWNER_ONLY |
 | EP-1 | migração real da baseline publicada | instalador 0.7.13 exato não autentica o estado histórico; somente condicional se upgrade for prometido | CONDITIONAL |

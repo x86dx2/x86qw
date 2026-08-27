@@ -2,7 +2,7 @@
 
 ## Estado corrente
 
-Em 2026-08-27T20:57:31Z, a cadeia pública autenticou root v1, timestamp v28,
+Em 2026-08-27T23:18:37Z, a cadeia pública autenticou root v1, timestamp v28,
 snapshot/targets v27 e 75 pacotes. O timestamp expira em
 2026-09-03T19:15:09Z, fora da janela de alerta de 6 horas. O monitor público
 retornou saudável nos domínios canônico e alias. A correção histórica da
@@ -12,7 +12,7 @@ A renovação limitada foi executada sem alterar catálogo, root ou targets:
 
 - handoff/source run: 33107300472; artifact 9661014418;
 - renewal run: 33107505069; artifact 9661074451;
-- projection verification run: 33115777739; artifact 9664449974;
+- projection verification run: 33125534974; artifact 9668294484;
 - timestamp: v27 → v28;
 - renewal report SHA-256:
   eb68c1448e6fe6a0d2aa8df6ca9531710927fd4498b37fc854fb43db122be811.
