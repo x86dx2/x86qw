@@ -13,6 +13,16 @@ FULL_ACTION = re.compile(r"uses:\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}(
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
+    def test_release_rehearsal_disables_optional_other_os_preview(self):
+        validate = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("run_preview:", validate)
+        self.assertIn("if: inputs.run_preview == true", validate)
+        self.assertIn(
+            "  validate:\n    uses: ./.github/workflows/validate.yml\n    with:\n      run_preview: false",
+            release,
+        )
+
     def test_direct_python_entrypoints_used_by_release_workflows_start(self):
         scripts = (
             "maintenance/tools/build_installer_bundle.py",

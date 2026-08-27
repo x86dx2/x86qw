@@ -83,6 +83,8 @@ concurrency:
 jobs:
   validate:
     uses: ./.github/workflows/validate.yml
+    with:
+      run_preview: false
     permissions:
       contents: read
 
