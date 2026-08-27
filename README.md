@@ -12,7 +12,7 @@
 
   [![Release](https://img.shields.io/github/v/release/x86dx2/x86qw?display_name=tag&sort=semver&style=for-the-badge&label=release&color=ef6a57)](https://github.com/x86dx2/x86qw/releases/latest)
   [![Quality gate](https://img.shields.io/github/actions/workflow/status/x86dx2/x86qw/validate.yml?branch=main&style=for-the-badge&label=quality%20gate&color=4767ff)](https://github.com/x86dx2/x86qw/actions/workflows/validate.yml)
-  [![Portal](https://img.shields.io/website?url=https%3A%2F%2Fx86qw.x86.com.br%2F&style=for-the-badge&label=portal&up_message=online&down_message=offline&color=28a890)](https://x86qw.x86.com.br/)
+  [![Portal](https://img.shields.io/website?url=https%3A%2F%2Fqw.x86.com.br%2F&style=for-the-badge&label=portal&up_message=online&down_message=offline&color=28a890)](https://qw.x86.com.br/)
   [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-catalogued-181b2a?style=for-the-badge)](#compatibilidade)
 
   [**Instalar**](#instalação) · [Explorar](#o-que-vem-no-x86qw) · [Operar](#uma-cli-toda-a-arena) · [Arquitetura](#arquitetura) · [Contribuir](#contribuindo)
@@ -45,13 +45,13 @@ O x86QW transforma um ecossistema histórico em um produto atual: seleciona vers
 ### macOS e Linux
 
 ```sh
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
 ```
 
 ### Windows PowerShell
 
 ```powershell
-& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
 ```
 
 O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
@@ -96,7 +96,7 @@ interpretar versão, audiência ou plataforma. O sistema atual é detectado
 automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? Consulte o [manual do instalador](dist/installer/docs/installer.md) ou baixe diretamente pela [release mais recente](https://github.com/x86dx2/x86qw/releases/latest).
@@ -388,7 +388,7 @@ Consulte [proveniência e licenças por componente](maintenance/docs/provenance.
 <div align="center">
   <strong>READY // CONNECT // FRAG</strong><br>
   <sub>Feito para preservar QuakeWorld — e continuar jogando.</sub><br><br>
-  <a href="https://x86qw.x86.com.br/">Portal</a> ·
+  <a href="https://qw.x86.com.br/">Portal</a> ·
   <a href="https://github.com/x86dx2/x86qw/releases">Releases</a> ·
   <a href="https://gitlab.com/x86dx2/x86qw">Mirror GitLab</a> ·
   <a href="https://github.com/x86dx2/x86qw/issues">Issues</a>

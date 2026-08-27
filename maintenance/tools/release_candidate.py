@@ -448,7 +448,7 @@ def prepare_candidate(
             "dataLicense": "CC0-1.0",
             "SPDXID": "SPDXRef-DOCUMENT",
             "name": f"{PROJECT}-{version}",
-            "documentNamespace": f"https://x86qw.x86.com.br/release/{version}/{commit}",
+            "documentNamespace": f"https://qw.x86.com.br/release/{version}/{commit}",
             "creationInfo": {
                 "created": generated_at,
                 "creators": [SPDX_CREATOR],
@@ -561,7 +561,7 @@ def _validate_sbom(
         sbom.get("SPDXID") != "SPDXRef-DOCUMENT"
         or sbom.get("dataLicense") != "CC0-1.0"
         or sbom.get("name") != f"{PROJECT}-{version}"
-        or sbom.get("documentNamespace") != f"https://x86qw.x86.com.br/release/{version}/{commit}"
+        or sbom.get("documentNamespace") != f"https://qw.x86.com.br/release/{version}/{commit}"
     ):
         raise CandidateError("SBOM não corresponde à identidade do candidato")
     creation = sbom.get("creationInfo")

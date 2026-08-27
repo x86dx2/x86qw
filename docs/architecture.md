@@ -7,15 +7,18 @@ versionada fica ao lado, em `x86qw-platform.architecture.json`.
 ## Contratos públicos
 
 ```text
-https://x86qw.x86.com.br/                    site do projeto
-https://x86qw.x86.com.br/install.sh          bootstrap macOS/Linux
-https://x86qw.x86.com.br/install.ps1         bootstrap Windows
-https://x86qw.x86.com.br/api/v1/catalog.json catálogo do instalador
-https://x86qw.x86.com.br/api/v1/product.json fatos públicos do produto
+https://qw.x86.com.br/                    site do projeto
+https://qw.x86.com.br/install.sh          bootstrap macOS/Linux
+https://qw.x86.com.br/install.ps1         bootstrap Windows
+https://qw.x86.com.br/api/v1/catalog.json catálogo do instalador
+https://qw.x86.com.br/api/v1/product.json fatos públicos do produto
 https://github.com/x86dx2/x86qw/tree/main/dist distribuição canônica
 https://github.com/x86dx2/x86qw/releases      releases oficiais
 https://gitlab.com/x86dx2/x86qw               código e pacotes de contingência
 ```
+
+`x86qw.x86.com.br` continua apontando para o mesmo Worker como alias de
+compatibilidade para versões já publicadas.
 
 Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
 componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `distribution_path`

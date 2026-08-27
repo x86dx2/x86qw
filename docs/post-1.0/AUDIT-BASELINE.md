@@ -11,6 +11,9 @@ entre `2026-08-15T01:28:37Z` e `2026-08-15T01:55:48Z`, sobre o commit
 `dc080acacba7d70ced0cb311f08a81259bf5a9bd`. O snapshot é datado: não substitui
 uma verificação nova da rede, dos runners ou dos releases.
 
+A alegação histórica de root v2 abaixo foi corrigida pela
+[errata TUF](ERRATA-TUF-ROOT-VERSION.md), sem reescrever o snapshot datado.
+
 | Área | Estado observado | Evidência | Leitura permitida |
 | --- | --- | --- | --- |
 | Linha canônica | `origin/main`, snapshot `dc080ac...` | git e auditoria | VERIFIED FACT; revalidar antes de uma promoção |

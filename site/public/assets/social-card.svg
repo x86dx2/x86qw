@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">x86QW</title>
+  <desc id="description">Cinco jogos em uma distribuição auditável de QuakeWorld.</desc>
+  <rect width="1200" height="630" fill="#201e1e"/>
+  <rect x="72" y="72" width="132" height="132" rx="9" fill="#f8f7f6"/>
+  <path d="M100 111h18l20 25 20-25h18l-30 34 34 36h-21l-21-23-21 23H96l34-36z" fill="#201e1e"/>
+  <text x="72" y="330" fill="#f8f7f6" font-family="Arial, sans-serif" font-size="112" font-weight="700" letter-spacing="-4">x86QW</text>
+  <text x="76" y="407" fill="#b8b2ae" font-family="Arial, sans-serif" font-size="38">Cinco jogos. Um comando.</text>
+  <text x="76" y="458" fill="#b8b2ae" font-family="Arial, sans-serif" font-size="38">Catálogo com SHA-256 e TUF.</text>
+  <line x1="72" y1="520" x2="1128" y2="520" stroke="#5a5552" stroke-width="2"/>
+  <text x="76" y="574" fill="#f8f7f6" font-family="Arial, sans-serif" font-size="27">KTX · FINAL ARENA · PRO-X · TEAM FORTRESS · TOTAL DESTRUCTION 2</text>
+</svg>

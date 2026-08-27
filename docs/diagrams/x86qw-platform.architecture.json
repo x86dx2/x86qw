@@ -26,7 +26,7 @@
   "boundaries": [
     { "kind": "region", "label": "Pipeline de distribuição x86QW", "wraps": ["dist", "control", "ci", "packages"] },
     { "kind": "region", "label": "Entrega pública", "wraps": ["mirrors"] },
-    { "kind": "region", "label": "x86qw.x86.com.br", "wraps": ["edge"] },
+    { "kind": "region", "label": "qw.x86.com.br", "wraps": ["edge"] },
     { "kind": "security-group", "label": "Instalação autocontida do jogador", "wraps": ["cli", "play", "state", "host", "relays"] }
   ],
   "connections": [

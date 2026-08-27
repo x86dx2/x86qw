@@ -32,13 +32,13 @@ existência do bootstrap.
 Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
 
 ```sh
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
 ```
 
 No Windows PowerShell:
 
 ```powershell
-& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
 ```
 
 O bootstrap não usa `exit`: a janela atual do PowerShell permanece aberta ao
@@ -210,13 +210,13 @@ Para preparar um cliente diferente do host, informe explicitamente
 
 ```sh
 ./dist/installer/bin/manager.py install --platform windows
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
+/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
 ```
 
 No PowerShell, o equivalente para preparar Linux a partir do Windows é:
 
 ```powershell
-& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } } --platform linux
+& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } } --platform linux
 ```
 
 O argumento substitui apenas a detecção do cliente; não tenta executar o
@@ -358,7 +358,7 @@ removidas do `config.cfg` salvo sem tocar em aliases pessoais ou em
 
 As duas listas vêm do catálogo versionado em `site/public/api/v1/catalog.json`;
 sem um checkout completo, o mesmo arquivo é obtido em
-`https://x86qw.x86.com.br/api/v1/catalog.json`.
+`https://qw.x86.com.br/api/v1/catalog.json`.
 Cada entrada registra origem, licença revisada, tamanho, SHA-256 e uma lista
 ordenada de mirrors. Se uma cópia estiver indisponível ou entregar um hash
 incorreto, o instalador tenta a próxima automaticamente.

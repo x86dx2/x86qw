@@ -162,8 +162,8 @@ class Release0713Tests(unittest.TestCase):
         self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertIn("0.7.13 histórica", index)
-        self.assertIn('data-product-version>1.0.4</span>', index)
-        self.assertIn('data-package-count>78</span>', index)
+        self.assertIn("x86QW 1.0.4", index)
+        self.assertIn("78 pacotes", index)
 
 
 if __name__ == "__main__":

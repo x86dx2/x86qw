@@ -135,6 +135,7 @@ jobs:
         shell: bash
         run: |
           npm ci
+          npm test
           npm run deploy:dry-run
           python -m unittest discover -s tests -v
 

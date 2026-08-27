@@ -48,4 +48,4 @@ Os PAKs registrados ficam em id1/ e sao preservados por atualizacoes e pela
 desinstalacao comum. O modo uninstall --purge remove toda a instalacao.
 
 Documentacao do ezQuake: https://ezquake.com/docs/
-Projeto x86QW: https://x86qw.x86.com.br/
+Projeto x86QW: https://qw.x86.com.br/

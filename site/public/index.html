@@ -3,18 +3,31 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="x86QW: uma distribuição moderna, reproduzível e auditável de QuakeWorld para macOS, Linux e Windows.">
-    <meta name="theme-color" content="oklch(0.43 0.15 268.5)">
+    <meta name="description" content="x86QW: cinco jogos, um comando, catálogo com SHA-256. Distribuição moderna, reproduzível e auditável de QuakeWorld para macOS, Linux e Windows.">
+    <meta name="theme-color" content="#201e1e">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="pt_BR">
-    <meta property="og:title" content="x86QW — QuakeWorld, pronto para rodar">
-    <meta property="og:description" content="Cliente moderno, customizações curadas e artefatos verificáveis para macOS, Linux e Windows.">
-    <meta property="og:url" content="https://x86qw.x86.com.br/">
-    <title>x86QW — QuakeWorld, pronto para rodar</title>
-    <link rel="canonical" href="https://x86qw.x86.com.br/">
+    <meta property="og:site_name" content="x86QW">
+    <meta property="og:title" content="x86QW — cinco jogos, um catálogo auditável">
+    <meta property="og:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu. Cada pacote com origem, licença e SHA-256.">
+    <meta property="og:url" content="https://qw.x86.com.br/">
+    <meta property="og:image" content="https://qw.x86.com.br/assets/social-card.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="x86QW — cinco jogos, um catálogo auditável">
+    <meta name="twitter:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu. Cada pacote com origem, licença e SHA-256.">
+    <meta name="twitter:image" content="https://qw.x86.com.br/assets/social-card.png">
+    <meta name="twitter:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
+    <title>x86QW — cinco jogos, um catálogo auditável</title>
+    <link rel="canonical" href="https://qw.x86.com.br/">
     <link rel="icon" href="/assets/mark.svg" type="image/svg+xml">
-    <link rel="preload" href="/assets/fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
     <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-700.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/site.css">
     <script src="/assets/site.js" defer></script>
   </head>
@@ -23,254 +36,250 @@
 
     <header class="site-header">
       <a class="brand" href="#topo" aria-label="x86QW, início">
-        <svg aria-hidden="true" viewBox="0 0 44 44" width="36" height="36">
+        <svg aria-hidden="true" viewBox="0 0 44 44" width="32" height="32">
           <rect width="44" height="44" rx="3" class="brand-block"/>
           <path d="M9 11h6l7 9 7-9h6L25 23l11 10h-7l-7-7-7 7H8l11-10z" class="brand-x"/>
-          <rect x="31" y="7" width="6" height="6" class="brand-ping"/>
         </svg>
-        <span>x86<span>QW</span></span>
+        <span>x86QW</span>
       </a>
 
-      <nav aria-label="Navegação principal">
-        <a href="#projeto">Projeto</a>
-        <a href="#plataformas">Plataformas</a>
-        <a href="#confianca">Confiança</a>
-      </nav>
-
-      <a class="header-status" href="#estado">
-        <span aria-hidden="true"></span>
-        Estado da distribuição
-      </a>
+      <div class="header-actions">
+        <a class="header-install" href="#instalar">Instalar</a>
+        <a class="header-status" href="#confianca" data-catalog-live data-state="pending" aria-label="Catálogo: estado não consultado">
+          <span class="catalog-signal" aria-hidden="true"><span></span></span>
+          <span class="catalog-label">Catálogo</span>
+        </a>
+      </div>
     </header>
 
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <p class="launch-note"><span aria-hidden="true"></span> x86QW 1.0.4 fonte current · 0.7.13 histórica · owner-only</p>
-          <h1 id="hero-title">QuakeWorld,<br><strong>pronto para rodar.</strong></h1>
-          <p class="hero-lead">O x86QW está reunindo o ezQuake mais recente, as customizações que fizeram o nQuake essencial e uma instalação verificável para três sistemas — sem esconder de onde cada arquivo veio.</p>
-
-          <div class="hero-actions">
-            <a class="button button-primary" href="#instalar">Instalar x86QW <span aria-hidden="true">↓</span></a>
-            <a class="button button-quiet" href="#estado">Ver estado real</a>
-          </div>
-
-          <ul class="platform-list" aria-label="Sistemas catalogados">
-            <li>macOS <span>cliente universal condicional · serviços arm64 preview</span></li>
-            <li>Linux <span>x86_64 · portable-contract · preview</span></li>
-            <li>Windows <span>x64 · portable-contract · preview</span></li>
-          </ul>
+        <p class="kicker">x86QW 1.0.4 · validado no Apple M3 · 0.7.13 histórica</p>
+        <h1 id="hero-title">Cinco jogos. Um comando. Catálogo com hash.</h1>
+        <p class="hero-lead">KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 usam o mesmo ezQuake, o mesmo MVDSV e um menu em português. Você escolhe o que entra no disco; cada pacote traz origem, licença e SHA-256.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#instalar">Instalar x86QW</a>
+          <a class="button button-quiet" href="#jogos">Ver os jogos</a>
         </div>
-
-        <div class="arena-visual" aria-label="Visualização abstrata do fluxo entre jogadores, catálogo verificado e arena QuakeWorld">
-          <div class="arena-topline">
-            <span>ARENA / SIGNAL</span>
-            <span>QW 1996 → AGORA</span>
-          </div>
-
-          <svg viewBox="0 0 640 660" role="img" aria-labelledby="arena-title arena-desc">
-            <title id="arena-title">Sinal x86QW atravessando uma arena</title>
-            <desc id="arena-desc">Um trajeto geométrico conecta cliente, catálogo e jogo, representando uma instalação rastreável.</desc>
-            <g class="arena-grid" aria-hidden="true">
-              <path d="M0 110H640M0 220H640M0 330H640M0 440H640M0 550H640"/>
-              <path d="M106 0V660M213 0V660M320 0V660M426 0V660M533 0V660"/>
-            </g>
-            <g class="arena-map" aria-hidden="true">
-              <path d="M80 108h166v82h86v-48h154v106h76v196H436v92H252v-72H96V338h58V226H80z"/>
-              <path d="M154 226h98v84h118v-62h116v108h-88v108H252v-70h-98z"/>
-              <circle cx="203" cy="352" r="39"/>
-              <circle cx="438" cy="403" r="49"/>
-            </g>
-            <path class="route-shadow" aria-hidden="true" d="M100 470C160 470 161 351 218 351S278 272 327 272s61 130 112 130 57-118 112-118"/>
-            <path class="route" aria-hidden="true" d="M100 470C160 470 161 351 218 351S278 272 327 272s61 130 112 130 57-118 112-118"/>
-            <g class="signal-nodes" aria-hidden="true">
-              <circle cx="100" cy="470" r="8"/>
-              <circle cx="218" cy="351" r="8"/>
-              <circle cx="327" cy="272" r="8"/>
-              <circle cx="439" cy="402" r="8"/>
-              <circle cx="551" cy="284" r="8"/>
-            </g>
-            <circle class="packet" aria-hidden="true" cx="100" cy="470" r="9"/>
-          </svg>
-
-          <div class="arena-label arena-label-source">
-            <span>01</span>
-            <strong>origem</strong>
-            <small>identificada</small>
-          </div>
-          <div class="arena-label arena-label-hash">
-            <span>02</span>
-            <strong>hash</strong>
-            <small>confirmado</small>
-          </div>
-          <div class="arena-label arena-label-run">
-            <span>03</span>
-            <strong>spawn</strong>
-            <small>sob seu controle</small>
-          </div>
-
-          <div class="arena-caption">
-            <span>stable + nightly</span>
-            <strong>coexistem</strong>
-          </div>
-        </div>
+        <ul class="hero-games" aria-label="Jogos da distribuição">
+          <li>KTX <span>1.47</span></li>
+          <li>Final Arena <span>1.20</span></li>
+          <li>Pro-X <span>1.1</span></li>
+          <li>Team Fortress <span>2.9</span></li>
+          <li>Total Destruction 2 <span>2.22</span></li>
+        </ul>
       </section>
 
-      <section class="manifesto section" id="projeto" aria-labelledby="manifesto-title">
-        <div class="section-mark" aria-hidden="true">x86 / QW</div>
-        <div class="manifesto-copy">
-          <h2 id="manifesto-title">Sem launcher proprietário.<br>Sem pacote invisível.<br><strong>Sem abandonar 30 anos de jogo.</strong></h2>
-          <div class="manifesto-detail">
-            <p>O QuakeWorld continua rápido, técnico e vivo. O problema não é o jogo: é transformar fontes espalhadas em uma instalação atual que continue disponível amanhã.</p>
-            <p>O x86QW cria esse ponto de encontro. Cada versão entra no catálogo com origem, licença, tamanho e SHA-256. O instalador usa o catálogo, tenta mirrors independentes e prepara automaticamente o pacote separado dos PAKs registrados.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="audiences" aria-label="Para quem é o x86QW">
-        <article class="audience-new">
-          <p>Para quem está chegando</p>
-          <h2>Uma porta de entrada que explica antes de pedir um comando.</h2>
-          <ul>
-            <li>Escolha guiada de sistema, canal e versão.</li>
-            <li>Configuração moderna sem substituir preferências pessoais.</li>
-            <li>Mapas e LOCs curados do nQuake, sem downloads em massa.</li>
-          </ul>
-        </article>
-        <article class="audience-veteran">
-          <p>Para quem nunca saiu</p>
-          <h2>Controle suficiente para confiar. Pouco atrito para jogar.</h2>
-          <ul>
-            <li>Stable e nightly instalados lado a lado.</li>
-            <li>Inventários para verificar, atualizar e remover.</li>
-            <li>Mesma árvore transportável entre macOS, Linux e Windows.</li>
-          </ul>
-        </article>
-      </section>
-
-      <section class="platforms section" id="plataformas" aria-labelledby="platforms-title">
-        <header class="section-heading">
-          <h2 id="platforms-title">Um instalador.<br><strong>Três destinos.</strong></h2>
-          <p>O instalador detecta o sistema atual sem perguntar. Para montar a pasta de outro computador, use <code>--platform macos</code>, <code>linux</code> ou <code>windows</code>.</p>
+      <section class="games section" id="jogos" aria-labelledby="games-title">
+        <header class="section-intro">
+          <h2 id="games-title">O que você instala para jogar.</h2>
+          <p>Cinco títulos na mesma árvore. Versões do catálogo público, não de um pacote opaco.</p>
         </header>
-
-        <div class="platform-matrix" role="table" aria-label="Plataformas, formatos e estado de suporte">
-          <div class="matrix-header" role="row">
-            <span role="columnheader">Sistema</span>
-            <span role="columnheader">Arquitetura</span>
-            <span role="columnheader">Formato</span>
-            <span role="columnheader">Canais</span>
-          </div>
-          <div role="row">
-            <strong role="cell">macOS</strong>
-            <span role="cell">cliente universal; serviços arm64</span>
-            <span role="cell">App universal + binários arm64</span>
-            <span role="cell">stable · condicional / nightly · preview</span>
-          </div>
-          <div role="row">
-            <strong role="cell">Linux</strong>
-            <span role="cell">x86_64</span>
-            <span role="cell">AppImage</span>
-            <span role="cell">stable / nightly</span>
-          </div>
-          <div role="row">
-            <strong role="cell">Windows</strong>
-            <span role="cell">x64</span>
-            <span role="cell">Executável</span>
-            <span role="cell">stable / nightly</span>
-          </div>
-        </div>
-
-        <div class="install-now" id="instalar">
-          <div class="install-now-copy">
-            <p>Instalação owner-only</p>
-            <h3>Um comando. Nenhum clone.</h3>
-            <p>A release final baixável é owner-only; external-public continua NO-GO. Requer Python 3.10 ou mais recente, curl e unzip. O bootstrap limita e valida o script antes de executá-lo — um prefixo produzido por pipeline com falha nunca é aceito —, baixa a CLI enxuta, confere seu SHA-256, pergunta onde instalar e obtém cada conteúdo separadamente pelo catálogo publicado.</p>
-          </div>
-          <div class="install-command">
-            <code data-install-command>/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2&gt;/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://x86qw.x86.com.br/install.sh | head -c 262145 &gt;"$f"; s=$?; n=$(wc -c &lt;"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." &gt;&amp;2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw</code>
-            <button type="button" data-copy-install aria-live="polite">Copiar</button>
-            <p>Windows PowerShell: <code>& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://x86qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }</code></p>
-          </div>
-        </div>
-
-        <ol class="install-flow" aria-label="Fluxo de instalação">
+        <ol class="game-list">
           <li>
-            <span>1</span>
-            <div><strong>Confirme o destino</strong><p>O SO atual é detectado automaticamente; <code>--platform</code> prepara um cliente diferente.</p></div>
+            <p class="game-name">KTX <span>1.47</span></p>
+            <p>24 modos, Frogbots e Coach de Quad opt-in. Duel, equipes, CTF e Race com mapas filtrados pelo que está no disco.</p>
           </li>
           <li>
-            <span>2</span>
-            <div><strong>Escolha o ritmo</strong><p>Stable para releases oficiais; nightly para acompanhar o desenvolvimento.</p></div>
+            <p class="game-name">Final Arena <span>1.20</span></p>
+            <p>Duelos em fila: o vencedor permanece. Servidor local ou dedicado pelo mesmo menu.</p>
           </li>
           <li>
-            <span>3</span>
-            <div><strong>Escolha os componentes</strong><p>Os 21 componentes e os presets só entram com sua confirmação; stable e nightly coexistem.</p></div>
+            <p class="game-name">Pro-X <span>1.1</span></p>
+            <p>Rounds e equipes com ready, break e votação, no protocolo QuakeWorld.</p>
+          </li>
+          <li>
+            <p class="game-name">Team Fortress <span>2.9</span></p>
+            <p>Team Fortress clássico para QuakeWorld, com cliente e servidor na mesma instalação.</p>
+          </li>
+          <li>
+            <p class="game-name">Total Destruction 2 <span>2.22</span></p>
+            <p>Armas, magias, runas e poderes — o mod TD2 curado no catálogo x86QW.</p>
           </li>
         </ol>
       </section>
 
-      <section class="trust" id="confianca" aria-labelledby="trust-title">
-        <div class="trust-intro">
-          <p>Confiança verificável</p>
-          <h2 id="trust-title">O mirror não é a verdade.<br><strong>O catálogo é o contrato.</strong></h2>
-          <p>Nesta fase, os pacotes vivem em GitHub Releases. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado.</p>
-          <a href="/api/v1/catalog.json">Abrir catálogo de pacotes <span aria-hidden="true">↗</span></a>
-          <a href="/api/v1/product.json">Abrir catálogo do produto <span aria-hidden="true">↗</span></a>
-          <a href="/api/v1/release-truth.json">Abrir verdade de release e audiência <span aria-hidden="true">↗</span></a>
-        </div>
-
-        <dl class="trust-ledger">
-          <div><dt>Origem</dt><dd>Projeto, autor e URL imutável</dd></div>
-          <div><dt>Permissão</dt><dd>Licença e redistribuição revisadas</dd></div>
-          <div><dt>Identidade</dt><dd>Versão, tamanho e SHA-256</dd></div>
-          <div><dt>Redundância</dt><dd>Mirrors ordenados com failover</dd></div>
-          <div><dt>Base</dt><dd>PAKs registrados validados por SHA-256</dd></div>
+      <section class="capabilities section" id="capacidades" aria-labelledby="capabilities-title">
+        <header class="section-intro">
+          <h2 id="capabilities-title">Partida, host e hub no mesmo menu.</h2>
+          <p>A CLI em português cobre o ciclo completo: jogar, hospedar, entrar, atualizar e conferir. Stable e nightly coexistem.</p>
+        </header>
+        <dl class="capability-list">
+          <div>
+            <dt><code>play</code> Jogar</dt>
+            <dd>Modos, mapas e ruleset assistido a partir do menu. Frogbots e Coach de Quad só onde o QVM permite.</dd>
+          </div>
+          <div>
+            <dt><code>host</code> Hospedar</dt>
+            <dd>MVDSV em primeiro ou segundo plano, com preflight, journal e encerramento coordenado.</dd>
+          </div>
+          <div>
+            <dt><code>hub</code> Entrar</dt>
+            <dd>Servidores, observação e QTV. A biblioteca guarda favoritos e recentes.</dd>
+          </div>
+          <div>
+            <dt><code>update</code> Atualizar</dt>
+            <dd>Plano autenticado por TUF antes de escrever. <code>verify</code> confere o SHA-256 do que já está no disco.</dd>
+          </div>
+          <div>
+            <dt>MVDSV · QTV · QWFWD</dt>
+            <dd>Servidor dedicado, relay e proxy na mesma árvore, com senha fora da linha de comando.</dd>
+          </div>
+          <div>
+            <dt>PAKs seus</dt>
+            <dd>Quake continua sendo da id Software. Os PAKs registrados são obtidos separadamente do instalador e permanecem sob os termos da id Software.</dd>
+          </div>
         </dl>
       </section>
 
-      <section class="status section" id="estado" aria-labelledby="status-title">
-        <div class="status-heading">
-          <p>Estado público</p>
-          <h2 id="status-title">A release só aparece<br><strong>quando pode ser provada.</strong></h2>
+      <section class="install" id="instalar" aria-labelledby="install-title">
+        <div class="install-inner">
+          <div class="install-copy">
+            <p class="install-kicker">Distribuição em validação individual</p>
+            <h2 id="install-title">Um comando. Nenhum clone.</h2>
+            <p>A versão 1.0.4 foi validada para uso do próprio mantenedor em um Mac Apple M3 e ainda não oferece suporte público geral. A classificação técnica é <code>owner-only</code>; a audiência <code>external-public</code> ainda não foi autorizada.</p>
+            <p class="install-requirements"><strong>Antes de começar:</strong> instale Python 3.10 ou mais recente. macOS e Linux também precisam de <code>curl</code>. O comando exige HTTPS e limita o download do bootstrap antes de executá-lo.</p>
+          </div>
+          <div class="install-command" aria-label="Comandos de instalação">
+            <div class="install-command-row">
+              <p>macOS / Linux</p>
+              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-unix-command" aria-label="Copiar comando para macOS e Linux">
+                <span class="command-prompt" aria-hidden="true">$</span>
+                <code id="install-unix-command" data-install-command>/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2&gt;/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 &gt;"$f"; s=$?; n=$(wc -c &lt;"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." &gt;&amp;2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw</code>
+                <span class="install-copy-icon" aria-hidden="true">
+                  <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
+                  <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
+                </span>
+                <span class="copy-status" data-copy-status aria-live="polite"></span>
+              </button>
+            </div>
+            <div class="install-command-row">
+              <p>Windows PowerShell</p>
+              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command" aria-label="Copiar comando para Windows PowerShell">
+                <span class="command-prompt" aria-hidden="true">PS&gt;</span>
+                <code id="install-windows-command" data-install-command>&amp; { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); &amp; ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }</code>
+                <span class="install-copy-icon" aria-hidden="true">
+                  <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
+                  <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
+                </span>
+                <span class="copy-status" data-copy-status aria-live="polite"></span>
+              </button>
+            </div>
+          </div>
+          <ol class="install-flow" aria-label="Fluxo de instalação">
+            <li>
+              <span>1</span>
+              <div><strong>Confirme o destino</strong><p>O sistema atual é detectado automaticamente; <code>--platform</code> prepara um cliente diferente.</p></div>
+            </li>
+            <li>
+              <span>2</span>
+              <div><strong>Escolha o ritmo</strong><p>Stable para releases oficiais; nightly para acompanhar o desenvolvimento. Os dois coexistem.</p></div>
+            </li>
+            <li>
+              <span>3</span>
+              <div><strong>Escolha os componentes</strong><p>Os 21 componentes e os presets só entram com a sua confirmação.</p></div>
+            </li>
+          </ol>
         </div>
+      </section>
 
-        <div class="catalog-status" data-state="loading" aria-live="polite">
+      <section class="trust section" id="confianca" aria-labelledby="trust-title">
+        <header class="section-intro">
+          <h2 id="trust-title">O catálogo é o contrato.</h2>
+          <p>Nesta fase os pacotes vivem em GitHub Releases e GitLab Generic Packages. O instalador aceita uma cópia somente quando o arquivo recebido corresponde ao SHA-256 registrado e a metadados TUF vigentes.</p>
+        </header>
+
+        <div class="catalog-status" data-catalog-live data-state="pending">
           <div class="catalog-signal" aria-hidden="true"><span></span></div>
-          <div>
-            <p class="catalog-label">Consultando o catálogo</p>
-            <strong class="catalog-value">—</strong>
-            <p class="catalog-detail">Lendo o contrato público em tempo real.</p>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            <p class="catalog-label">Estado não consultado</p>
+            <strong class="catalog-value">Catálogo disponível em JSON</strong>
+            <p class="catalog-detail">A verificação em tempo real começa quando o JavaScript é executado.</p>
           </div>
           <a href="/api/v1/catalog.json">JSON <span aria-hidden="true">↗</span></a>
         </div>
         <noscript><p class="noscript-note">JavaScript está desativado. Consulte o <a href="/api/v1/catalog.json">catálogo JSON</a> diretamente.</p></noscript>
 
-        <div class="readiness">
-          <p><strong>Já funciona:</strong> release owner-only <span data-product-version>1.0.4</span> (fonte current; 0.7.13 histórica), <span data-package-count>78</span> pacotes, <span data-component-count>21</span> componentes, cinco jogos, KTX com 24 modos, Frogbots, ruleset assistido e Coach de Quad opt-in, MVDSV, QTV e QWFWD. A CLI oferece <code>play</code>, <code>host</code>, <code>proxy</code>, <code>qtv</code>, <code>status</code>, <code>hub</code>, <code>update</code>, <code>upgrade</code>, <code>verify</code>, <code>doctor</code>, <code>ui</code>, <code>profile</code>, <code>library</code>, <code>changes</code>, <code>migrate</code>, <code>repair</code>, <code>cleanup</code>, <code>uninstall</code> e <code>version</code>.</p>
-          <p><strong>Runtime previsível:</strong> a release owner-only 1.0.0 autentica o catálogo com TUF e mantém downloads, arquivos, transações, UI, gameplay, plataforma e supervisor em fronteiras reutilizáveis. O contrato <code>portable-contract</code> passou nos sete checks protegidos; isso não é smoke nativo de runtime.</p>
-          <p><strong>Confiança macOS explícita:</strong> o stable preserva o bundle upstream sem re-assinatura local. O artefato continua ad hoc, sem Developer ID ou notarização comprovada; stable e nightly permanecem condicionais por essa limitação, e smokes nativos não são requisito do fluxo Mac/local.</p>
-          <p><strong>Execução conservadora:</strong> gameplay e serviços não instalam payload permanente. Senhas podem ser lidas sem eco ou por arquivo privado; preflight, readiness e journal protegem primeiro ou segundo plano. A stack ativa pode ser inspecionada e encerrada coordenadamente pelo menu.</p>
-          <p><strong>Atualização independente:</strong> KTX 1.47, Pro-X 1.1 e Team Fortress 2.9 avançam sem renomear os outros componentes. Coleções sem release própria continuam fixadas no commit nQuake auditado.</p>
-          <p><strong>Dois mirrors:</strong> o catálogo aponta para GitHub Releases e GitLab Generic Packages, sempre com tamanho e SHA-256. Em andamento: novos adaptadores por upstream.</p>
-        </div>
+        <dl class="trust-ledger">
+          <div><dt>Origem</dt><dd>Projeto, autor e URL imutável por entrada</dd></div>
+          <div><dt>Permissão</dt><dd>Licença e redistribuição revistas</dd></div>
+          <div><dt>Identidade</dt><dd>Versão, tamanho e SHA-256</dd></div>
+          <div><dt>Autenticação</dt><dd>Catálogo assinado com TUF; timestamp e snapshot expiram</dd></div>
+          <div><dt>Redundância</dt><dd>Dois mirrors ordenados, com failover</dd></div>
+          <div><dt>Base</dt><dd>PAKs registrados, validados por SHA-256, permanecem seus</dd></div>
+        </dl>
+
+        <p class="trust-links">
+          <a href="/api/v1/catalog.json">Catálogo de pacotes <span aria-hidden="true">↗</span></a>
+          <a href="/api/v1/product.json">Catálogo do produto <span aria-hidden="true">↗</span></a>
+          <a href="/api/v1/release-truth.json">Verdade de release e audiência <span aria-hidden="true">↗</span></a>
+        </p>
       </section>
 
-      <section class="closing" aria-labelledby="closing-title">
-        <p>x86QW é preservação que executa.</p>
-        <h2 id="closing-title">O próximo spawn<br><strong>começa com confiança.</strong></h2>
-        <a class="button button-light" href="https://github.com/x86dx2/x86qw/releases">Abrir releases x86QW</a>
+      <section class="platforms section" id="plataformas" aria-labelledby="platforms-title">
+        <header class="section-intro">
+          <h2 id="platforms-title">Três sistemas, com o suporte que realmente existe.</h2>
+          <p>O instalador detecta o sistema atual sem perguntar. Para montar a pasta de outro computador, use <code>--platform macos</code>, <code>linux</code> ou <code>windows</code>.</p>
+        </header>
+        <table class="platform-matrix">
+          <caption>Plataformas, formatos e estado de suporte</caption>
+          <thead>
+            <tr>
+              <th scope="col">Sistema</th>
+              <th scope="col">Arquitetura</th>
+              <th scope="col">Formato</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">macOS</th>
+              <td data-label="Arquitetura">cliente universal; serviços arm64</td>
+              <td data-label="Formato">App universal; binários arm64</td>
+              <td data-label="Estado">stable condicional; nightly e serviços preview</td>
+            </tr>
+            <tr>
+              <th scope="row">Linux</th>
+              <td data-label="Arquitetura">cliente x86_64; serviços amd64</td>
+              <td data-label="Formato">AppImage; binários de serviço</td>
+              <td data-label="Estado">stable e nightly preview</td>
+            </tr>
+            <tr>
+              <th scope="row">Windows</th>
+              <td data-label="Arquitetura">cliente e serviços x64</td>
+              <td data-label="Formato">Executável; binários de serviço</td>
+              <td data-label="Estado">stable e nightly preview</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="limits section" id="estado" aria-labelledby="limits-title">
+        <header class="section-intro">
+          <h2 id="limits-title">O que funciona hoje, e para quem.</h2>
+          <p>Capacidades e limites descritos sem transformar evidência interna em promessa pública.</p>
+        </header>
+        <div class="readiness">
+          <p><strong>Uso validado:</strong> versão 1.0.4 para o próprio mantenedor em Apple M3. Linux, Windows e os serviços permanecem em preview até receberem evidência nativa equivalente.</p>
+          <p><strong>Conteúdo disponível:</strong> 78 pacotes, 21 componentes, cinco jogos, KTX com 24 modos e Frogbots, além de MVDSV, QTV e QWFWD. Stable e nightly podem coexistir.</p>
+          <p><strong>Integridade verificável:</strong> o instalador autentica o catálogo com TUF e só aceita arquivos que correspondem ao tamanho e ao SHA-256 publicados. GitHub Releases e GitLab Generic Packages funcionam como mirrors.</p>
+          <p><strong>Limite do macOS:</strong> o cliente stable preserva o bundle upstream, que não possui Developer ID nem notarização comprovada. Por isso, esse suporte continua condicional.</p>
+          <p><strong>Operação conservadora:</strong> senhas não entram na linha de comando; serviços usam loopback por padrão e a stack ativa pode ser inspecionada e encerrada de forma coordenada.</p>
+        </div>
       </section>
     </main>
 
     <footer>
-      <a class="brand brand-footer" href="#topo" aria-label="x86QW, voltar ao início">x86<span>QW</span></a>
+      <a class="brand brand-footer" href="#topo" aria-label="x86QW, voltar ao início">x86QW</a>
       <p>Distribuição independente de QuakeWorld mantida por x86dx2.<br>Quake é marca da id Software. Seus PAKs originais permanecem seus.</p>
       <nav aria-label="Links do rodapé">
+        <a href="https://github.com/x86dx2/x86qw">Código</a>
+        <a href="https://github.com/x86dx2/x86qw/releases">Releases</a>
+        <a href="https://github.com/x86dx2/x86qw/issues">Issues</a>
+        <a href="https://github.com/x86dx2/x86qw/security/policy">Segurança</a>
         <a href="/api/v1/catalog.json">Catálogo</a>
         <a href="/api/v1/product.json">Produto</a>
         <a href="/legal/fonts/Atkinson-Hyperlegible-OFL.txt">Licença Atkinson</a>
-        <a href="/legal/fonts/Barlow-Condensed-OFL.txt">Licença Barlow</a>
         <a href="https://www.quakeworld.nu/" rel="external">QuakeWorld.nu ↗</a>
       </nav>
     </footer>

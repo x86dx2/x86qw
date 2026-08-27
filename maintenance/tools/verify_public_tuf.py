@@ -37,7 +37,7 @@ from x86qw_runtime.trust import (  # noqa: E402
 )
 
 
-DEFAULT_BASE_URL = "https://x86qw.x86.com.br/api/v1/trust/"
+DEFAULT_BASE_URL = "https://qw.x86.com.br/api/v1/trust/"
 USER_AGENT = "x86qw-public-tuf-gate/1"
 MAX_PUBLIC_RESPONSE_BYTES = 2 * 1024 * 1024
 

@@ -66,7 +66,7 @@ class ReleaseReceiptTests(unittest.TestCase):
                 "artifact_name": "tuf-metadata-1",
             },
             "deployment": {
-                "endpoint": "https://x86qw.x86.com.br",
+                "endpoint": "https://qw.x86.com.br",
                 "verification": "tuf,bootstraps,product,public-install",
             },
         }
