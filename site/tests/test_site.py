@@ -134,6 +134,19 @@ class SiteTests(unittest.TestCase):
         self.assertIsNotNone(quiet_install)
         self.assertIn("owner-only", unescape(quiet_install.group(1)).casefold())
 
+    def test_hero_leads_with_play_not_supply_chain(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        title = re.search(r'<h1 id="hero-title">([^<]+)</h1>', home)
+        self.assertIsNotNone(title)
+        headline = unescape(title.group(1))
+        self.assertNotRegex(headline, r"(?i)hash|catálogo|sha-256|tuf")
+        self.assertRegex(headline, r"(?i)jog")
+        self.assertLess(home.find('id="jogos"'), home.find('id="confianca"'))
+        self.assertLess(home.find('id="capacidades"'), home.find('id="confianca"'))
+        document_title = re.search(r"<title>([^<]+)</title>", home)
+        self.assertIsNotNone(document_title)
+        self.assertNotRegex(unescape(document_title.group(1)), r"(?i)hash|sha-256")
+
     def test_release_documentation_keeps_mac_local_boundary(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
         cloudflare = (PROJECT_ROOT / "site/docs/cloudflare.md").read_text(encoding="utf-8")
