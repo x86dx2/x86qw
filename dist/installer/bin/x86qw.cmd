@@ -79,8 +79,8 @@ echo   upgrade [--yes]      incorpora novidades do perfil
 echo   verify               verifica a instalacao
 echo   doctor [--bundle]    diagnostica a instalacao sem alterar arquivos
 echo   ui                   painel HTML local somente leitura
-echo   profile [--backup|--restore]  configuracoes pessoais, fora de cache e demos
-echo   library [--add|--remove]  favoritos e recentes locais, com origem e freshness
+echo   profile [--backup^|--restore]  configuracoes pessoais, fora de cache e demos
+echo   library [--add^|--remove]  favoritos e recentes locais, com origem e freshness
 echo   changes [--sync-gitignore] compara mudancas locais com a instalacao registrada
 echo   migrate [--dry-run]   migra metadados para o contrato 1.0
 echo   repair [--dry-run]   diagnostica e repara conteudo gerenciado

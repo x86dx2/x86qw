@@ -288,8 +288,10 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
             self.assertIn("changes [--sync-gitignore]", source)
             self.assertIn("migrate [--dry-run]", source)
             self.assertIn("doctor [--bundle]", source)
-            self.assertIn("profile [--backup|--restore]", source)
-            self.assertIn("library [--add|--remove]", source)
+        self.assertIn("profile [--backup|--restore]", shell)
+        self.assertIn("library [--add|--remove]", shell)
+        self.assertIn("profile [--backup^|--restore]", batch)
+        self.assertIn("library [--add^|--remove]", batch)
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
     def test_unix_launcher_forwards_repair_and_long_play_arguments_exactly(self):
@@ -342,7 +344,15 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                         [str(launcher), *arguments], env=environment,
                         check=False, capture_output=True,
                     )
-                    self.assertEqual(0, completed.returncode)
+                    self.assertEqual(
+                        0,
+                        completed.returncode,
+                        msg=(
+                            f"stdout={completed.stdout!r}\n"
+                            f"stderr={completed.stderr!r}\n"
+                            f"launcher={launcher.read_text(encoding='utf-8')!r}"
+                        ),
+                    )
                     self.assertEqual(expected, json.loads(output.read_text(encoding="utf-8")))
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")
@@ -476,7 +486,15 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                         env=dict(environment, X86QW_STUB_EXIT="0"), check=False,
                         capture_output=True,
                     )
-                    self.assertEqual(0, completed.returncode)
+                    self.assertEqual(
+                        0,
+                        completed.returncode,
+                        msg=(
+                            f"stdout={completed.stdout!r}\n"
+                            f"stderr={completed.stderr!r}\n"
+                            f"launcher={launcher.read_text(encoding='utf-8')!r}"
+                        ),
+                    )
                     received = json.loads(output.read_text(encoding="utf-8"))
                     if target_at_end:
                         self.assertEqual(prefix, received[:-1])

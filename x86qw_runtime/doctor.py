@@ -99,11 +99,19 @@ def sanitize_doctor_report(
 
     from .contracts.output import redact_json
 
-    payload = json.dumps(dict(report), ensure_ascii=False)
     home_text = str(home or Path.home())
-    if home_text:
-        payload = payload.replace(home_text, "~")
-    sanitized = redact_json(json.loads(payload))
+
+    def replace_home(value: object) -> object:
+        if isinstance(value, str):
+            replaced = value.replace(home_text, "~") if home_text else value
+            return replaced.replace("\\", "/") if replaced.startswith("~") else replaced
+        if isinstance(value, Mapping):
+            return {str(key): replace_home(item) for key, item in value.items()}
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            return [replace_home(item) for item in value]
+        return value
+
+    sanitized = redact_json(replace_home(dict(report)))
     if not isinstance(sanitized, dict):
         raise ValueError("doctor report must remain an object after sanitization")
     return sanitized
