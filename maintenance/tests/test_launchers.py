@@ -342,7 +342,15 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                         [str(launcher), *arguments], env=environment,
                         check=False, capture_output=True,
                     )
-                    self.assertEqual(0, completed.returncode)
+                    self.assertEqual(
+                        0,
+                        completed.returncode,
+                        msg=(
+                            f"stdout={completed.stdout!r}\n"
+                            f"stderr={completed.stderr!r}\n"
+                            f"launcher={launcher.read_text(encoding='utf-8')!r}"
+                        ),
+                    )
                     self.assertEqual(expected, json.loads(output.read_text(encoding="utf-8")))
 
     @unittest.skipIf(os.name == "nt", "launcher Unix é exercitado nos runners POSIX")

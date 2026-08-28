@@ -9568,7 +9568,7 @@ def main(arguments: list[str] | None = None) -> int:
                 destination = Path(name)
             else:
                 destination = Path(options.output)
-            print(write_local_ui(target, destination))
+            print(write_local_ui(target, destination).as_posix())
             return 0
         if options.action == "profile":
             target = options.target.expanduser().resolve()
