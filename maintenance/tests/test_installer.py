@@ -724,6 +724,10 @@ class InstallerTests(unittest.TestCase):
             ), mock.patch.object(
                 installer, "choose_release",
             ), mock.patch.object(
+                installer, "choose_install_content", return_value=None,
+            ), mock.patch.object(
+                installer, "confirm_update_plan", return_value=True,
+            ), mock.patch.object(
                 installer, "macos_game_directory_reset_required", return_value=False,
             ), mock.patch.object(
                 installer, "ensure_macos_ezquake_closed",
@@ -1166,6 +1170,9 @@ class InstallerTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(
                     installer, "choose_install_content", return_value=None,
                 ))
+                stack.enter_context(mock.patch.object(
+                    installer, "confirm_update_plan", return_value=True,
+                ))
                 stack.enter_context(mock.patch.object(installer, "write_install_state"))
                 stack.enter_context(mock.patch.object(
                     installer, "verify_installation",
@@ -1247,6 +1254,9 @@ class InstallerTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(installer, "commit_runtime"))
                 stack.enter_context(mock.patch.object(
                     installer, "choose_install_content", return_value=None,
+                ))
+                stack.enter_context(mock.patch.object(
+                    installer, "confirm_update_plan", return_value=True,
                 ))
                 stack.enter_context(mock.patch.object(installer, "write_install_state"))
                 stack.enter_context(mock.patch.object(installer, "verify_installation"))
@@ -1869,6 +1879,7 @@ class InstallerTests(unittest.TestCase):
                     mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
                     mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
                     mock.patch.object(installer, "choose_install_content", return_value=None),
+                    mock.patch.object(installer, "confirm_update_plan", return_value=True),
                     mock.patch.object(installer, "installed_components", return_value=[]),
                     mock.patch.object(
                         installer, "write_install_state",
@@ -1905,6 +1916,9 @@ class InstallerTests(unittest.TestCase):
     def test_install_rolls_back_new_core_paks_when_later_preparation_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))
+            installer.spec = install_qw.PLATFORMS["linux"]
+            installer.channel = "stable"
+            installer.selected_version = "3.6.10"
             marker = target / "id1/pak-transaction-marker"
             marker.parent.mkdir(parents=True)
             for name in ("pak0.pak", "pak1.pak"):
@@ -1935,6 +1949,8 @@ class InstallerTests(unittest.TestCase):
                 mock.patch.object(installer, "select_platform"),
                 mock.patch.object(installer, "choose_channel"),
                 mock.patch.object(installer, "choose_release"),
+                mock.patch.object(installer, "choose_install_content", return_value=None),
+                mock.patch.object(installer, "confirm_update_plan", return_value=True),
                 mock.patch.object(
                     installer, "macos_game_directory_reset_required", return_value=False,
                 ),
@@ -2160,6 +2176,70 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("Disponível | 1.47+x86qw.123456789", rendered)
         self.assertIn("x86QW Package Manifest com nome longo", rendered)
         self.assertIn("Baixado | 123.5KB/123.5KB", rendered)
+
+    def test_install_plan_is_confirmed_before_any_mutation(self):
+        """A bootstrap cancellation must leave the target untouched."""
+
+        class MutationPathReached(RuntimeError):
+            pass
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            mutation_started = []
+
+            def select_platform(_requested=None):
+                installer.spec = install_qw.PLATFORMS["linux"]
+
+            def choose_channel(_requested=None):
+                installer.channel = "stable"
+
+            def choose_release(_requested=None):
+                installer.selected_version = "3.6.10"
+                installer.app_expected_size = 12_000_000
+
+            installer.select_platform = mock.Mock(side_effect=select_platform)
+            installer.choose_channel = mock.Mock(side_effect=choose_channel)
+            installer.choose_release = mock.Mock(side_effect=choose_release)
+            installer.choose_install_content = mock.Mock(return_value=["ktx"])
+            installer.component_package_record = mock.Mock(return_value={
+                "version": "1.47+x86qw.2",
+                "size": 2_000_000,
+            })
+            installer.macos_game_directory_reset_required = mock.Mock(
+                side_effect=MutationPathReached,
+            )
+
+            output = io.StringIO()
+            with mock.patch.object(
+                install_qw.navigation, "supports_navigation", return_value=False,
+            ), mock.patch("builtins.input", return_value="n"), contextlib.redirect_stdout(output):
+                try:
+                    installer.install(
+                        before_mutation=lambda: mutation_started.append(True),
+                    )
+                except MutationPathReached:
+                    pass
+
+            self.assertEqual([], mutation_started)
+            self.assertIn("==> Plano: instalar 2 pacotes", output.getvalue())
+            self.assertIn("ezQuake Linux x86_64 stable", output.getvalue())
+            self.assertIn("KTX x86QW", output.getvalue())
+            self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
+
+    def test_console_reports_the_active_download_item_and_phase(self):
+        reporter = install_qw.Console()
+        output = io.StringIO()
+        start = getattr(reporter, "download_start", None)
+        self.assertIsNotNone(start)
+        with contextlib.redirect_stdout(output):
+            start("KTX 1.47", size=2_000_000)
+            reporter.download_result("KTX 1.47", size=2_000_000, status="Verificado")
+
+        rendered = output.getvalue()
+        self.assertIn("KTX 1.47", rendered)
+        self.assertIn("Baixando", rendered)
+        self.assertIn("0B/2.0MB", rendered)
+        self.assertIn("Verificado", rendered)
 
     def test_nquake_startup_state_reports_pending_and_loaded(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3264,6 +3344,13 @@ class InstallerTests(unittest.TestCase):
         with mock.patch("builtins.input", side_effect=EOFError):
             with self.assertRaisesRegex(install_qw.InstallerError, "use --yes"):
                 install_qw.Installer.confirm_update_plan("update", assume_yes=False)
+
+    def test_noninteractive_install_explains_the_install_contract(self):
+        with mock.patch("builtins.input", side_effect=EOFError):
+            with self.assertRaisesRegex(
+                install_qw.InstallerError, "install --non-interactive",
+            ):
+                install_qw.Installer.confirm_update_plan("install", assume_yes=False)
 
     def test_update_confirmation_accepts_homebrew_y_prompt(self):
         with mock.patch("builtins.input", return_value="y") as prompt:

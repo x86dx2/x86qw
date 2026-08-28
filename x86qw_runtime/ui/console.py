@@ -46,6 +46,7 @@ class Console:
         self.verbose = False
         self.color = False
         self._version = version
+        self._download_label: str | None = None
 
     def configure(self, *, verbose: bool, no_color: bool) -> None:
         self.verbose = verbose
@@ -85,11 +86,14 @@ class Console:
 
     def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
         noun = "pacote" if len(rows) == 1 else "pacotes"
-        adjective = "desatualizado" if len(rows) == 1 else "desatualizados"
         action_label = {
-            "update": "atualizar", "upgrade": "incorporar", "repair": "reparar",
+            "install": "instalar", "update": "atualizar",
+            "upgrade": "incorporar", "repair": "reparar",
         }[action]
-        self.heading(f"Plano: {action_label} {len(rows)} {noun} {adjective}")
+        suffix = "" if action == "install" else (
+            " desatualizado" if len(rows) == 1 else " desatualizados"
+        )
+        self.heading(f"Plano: {action_label} {len(rows)} {noun}{suffix}")
         names = [row.item for row in rows]
         installed = [row.installed for row in rows]
         available = [row.available for row in rows]
@@ -120,6 +124,7 @@ class Console:
     def download_result(
         self, label: str, *, size: int, status: str = "Baixado",
     ) -> None:
+        self._download_label = None
         amount = format_bytes_compact(size)
         check = self.paint("✔︎", "32")
         line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
@@ -130,9 +135,16 @@ class Console:
             print(f"{check} {label}", flush=True)
             print(f"    {status} | {amount}/{amount}", flush=True)
 
+    def download_start(self, label: str, *, size: int | None) -> None:
+        self._download_label = label
+        total = format_bytes_compact(size) if size is not None else "?"
+        marker = self.paint("⠋", "36")
+        print(f"{marker} {label:<48} {'Baixando':>10}  {'0B':>9}/{total}", flush=True)
+
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
         if not sys.stdout.isatty():
             return
+        label = f"{self._download_label}  " if self._download_label else ""
         if total:
             width = 24
             ratio = min(received / total, 1)
@@ -141,7 +153,7 @@ class Console:
             status = f"[{bar}] {ratio:6.1%}  {format_bytes(received)} / {format_bytes(total)}"
         else:
             status = f"Recebidos {format_bytes(received)}"
-        print(f"\r       {status}", end="\n" if done else "", flush=True)
+        print(f"\r       {label}{status}", end="\n" if done else "", flush=True)
 
 
 __all__ = (

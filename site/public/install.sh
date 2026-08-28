@@ -258,6 +258,7 @@ PY
 
 downloaded=0
 budget_exhausted=0
+printf '==> Baixando o instalador x86QW %s\n' "$INSTALLER_VERSION"
 for url in "${INSTALLER_URLS[@]}"; do
   attempt=1
   while (( attempt <= DOWNLOAD_ATTEMPTS )); do
@@ -317,6 +318,8 @@ for url in "${INSTALLER_URLS[@]}"; do
 done
 [[ "$budget_exhausted" == 0 ]] || fail "o prazo total para baixar o instalador foi excedido."
 [[ "$downloaded" == 1 ]] || fail "nenhum mirror entregou um instalador íntegro."
+printf '✔︎ Instalador x86QW %s  Baixado  %sB/%sB\n' \
+  "$INSTALLER_VERSION" "$INSTALLER_SIZE" "$INSTALLER_SIZE"
 
 helper_root="$work_dir/archive-helper"
 printf '%s' "$ARCHIVE_HELPER_BASE64" | TMPDIR="$work_dir" "$python_runtime" -c '
@@ -337,6 +340,7 @@ os.chmod(module, 0o600)
 ' "$helper_root"
 
 extracted="$work_dir/extracted"
+printf '==> Extraindo e verificando o instalador x86QW\n'
 prefix="x86qw-installer-$INSTALLER_VERSION"
 required="$prefix/x86qw.pyz"
 shell_executable="$prefix/x86qw.sh"
@@ -355,6 +359,7 @@ runpy.run_module("x86qw_runtime.io.archive", run_name="__main__")
   --executable "$legacy_executable"
 
 root="$extracted/x86qw-installer-$INSTALLER_VERSION"
+printf '==> Iniciando a instalação x86QW\n'
 if { exec 3</dev/tty; } 2>/dev/null; then
   "$python_runtime" "$root/x86qw.pyz" --online-only "$@" <&3
 else
