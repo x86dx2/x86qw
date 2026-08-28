@@ -1347,6 +1347,34 @@ class ModernComponentTests(unittest.TestCase):
                     player.resolve_client_ruleset(None, choose_interactively=True),
                 )
 
+    def test_back_from_first_ruleset_choice_leaves_play_without_interrupting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            with mock.patch.object(player, "choose_client_ruleset", return_value=None):
+                with mock.patch.object(player, "save_client_ruleset") as save:
+                    with mock.patch.object(player, "check_paks") as paks:
+                        player.play_local(choose_ruleset_interactively=True)
+            save.assert_not_called()
+            paks.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            with mock.patch.object(play_qw, "Player", return_value=player):
+                with mock.patch.object(player, "validate_target"):
+                    with mock.patch.object(player, "reject_target_symlinks"):
+                        with mock.patch.object(
+                            player, "choose_client_ruleset", return_value=None,
+                        ):
+                            with mock.patch.object(player, "save_client_ruleset") as save:
+                                with contextlib.redirect_stdout(io.StringIO()):
+                                    self.assertEqual(
+                                        0,
+                                        play_qw.main([
+                                            "--target", str(target), "--configure-ruleset",
+                                        ]),
+                                    )
+            save.assert_not_called()
+
     def test_assisted_ruleset_profile_is_packaged_and_runs_before_personal_configs(self):
         inventory = json.loads(
             (ROOT / "maintenance/inventory/components.json").read_text(encoding="utf-8")
@@ -5950,6 +5978,55 @@ class ModernComponentTests(unittest.TestCase):
                 installer.browse_hub()
             self.assertEqual(2, choose_runtime.call_count)
             launch.assert_called_once_with(runtime, ["+join", "server.example:27500"])
+
+    def test_hub_action_left_returns_to_server_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            server = {
+                "address": "server.example:27500", "mode": "duel", "players": [],
+                "settings": {"map": "dm6", "hostname": "Servidor Teste"},
+            }
+            runtime = target / "client"
+            with mock.patch.object(
+                installer, "hub_servers", return_value=[server],
+            ), mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=("0", None, "0", "join"),
+            ) as select, mock.patch.object(
+                installer, "choose_host_runtime",
+                return_value=("ezQuake stable", runtime),
+            ), mock.patch.object(
+                install_qw.navigation, "confirm", return_value=False,
+            ), mock.patch.object(installer, "launch_runtime") as launch:
+                installer.browse_hub()
+            self.assertEqual(4, select.call_count)
+            self.assertEqual(
+                "Servidores QuakeWorld ativos",
+                select.call_args_list[2].args[0],
+            )
+            launch.assert_not_called()
+
+    def test_hub_client_left_returns_to_action_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            server = {
+                "address": "server.example:27500", "mode": "duel", "players": [],
+                "settings": {"map": "dm6", "hostname": "Servidor Teste"},
+            }
+            runtime = target / "client"
+            with mock.patch.object(
+                installer, "hub_servers", return_value=[server],
+            ), mock.patch.object(
+                install_qw.navigation, "select_one",
+                side_effect=("0", "join", "observe"),
+            ), mock.patch.object(
+                installer, "choose_host_runtime",
+                side_effect=(None, ("ezQuake stable", runtime)),
+            ), mock.patch.object(
+                install_qw.navigation, "confirm", return_value=True,
+            ), mock.patch.object(installer, "launch_runtime") as launch:
+                installer.browse_hub()
+            launch.assert_called_once_with(runtime, ["+observe", "server.example:27500"])
 
     def test_uninstall_removes_component_receipt_when_managed_file_is_missing(self):
         with tempfile.TemporaryDirectory() as temporary:
