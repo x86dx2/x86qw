@@ -170,10 +170,11 @@ bootstraps mantêm projeções mínimas e isoladas:
   seguido de `--proto '=https' --proto-redir '=https'`, timeout de conexão,
   orçamento único para retries e mirrors, limite durante a recepção e validação
   de `Content-Length`, tamanho e SHA-256;
-- o comando público Unix grava no máximo 262145 bytes sob `umask 077`, usa
-  `pipefail` e só executa o arquivo após confirmar status e tamanho máximo de
-  262144 bytes; prefixo produzido por pipeline com falha e stream excessivo sem
-  `Content-Length` são rejeitados;
+- a fronteira de truncamento do bootstrap Unix é estrutural no script, não no
+  chamador: o corpo vive em `x86qw_install_main` e só corre na última linha
+  `x86qw_install_main "$@"`; um prefixo a 25%, 50%, 75% ou 99% falha na
+  análise e não executa o instalador. O comando público é
+  `curl -fsS https://qw.x86.com.br/install.sh | bash`;
 - PowerShell incorpora um downloader Python com HTTPS, limite, deadline,
   `Retry-After`, temporário privado no POSIX e promoção atômica;
 - no PowerShell, timeouts de conexão e tentativa usam o orçamento completo

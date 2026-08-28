@@ -32,7 +32,7 @@ existência do bootstrap.
 Jogadores não precisam clonar o repositório. Em macOS e Linux, execute:
 
 ```sh
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw
+curl -fsS https://qw.x86.com.br/install.sh | bash
 ```
 
 No Windows PowerShell:
@@ -46,14 +46,11 @@ fim da instalação. O código devolvido pelo instalador Python fica disponível
 `$LASTEXITCODE`; em caso de falha, o bootstrap também imprime um erro com esse
 código antes de devolver o controle ao terminal.
 
-Ambos os comandos iniciais bloqueiam downgrade de HTTPS, têm prazo de 60
-segundos e recusam scripts acima de 256 KiB antes de executá-los. No Windows,
-o buffer limitado do `HttpClient` substitui o fluxo ilimitado `irm | iex`.
-No Unix, `curl --disable` ignora `.curlrc`; `pipefail` e `head` limitam a escrita
-a 262145 bytes dentro de um diretório temporário criado sob `umask 077`. O
-tamanho e o status do pipeline são validados antes de chamar Bash, que nunca
-executa um prefixo produzido por pipeline com falha nem uma resposta sem
-`Content-Length` que exceda o limite.
+O comando Windows recusa scripts acima de 256 KiB antes de executá-los: o
+buffer limitado do `HttpClient` substitui o fluxo ilimitado `irm | iex`. No
+Unix, o corpo do bootstrap só corre na última linha `x86qw_install_main "$@"`;
+um download truncado falha na análise e não executa o instalador. O comando
+público é `curl -fsS https://qw.x86.com.br/install.sh | bash`.
 
 Na `0.7.1`, o corpo executa em um escopo de script próprio dentro da
 mesma sessão PowerShell. Isso não cria outra janela nem outro processo: apenas
@@ -210,7 +207,7 @@ Para preparar um cliente diferente do host, informe explicitamente
 
 ```sh
 ./dist/installer/bin/manager.py install --platform windows
-/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw --platform windows
+curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
 No PowerShell, o equivalente para preparar Linux a partir do Windows é:

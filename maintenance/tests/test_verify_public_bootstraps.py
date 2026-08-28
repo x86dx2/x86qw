@@ -35,6 +35,40 @@ class VerifyPublicBootstrapsTests(unittest.TestCase):
                 )
             self.assertEqual("verified-public-bootstraps", result["status"])
 
+    def test_projected_bootstraps_are_compared_instead_of_the_candidate_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "site/public").mkdir(parents=True)
+            projected = root / "current-site"
+            projected.mkdir()
+            (root / "site/public/install.sh").write_bytes(b"candidate-shell")
+            (root / "site/public/install.ps1").write_bytes(b"candidate-powershell")
+            (projected / "install.sh").write_bytes(b"projected-shell")
+            (projected / "install.ps1").write_bytes(b"projected-powershell")
+
+            def fake_download(contract):
+                payload = (
+                    b"projected-shell"
+                    if contract.url.endswith("install.sh")
+                    else b"projected-powershell"
+                )
+                return mock.Mock(data=payload)
+
+            with mock.patch(
+                "maintenance.tools.verify_public_bootstraps.download",
+                side_effect=fake_download,
+            ):
+                result = verify_public_bootstraps(
+                    base_url="https://public.invalid/",
+                    candidate=root,
+                    bootstrap_dir=projected,
+                )
+            self.assertEqual("verified-public-bootstraps", result["status"])
+            self.assertEqual(
+                "projected-shell",
+                (projected / "install.sh").read_text(),
+            )
+
     def test_one_public_bootstrap_divergence_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

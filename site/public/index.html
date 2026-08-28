@@ -54,7 +54,7 @@
 
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
-        <p class="kicker">x86QW <span class="release-product-version">1.0.4</span> · validado no Apple M3 · 0.7.13 histórica</p>
+        <p class="kicker">x86QW <span class="release-product-version">1.0.4</span> · validado no Apple M3</p>
         <h1 id="hero-title">Cinco jogos. Um comando. Catálogo com hash.</h1>
         <p class="hero-lead">KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 usam o mesmo ezQuake, o mesmo MVDSV e um menu em português. Você escolhe o que entra no disco; cada pacote traz origem, licença e SHA-256.</p>
         <div class="hero-actions">
@@ -138,14 +138,14 @@
             <p class="install-kicker">Distribuição em validação individual</p>
             <h2 id="install-title">Um comando. Nenhum clone.</h2>
             <p>A versão <span class="release-product-version">1.0.4</span> foi validada para uso do próprio mantenedor em um Mac Apple M3 e ainda não oferece suporte público geral. A classificação técnica é <code>owner-only</code>; a audiência <code>external-public</code> ainda não foi autorizada.</p>
-            <p class="install-requirements"><strong>Antes de começar:</strong> instale Python 3.10 ou mais recente. macOS e Linux também precisam de <code>curl</code>. O comando exige HTTPS e limita o download do bootstrap antes de executá-lo.</p>
+            <p class="install-requirements"><strong>Antes de começar:</strong> instale Python 3.10 ou mais recente. macOS e Linux também precisam de <code>curl</code>. O comando Unix usa HTTPS; um bootstrap truncado não executa o instalador.</p>
           </div>
           <div class="install-command" aria-label="Comandos de instalação">
             <div class="install-command-row">
               <p>macOS / Linux</p>
               <button class="install-command-control" type="button" data-copy-install data-copy-target="install-unix-command" aria-label="Copiar comando para macOS e Linux">
                 <span class="command-prompt" aria-hidden="true">$</span>
-                <code id="install-unix-command" data-install-command>/bin/bash -c 'umask 077; d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2&gt;/dev/null || :; }; abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" --connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL https://qw.x86.com.br/install.sh | head -c 262145 &gt;"$f"; s=$?; n=$(wc -c &lt;"$f") || exit 1; if [ "$n" -gt 262144 ]; then printf "%s\n" "x86QW: bootstrap excedeu 262144 bytes." &gt;&amp;2; exit 1; fi; [ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw</code>
+                <code id="install-unix-command" data-install-command>curl -fsS https://qw.x86.com.br/install.sh | bash</code>
                 <span class="install-copy-icon" aria-hidden="true">
                   <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
                   <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>

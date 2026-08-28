@@ -264,6 +264,7 @@ jobs:
             --source site/public \
             --catalog candidate/catalog.json \
             --product candidate/product.json \
+            --bootstrap-source dist/installer/bin \
             --output release-work/current-site
           now="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"))')"
           python3 maintenance/tools/project_release_truth.py \
@@ -287,6 +288,11 @@ jobs:
               Path("release-work/current-site/index.html"),
               source_projection / "index.html",
           )
+          for name in ("install.sh", "install.ps1"):
+              shutil.copyfile(
+                  Path("release-work/current-site") / name,
+                  source_projection / name,
+              )
           headers = source_projection / "_headers"
           headers.write_text(
               headers.read_text(encoding="utf-8")
@@ -329,7 +335,9 @@ jobs:
           python3 maintenance/tools/verify_public_tuf.py \
             --root maintenance/trust/root.json \
             --catalog candidate/catalog.json
-          python3 maintenance/tools/verify_public_bootstraps.py --candidate candidate
+          python3 maintenance/tools/verify_public_bootstraps.py \
+            --candidate candidate \
+            --bootstrap-dir release-work/current-site
           python3 maintenance/tools/verify_public_product.py --candidate candidate
           for attempt in 1 2 3 4 5; do
             if python3 - <<'PY'
