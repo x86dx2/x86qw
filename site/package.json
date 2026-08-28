@@ -9,6 +9,6 @@
     "test": "node --test --test-concurrency=1 tests/*.test.mjs"
   },
   "devDependencies": {
-    "wrangler": "4.114.0"
+    "wrangler": "4.125.0"
   }
 }
