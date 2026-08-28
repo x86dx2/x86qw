@@ -207,7 +207,7 @@ class DistributionTests(unittest.TestCase):
             {path.name for path in (ktx_x86qw / "source").iterdir()},
         )
         self.assertEqual(
-            {"names.json", "names.user.json.example"},
+            {"names.json", "names.one-piece.json", "names.user.json.example"},
             {
                 path.name
                 for path in (ktx_x86qw / "catalog/frogbots").iterdir()

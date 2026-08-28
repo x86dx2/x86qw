@@ -443,6 +443,9 @@ class InstallerTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
             catalog = json.loads(application.read("_x86qw/ktx-modes.json"))
             bot_names = json.loads(application.read("_x86qw/ktx-frogbot-names.json"))
+            one_piece = json.loads(
+                application.read("_x86qw/ktx-frogbot-names-one-piece.json")
+            )
             self.assertNotIn("session_control.py", application.namelist())
             self.assertIn("python_runtime.py", application.namelist())
             self.assertIn("x86qw_runtime/io/downloader.py", application.namelist())
@@ -458,8 +461,10 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("ktx", catalog["game"])
         self.assertEqual("duel", catalog["modes"][0]["id"])
         self.assertIn("race", [mode["id"] for mode in catalog["modes"]])
-        self.assertEqual("one-piece", bot_names["theme"])
-        luffy = bot_names["groups"][0]["characters"][0]
+        self.assertEqual("x86qw", bot_names["theme"])
+        self.assertEqual("dm6", bot_names["groups"][0]["characters"][0]["name"])
+        self.assertEqual("one-piece", one_piece["theme"])
+        luffy = one_piece["groups"][0]["characters"][0]
         self.assertEqual("Luffy", luffy["name"])
         self.assertEqual({"name"}, set(luffy))
 

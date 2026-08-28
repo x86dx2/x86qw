@@ -1391,6 +1391,7 @@ def host_spec(
                 ("bot_names", {
                     "default": "KTX Default",
                     "x86qw": "x86QW aleatório",
+                    "one-piece": "One Piece (opcional)",
                     "personal": "lista pessoal",
                 }.get(ktx_options.bot_names_profile, ktx_options.bot_names_profile)),
             ))

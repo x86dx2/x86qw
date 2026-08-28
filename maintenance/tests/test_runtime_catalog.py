@@ -229,6 +229,7 @@ class RuntimeCatalogTests(unittest.TestCase):
                 "_x86qw/runtimes.json", "_x86qw/games.json",
                 "_x86qw/capabilities.json",
                 "_x86qw/ktx-modes.json", "_x86qw/ktx-frogbot-names.json",
+                "_x86qw/ktx-frogbot-names-one-piece.json",
             ):
                 self.assertIn(name, names)
             self.assertNotIn("_x86qw/compatibility.json", names)

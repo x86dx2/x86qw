@@ -1,25 +1,27 @@
 # Nomes dos Frogbots
 
-O x86QW oferece três perfis de identidade para os Frogbots do KTX. O perfil é
+O x86QW oferece quatro perfis de identidade para os Frogbots do KTX. O perfil é
 escolhido no menu ou com `--bot-names`; nomes são dados declarativos e
 não alteram regras, atributos ou inteligência dos bots.
 
 | Perfil | Comportamento |
 |---|---|
 | `default` — KTX Default | Não define identidade; o KTX conserva nomes e cores originais. |
-| `x86qw` — x86QW aleatório | Embaralha uma vez por lançamento os nomes de personagens One Piece. |
+| `x86qw` — x86QW aleatório | Embaralha uma vez por lançamento mapas e modos da distribuição. |
+| `one-piece` — One Piece (opcional) | Embaralha uma vez por lançamento os nomes de personagens One Piece. |
 | `personal` | Usa, na ordem declarada, os nomes da lista pessoal da instalação. |
 
 Exemplos:
 
 ```sh
 ./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-names x86qw
+./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-names one-piece
 ./x86qw.sh play ktx --mode 2on2 --map dm6 --bots 2 --bot-names personal
 ./x86qw.sh host ktx --mode 2on2 --map dm6 --bots 2 --bot-names x86qw
 ```
 
-O menu interativo destaca `x86QW aleatório` inicialmente; `KTX Default` continua
-disponível para usar somente as identidades originais. Na CLI, `default` permanece o
+O menu interativo destaca `KTX Default` inicialmente. `x86QW aleatório` e
+`One Piece (opcional)` continuam disponíveis. Na CLI, `default` permanece o
 padrão por compatibilidade, portanto uma execução que não informe `--bot-names`
 fica sem customização.
 
@@ -29,6 +31,19 @@ A fonte canônica fica em:
 
 ```text
 dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json
+```
+
+Os dez primeiros nomes são mapas clássicos da distribuição: dm6, dm4, dm2, dm3,
+aerowalk, e1m2, schloss, povdmm4, death32c e cmt3. Os nomes seguintes reúnem
+outros mapas embarcados e rótulos dos modos KTX. A seleção é o vocabulário do
+próprio produto, não uma lista de personagens de terceiros.
+
+## Lista One Piece (opcional)
+
+A fonte canônica fica em:
+
+```text
+dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json
 ```
 
 Os dez primeiros nomes são os integrantes do Bando do Chapéu de Palha:
