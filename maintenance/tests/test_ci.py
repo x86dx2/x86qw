@@ -331,7 +331,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "native-m3.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
-                "rc-soak.yml", "site-projection-repair.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "tuf-timestamp-publish.yml", "tuf-timestamp-renewal.yml", "validate.yml",
+                "rc-soak.yml", "site-projection-repair.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "tuf-snapshot-publish.yml", "tuf-snapshot-renewal.yml", "tuf-timestamp-publish.yml", "tuf-timestamp-renewal.yml", "validate.yml",
             },
             {path.name for path in workflow_files},
         )
@@ -374,8 +374,15 @@ class ContinuousIntegrationTests(unittest.TestCase):
         timestamp = (ROOT / ".github/workflows/tuf-timestamp-publish.yml").read_text(
             encoding="utf-8"
         )
-        for source in (projection, timestamp):
-            with self.subTest(workflow="projection" if source is projection else "timestamp"):
+        snapshot = (ROOT / ".github/workflows/tuf-snapshot-publish.yml").read_text(
+            encoding="utf-8"
+        )
+        for name, source in (
+            ("projection", projection),
+            ("timestamp", timestamp),
+            ("snapshot", snapshot),
+        ):
+            with self.subTest(workflow=name):
                 self.assertIn("maintenance/tools/verify_release_mirrors.py", source)
                 self.assertIn("--expected-release", source)
         self.assertIn("maintenance/tools/project_release_truth.py", projection)
