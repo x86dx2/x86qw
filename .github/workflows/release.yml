@@ -288,6 +288,7 @@ jobs:
             --release-title "$RELEASE_TITLE" \
             --generated-at "$CANDIDATE_GENERATED_AT" \
             --release-notes "$RELEASE_NOTES" \
+            --reuse-existing-current \
             --product-source site/public/api/v1/product.json \
             --product-output release-work/input/product.json
           python3 maintenance/tools/render_release_site.py \
