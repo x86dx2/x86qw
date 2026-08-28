@@ -2065,9 +2065,87 @@ class Installer:
             "Instalar também os componentes x86QW?",
             breadcrumb="x86QW › Instalação › Conteúdo",
             description="KTX, mapas, recursos visuais e componentes do perfil escolhido.",
-            default=False,
+            default=True,
             invalid_message="Resposta inválida. Digite s para sim ou n para não.",
         )
+
+    def confirm_client_only_install(self) -> bool:
+        return bool(navigation.confirm(
+            "Instalar somente o cliente ezQuake?",
+            breadcrumb="x86QW › Instalação › Avançado › Somente cliente",
+            description=(
+                "Esta instalação não será jogável. Jogar recusará até você "
+                "adicionar ao menos KTX."
+            ),
+            default=False,
+            invalid_message="Resposta inválida. Digite s para sim ou n para não.",
+        ))
+
+    def choose_install_content(self) -> list[str] | None:
+        if self._non_interactive_install:
+            return self.choose_components()
+        path = navigation.select_one(
+            "Qual conteúdo deseja instalar?",
+            (
+                navigation.MenuOption(
+                    "recommended",
+                    "Recomendado",
+                    "KTX, mapas e configuração para jogar agora",
+                ),
+                navigation.MenuOption(
+                    "advanced",
+                    "Avançado",
+                    "essencial, completo, personalizado ou somente cliente",
+                ),
+            ),
+            breadcrumb="x86QW › Instalação › Conteúdo",
+            default=0,
+            invalid_message="Opção inválida. Digite 1 para recomendado ou 2 para avançado.",
+        )
+        if path is None:
+            raise InstallerError("Nenhum conteúdo foi selecionado.")
+        if path == "recommended":
+            return self.select_components_profile("recommended")
+        while True:
+            choice = navigation.select_one(
+                "Opções avançadas de conteúdo",
+                (
+                    navigation.MenuOption(
+                        "essential",
+                        "Essencial",
+                        "configuração, interface principal e KTX",
+                    ),
+                    navigation.MenuOption(
+                        "complete",
+                        "Completo",
+                        f"todos os {len(self.components)} componentes atuais",
+                    ),
+                    navigation.MenuOption(
+                        "custom",
+                        "Personalizado",
+                        "escolha componentes individualmente",
+                    ),
+                    navigation.MenuOption(
+                        "client-only",
+                        "Somente cliente",
+                        "ezQuake sem mods; Jogar recusa até adicionar KTX",
+                    ),
+                ),
+                breadcrumb="x86QW › Instalação › Avançado",
+                invalid_message="Opção inválida. Digite 1 a 4.",
+            )
+            if choice is None:
+                raise InstallerError("Nenhum conteúdo foi selecionado.")
+            if choice == "client-only":
+                if self.confirm_client_only_install():
+                    console.warning(
+                        "Somente cliente: Jogar recusará até instalar ao menos KTX."
+                    )
+                    self.selected_component_profile = "none"
+                    self.requested_components = []
+                    return None
+                continue
+            return self._resolve_component_selection(choice)
 
     def catalog_records(
         self,
@@ -4393,6 +4471,9 @@ class Installer:
             )
         if profile is None:
             raise InstallerError("Nenhum perfil foi selecionado.")
+        return self._resolve_component_selection(profile)
+
+    def _resolve_component_selection(self, profile: str) -> list[str]:
         if profile != "custom":
             selected = list(self.component_catalog["profiles"][profile])
             requested: list[str] = []
@@ -7599,10 +7680,12 @@ class Installer:
                     )
                 selected = self.select_components_profile(native_profile)
                 installation_results.extend(self.install_component_phase(selected=selected))
-            elif self.confirm_components():
-                installation_results.extend(self.install_component_phase())
+            elif (selected := self.choose_install_content()) is not None:
+                installation_results.extend(self.install_component_phase(selected=selected))
             else:
-                console.info("Dados nQuake não solicitados; esta etapa foi ignorada.")
+                console.warning(
+                    "Somente cliente: Jogar recusará até instalar ao menos KTX."
+                )
                 self.write_install_state(
                     "none", [], mutation_results=installation_results,
                 )
@@ -7628,10 +7711,15 @@ class Installer:
         print(f"  Canal:   {self.channel}")
         print(f"  Versão:  {self.selected_version}")
         print(f"  Destino: {self.target}")
+        launcher = public_launcher_name()
+        play_command = f"{launcher} play"
         if self.installed_components():
             console.success("Instalação completa e pronta para uso.")
+            print(f"  Jogar agora: {play_command}")
         else:
             console.success(f"ezQuake pronto em {self.target / self.spec.runtime(self.channel)}")
+            console.warning("Somente cliente: Jogar recusará até instalar ao menos KTX.")
+            print(f"  Jogar agora fica indisponível até adicionar componentes com {launcher}.")
 
     @staticmethod
     def release_is_newer(candidate: str, installed: str, channel: str) -> bool:

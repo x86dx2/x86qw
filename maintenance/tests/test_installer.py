@@ -1159,7 +1159,7 @@ class InstallerTests(unittest.TestCase):
                     installer, "reset_macos_game_directory", side_effect=reset_preferences,
                 ))
                 stack.enter_context(mock.patch.object(
-                    installer, "confirm_components", return_value=False,
+                    installer, "choose_install_content", return_value=None,
                 ))
                 stack.enter_context(mock.patch.object(installer, "write_install_state"))
                 stack.enter_context(mock.patch.object(
@@ -1241,7 +1241,7 @@ class InstallerTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(installer, "ensure_metadata_directory"))
                 stack.enter_context(mock.patch.object(installer, "commit_runtime"))
                 stack.enter_context(mock.patch.object(
-                    installer, "confirm_components", return_value=False,
+                    installer, "choose_install_content", return_value=None,
                 ))
                 stack.enter_context(mock.patch.object(installer, "write_install_state"))
                 stack.enter_context(mock.patch.object(installer, "verify_installation"))
@@ -1863,7 +1863,7 @@ class InstallerTests(unittest.TestCase):
                     mock.patch.object(installer, "prepare_cache"),
                     mock.patch.object(installer, "ensure_archive", return_value=target / "archive"),
                     mock.patch.object(installer, "prepare_runtime", side_effect=prepare_runtime),
-                    mock.patch.object(installer, "confirm_components", return_value=False),
+                    mock.patch.object(installer, "choose_install_content", return_value=None),
                     mock.patch.object(installer, "installed_components", return_value=[]),
                     mock.patch.object(
                         installer, "write_install_state",
@@ -5120,16 +5120,43 @@ class InstallerTests(unittest.TestCase):
             source = ROOT / "dist" / installer.app_distribution_path
             self.assertEqual(source.read_bytes(), artifact.read_bytes())
 
-    def test_nquake_confirmation_defaults_to_no_and_reprompts_invalid_answer(self):
+    def test_recommended_content_is_the_default_install_path(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
-            with mock.patch("builtins.input", return_value=""):
-                self.assertFalse(installer.confirm_components())
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(
+                    installer, "select_components_profile", return_value=["ktx"],
+                ) as selected:
+                    with mock.patch("builtins.input", return_value=""):
+                        self.assertEqual(["ktx"], installer.choose_install_content())
+            selected.assert_called_once_with("recommended")
+
+    def test_client_only_requires_advanced_confirmation_of_the_consequence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                with mock.patch("builtins.input", side_effect=["talvez", "sim"]):
-                    self.assertTrue(installer.confirm_components())
-            self.assertIn("Resposta inválida. Digite s para sim ou n para não.", output.getvalue())
+                with mock.patch("builtins.input", side_effect=["2", "4", "s"]):
+                    self.assertIsNone(installer.choose_install_content())
+            self.assertEqual("none", installer.selected_component_profile)
+            self.assertIn("não será jogável", output.getvalue())
+            self.assertIn("Somente cliente: Jogar recusará até instalar ao menos KTX.", output.getvalue())
+
+    def test_invalid_content_choice_reprompts_then_keeps_the_playable_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                with mock.patch.object(
+                    installer, "select_components_profile", return_value=["ktx"],
+                ) as selected:
+                    with mock.patch("builtins.input", side_effect=["talvez", ""]):
+                        self.assertEqual(["ktx"], installer.choose_install_content())
+            selected.assert_called_once_with("recommended")
+            self.assertIn(
+                "Opção inválida. Digite 1 para recomendado ou 2 para avançado.",
+                output.getvalue(),
+            )
 
     def test_human_readable_sizes(self):
         self.assertEqual("0 B", install_qw.format_bytes(0))
