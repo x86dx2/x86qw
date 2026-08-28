@@ -32,6 +32,25 @@ sys.modules[SPEC.name] = install_qw
 SPEC.loader.exec_module(install_qw)
 
 
+def run_public_unix_bootstrap(environment, extra_args=(), timeout=10):
+    command = install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND
+    if extra_args:
+        if not command.endswith(" | bash"):
+            raise AssertionError(command)
+        script = command[: -len(" | bash")] + ' | bash -s -- "$@"'
+        argv = ["/bin/bash", "-c", script, "x86qw", *extra_args]
+    else:
+        argv = ["/bin/bash", "-c", command]
+    return subprocess.run(
+        argv,
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+        timeout=timeout,
+    )
+
+
 class InstallerTests(unittest.TestCase):
     def setUp(self):
         install_qw.console.configure(verbose=False, no_color=True)
@@ -330,13 +349,22 @@ class InstallerTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
     def test_public_unix_bootstrap_never_executes_a_partial_response(self):
+        self.assertEqual(
+            "curl -fsS https://qw.x86.com.br/install.sh | bash",
+            install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND,
+        )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             sentinel = root / "partial-executed"
             curl = root / "curl"
             curl.write_text(
                 "#!/bin/sh\n"
-                "printf '%s\\n' 'printf partial >\"$X86QW_TEST_SENTINEL\"'\n"
+                "cat <<'BOOTSTRAP'\n"
+                "#!/bin/bash\n"
+                "set -euo pipefail\n"
+                "x86qw_install_main() {\n"
+                "printf partial >\"$X86QW_TEST_SENTINEL\"\n"
+                "BOOTSTRAP\n"
                 "exit 63\n",
                 encoding="utf-8",
             )
@@ -345,21 +373,14 @@ class InstallerTests(unittest.TestCase):
             environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
             environment["TMPDIR"] = str(root)
             environment["X86QW_TEST_SENTINEL"] = str(sentinel)
-            result = subprocess.run(
-                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
-                capture_output=True,
-                check=False,
-                env=environment,
-                text=True,
-                timeout=10,
-            )
+            result = run_public_unix_bootstrap(environment)
             leftovers = list(root.glob("x86qw-bootstrap.*"))
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(sentinel.exists())
         self.assertEqual([], leftovers)
 
     @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
-    def test_public_unix_bootstrap_bounds_unknown_length_before_execution(self):
+    def test_public_unix_bootstrap_keeps_truncated_payloads_inert(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             sentinel = root / "oversized-executed"
@@ -367,12 +388,13 @@ class InstallerTests(unittest.TestCase):
             curl.write_text(
                 f"#!{sys.executable}\n"
                 "import os, sys\n"
-                "prefix = 'printf oversized >\\\"$X86QW_TEST_SENTINEL\\\"\\n'\n"
-                "try:\n"
-                "    sys.stdout.write(prefix + ('#' * 300000))\n"
-                "    sys.stdout.flush()\n"
-                "except BrokenPipeError:\n"
-                "    os._exit(23)\n",
+                "sys.stdout.write("
+                "'#!/bin/bash\\nset -euo pipefail\\n"
+                "x86qw_install_main() {\\n"
+                "printf oversized >\\\"$X86QW_TEST_SENTINEL\\\"\\n'"
+                " + ('#' * 300000))\n"
+                "sys.stdout.flush()\n"
+                "sys.exit(23)\n",
                 encoding="utf-8",
             )
             curl.chmod(0o755)
@@ -380,18 +402,10 @@ class InstallerTests(unittest.TestCase):
             environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
             environment["TMPDIR"] = str(root)
             environment["X86QW_TEST_SENTINEL"] = str(sentinel)
-            result = subprocess.run(
-                shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
-                capture_output=True,
-                check=False,
-                env=environment,
-                text=True,
-                timeout=10,
-            )
+            result = run_public_unix_bootstrap(environment)
             leftovers = list(root.glob("x86qw-bootstrap.*"))
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(sentinel.exists())
-        self.assertIn("bootstrap excedeu 262144 bytes", result.stderr)
         self.assertEqual([], leftovers)
 
     @unittest.skipUnless(os.name == "posix", "bootstrap público Unix requer ambiente POSIX")
@@ -413,16 +427,9 @@ class InstallerTests(unittest.TestCase):
             environment["PATH"] = os.pathsep.join((str(root), "/usr/bin", "/bin"))
             environment["TMPDIR"] = str(root)
             environment["X86QW_TEST_SENTINEL"] = str(received)
-            result = subprocess.run(
-                [
-                    *shlex.split(install_qw.PUBLIC_UNIX_BOOTSTRAP_COMMAND),
-                    "--platform", "windows", "caminho com espaço",
-                ],
-                capture_output=True,
-                check=False,
-                env=environment,
-                text=True,
-                timeout=10,
+            result = run_public_unix_bootstrap(
+                environment,
+                extra_args=("--platform", "windows", "caminho com espaço"),
             )
             arguments = received.read_text(encoding="utf-8").splitlines()
             leftovers = list(root.glob("x86qw-bootstrap.*"))

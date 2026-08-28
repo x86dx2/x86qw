@@ -221,16 +221,7 @@ CATALOG_TIMEOUT = 10.0
 CATALOG_MAX_BYTES = 2 * 1024 * 1024
 HUB_MAX_BYTES = 1024 * 1024
 PUBLIC_UNIX_BOOTSTRAP_COMMAND = (
-    """/bin/bash -c 'umask 077; """
-    """d=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXXXX") || exit 1; """
-    """f="$d/install.sh"; cleanup() { rm -f -- "$f"; rmdir "$d" 2>/dev/null || :; }; """
-    """abort() { exit 130; }; trap cleanup EXIT; trap abort HUP INT TERM; """
-    """set -o pipefail; curl --disable --proto "=https" --proto-redir "=https" """
-    """--connect-timeout 15 --max-time 60 --max-filesize 262144 -fsSL """
-    """https://qw.x86.com.br/install.sh | head -c 262145 >"$f"; s=$?; """
-    """n=$(wc -c <"$f") || exit 1; if [ "$n" -gt 262144 ]; then """
-    """printf "%s\\n" "x86QW: bootstrap excedeu 262144 bytes." >&2; exit 1; fi; """
-    """[ "$s" -eq 0 ] || exit "$s"; /bin/bash "$f" "$@"' x86qw"""
+    "curl -fsS https://qw.x86.com.br/install.sh | bash"
 )
 PUBLIC_POWERSHELL_BOOTSTRAP_COMMAND = (
     "& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); "

@@ -266,18 +266,12 @@ class SiteTests(unittest.TestCase):
                 for target in statement.targets
             )
         )
-        for fragment in (
-            "umask 077",
-            "mktemp -d",
-            "trap cleanup EXIT",
-            "set -o pipefail",
-            'curl --disable --proto "=https" --proto-redir "=https"',
-            "--connect-timeout 15 --max-time 60 --max-filesize 262144",
-            "head -c 262145",
-            'n=$(wc -c <"$f")',
-            '[ "$s" -eq 0 ] || exit "$s"',
-        ):
-            self.assertIn(fragment, command)
+        self.assertEqual(
+            "curl -fsS https://qw.x86.com.br/install.sh | bash",
+            command,
+        )
+        self.assertNotIn("umask 077", command)
+        self.assertNotIn("head -c", command)
         self.assertNotIn('"$(curl', command)
         documents = (
             PROJECT_ROOT / "README.md",
