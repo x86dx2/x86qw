@@ -22,7 +22,7 @@ A auditoria Gauntlet pós-publicação e o Master Plan executável estão em
 [issue #164](https://github.com/x86dx2/x86qw/issues/164). O snapshot histórico
 começou em `MAIN=RED`; o estado corrente é
 `MAIN=GREEN`, `TUF=HEALTHY`, `1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3` e
-`external-public=NO-GO`. A fonte current é `1.0.4`; `1.0.3`, `1.0.2`, `1.0.1` e `0.7.13` estão
+`external-public=NO-GO`. A fonte current é `1.0.5`; `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1` e `0.7.13` estão
 aposentadas como current e permanecem históricas. F1–F3 e o conserto de `host` entram em
 1.0.x; não há linha 1.1 nesta fase. EP-0–EP-5 só reabrem com decisão
 explícita de audiência. A história pré-1.0 abaixo permanece preservada.
