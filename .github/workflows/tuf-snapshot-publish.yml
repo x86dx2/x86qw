@@ -433,4 +433,3 @@ jobs:
             echo "snapshot-timestamp publication completed after protected approval"
             echo "publication_artifact=tuf-snapshot-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}"
           } >> "$GITHUB_STEP_SUMMARY"
-
