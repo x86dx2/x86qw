@@ -18,7 +18,7 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("GREEN", document["status"]["main"])
         self.assertEqual("HEALTHY", document["status"]["tuf"])
         self.assertEqual(
-            "adf83f9f01a8601ed22676525d215b2d00f86592",
+            "962fb2b2cc27560e982c2255d9299a55f16acdd1",
             document["snapshot_commit"],
         )
         self.assertEqual("owner-only", document["authorities"]["candidate_release"]["audience"])
@@ -31,14 +31,31 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertEqual("1.0.0", live["catalog_current_installer"])
         self.assertEqual("CONVERGED_CANDIDATE_DEPLOYMENT", live["state"])
         self.assertEqual(
-            33125534974,
+            "x86QW 1.0.0 · validado no Apple M3",
+            live["root_site_hero"],
+        )
+        self.assertNotIn("0.7.13", live["root_site_hero"])
+        self.assertEqual(
+            30,
+            document["authorities"]["deployment"]["tuf"]["timestamp_version"],
+        )
+        self.assertEqual(
+            29,
+            document["authorities"]["deployment"]["tuf"]["snapshot_version"],
+        )
+        self.assertEqual(
+            33136179763,
             document["authorities"]["deployment"]["tuf"]["publication_run_id"],
         )
         self.assertEqual(
-            "adf83f9f01a8601ed22676525d215b2d00f86592",
+            33135314707,
+            document["authorities"]["deployment"]["tuf"]["renewal_run_id"],
+        )
+        self.assertEqual(
+            "962fb2b2cc27560e982c2255d9299a55f16acdd1",
             document["authorities"]["development"]["head"],
         )
-        self.assertEqual(33124929611, document["authorities"]["development"]["validate_run"])
+        self.assertEqual(33135951867, document["authorities"]["development"]["validate_run"])
         evidence = document["evidence"]
         self.assertEqual(33116886265, evidence["main_green"]["run_id"])
         self.assertEqual(
@@ -122,20 +139,20 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
             "MAIN=GREEN",
             "TUF=HEALTHY",
             "external-public=NO-GO",
-            "33125534974",
-            "33124929611",
-            "timestamp v28",
-            "snapshot/targets v27",
+            "33136179763",
+            "33135951867",
+            "timestamp v30",
+            "snapshot/targets v29",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, status)
                 self.assertIn(marker, current_truth)
 
         operational_records = {
-            ROOT / "docs/post-1.0/CI-HEALTH.md": ("MAIN=GREEN", "33124929611"),
+            ROOT / "docs/post-1.0/CI-HEALTH.md": ("MAIN=GREEN", "33135951867"),
             ROOT / "docs/post-1.0/TUF-SLO-AND-RECOVERY.md": (
-                "timestamp v28",
-                "snapshot/targets v27",
+                "timestamp v30",
+                "snapshot/targets v29",
                 "external-public=NO-GO",
             ),
             ROOT / "docs/post-1.0/RELEASE-AUDIENCE.md": (
@@ -143,7 +160,7 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
                 "external-public",
             ),
             ROOT / "docs/post-1.0/EXTERNAL-PUBLIC-READINESS.md": (
-                "33125534974",
+                "33136179763",
                 "NO-GO",
             ),
         }

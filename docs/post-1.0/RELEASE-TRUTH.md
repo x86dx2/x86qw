@@ -16,7 +16,7 @@ Nenhuma release note ou issue substitui uma autoridade de bytes. O
 [JSON desta fotografia histórica](release-truth.json) é um índice, não um novo
 catálogo TUF. A autoridade corrente é
 [`release-truth-current.json`](release-truth-current.json), observado em
-2026-08-27T23:18:37Z.
+2026-08-28T02:32:21Z.
 
 ## Identidade observada
 
@@ -38,8 +38,8 @@ catálogo TUF. A autoridade corrente é
 | validação | VERIFIED FACT no M3; BLOCKED nas plataformas não-M3 | não extrapolar E3 |
 | audiência owner-only | VALID_FOR_SINGLE_USER_M3 | candidato exato, M3 e lifecycle single-user verificados |
 | audiência external-public | NO-GO | exige EP-0–EP-5 e autorização explícita |
-| TUF técnico | HEALTHY | root v1, timestamp v28, snapshot/targets v27 e monitor saudável |
-| release operacional | CONVERGED_CANDIDATE_DEPLOYMENT | projeção 33125534974, bootstraps/product/catalog/release-truth verificados |
+| TUF técnico | HEALTHY | root v1, timestamp v30, snapshot/targets v29 e monitor saudável |
+| release operacional | CONVERGED_CANDIDATE_DEPLOYMENT | projeção 33136179763, bootstraps/product/catalog/release-truth verificados |
 
 ## Contradições abertas
 

@@ -5,14 +5,14 @@ Esta é a projeção legível da autoridade machine-readable em
 candidate/release, deployment e development; não transforma disponibilidade de
 artefato em suporte ou autorização de audiência.
 
-## Estado verificado em 2026-08-27T23:18:37Z
+## Estado verificado em 2026-08-28T02:32:21Z
 
 - `MAIN=GREEN`: a linha `main` passou o Validate no run
-  [33124929611](https://github.com/x86dx2/x86qw/actions/runs/33124929611), no
-  commit `adf83f9f01a8601ed22676525d215b2d00f86592`.
-- `TUF=HEALTHY`: root v1, timestamp v28 e snapshot/targets v27 autenticam o
+  [33135951867](https://github.com/x86dx2/x86qw/actions/runs/33135951867), no
+  commit `962fb2b2cc27560e982c2255d9299a55f16acdd1`.
+- `TUF=HEALTHY`: root v1, timestamp v30 e snapshot/targets v29 autenticam o
   catálogo público de 75 pacotes. O timestamp expira em
-  `2026-09-03T19:15:09Z`, fora da janela de alerta de seis horas no momento da
+  `2026-09-27T02:15:12Z`, fora da janela de alerta de seis horas no momento da
   observação.
 - `1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3`: o candidato exato permanece
   válido para um mantenedor no Apple M3, com instalador SHA-256
@@ -29,12 +29,12 @@ artefato em suporte ou autorização de audiência.
 | source | baseline current `1.0.4` em `dist/installer/VERSION` |
 | candidate/release | `x86qw-installer-1.0.0`, commit `e12ed081b968f820f47200e4be954a4f444056a1`, audiência `owner-only` |
 | deployment | site, bootstraps, product, catálogo, trust e release-truth convergentes |
-| development | `main` verde no Validate `33124929611`; candidato exato preservado pelo receipt e pela evidência M3 |
+| development | `main` verde no Validate `33135951867`; candidato exato preservado pelo receipt e pela evidência M3 |
 | scope | um usuário, um mantenedor e laboratório nativo Apple M3 |
 
 ## Deployment público
 
-O run [33125534974](https://github.com/x86dx2/x86qw/actions/runs/33125534974)
+O run [33136179763](https://github.com/x86dx2/x86qw/actions/runs/33136179763)
 reparou e verificou a projeção owner-only. O candidato carregado é o mesmo
 nos endpoints canônico `https://qw.x86.com.br/` e alias
 `https://x86qw.x86.com.br/`: product e catálogo reportam `1.0.0`, a raiz HTTP
@@ -43,25 +43,25 @@ nos endpoints canônico `https://qw.x86.com.br/` e alias
 O catálogo público tem SHA-256
 `a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a`; a
 projeção de release-truth tem SHA-256
-`f6ba7574505b2ab5272711844faae849b4a8c9f428dbdeb6454a06b7e8cb4bff` na
+`601e30eb9025a76782e75fe417723fda404539d065d5c1bd338a4a4b382a6cf7` na
 observação pública corrente.
 GitHub e GitLab continuam byte-equal para o instalador owner-only. A release
 final tem 600825 bytes e candidate SHA-256
 `0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21`.
 
 O receipt da projeção registra o mesmo estado: `CONVERGED_CANDIDATE_DEPLOYMENT`,
-root probe `200_OWNER_ONLY`, repair artifact `9668294484` e publicação de site
+root probe `200_OWNER_ONLY`, repair artifact `9672118367` e publicação de site
 `projection-only`. A execução usou o commit corrente
-`adf83f9f01a8601ed22676525d215b2d00f86592`; ela não reconstruiu o candidato nem
+`962fb2b2cc27560e982c2255d9299a55f16acdd1`; ela não reconstruiu o candidato nem
 alterou seus bytes imutáveis.
 
 ## TUF técnico e operação
 
-O TUF público atual é autenticado pela root Ed25519 v1. O timestamp v28 foi
-renovado no run `33107505069`, com artifact `9661074451` e relatório SHA-256
-`eb68c1448e6fe6a0d2aa8df6ca9531710927fd4498b37fc854fb43db122be811`.
-Snapshot e targets permanecem v27. O monitor público passou nos limiares de
-seis e uma hora nos dois domínios.
+O TUF público atual é autenticado pela root Ed25519 v1. O timestamp v30 foi
+renovado no run `33135314707`, com artifact `9671800710` e relatório SHA-256
+`fe90b29ca4aa49f3b3c5a33897edd67b7069685d1622f3ae8d85f348a172e7cb`.
+Snapshot e targets estão em v29 e expiram depois do timestamp. O monitor
+público passou nos limiares de seis e uma hora nos dois domínios.
 
 O drill técnico de recuperação está registrado no run `31900793093`; ele prova
 o contrato operacional com chaves efêmeras, mas não prova custódia humana
