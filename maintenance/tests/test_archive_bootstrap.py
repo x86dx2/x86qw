@@ -327,6 +327,33 @@ class ArchiveBootstrapTests(unittest.TestCase):
         )
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
+    def test_unix_bootstrap_opens_with_project_identity_before_download(self):
+        version = "9.9.4"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, binaries = self._prepare_unix_bootstrap(root, version, bundle)
+            completed = subprocess.run(
+                [str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        lines = [line for line in completed.stdout.splitlines() if line]
+        self.assertEqual("[X] x86QW", lines[0])
+        self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
+        self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
+        self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_unix_bootstrap_preserves_unicode_arguments_and_installer_exit(self):
         version = "9.9.9"
         prefix = f"x86qw-installer-{version}"
@@ -457,6 +484,39 @@ class ArchiveBootstrapTests(unittest.TestCase):
         shutil.which("pwsh") or shutil.which("powershell"),
         "PowerShell indisponivel neste runner",
     )
+    def test_powershell_bootstrap_opens_with_project_identity_before_download(self):
+        version = "9.9.3"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, runner = self._prepare_powershell_bootstrap(root, version, bundle)
+            completed = subprocess.run(
+                [
+                    self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(runner), str(bootstrap), "--help",
+                ],
+                env={
+                    **os.environ,
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        lines = [line for line in completed.stdout.splitlines() if line]
+        self.assertEqual("[X] x86QW", lines[0])
+        self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
+        self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
+        self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
+
+    @unittest.skipUnless(
+        shutil.which("pwsh") or shutil.which("powershell"),
+        "PowerShell indisponivel neste runner",
+    )
     def test_powershell_bootstrap_preserves_unicode_long_arguments_and_exit_code(self):
         version = "9.9.7"
         with tempfile.TemporaryDirectory() as temporary:
@@ -494,6 +554,8 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(23, completed.returncode, completed.stderr)
+            self.assertNotIn("Write-Error:", completed.stderr)
+            self.assertNotIn("Line |", completed.stderr)
             self.assertEqual(
                 ["--online-only", *forwarded],
                 json.loads(arguments.read_text(encoding="utf-8")),

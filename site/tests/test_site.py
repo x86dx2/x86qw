@@ -591,13 +591,14 @@ class SiteTests(unittest.TestCase):
             set(names),
         )
         application_plan = scan_archive(application, required_members=(
-            "_x86qw/installer.json", "_x86qw/components.json",
+            "_x86qw/installer.json", "_x86qw/components.json", "manager.py",
         ))
         application_members = read_archive_members(application_plan, (
-            "_x86qw/installer.json", "_x86qw/components.json",
+            "_x86qw/installer.json", "_x86qw/components.json", "manager.py",
         ))
         embedded_identity = json.loads(application_members["_x86qw/installer.json"])
         runtime = json.loads(application_members["_x86qw/components.json"])
+        packaged_manager = application_members["manager.py"].decode("utf-8")
         self.assertEqual(
             {"format": 1, "project": "x86qw", "version": package["version"]},
             identity,
@@ -614,6 +615,8 @@ class SiteTests(unittest.TestCase):
         self.assertEqual("x86qw-runtime", runtime["project"])
         self.assertTrue(all("sources" not in component for component in runtime["components"]))
         self.assertTrue(all("project_sources" not in component for component in runtime["components"]))
+        self.assertIn("https://qw.x86.com.br/api/v1/trust/metadata/", packaged_manager)
+        self.assertNotIn("https://x86qw.x86.com.br/", packaged_manager)
         latest = ROOT.parents[1] / "dist" / "installer" / "packages" / "latest"
         self.assertTrue(latest.is_symlink())
         self.assertEqual(package["version"], os.readlink(latest))
@@ -628,7 +631,8 @@ class SiteTests(unittest.TestCase):
         self.assertNotRegex(powershell, r"(?m)^\s*exit(?:\s|$)")
         self.assertIn("$InstallerExitCode = $LASTEXITCODE", powershell)
         self.assertIn("$global:LASTEXITCODE = $InstallerExitCode", powershell)
-        self.assertIn("-ErrorAction Continue", powershell)
+        self.assertIn("[Console]::Error.WriteLine", powershell)
+        self.assertNotIn("Write-Error", powershell)
         home = (ROOT / "index.html").read_text(encoding="utf-8")
         self.assertRegex(home, re.escape('https://qw.x86.com.br/install.sh'))
         self.assertIn("data-copy-install", home)
