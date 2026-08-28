@@ -159,6 +159,62 @@ class RenderReleaseSiteTests(unittest.TestCase):
             )
             self.assertIn('INSTALLER_SIZE="9"', (output / "install.sh").read_text())
 
+    def test_historical_candidate_product_count_still_renders_published_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer = root / "installer.zip"
+            installer.write_bytes(b"candidate")
+            catalog = root / "catalog.json"
+            catalog_value = build_candidate_catalog(
+                source=ROOT / "site/public/api/v1/catalog.json",
+                installer=installer,
+                output=catalog,
+                version="1.0.0-rc.1",
+            )
+            product = root / "product.json"
+            product_value = build_candidate_product(
+                source=ROOT / "site/public/api/v1/product.json",
+                catalog=catalog_value,
+                output=product,
+            )
+            published = published_package_count(catalog_value)
+            historical = len(catalog_value["packages"])
+            self.assertNotEqual(published, historical)
+            product_value["package_count"] = historical
+            product.write_text(
+                json.dumps(product_value, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            output = root / "rendered"
+            result = render_release_site(
+                source=ROOT / "site/public",
+                catalog=catalog,
+                product=product,
+                output=output,
+            )
+            self.assertEqual(published, result["package_count"])
+            rendered = (output / "index.html").read_text(encoding="utf-8")
+            self.assertIn(
+                f'<span class="release-package-count">{published}</span> pacotes',
+                rendered,
+            )
+            self.assertNotIn(
+                f'<span class="release-package-count">{historical}</span> pacotes',
+                rendered,
+            )
+            product_value["package_count"] = historical + 1
+            product.write_text(
+                json.dumps(product_value, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(ReleaseSiteError):
+                render_release_site(
+                    source=ROOT / "site/public",
+                    catalog=catalog,
+                    product=product,
+                    output=root / "rejected",
+                )
+
     def test_existing_destination_is_not_overwritten(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

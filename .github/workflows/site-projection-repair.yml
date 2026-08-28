@@ -288,6 +288,10 @@ jobs:
               Path("release-work/current-site/index.html"),
               source_projection / "index.html",
           )
+          shutil.copyfile(
+              Path("release-work/current-site/assets/site.js"),
+              source_projection / "assets/site.js",
+          )
           for name in ("install.sh", "install.ps1"):
               shutil.copyfile(
                   Path("release-work/current-site") / name,

@@ -399,6 +399,13 @@ class ContinuousIntegrationTests(unittest.TestCase):
             '          )',
             projection,
         )
+        self.assertIn(
+            'shutil.copyfile(\n'
+            '              Path("release-work/current-site/assets/site.js"),\n'
+            '              source_projection / "assets/site.js",\n'
+            '          )',
+            projection,
+        )
         self.assertIn('for name in ("install.sh", "install.ps1"):', projection)
         self.assertIn("--bootstrap-dir release-work/current-site", projection)
         self.assertIn("verify_site_root_probe.py", projection)

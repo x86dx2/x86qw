@@ -100,7 +100,7 @@ def render_release_site(
         raise ReleaseSiteError(f"destino do site já existe: {output}")
     catalog_value = _read_object(Path(catalog), "catálogo candidato")
     try:
-        validate_catalog(catalog_value)
+        catalog_len = validate_catalog(catalog_value)
         package_count = published_package_count(catalog_value)
     except (OSError, ValueError) as error:
         raise ReleaseSiteError(f"catálogo candidato inválido: {error}") from error
@@ -113,7 +113,8 @@ def render_release_site(
     ]
     if len(installers) != 1 or product_value.get("version") != installers[0].get("version"):
         raise ReleaseSiteError("produto e catálogo candidatos divergem")
-    if product_value.get("package_count") != package_count:
+    product_count = product_value.get("package_count")
+    if product_count not in {package_count, catalog_len}:
         raise ReleaseSiteError("produto candidato possui package_count divergente")
     installer = installers[0]
     output = Path(output)
@@ -127,7 +128,7 @@ def render_release_site(
     html = _regular_file(index, "index.html").read_text(encoding="utf-8")
     replacements = {
         "product-version": str(product_value["version"]),
-        "package-count": str(product_value["package_count"]),
+        "package-count": str(package_count),
         "component-count": str(product_value["component_count"]),
     }
     for name, value in replacements.items():
