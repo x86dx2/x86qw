@@ -2241,6 +2241,15 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("0B/2.0MB", rendered)
         self.assertIn("Verificado", rendered)
 
+    def test_console_normalizes_download_labels_before_terminal_output(self):
+        reporter = install_qw.Console()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            reporter.download_start("KTX\n1.47", size=2_000_000)
+
+        self.assertIn("KTX?1.47", output.getvalue())
+        self.assertNotIn("KTX\n1.47", output.getvalue())
+
     def test_nquake_startup_state_reports_pending_and_loaded(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, target, _ = self.make_installer(Path(temporary))

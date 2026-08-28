@@ -39,6 +39,12 @@ def format_bytes_compact(size: int) -> str:
     return f"{value:.1f}GB"
 
 
+def terminal_label(value: str) -> str:
+    """Keep public package identities on one bounded terminal line."""
+
+    return "".join(character if character.isprintable() else "?" for character in value)[:96]
+
+
 class Console:
     """Small stateful terminal reporter without repository dependencies."""
 
@@ -136,10 +142,13 @@ class Console:
             print(f"    {status} | {amount}/{amount}", flush=True)
 
     def download_start(self, label: str, *, size: int | None) -> None:
-        self._download_label = label
+        safe_label = terminal_label(label)
+        self._download_label = safe_label
         total = format_bytes_compact(size) if size is not None else "?"
         marker = self.paint("⠋", "36")
-        print(f"{marker} {label:<48} {'Baixando':>10}  {'0B':>9}/{total}", flush=True)
+        # Package identifiers are intentionally public UI, never credentials.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(f"{marker} {safe_label:<48} {'Baixando':>10}  {'0B':>9}/{total}", flush=True)
 
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
         if not sys.stdout.isatty():
@@ -157,5 +166,5 @@ class Console:
 
 
 __all__ = (
-    "Console", "UpdatePlanRow", "format_bytes", "format_bytes_compact",
+    "Console", "UpdatePlanRow", "format_bytes", "format_bytes_compact", "terminal_label",
 )
