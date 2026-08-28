@@ -399,7 +399,9 @@ def player_count_label(value: str) -> str:
     return f"{value} jogadores"
 
 
-def ktx_options_cli_arguments(options: KtxLaunchOptions) -> list[str]:
+def ktx_options_cli_arguments(
+    options: KtxLaunchOptions, *, dedicated: bool = False,
+) -> list[str]:
     arguments: list[str] = []
     if options.fill_bots:
         arguments.append("--fill-bots")
@@ -429,10 +431,11 @@ def ktx_options_cli_arguments(options: KtxLaunchOptions) -> list[str]:
         arguments.extend(["--race-style", options.race_style])
     if options.race_scoring is not None:
         arguments.extend(["--race-scoring", options.race_scoring])
-    if options.race_pacemaker is not None:
-        arguments.extend(["--race-pacemaker", str(options.race_pacemaker)])
-    if options.race_hide_players:
-        arguments.append("--race-hide-players")
+    if not dedicated:
+        if options.race_pacemaker is not None:
+            arguments.extend(["--race-pacemaker", str(options.race_pacemaker)])
+        if options.race_hide_players:
+            arguments.append("--race-hide-players")
     return arguments
 
 
@@ -1585,6 +1588,14 @@ class GameplayPlayerMixin:
                     )
                     if scoring is None:
                         continue
+                if activity == "Hospedar":
+                    return replace(
+                        selected,
+                        race_style=style,
+                        race_scoring=scoring,
+                        race_pacemaker=None,
+                        race_hide_players=False,
+                    )
                 while True:
                     pacemaker = navigation.select_one(
                         "Pacemaker",

@@ -1884,7 +1884,9 @@ def host_command_arguments(
     arguments = ["host", selection.game.key]
     if selection.mode is not None:
         arguments.extend(["--mode", selection.mode.key])
-        arguments.extend(gameplay.ktx_options_cli_arguments(selection.ktx_options))
+        arguments.extend(gameplay.ktx_options_cli_arguments(
+            selection.ktx_options, dedicated=True,
+        ))
     arguments.extend(["--map", selection.map_name])
     arguments.extend(["--bind", options.bind, "--port", str(options.port)])
     arguments.extend(["--maxclients", str(options.maxclients)])
