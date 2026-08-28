@@ -1,0 +1,10 @@
+{
+  "catalog_sha256": "a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a",
+  "commit": "962fb2b2cc27560e982c2255d9299a55f16acdd1",
+  "deploy_run_id": 33136179763,
+  "external_public": false,
+  "format": 1,
+  "project": "x86qw",
+  "release_audience": "owner-only",
+  "validate_run_id": 33135951867
+}

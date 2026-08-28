@@ -46,6 +46,24 @@
   CDN-Cache-Control: no-store
   Access-Control-Allow-Origin: *
 
+/version
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *
+
+/api/v1/version
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *
+
+/api/v1/health
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-store, no-cache, must-revalidate
+  CDN-Cache-Control: no-store
+  Access-Control-Allow-Origin: *
+
 /api/v1/trust/metadata/*
   Cache-Control: no-store, no-cache, must-revalidate
   CDN-Cache-Control: no-store

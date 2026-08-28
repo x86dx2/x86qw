@@ -259,6 +259,27 @@ class SiteTests(unittest.TestCase):
         for command in product["commands"]:
             self.assertIn(command, cli_help)
 
+    def test_deploy_provenance_endpoints_are_static_json(self):
+        truth = json.loads(
+            (PROJECT_ROOT / "docs/post-1.0/release-truth-current.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        version = json.loads((ROOT / "version").read_text(encoding="utf-8"))
+        api_version = json.loads((ROOT / "api/v1/version").read_text(encoding="utf-8"))
+        health = json.loads((ROOT / "api/v1/health").read_text(encoding="utf-8"))
+        self.assertEqual(version, api_version)
+        self.assertEqual(truth["snapshot_commit"], version["commit"])
+        self.assertEqual("owner-only", version["release_audience"])
+        self.assertFalse(version["external_public"])
+        self.assertEqual(
+            truth["authorities"]["deployment"]["tuf"]["catalog_sha256"],
+            version["catalog_sha256"],
+        )
+        self.assertEqual("ok", health["status"])
+        self.assertEqual(version["commit"], health["commit"])
+        self.assertFalse(health["external_public"])
+
     def test_unix_install_command_restricts_https_consistently(self):
         manager_path = PROJECT_ROOT / "dist/installer/bin/manager.py"
         manager_tree = ast.parse(manager_path.read_text(encoding="utf-8"))
@@ -402,6 +423,9 @@ class SiteTests(unittest.TestCase):
             "/install.ps1",
             "/api/v1/trust/metadata/*",
             "/api/v1/trust/targets/*",
+            "/version",
+            "/api/v1/version",
+            "/api/v1/health",
             "max-age=31536000, immutable",
         ):
             self.assertIn(value, headers)
