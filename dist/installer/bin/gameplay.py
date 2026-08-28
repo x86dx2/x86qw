@@ -235,6 +235,10 @@ def _remove_created_profile(token: _PersonalProfileToken) -> None:
         ))
 
 PLAY_SUPPORT_VERSION = "8"
+FIRST_MATCH_MODE = "duel"
+FIRST_MATCH_MAP = "dm6"
+FIRST_MATCH_BOT_SKILL = 4
+FIRST_MATCH_CONTROL_KEYS = ("F5", "F6", "F11")
 DEVELOPMENT_KTX_MODE_CATALOG = "dist/mods/ktx/1.47/x86qw/catalog/modes.json"
 RUNTIME_KTX_MODE_CATALOG = "_x86qw/ktx-modes.json"
 DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
@@ -480,6 +484,21 @@ def ktx_summary_lines(options: KtxLaunchOptions) -> list[str]:
     return lines
 
 
+def first_match_launch_options() -> KtxLaunchOptions:
+    return KtxLaunchOptions(bots=1, bot_skill=FIRST_MATCH_BOT_SKILL)
+
+
+def first_match_control_lines(mode: KtxModeSpec) -> tuple[str, ...]:
+    descriptions = {
+        key: description for key, _command, description in mode.key_bindings
+    }
+    return tuple(
+        f"  {key:<4} | {descriptions[key]}"
+        for key in FIRST_MATCH_CONTROL_KEYS
+        if key in descriptions
+    )
+
+
 def play_summary_text(
     game: LocalGameSpec,
     mode: KtxModeSpec | None,
@@ -487,6 +506,8 @@ def play_summary_text(
     runtime_label: str,
     options: KtxLaunchOptions,
     ruleset: str = DEFAULT_PRODUCT_RULESET,
+    *,
+    first_match: bool = False,
 ) -> str:
     lines = ["Resumo da partida", f"  Jogo    | {game.label}"]
     if mode is not None:
@@ -498,6 +519,11 @@ def play_summary_text(
     ))
     if mode is not None:
         lines.extend(ktx_summary_lines(options))
+        if first_match:
+            controls = first_match_control_lines(mode)
+            if controls:
+                lines.extend(("", "Controles essenciais:"))
+                lines.extend(controls)
     cli = ["play", game.key]
     cli.extend(["--ruleset", ruleset])
     if mode is not None:
@@ -1793,6 +1819,28 @@ class GameplayPlayerMixin:
                     )
         return selected
 
+    def choose_play_start(self) -> str | None:
+        return navigation.select_one(
+            "Como deseja começar?",
+            (
+                navigation.MenuOption(
+                    "first-match",
+                    "Primeira partida",
+                    "Duel com 1 Frogbot em dm6",
+                    "oponente iniciante e três controles essenciais",
+                ),
+                navigation.MenuOption(
+                    "browse",
+                    "Escolher jogo e modo",
+                    "KTX, addons e catálogo completo",
+                    "todos os formatos e opções",
+                ),
+            ),
+            breadcrumb="x86QW › Jogar",
+            default=0,
+            allow_back=True,
+        )
+
     def play_local(
         self,
         game_key: str | None = None,
@@ -1817,24 +1865,65 @@ class GameplayPlayerMixin:
         game: LocalGameSpec | None = None
         ktx_mode: KtxModeSpec | None = None
         ktx_assets: frozenset[str] | None = None
-        launch_options = ktx_options or KtxLaunchOptions()
+        selected_game_key = game_key
+        selected_mode_key = mode_key
+        selected_map_key = map_key
+        selected_options = ktx_options
+        launch_options = selected_options or KtxLaunchOptions()
         base_launch_options = launch_options
         previous_mode_key: str | None = None
         map_name: str | None = None
         runtime_choice: tuple[str, Path] | None = None
-        state = "game"
+        guided_first_match = False
+        offered_play_start = (
+            game_key is None
+            and mode_key is None
+            and map_key is None
+            and ktx_options is None
+            and any(item.key == "ktx" for item in games)
+        )
+        state = "start" if offered_play_start else "game"
         while True:
+            if state == "start":
+                game = None
+                ktx_mode = None
+                ktx_assets = None
+                map_name = None
+                runtime_choice = None
+                previous_mode_key = None
+                start = self.choose_play_start()
+                if start is None:
+                    return
+                if start == "first-match":
+                    guided_first_match = True
+                    selected_game_key = "ktx"
+                    selected_mode_key = FIRST_MATCH_MODE
+                    selected_map_key = FIRST_MATCH_MAP
+                    selected_options = first_match_launch_options()
+                else:
+                    guided_first_match = False
+                    selected_game_key = None
+                    selected_mode_key = None
+                    selected_map_key = None
+                    selected_options = None
+                launch_options = selected_options or KtxLaunchOptions()
+                base_launch_options = launch_options
+                state = "game"
+                continue
             if state == "game":
-                game = self.choose_local_game(games, game_key)
+                game = self.choose_local_game(games, selected_game_key)
                 if game is None:
+                    if offered_play_start:
+                        state = "start"
+                        continue
                     return
                 uses_mode_catalog = game.mode_catalog is not None
-                if mode_key is not None and not uses_mode_catalog:
+                if selected_mode_key is not None and not uses_mode_catalog:
                     raise InstallerError("--mode só pode ser usado com o jogo KTX.")
                 if (
                     not uses_mode_catalog
-                    and ktx_options is not None
-                    and ktx_options != KtxLaunchOptions()
+                    and selected_options is not None
+                    and selected_options != KtxLaunchOptions()
                 ):
                     raise InstallerError(
                         "Opções de bots, CTF e Race só podem ser usadas com o jogo KTX."
@@ -1844,14 +1933,14 @@ class GameplayPlayerMixin:
                     raise InstallerError(f"O componente de {game.label} não está mais instalado.")
                 self.verify_component(installed_component)
                 ktx_mode = None
-                launch_options = ktx_options or KtxLaunchOptions()
+                launch_options = selected_options or KtxLaunchOptions()
                 state = "mode" if uses_mode_catalog else "map"
                 continue
             assert game is not None
             uses_mode_catalog = game.mode_catalog is not None
             if state == "mode":
                 ktx_mode = self.choose_ktx_mode(
-                    load_ktx_modes(self.project_root), mode_key,
+                    load_ktx_modes(self.project_root), selected_mode_key,
                 )
                 if ktx_mode is None:
                     state = "game"
@@ -1860,7 +1949,11 @@ class GameplayPlayerMixin:
                     launch_options = base_launch_options
                 previous_mode_key = ktx_mode.key
                 console.success(f"Modo KTX selecionado: {ktx_mode.label}.")
-                state = "options" if configure_interactively else "map"
+                state = (
+                    "options"
+                    if configure_interactively and not guided_first_match
+                    else "map"
+                )
                 continue
             if state == "options":
                 assert ktx_mode is not None
@@ -1888,20 +1981,23 @@ class GameplayPlayerMixin:
                         default_map=ktx_mode.default_map,
                         suggested_maps=ktx_mode.suggested_maps,
                         label=f"KTX · {ktx_mode.label}",
-                        requested_map=map_key,
+                        requested_map=selected_map_key,
                         required_assets=required_assets,
                         available_assets=ktx_assets,
                         breadcrumb=f"x86QW › Jogar › KTX › {ktx_mode.label} › Mapa",
                     )
                 else:
                     map_name = self.choose_local_map(
-                        game, requested_map=map_key,
+                        game, requested_map=selected_map_key,
                         breadcrumb=f"x86QW › Jogar › {game.label} › Mapa",
                     )
                 if map_name is None:
-                    state = "options" if uses_mode_catalog and configure_interactively else (
-                        "mode" if uses_mode_catalog else "game"
-                    )
+                    if guided_first_match:
+                        state = "start"
+                    elif uses_mode_catalog and configure_interactively:
+                        state = "options"
+                    else:
+                        state = "mode" if uses_mode_catalog else "game"
                     continue
                 state = "runtime"
                 continue
@@ -1913,12 +2009,13 @@ class GameplayPlayerMixin:
                 ),
             )
             if runtime_choice is None:
-                state = "map"
+                state = "start" if guided_first_match else "map"
                 continue
             if configure_interactively:
                 label, _runtime = runtime_choice
                 summary = play_summary_text(
                     game, ktx_mode, map_name, label, launch_options, selected_ruleset,
+                    first_match=guided_first_match,
                 )
                 confirmed = navigation.confirm(
                     "Iniciar esta partida?",
