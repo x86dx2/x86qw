@@ -10,14 +10,15 @@ from pathlib import Path
 
 from maintenance.tools.components import load_catalog as load_component_catalog
 from maintenance.tools.runtime_catalog import load_inventory as load_runtime_inventory
-from maintenance.tools.validate_catalog import validate_catalog
+from maintenance.tools.validate_catalog import published_package_count, validate_catalog
 
 
 def build_product_catalog(project_root: Path) -> dict[str, object]:
     inventory_root = project_root / "maintenance/inventory"
     public_catalog_path = project_root / "site/public/api/v1/catalog.json"
     public_catalog = json.loads(public_catalog_path.read_text(encoding="utf-8"))
-    package_count = validate_catalog(public_catalog)
+    validate_catalog(public_catalog)
+    package_count = published_package_count(public_catalog)
     components = load_component_catalog(inventory_root / "components.json")
     inventory = load_runtime_inventory(
         inventory_root,

@@ -165,7 +165,7 @@ class Release0713Tests(unittest.TestCase):
         self.assertNotIn("0.7.13 histórica", index)
         visible_index = re.sub(r"<[^>]+>", "", index)
         self.assertIn("x86QW 1.0.4", visible_index)
-        self.assertIn("78 pacotes", visible_index)
+        self.assertIn("29 pacotes", visible_index)
 
 
 if __name__ == "__main__":

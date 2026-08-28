@@ -56,7 +56,7 @@ if (catalogLive.length) {
         throw new Error('catálogo incompatível');
       }
 
-      const count = catalog.packages.length;
+      const count = catalog.packages.filter((item) => item.component !== 'installer').length;
       const ktx = catalog.packages.find((item) => item.package === 'ktx');
       const ktxVersion = ktx && (ktx.upstream_version || ktx.version);
       applyCatalog(

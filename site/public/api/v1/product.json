@@ -110,7 +110,7 @@
       "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/1.0.4/x86qw-installer-1.0.4.zip"
     ]
   },
-  "package_count": 78,
+  "package_count": 29,
   "project": "x86qw",
   "release_audience": "owner-only",
   "release_truth_url": "/api/v1/release-truth.json",

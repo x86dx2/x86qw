@@ -24,7 +24,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from maintenance.tools.validate_catalog import MAX_ARTIFACT_BYTES, validate_catalog
+from maintenance.tools.validate_catalog import (
+    MAX_ARTIFACT_BYTES,
+    published_package_count,
+    validate_catalog,
+)
 from x86qw_runtime.versioning import VersionError, parse_semver
 
 
@@ -218,7 +222,7 @@ def build_candidate_product(
     if not isinstance(installer, dict):
         raise ReleaseCatalogError("produto base sem projeção de installer")
     product["version"] = current["version"]
-    product["package_count"] = len(packages)
+    product["package_count"] = published_package_count(catalog)
     product["installer"] = {
         "filename": current["filename"],
         "distribution_path": current["distribution_path"],

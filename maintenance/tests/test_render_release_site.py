@@ -9,6 +9,7 @@ from pathlib import Path
 
 from maintenance.tools.build_release_catalog import build_candidate_catalog, build_candidate_product
 from maintenance.tools.render_release_site import ReleaseSiteError, render_release_site
+from maintenance.tools.validate_catalog import published_package_count
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,7 +60,7 @@ class RenderReleaseSiteTests(unittest.TestCase):
             self.assertEqual("1.0.0-rc.1", result["version"])
             rendered = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn("1.0.0-rc.1", rendered)
-            self.assertIn(f">{len(catalog_value['packages'])}<", rendered)
+            self.assertIn(f">{published_package_count(catalog_value)}<", rendered)
             self.assertEqual(catalog.read_bytes(), (output / "api/v1/catalog.json").read_bytes())
             self.assertEqual(product.read_bytes(), (output / "api/v1/product.json").read_bytes())
 
@@ -96,7 +97,7 @@ class RenderReleaseSiteTests(unittest.TestCase):
                 r'x86QW\s+<span class="release-product-version">1\.0\.0-rc\.1</span>',
             )
             self.assertIn(
-                f'<span class="release-package-count">{len(catalog_value["packages"])}</span> pacotes',
+                f'<span class="release-package-count">{published_package_count(catalog_value)}</span> pacotes',
                 rendered,
             )
             self.assertIn(
