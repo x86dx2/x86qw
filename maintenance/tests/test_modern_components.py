@@ -1621,6 +1621,44 @@ class ModernComponentTests(unittest.TestCase):
             self.assertEqual(3, options.race_pacemaker)
             self.assertTrue(options.race_hide_players)
 
+    def test_host_race_menu_omits_client_only_flags_and_round_trips_the_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            race = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "race")
+            with mock.patch.object(
+                play_qw.navigation, "select_one",
+                side_effect=("match", "formula1"),
+            ), mock.patch.object(play_qw.navigation, "confirm") as confirm:
+                options = player.choose_ktx_launch_options(race, activity="Hospedar")
+            confirm.assert_not_called()
+            self.assertEqual("match", options.race_style)
+            self.assertEqual("formula1", options.race_scoring)
+            self.assertIsNone(options.race_pacemaker)
+            self.assertFalse(options.race_hide_players)
+            host_ns = services_qw.parse_arguments(
+                ["host", "ktx", "--mode", "race", "--map", "dm6"], ROOT,
+            )
+            selection = services_qw.HostedGame(game, race, "dm6", frozenset(), options)
+            arguments = services_qw.host_command_arguments(selection, host_ns)
+            self.assertNotIn("--race-pacemaker", arguments)
+            self.assertNotIn("--race-hide-players", arguments)
+            parsed = services_qw.parse_arguments(arguments, ROOT)
+            self.assertEqual("host", parsed.action)
+            self.assertEqual("ktx", parsed.game)
+            self.assertEqual("race", parsed.mode)
+            poisoned = play_qw.KtxLaunchOptions(
+                race_style="match", race_scoring="formula1",
+                race_pacemaker=3, race_hide_players=True,
+            )
+            leaked = services_qw.host_command_arguments(
+                services_qw.HostedGame(game, race, "dm6", frozenset(), poisoned),
+                host_ns,
+            )
+            self.assertNotIn("--race-pacemaker", leaked)
+            self.assertNotIn("--race-hide-players", leaked)
+            services_qw.parse_arguments(leaked, ROOT)
+
     def test_frogbot_menu_exposes_default_random_and_personal_name_profiles(self):
         with tempfile.TemporaryDirectory() as temporary:
             player, _, _ = self.make_player(Path(temporary))
