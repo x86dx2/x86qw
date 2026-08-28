@@ -6253,7 +6253,6 @@ class Installer:
 
     def browse_hub(self) -> None:
         servers = self.hub_servers()
-        interactive_menu = navigation.supports_navigation()
         server_options = []
         for index, server in enumerate(servers, 1):
             settings = server.get("settings") if isinstance(server.get("settings"), dict) else {}
@@ -6271,35 +6270,14 @@ class Installer:
                 f"{humans} {human_label} + {bots} {bot_label} · {mode} · {map_name}",
                 str(server["address"]),
             ))
-        legacy_action = None
-        if not interactive_menu:
-            print("\nServidores QuakeWorld ativos:")
-            for index, option in enumerate(server_options, 1):
-                print(f"  {index:3d}) {option.description} · {option.label}")
-            print("\nDigite um número para jogar, oN para observar, qN para usar QTV, ou Enter para sair.")
-            while True:
-                try:
-                    answer = input("Escolha: ").strip().lower()
-                except EOFError:
-                    answer = ""
-                if not answer:
-                    selected = None
-                    break
-                match = re.fullmatch(r"([oq]?)([0-9]+)", answer)
-                if match and 1 <= int(match.group(2)) <= len(servers):
-                    selected = str(int(match.group(2)) - 1)
-                    legacy_action = {"": "join", "o": "observe", "q": "qtv"}[match.group(1)]
-                    break
-                console.warning(f"Escolha inválida. Use 1 a {len(servers)}, oN ou qN.")
-        else:
-            selected = navigation.select_one(
-                "Servidores QuakeWorld ativos",
-                server_options,
-                breadcrumb="x86QW › Encontrar servidor",
-                subtitle="Jogadores humanos primeiro. Use a busca para filtrar servidores.",
-                searchable=True,
-                allow_back=True,
-            )
+        selected = navigation.select_one(
+            "Servidores QuakeWorld ativos",
+            server_options,
+            breadcrumb="x86QW › Encontrar servidor",
+            subtitle="Jogadores humanos primeiro. Use a busca para filtrar servidores.",
+            searchable=True,
+            allow_back=True,
+        )
         if selected is None:
             console.info("Hub fechado; nenhum cliente foi aberto.")
             return
@@ -6310,7 +6288,7 @@ class Installer:
         has_qtv = isinstance(qtv_url, str) and re.fullmatch(
             r"[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", qtv_url,
         )
-        action = legacy_action or navigation.select_one(
+        action = navigation.select_one(
             "Como deseja entrar?",
             (
                 navigation.MenuOption("join", "Jogar", "conectar como jogador"),
@@ -6329,8 +6307,6 @@ class Installer:
             return
         if action == "qtv":
             if not has_qtv:
-                qtv = server.get("qtv_stream")
-                qtv_url = qtv.get("url", "") if isinstance(qtv, dict) else ""
                 raise InstallerError("Este servidor não publicou um stream QTV válido.")
             quake_arguments = ["+qtvplay", qtv_url]
             operation = "QTV"
@@ -6346,8 +6322,6 @@ class Installer:
                 console.info("Conexão cancelada; nenhum cliente foi aberto.")
                 return
             label, runtime = runtime_choice
-            if not interactive_menu:
-                break
             action_label = {
                 "join": "Jogar",
                 "observe": "Observar",

@@ -5682,19 +5682,67 @@ class ModernComponentTests(unittest.TestCase):
                 "qtv_stream": {"url": "2@qtv.example:28000"},
             }
             runtime = target / "client"
-            for answer, expected in (
-                ("1", ["+join", "server.example:27500"]),
-                ("o1", ["+observe", "server.example:27500"]),
-                ("q1", ["+qtvplay", "2@qtv.example:28000"]),
+            for action, expected in (
+                ("join", ["+join", "server.example:27500"]),
+                ("observe", ["+observe", "server.example:27500"]),
+                ("qtv", ["+qtvplay", "2@qtv.example:28000"]),
             ):
-                with self.subTest(answer=answer):
+                with self.subTest(action=action):
                     with contextlib.redirect_stdout(io.StringIO()):
                         with mock.patch.object(installer, "hub_servers", return_value=[server]):
-                            with mock.patch.object(installer, "choose_host_runtime", return_value=("client", runtime)):
-                                with mock.patch.object(installer, "launch_runtime") as launch:
-                                    with mock.patch("builtins.input", return_value=answer):
-                                        installer.browse_hub()
+                            with mock.patch.object(
+                                install_qw.navigation, "select_one",
+                                side_effect=("0", action),
+                            ):
+                                with mock.patch.object(
+                                    installer, "choose_host_runtime",
+                                    return_value=("client", runtime),
+                                ):
+                                    with mock.patch.object(
+                                        install_qw.navigation, "confirm", return_value=True,
+                                    ) as confirm:
+                                        with mock.patch.object(installer, "launch_runtime") as launch:
+                                            installer.browse_hub()
                     launch.assert_called_once_with(runtime, expected)
+                    confirm.assert_called_once()
+
+    def test_hub_fallback_confirms_before_launch_and_keeps_qtv_disabled(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            server = {
+                "address": "server.example:27500", "mode": "duel", "players": [],
+                "settings": {"map": "dm6", "hostname": "Test"},
+            }
+            runtime = target / "client"
+            captured = {}
+
+            def capture_action(title, options, **kwargs):
+                captured["action_options"] = tuple(options)
+                if title.startswith("Servidores"):
+                    return "0"
+                return "join"
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(installer, "hub_servers", return_value=[server]):
+                    with mock.patch.object(
+                        install_qw.navigation, "supports_navigation", return_value=False,
+                    ):
+                        with mock.patch.object(
+                            install_qw.navigation, "select_one", side_effect=capture_action,
+                        ):
+                            with mock.patch.object(
+                                installer, "choose_host_runtime",
+                                return_value=("client", runtime),
+                            ):
+                                with mock.patch.object(
+                                    install_qw.navigation, "confirm", return_value=False,
+                                ) as confirm:
+                                    with mock.patch.object(installer, "launch_runtime") as launch:
+                                        installer.browse_hub()
+            launch.assert_not_called()
+            confirm.assert_called_once()
+            qtv = next(option for option in captured["action_options"] if option.key == "qtv")
+            self.assertFalse(qtv.enabled)
 
     def test_hub_menu_reviews_server_action_and_client_before_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
