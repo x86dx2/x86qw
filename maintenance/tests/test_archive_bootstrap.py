@@ -219,6 +219,46 @@ class ArchiveBootstrapTests(unittest.TestCase):
                     ),
                 )
 
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
+    def test_truncated_unix_bootstrap_prefixes_are_inert(self):
+        source = SHELL_BOOTSTRAP.read_bytes()
+        self.assertEqual(source, PUBLIC_SHELL_BOOTSTRAP.read_bytes())
+        self.assertTrue(source.endswith(b'\nx86qw_install_main "$@"\n'))
+        self.assertIn(b"x86qw_install_main() {", source)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sentinel = root / "side-effect"
+            binaries = root / "bin"
+            binaries.mkdir()
+            for name in ("curl", "mktemp", "python3", "rm"):
+                path = binaries / name
+                path.write_text(
+                    "#!/bin/sh\n"
+                    f"printf '%s\\n' '{name}' >>\"$X86QW_TEST_SENTINEL\"\n"
+                    "exit 0\n",
+                    encoding="utf-8",
+                )
+                path.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = str(binaries)
+            environment["TMPDIR"] = str(root)
+            environment["X86QW_TEST_SENTINEL"] = str(sentinel)
+            for percent in (25, 50, 75, 99):
+                with self.subTest(percent=percent):
+                    if sentinel.exists():
+                        sentinel.unlink()
+                    prefix = source[: max(1, len(source) * percent // 100)]
+                    result = subprocess.run(
+                        ["/bin/bash"],
+                        input=prefix,
+                        capture_output=True,
+                        check=False,
+                        env=environment,
+                        timeout=10,
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertFalse(sentinel.exists())
+
     def test_bootstraps_do_not_delegate_archive_extraction(self):
         for path in (
             SHELL_BOOTSTRAP,

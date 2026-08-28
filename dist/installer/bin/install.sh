@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+x86qw_install_main() {
 INSTALLER_VERSION="1.0.4"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
 INSTALLER_SHA256="24a3115db79a60601d4afd48da1ecb06a8ec5a4593f485450b3bd34cc2492011"
@@ -356,3 +357,6 @@ if { exec 3</dev/tty; } 2>/dev/null; then
 else
   "$python_runtime" "$root/x86qw.pyz" --online-only "$@"
 fi
+}
+
+x86qw_install_main "$@"

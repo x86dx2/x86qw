@@ -162,7 +162,7 @@ class Release0713Tests(unittest.TestCase):
         self.assertIn("directory-preferences", notes)
         self.assertIn("CFPreferences", notes)
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
-        self.assertIn("0.7.13 histórica", index)
+        self.assertNotIn("0.7.13 histórica", index)
         visible_index = re.sub(r"<[^>]+>", "", index)
         self.assertIn("x86QW 1.0.4", visible_index)
         self.assertIn("78 pacotes", visible_index)
