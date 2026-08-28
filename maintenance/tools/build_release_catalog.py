@@ -97,6 +97,7 @@ def build_candidate_catalog(
     release_title: str | None = None,
     release_notes: str | None = None,
     generated_at: str | None = None,
+    reuse_existing_current: bool = False,
 ) -> dict[str, object]:
     try:
         parse_semver(version)
@@ -122,8 +123,43 @@ def build_candidate_catalog(
     current = [item for item in installers if item.get("current") is True]
     if len(current) != 1:
         raise ReleaseCatalogError("catálogo base não possui um instalador current")
-    if any(item.get("version") == version for item in installers):
-        raise ReleaseCatalogError(f"catálogo já contém a versão candidata: {version}")
+    existing = [item for item in installers if item.get("version") == version]
+    if existing:
+        if not reuse_existing_current or existing != current:
+            raise ReleaseCatalogError(f"catálogo já contém a versão candidata: {version}")
+        size, digest = _digest(Path(installer))
+        if existing[0].get("size") != size or existing[0].get("sha256") != digest:
+            raise ReleaseCatalogError("instalador reconstruído diverge da versão current")
+        if not isinstance(release_title, (str, type(None))) or not isinstance(
+            release_notes, (str, type(None))
+        ):
+            raise ReleaseCatalogError("metadados da release precisam ser texto")
+        title = release_title.strip() if release_title is not None else f"x86QW Installer {version}"
+        notes = release_notes.strip() if release_notes is not None else f"x86QW release candidate {version}."
+        if (
+            not title
+            or not notes
+            or existing[0].get("release_title") != title
+            or existing[0].get("release_notes") != notes
+            or existing[0].get("mirror_title") != title
+            or existing[0].get("mirror_notes") != notes
+        ):
+            raise ReleaseCatalogError("metadados reconstruídos divergem da versão current")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{output.name}-", suffix=".tmp", dir=output.parent,
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(Path(source).read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(temporary, 0o644)
+            os.replace(temporary, output)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return catalog
     if generated_at is None:
         generated_at = catalog.get("generated_at")
     generated_at = _canonical_generated_at(generated_at)
@@ -263,6 +299,11 @@ def main(arguments: list[str] | None = None) -> int:
         "--generated-at",
         help="timestamp UTC RFC3339 determinístico; por padrão preserva o catálogo-base",
     )
+    parser.add_argument(
+        "--reuse-existing-current",
+        action="store_true",
+        help="reutiliza sem alteração a versão current já registrada",
+    )
     parser.add_argument("--product-source", type=Path)
     parser.add_argument("--product-output", type=Path)
     options = parser.parse_args(arguments)
@@ -277,6 +318,7 @@ def main(arguments: list[str] | None = None) -> int:
             release_title=options.release_title,
             release_notes=options.release_notes,
             generated_at=options.generated_at,
+            reuse_existing_current=options.reuse_existing_current,
         )
         if (options.product_source is None) != (options.product_output is None):
             raise ReleaseCatalogError(

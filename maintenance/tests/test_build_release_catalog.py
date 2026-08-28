@@ -112,6 +112,98 @@ class BuildReleaseCatalogTests(unittest.TestCase):
             self.assertEqual("Notas aprovadas do candidato.", current["release_notes"])
             self.assertEqual("x86QW RC 1", current["mirror_title"])
 
+    def test_cli_reuses_exact_current_release_without_changing_catalog_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.json"
+            catalog = json.loads(
+                (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+            )
+            current = next(
+                item for item in catalog["packages"]
+                if item["component"] == "installer" and item["current"]
+            )
+            installer = root / current["filename"]
+            payload = b"exact reconstructed installer bytes"
+            installer.write_bytes(payload)
+            current["size"] = len(payload)
+            current["sha256"] = hashlib.sha256(payload).hexdigest()
+            source.write_text(
+                json.dumps(catalog, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            output = root / "catalog.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "maintenance/tools/build_release_catalog.py"),
+                    "--source", str(source),
+                    "--installer", str(installer),
+                    "--output", str(output),
+                    "--version", current["version"],
+                    "--release-title", current["release_title"],
+                    "--release-notes", current["release_notes"],
+                    "--generated-at", "2030-01-01T00:00:00Z",
+                    "--reuse-existing-current",
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(source.read_bytes(), output.read_bytes())
+
+    def test_reuse_existing_current_rejects_different_installer_bytes(self) -> None:
+        source = ROOT / "site/public/api/v1/catalog.json"
+        catalog = json.loads(source.read_text(encoding="utf-8"))
+        current = next(
+            item for item in catalog["packages"]
+            if item["component"] == "installer" and item["current"]
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installer = root / current["filename"]
+            installer.write_bytes(b"different installer bytes")
+            with self.assertRaisesRegex(ReleaseCatalogError, "diverge"):
+                build_candidate_catalog(
+                    source=source,
+                    installer=installer,
+                    output=root / "catalog.json",
+                    version=current["version"],
+                    release_title=current["release_title"],
+                    release_notes=current["release_notes"],
+                    reuse_existing_current=True,
+                )
+
+    def test_reuse_existing_current_rejects_different_release_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.json"
+            catalog = json.loads(
+                (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+            )
+            current = next(
+                item for item in catalog["packages"]
+                if item["component"] == "installer" and item["current"]
+            )
+            installer = root / current["filename"]
+            payload = b"exact reconstructed installer bytes"
+            installer.write_bytes(payload)
+            current["size"] = len(payload)
+            current["sha256"] = hashlib.sha256(payload).hexdigest()
+            source.write_text(json.dumps(catalog), encoding="utf-8")
+            with self.assertRaisesRegex(ReleaseCatalogError, "metadados"):
+                build_candidate_catalog(
+                    source=source,
+                    installer=installer,
+                    output=root / "catalog.json",
+                    version=current["version"],
+                    release_title="Título divergente",
+                    release_notes=current["release_notes"],
+                    reuse_existing_current=True,
+                )
+
     def test_existing_output_and_existing_version_fail_without_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
