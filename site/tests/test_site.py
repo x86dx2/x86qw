@@ -109,6 +109,31 @@ class SiteTests(unittest.TestCase):
         self.assertIn('<table class="platform-matrix">', home)
         self.assertNotIn('role="table"', home)
 
+    def test_public_cta_is_not_install_while_external_public_is_false(self):
+        product = json.loads((ROOT / "api/v1/product.json").read_text(encoding="utf-8"))
+        self.assertFalse(product["external_public"])
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        primary = re.search(
+            r'<a class="button button-primary" href="([^"]+)">([^<]+)</a>',
+            home,
+        )
+        self.assertIsNotNone(primary)
+        href, label = primary.group(1), unescape(primary.group(2)).strip()
+        self.assertNotEqual("#instalar", href)
+        self.assertNotIn("Instalar x86QW", label)
+        header = re.search(
+            r'<a class="header-install" href="#instalar"[^>]*>([^<]+)</a>',
+            home,
+        )
+        self.assertIsNotNone(header)
+        self.assertIn("owner-only", unescape(header.group(1)).casefold())
+        quiet_install = re.search(
+            r'<a class="button button-quiet" href="#instalar">([^<]+)</a>',
+            home,
+        )
+        self.assertIsNotNone(quiet_install)
+        self.assertIn("owner-only", unescape(quiet_install.group(1)).casefold())
+
     def test_release_documentation_keeps_mac_local_boundary(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
         cloudflare = (PROJECT_ROOT / "site/docs/cloudflare.md").read_text(encoding="utf-8")
