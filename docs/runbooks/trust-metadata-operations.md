@@ -48,10 +48,12 @@ python3 maintenance/tools/generate_trust_metadata.py generate \
   --version 1
 ```
 
-Renovações usam uma saída nova e `--version N+1`. Targets vence em até 90 dias,
-snapshot em 7 dias, timestamp em 7 dias no modo owner-only (24 horas antes de
-catálogo público) e root em 365 dias. Nunca reutilize uma versão para bytes
-diferentes.
+Renovações usam uma saída nova e `--version N+1`. No modo owner-only, conforme a
+emenda de 2026-08-27 do ADR 0006, targets vence em até 90 dias, snapshot em 90
+dias, timestamp em 30 dias e root em 365 dias. Antes de catálogo público os tetos
+voltam a 7 dias para snapshot e 24 horas para timestamp. Snapshot nunca vence
+antes do timestamp: se vencerem juntos, a renovação isolada de timestamp deixa de
+recuperar a cadeia. Nunca reutilize uma versão para bytes diferentes.
 
 ## Papéis humanos do modelo-alvo
 
@@ -146,23 +148,24 @@ confere que nenhum segredo entrou na ata antes de anexá-la à evidência da iss
 
 ## Renovação normal
 
-### Timestamp, antes de 48 horas restantes (owner-only)
+### Timestamp, antes de 7 dias restantes (owner-only)
 
-- [ ] monitor confirma mais de 6 horas restantes antes de iniciar;
-- [ ] snapshot referenciado ainda é o último aprovado e está válido;
+- [ ] monitor confirma mais de 72 horas restantes antes de iniciar;
+- [ ] snapshot referenciado ainda é o último aprovado, está válido e vence depois
+      da nova expiração de timestamp;
 - [ ] versão de timestamp é exatamente a anterior mais um;
-- [ ] nova expiração não passa de 7 dias; antes de catálogo público, o teto
+- [ ] nova expiração não passa de 30 dias; antes de catálogo público, o teto
       volta a 24 horas;
 - [ ] assinatura é verificada localmente;
 - [ ] bytes são comparados em todos os mirrors;
 - [ ] `timestamp.json` é promovido por último.
 
-### Snapshot, antes de 48 horas restantes
+### Snapshot, antes de 14 dias restantes
 
 - [ ] targets e todas as delegações referenciadas continuam presentes;
 - [ ] versões nunca diminuem e hashes correspondem aos bytes publicados;
 - [ ] versão de snapshot é exatamente a anterior mais um;
-- [ ] nova expiração não passa de 7 dias;
+- [ ] nova expiração não passa de 90 dias e é maior que a do timestamp vigente;
 - [ ] snapshot versionado é imutável nos mirrors;
 - [ ] timestamp novo é preparado e promovido somente após a convergência.
 

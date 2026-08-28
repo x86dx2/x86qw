@@ -106,12 +106,19 @@ class GenerateTrustMetadataTests(unittest.TestCase):
             )
             limits = {
                 "1.targets.json": timedelta(days=90, minutes=1),
-                "1.snapshot.json": timedelta(days=7, minutes=1),
-                "timestamp.json": timedelta(days=7, minutes=1),
+                "1.snapshot.json": timedelta(days=90, minutes=1),
+                "timestamp.json": timedelta(days=30, minutes=1),
             }
+            expiries = {}
             for name, limit in limits.items():
                 metadata = Metadata.from_bytes((output / "metadata" / name).read_bytes())
                 self.assertLessEqual(metadata.signed.expires, datetime.now(timezone.utc) + limit)
+                expiries[name] = metadata.signed.expires
+            # A timestamp that outlives its snapshot renews nothing: the client
+            # rejects the expired snapshot the renewed timestamp points at, so
+            # the timestamp-only workflow could never rescue the chain.
+            self.assertLess(expiries["timestamp.json"], expiries["1.snapshot.json"])
+            self.assertLessEqual(expiries["1.snapshot.json"], expiries["1.targets.json"])
 
             cache = workspace / "cache"
             cache.mkdir(mode=0o700)
