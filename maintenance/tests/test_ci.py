@@ -349,17 +349,23 @@ class ContinuousIntegrationTests(unittest.TestCase):
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "17 * * * *"', monitor)
         self.assertIn("monitor_public_tuf.py", monitor)
-        self.assertIn("--warning-hours 6", monitor)
+        self.assertIn("--warning-hours 72", monitor)
+        self.assertNotIn("--warning-hours 6", monitor)
 
     def test_tuf_monitor_persists_one_actionable_alert_on_failure(self):
         monitor = (ROOT / ".github/workflows/tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn("issues: write", monitor)
+        self.assertIn("actions: read", monitor)
         self.assertIn("if: failure()", monitor)
         self.assertIn("actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd", monitor)
         self.assertIn("x86qw-tuf-lease-alert", monitor)
         self.assertIn("issues.listForRepo", monitor)
         self.assertIn("issues.create", monitor)
         self.assertIn("issues.update", monitor)
+        self.assertIn("const labels = ['P0', 'owner-only']", monitor)
+        self.assertIn("labels: 'P0'", monitor)
+        self.assertIn("listWorkflowRuns", monitor)
+        self.assertIn("monitor gap", monitor)
 
     def test_public_projection_and_timestamp_recovery_verify_all_mirrors_first(self):
         projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
