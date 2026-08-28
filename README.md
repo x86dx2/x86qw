@@ -151,16 +151,17 @@ arena/alternativos e treino, com uma entrada adicional para consultar o catálog
 completo. Nenhum modo é ocultado por essa organização.
 Race pergunta formato, pontuação, pacemaker e visibilidade dos corredores; CTF
 pergunta gancho, runas e spawn; modos compatíveis oferecem Frogbots, habilidade
-e nomes. Há três perfis: `KTX Default`, nomes originais sem customização;
-`x86QW aleatório`, a seleção inicial do menu com a lista One Piece embaralhada
-a cada lançamento; e uma lista pessoal editável. Veja o
+e nomes. Há quatro perfis: `KTX Default`, nomes originais sem customização e seleção
+inicial do menu; `x86QW aleatório`, mapas e modos da distribuição embaralhados
+a cada lançamento; `One Piece (opcional)`, a lista One Piece embaralhada; e
+uma lista pessoal editável. Veja o
 [guia de nomes dos Frogbots](docs/FROGBOTS.md).
 Modos de tamanho fixo limitam a seleção às vagas restantes: Duel oferece no
 máximo um bot quando há um jogador humano.
 Ao entrar no mapa, o console imprime as teclas do modo ativo. Em Duel, `F5`
 marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
-`DEL`, `HOME` e `END` gerenciam bots e habilidade. O perfil One Piece também
-preserva as cores de camisa, calça e equipe definidas pelo KTX.
+`DEL`, `HOME` e `END` gerenciam bots e habilidade. Os perfis nomeados também
+preservam as cores de camisa, calça e equipe definidas pelo KTX.
 `--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
 um bot entra. `INS` respeita a lotação do modo, `DEL` libera a vaga e
 `HOME`/`END` alteram cumulativamente a habilidade dos próximos bots. Arma, vida

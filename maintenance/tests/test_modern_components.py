@@ -213,6 +213,15 @@ class ModernComponentTests(unittest.TestCase):
         ], ROOT)
         self.assertEqual("x86qw", named.ktx_options.bot_names_profile)
         try:
+            one_piece = play_qw.parse_arguments([
+                "ktx", "--mode", "duel", "--bots", "1", "--bot-names", "one-piece",
+                "--target", str(target),
+            ], ROOT)
+        except SystemExit as error:
+            self.fail(f"--bot-names one-piece deveria ser aceito, mas encerrou com {error.code}")
+        self.assertEqual("one-piece", one_piece.ktx_options.bot_names_profile)
+        self.assertEqual("default", direct.ktx_options.bot_names_profile)
+        try:
             competitive = play_qw.parse_arguments([
                 "ktx", "--mode", "duel", "--ruleset", "qcon",
                 "--target", str(target),
@@ -1820,14 +1829,19 @@ class ModernComponentTests(unittest.TestCase):
             )
             name_options = tuple(select.call_args_list[2].args[1])
             self.assertEqual(
-                ("default", "x86qw", "personal"),
+                ("default", "x86qw", "one-piece", "personal"),
                 tuple(option.key for option in name_options),
             )
             self.assertEqual(
-                ("KTX Default", "x86QW aleatório", "Lista pessoal"),
+                (
+                    "KTX Default",
+                    "x86QW aleatório",
+                    "One Piece (opcional)",
+                    "Lista pessoal",
+                ),
                 tuple(option.label for option in name_options),
             )
-            self.assertEqual(1, select.call_args_list[2].kwargs["default"])
+            self.assertEqual(0, select.call_args_list[2].kwargs["default"])
 
     def test_selecting_no_bots_clears_previous_frogbot_state(self):
         duel = next(mode for mode in play_qw.load_ktx_modes(ROOT) if mode.key == "duel")
@@ -4732,7 +4746,7 @@ class ModernComponentTests(unittest.TestCase):
                 for path in (target / "qw").glob("x86qw-ktx-session-*.cfg"):
                     path.unlink(missing_ok=True)
 
-    def test_frogbot_name_catalog_prioritizes_straw_hats_and_is_unique(self):
+    def test_x86qw_frogbot_catalog_uses_distribution_maps_and_is_unique(self):
         document = json.loads(
             (ROOT / "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json").read_text(
                 encoding="utf-8",
@@ -4741,17 +4755,66 @@ class ModernComponentTests(unittest.TestCase):
         identities = play_qw.validate_frogbot_name_document(
             document, profile="x86qw", label="fixture",
         )
+        self.assertEqual("x86qw", document["theme"])
+        self.assertEqual("x86qw", document["profile"])
         self.assertEqual(
-            ("Luffy", "Zoro", "Nami", "Usopp", "Sanji", "Chopper", "Robin", "Franky", "Brook", "Jinbe"),
+            (
+                "dm6", "dm4", "dm2", "dm3", "aerowalk",
+                "e1m2", "schloss", "povdmm4", "death32c", "cmt3",
+            ),
             tuple(identity.name for identity in identities[:10]),
         )
-        self.assertEqual(32, len(identities))
-        self.assertEqual(32, len({identity.name.casefold() for identity in identities}))
+        self.assertNotIn("Luffy", {identity.name for identity in identities})
+        self.assertGreaterEqual(len(identities), 19)
+        self.assertEqual(
+            len(identities),
+            len({identity.name.casefold() for identity in identities}),
+        )
         self.assertTrue(all(
             set(character) == {"name"}
             for group in document["groups"]
             for character in group["characters"]
         ))
+
+    def test_one_piece_frogbot_catalog_remains_optional_and_unique(self):
+        document = json.loads(
+            (
+                ROOT
+                / "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json"
+            ).read_text(encoding="utf-8")
+        )
+        identities = play_qw.validate_frogbot_name_document(
+            document, profile="one-piece", label="fixture",
+        )
+        self.assertEqual("one-piece", document["theme"])
+        self.assertEqual("one-piece", document["profile"])
+        self.assertEqual(
+            (
+                "Luffy", "Zoro", "Nami", "Usopp", "Sanji",
+                "Chopper", "Robin", "Franky", "Brook", "Jinbe",
+            ),
+            tuple(identity.name for identity in identities[:10]),
+        )
+        self.assertEqual(32, len(identities))
+        self.assertEqual(32, len({identity.name.casefold() for identity in identities}))
+
+    def test_x86qw_frogbot_profile_rejects_one_piece_theme(self):
+        document = {
+            "format": 1,
+            "game": "ktx",
+            "profile": "x86qw",
+            "theme": "one-piece",
+            "prefix": "/",
+            "color": "quake-high-bit",
+            "randomize": True,
+            "groups": [
+                {"id": "classic-maps", "characters": [{"name": "dm6"}]},
+            ],
+        }
+        with self.assertRaises(play_qw.InstallerError):
+            play_qw.validate_frogbot_name_document(
+                document, profile="x86qw", label="fixture",
+            )
 
     def test_frogbot_names_use_slash_and_quake_high_bit_color(self):
         self.assertEqual("/$xa0$xcc$xf5$xe6$xe6$xf9", play_qw.quake_colored_frogbot_name("Luffy"))
@@ -4841,6 +4904,27 @@ class ModernComponentTests(unittest.TestCase):
         options = play_qw.resolve_frogbot_name_profile(
             ROOT, ROOT / "unused", game,
             play_qw.KtxLaunchOptions(bots=2, bot_names_profile="x86qw"),
+            generator=generator,
+        )
+        self.assertEqual(tuple(reversed(source_names)), options.bot_name_pool)
+        generator.sample.assert_called_once_with(source_names, len(source_names))
+
+    def test_one_piece_frogbot_profile_randomizes_once_per_launch(self):
+        game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+        document = json.loads(
+            (
+                ROOT
+                / "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json"
+            ).read_text(encoding="utf-8")
+        )
+        source_names = play_qw.validate_frogbot_name_document(
+            document, profile="one-piece", label="fixture",
+        )
+        generator = mock.Mock()
+        generator.sample.return_value = list(reversed(source_names))
+        options = play_qw.resolve_frogbot_name_profile(
+            ROOT, ROOT / "unused", game,
+            play_qw.KtxLaunchOptions(bots=2, bot_names_profile="one-piece"),
             generator=generator,
         )
         self.assertEqual(tuple(reversed(source_names)), options.bot_name_pool)

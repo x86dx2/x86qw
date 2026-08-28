@@ -498,7 +498,8 @@ Race cruza os BSPs com as 54 rotas oficiais ou pessoais; CTF cruza os BSPs com
 os seis ENTs gerenciados ou um ENT pessoal seguro.
 
 `--bot-names default` mantém os nomes originais do KTX sem definir cvars de
-customização. `--bot-names x86qw` sorteia por lançamento uma lista One Piece,
+customização. `--bot-names x86qw` sorteia por lançamento mapas e modos da
+distribuição. `--bot-names one-piece` sorteia a lista One Piece opcional,
 priorizando os dez Chapéus de Palha. `--bot-names personal` usa na ordem
 declarada `quake-world/qw/x86qw-frogbot-names.json`, criado pelo bootstrap e
 nunca sobrescrito depois de uma edição. O launcher aplica automaticamente o
@@ -507,9 +508,9 @@ somente o nome, sem prefixo ou códigos no valor. Campos de aparência são
 rejeitados para que as cores continuem inequivocamente sob controle do KTX. O contrato completo está em
 [`docs/FROGBOTS.md`](../../../docs/FROGBOTS.md).
 
-No menu, `x86QW aleatório` é a seleção inicial e o perfil sem customização
-aparece como `KTX Default`. A CLI conserva `default` como padrão por
-compatibilidade. Modos de tamanho fixo oferecem somente as vagas restantes —
+No menu, `KTX Default` é a seleção inicial. `x86QW aleatório` e
+`One Piece (opcional)` continuam disponíveis. A CLI conserva `default` como
+padrão por compatibilidade. Modos de tamanho fixo oferecem somente as vagas restantes —
 Duel aceita um bot com o jogador humano — enquanto FFA e Practice mantêm
 preenchimento e quantidade personalizada. Vários bots entram em frames
 separados. Durante a sessão, `INS` respeita a lotação, `DEL` reabre a vaga e

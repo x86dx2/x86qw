@@ -11,6 +11,7 @@
     {"member": "x86qw_runtime/session_control.py", "source": "x86qw_runtime/session_control.py", "consumer": "manager, services e supervisor.sessions", "contract": "lock exclusivo da instalação"},
     {"member": "_x86qw/ktx-modes.json", "source": "dist/mods/ktx/1.47/x86qw/catalog/modes.json", "consumer": "gameplay.py", "contract": "projeção runtime dos modos KTX"},
     {"member": "_x86qw/ktx-frogbot-names.json", "source": "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "consumer": "gameplay.py", "contract": "projeção runtime dos nomes Frogbot"},
+    {"member": "_x86qw/ktx-frogbot-names-one-piece.json", "source": "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json", "consumer": "gameplay.py", "contract": "projeção runtime opcional dos nomes Frogbot One Piece"},
     {"member": "x86qw_runtime/io/downloader.py", "source": "x86qw_runtime/io/downloader.py", "consumer": "manager.py", "contract": "única fronteira de bytes remotos"},
     {"member": "x86qw_runtime/__init__.py", "source": "x86qw_runtime/__init__.py", "consumer": "importador Python", "contract": "pacote runtime canônico"},
     {"member": "x86qw_runtime/contracts/__init__.py", "source": "x86qw_runtime/contracts/__init__.py", "consumer": "manager, maintenance e testes de contrato", "contract": "fachada dos contratos de versão, schema, política e JSON"},

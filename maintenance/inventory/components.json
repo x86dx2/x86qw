@@ -189,6 +189,7 @@
         {"path": "dist/mods/ktx/1.47/x86qw/CHANGELOG.md", "purpose": "mod-change-log"},
         {"path": "dist/mods/ktx/1.47/x86qw/catalog/modes.json", "purpose": "launcher-mode-catalog"},
         {"path": "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json", "purpose": "launcher-bot-name-catalog"},
+        {"path": "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json", "purpose": "optional-launcher-bot-name-catalog"},
         {"path": "dist/mods/ktx/1.47/x86qw/source/0001-reproducible-build-date.patch", "purpose": "reproducible-ktx-qvm-build-metadata"},
         {"path": "dist/mods/ktx/1.47/x86qw/source/0002-frogbot-identities.patch", "purpose": "reproducible-ktx-qvm-identity-extension"},
         {"path": "dist/mods/ktx/1.47/x86qw/source/0003-frogbot-team-balance.patch", "purpose": "reproducible-ktx-qvm-team-balance-extension"},

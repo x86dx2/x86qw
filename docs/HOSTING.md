@@ -89,8 +89,9 @@ Arma, vida e interrupção por morte pertencem exclusivamente ao ToT:
 Equipe fixa de bot, pacemaker e ocultação de corredores são controles do
 cliente e permanecem disponíveis em `play`, não em `host`.
 
-O dedicado aceita os mesmos três perfis de nome: `default` não customiza o
-KTX, `x86qw` sorteia a lista One Piece da distribuição e `personal` lê
+O dedicado aceita os mesmos quatro perfis de nome: `default` não customiza o
+KTX, `x86qw` sorteia mapas e modos da distribuição, `one-piece` sorteia a
+lista One Piece opcional e `personal` lê
 `qw/x86qw-frogbot-names.json`. O prefixo `/` e a cor Quake são aplicados pelo
 launcher. Consulte [Nomes dos Frogbots](FROGBOTS.md) para editar a lista
 pessoal.

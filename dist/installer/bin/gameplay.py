@@ -245,6 +245,15 @@ DEVELOPMENT_KTX_BOT_NAME_CATALOG = (
     "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json"
 )
 RUNTIME_KTX_BOT_NAME_CATALOG = "_x86qw/ktx-frogbot-names.json"
+DEVELOPMENT_KTX_BOT_NAME_CATALOGS = {
+    "x86qw": DEVELOPMENT_KTX_BOT_NAME_CATALOG,
+    "one-piece": "dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json",
+}
+RUNTIME_KTX_BOT_NAME_CATALOGS = {
+    "x86qw": RUNTIME_KTX_BOT_NAME_CATALOG,
+    "one-piece": "_x86qw/ktx-frogbot-names-one-piece.json",
+}
+GROUPED_FROGBOT_NAME_PROFILES = frozenset(DEVELOPMENT_KTX_BOT_NAME_CATALOGS)
 KTX_RUNTIME_CONFIG_PLACEHOLDER = "__X86QW_KTX_RUNTIME_CONFIG__"
 # ezQuake may spend several seconds loading the large managed configuration and
 # its assets before it reaches the first frame.  This grace period is only a
@@ -455,6 +464,7 @@ def ktx_summary_lines(options: KtxLaunchOptions) -> list[str]:
         names = {
             "default": "KTX Default",
             "x86qw": "x86QW aleatório",
+            "one-piece": "One Piece (opcional)",
             "personal": "lista pessoal",
         }.get(options.bot_names_profile, options.bot_names_profile)
         lines.append(f"  Nomes   | {names}")
@@ -565,8 +575,8 @@ def validate_frogbot_name_document(
     ):
         raise InstallerError(f"Catálogo de nomes Frogbot inválido: {label}")
     raw_identities: list[object]
-    if profile == "x86qw":
-        if document.get("theme") != "one-piece" or document.get("randomize") is not True:
+    if profile in GROUPED_FROGBOT_NAME_PROFILES:
+        if document.get("theme") != profile or document.get("randomize") is not True:
             raise InstallerError(f"Catálogo de nomes Frogbot inválido: {label}")
         groups = document.get("groups")
         if not isinstance(groups, list) or not groups:
@@ -610,23 +620,31 @@ def validate_frogbot_name_document(
     return result
 
 
-def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
+def load_grouped_frogbot_names(
+    project_root: Path,
+    profile: str,
+) -> tuple[FrogbotIdentity, ...]:
     context = _gameplay_context
     if context is not None and context.zipapp_path is not None:
+        member = RUNTIME_KTX_BOT_NAME_CATALOGS[profile]
         document = context.read_zipapp_json(
             context.zipapp_path,
-            RUNTIME_KTX_BOT_NAME_CATALOG,
+            member,
             "Catálogo de nomes Frogbot",
         )
-        label = RUNTIME_KTX_BOT_NAME_CATALOG
+        label = member
     else:
-        path = project_root / DEVELOPMENT_KTX_BOT_NAME_CATALOG
+        path = project_root / DEVELOPMENT_KTX_BOT_NAME_CATALOGS[profile]
         label = str(path)
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
             raise InstallerError(f"Catálogo de nomes Frogbot inválido: {path}") from error
-    return validate_frogbot_name_document(document, profile="x86qw", label=label)
+    return validate_frogbot_name_document(document, profile=profile, label=label)
+
+
+def load_x86qw_frogbot_names(project_root: Path) -> tuple[FrogbotIdentity, ...]:
+    return load_grouped_frogbot_names(project_root, "x86qw")
 
 
 def load_personal_frogbot_names(target: Path, relative: str) -> tuple[FrogbotIdentity, ...]:
@@ -657,8 +675,8 @@ def resolve_frogbot_name_profile(
     count = requested_frogbot_names(options, mode)
     if options.bot_names_profile == "default" or count == 0:
         return replace(options, bot_name_pool=())
-    if options.bot_names_profile == "x86qw":
-        pool = load_x86qw_frogbot_names(project_root)
+    if options.bot_names_profile in GROUPED_FROGBOT_NAME_PROFILES:
+        pool = load_grouped_frogbot_names(project_root, options.bot_names_profile)
         randomizer = generator or random.SystemRandom()
         pool = tuple(randomizer.sample(pool, len(pool)))
     elif options.bot_names_profile == "personal":
@@ -1754,6 +1772,10 @@ class GameplayPlayerMixin:
                             ),
                             navigation.MenuOption(
                                 "x86qw", "x86QW aleatório",
+                                "mapas e modos da distribuição, embaralhados",
+                            ),
+                            navigation.MenuOption(
+                                "one-piece", "One Piece (opcional)",
                                 "Chapéus de Palha, lendas e grandes potências",
                             ),
                             navigation.MenuOption(
@@ -1762,7 +1784,7 @@ class GameplayPlayerMixin:
                             ),
                         ),
                         breadcrumb=breadcrumb + " › Frogbots",
-                        default=1,
+                        default=0,
                         allow_back=True,
                     )
                     if names_profile is None:
@@ -2580,8 +2602,8 @@ def add_game_launch_arguments(
     )
     parser.set_defaults(bot_break_on_death=None)
     parser.add_argument(
-        "--bot-names", choices=("default", "x86qw", "personal"), default="default",
-        help="seleciona nomes padrão KTX, x86QW aleatórios ou a lista pessoal",
+        "--bot-names", choices=("default", "x86qw", "one-piece", "personal"), default="default",
+        help="seleciona nomes padrão KTX, x86QW aleatórios, One Piece ou a lista pessoal",
     )
     parser.add_argument(
         "--ctf-hook", choices=("smooth", "fast", "classic", "crhook", "off"),
