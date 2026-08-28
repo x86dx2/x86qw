@@ -22,6 +22,7 @@ from x86qw_runtime.io.archive import (  # noqa: E402
     read_archive_members,
     scan_archive,
 )
+from maintenance.tools.validate_catalog import published_package_count  # noqa: E402
 
 
 class Page(HTMLParser):
@@ -103,6 +104,7 @@ class SiteTests(unittest.TestCase):
         self.assertIn("aria-live=\"polite\"", home)
         self.assertIn("/api/v1/catalog.json", script)
         self.assertIn("catalog.project !== 'x86qw'", script)
+        self.assertIn("item.component !== 'installer'", script)
         self.assertIn('role="status" aria-live="polite" aria-atomic="true"', home)
         self.assertIn('<table class="platform-matrix">', home)
         self.assertNotIn('role="table"', home)
@@ -192,7 +194,11 @@ class SiteTests(unittest.TestCase):
         manual = (PROJECT_ROOT / "dist/installer/docs/installer.md").read_text(encoding="utf-8")
 
         self.assertEqual(version, product["version"])
-        self.assertEqual(len(packages["packages"]), product["package_count"])
+        self.assertEqual(published_package_count(packages), product["package_count"])
+        self.assertLess(product["package_count"], len(packages["packages"]))
+        self.assertTrue(
+            any(item.get("component") == "installer" for item in packages["packages"]),
+        )
         self.assertEqual(len(components["components"]), product["component_count"])
         self.assertEqual(capabilities["commands"], product["commands"])
         self.assertEqual(

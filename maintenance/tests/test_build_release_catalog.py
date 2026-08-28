@@ -13,7 +13,7 @@ from maintenance.tools.build_release_catalog import (
     build_candidate_product,
     build_candidate_catalog,
 )
-from maintenance.tools.validate_catalog import validate_catalog
+from maintenance.tools.validate_catalog import published_package_count, validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -87,7 +87,7 @@ class BuildReleaseCatalogTests(unittest.TestCase):
                 source=product_source, catalog=catalog, output=product_output,
             )
             self.assertEqual("1.0.0-rc.1", product["version"])
-            self.assertEqual(len(catalog["packages"]), product["package_count"])
+            self.assertEqual(published_package_count(catalog), product["package_count"])
             self.assertEqual(current[0]["sha256"], product["installer"]["sha256"])
 
     def test_candidate_catalog_binds_release_title_and_notes_from_the_release_input(self) -> None:

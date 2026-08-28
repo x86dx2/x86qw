@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "maintenance/tools"))
 
 from add_package import register_package  # noqa: E402
 from downloader import MAX_ARTIFACT_BYTES  # noqa: E402
-from validate_catalog import validate_catalog  # noqa: E402
+from validate_catalog import published_package_count, validate_catalog  # noqa: E402
 from publish_gitlab_packages import artifact_url, main as publish_gitlab_main, upload  # noqa: E402
 from build_component_packages import component_package_metadata, register_packages  # noqa: E402
 from build_core_package import build_core_package  # noqa: E402
@@ -245,6 +245,12 @@ class CatalogTests(unittest.TestCase):
             (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
         )
         self.assertEqual(validate_catalog(catalog), len(catalog["packages"]))
+        installers = sum(package["component"] == "installer" for package in catalog["packages"])
+        self.assertGreater(installers, 0)
+        self.assertEqual(
+            published_package_count(catalog),
+            len(catalog["packages"]) - installers,
+        )
         self.assertEqual(6, sum(package["component"] == "ezquake" for package in catalog["packages"]))
         ktx = next(package for package in catalog["packages"] if package.get("package") == "ktx")
         self.assertEqual("1.47+x86qw.19", ktx["version"])

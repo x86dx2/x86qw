@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from maintenance.tools.validate_catalog import validate_catalog
+from maintenance.tools.validate_catalog import published_package_count, validate_catalog
 
 
 class ReleaseSiteError(ValueError):
@@ -100,7 +100,8 @@ def render_release_site(
         raise ReleaseSiteError(f"destino do site já existe: {output}")
     catalog_value = _read_object(Path(catalog), "catálogo candidato")
     try:
-        package_count = validate_catalog(catalog_value)
+        validate_catalog(catalog_value)
+        package_count = published_package_count(catalog_value)
     except (OSError, ValueError) as error:
         raise ReleaseSiteError(f"catálogo candidato inválido: {error}") from error
     product_value = _read_object(Path(product), "produto candidato")

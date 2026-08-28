@@ -214,6 +214,20 @@ def validate_catalog(catalog: object) -> int:
     return len(packages)
 
 
+def published_package_count(catalog: object) -> int:
+    """Count distributable content, omitting historical installer bundles."""
+    if not isinstance(catalog, dict):
+        raise ValueError("catalog must be a JSON object")
+    packages = catalog.get("packages")
+    if not isinstance(packages, list):
+        raise ValueError("packages must be a list")
+    return sum(
+        1
+        for package in packages
+        if isinstance(package, dict) and package.get("component") != "installer"
+    )
+
+
 def main(argv: list[str]) -> int:
     path = Path(argv[1]) if len(argv) > 1 else DEFAULT_CATALOG
     if len(argv) > 2:
