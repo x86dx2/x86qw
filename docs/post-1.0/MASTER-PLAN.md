@@ -16,7 +16,7 @@ FEATURE WORK: ALLOWED_AFTER_S0_M3
 
 ## Estado e autoridades
 
-- `source`: baseline current `1.0.6`; `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2` e `0.7.13` permanecem históricas no catálogo.
+- `source`: baseline current `1.0.7`; `1.0.6`, `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2` e `0.7.13` permanecem históricas no catálogo.
 - `candidate/release`: bytes imutáveis de 1.0.0, installer SHA-256 `d3274e6a...`, audiência `owner-only`.
 - `deployment`: site, bootstraps, product, catálogo e TUF servidos; deve convergir com o candidato exato.
 - `development`: HEAD atual e seus checks; a main verde é pré-condição de qualquer mudança.
@@ -136,6 +136,6 @@ Medir em harness e recibos locais: fresh install success, lifecycle success, upd
 
 ## Próxima ação
 
-A fonte current é **1.0.6**; `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1` e `0.7.13` estão históricas. F1–F3 e o
+A fonte current é **1.0.7**; `1.0.6`, `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1` e `0.7.13` estão históricas. F1–F3 e o
 conserto de `host`/launcher ficam em 1.0.x. Manter a lease TUF fora da janela
 de 6 h. F4 e EP só com uso real ou decisão de audiência.
