@@ -49,6 +49,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "maintenance/tools/tuf_timestamp_renewal.py",
             "maintenance/tools/verify_tuf_timestamp_renewal.py",
             "maintenance/tools/verify_tuf_timestamp_publication.py",
+            "maintenance/tools/tuf_snapshot_renewal.py",
+            "maintenance/tools/verify_tuf_snapshot_renewal.py",
+            "maintenance/tools/verify_tuf_snapshot_publication.py",
             "maintenance/tools/build_soak_report.py",
             "maintenance/tools/verify_soak_report.py",
             "maintenance/tools/validate_release_inputs.py",
@@ -77,6 +80,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ROOT / ".github/workflows/tuf-operation-drill.yml",
             ROOT / ".github/workflows/tuf-timestamp-renewal.yml",
             ROOT / ".github/workflows/tuf-timestamp-publish.yml",
+            ROOT / ".github/workflows/tuf-snapshot-renewal.yml",
+            ROOT / ".github/workflows/tuf-snapshot-publish.yml",
         ]
         for path in workflows:
             source = path.read_text(encoding="utf-8")
@@ -175,6 +180,55 @@ class ReleaseWorkflowTests(unittest.TestCase):
             source,
         )
         self.assertNotIn("generate_trust_metadata.py", source)
+
+    def test_snapshot_renewal_is_protected_and_never_publishes(self):
+        source = (ROOT / ".github/workflows/tuf-snapshot-renewal.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("TUF_SNAPSHOT_KEY_B64", source)
+        self.assertIn("TUF_TIMESTAMP_KEY_B64", source)
+        self.assertIn("tuf_snapshot_renewal.py", source)
+        self.assertIn('default: "90"', source)
+        self.assertIn('default: "30"', source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("tuf-metadata-handoff.yml", source)
+        self.assertIn("release_code_commit:", source)
+        self.assertIn("ref: ${{ inputs.release_code_commit }}", source)
+        self.assertIn("Validate the pinned renewal-code checkout", source)
+        self.assertNotIn("ref: main", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn("published=false", source)
+        self.assertIn("tuf-snapshot-renewal-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
+        self.assertNotIn("publish_tuf_metadata.py", source)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
+
+    def test_snapshot_publication_is_protected_and_binds_renewal_before_deploy(self):
+        source = (ROOT / ".github/workflows/tuf-snapshot-publish.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("tuf-snapshot-renewal.yml", source)
+        self.assertIn("verify_tuf_snapshot_renewal.py", source)
+        self.assertIn("publish_tuf_metadata.py", source)
+        self.assertIn("assemble_site_release.py", source)
+        self.assertIn("CLOUDFLARE_API_TOKEN", source)
+        self.assertIn("verify_public_tuf.py", source)
+        self.assertIn("verify_tuf_snapshot_publication.py", source)
+        self.assertIn("Verify immutable snapshot publication receipt", source)
+        self.assertIn("overwrite: false", source)
+        self.assertIn(
+            "tuf-snapshot-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}",
+            source,
+        )
+        self.assertNotIn("generate_trust_metadata.py", source)
+        self.assertNotIn("verify_tuf_timestamp_renewal.py", source)
+        self.assertNotIn('"changed_files": ["metadata/timestamp.json"]', source)
 
     def test_public_acceptance_runs_inside_the_protected_release_environment(self):
         source = (ROOT / ".github/workflows/public-acceptance.yml").read_text(

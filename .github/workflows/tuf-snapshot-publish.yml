@@ -1,0 +1,436 @@
+name: Publish protected TUF snapshot renewal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_code_commit:
+        description: "SHA exato da revisão que contém este workflow e os gates"
+        required: true
+        type: string
+      renewal_workflow_commit:
+        description: "SHA da revisão que executou a renovação snapshot-timestamp"
+        required: true
+        type: string
+      renewal_run_id:
+        description: "Run protegido que produziu o handoff snapshot renovado"
+        required: true
+        type: string
+      renewal_artifact_id:
+        description: "Artifact ID imutável do handoff snapshot renovado"
+        required: true
+        type: string
+      renewal_artifact_name:
+        description: "Nome exato do artifact snapshot renovado"
+        required: true
+        type: string
+      source_workflow_commit:
+        description: "SHA da revisão que publicou o TUF de origem"
+        required: true
+        type: string
+      source_run_id:
+        description: "Run protegido que produziu o TUF de origem"
+        required: true
+        type: string
+      source_artifact_id:
+        description: "Artifact ID imutável do TUF de origem"
+        required: true
+        type: string
+      source_artifact_name:
+        description: "Nome exato do artifact TUF de origem"
+        required: true
+        type: string
+      candidate_commit:
+        description: "SHA completo do commit de produto associado ao catálogo"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Run que produziu o candidato imutável"
+        required: true
+        type: string
+      candidate_artifact_id:
+        description: "Artifact ID imutável do candidato"
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: "Nome exato do artifact candidato"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA-256 exato de candidate.json"
+        required: true
+        type: string
+      snapshot_key_id:
+        description: "Key ID snapshot autorizado pela root"
+        required: true
+        type: string
+      timestamp_key_id:
+        description: "Key ID timestamp autorizado pela root"
+        required: true
+        type: string
+      renewal_report_sha256:
+        description: "SHA-256 do report.json do handoff snapshot"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-tuf-snapshot-publish-${{ inputs.candidate_commit }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify and publish snapshot-timestamp TUF renewal
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_code_commit }}
+          lfs: false
+          fetch-depth: 1
+      - name: Validate the pinned release-code checkout
+        shell: bash
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - name: Validate bounded publication coordinates
+        shell: bash
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          RENEWAL_WORKFLOW_COMMIT: ${{ inputs.renewal_workflow_commit }}
+          RENEWAL_RUN_ID: ${{ inputs.renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.renewal_artifact_id }}
+          RENEWAL_ARTIFACT_NAME: ${{ inputs.renewal_artifact_name }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          SNAPSHOT_KEY_ID: ${{ inputs.snapshot_key_id }}
+          TIMESTAMP_KEY_ID: ${{ inputs.timestamp_key_id }}
+          RENEWAL_REPORT_SHA256: ${{ inputs.renewal_report_sha256 }}
+        run: |
+          set -euo pipefail
+          for value in "$RENEWAL_WORKFLOW_COMMIT" "$SOURCE_WORKFLOW_COMMIT" "$CANDIDATE_COMMIT"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+          done
+          test "$RENEWAL_WORKFLOW_COMMIT" = "$RELEASE_CODE_COMMIT"
+          [[ "$RENEWAL_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$RENEWAL_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$RENEWAL_ARTIFACT_NAME" =~ ^tuf-snapshot-renewal-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$RENEWAL_ARTIFACT_NAME" == tuf-snapshot-renewal-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" =~ ^tuf-metadata-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$SOURCE_ARTIFACT_NAME" == tuf-metadata-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" == candidate-"$CANDIDATE_COMMIT"-* ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SNAPSHOT_KEY_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$TIMESTAMP_KEY_ID" =~ ^[0-9a-f]{64}$ ]]
+          test "$SNAPSHOT_KEY_ID" != "$TIMESTAMP_KEY_ID"
+          [[ "$RENEWAL_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+      - name: Verify the exact renewal handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RENEWAL_WORKFLOW_COMMIT: ${{ inputs.renewal_workflow_commit }}
+          RENEWAL_RUN_ID: ${{ inputs.renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.renewal_artifact_id }}
+          RENEWAL_ARTIFACT_NAME: ${{ inputs.renewal_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$RENEWAL_RUN_ID" \
+            --commit "$RENEWAL_WORKFLOW_COMMIT" \
+            --artifact "$RENEWAL_ARTIFACT_NAME" \
+            --artifact-id "$RENEWAL_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-snapshot-renewal.yml \
+            --output "$RUNNER_TEMP/renewal-provenance.json"
+      - name: Verify the exact source TUF handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$SOURCE_RUN_ID" \
+            --commit "$SOURCE_WORKFLOW_COMMIT" \
+            --artifact "$SOURCE_ARTIFACT_NAME" \
+            --artifact-id "$SOURCE_ARTIFACT_ID" \
+            --workflow .github/workflows/tuf-metadata-handoff.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/source-provenance.json"
+      - name: Verify the exact candidate provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$CANDIDATE_ARTIFACT_NAME" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --workflow .github/workflows/release.yml \
+            --output "$RUNNER_TEMP/candidate-provenance.json"
+      - name: Download the exact candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: candidate
+      - name: Download the exact source TUF artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.source_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: source-tuf
+      - name: Download the exact snapshot renewal artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ inputs.renewal_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.renewal_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: renewal
+      - name: Verify candidate and exact catalog binding
+        env:
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify candidate
+          mapfile -t catalogs < <(find source-tuf/targets -type f -name '*.catalog.json' -print | sort)
+          test "${#catalogs[@]}" -eq 1
+          cmp -s candidate/catalog.json "${catalogs[0]}"
+          test -f renewal/repository/metadata/timestamp.json
+          test -f renewal/report.json
+      - name: Verify every declared installer mirror before public metadata changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_VERSION="$(python3 -c 'import json; print(json.load(open("candidate/candidate.json", encoding="utf-8"))["version"])')"
+          python3 maintenance/tools/verify_release_mirrors.py \
+            --candidate candidate \
+            --catalog candidate/catalog.json \
+            --expected-release "$CANDIDATE_VERSION"
+      - name: Verify that the renewal changes only snapshot and timestamp metadata
+        env:
+          EXPECTED_SNAPSHOT_KEY_ID: ${{ inputs.snapshot_key_id }}
+          EXPECTED_TIMESTAMP_KEY_ID: ${{ inputs.timestamp_key_id }}
+          EXPECTED_REPORT_SHA256: ${{ inputs.renewal_report_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("renewal/report.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$EXPECTED_REPORT_SHA256"
+          python3 maintenance/tools/verify_tuf_snapshot_renewal.py \
+            --source-repository source-tuf \
+            --renewed-repository renewal/repository \
+            --report renewal/report.json \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --expected-snapshot-key-id "$EXPECTED_SNAPSHOT_KEY_ID" \
+            --expected-timestamp-key-id "$EXPECTED_TIMESTAMP_KEY_ID" \
+            > "$RUNNER_TEMP/snapshot-renewal-verified.json"
+      - name: Stage the authenticated renewed TUF repository
+        run: |
+          mkdir -p release-work
+          python3 maintenance/tools/publish_tuf_metadata.py \
+            --metadata-dir renewal/repository \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            --stage-dir release-work/trust
+      - name: Assemble one immutable site generation
+        run: |
+          cp site/wrangler.jsonc release-work/wrangler.jsonc
+          python3 maintenance/tools/assemble_site_release.py \
+            --site-source candidate/site/public \
+            --catalog candidate/catalog.json \
+            --product candidate/product.json \
+            --trust-repository release-work/trust \
+            --output release-work/public
+      - name: Dry-run the exact site generation
+        working-directory: site
+        run: |
+          npm ci
+          node_modules/.bin/wrangler deploy \
+            --config ../release-work/wrangler.jsonc \
+            --dry-run
+      - name: Deploy the verified snapshot-timestamp generation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          site/node_modules/.bin/wrangler deploy \
+            --config release-work/wrangler.jsonc
+      - name: Verify public TUF, bootstraps and product after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/snapshot-publication"
+          python3 maintenance/tools/verify_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --catalog candidate/catalog.json \
+            > "$RUNNER_TEMP/snapshot-publication/tuf.json"
+          python3 maintenance/tools/verify_public_bootstraps.py \
+            --candidate candidate \
+            > "$RUNNER_TEMP/snapshot-publication/bootstraps.json"
+          python3 maintenance/tools/verify_public_product.py \
+            --candidate candidate \
+            > "$RUNNER_TEMP/snapshot-publication/product.json"
+      - name: Write immutable snapshot publication receipt
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          RENEWAL_WORKFLOW_COMMIT: ${{ inputs.renewal_workflow_commit }}
+          RENEWAL_RUN_ID: ${{ inputs.renewal_run_id }}
+          RENEWAL_ARTIFACT_ID: ${{ inputs.renewal_artifact_id }}
+          RENEWAL_ARTIFACT_NAME: ${{ inputs.renewal_artifact_name }}
+          EXPECTED_RENEWAL_REPORT_SHA256: ${{ inputs.renewal_report_sha256 }}
+          SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          SNAPSHOT_KEY_ID: ${{ inputs.snapshot_key_id }}
+          TIMESTAMP_KEY_ID: ${{ inputs.timestamp_key_id }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python3 - "$RUNNER_TEMP/snapshot-publication/receipt.json" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def read_json(path: str) -> object:
+              return json.loads(Path(path).read_text(encoding="utf-8"))
+
+          renewal_report = read_json("renewal/report.json")
+          verified = read_json(os.path.join(os.environ["RUNNER_TEMP"], "snapshot-renewal-verified.json"))
+          if not isinstance(renewal_report, dict) or renewal_report.get("published") is not False:
+              raise SystemExit("o handoff snapshot não está marcado como unpublished")
+          if not isinstance(verified, dict) or verified.get("status") != "verified-snapshot-renewal":
+              raise SystemExit("verificação snapshot-timestamp ausente")
+          changed_files = renewal_report.get("changed_files")
+          if not isinstance(changed_files, list) or changed_files != verified.get("changed_files"):
+              raise SystemExit("changed_files do handoff snapshot divergem da verificação")
+          catalog_path = Path("candidate/catalog.json")
+          value = {
+              "format": 1,
+              "project": "x86qw",
+              "status": "snapshot-published",
+              "published": True,
+              "changed_files": changed_files,
+              "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+              "release_code_commit": os.environ["RELEASE_CODE_COMMIT"],
+              "candidate": {
+                  "commit": os.environ["CANDIDATE_COMMIT"],
+                  "run_id": os.environ["CANDIDATE_RUN_ID"],
+                  "artifact_id": os.environ["CANDIDATE_ARTIFACT_ID"],
+                  "artifact_name": os.environ["CANDIDATE_ARTIFACT_NAME"],
+                  "candidate_json_sha256": os.environ["EXPECTED_CANDIDATE_SHA256"],
+                  "catalog_sha256": hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+              },
+              "source_tuf": {
+                  "workflow_commit": os.environ["SOURCE_WORKFLOW_COMMIT"],
+                  "run_id": os.environ["SOURCE_RUN_ID"],
+                  "artifact_id": os.environ["SOURCE_ARTIFACT_ID"],
+                  "artifact_name": os.environ["SOURCE_ARTIFACT_NAME"],
+              },
+              "renewal": {
+                  "workflow_commit": os.environ["RENEWAL_WORKFLOW_COMMIT"],
+                  "run_id": os.environ["RENEWAL_RUN_ID"],
+                  "artifact_id": os.environ["RENEWAL_ARTIFACT_ID"],
+                  "artifact_name": os.environ["RENEWAL_ARTIFACT_NAME"],
+                  "report_sha256": os.environ["EXPECTED_RENEWAL_REPORT_SHA256"],
+                  "snapshot_key_id": os.environ["SNAPSHOT_KEY_ID"],
+                  "timestamp_key_id": os.environ["TIMESTAMP_KEY_ID"],
+                  "report": renewal_report,
+                  "verified": verified,
+              },
+              "publication": {
+                  "workflow": ".github/workflows/tuf-snapshot-publish.yml",
+                  "run_id": os.environ["RELEASE_RUN_ID"],
+                  "run_attempt": os.environ["RELEASE_RUN_ATTEMPT"],
+              },
+              "public_verification": {
+                  "tuf": read_json(os.path.join(os.environ["RUNNER_TEMP"], "snapshot-publication/tuf.json")),
+                  "bootstraps": read_json(os.path.join(os.environ["RUNNER_TEMP"], "snapshot-publication/bootstraps.json")),
+                  "product": read_json(os.path.join(os.environ["RUNNER_TEMP"], "snapshot-publication/product.json")),
+              },
+          }
+          destination = Path(sys.argv[1])
+          if destination.exists() or destination.is_symlink():
+              raise SystemExit("recibo de publicação já existe")
+          destination.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - name: Verify immutable snapshot publication receipt
+        run: |
+          python3 maintenance/tools/verify_tuf_snapshot_publication.py \
+            --receipt "$RUNNER_TEMP/snapshot-publication/receipt.json" \
+            --candidate candidate \
+            --renewal-report renewal/report.json \
+            --verified-renewal "$RUNNER_TEMP/snapshot-renewal-verified.json" \
+            --public-tuf "$RUNNER_TEMP/snapshot-publication/tuf.json" \
+            --public-bootstraps "$RUNNER_TEMP/snapshot-publication/bootstraps.json" \
+            --public-product "$RUNNER_TEMP/snapshot-publication/product.json"
+      - name: Upload immutable snapshot publication receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tuf-snapshot-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/snapshot-publication/receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 90
+      - name: Record the protected publication result
+        run: |
+          {
+            echo "snapshot-timestamp publication completed after protected approval"
+            echo "publication_artifact=tuf-snapshot-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
