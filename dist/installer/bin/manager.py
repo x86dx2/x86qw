@@ -6351,57 +6351,79 @@ class Installer:
                 f"{humans} {human_label} + {bots} {bot_label} · {mode} · {map_name}",
                 str(server["address"]),
             ))
-        selected = navigation.select_one(
-            "Servidores QuakeWorld ativos",
-            server_options,
-            breadcrumb="x86QW › Encontrar servidor",
-            subtitle="Jogadores humanos primeiro. Use a busca para filtrar servidores.",
-            searchable=True,
-            allow_back=True,
-        )
-        if selected is None:
-            console.info("Hub fechado; nenhum cliente foi aberto.")
-            return
-        server = servers[int(selected)]
-        address = str(server["address"])
-        qtv = server.get("qtv_stream")
-        qtv_url = qtv.get("url", "") if isinstance(qtv, dict) else ""
-        has_qtv = isinstance(qtv_url, str) and re.fullmatch(
-            r"[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", qtv_url,
-        )
-        action = navigation.select_one(
-            "Como deseja entrar?",
-            (
-                navigation.MenuOption("join", "Jogar", "conectar como jogador"),
-                navigation.MenuOption("observe", "Observar", "entrar como espectador"),
-                navigation.MenuOption(
-                    "qtv", "Assistir pelo QTV", "reproduzir o stream publicado",
-                    enabled=bool(has_qtv),
-                    disabled_reason="este servidor não publicou um stream QTV válido",
-                ),
-            ),
-            breadcrumb="x86QW › Encontrar servidor › " + address,
-            allow_back=True,
-        )
-        if action is None:
-            console.info("Hub fechado; nenhum cliente foi aberto.")
-            return
-        if action == "qtv":
-            if not has_qtv:
-                raise InstallerError("Este servidor não publicou um stream QTV válido.")
-            quake_arguments = ["+qtvplay", qtv_url]
-            operation = "QTV"
-        elif action == "observe":
-            quake_arguments = ["+observe", address]
-            operation = "observação"
-        else:
-            quake_arguments = ["+join", address]
-            operation = "conexão"
+        selected = None
+        action = None
+        runtime_choice = None
+        quake_arguments: list[str] = []
+        operation = "conexão"
+        qtv_url = ""
+        address = ""
+        state = "server"
         while True:
-            runtime_choice = self.choose_host_runtime()
-            if runtime_choice is None:
-                console.info("Conexão cancelada; nenhum cliente foi aberto.")
-                return
+            if state == "server":
+                selected = navigation.select_one(
+                    "Servidores QuakeWorld ativos",
+                    server_options,
+                    breadcrumb="x86QW › Encontrar servidor",
+                    subtitle="Jogadores humanos primeiro. Use a busca para filtrar servidores.",
+                    searchable=True,
+                    allow_back=True,
+                )
+                if selected is None:
+                    console.info("Hub fechado; nenhum cliente foi aberto.")
+                    return
+                action = None
+                runtime_choice = None
+                state = "action"
+                continue
+            server = servers[int(selected)]
+            address = str(server["address"])
+            qtv = server.get("qtv_stream")
+            qtv_url = qtv.get("url", "") if isinstance(qtv, dict) else ""
+            has_qtv = isinstance(qtv_url, str) and re.fullmatch(
+                r"[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}", qtv_url,
+            )
+            if state == "action":
+                action = navigation.select_one(
+                    "Como deseja entrar?",
+                    (
+                        navigation.MenuOption("join", "Jogar", "conectar como jogador"),
+                        navigation.MenuOption("observe", "Observar", "entrar como espectador"),
+                        navigation.MenuOption(
+                            "qtv", "Assistir pelo QTV", "reproduzir o stream publicado",
+                            enabled=bool(has_qtv),
+                            disabled_reason="este servidor não publicou um stream QTV válido",
+                        ),
+                    ),
+                    breadcrumb="x86QW › Encontrar servidor › " + address,
+                    allow_back=True,
+                )
+                if action is None:
+                    state = "server"
+                    continue
+                runtime_choice = None
+                state = "runtime"
+                continue
+            if action == "qtv":
+                if not has_qtv:
+                    raise InstallerError("Este servidor não publicou um stream QTV válido.")
+                quake_arguments = ["+qtvplay", qtv_url]
+                operation = "QTV"
+            elif action == "observe":
+                quake_arguments = ["+observe", address]
+                operation = "observação"
+            else:
+                quake_arguments = ["+join", address]
+                operation = "conexão"
+            if state == "runtime":
+                runtime_choice = self.choose_host_runtime(
+                    breadcrumb="x86QW › Encontrar servidor › Cliente",
+                )
+                if runtime_choice is None:
+                    state = "action"
+                    continue
+                state = "confirm"
+                continue
             label, runtime = runtime_choice
             action_label = {
                 "join": "Jogar",
@@ -6425,11 +6447,14 @@ class Installer:
                 allow_back=True,
             )
             if confirmed is None:
+                runtime_choice = None
+                state = "runtime"
                 continue
             if not confirmed:
                 console.info("Conexão cancelada; nenhum cliente foi aberto.")
                 return
             break
+        label, runtime = runtime_choice
         self.launch_runtime(runtime, quake_arguments)
         title = str(server_options[int(selected)].label)
         origin = server.get("origin")

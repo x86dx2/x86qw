@@ -8,6 +8,7 @@ import select
 import shutil
 import sys
 import textwrap
+import unicodedata
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -128,6 +129,43 @@ def _read_posix_escape(descriptor: int) -> str:
     return "escape" if not sequence else _decode_posix_escape(sequence)
 
 
+def _utf8_needed(lead: int) -> int | None:
+    if lead < 0x80:
+        return 1
+    if 0xC2 <= lead <= 0xDF:
+        return 2
+    if 0xE0 <= lead <= 0xEF:
+        return 3
+    if 0xF0 <= lead <= 0xF4:
+        return 4
+    return None
+
+
+def _decode_utf8_character(
+    first: bytes,
+    read_byte: Callable[[], bytes],
+    *,
+    wait: Callable[[], bool] | None = None,
+) -> str:
+    """Assemble one UTF-8 character from a lead byte plus optional continuations."""
+    needed = _utf8_needed(first[0]) if first else None
+    if needed is None:
+        return "unknown"
+    data = first
+    while len(data) < needed:
+        if wait is not None and not wait():
+            return "unknown"
+        part = read_byte()
+        if not part:
+            return "unknown"
+        data += part
+    try:
+        character = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "unknown"
+    return character if character.isprintable() else "unknown"
+
+
 def _read_posix_key() -> str:  # pragma: no cover - real terminal path
     import termios
     import tty
@@ -145,10 +183,12 @@ def _read_posix_key() -> str:  # pragma: no cover - real terminal path
             return "backspace"
         if first == b"\x03":
             return "interrupt"
-        try:
-            return first.decode("utf-8")
-        except UnicodeDecodeError:
-            return "unknown"
+        wait = lambda: bool(
+            select.select([descriptor], [], [], _ESCAPE_CONTINUATION_TIMEOUT)[0]
+        )
+        return _decode_utf8_character(
+            first, lambda: os.read(descriptor, 1), wait=wait,
+        )
     finally:
         termios.tcsetattr(descriptor, termios.TCSADRAIN, previous)
 
@@ -157,16 +197,27 @@ def read_key() -> str:
     return _read_windows_key() if os.name == "nt" else _read_posix_key()
 
 
+def _fold(value: str) -> str:
+    stripped = unicodedata.normalize("NFD", value.casefold())
+    return "".join(
+        character for character in stripped if unicodedata.category(character) != "Mn"
+    )
+
+
+def _option_search_text(option: MenuOption) -> str:
+    return " ".join((
+        option.key, option.label, option.description, option.detail,
+        option.disabled_reason, option.group, *option.aliases,
+    ))
+
+
 def _matching(options: tuple[MenuOption, ...], query: str) -> list[int]:
     if not query:
         return list(range(len(options)))
-    folded = query.casefold()
+    folded = _fold(query)
     return [
         index for index, option in enumerate(options)
-        if folded in " ".join((
-            option.key, option.label, option.description, option.detail,
-            option.disabled_reason, option.group, *option.aliases,
-        )).casefold()
+        if folded in _fold(_option_search_text(option))
     ]
 
 
@@ -346,6 +397,15 @@ def _rule(width: int) -> str:
     return _paint("─" * min(width, 42), _MUTED)
 
 
+def _emit_text(value: str, width: int, code: str = "") -> None:
+    for line in value.splitlines() or [""]:
+        if not line:
+            print()
+            continue
+        for part in _wrapped(line, width):
+            print(_paint(part, code) if code else part)
+
+
 def _render_header(
     *,
     title: str,
@@ -359,12 +419,12 @@ def _render_header(
     width: int,
 ) -> None:
     if breadcrumb:
-        print(_paint(breadcrumb, _MUTED))
+        _emit_text(breadcrumb, width, _MUTED)
         if not _compact_chrome():
             print(_rule(width))
-    print(_paint(title, _TITLE if not _isatty(sys.stdout) or _NO_COLOR else _ACCENT))
+    _emit_text(title, width, _TITLE if not _isatty(sys.stdout) or _NO_COLOR else _ACCENT)
     if subtitle:
-        print(subtitle)
+        _emit_text(subtitle, width)
     if searchable:
         if searching or query:
             field = query + ("_" if searching else "")
@@ -622,12 +682,15 @@ def _select_fallback(
         raise ValueError("menu has no enabled options")
     default_key = enabled[min(default, len(enabled) - 1)].key
     visible = list(options)
+    width = _chrome_width()
     while True:
         if breadcrumb:
-            print(f"\n{breadcrumb}")
-        print(f"\n{title}")
+            print()
+            _emit_text(breadcrumb, width)
+        print()
+        _emit_text(title, width)
         if subtitle:
-            print(subtitle)
+            _emit_text(subtitle, width)
         labels = [
             option.label + (" (padrão)" if option.key == default_key else "")
             for option in visible
@@ -679,11 +742,12 @@ def _select_fallback(
                 return option.key
             print("[ATENÇÃO] Esta opção não está disponível neste contexto.")
             continue
+        folded_answer = _fold(answer)
         exact = [
             option for option in enabled
-            if answer.casefold() in {
-                option.key.casefold(), option.label.casefold(),
-                *(alias.casefold() for alias in option.aliases),
+            if folded_answer in {
+                _fold(option.key), _fold(option.label),
+                *(_fold(alias) for alias in option.aliases),
             }
         ]
         if len(exact) == 1:
@@ -691,10 +755,7 @@ def _select_fallback(
         if searchable:
             found = [
                 option for option in visible
-                if answer.casefold() in " ".join((
-                    option.key, option.label, option.description, option.detail,
-                    option.disabled_reason, option.group, *option.aliases,
-                )).casefold()
+                if folded_answer in _fold(_option_search_text(option))
             ]
             if len(found) == 1 and found[0].enabled:
                 return found[0].key
@@ -827,10 +888,12 @@ def select_many(
             labels = [option.label for option in entries]
             index_width = len(str(len(entries)))
             label_width = max(len(label) for label in labels)
-            print(f"\n{breadcrumb}" if breadcrumb else "", end="")
-            print(f"\n{title}")
+            print()
+            if breadcrumb:
+                _emit_text(breadcrumb, _chrome_width())
+            _emit_text(title, _chrome_width())
             if subtitle:
-                print(subtitle)
+                _emit_text(subtitle, _chrome_width())
             description_width = max(len(item.description) for item in enabled)
             previous_group = ""
             for index, option in enumerate(entries, 1):
@@ -875,11 +938,12 @@ def select_many(
                     else:
                         invalid = True
                     continue
+                token_fold = _fold(token)
                 token_matches = [
                     option for option in enabled
-                    if token.casefold() in {
-                        option.key.casefold(), option.label.casefold(),
-                        *(alias.casefold() for alias in option.aliases),
+                    if token_fold in {
+                        _fold(option.key), _fold(option.label),
+                        *(_fold(alias) for alias in option.aliases),
                     }
                 ]
                 if len(token_matches) != 1:

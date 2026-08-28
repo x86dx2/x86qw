@@ -890,7 +890,7 @@ class GameplayPlayerMixin:
         )))
         finalize_mutation(result)
 
-    def choose_client_ruleset(self, current: str | None = None) -> str:
+    def choose_client_ruleset(self, current: str | None = None) -> str | None:
         keys = tuple(PRODUCT_RULESET_ENGINES)
         selected = navigation.select_one(
             "Como você quer jogar?",
@@ -926,13 +926,11 @@ class GameplayPlayerMixin:
             searchable=True,
             allow_back=True,
         )
-        if selected is None:
-            raise navigation.MenuCancelled("Experiência")
         return selected
 
     def resolve_client_ruleset(
         self, requested: str | None, *, choose_interactively: bool,
-    ) -> str:
+    ) -> str | None:
         if requested is not None:
             if requested not in PRODUCT_RULESET_ENGINES:
                 raise InstallerError(f"Ruleset de cliente desconhecido: {requested}.")
@@ -943,6 +941,8 @@ class GameplayPlayerMixin:
         if not choose_interactively:
             return DEFAULT_PRODUCT_RULESET
         selected = self.choose_client_ruleset()
+        if selected is None:
+            return None
         self.save_client_ruleset(selected)
         console.success(f"Experiência salva: {PRODUCT_RULESET_LABELS[selected]}.")
         return selected
@@ -1866,6 +1866,8 @@ class GameplayPlayerMixin:
         selected_ruleset = self.resolve_client_ruleset(
             ruleset, choose_interactively=choose_ruleset_interactively,
         )
+        if selected_ruleset is None:
+            return
         self.check_paks()
         games = self.available_local_games()
         if not games:
@@ -2800,6 +2802,9 @@ def main(
         player.reject_target_symlinks()
         if options.configure_ruleset:
             selected = player.choose_client_ruleset(player.saved_client_ruleset())
+            if selected is None:
+                console.info("Experiência inalterada; nenhuma preferência foi gravada.")
+                return int(ExitCode.SUCCESS)
             player.save_client_ruleset(selected)
             console.success(
                 "Experiência padrão alterada para "

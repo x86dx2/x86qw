@@ -320,6 +320,57 @@ class MenuTests(unittest.TestCase):
         ]
         self.assertLessEqual(max(map(len, rendered)), 32)
 
+    def test_narrow_terminal_wraps_breadcrumb_title_and_subtitle(self):
+        output = io.StringIO()
+        summary = (
+            "Resumo da partida\n"
+            "  Comando equivalente: ./x86qw.sh play ktx --mode duel --bots 1 "
+            "--bot-skill 4 --map dm6 --ruleset x86qw"
+        )
+        with mock.patch.object(
+            menu.shutil, "get_terminal_size", return_value=os.terminal_size((32, 24)),
+        ), contextlib.redirect_stdout(output):
+            menu.select_one(
+                "Iniciar esta partida agora mesmo?",
+                self.options,
+                interactive=True,
+                key_reader=lambda: "enter",
+                breadcrumb="x86QW › Jogar › KTX › Duel › Confirmação",
+                subtitle=summary,
+                allow_back=True,
+            )
+        rendered = [
+            line for line in output.getvalue().replace("\033[2J\033[H", "").splitlines()
+            if line
+        ]
+        self.assertLessEqual(max(map(len, rendered)), 32)
+        self.assertTrue(any("Resumo da partida" in line for line in rendered))
+
+    def test_search_ignores_diacritics(self):
+        options = (
+            menu.MenuOption("practice", "Practice", "prática livre"),
+            menu.MenuOption("duel", "Duel", "dois jogadores"),
+        )
+        self.assertEqual([0], menu._matching(options, "pratica"))
+        self.assertEqual([0], menu._matching(options, "PRÁTICA"))
+        selected = menu.select_one(
+            "Modo", options, interactive=False, input_fn=lambda _: "pratica",
+            searchable=True,
+        )
+        self.assertEqual("practice", selected)
+
+    def test_utf8_character_assembles_continuation_bytes(self):
+        remaining = iter((b"\xa1",))
+        self.assertEqual(
+            "á",
+            menu._decode_utf8_character(b"\xc3", lambda: next(remaining)),
+        )
+        self.assertEqual("q", menu._decode_utf8_character(b"q", lambda: b""))
+        self.assertEqual(
+            "unknown",
+            menu._decode_utf8_character(b"\xc3", lambda: b"", wait=lambda: False),
+        )
+
     def test_narrow_terminal_limits_visible_rows_and_reports_the_window(self):
         options = tuple(
             menu.MenuOption(
