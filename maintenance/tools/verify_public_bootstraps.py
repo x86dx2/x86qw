@@ -38,7 +38,12 @@ def _read(path: Path, label: str) -> bytes:
         raise PublicBootstrapError(f"{label} ausente ou inseguro: {path}") from error
 
 
-def verify_public_bootstraps(*, base_url: str, candidate: Path) -> dict[str, object]:
+def verify_public_bootstraps(
+    *,
+    base_url: str,
+    candidate: Path,
+    bootstrap_dir: Path | None = None,
+) -> dict[str, object]:
     try:
         parsed = validate_https_url(base_url, "base pública")
     except DownloadError as error:
@@ -46,9 +51,15 @@ def verify_public_bootstraps(*, base_url: str, candidate: Path) -> dict[str, obj
     if parsed.query or parsed.fragment or not parsed.path.endswith("/"):
         raise PublicBootstrapError("base pública deve terminar em / sem query ou fragmento")
     candidate = Path(candidate)
+    if bootstrap_dir is None:
+        source = candidate / "site/public"
+        label = "bootstrap candidato"
+    else:
+        source = Path(bootstrap_dir)
+        label = "bootstrap projetado"
     files = {
-        "install.sh": _read(candidate / "site/public/install.sh", "bootstrap candidato"),
-        "install.ps1": _read(candidate / "site/public/install.ps1", "bootstrap candidato"),
+        "install.sh": _read(source / "install.sh", label),
+        "install.ps1": _read(source / "install.ps1", label),
     }
     for name, expected in files.items():
         result = download(BoundedMetadata(
@@ -77,11 +88,13 @@ def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--candidate", type=Path, required=True)
+    parser.add_argument("--bootstrap-dir", type=Path)
     options = parser.parse_args(arguments)
     try:
         result = verify_public_bootstraps(
             base_url=options.base_url,
             candidate=options.candidate,
+            bootstrap_dir=options.bootstrap_dir,
         )
     except (OSError, PublicBootstrapError, DownloadError) as error:
         print(f"[ERRO] {error}", file=sys.stderr)

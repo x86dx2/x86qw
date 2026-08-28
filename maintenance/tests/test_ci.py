@@ -391,6 +391,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("--source site/public", projection)
         self.assertIn("--catalog candidate/catalog.json", projection)
         self.assertIn("--product candidate/product.json", projection)
+        self.assertIn("--bootstrap-source dist/installer/bin", projection)
         self.assertIn(
             'shutil.copyfile(\n'
             '              Path("release-work/current-site/index.html"),\n'
@@ -398,6 +399,8 @@ class ContinuousIntegrationTests(unittest.TestCase):
             '          )',
             projection,
         )
+        self.assertIn('for name in ("install.sh", "install.ps1"):', projection)
+        self.assertIn("--bootstrap-dir release-work/current-site", projection)
         self.assertIn("verify_site_root_probe.py", projection)
 
     def test_migration_plan_names_the_complete_public_0_7_fixture_range(self):

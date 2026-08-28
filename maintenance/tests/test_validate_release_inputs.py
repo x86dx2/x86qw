@@ -80,6 +80,32 @@ class ValidateReleaseInputsTests(unittest.TestCase):
         self.assertEqual("validated-release-inputs", result["status"])
         self.assertEqual([], result["required_handoffs"])
 
+    def test_owner_only_rehearsal_accepts_the_1_0_patch_line(self):
+        result = validate_release_inputs(
+            mode="rehearsal",
+            release_audience="owner-only",
+            candidate_commit=SHA,
+            candidate_version="1.0.4",
+            public_acceptance_scope="single-user",
+            handoffs={name: "{}" for name in GROUP_KEYS},
+        )
+        self.assertEqual("validated-release-inputs", result["status"])
+        self.assertEqual("1.0.4", result["candidate_version"])
+
+    def test_minor_and_major_bumps_stay_outside_the_1_0_ceremony(self):
+        handoffs = {name: "{}" for name in GROUP_KEYS}
+        for version in ("1.1.0", "2.0.0", "1.0", "1.0.4-beta.1"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ReleaseInputError, "candidate_version inválido"):
+                    validate_release_inputs(
+                        mode="rehearsal",
+                        release_audience="owner-only",
+                        candidate_commit=SHA,
+                        candidate_version=version,
+                        public_acceptance_scope="single-user",
+                        handoffs=handoffs,
+                    )
+
     def test_owner_only_final_requires_acceptance_but_not_external_operations(self):
         handoffs = _handoffs()
         handoffs["tuf_operation_handoff"] = "{}"

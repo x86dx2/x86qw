@@ -17,7 +17,7 @@ RUN_ID = re.compile(r"^[1-9][0-9]{0,19}$")
 ARTIFACT_ID = re.compile(r"^[1-9][0-9]{0,19}$")
 ARTIFACT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
 WORKFLOW = re.compile(r"^\.github/workflows/[A-Za-z0-9._/-]+\.ya?ml$")
-VERSION = re.compile(r"^1\.0\.0(?:-rc\.[0-9]+)?$")
+VERSION = re.compile(r"^1\.0\.(?:0|[1-9][0-9]*)(?:-rc\.[0-9]+)?$")
 MAX_JSON_BYTES = 32 * 1024
 MAX_VALUE_LENGTH = 512
 
