@@ -13,6 +13,7 @@ Executar localmente:
 ```sh
 cd site
 npm ci
+npx playwright install chromium
 npm test
 npm run dev
 ```

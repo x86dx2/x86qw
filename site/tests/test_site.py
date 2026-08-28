@@ -494,6 +494,23 @@ class SiteTests(unittest.TestCase):
         workflow = (PROJECT_ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
         self.assertIn("npm test", workflow)
 
+    def test_webqa_runs_playwright_and_axe_at_required_viewports(self):
+        package = json.loads((PROJECT_ROOT / "site/package.json").read_text(encoding="utf-8"))
+        self.assertIn("playwright", package["devDependencies"])
+        self.assertIn("@axe-core/playwright", package["devDependencies"])
+        webqa = (PROJECT_ROOT / "site/tests/webqa.test.mjs").read_text(encoding="utf-8")
+        self.assertIn("AxeBuilder", webqa)
+        self.assertIn(".install-command-control", webqa)
+        for width in ("320", "390", "1440"):
+            self.assertIn(width, webqa)
+        workflow = (PROJECT_ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
+        site_job = workflow.split("name: portable-contract / site", 1)[1].split("preview-other-os:", 1)[0]
+        self.assertIn("npx playwright install --with-deps chromium", site_job)
+        self.assertLess(
+            site_job.find("npx playwright install --with-deps chromium"),
+            site_job.find("npm test"),
+        )
+
     def test_public_bootstrap_matches_the_registered_installer_bundle(self):
         catalog = json.loads((ROOT / "api/v1/catalog.json").read_text(encoding="utf-8"))
         installers = [item for item in catalog["packages"] if item.get("package") == "x86qw-installer"]

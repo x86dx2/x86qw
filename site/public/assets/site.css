@@ -919,11 +919,6 @@ footer nav {
     width: 100%;
   }
 
-  .install-command-control code {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
   .platform-matrix,
   .platform-matrix tbody,
   .platform-matrix tr {
