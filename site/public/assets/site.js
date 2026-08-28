@@ -46,19 +46,24 @@ if (catalogLive.length) {
     'Aguardando resposta',
     'Lendo o contrato público em tempo real.',
   );
-  fetch('/api/v1/catalog.json', { cache: 'no-store' })
+  fetch('/api/v1/product.json', { cache: 'no-store' })
     .then((response) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
     })
-    .then((catalog) => {
-      if (catalog.project !== 'x86qw' || !Array.isArray(catalog.packages)) {
-        throw new Error('catálogo incompatível');
+    .then((product) => {
+      if (
+        product.project !== 'x86qw'
+        || !Number.isInteger(product.package_count)
+        || product.package_count < 0
+        || !Array.isArray(product.games)
+      ) {
+        throw new Error('produto incompatível');
       }
 
-      const count = catalog.packages.filter((item) => item.component !== 'installer').length;
-      const ktx = catalog.packages.find((item) => item.package === 'ktx');
-      const ktxVersion = ktx && (ktx.upstream_version || ktx.version);
+      const count = product.package_count;
+      const ktx = product.games.find((item) => item.id === 'ktx');
+      const ktxVersion = ktx && ktx.version;
       applyCatalog(
         count ? 'ready' : 'pending',
         count ? 'Catálogo publicado' : 'Distribuição em preparação',
