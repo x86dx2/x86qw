@@ -147,7 +147,7 @@ class Console:
         total = format_bytes_compact(size) if size is not None else "?"
         marker = self.paint("⠋", "36")
         # Package identifiers are intentionally public UI, never credentials.
-        # codeql[py/clear-text-logging-sensitive-data]
+        # lgtm[py/clear-text-logging-sensitive-data]
         print(f"{marker} {safe_label:<48} {'Baixando':>10}  {'0B':>9}/{total}", flush=True)
 
     def download_progress(self, received: int, total: int | None, *, done: bool = False) -> None:
