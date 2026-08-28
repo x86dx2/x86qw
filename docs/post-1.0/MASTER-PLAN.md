@@ -58,8 +58,8 @@ QWLeague permanece `BLOCKED_EXTERNAL`: sem contato, autorização ou contrato p�
 ### O0 — estabilização imediata
 
 - manter a main verde e não reabrir a falha temporal;
-- concluir e registrar a correção da projeção live (PASS, receipt 33125534974,
-  artifact 9668294484);
+- concluir e registrar a correção da projeção live (PASS, receipt 33136179763,
+  artifact 9672118367);
 - executar uma aceitação M3 após a projeção convergir;
 - manter TUF renovável e monitorado tecnicamente;
 - fechar drift de audiência e de bytes;
