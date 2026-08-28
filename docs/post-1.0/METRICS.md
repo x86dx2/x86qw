@@ -4,18 +4,18 @@ As métricas abaixo medem gates, não vaidade de produto. Cada valor precisa de
 timestamp UTC, commit, run/artefacto, origem e Checker. Ausência de medição é
 `BLOCKED`, não zero.
 
-## Snapshot atual — 2026-08-27T23:18:37Z
+## Snapshot atual — 2026-08-28T02:32:21Z
 
 | Métrica | Valor na auditoria | Nível | Próximo limiar |
 | --- | --- | --- | --- |
-| main CI | `GREEN`; Validate `33124929611`, 5/5 jobs exigidos | E2 | manter zero vermelhos em 0A |
+| main CI | `GREEN`; Validate `33135951867`, 5/5 jobs exigidos | E2 | manter zero vermelhos em 0A |
 | Windows portable-contract | Python 3.10 e 3.13 verdes | E2 | manter matriz protegida |
 | installer mirror equality | `E2`, GitHub/GitLab iguais | E2 | manter e adicionar redundância |
 | exact native candidate | `25/25` Apple M3 | E3 | não extrapolar para não-M3 |
 | independent rebuild | não executado | E0 | E4 explícito ou exceção |
 | TUF root | v1 | E2 | rotação/recovery observável |
-| TUF timestamp/snapshot/targets | v28/v27/v27 | E2 | lease sem alerta crítico |
-| timestamp expiry | `2026-09-03T19:15:09Z` | E2 | alerta 6 h e renovação comprovada |
+| TUF timestamp/snapshot/targets | v30/v29/v29 | E2 | lease sem alerta crítico |
+| timestamp expiry | `2026-09-27T02:15:12Z` | E2 | alerta 6 h e renovação comprovada |
 | SBOM/ownership classified | `0/87` classificados; `87/87` unclassified/NOASSERTION | E1 | 87/87 classificados ou exceções |
 | package mirrors | GitHub/GitLab byte-equal para o instalador | E2 | manter verificação após cada projeção |
 | QWLeague contract | nenhum API/OAuth/webhook verificado | E1 | contrato oficial |
