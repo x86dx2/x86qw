@@ -304,21 +304,26 @@ A execução continua dividida em duas fases:
 
 1. **ezQuake:** detecta o SO (ou respeita `--platform`), seleciona, baixa,
    valida e instala o artefato correspondente.
-2. **componentes x86QW:** após confirmação explícita, escolhe um perfil ou
-   componentes individuais e instala somente o conteúdo selecionado.
+2. **componentes x86QW:** o caminho recomendado instala um perfil jogável.
+   Somente cliente fica em Avançado, com confirmação da consequência.
 
 Ao terminar a primeira fase, o instalador pergunta:
 
 ```text
-Deseja instalar/atualizar também os componentes x86QW? [s/N]
+Qual conteúdo deseja instalar?
+  1) Recomendado (padrão)
+  2) Avançado
 ```
 
-O padrão é `N`. Se a resposta for positiva, há quatro opções:
+O padrão é `Recomendado` e produz KTX, mapas e configuração para jogar agora.
+A conclusão mostra o comando `Jogar agora`. Em Avançado há:
 
-- `recomendado`: experiência base nQuake, sem matchinfo, QRP nem mods opcionais;
 - `essencial`: bootstrap, interface principal e KTX;
 - `completo`: os 21 componentes atuais, incluindo QRP, os cinco jogos, MVDSV, QTV e QWFWD;
-- `personalizado`: seleção individual, com dependências acrescentadas de forma explícita.
+- `personalizado`: seleção individual, com dependências acrescentadas de forma explícita;
+- `somente cliente`: ezQuake sem mods, só depois de confirmar que Jogar recusará até adicionar KTX.
+
+O perfil `recomendado` permanece a experiência base nQuake, sem matchinfo, QRP nem mods opcionais.
 
 O executável Windows antigo presente nos distfiles não faz parte do overlay.
 O TD2 2.22 entra como diretório `td2/`, sem mapas adicionais. Documentação,
