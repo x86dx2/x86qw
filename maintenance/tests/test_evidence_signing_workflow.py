@@ -28,7 +28,7 @@ class EvidenceSigningWorkflowTests(unittest.TestCase):
             "--trust-root",
             "maintenance/trust/m3-root.json",
             "maintenance/tools/attach_release_evidence.py",
-            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
             "overwrite: false",
             "ADR 0007",
             "solo maintainer waiver",

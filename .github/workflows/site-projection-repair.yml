@@ -191,7 +191,7 @@ jobs:
             --workflow .github/workflows/tuf-timestamp-renewal.yml \
             --head-branch main \
             --output "$RUNNER_TEMP/renewal-provenance.json"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           repository: ${{ github.repository }}
@@ -199,7 +199,7 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: candidate
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.tuf_source_artifact_id }}
           repository: ${{ github.repository }}
@@ -207,7 +207,7 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: source-tuf
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.tuf_renewal_artifact_id }}
           repository: ${{ github.repository }}
@@ -283,24 +283,12 @@ jobs:
           import shutil
 
           source_projection = Path("release-work/site-source")
-          shutil.copytree(Path("candidate/site/public"), source_projection)
-          shutil.copyfile(
-              Path("release-work/current-site/index.html"),
-              source_projection / "index.html",
-          )
-          shutil.copyfile(
-              Path("release-work/current-site/assets/site.js"),
-              source_projection / "assets/site.js",
-          )
-          shutil.copyfile(
-              Path("release-work/current-site/_headers"),
-              source_projection / "_headers",
-          )
-          for name in ("install.sh", "install.ps1"):
-              shutil.copyfile(
-                  Path("release-work/current-site") / name,
-                  source_projection / name,
-              )
+          # The frontend is one generation: HTML, CSS, JS, fonts and images all
+          # come from the current release-code checkout. Candidate release data
+          # was already bound by render_release_site and is overlaid again by
+          # assemble_site_release below; using candidate visuals here creates a
+          # hybrid page when the site's design changes between releases.
+          shutil.copytree(Path("release-work/current-site"), source_projection)
           headers = source_projection / "_headers"
           headers.write_text(
               headers.read_text(encoding="utf-8")
@@ -338,6 +326,7 @@ jobs:
           npm ci
           node_modules/.bin/wrangler deploy \
             --config ../release-work/site/wrangler.jsonc \
+            --assets ../release-work/site/public \
             --dry-run
       - name: Deploy the projection repair (no release or TUF metadata publication)
         env:
@@ -345,7 +334,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
-          site/node_modules/.bin/wrangler deploy --config release-work/site/wrangler.jsonc
+          site/node_modules/.bin/wrangler deploy \
+            --config release-work/site/wrangler.jsonc \
+            --assets release-work/site/public \
+            --strict
       - name: Verify public projection, TUF and owner-only audience
         env:
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
@@ -462,7 +454,7 @@ jobs:
               encoding="utf-8",
           )
           PY
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: site-projection-repair-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

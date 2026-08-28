@@ -87,8 +87,11 @@ test('home has no serious axe violations at 320, 390 and 1440', async (t) => {
         await page.locator('h1').waitFor();
 
         const heading = await page.locator('h1').innerText();
-        assert.match(heading, /partida/i);
+        assert.match(heading, /Cinco jogos/i);
+        assert.match(heading, /Um menu/i);
+        assert.match(heading, /Uma partida/i);
         assert.doesNotMatch(heading, /0\.7\.13/);
+        assert.equal(await page.locator('.arena-visual').count(), 0);
         assert.equal(await page.locator('.button-primary').getAttribute('href'), '#jogos');
         assert.ok(await page.locator('.skip-link').count());
         assert.ok(await page.locator('table.platform-matrix caption').count());

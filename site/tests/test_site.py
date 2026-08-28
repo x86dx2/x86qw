@@ -135,18 +135,36 @@ class SiteTests(unittest.TestCase):
         self.assertIsNotNone(quiet_install)
         self.assertIn("owner-only", unescape(quiet_install.group(1)).casefold())
 
-    def test_hero_leads_with_play_not_supply_chain(self):
+    def test_home_leads_with_the_minimal_five_game_message(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
-        title = re.search(r'<h1 id="hero-title">([^<]+)</h1>', home)
+        title = re.search(r'<h1 id="hero-title">(.+?)</h1>', home, re.DOTALL)
         self.assertIsNotNone(title)
-        headline = unescape(title.group(1))
+        headline = unescape(re.sub(r"<[^>]+>", " ", title.group(1)))
         self.assertNotRegex(headline, r"(?i)hash|catálogo|sha-256|tuf")
-        self.assertRegex(headline, r"(?i)jog")
+        self.assertRegex(headline, r"(?i)cinco jogos")
+        self.assertRegex(headline, r"(?i)um menu")
+        self.assertRegex(headline, r"(?i)uma partida")
         self.assertLess(home.find('id="jogos"'), home.find('id="confianca"'))
         self.assertLess(home.find('id="capacidades"'), home.find('id="confianca"'))
         document_title = re.search(r"<title>([^<]+)</title>", home)
         self.assertIsNotNone(document_title)
         self.assertNotRegex(unescape(document_title.group(1)), r"(?i)hash|sha-256")
+
+    def test_visual_generation_is_the_historical_monochrome_bundle(self):
+        home = (ROOT / "index.html").read_text(encoding="utf-8")
+        css = (ROOT / "assets" / "site.css").read_text(encoding="utf-8")
+
+        self.assertNotIn('class="hero-copy"', home)
+        self.assertNotIn('class="arena-visual"', home)
+        self.assertIn("Cinco jogos.", home)
+        self.assertIn("Um menu.", home)
+        self.assertIn("Uma partida.", home)
+        self.assertNotIn("barlow-condensed", home.casefold())
+        self.assertNotIn('font-family: "Barlow Condensed"', css)
+        self.assertNotIn(".arena-visual", css)
+        self.assertFalse((ROOT / "assets/fonts/barlow-condensed-600.woff2").exists())
+        self.assertFalse((ROOT / "assets/fonts/barlow-condensed-800.woff2").exists())
+        self.assertFalse((ROOT / "legal/fonts/Barlow-Condensed-OFL.txt").exists())
 
     def test_release_documentation_keeps_mac_local_boundary(self):
         home = (ROOT / "index.html").read_text(encoding="utf-8")
@@ -160,14 +178,13 @@ class SiteTests(unittest.TestCase):
         self.assertIn("account_id", cloudflare)
         self.assertRegex(cloudflare, r"não é uma\s+credencial")
 
-    def test_qw_is_canonical_and_the_legacy_hostname_remains_an_alias(self):
+    def test_qw_is_the_only_configured_hostname(self):
         canonical_origin = "https://qw.x86.com.br"
-        legacy_hostname = "x86qw.x86.com.br"
         wrangler = json.loads(
             (PROJECT_ROOT / "site/wrangler.jsonc").read_text(encoding="utf-8")
         )
         self.assertEqual(
-            {"qw.x86.com.br", legacy_hostname},
+            {"qw.x86.com.br"},
             {route["pattern"] for route in wrangler["routes"]},
         )
         self.assertTrue(all(route.get("custom_domain") is True for route in wrangler["routes"]))
@@ -300,7 +317,7 @@ class SiteTests(unittest.TestCase):
 
     def test_deploy_provenance_endpoints_are_static_json(self):
         truth = json.loads(
-            (PROJECT_ROOT / "docs/post-1.0/release-truth-current.json").read_text(
+            (PROJECT_ROOT / "docs/post-1.0/release-truth-projection-seed.json").read_text(
                 encoding="utf-8"
             )
         )

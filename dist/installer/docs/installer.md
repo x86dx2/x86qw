@@ -14,8 +14,8 @@ versão confere o requisito Python por
 `python3` e `python`, nessa ordem; Windows testa `py -3`, `python3` e `python`.
 A instalação grava no launcher o executável validado e o launcher repete a
 resolução caso esse caminho desapareça ou fique incompatível. O contrato
-`portable-contract` obrigatório cobre macOS Python 3.10 e 3.13; Linux e
-Windows permanecem preview manual. Isso não é smoke nativo de runtime. O bundle `0.7.3` permanece
+`portable-contract` obrigatório cobre macOS e Ubuntu em Python 3.10 e 3.13;
+Windows permanece preview manual. Isso não é smoke nativo de runtime. O bundle `0.7.3` permanece
 imutável no histórico.
 
 O instalador usa apenas a biblioteca padrão do Python.

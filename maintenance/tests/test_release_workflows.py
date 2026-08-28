@@ -415,7 +415,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_release_reuses_lfs_cache_and_materializes_on_miss(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn(
-            "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+            "actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306",
             source,
         )
         self.assertIn("path: .git/lfs/objects", source)

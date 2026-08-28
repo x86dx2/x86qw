@@ -28,22 +28,37 @@ O registro detalhado, incluindo os hashes e a aceitação pública no M3, está 
 
 Estado operacional rebaselineado: o escopo corrente é um único usuário no Apple M3. `owner-only` é válido somente para esse escopo; `external-public = NO-GO`. A lease TUF técnica continua necessária para instalar e atualizar o ambiente do mantenedor, mas custódia independente, backup e RTO são requisitos condicionais de uma abertura para terceiros.
 
-## Snapshot corrente verificado
+## Autoridade viva e última fotografia local
+
+O estado corrente de deployment é exclusivamente o endpoint
+`https://qw.x86.com.br/api/v1/release-truth.json`, conferido também contra o
+alias pelo comando:
+
+```sh
+python3 maintenance/tools/verify_live_release_truth.py
+```
+
+[`release-truth-current.json`](post-1.0/release-truth-current.json) é apenas o
+ponteiro machine-readable para essa autoridade. A fotografia versionada
+[`release-truth-projection-seed.json`](post-1.0/release-truth-projection-seed.json)
+é uma semente offline para montagem e testes; não declara o estado vivo atual.
+
+### Última fotografia registrada em 2026-08-28T02:32:21Z
 
 `MAIN=GREEN`; `TUF=HEALTHY`; `external-public=NO-GO`; a release
 `1.0.0 owner-only` continua `VALID_FOR_SINGLE_USER_M3`. A projeção pública
 convergente foi verificada no run [33136179763](https://github.com/x86dx2/x86qw/actions/runs/33136179763),
 com o catálogo, product, bootstraps, site e release-truth servindo os bytes do
-candidato exato. O Validate corrente da linha `main` é o run
+candidato exato. O Validate observado da linha `main` foi o run
 [33135951867](https://github.com/x86dx2/x86qw/actions/runs/33135951867).
 
-O TUF público atual é root v1, timestamp v30 e snapshot/targets v29, com
+Nessa fotografia, o TUF público era root v1, timestamp v30 e snapshot/targets v29, com
 75 pacotes e timestamp válido até `2026-09-27T02:15:12Z`. A renovação técnica
 foi registrada no run `33135314707`/artifact `9671800710`; custódia
 independente, backup humano e RTO continuam condicionais a `external-public`.
-Os detalhes machine-readable estão em
-[`release-truth-current.json`](post-1.0/release-truth-current.json) e a
-projeção legível em [`RELEASE-TRUTH-CURRENT.md`](post-1.0/RELEASE-TRUTH-CURRENT.md).
+Os detalhes históricos dessa observação permanecem na semente offline e a
+regra de consulta está em
+[`RELEASE-TRUTH-CURRENT.md`](post-1.0/RELEASE-TRUTH-CURRENT.md).
 
 
 ## Baseline real
@@ -87,7 +102,7 @@ pacotes e catálogo SHA-256
 TUF, bootstraps, product e release-truth passaram a verificação independente
 nos domínios canônico e alias.
 
-O run de renovação timestamp-only atual é `33135314707`, artifact
+O run de renovação timestamp-only dessa fotografia foi `33135314707`, artifact
 `9671800710`; o run de publicação/verificação da projeção é `33136179763`,
 artifact `9672118367`. A custódia independente, backup humano e RTO continuam
 pendência condicional de `external-public`; a lease técnica do owner-only está

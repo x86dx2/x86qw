@@ -49,8 +49,8 @@ class NativeWorkflowTests(unittest.TestCase):
         source = (ROOT / ".github/workflows/native-m3.yml").read_text(encoding="utf-8")
         for action in (
             "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
-            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
-            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+            "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
         ):
             self.assertIn(action, source)
         self.assertNotIn("actions/setup-python@", source)

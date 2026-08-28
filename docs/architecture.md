@@ -17,9 +17,6 @@ https://github.com/x86dx2/x86qw/releases      releases oficiais
 https://gitlab.com/x86dx2/x86qw               código e pacotes de contingência
 ```
 
-`x86qw.x86.com.br` continua apontando para o mesmo Worker como alias de
-compatibilidade para versões já publicadas.
-
 Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
 componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `distribution_path`
 somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
