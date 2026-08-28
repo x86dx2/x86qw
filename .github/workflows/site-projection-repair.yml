@@ -292,6 +292,10 @@ jobs:
               Path("release-work/current-site/assets/site.js"),
               source_projection / "assets/site.js",
           )
+          shutil.copyfile(
+              Path("release-work/current-site/_headers"),
+              source_projection / "_headers",
+          )
           for name in ("install.sh", "install.ps1"):
               shutil.copyfile(
                   Path("release-work/current-site") / name,
@@ -307,6 +311,17 @@ jobs:
               Path("release-work/projection-overlay.json").read_bytes()
           )
           PY
+      - name: Write deploy provenance endpoints into the overlay
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          DEVELOPMENT_VALIDATE_RUN: ${{ inputs.development_validate_run }}
+        run: |
+          python3 maintenance/tools/build_deploy_provenance.py \
+            --directory release-work/site-source \
+            --commit "$RELEASE_CODE_COMMIT" \
+            --validate-run-id "$DEVELOPMENT_VALIDATE_RUN" \
+            --deploy-run-id "$GITHUB_RUN_ID" \
+            --catalog candidate/catalog.json
       - name: Assemble verified site generation from current source overlay
         run: |
           mkdir -p release-work/site
