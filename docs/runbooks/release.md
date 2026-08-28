@@ -18,8 +18,9 @@ Quando o produto for declarado aberto a usuários externos, use
 operação TUF sustentável ficam obrigatórios.
 
 O fluxo de release tem duas camadas: a validação local/portátil e o workflow
-protegido de candidato. Linux, Windows e macOS Intel continuam `preview`; o
-único smoke nativo obrigatório deste escopo é um Mac M3 (Apple M3/macOS arm64) real.
+protegido de candidato. O contrato portátil obrigatório cobre macOS e Ubuntu
+em Python 3.10 e 3.13; Windows permanece `preview`. O único smoke nativo
+obrigatório deste escopo é um Mac M3 (Apple M3/macOS arm64) real.
 
 ## Candidato local
 

@@ -202,7 +202,7 @@ jobs:
             --workflow .github/workflows/release.yml \
             --output "$RUNNER_TEMP/candidate-provenance.json"
       - name: Download the exact candidate artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.candidate_artifact_id }}
           repository: ${{ github.repository }}
@@ -211,7 +211,7 @@ jobs:
           merge-multiple: true
           path: candidate
       - name: Download the exact source TUF artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.source_artifact_id }}
           repository: ${{ github.repository }}
@@ -220,7 +220,7 @@ jobs:
           merge-multiple: true
           path: source-tuf
       - name: Download the exact snapshot renewal artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           artifact-ids: ${{ inputs.renewal_artifact_id }}
           repository: ${{ github.repository }}
@@ -293,6 +293,7 @@ jobs:
           npm ci
           node_modules/.bin/wrangler deploy \
             --config ../release-work/wrangler.jsonc \
+            --assets ../release-work/public \
             --dry-run
       - name: Deploy the verified snapshot-timestamp generation
         env:
@@ -301,7 +302,9 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           site/node_modules/.bin/wrangler deploy \
-            --config release-work/wrangler.jsonc
+            --config release-work/wrangler.jsonc \
+            --assets release-work/public \
+            --strict
       - name: Verify public TUF, bootstraps and product after deployment
         shell: bash
         run: |
@@ -420,7 +423,7 @@ jobs:
             --public-bootstraps "$RUNNER_TEMP/snapshot-publication/bootstraps.json" \
             --public-product "$RUNNER_TEMP/snapshot-publication/product.json"
       - name: Upload immutable snapshot publication receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: tuf-snapshot-publication-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/snapshot-publication/receipt.json

@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseTruthProjectionTests(unittest.TestCase):
-    def test_public_projection_matches_dated_authority(self) -> None:
-        authority = ROOT / "docs/post-1.0/release-truth-current.json"
+    def test_public_projection_matches_explicit_offline_seed(self) -> None:
+        authority = ROOT / "docs/post-1.0/release-truth-projection-seed.json"
         projection = ROOT / "site/public/api/v1/release-truth.json"
         self.assertEqual(authority.read_bytes(), projection.read_bytes())
         document = json.loads(authority.read_text(encoding="utf-8"))
@@ -76,6 +76,24 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         self.assertIn("release-product-version", home)
         self.assertIn("release-package-count", home)
 
+    def test_current_release_truth_is_a_live_authority_pointer(self) -> None:
+        pointer = json.loads(
+            (ROOT / "docs/post-1.0/release-truth-current.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("x86qw-live-release-truth-pointer-v1", pointer["schema"])
+        self.assertEqual(
+            "https://qw.x86.com.br/api/v1/release-truth.json",
+            pointer["authority_url"],
+        )
+        self.assertNotIn("alias_url", pointer)
+        self.assertEqual(
+            "release-truth-projection-seed.json", pointer["projection_seed"]
+        )
+        self.assertEqual("owner-only", pointer["required"]["release_audience"])
+        self.assertEqual("NO-GO", pointer["required"]["external_public"])
+
     def test_product_points_to_the_release_truth_projection(self) -> None:
         product = json.loads(
             (ROOT / "site/public/api/v1/product.json").read_text(encoding="utf-8")
@@ -136,13 +154,9 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
                 self.assertIn("external-public", text)
 
         for marker in (
-            "MAIN=GREEN",
-            "TUF=HEALTHY",
-            "external-public=NO-GO",
-            "33136179763",
-            "33135951867",
-            "timestamp v30",
-            "snapshot/targets v29",
+            "https://qw.x86.com.br/api/v1/release-truth.json",
+            "verify_live_release_truth.py",
+            "release-truth-projection-seed.json",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, status)

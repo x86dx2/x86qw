@@ -14,9 +14,11 @@ consultada não ganha precedência por ser mais recente.
 
 Nenhuma release note ou issue substitui uma autoridade de bytes. O
 [JSON desta fotografia histórica](release-truth.json) é um índice, não um novo
-catálogo TUF. A autoridade corrente é
-[`release-truth-current.json`](release-truth-current.json), observado em
-2026-08-28T02:32:21Z.
+catálogo TUF. A autoridade corrente é o endpoint vivo
+`https://qw.x86.com.br/api/v1/release-truth.json`; o arquivo
+[`release-truth-current.json`](release-truth-current.json) é seu ponteiro e
+[`release-truth-projection-seed.json`](release-truth-projection-seed.json) é
+somente a última semente offline versionada.
 
 ## Identidade observada
 

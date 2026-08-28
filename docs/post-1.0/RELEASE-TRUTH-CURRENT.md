@@ -1,11 +1,21 @@
 # Release truth — escopo corrente M3-first
 
-Esta é a projeção legível da autoridade machine-readable em
-[`release-truth-current.json`](release-truth-current.json). Ela separa source,
-candidate/release, deployment e development; não transforma disponibilidade de
-artefato em suporte ou autorização de audiência.
+O estado corrente de deployment é exclusivamente
+`https://qw.x86.com.br/api/v1/release-truth.json`.
+[`release-truth-current.json`](release-truth-current.json) contém
+somente esse ponteiro e os invariantes de audiência. Verifique a observação
+viva com:
 
-## Estado verificado em 2026-08-28T02:32:21Z
+```sh
+python3 maintenance/tools/verify_live_release_truth.py
+```
+
+[`release-truth-projection-seed.json`](release-truth-projection-seed.json) é a
+semente offline versionada usada pela projeção estática e pelos testes. Ela não
+é autoridade do deployment corrente. O restante deste documento registra a
+última fotografia auditada, sem convertê-la em verdade viva permanente.
+
+## Última fotografia verificada em 2026-08-28T02:32:21Z
 
 - `MAIN=GREEN`: a linha `main` passou o Validate no run
   [33135951867](https://github.com/x86dx2/x86qw/actions/runs/33135951867), no
@@ -24,7 +34,7 @@ artefato em suporte ou autorização de audiência.
 
 ## Autoridades
 
-| Autoridade | Verdade corrente |
+| Autoridade | Valor na fotografia de 2026-08-28 |
 | --- | --- |
 | source | baseline current `1.0.4` em `dist/installer/VERSION` |
 | candidate/release | `x86qw-installer-1.0.0`, commit `e12ed081b968f820f47200e4be954a4f444056a1`, audiência `owner-only` |
@@ -36,28 +46,27 @@ artefato em suporte ou autorização de audiência.
 
 O run [33136179763](https://github.com/x86dx2/x86qw/actions/runs/33136179763)
 reparou e verificou a projeção owner-only. O candidato carregado é o mesmo
-nos endpoints canônico `https://qw.x86.com.br/` e alias
-`https://x86qw.x86.com.br/`: product e catálogo reportam `1.0.0`, a raiz HTTP
+no endpoint canônico `https://qw.x86.com.br/`: product e catálogo reportam `1.0.0`, a raiz HTTP
 200 mostra `owner-only`, e `/api/v1/release-truth.json` responde 200.
 
 O catálogo público tem SHA-256
 `a03a8b0e3dcd97a66d338891dacd6ca80befdbee907ed9b83007a538bb97646a`; a
-projeção de release-truth tem SHA-256
-`601e30eb9025a76782e75fe417723fda404539d065d5c1bd338a4a4b382a6cf7` na
-observação pública corrente.
+projeção de release-truth tinha SHA-256
+`601e30eb9025a76782e75fe417723fda404539d065d5c1bd338a4a4b382a6cf7` nessa
+observação pública.
 GitHub e GitLab continuam byte-equal para o instalador owner-only. A release
 final tem 600825 bytes e candidate SHA-256
 `0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21`.
 
 O receipt da projeção registra o mesmo estado: `CONVERGED_CANDIDATE_DEPLOYMENT`,
 root probe `200_OWNER_ONLY`, repair artifact `9672118367` e publicação de site
-`projection-only`. A execução usou o commit corrente
+`projection-only`. A execução usou o commit observado
 `962fb2b2cc27560e982c2255d9299a55f16acdd1`; ela não reconstruiu o candidato nem
 alterou seus bytes imutáveis.
 
 ## TUF técnico e operação
 
-O TUF público atual é autenticado pela root Ed25519 v1. O timestamp v30 foi
+Na fotografia, o TUF público era autenticado pela root Ed25519 v1. O timestamp v30 foi
 renovado no run `33135314707`, com artifact `9671800710` e relatório SHA-256
 `fe90b29ca4aa49f3b3c5a33897edd67b7069685d1622f3ae8d85f348a172e7cb`.
 Snapshot e targets estão em v29 e expiram depois do timestamp. O monitor

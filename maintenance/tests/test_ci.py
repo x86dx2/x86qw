@@ -280,7 +280,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertNotIn("seed_lfs:", workflow)
         self.assertIn("matrix:\n        include:", workflow)
         self.assertIn(
-            "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+            "actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306",
             workflow,
         )
         self.assertIn("path: .git/lfs/objects", workflow)
@@ -294,6 +294,66 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("materialize_lfs.py", workflow)
         self.assertIn("git lfs fsck --pointers", workflow)
         self.assertEqual(0, workflow.count("git lfs pull"))
+
+    def test_workflows_use_node24_actions_and_codeql(self):
+        workflow_dir = ROOT / ".github/workflows"
+        workflows = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(workflow_dir.glob("*.yml"))
+        )
+        for legacy in (
+            "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830",
+            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ):
+            self.assertNotIn(legacy, workflows)
+        for current in (
+            "actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306",
+            "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+            "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
+        ):
+            self.assertIn(current, workflows)
+
+        codeql = workflow_dir / "codeql.yml"
+        self.assertTrue(codeql.is_file())
+        source = codeql.read_text(encoding="utf-8")
+        self.assertIn("security-events: write", source)
+        self.assertIn("javascript-typescript", source)
+        self.assertIn("python", source)
+        self.assertEqual(
+            2,
+            source.count(
+                "github/codeql-action/"
+            ),
+        )
+        self.assertEqual(
+            2,
+            source.count("@bb16b9baa2ec4010b29f5c606d57d01190139edd"),
+        )
+        self.assertNotIn("pull_request_target", source)
+
+    def test_production_site_deploys_only_explicit_assembled_assets(self):
+        workflow_names = (
+            "release.yml",
+            "site-projection-repair.yml",
+            "tuf-snapshot-publish.yml",
+            "tuf-timestamp-publish.yml",
+        )
+        for name in workflow_names:
+            source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            deploy_lines = [
+                line for line in source.splitlines()
+                if "wrangler deploy" in line
+            ]
+            self.assertEqual(2, len(deploy_lines), name)
+            self.assertEqual(2, source.count("--assets"), name)
+            if name in {"release.yml", "site-projection-repair.yml"}:
+                self.assertIn("--assets ../release-work/site/public", source)
+                self.assertIn("--assets release-work/site/public", source)
+            else:
+                self.assertIn("--assets ../release-work/public", source)
+                self.assertIn("--assets release-work/public", source)
+            self.assertEqual(1, source.count("--strict"), name)
 
     def test_lfs_materializer_is_a_bounded_content_addressed_ci_boundary(self):
         materializer = ROOT / "maintenance/tools/materialize_lfs.py"
@@ -332,7 +392,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             {
-                "native-m3.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
+                "codeql.yml", "native-m3.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
                 "rc-soak.yml", "site-projection-repair.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "tuf-snapshot-publish.yml", "tuf-snapshot-renewal.yml", "tuf-timestamp-publish.yml", "tuf-timestamp-renewal.yml", "validate.yml",
             },
             {path.name for path in workflow_files},
@@ -346,6 +406,9 @@ class ContinuousIntegrationTests(unittest.TestCase):
             elif path.name == "public-acceptance.yml":
                 self.assertIn("Prepare isolated Python on self-hosted M3", source)
                 self.assertIn('python3 -m venv "$RUNNER_TEMP/x86qw-public-acceptance-python"', source)
+            elif path.name == "codeql.yml":
+                self.assertIn("github/codeql-action/init@", source)
+                self.assertIn("github/codeql-action/analyze@", source)
             else:
                 self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
@@ -402,29 +465,16 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("--product candidate/product.json", projection)
         self.assertIn("--bootstrap-source dist/installer/bin", projection)
         self.assertIn(
-            'shutil.copyfile(\n'
-            '              Path("release-work/current-site/index.html"),\n'
-            '              source_projection / "index.html",\n'
-            '          )',
+            'shutil.copytree(Path("release-work/current-site"), source_projection)',
             projection,
         )
-        self.assertIn(
-            'shutil.copyfile(\n'
-            '              Path("release-work/current-site/assets/site.js"),\n'
-            '              source_projection / "assets/site.js",\n'
-            '          )',
+        self.assertNotIn(
+            'shutil.copytree(Path("candidate/site/public"), source_projection)',
             projection,
         )
-        self.assertIn(
-            'shutil.copyfile(\n'
-            '              Path("release-work/current-site/_headers"),\n'
-            '              source_projection / "_headers",\n'
-            '          )',
-            projection,
-        )
+        self.assertNotIn("source_projection / \"assets/site.css\"", projection)
         self.assertIn("maintenance/tools/build_deploy_provenance.py", projection)
         self.assertIn("--directory release-work/site-source", projection)
-        self.assertIn('for name in ("install.sh", "install.ps1"):', projection)
         self.assertIn("--bootstrap-dir release-work/current-site", projection)
         self.assertIn("verify_site_root_probe.py", projection)
 

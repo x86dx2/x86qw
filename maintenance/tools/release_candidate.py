@@ -39,11 +39,7 @@ CANDIDATE_FORMAT = 2
 SPDX_VERSION = "SPDX-2.3"
 SPDX_CREATOR = "Tool: x86QW release-candidate"
 SPDX_LICENSES = frozenset({"MIT", "NOASSERTION"})
-# Candidates created before the public-domain migration carry the legacy
-# namespace in their immutable SBOM.  New candidates are always emitted with
-# the canonical host below; verification keeps the old host as a compatibility
-# alias so historical candidates remain reviewable without being rebuilt.
-SBOM_NAMESPACE_HOSTS = ("qw.x86.com.br", "x86qw.x86.com.br")
+SBOM_NAMESPACE_HOST = "qw.x86.com.br"
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SIGNATURE_TEXT = re.compile(r"^[A-Za-z0-9._:-]+$")
@@ -562,15 +558,14 @@ def _validate_sbom(
         raise CandidateError("SBOM contém campos desconhecidos ou ausentes")
     if type(sbom.get("spdxVersion")) is not str or sbom.get("spdxVersion") != SPDX_VERSION:
         raise CandidateError("SBOM SPDX inválido")
-    expected_namespaces = {
-        f"https://{host}/release/{version}/{commit}"
-        for host in SBOM_NAMESPACE_HOSTS
-    }
+    expected_namespace = (
+        f"https://{SBOM_NAMESPACE_HOST}/release/{version}/{commit}"
+    )
     if (
         sbom.get("SPDXID") != "SPDXRef-DOCUMENT"
         or sbom.get("dataLicense") != "CC0-1.0"
         or sbom.get("name") != f"{PROJECT}-{version}"
-        or sbom.get("documentNamespace") not in expected_namespaces
+        or sbom.get("documentNamespace") != expected_namespace
     ):
         raise CandidateError("SBOM não corresponde à identidade do candidato")
     creation = sbom.get("creationInfo")

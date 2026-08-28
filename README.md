@@ -328,7 +328,7 @@ desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
 | CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
 
 > [!NOTE]
-> O contrato `portable-contract` obrigatório roda em macOS com Python 3.10 e 3.13. Jobs Linux/Windows existem como preview manual (`workflow_dispatch`) e não bloqueiam merge. Isso não equivale a smoke nativo fora do Apple M3.
+> O contrato `portable-contract` obrigatório roda em macOS e Ubuntu com Python 3.10 e 3.13. Windows permanece preview manual (`workflow_dispatch`) e não bloqueia merge. Isso não equivale a smoke nativo fora do Apple M3.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso
@@ -353,15 +353,20 @@ A validação integral não instala dependências Python adicionais:
 ./maintenance/manage.py verify
 ./dist/installer/bin/manager.py --help
 ./dist/installer/bin/manager.py play --help
-cd site && npx --yes wrangler@4.114.0 deploy --dry-run
+cd site && npm run deploy:dry-run
 ```
 
 Para visualizar o portal localmente:
 
 ```sh
 cd site
-npx --yes wrangler@4.114.0 dev --ip 127.0.0.1 --port 8787
+npm run dev
 ```
+
+A configuração versionada de produção não contém um diretório de assets. Um
+deploy real só é permitido pelos workflows protegidos, que passam por
+`--assets` a geração montada e verificada; executar `wrangler deploy` sem esse
+argumento falha fechado.
 
 Abra `http://127.0.0.1:8787`. O fluxo completo de manutenção está em [maintenance/README.md](maintenance/README.md) e a operação do site em [site/README.md](site/README.md).
 

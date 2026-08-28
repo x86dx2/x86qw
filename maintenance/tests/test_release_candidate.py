@@ -852,7 +852,7 @@ class ReleaseCandidateTests(unittest.TestCase):
                 evidence_path.write_text(json.dumps(evidence) + "\n", encoding="utf-8")
                 module.verify_candidate(candidate)
 
-    def test_verify_accepts_legacy_sbom_namespace_for_pre_migration_candidates(self):
+    def test_verify_rejects_noncanonical_sbom_namespace(self):
         module = self._candidate_module()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -871,7 +871,7 @@ class ReleaseCandidateTests(unittest.TestCase):
             sbom_path = candidate / "sbom.spdx.json"
             sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
             sbom["documentNamespace"] = (
-                "https://x86qw.x86.com.br/release/1.0.0/" + "1" * 40
+                "https://invalid.example/release/1.0.0/" + "1" * 40
             )
             sbom_path.write_bytes(module._json_bytes(sbom))
 
@@ -884,8 +884,8 @@ class ReleaseCandidateTests(unittest.TestCase):
             manifest["candidate_sha256"] = module._candidate_digest(manifest)
             manifest_path.write_bytes(module._json_bytes(manifest))
 
-            verified = module.verify_candidate(candidate)
-            self.assertEqual(verified["version"], "1.0.0")
+            with self.assertRaises(module.CandidateError):
+                module.verify_candidate(candidate)
 
     def test_verify_binds_sbom_and_provenance_to_manifest(self):
         module = self._candidate_module()
