@@ -2407,6 +2407,11 @@ class Installer:
             download = self.stage / f"{self.app_archive_name}.download"
             if not self.update_ui:
                 console.info(f"Baixando {self.app_archive_name}...")
+            else:
+                console.download_start(
+                    f"ezQuake {self.selected_version}",
+                    size=self.app_expected_size or None,
+                )
             _, self.app_url = self.remote.get_mirrors(
                 self.app_urls or (self.app_url,),
                 download,
@@ -4942,8 +4947,16 @@ class Installer:
     @staticmethod
     def confirm_update_plan(action: str, *, assume_yes: bool) -> bool:
         if assume_yes:
-            console.info("Plano confirmado automaticamente por --yes.")
+            confirmation_source = (
+                "install --non-interactive" if action == "install" else "--yes"
+            )
+            console.info(f"Plano confirmado automaticamente por {confirmation_source}.")
             return True
+        confirmation_help = (
+            "ou execute install --non-interactive com todas as seleções obrigatórias."
+            if action == "install"
+            else "ou use --yes para confirmar o plano automaticamente."
+        )
         if not navigation.supports_navigation():
             while True:
                 try:
@@ -4953,7 +4966,7 @@ class Installer:
                 except EOFError as error:
                     raise InstallerError(
                         "A confirmação não pôde ser lida. Execute em um terminal interativo "
-                        "ou use --yes para confirmar o plano automaticamente."
+                        + confirmation_help
                     ) from error
                 if answer in ("y", "yes", "s", "sim"):
                     return True
@@ -4971,7 +4984,7 @@ class Installer:
         except navigation.MenuCancelled as error:
             raise InstallerError(
                 "A confirmação não pôde ser lida. Execute em um terminal interativo "
-                "ou use --yes para confirmar o plano automaticamente."
+                + confirmation_help
             ) from error
         if not accepted:
             console.info("Operação cancelada; nenhum arquivo do jogo foi alterado.")
@@ -5143,6 +5156,10 @@ class Installer:
                     console.success(f"Pacote carregado da distribuição local: {distribution_path}")
                 return artifact
         temporary = self.stage / f"{identifier}.download"
+        if self.update_ui:
+            console.download_start(
+                f"{identifier} {package['version']}", size=int(package["size"]),
+            )
         self.remote.get_mirrors(
             tuple(str(url) for url in package["urls"]),
             temporary,
@@ -7633,6 +7650,32 @@ class Installer:
             # non-interactive selection contract.
             self.choose_channel()
             self.choose_release()
+        if native_profile is not None:
+            if native_profile != "complete" or self._native_candidate_root() is None:
+                raise InstallerError(
+                    "--native-profile exige o perfil complete em um candidato nativo explícito."
+                )
+            selected = self.select_components_profile(native_profile)
+        else:
+            selected = self.choose_install_content()
+        assert self.spec is not None
+        plan_rows = [UpdatePlanRow(
+            "Cliente", f"ezQuake {self.spec.label} {self.channel}",
+            "não instalado", self.selected_version, "Instalar",
+            self.app_expected_size or None,
+        )]
+        for identifier in selected or ():
+            package = self.component_package_record(identifier)
+            plan_rows.append(UpdatePlanRow(
+                "Componente", str(self.components[identifier]["label"]),
+                "não instalado", str(package["version"]), "Instalar",
+                package_size(package),
+            ))
+        console.update_plan(plan_rows, "install")
+        if not self.confirm_update_plan(
+            "install", assume_yes=self._non_interactive_install,
+        ):
+            return
         if before_mutation is not None:
             before_mutation()
         reset_macos_game_directory = self.macos_game_directory_reset_required()
@@ -7673,13 +7716,8 @@ class Installer:
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
             if native_profile is not None:
-                if native_profile != "complete" or self._native_candidate_root() is None:
-                    raise InstallerError(
-                        "--native-profile exige o perfil complete em um candidato nativo explícito."
-                    )
-                selected = self.select_components_profile(native_profile)
                 installation_results.extend(self.install_component_phase(selected=selected))
-            elif (selected := self.choose_install_content()) is not None:
+            elif selected is not None:
                 installation_results.extend(self.install_component_phase(selected=selected))
             else:
                 console.warning(
@@ -9454,6 +9492,7 @@ def execute_manager_action(
                     installer.install_online_cli(mutation_results=operation_results)
         else:
             if options.action == "install":
+                installer.update_ui = True
                 with installer.component_state_transaction() as operation_results:
                     install_kwargs: dict[str, object] = {
                         "platform": options.platform,

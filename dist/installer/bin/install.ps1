@@ -1173,6 +1173,7 @@ except Exception as error:
       (New-Object System.Text.UTF8Encoding($false))
     )
     Remove-Item -LiteralPath $Archive -Force -ErrorAction SilentlyContinue
+    Write-Host "==> Baixando o instalador x86QW $InstallerVersion"
     Write-Host "x86QW: baixando instalador $InstallerVersion..."
     $DownloadArguments = @($PythonRuntime.Arguments) + @(
       $Downloader,
@@ -1198,6 +1199,7 @@ except Exception as error:
     if ($ArchiveSize -ne $InstallerSize -or $Actual -ne $InstallerSha256) {
       throw "x86QW: o downloader retornou um instalador divergente."
     }
+    Write-Host "[OK] Instalador x86QW $InstallerVersion  Baixado  ${InstallerSize}B/${InstallerSize}B"
     $HelperRoot = Join-Path $WorkDir "archive-helper"
     $MaterializeSource = @'
 import base64
@@ -1232,6 +1234,7 @@ os.chmod(module, 0o600)
       $MaterializeScript, $HelperRoot, $ArchiveHelperPayload
     )
     $Extracted = Join-Path $WorkDir "extracted"
+    Write-Host "==> Extraindo e verificando o instalador x86QW"
     $Prefix = "x86qw-installer-$InstallerVersion"
     $Required = "$Prefix/x86qw.pyz"
     $ShellExecutable = "$Prefix/x86qw.sh"
@@ -1284,6 +1287,7 @@ runpy.run_module("x86qw_runtime.io.archive", run_name="__main__")
     }
 
     $Root = Join-Path $Extracted "x86qw-installer-$InstallerVersion"
+    Write-Host "==> Iniciando a instalacao x86QW"
     $InstallerArguments = @($PythonRuntime.Arguments) + @((Join-Path $Root "x86qw.pyz"), "--online-only") + @($BootstrapArguments)
     & $PythonRuntime.Command @InstallerArguments
     $InstallerExitCode = $LASTEXITCODE

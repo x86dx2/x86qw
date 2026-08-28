@@ -333,6 +333,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
             root = Path(temporary)
             bundle = root / f"x86qw-installer-{version}.zip"
             self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bundle_size = bundle.stat().st_size
             bootstrap, binaries = self._prepare_unix_bootstrap(root, version, bundle)
             completed = subprocess.run(
                 [str(bootstrap), "--help"],
@@ -352,6 +353,13 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
         self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
         self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
+        self.assertIn(f"==> Baixando o instalador x86QW {version}", completed.stdout)
+        self.assertIn(
+            f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
+            completed.stdout,
+        )
+        self.assertIn("==> Extraindo e verificando o instalador x86QW", completed.stdout)
+        self.assertIn("==> Iniciando a instalação x86QW", completed.stdout)
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_unix_bootstrap_preserves_unicode_arguments_and_installer_exit(self):
@@ -490,6 +498,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
             root = Path(temporary)
             bundle = root / f"x86qw-installer-{version}.zip"
             self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bundle_size = bundle.stat().st_size
             bootstrap, runner = self._prepare_powershell_bootstrap(root, version, bundle)
             completed = subprocess.run(
                 [
@@ -512,6 +521,13 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
         self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
         self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
+        self.assertIn(f"==> Baixando o instalador x86QW {version}", completed.stdout)
+        self.assertIn(
+            f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
+            completed.stdout,
+        )
+        self.assertIn("==> Extraindo e verificando o instalador x86QW", completed.stdout)
+        self.assertIn("==> Iniciando a instalacao x86QW", completed.stdout)
 
     @unittest.skipUnless(
         shutil.which("pwsh") or shutil.which("powershell"),
