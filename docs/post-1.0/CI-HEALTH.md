@@ -1,8 +1,10 @@
 # CI health e Gate 0A
 
-**Estado corrente:** GREEN; Gate 0A fechado na main em
-fdd5a7267ec85674db70344b546ffc6a56417cb2, Validate run 31891985767,
-com os 7 contexts protegidos verdes (8 jobs no run).
+**Estado corrente:** `MAIN=GREEN`; Gate 0A permanece fechado. O Validate da
+linha `main` passou no run
+[33124929611](https://github.com/x86dx2/x86qw/actions/runs/33124929611),
+no commit `adf83f9f01a8601ed22676525d215b2d00f86592`, com 5/5 jobs exigidos
+verdes; o job de preview foi omitido sem ser usado como suporte.
 
 ## Diagnóstico fechado
 
@@ -20,7 +22,7 @@ Verificação do Checker:
   preservaram o orçamento e o erro esperado;
 - manage.py verify --no-tests e git diff --check: OK;
 - Windows/Python 3.10 e 3.13 e a matriz protegida: verdes no run
-  31891985767.
+  33124929611.
 
 A classificação é **test-only**. Não há evidência de mudança necessária no
 runtime/package nem motivo para 1.0.1 por este finding. Se uma futura

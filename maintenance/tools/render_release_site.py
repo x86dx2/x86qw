@@ -130,13 +130,23 @@ def render_release_site(
         "component-count": str(product_value["component_count"]),
     }
     for name, value in replacements.items():
-        html, count = re.subn(
+        patterns = (
             rf"(<span data-{re.escape(name)}>)[^<]*(</span>)",
-            rf"\g<1>{value}\g<2>",
-            html,
+            rf"(<span class=\"[^\"]*\brelease-{re.escape(name)}\b[^\"]*\">)[^<]*(</span>)",
         )
+        count = 0
+        for pattern in patterns:
+            html, count = re.subn(
+                pattern,
+                rf"\g<1>{value}\g<2>",
+                html,
+            )
+            if count:
+                break
         if count == 0:
-            raise ReleaseSiteError(f"index.html não expõe o marcador data-{name}")
+            raise ReleaseSiteError(
+                f"index.html não expõe o marcador data-{name} ou release-{name}"
+            )
     index.write_text(html, encoding="utf-8")
     if bootstrap_source is not None:
         bootstrap_source = Path(bootstrap_source)

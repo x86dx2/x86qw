@@ -9,6 +9,15 @@
 - **Emenda owner-only (2026-08-16):** expiração máxima de `timestamp` = 7 dias
   enquanto a audiência for um mantenedor e `external-public=NO-GO`. O teto de
   24 horas volta a valer antes de qualquer anúncio de catálogo público.
+- **Emenda owner-only (2026-08-27):** expiração de `snapshot` = 90 dias e de
+  `timestamp` = 30 dias, no mesmo regime owner-only. A emenda anterior deixou as
+  duas roles vencendo no mesmo instante, o que anulava o único fluxo protegido de
+  renovação do projeto: `tuf-timestamp-publish` só pode alterar
+  `metadata/timestamp.json`, e um timestamp renovado continua apontando para um
+  snapshot já vencido. A partir daqui `snapshot` sobrevive ao `timestamp` por
+  construção. Os tetos de 7 dias e 24 horas voltam a valer antes de qualquer
+  anúncio de catálogo público, junto com a separação de custódia da tabela
+  abaixo; o INC-001 de 2026-08-27 é a evidência que motivou a emenda.
 
 ## Contexto
 
@@ -54,12 +63,21 @@ mudança de major, algoritmo ou formato exige nova aprovação deste ADR.
 
 ### Roles, thresholds e custódia
 
-| Role | Chaves autorizadas | Threshold | Custódia | Expiração máxima |
-|---|---:|---:|---|---:|
-| root | 3 | 2 | três custodians distintos; chaves offline e não exportáveis | 365 dias |
-| targets | 3 | 2 | três autoridades de release; uso offline e aprovação humana | 90 dias |
-| snapshot | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias |
-| timestamp | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias |
+A coluna de alvo público é a política final. A coluna owner-only é o que vale
+enquanto `external-public` for NO-GO, conforme as emendas registradas no topo.
+
+| Role | Chaves autorizadas | Threshold | Custódia | Alvo público | Owner-only em vigor |
+|---|---:|---:|---|---:|---:|
+| root | 3 | 2 | três custodians distintos; chaves offline e não exportáveis | 365 dias | 365 dias |
+| targets | 3 | 2 | três autoridades de release; uso offline e aprovação humana | 90 dias | 90 dias |
+| snapshot | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias | 90 dias |
+| timestamp | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 24 horas | 30 dias |
+
+A expiração de `snapshot` é sempre estritamente maior que a de `timestamp`, nas
+duas colunas. Igualá-las remove a capacidade de recuperar a cadeia pelo fluxo
+protegido, e o teste
+`test_initializes_root_and_generates_refreshable_catalog_repository` trava essa
+ordem.
 
 Cada chave pertence a uma única role. Nenhuma chave privada entra em Git, no
 bundle, em logs, artefatos de CI ou secrets de jobs de pull request. Root e
@@ -75,14 +93,17 @@ fingerprints e evidência sem segredo.
 
 ### Janelas operacionais
 
-- no modo owner-only, `timestamp` é renovado antes de restarem 48 horas; alerta
-  crítico começa quando restarem 6 horas. A expiração máxima é 7 dias, igual ao
-  snapshot: com um operador, sem custódia 2-de-3 e sem clientes na rede, a
-  cadência de 12 horas só gerava cerimônia manual. O teto de 24 horas e a
-  renovação no máximo a cada 12 horas voltam a valer antes de autorizar
-  catálogo público, para limitar o freeze da chave online;
-- `snapshot` é renovado a cada mudança de targets e, sem mudança, antes de
-  restarem 48 horas;
+- no modo owner-only, `timestamp` expira em 30 dias e é renovado antes de
+  restarem 7 dias; alerta crítico começa quando restarem 72 horas. A janela de
+  alerta precisa superar com folga o pior intervalo observado entre execuções do
+  monitor, que em 2026-08-27 foi de 10,25 horas; a janela anterior, de 6 horas,
+  era menor que esse intervalo e por isso não avisava. O teto de 24 horas e a
+  renovação no máximo a cada 12 horas voltam a valer antes de autorizar catálogo
+  público, para limitar o freeze da chave online;
+- no modo owner-only, `snapshot` expira em 90 dias. É renovado a cada mudança de
+  targets e, sem mudança, antes de restarem 14 dias. Ele nunca vence antes do
+  `timestamp`, para que a renovação isolada de timestamp seja capaz de recuperar
+  a cadeia sem cerimônia completa;
 - `targets` é renovado a cada promoção e, sem promoção, antes de restarem 30
   dias;
 - `root` é revisado trimestralmente e renovado antes de restarem 120 dias;

@@ -235,6 +235,15 @@ jobs:
           cmp -s candidate/catalog.json "${catalogs[0]}"
           test -f renewal/repository/metadata/timestamp.json
           test -f renewal/report.json
+      - name: Verify every declared installer mirror before public metadata changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_VERSION="$(python3 -c 'import json; print(json.load(open("candidate/candidate.json", encoding="utf-8"))["version"])')"
+          python3 maintenance/tools/verify_release_mirrors.py \
+            --candidate candidate \
+            --catalog candidate/catalog.json \
+            --expected-release "$CANDIDATE_VERSION"
       - name: Verify that the renewal changes only timestamp metadata
         env:
           EXPECTED_KEY_ID: ${{ inputs.timestamp_key_id }}

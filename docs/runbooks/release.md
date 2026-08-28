@@ -257,9 +257,12 @@ A renovação operacional, neste repositório de mantenedor único, requer cust�
 explicitamente sob o ADR 0007, monitor de expiração e uma cerimônia manual
 protegida (modo B deste ciclo); não há signer online agendado implementado.
 `.github/workflows/tuf-monitor.yml` executa a
-verificação autenticada de hora em hora, falha 6 horas antes do vencimento e
-abre/atualiza uma única issue acionável quando o monitor falha; ele é somente
-observabilidade e não substitui a cerimônia autorizada de renovação. Sem signer,
+verificação autenticada de hora em hora, falha 72 horas antes do vencimento,
+falha explicitamente se a última execução bem-sucedida tiver mais de 4 horas e
+abre/atualiza uma issue acionável com labels `P0` e `owner-only` quando o
+monitor falha. Issues abertas sem esses labels não são recicladas como canal
+de alerta. Ele é somente observabilidade e não substitui a cerimônia
+autorizada de renovação. Sem signer,
 alertas entregues e um drill de recuperação observados, a 1.0 permanece NO-GO
 mesmo que a validação técnica da TUF passe.
 O drill operacional está em
@@ -275,8 +278,10 @@ validado em `format: 2`, incluindo as versões `current`/`renewed` de
 artifact, digest, operador, host e SLA. Sem esse handoff a promoção permanece
 fail-closed.
 Além disso, `release.yml` executa `monitor_public_tuf.py` com janela de alerta de
-seis horas imediatamente antes da promoção final. Uma lease dentro dessa janela
-exige renovação/recuperação manual e mantém a promoção em `NO-GO`.
+seis horas imediatamente antes da promoção final — essa janela de promoção
+permanece estreita de propósito e não segue as 72 horas do monitor contínuo.
+Uma lease dentro da janela de promoção exige renovação/recuperação manual e
+mantém a promoção em `NO-GO`.
 
 O caminho de signer limitado está preparado como duas etapas manuais protegidas;
 ele não é agendado e nunca publica sem aprovação do ambiente `release`. No modo

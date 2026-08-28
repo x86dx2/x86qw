@@ -13,7 +13,10 @@ consultada não ganha precedência por ser mais recente.
 5. run/artefacto de CI e documentação derivada.
 
 Nenhuma release note ou issue substitui uma autoridade de bytes. O
-[JSON desta verdade](release-truth.json) é um índice, não um novo catálogo TUF.
+[JSON desta fotografia histórica](release-truth.json) é um índice, não um novo
+catálogo TUF. A autoridade corrente é
+[`release-truth-current.json`](release-truth-current.json), observado em
+2026-08-27T23:18:37Z.
 
 ## Identidade observada
 
@@ -33,20 +36,20 @@ Nenhuma release note ou issue substitui uma autoridade de bytes. O
 | --- | --- | --- |
 | artefato | VERIFIED FACT | usar tag, commit, bytes e digests acima |
 | validação | VERIFIED FACT no M3; BLOCKED nas plataformas não-M3 | não extrapolar E3 |
-| audiência owner-only | AT-RISK na fotografia | receipt e P1s precisam ser reconciliados |
-| audiência external-public | NO-GO | exige EP-1–EP-5 |
-| TUF técnico | HEALTHY no intervalo auditado | lease e recovery continuam pendentes |
-| release operacional | AT-RISK | Gate 0A verde; Gate 0C ainda aguarda projeção live e receipt final |
+| audiência owner-only | VALID_FOR_SINGLE_USER_M3 | candidato exato, M3 e lifecycle single-user verificados |
+| audiência external-public | NO-GO | exige EP-0–EP-5 e autorização explícita |
+| TUF técnico | HEALTHY | root v1, timestamp v28, snapshot/targets v27 e monitor saudável |
+| release operacional | CONVERGED_CANDIDATE_DEPLOYMENT | projeção 33125534974, bootstraps/product/catalog/release-truth verificados |
 
 ## Contradições abertas
 
 | ID | Contradição | Como resolver | Estado |
 | --- | --- | --- | --- |
-| RT-01 | receipt final `public_acceptance` aponta para RC1; evidência final está em arquivo separado | gerar/validar receipt que referencia o candidato final e o recibo final exatos | BLOCKED |
-| RT-02 | source/release/deployment/development e audiência apresentam drift | escolher uma matriz de autoridade e atualizar consumidores em uma mudança revisada | BLOCKED |
-| RT-03 | ownership/SBOM `87/87` `unclassified`/`NOASSERTION` | classificar cada item, ou declarar exceção aprovada com expiry | BLOCKED |
-| RT-04 | mirror de pacote único como redundância | definir segunda fonte e teste de igualdade, ou registrar decisão de risco | BLOCKED |
-| RT-05 | release histórica e estado atual divergem em alguns documentos | reauditar contra a ref exata; não apagar a fotografia histórica | INFERENCE |
+| RT-01 | receipt final `public_acceptance` aponta para RC1; evidência final está em arquivo separado | manter separado no owner-only; reconciliar somente em uma promoção external-public | ACCEPTED_OWNER_ONLY |
+| RT-02 | source/release/deployment/development e audiência apresentam drift | projeção corrente e site foram atualizados e verificados | RESOLVED_DEPLOYMENT_VERIFIED |
+| RT-03 | ownership/SBOM `87/87` `unclassified`/`NOASSERTION` | classificar cada item, ou declarar exceção aprovada com expiry | DEFERRED_EXTERNAL |
+| RT-04 | mirror de pacote único não prova redundância operacional | manter igualdade GitHub/GitLab e registrar risco | DEFERRED_CONDITIONAL_UPGRADE |
+| RT-05 | fotografias históricas divergem deliberadamente do estado atual | reauditar documentos current sem apagar snapshots datados | DOCUMENTED_HISTORICAL |
 
 ## Regras para consumidores
 

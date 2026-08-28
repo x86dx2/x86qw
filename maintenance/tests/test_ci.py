@@ -262,7 +262,8 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn('- os: macos-latest\n            python: "3.10"', workflow)
         self.assertIn('- os: macos-latest\n            python: "3.13"', workflow)
         self.assertIn("preview-other-os:", workflow)
-        self.assertIn("if: github.event_name == 'workflow_dispatch'", workflow)
+        self.assertIn("run_preview:", workflow)
+        self.assertIn("if: inputs.run_preview == true", workflow)
         self.assertIn("Windows preview contract", workflow)
         self.assertIn("windows_preview_excluded", workflow)
         self.assertNotIn("continue-on-error", workflow)
@@ -348,17 +349,56 @@ class ContinuousIntegrationTests(unittest.TestCase):
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "17 * * * *"', monitor)
         self.assertIn("monitor_public_tuf.py", monitor)
-        self.assertIn("--warning-hours 6", monitor)
+        self.assertIn("--warning-hours 72", monitor)
+        self.assertNotIn("--warning-hours 6", monitor)
 
     def test_tuf_monitor_persists_one_actionable_alert_on_failure(self):
         monitor = (ROOT / ".github/workflows/tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn("issues: write", monitor)
+        self.assertIn("actions: read", monitor)
         self.assertIn("if: failure()", monitor)
         self.assertIn("actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd", monitor)
         self.assertIn("x86qw-tuf-lease-alert", monitor)
         self.assertIn("issues.listForRepo", monitor)
         self.assertIn("issues.create", monitor)
         self.assertIn("issues.update", monitor)
+        self.assertIn("const labels = ['P0', 'owner-only']", monitor)
+        self.assertIn("labels: 'P0'", monitor)
+        self.assertIn("listWorkflowRuns", monitor)
+        self.assertIn("monitor gap", monitor)
+
+    def test_public_projection_and_timestamp_recovery_verify_all_mirrors_first(self):
+        projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
+            encoding="utf-8"
+        )
+        timestamp = (ROOT / ".github/workflows/tuf-timestamp-publish.yml").read_text(
+            encoding="utf-8"
+        )
+        for source in (projection, timestamp):
+            with self.subTest(workflow="projection" if source is projection else "timestamp"):
+                self.assertIn("maintenance/tools/verify_release_mirrors.py", source)
+                self.assertIn("--expected-release", source)
+        self.assertIn("maintenance/tools/project_release_truth.py", projection)
+        self.assertIn('"product_version": candidate_version', Path(
+            ROOT / "maintenance/tools/project_release_truth.py"
+        ).read_text(encoding="utf-8"))
+
+    def test_site_projection_uses_current_root_for_audience_and_domain(self):
+        projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("maintenance/tools/render_release_site.py", projection)
+        self.assertIn("--source site/public", projection)
+        self.assertIn("--catalog candidate/catalog.json", projection)
+        self.assertIn("--product candidate/product.json", projection)
+        self.assertIn(
+            'shutil.copyfile(\n'
+            '              Path("release-work/current-site/index.html"),\n'
+            '              source_projection / "index.html",\n'
+            '          )',
+            projection,
+        )
+        self.assertIn("verify_site_root_probe.py", projection)
 
     def test_migration_plan_names_the_complete_public_0_7_fixture_range(self):
         roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
