@@ -1056,8 +1056,123 @@ class ModernComponentTests(unittest.TestCase):
                 stack.enter_context(mock.patch.object(
                     player, "choose_ktx_mode", return_value=None,
                 ))
+                choose_start = stack.enter_context(mock.patch.object(
+                    player, "choose_play_start", side_effect=("browse", None),
+                ))
                 player.play_local(configure_interactively=True)
             self.assertEqual(2, choose_game.call_count)
+            self.assertEqual(2, choose_start.call_count)
+
+    def test_play_start_offers_first_match_as_the_default_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, _, _ = self.make_player(Path(temporary))
+            with mock.patch.object(
+                play_qw.navigation, "select_one", return_value="first-match",
+            ) as select:
+                self.assertEqual("first-match", player.choose_play_start())
+        options = tuple(select.call_args.args[1])
+        self.assertEqual(("first-match", "browse"), tuple(option.key for option in options))
+        self.assertEqual(0, select.call_args.kwargs["default"])
+        self.assertEqual("Primeira partida", options[0].label)
+
+    def test_first_match_launches_duel_with_one_beginner_frogbot_on_dm6(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            player, target, _ = self.make_player(Path(temporary))
+            (target / "qw").mkdir()
+            game = next(game for game in play_qw.LOCAL_GAMES if game.key == "ktx")
+            runtime = target / "ezQuake Stable.app"
+            captured: dict[str, object] = {}
+
+            def capture_launch(_runtime, arguments):
+                captured["arguments"] = arguments
+                config_name = next(
+                    arguments[index + 1]
+                    for index, argument in enumerate(arguments[:-1])
+                    if argument == "+exec"
+                    and arguments[index + 1].startswith("x86qw-ktx-session-")
+                )
+                captured["config"] = (target / "qw" / config_name).read_text(
+                    encoding="ascii",
+                )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                with mock.patch.object(player, "check_paks"):
+                    with mock.patch.object(
+                        player, "available_local_games", return_value=[game],
+                    ):
+                        with mock.patch.object(
+                            player, "installed_component_for_game", return_value="ktx",
+                        ):
+                            with mock.patch.object(player, "verify_component"):
+                                with mock.patch.object(
+                                    player, "ktx_archive_members",
+                                    return_value=frozenset({"bots/maps/dm6.bot"}),
+                                ):
+                                    with mock.patch.object(
+                                        player, "local_map_names", return_value=["dm6"],
+                                    ):
+                                        with mock.patch.object(
+                                            player, "choose_host_runtime",
+                                            return_value=("stable", runtime),
+                                        ):
+                                            with mock.patch.object(
+                                                player, "choose_ktx_launch_options",
+                                            ) as options_menu:
+                                                with mock.patch.object(
+                                                    player, "launch_runtime",
+                                                    side_effect=capture_launch,
+                                                ) as launch:
+                                                    with mock.patch.object(
+                                                        play_qw,
+                                                        "transfer_runtime_config_controller",
+                                                        side_effect=lambda _target, ownership, _process: ownership,
+                                                    ):
+                                                        with mock.patch.object(
+                                                            play_qw,
+                                                            "process_remains_alive",
+                                                            return_value=True,
+                                                        ):
+                                                            with mock.patch.object(
+                                                                player, "verify_local_play_support",
+                                                            ):
+                                                                with mock.patch.object(
+                                                                    player, "choose_play_start",
+                                                                    return_value="first-match",
+                                                                ):
+                                                                    with mock.patch.object(
+                                                                        play_qw.navigation,
+                                                                        "confirm",
+                                                                        return_value=True,
+                                                                    ) as confirm:
+                                                                        player.play_local(
+                                                                            configure_interactively=True,
+                                                                        )
+            launch.assert_called_once()
+            options_menu.assert_not_called()
+            arguments = captured["arguments"]
+            self.assertIn(
+                ["+map", "dm6"],
+                [arguments[index:index + 2] for index in range(len(arguments) - 1)],
+            )
+            self.assertIn(
+                ["+set", "k_defmode", "1on1"],
+                [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+            )
+            self.assertIn(
+                ["+set", "k_fb_enabled", "1"],
+                [arguments[index:index + 3] for index in range(len(arguments) - 2)],
+            )
+            config = str(captured["config"])
+            self.assertIn("cmd botcmd skill 4", config)
+            self.assertIn("cmd botcmd addbot 4", config)
+            subtitle = confirm.call_args.kwargs["subtitle"]
+            self.assertIn("Duel", subtitle)
+            self.assertIn("dm6", subtitle)
+            self.assertIn("1 · habilidade 4", subtitle)
+            self.assertIn("Controles essenciais:", subtitle)
+            self.assertIn("F5", subtitle)
+            self.assertIn("F6", subtitle)
+            self.assertIn("F11", subtitle)
 
     def test_ktx_mode_catalog_is_declarative_and_uses_only_supported_commands(self):
         modes = play_qw.load_ktx_modes(ROOT)
@@ -1724,7 +1839,9 @@ class ModernComponentTests(unittest.TestCase):
                 player, "choose_local_game", return_value=game,
             ), mock.patch.object(
                 player, "installed_component_for_game", return_value=game.component,
-            ), mock.patch.object(player, "verify_component"), mock.patch.object(
+            ), mock.patch.object(player, "verify_component"            ), mock.patch.object(
+                player, "choose_play_start", return_value="browse",
+            ), mock.patch.object(
                 player, "choose_ktx_mode", side_effect=(modes["duel"], modes["race"]),
             ), mock.patch.object(
                 player, "choose_ktx_launch_options", side_effect=choose_options,
