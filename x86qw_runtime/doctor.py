@@ -103,7 +103,8 @@ def sanitize_doctor_report(
 
     def replace_home(value: object) -> object:
         if isinstance(value, str):
-            return value.replace(home_text, "~") if home_text else value
+            replaced = value.replace(home_text, "~") if home_text else value
+            return replaced.replace("\\", "/") if replaced.startswith("~") else replaced
         if isinstance(value, Mapping):
             return {str(key): replace_home(item) for key, item in value.items()}
         if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):

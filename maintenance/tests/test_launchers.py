@@ -484,7 +484,15 @@ raise SystemExit(int(os.environ.get('X86QW_STUB_EXIT', '0')))
                         env=dict(environment, X86QW_STUB_EXIT="0"), check=False,
                         capture_output=True,
                     )
-                    self.assertEqual(0, completed.returncode)
+                    self.assertEqual(
+                        0,
+                        completed.returncode,
+                        msg=(
+                            f"stdout={completed.stdout!r}\n"
+                            f"stderr={completed.stderr!r}\n"
+                            f"launcher={launcher.read_text(encoding='utf-8')!r}"
+                        ),
+                    )
                     received = json.loads(output.read_text(encoding="utf-8"))
                     if target_at_end:
                         self.assertEqual(prefix, received[:-1])
