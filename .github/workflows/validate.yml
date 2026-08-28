@@ -68,6 +68,10 @@ jobs:
             python: "3.10"
           - os: macos-latest
             python: "3.13"
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.13"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -162,10 +166,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            python: "3.10"
-          - os: ubuntu-latest
-            python: "3.13"
           - os: windows-latest
             python: "3.10"
           - os: windows-latest
@@ -198,15 +198,7 @@ jobs:
           git lfs fsck --pointers
           python maintenance/tools/check_lfs.py
           python maintenance/tools/check_committed_diff.py
-      - name: Run preview maintenance tests
-        if: matrix.os != 'windows-latest'
-        shell: bash
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-          X86QW_CI_PORTABLE: "1"
-        run: python -m unittest discover -s maintenance/tests -v
       - name: Run Windows preview contract
-        if: matrix.os == 'windows-latest'
         shell: bash
         env:
           PYTHONDONTWRITEBYTECODE: "1"
