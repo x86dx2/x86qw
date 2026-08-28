@@ -43,10 +43,10 @@ class Release0713Tests(unittest.TestCase):
             if package.get("package") == "x86qw-installer"
         ]
         current = [package for package in installers if package.get("current") is True]
-        self.assertEqual("1.0.6", (ROOT / "dist/installer/VERSION").read_text().strip())
-        self.assertEqual("1.0.6", (ROOT / "dist/installer/packages/latest").resolve().name)
-        self.assertEqual(["1.0.6"], [package["version"] for package in current])
-        self.assertEqual("1.0.6", product["version"])
+        self.assertEqual("1.0.7", (ROOT / "dist/installer/VERSION").read_text().strip())
+        self.assertEqual("1.0.7", (ROOT / "dist/installer/packages/latest").resolve().name)
+        self.assertEqual(["1.0.7"], [package["version"] for package in current])
+        self.assertEqual("1.0.7", product["version"])
 
         previous = next(package for package in installers if package["version"] == "0.7.4")
         self.assertFalse(previous["current"])
@@ -110,11 +110,11 @@ class Release0713Tests(unittest.TestCase):
         previous_105 = next(package for package in installers if package["version"] == "1.0.5")
         self.assertFalse(previous_105["current"])
 
-        bundle = ROOT / "dist/installer/packages/1.0.6/x86qw-installer-1.0.6.zip"
+        bundle = ROOT / "dist/installer/packages/1.0.7/x86qw-installer-1.0.7.zip"
         self.assertEqual(current[0]["sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest())
         self.assertEqual(current[0]["size"], bundle.stat().st_size)
         with zipfile.ZipFile(bundle) as outer:
-            application = outer.read("x86qw-installer-1.0.6/x86qw.pyz")
+            application = outer.read("x86qw-installer-1.0.7/x86qw.pyz")
         with zipfile.ZipFile(io.BytesIO(application)) as inner:
             self.assertEqual(
                 (ROOT / "maintenance/trust/root.json").read_bytes(),
@@ -122,8 +122,8 @@ class Release0713Tests(unittest.TestCase):
             )
             self.assertFalse(any(name.endswith((".pem", ".key")) for name in inner.namelist()))
 
-        self.assertIn('INSTALLER_VERSION="1.0.6"', (ROOT / "site/public/install.sh").read_text())
-        self.assertIn('$InstallerVersion = "1.0.6"', (ROOT / "site/public/install.ps1").read_text())
+        self.assertIn('INSTALLER_VERSION="1.0.7"', (ROOT / "site/public/install.sh").read_text())
+        self.assertIn('$InstallerVersion = "1.0.7"', (ROOT / "site/public/install.ps1").read_text())
 
     def test_public_trust_repository_authenticates_the_final_catalog(self) -> None:
         trust = ROOT / "site/public/api/v1/trust"
@@ -168,7 +168,7 @@ class Release0713Tests(unittest.TestCase):
         index = (ROOT / "site/public/index.html").read_text(encoding="utf-8")
         self.assertNotIn("0.7.13 histórica", index)
         visible_index = re.sub(r"<[^>]+>", "", index)
-        self.assertIn("x86QW 1.0.6", visible_index)
+        self.assertIn("x86QW 1.0.7", visible_index)
         self.assertIn("29 pacotes", visible_index)
 
 
