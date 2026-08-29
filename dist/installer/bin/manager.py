@@ -3732,7 +3732,7 @@ class Installer:
                 self._stage_created_roots = previous_stage_created_roots
         return tuple(created) if mutation_results is not None else ()
 
-    def verify_qw_package_order(self) -> None:
+    def verify_qw_package_order(self, *, report_details: bool = True) -> None:
         packages = self.expected_qw_package_order()
         present, _, _ = self.validate_component_pair("package-order")
         if not packages:
@@ -3744,7 +3744,7 @@ class Installer:
                 "Ordem de PK3 não registrada. Reexecute o bootstrap x86QW no mesmo "
                 "destino para gerar qw/pak.lst."
             )
-        self.verify_component("package-order")
+        self.verify_component("package-order", report_details=report_details)
         path = self.target / "qw/pak.lst"
         expected = "".join(f"{name}\n" for name in packages)
         if path.read_text(encoding="utf-8") != expected:
@@ -4038,7 +4038,7 @@ class Installer:
                 self.cleanup_stage()
                 self.stage = None
 
-    def verify_component(self, component: str) -> int:
+    def verify_component(self, component: str, *, report_details: bool = True) -> int:
         present, entries, receipt = self.validate_component_pair(component)
         if not present:
             return 0
@@ -4067,7 +4067,11 @@ class Installer:
                     if source.read(4) != b"PACK":
                         raise InstallerError(f"PAK gerenciado inválido: {managed}")
         assert receipt is not None
-        console.success(f"Componente {component} íntegro ({file_count(len(entries))}; seleção {receipt['selection']}).")
+        if report_details:
+            console.success(
+                f"Componente {component} íntegro "
+                f"({file_count(len(entries))}; seleção {receipt['selection']})."
+            )
         return len(entries)
 
     def manage_presets(
@@ -4516,13 +4520,18 @@ class Installer:
         selected = resolved
         self.selected_component_profile = profile
         self.requested_components = requested
-        console.success(f"{len(selected)} componente(s) selecionado(s).")
-        print("\nVersões que serão instaladas ou atualizadas:")
+        noun = "componente selecionado" if len(selected) == 1 else "componentes selecionados"
+        console.detail(f"{len(selected)} {noun}.")
+        console.detail("Versões que serão instaladas ou atualizadas:")
         for identifier in selected:
             package = self.component_package_record(identifier)
-            print(f"  - {self.components[identifier]['label']}: {package['version']}")
+            console.detail(
+                f"- {self.components[identifier]['label']}: {package['version']}"
+            )
             if package.get("release_url"):
-                print(f"    novidades: {safe_url_for_log(package['release_url'])}")
+                console.detail(
+                    f"  novidades: {safe_url_for_log(package['release_url'])}"
+                )
         return selected
 
     def select_components_profile(self, profile: str) -> list[str]:
@@ -4537,13 +4546,18 @@ class Installer:
             raise InstallerError(f"Perfil nativo inválido: {profile}") from error
         self.selected_component_profile = profile
         self.requested_components = []
-        console.success(f"{len(selected)} componente(s) selecionado(s).")
-        print("\nVersões que serão instaladas ou atualizadas:")
+        noun = "componente selecionado" if len(selected) == 1 else "componentes selecionados"
+        console.detail(f"{len(selected)} {noun}.")
+        console.detail("Versões que serão instaladas ou atualizadas:")
         for identifier in selected:
             package = self.component_package_record(identifier)
-            print(f"  - {self.components[identifier]['label']}: {package['version']}")
+            console.detail(
+                f"- {self.components[identifier]['label']}: {package['version']}"
+            )
             if package.get("release_url"):
-                print(f"    novidades: {safe_url_for_log(package['release_url'])}")
+                console.detail(
+                    f"  novidades: {safe_url_for_log(package['release_url'])}"
+                )
         return selected
 
     def _native_candidate_root(self) -> Path | None:
@@ -4945,7 +4959,9 @@ class Installer:
             self.cleanup_stage()
 
     @staticmethod
-    def confirm_update_plan(action: str, *, assume_yes: bool) -> bool:
+    def confirm_update_plan(
+        action: str, *, assume_yes: bool, summary: str = "",
+    ) -> bool:
         if assume_yes:
             confirmation_source = (
                 "install --non-interactive" if action == "install" else "--yes"
@@ -4978,6 +4994,7 @@ class Installer:
             accepted = navigation.confirm(
                 "Deseja executar este plano?",
                 breadcrumb=f"x86QW › {action.capitalize()} › Confirmação",
+                subtitle=summary,
                 description="aplicar as alterações apresentadas",
                 default=False,
             )
@@ -5785,6 +5802,9 @@ class Installer:
     def install_components(self, selected: list[str]) -> tuple[MutationResult, ...]:
         assert self.stage is not None
         results: list[MutationResult] = []
+        total_files = 0
+        noun = "componente" if len(selected) == 1 else "componentes"
+        console.heading(f"Instalando {len(selected)} {noun} x86QW")
         try:
             self.migrate_legacy_nquake(results)
             self.migrate_legacy_clan_arena(selected, results)
@@ -5792,7 +5812,7 @@ class Installer:
             self.release_play_support_profiles(selected, results)
             for index, identifier in enumerate(selected, 1):
                 component = self.components[identifier]
-                console.info(f"[{index}/{len(selected)}] Preparando {component['label']}...")
+                console.activity(index, len(selected))
                 package = self.component_package_record(identifier)
                 prepared = self.prepare_component_sources(package)
                 if prepared is None:
@@ -5805,6 +5825,7 @@ class Installer:
                 count, result = self.install_component_overlay_transaction(
                     identifier, managed, str(package["version"]), source,
                 )
+                total_files += count
                 results.append(result)
                 for staged, destination in defaults:
                     existed_before = lexists(destination)
@@ -5814,14 +5835,13 @@ class Installer:
                     if default_result is not None:
                         results.append(default_result)
                         if existed_before:
-                            console.info(
+                            console.detail(
                                 f"Configuração inicial existente registrada: {destination}"
                             )
                         else:
-                            console.info(f"Configuração inicial criada: {destination}")
+                            console.detail(f"Configuração inicial criada: {destination}")
                 if identifier == "x86qw-client-bootstrap":
                     self.migrate_nquake_texture_limit(results)
-                console.success(f"{component['label']} atualizado ({file_count(count)}).")
             if "x86qw-client-bootstrap" in selected:
                 preset = self.target / "ezquake/configs/preset.cfg"
                 if not preset.is_file():
@@ -5836,8 +5856,15 @@ class Installer:
             self.migrate_saved_configs(results)
             self.refresh_qw_package_order(mutation_results=results)
             self.reconcile_play_support_transaction(mutation_results=results)
+            console.activity_done()
+            console.flush_download_summary()
+            verb = "instalado" if len(selected) == 1 else "instalados"
+            console.success(
+                f"{len(selected)} {noun} {verb} · {file_count(total_files)}"
+            )
             return tuple(results)
         except BaseException as error:
+            console.activity_done()
             self.rollback_component_transactions(results, error)
             raise
 
@@ -6203,7 +6230,6 @@ class Installer:
         self, *, selected: list[str] | None = None,
     ) -> tuple[MutationResult, ...]:
         assert self.stage is not None
-        console.section("Fase 2/2 · Componentes x86QW")
         selected = self.choose_components() if selected is None else selected
         results = list(self.install_components(selected))
         try:
@@ -6482,7 +6508,7 @@ class Installer:
             console.warning(f"Não foi possível gravar o recente local: {error}")
         console.success(f"{label} aberto para {operation} em {address}.")
 
-    def verify_ezquake_variants(self) -> int:
+    def verify_ezquake_variants(self, *, report_details: bool = True) -> int:
         verified = 0
         for spec in PLATFORMS.values():
             for channel in ("stable", "nightly"):
@@ -6510,13 +6536,20 @@ class Installer:
                     raise InstallerError(
                         f"O fullscreen integral ainda não foi aplicado em {runtime}. Execute update."
                     )
-                console.success(f"ezQuake {spec.label} {channel} {receipt['selection']} íntegro.")
+                if report_details:
+                    console.success(
+                        f"ezQuake {spec.label} {channel} "
+                        f"{receipt['selection']} íntegro."
+                    )
                 verified += 1
         return verified
 
-    def verify_installation(self) -> None:
+    def verify_installation(self, *, report_details: bool | None = None) -> None:
+        if report_details is None:
+            report_details = console.verbose
+        console.heading("Verificando instalação")
         self.check_paks()
-        runtime_count = self.verify_ezquake_variants()
+        runtime_count = self.verify_ezquake_variants(report_details=report_details)
         if runtime_count == 0:
             raise InstallerError(f"Nenhum ezQuake gerenciado foi encontrado em {self.target}. Execute install primeiro.")
         legacy, _, _ = self.validate_nquake_pair()
@@ -6535,16 +6568,25 @@ class Installer:
                 )
         if not installed:
             console.info("Nenhum componente x86QW está instalado.")
+        managed_file_count = 0
         for identifier in installed:
-            self.verify_component(identifier)
+            managed_file_count += self.verify_component(
+                identifier, report_details=report_details,
+            )
         if lexists(self.target / "id1/gpl_maps.pk3"):
             raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
-        self.verify_component("maps")
-        self.verify_component("presets")
+        self.verify_component("maps", report_details=report_details)
+        self.verify_component("presets", report_details=report_details)
         player = self.play_support_player()
         player.verify_local_play_support(player.available_local_games())
-        self.verify_qw_package_order()
-        self.report_nquake_startup_state(installed)
+        self.verify_qw_package_order(report_details=report_details)
+        if report_details:
+            self.report_nquake_startup_state(installed)
+        component_noun = "componente" if len(installed) == 1 else "componentes"
+        console.success(
+            f"ezQuake + {len(installed)} {component_noun} íntegros · "
+            f"{file_count(managed_file_count)}"
+        )
 
     def installation_change_ignored_paths(self) -> tuple[str, ...]:
         paths = {
@@ -7638,7 +7680,6 @@ class Installer:
         self._requested_channel = channel
         self._requested_release = release
         self._requested_profile = profile
-        console.section("Fase 1/2 · ezQuake")
         self.select_platform(platform)
         if non_interactive:
             self.choose_channel(channel)
@@ -7671,9 +7712,10 @@ class Installer:
                 "não instalado", str(package["version"]), "Instalar",
                 package_size(package),
             ))
-        console.update_plan(plan_rows, "install")
+        plan_summary = console.update_plan(plan_rows, "install")
         if not self.confirm_update_plan(
             "install", assume_yes=self._non_interactive_install,
+            summary=plan_summary,
         ):
             return
         if before_mutation is not None:
@@ -7695,12 +7737,13 @@ class Installer:
             pak0_before = file_hash(self.target / "id1/pak0.pak")
             pak1_before = file_hash(self.target / "id1/pak1.pak")
             self.prepare_cache()
+            console.heading(
+                f"Instalando ezQuake {self.spec.label} {self.channel} "
+                f"{self.selected_version}"
+            )
             archive = self.ensure_archive()
             assert self.spec is not None and self.stage is not None
-            console.info(
-                f"Preparando ezQuake {self.spec.label} {self.channel} "
-                f"{self.selected_version}..."
-            )
+            console.activity(1, 1)
             prepared = self.prepare_runtime(archive)
             staged_receipt = self.stage / "ezquake-receipt"
             self.write_ezquake_receipt(staged_receipt)
@@ -7712,7 +7755,7 @@ class Installer:
                 preference_result = self.reset_macos_game_directory()
                 if preference_result is not None:
                     installation_results.append(preference_result)
-            console.success("ezQuake instalado e recibo registrado.")
+            console.success(f"ezQuake {self.selected_version} instalado")
             if reset_macos_game_directory:
                 console.info(f"Na primeira abertura, selecione este diretório quando o macOS solicitar: {self.target}")
             if native_profile is not None:
@@ -7734,7 +7777,6 @@ class Installer:
                     "Um PAK registrado foi alterado durante a instalação; "
                     "a operação foi interrompida."
                 )
-            console.section("Verificação final")
             self.verify_installation()
         except BaseException as error:
             if (
@@ -7835,13 +7877,13 @@ class Installer:
             parent_managed=mutation_results is not None,
         ):
             self.prepare_cache()
+            operation_label = "Restaurando" if restore_stable_bundle else "Atualizando"
+            console.heading(
+                f"{operation_label} ezQuake {spec.label} {channel} "
+                f"{installed} -> {available}"
+            )
             archive = self.ensure_archive()
-            if restore_stable_bundle:
-                console.info(
-                    "Restaurando o ezQuake stable a partir do bundle upstream integral..."
-                )
-            else:
-                console.info(f"Atualizando ezQuake {spec.label} {channel}: {installed} → {available}...")
+            console.activity(1, 1)
             prepared = self.prepare_runtime(archive)
             assert self.stage is not None
             staged_receipt = self.stage / "ezquake-receipt"
@@ -7857,7 +7899,7 @@ class Installer:
         if restore_stable_bundle:
             console.success("Bundle upstream integral do ezQuake stable restaurado.")
         else:
-            console.success(f"ezQuake {spec.label} {channel} atualizado para {available}.")
+            console.success(f"ezQuake atualizado para {available}")
         return True
 
     def outdated_installed_components(self) -> list[str]:
@@ -7939,8 +7981,6 @@ class Installer:
         with self.component_state_transaction(mutation_results) as mutation_results:
             if not dry_run and layout_change:
                 self.migrate_metadata_layout(mutation_results)
-            if not dry_run:
-                console.section("Clientes ezQuake instalados")
             for spec, channel, receipt in runtimes:
                 changed = self.update_runtime(
                     spec, channel, receipt,
@@ -7950,8 +7990,6 @@ class Installer:
                     mutation_results=mutation_results,
                 ) or changed
 
-            if not dry_run:
-                console.section("Componentes instalados")
             if legacy_removals:
                 if dry_run:
                     for identifier in legacy_removals:
@@ -8050,7 +8088,6 @@ class Installer:
                     mutation_results=mutation_results,
                 )
             if not dry_run and changed and not profile_upgrade:
-                console.section("Verificação final")
                 self.verify_installation()
         if not dry_run and changed and not profile_upgrade:
             console.success("Conteúdo instalado atualizado e validado.")
@@ -8083,7 +8120,7 @@ class Installer:
             extras = [identifier for identifier in installed if identifier not in desired]
 
             if not dry_run:
-                console.section(f"Convergência do perfil {state['profile']}")
+                console.heading(f"Convergindo perfil {state['profile']}")
             if extras and not dry_run:
                 console.warning(
                     "Componentes fora do perfil foram preservados: "
@@ -8116,7 +8153,6 @@ class Installer:
                     mutation_results=component_results,
                 )
             if not dry_run and changed:
-                console.section("Verificação final do perfil")
                 self.verify_installation()
         if not dry_run and changed:
             console.success("Distribuição atualizada conforme o perfil da instalação.")
@@ -9404,9 +9440,7 @@ def execute_manager_action(
                 sync_gitignore=options.sync_gitignore,
             )
         elif options.action == "verify":
-            console.section("Verificação da instalação")
             installer.verify_installation()
-            console.success("Verificação concluída sem problemas.")
         elif options.action == "repair":
             acquire_operation_lock()
             plan_rows: list[UpdatePlanRow] = []
@@ -9476,11 +9510,13 @@ def execute_manager_action(
                 console.heading("Já está atualizado")
                 console.success(message)
                 return 0
-            console.update_plan(plan_rows, options.action)
+            plan_summary = console.update_plan(plan_rows, options.action)
             if options.dry_run:
                 console.heading("Simulação concluída; nenhum arquivo foi alterado")
                 return 0
-            if not installer.confirm_update_plan(options.action, assume_yes=options.yes):
+            if not installer.confirm_update_plan(
+                options.action, assume_yes=options.yes, summary=plan_summary,
+            ):
                 return 0
             console.heading(
                 "Atualizando pacotes" if options.action == "update" else "Incorporando novidades"
