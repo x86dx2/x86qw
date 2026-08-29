@@ -2177,6 +2177,222 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("x86QW Package Manifest com nome longo", rendered)
         self.assertIn("Baixado | 123.5KB/123.5KB", rendered)
 
+    def test_complete_install_plan_groups_components_for_confirmation(self):
+        rows = [
+            install_qw.UpdatePlanRow(
+                "Cliente", "ezQuake macOS stable", "não instalado", "3.6.9",
+                "Instalar", 8_600_000,
+            ),
+            install_qw.UpdatePlanRow(
+                "Componente", "KTX x86QW", "não instalado", "1.47+x86qw.19",
+                "Instalar", 2_500_000,
+            ),
+            install_qw.UpdatePlanRow(
+                "Componente", "Mapas selecionados nQuake", "não instalado",
+                "e4cb23d40aa2", "Instalar", 20_500_000,
+            ),
+            install_qw.UpdatePlanRow(
+                "Componente", "QRP alta resolução", "não instalado",
+                "e4cb23d40aa2+x86qw.1", "Instalar", 404_100_000,
+            ),
+        ]
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            confirmation = install_qw.console.update_plan(rows, "install")
+
+        rendered = output.getvalue()
+        self.assertIn("==> Plano: instalar 4 pacotes", rendered)
+        self.assertIn("ezQuake macOS stable", rendered)
+        self.assertIn("3 componentes x86QW", rendered)
+        self.assertNotIn("KTX x86QW", rendered)
+        self.assertNotIn("Mapas selecionados nQuake", rendered)
+        self.assertNotIn("QRP alta resolução", rendered)
+        self.assertEqual(
+            "Plano: instalar 4 pacotes · 435.7MB\n"
+            "ezQuake macOS stable: não instalado -> 3.6.9 · 8.6MB\n"
+            "3 componentes x86QW · 427.1MB",
+            confirmation,
+        )
+
+    def test_profile_selection_defers_component_versions_to_verbose_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            output = io.StringIO()
+
+            with mock.patch.object(
+                installer, "component_package_record",
+                return_value={
+                    "version": "fixture",
+                    "release_url": "https://example.invalid/releases/fixture",
+                },
+            ), contextlib.redirect_stdout(output):
+                selected = installer._resolve_component_selection("complete")
+
+        rendered = output.getvalue()
+        self.assertEqual(21, len(selected))
+        self.assertNotIn("componente(s)", rendered)
+        self.assertNotIn("Versões que serão instaladas ou atualizadas", rendered)
+        self.assertNotIn("novidades:", rendered)
+
+    def test_cached_packages_are_collapsed_before_the_next_section(self):
+        reporter = install_qw.Console()
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            reporter.download_result("KTX 1.47", size=2_000_000, status="Cached")
+            reporter.download_result("Mapas e4cb23", size=20_000_000, status="Cached")
+            reporter.section("Instalando componentes")
+
+        rendered = output.getvalue()
+        self.assertNotIn("KTX 1.47", rendered)
+        self.assertNotIn("Mapas e4cb23", rendered)
+        self.assertIn("✔︎ 2 pacotes no cache · 22.0MB validados", rendered)
+        self.assertIn("Instalando componentes", rendered)
+
+    def test_cached_summary_is_flushed_before_the_related_success(self):
+        reporter = install_qw.Console()
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            reporter.download_result("ezQuake 3.6.9", size=8_600_000, status="Cached")
+            reporter.success("ezQuake 3.6.9 instalado")
+
+        rendered = output.getvalue()
+        cache = "✔︎ 1 pacote no cache · 8.6MB validado"
+        installed = "✔︎ ezQuake 3.6.9 instalado"
+        self.assertIn(cache, rendered)
+        self.assertIn(installed, rendered)
+        self.assertLess(rendered.index(cache), rendered.index(installed))
+
+    def test_component_install_uses_transient_activity_and_one_persistent_summary(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer.stage = target / ".stage"
+            installer.stage.mkdir()
+            managed = installer.stage / "managed"
+            managed.mkdir()
+            staged_default = installer.stage / "default.cfg"
+            staged_default.write_text("default\n", encoding="utf-8")
+            default_destination = target / "qw/x86qw-user.cfg"
+            packages = {
+                "ktx": {
+                    "package": "ktx", "version": "1.47+x86qw.19",
+                    "origin_url": "https://example.invalid/ktx.zip",
+                },
+                "nquake-maps": {
+                    "package": "nquake-maps", "version": "e4cb23d40aa2",
+                    "origin_url": "https://example.invalid/maps.zip",
+                },
+            }
+            output = TtyBuffer()
+
+            with (
+                mock.patch.object(installer, "migrate_legacy_nquake"),
+                mock.patch.object(installer, "migrate_legacy_clan_arena"),
+                mock.patch.object(installer, "migrate_legacy_component_replacements"),
+                mock.patch.object(installer, "release_play_support_profiles"),
+                mock.patch.object(
+                    installer, "component_package_record",
+                    side_effect=lambda identifier: packages[identifier],
+                ),
+                mock.patch.object(
+                    installer, "prepare_component_sources",
+                    return_value=(
+                        managed, [(staged_default, default_destination)], "fixture",
+                    ),
+                ),
+                mock.patch.object(
+                    installer, "install_component_default_transaction",
+                    return_value=mock.sentinel.default_result,
+                ),
+                mock.patch.object(installer, "normalize_component_platform_payload"),
+                mock.patch.object(
+                    installer, "install_component_overlay_transaction",
+                    side_effect=[
+                        (2, mock.sentinel.ktx_result),
+                        (3, mock.sentinel.maps_result),
+                    ],
+                ),
+                mock.patch.object(installer, "migrate_saved_configs"),
+                mock.patch.object(installer, "refresh_qw_package_order"),
+                mock.patch.object(installer, "reconcile_play_support_transaction"),
+                contextlib.redirect_stdout(output),
+            ):
+                installer.install_components(["ktx", "nquake-maps"])
+
+        rendered = output.getvalue()
+        self.assertIn("==> Instalando 2 componentes x86QW", rendered)
+        self.assertIn("\r", rendered)
+        self.assertIn("[1/2] Processando pacote", rendered)
+        self.assertIn("[2/2] Processando pacote", rendered)
+        self.assertNotIn("[INFO] [1/2] Preparando", rendered)
+        self.assertNotIn("KTX x86QW atualizado", rendered)
+        self.assertNotIn("Mapas selecionados nQuake atualizado", rendered)
+        self.assertNotIn("Configuração inicial criada", rendered)
+        self.assertEqual(1, rendered.count("✔︎ 2 componentes instalados · 5 arquivos"))
+
+    def test_installation_verification_reports_one_summary_without_item_repetition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            player = mock.Mock()
+            player.available_local_games.return_value = []
+            output = io.StringIO()
+
+            with (
+                mock.patch.object(installer, "check_paks"),
+                mock.patch.object(installer, "verify_ezquake_variants", return_value=1),
+                mock.patch.object(
+                    installer, "validate_nquake_pair", return_value=(False, None, None),
+                ),
+                mock.patch.object(
+                    installer, "installed_components", return_value=["ktx", "nquake-maps"],
+                ),
+                mock.patch.object(
+                    installer, "verify_component",
+                    side_effect=lambda identifier, **_options: {
+                        "ktx": 17, "nquake-maps": 106,
+                        "maps": 0, "presets": 0,
+                    }[identifier],
+                ),
+                mock.patch.object(installer, "play_support_player", return_value=player),
+                mock.patch.object(installer, "verify_qw_package_order"),
+                mock.patch.object(installer, "report_nquake_startup_state"),
+                contextlib.redirect_stdout(output),
+            ):
+                installer.verify_installation()
+
+        rendered = output.getvalue()
+        self.assertIn("==> Verificando instalação", rendered)
+        self.assertEqual(1, rendered.count(
+            "✔︎ ezQuake + 2 componentes íntegros · 123 arquivos"
+        ))
+
+    def test_verify_command_does_not_wrap_the_verifier_in_duplicate_messages(self):
+        target = Path("/tmp/x86qw-compact-verify")
+        installer = mock.Mock()
+        installer.target = target
+        installer.verify_installation.side_effect = lambda: install_qw.console.success(
+            "ezQuake + 21 componentes íntegros · 737 arquivos"
+        )
+        output = io.StringIO()
+
+        with mock.patch.object(install_qw, "Installer", return_value=installer), \
+                contextlib.redirect_stdout(output):
+            result = install_qw.main(["--no-color", "verify", str(target)])
+
+        rendered = output.getvalue()
+        self.assertEqual(0, result)
+        self.assertEqual(1, rendered.count(
+            "✔︎ ezQuake + 21 componentes íntegros · 737 arquivos"
+        ))
+        self.assertNotIn("Verificação da instalação", rendered)
+        self.assertNotIn("Verificação concluída sem problemas", rendered)
+
     def test_install_plan_is_confirmed_before_any_mutation(self):
         """A bootstrap cancellation must leave the target untouched."""
 

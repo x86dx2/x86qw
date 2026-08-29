@@ -53,12 +53,21 @@ class Console:
         self.color = False
         self._version = version
         self._download_label: str | None = None
+        self._cached_items = 0
+        self._cached_bytes = 0
+        self._activity_visible = False
 
     def configure(self, *, verbose: bool, no_color: bool) -> None:
         self.verbose = verbose
         self.color = sys.stdout.isatty() and not no_color and "NO_COLOR" not in os.environ
+        self._download_label = None
+        self._cached_items = 0
+        self._cached_bytes = 0
+        self._activity_visible = False
 
     def paint(self, text: str, code: str) -> str:
+        if text == "[OK]" and not self.verbose:
+            text = "✔︎"
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
     def banner(self, action: str, target: Path) -> None:
@@ -68,18 +77,26 @@ class Console:
         print(f"Ação: {action}  |  Destino: {target}", flush=True)
 
     def section(self, title: str) -> None:
+        self.activity_done()
+        self.flush_download_summary()
         print(f"\n{self.paint(title, '1;36')}", flush=True)
 
     def heading(self, title: str) -> None:
+        self.activity_done()
+        self.flush_download_summary()
         print(f"\n{self.paint('==>', '1;36')} {self.paint(title, '1')}", flush=True)
 
     def info(self, message: str) -> None:
+        self.activity_done()
         print(f"{self.paint('[INFO]', '36')} {message}", flush=True)
 
     def success(self, message: str) -> None:
+        self.activity_done()
+        self.flush_download_summary()
         print(f"{self.paint('[OK]', '32')} {message}", flush=True)
 
     def warning(self, message: str) -> None:
+        self.activity_done()
         print(f"{self.paint('[ATENÇÃO]', '33')} {message}", flush=True)
 
     def detail(self, message: str) -> None:
@@ -87,10 +104,11 @@ class Console:
             print(self.paint(f"       {message}", "2"), flush=True)
 
     def error(self, message: str) -> None:
+        self.activity_done()
         label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
-    def update_plan(self, rows: list[UpdatePlanRow], action: str) -> None:
+    def update_plan(self, rows: list[UpdatePlanRow], action: str) -> str:
         noun = "pacote" if len(rows) == 1 else "pacotes"
         action_label = {
             "install": "instalar", "update": "atualizar",
@@ -99,7 +117,14 @@ class Console:
         suffix = "" if action == "install" else (
             " desatualizado" if len(rows) == 1 else " desatualizados"
         )
-        self.heading(f"Plano: {action_label} {len(rows)} {noun}{suffix}")
+        total_size = sum(row.size or 0 for row in rows)
+        size_suffix = f" · {format_bytes_compact(total_size)}" if total_size else ""
+        title = f"Plano: {action_label} {len(rows)} {noun}{suffix}"
+        self.heading(title + size_suffix)
+        confirmation_lines = [title + size_suffix]
+        component_rows = [row for row in rows if row.kind.casefold() == "componente"]
+        grouped_install = action == "install" and len(component_rows) > 1
+        display_rows = [row for row in rows if row not in component_rows] if grouped_install else rows
         names = [row.item for row in rows]
         installed = [row.installed for row in rows]
         available = [row.available for row in rows]
@@ -107,7 +132,7 @@ class Console:
         installed_width = max(map(len, installed))
         available_width = max(map(len, available))
         terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
-        for row in rows:
+        for row in display_rows:
             size = f" ({format_bytes_compact(row.size)})" if row.size is not None else ""
             line = (
                 f"{row.item.ljust(name_width)}  "
@@ -116,21 +141,72 @@ class Console:
             )
             if len(line) <= terminal_width:
                 print(line, flush=True)
-                continue
-            print("\n".join(textwrap.wrap(
-                row.item, width=terminal_width,
-                initial_indent="  ", subsequent_indent="    ",
-                break_long_words=False, break_on_hyphens=False,
-            )), flush=True)
-            print(f"    Instalado  | {row.installed}", flush=True)
-            print(f"    Disponível | {row.available}", flush=True)
+            else:
+                print("\n".join(textwrap.wrap(
+                    row.item, width=terminal_width,
+                    initial_indent="  ", subsequent_indent="    ",
+                    break_long_words=False, break_on_hyphens=False,
+                )), flush=True)
+                print(f"    Instalado  | {row.installed}", flush=True)
+                print(f"    Disponível | {row.available}", flush=True)
+                if row.size is not None:
+                    print(f"    Download   | {format_bytes_compact(row.size)}", flush=True)
+            detail = f"{row.item}: {row.installed} -> {row.available}"
             if row.size is not None:
-                print(f"    Download   | {format_bytes_compact(row.size)}", flush=True)
+                detail += f" · {format_bytes_compact(row.size)}"
+            confirmation_lines.append(detail)
+        if grouped_install:
+            component_size = sum(row.size or 0 for row in component_rows)
+            component_label = f"{len(component_rows)} componentes x86QW"
+            if component_size:
+                component_label += f" · {format_bytes_compact(component_size)}"
+            print(component_label, flush=True)
+            confirmation_lines.append(component_label)
+        return "\n".join(confirmation_lines)
+
+    def activity(self, current: int, total: int) -> None:
+        if self.verbose:
+            self.info(f"[{current}/{total}] Processando pacote")
+            return
+        if not sys.stdout.isatty():
+            return
+        print(
+            f"\r\033[2K{self.paint('⠋', '36')} "
+            f"[{current}/{total}] Processando pacote",
+            end="", flush=True,
+        )
+        self._activity_visible = True
+
+    def activity_done(self) -> None:
+        if not self._activity_visible:
+            return
+        print("\r\033[2K", end="", flush=True)
+        self._activity_visible = False
+
+    def flush_download_summary(self) -> None:
+        if not self._cached_items:
+            return
+        count = self._cached_items
+        size = self._cached_bytes
+        self._cached_items = 0
+        self._cached_bytes = 0
+        noun = "pacote" if count == 1 else "pacotes"
+        adjective = "validado" if count == 1 else "validados"
+        check = self.paint("✔︎", "32")
+        print(
+            f"{check} {count} {noun} no cache · {format_bytes_compact(size)} {adjective}",
+            flush=True,
+        )
 
     def download_result(
         self, label: str, *, size: int, status: str = "Baixado",
     ) -> None:
         self._download_label = None
+        self.activity_done()
+        if status == "Cached" and not self.verbose:
+            self._cached_items += 1
+            self._cached_bytes += size
+            return
         amount = format_bytes_compact(size)
         check = self.paint("✔︎", "32")
         line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
@@ -142,6 +218,8 @@ class Console:
             print(f"    {status} | {amount}/{amount}", flush=True)
 
     def download_start(self, label: str, *, size: int | None) -> None:
+        self.activity_done()
+        self.flush_download_summary()
         safe_label = terminal_label(label)
         self._download_label = safe_label
         total = format_bytes_compact(size) if size is not None else "?"
