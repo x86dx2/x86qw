@@ -202,20 +202,73 @@ def project_release_truth(
         or candidate_release.get("external_public_authorized") is not False
     ):
         raise ReleaseTruthProjectionError("fonte candidate_release não é owner-only")
-    _immutable_match(candidate_release.get("version"), candidate_version, "versão do candidate_release")
-    _immutable_match(candidate_release.get("target_commit"), candidate_commit, "target_commit do candidate_release")
-    _immutable_match(candidate_release.get("candidate_sha256"), candidate_sha256, "candidate_sha256")
-    _immutable_match(candidate_release.get("installer_size_bytes"), installer_size, "tamanho do instalador")
-    _immutable_match(candidate_release.get("installer_sha256"), installer_sha256, "SHA-256 do instalador")
-    _immutable_match(candidate_release.get("tag"), f"x86qw-installer-{candidate_version}", "tag do candidate_release")
-    candidate_release.update({
-        "tag": f"x86qw-installer-{candidate_version}",
-        "version": candidate_version,
-        "target_commit": candidate_commit,
-        "installer_size_bytes": installer_size,
-        "installer_sha256": installer_sha256,
-        "candidate_sha256": candidate_sha256,
-    })
+    deployment = _require_mapping(authorities.get("deployment"), "deployment")
+    if candidate_release.get("version") == candidate_version:
+        _immutable_match(candidate_release.get("target_commit"), candidate_commit, "target_commit do candidate_release")
+        _immutable_match(candidate_release.get("candidate_sha256"), candidate_sha256, "candidate_sha256")
+        _immutable_match(candidate_release.get("installer_size_bytes"), installer_size, "tamanho do instalador")
+        _immutable_match(candidate_release.get("installer_sha256"), installer_sha256, "SHA-256 do instalador")
+        _immutable_match(candidate_release.get("tag"), f"x86qw-installer-{candidate_version}", "tag do candidate_release")
+        candidate_release.update({
+            "tag": f"x86qw-installer-{candidate_version}",
+            "version": candidate_version,
+            "target_commit": candidate_commit,
+            "installer_size_bytes": installer_size,
+            "installer_sha256": installer_sha256,
+            "candidate_sha256": candidate_sha256,
+        })
+        deployment_state = "CONVERGED_CANDIDATE_DEPLOYMENT"
+    else:
+        current_installer_release = deployment.get("current_installer_release")
+        if current_installer_release is None:
+            current_installer_release = {}
+            deployment["current_installer_release"] = current_installer_release
+        else:
+            current_installer_release = _require_mapping(
+                current_installer_release, "deployment.current_installer_release"
+            )
+            _immutable_match(
+                current_installer_release.get("version"),
+                candidate_version,
+                "versão do current_installer_release",
+            )
+            _immutable_match(
+                current_installer_release.get("target_commit"),
+                candidate_commit,
+                "target_commit do current_installer_release",
+            )
+            _immutable_match(
+                current_installer_release.get("candidate_sha256"),
+                candidate_sha256,
+                "candidate_sha256 do current_installer_release",
+            )
+            _immutable_match(
+                current_installer_release.get("installer_size_bytes"),
+                installer_size,
+                "tamanho do current_installer_release",
+            )
+            _immutable_match(
+                current_installer_release.get("installer_sha256"),
+                installer_sha256,
+                "SHA-256 do current_installer_release",
+            )
+            _immutable_match(
+                current_installer_release.get("tag"),
+                f"x86qw-installer-{candidate_version}",
+                "tag do current_installer_release",
+            )
+        current_installer_release.update({
+            "tag": f"x86qw-installer-{candidate_version}",
+            "version": candidate_version,
+            "target_commit": candidate_commit,
+            "installer_size_bytes": installer_size,
+            "installer_sha256": installer_sha256,
+            "candidate_sha256": candidate_sha256,
+            "audience": "owner-only",
+            "external_public_authorized": False,
+            "historical_native_evidence_reused": False,
+        })
+        deployment_state = "CONVERGED_CURRENT_INSTALLER_DEPLOYMENT"
 
     root_version = _root_version(Path(trust_repository))
     timestamp_version, timestamp = _timestamp_metadata(Path(trust_repository))
@@ -229,7 +282,6 @@ def project_release_truth(
     if seconds_to_expiry <= 0:
         raise ReleaseTruthProjectionError("timestamp TUF já expirou na observação")
 
-    deployment = _require_mapping(authorities.get("deployment"), "deployment")
     live = _require_mapping(deployment.get("live_observation"), "live_observation")
     tuf = _require_mapping(deployment.get("tuf"), "deployment.tuf")
     live.update({
@@ -239,7 +291,7 @@ def project_release_truth(
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
         "root_mentions_owner_only": True,
-        "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
+        "state": deployment_state,
     })
     hero = _hero(Path(site_source))
     if hero is not None:

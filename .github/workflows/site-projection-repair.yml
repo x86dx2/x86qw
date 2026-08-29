@@ -419,6 +419,18 @@ jobs:
           import os
           from pathlib import Path
           probe = json.loads(Path("root-probe.json").read_text(encoding="utf-8"))
+          catalog = json.loads(Path("candidate/catalog.json").read_text(encoding="utf-8"))
+          installers = [
+              item for item in catalog.get("packages", [])
+              if isinstance(item, dict)
+              and item.get("package") == "x86qw-installer"
+              and item.get("current") is True
+          ]
+          if len(installers) != 1:
+              raise SystemExit("candidate catalog does not contain one current installer")
+          installer_sha256 = installers[0].get("sha256")
+          if not isinstance(installer_sha256, str) or len(installer_sha256) != 64:
+              raise SystemExit("candidate catalog current installer SHA-256 is invalid")
           receipt = {
               "format": 1,
               "operation": "owner-only-site-projection-repair",
@@ -431,7 +443,7 @@ jobs:
                   "artifact_id": int(os.environ["CANDIDATE_ARTIFACT_ID"]),
                   "artifact_name": os.environ["CANDIDATE_ARTIFACT_NAME"],
                   "candidate_sha256": os.environ["CANDIDATE_SHA256"],
-                  "installer_sha256": "d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8",
+                  "installer_sha256": installer_sha256,
               },
               "tuf": {
                   "source_run_id": int(os.environ["SOURCE_RUN_ID"]),
