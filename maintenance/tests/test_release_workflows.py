@@ -119,6 +119,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("tuf-metadata-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)
         self.assertNotIn("CLOUDFLARE_API_TOKEN", source)
 
+    def test_patch_mirror_publication_is_protected_and_fail_closed(self):
+        source = (ROOT / ".github/workflows/patch-mirror.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("environment: release", source)
+        self.assertIn("actions: read", source)
+        self.assertIn("contents: read", source)
+        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("--workflow .github/workflows/release.yml", source)
+        self.assertIn("release_candidate.py verify candidate", source)
+        self.assertIn("publish_gitlab_candidate.py", source)
+        self.assertIn("--publish", source)
+        self.assertIn("verify_release_mirrors.py", source)
+        self.assertIn("GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", source)
+        self.assertNotIn("curl ", source)
+        self.assertNotIn("--clobber", source)
+
     def test_tuf_handoff_fetches_sha_and_installs_trust_backend(self):
         source = (ROOT / ".github/workflows/tuf-metadata-handoff.yml").read_text(
             encoding="utf-8"
