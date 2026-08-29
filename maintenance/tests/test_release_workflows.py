@@ -134,6 +134,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--publish", source)
         self.assertIn("verify_release_mirrors.py", source)
         self.assertIn("GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", source)
+        self.assertIn("< dist/installer/VERSION", source)
+        self.assertNotIn("< VERSION", source)
         self.assertNotIn("curl ", source)
         self.assertNotIn("--clobber", source)
 
