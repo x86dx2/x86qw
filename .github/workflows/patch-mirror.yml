@@ -78,7 +78,7 @@ jobs:
           [[ "$EXPECTED_VERSION" =~ ^1\.0\.[0-9]+$ ]]
           test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
           test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
-          test "$(tr -d '\r\n' < VERSION)" = "$EXPECTED_VERSION"
+          test "$(tr -d '\r\n' < dist/installer/VERSION)" = "$EXPECTED_VERSION"
           [[ "$CANDIDATE_ARTIFACT_NAME" == candidate-"$CANDIDATE_COMMIT"-* ]]
       - name: Verify exact candidate handoff provenance
         env:
