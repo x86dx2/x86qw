@@ -225,6 +225,77 @@ class ProjectReleaseTruthTests(unittest.TestCase):
 
             self.assertEqual("owner-only", result["authorities"]["candidate_release"]["audience"])
 
+    def test_projects_new_current_installer_without_reusing_frozen_candidate_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, candidate, trust, output = self._fixture(Path(temporary))
+            source_document = json.loads(source.read_text(encoding="utf-8"))
+            frozen_candidate = source_document["authorities"]["candidate_release"]
+
+            manifest_path = candidate / "candidate.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["version"] = "1.0.1"
+            manifest["commit"] = "3" * 40
+            manifest["artifacts"] = {
+                "installer/x86qw-installer-1.0.1.zip": {
+                    "size": 10,
+                    "sha256": "a" * 64,
+                },
+            }
+            manifest_path.write_text(
+                json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            for name in ("catalog.json", "product.json"):
+                path = candidate / name
+                document = json.loads(path.read_text(encoding="utf-8"))
+                if name == "catalog.json":
+                    document["packages"][0]["version"] = "1.0.1"
+                else:
+                    document["version"] = "1.0.1"
+                path.write_text(json.dumps(document), encoding="utf-8")
+
+            candidate_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            try:
+                result = project_release_truth(
+                    source=source,
+                    candidate=candidate,
+                    trust_repository=trust,
+                    site_source=candidate / "site/public",
+                    release_code_commit="2" * 40,
+                    development_validate_run=123,
+                    observed_at="2026-08-27T18:00:00Z",
+                    output=output,
+                )
+            except ReleaseTruthProjectionError as error:
+                self.fail(f"a nova versão current deveria ser projetável: {error}")
+
+            self.assertEqual(frozen_candidate, result["authorities"]["candidate_release"])
+            current = result["authorities"]["deployment"]["current_installer_release"]
+            self.assertEqual("1.0.1", current["version"])
+            self.assertEqual("3" * 40, current["target_commit"])
+            self.assertEqual(candidate_sha, current["candidate_sha256"])
+            self.assertEqual("a" * 64, current["installer_sha256"])
+            self.assertEqual("owner-only", current["audience"])
+            self.assertFalse(current["external_public_authorized"])
+            self.assertFalse(current["historical_native_evidence_reused"])
+            live = result["authorities"]["deployment"]["live_observation"]
+            self.assertEqual("1.0.1", live["product_version"])
+            self.assertEqual("CONVERGED_CURRENT_INSTALLER_DEPLOYMENT", live["state"])
+
+            current["installer_sha256"] = "b" * 64
+            drifted_source = Path(temporary) / "drifted-release-truth.json"
+            drifted_source.write_text(json.dumps(result), encoding="utf-8")
+            with self.assertRaisesRegex(ReleaseTruthProjectionError, "current_installer_release"):
+                project_release_truth(
+                    source=drifted_source,
+                    candidate=candidate,
+                    trust_repository=trust,
+                    site_source=candidate / "site/public",
+                    release_code_commit="2" * 40,
+                    development_validate_run=123,
+                    observed_at="2026-08-27T18:00:00Z",
+                    output=Path(temporary) / "second-projection.json",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
