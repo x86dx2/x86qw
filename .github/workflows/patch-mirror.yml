@@ -1,0 +1,155 @@
+name: Publish owner-only patch mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_code_commit:
+        description: "Current main SHA containing this protected workflow"
+        required: true
+        type: string
+      candidate_commit:
+        description: "Exact commit used by the immutable candidate rehearsal"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Release rehearsal run containing the candidate"
+        required: true
+        type: string
+      candidate_artifact_id:
+        description: "Immutable candidate artifact ID"
+        required: true
+        type: string
+      candidate_artifact_name:
+        description: "Exact immutable candidate artifact name"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA-256 of candidate.json"
+        required: true
+        type: string
+      expected_version:
+        description: "Stable patch version being mirrored"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: x86qw-owner-only-patch-mirror-${{ inputs.expected_version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify candidate and publish only missing GitLab bytes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_code_commit }}
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Validate immutable coordinates
+        env:
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_NAME" =~ ^candidate-[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_VERSION" =~ ^1\.0\.[0-9]+$ ]]
+          test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
+          test "$(tr -d '\r\n' < VERSION)" = "$EXPECTED_VERSION"
+          [[ "$CANDIDATE_ARTIFACT_NAME" == candidate-"$CANDIDATE_COMMIT"-* ]]
+      - name: Verify exact candidate handoff provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+        run: |
+          python3 maintenance/tools/verify_external_handoff.py \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --commit "$CANDIDATE_COMMIT" \
+            --artifact "$CANDIDATE_ARTIFACT_NAME" \
+            --artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --workflow .github/workflows/release.yml \
+            --head-branch main \
+            --output "$RUNNER_TEMP/candidate-provenance.json"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: ${{ inputs.candidate_artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: candidate
+      - name: Verify candidate identity and exact installer bytes
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          test "$actual" = "$CANDIDATE_SHA256"
+          python3 maintenance/tools/release_candidate.py verify candidate
+          python3 - "$CANDIDATE_COMMIT" "$EXPECTED_VERSION" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path("candidate/candidate.json").read_text(encoding="utf-8"))
+          if manifest.get("commit") != sys.argv[1] or manifest.get("version") != sys.argv[2]:
+              raise SystemExit("candidate identity differs from requested patch")
+          PY
+      - name: Publish only the missing immutable GitLab installer
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 maintenance/tools/publish_gitlab_candidate.py \
+            --candidate candidate \
+            --publish | tee "$RUNNER_TEMP/gitlab-publication.json"
+      - name: Verify GitHub and GitLab mirrors byte for byte
+        env:
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          python3 maintenance/tools/verify_release_mirrors.py \
+            --candidate candidate \
+            --catalog candidate/catalog.json \
+            --expected-release "$EXPECTED_VERSION" \
+            | tee "$RUNNER_TEMP/mirror-verification.json"
+      - name: Preserve publication evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: patch-mirror-${{ inputs.expected_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/candidate-provenance.json
+            ${{ runner.temp }}/gitlab-publication.json
+            ${{ runner.temp }}/mirror-verification.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
