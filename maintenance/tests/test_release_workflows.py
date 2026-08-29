@@ -136,6 +136,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}", source)
         self.assertIn("< dist/installer/VERSION", source)
         self.assertNotIn("< VERSION", source)
+        self.assertIn("Fast-forward public GitLab source mirror", source)
+        self.assertIn("git merge-base --is-ancestor", source)
+        self.assertIn("git credential approve", source)
+        self.assertIn("git credential reject", source)
+        self.assertIn('"$RELEASE_CODE_COMMIT:refs/heads/main"', source)
+        self.assertNotIn("oauth2:${GITLAB_TOKEN}", source)
         self.assertNotIn("curl ", source)
         self.assertNotIn("--clobber", source)
 
