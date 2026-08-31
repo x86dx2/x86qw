@@ -163,7 +163,10 @@ jobs:
           expected_size="$(sed -n 's/^size \([0-9][0-9]*\)$/\1/p' "$RUNNER_TEMP/expected-installer-pointer")"
           test "$(sha256sum "$candidate_installer" | awk '{print $1}')" = "$expected_sha"
           test "$(stat -c %s "$candidate_installer")" = "$expected_size"
-          git lfs clean -- "$lfs_path" < "$candidate_installer" >/dev/null
+          git -c lfs.fetchrecentalways=false \
+            -c lfs.fetchrecentrefsdays=0 \
+            -c lfs.fetchrecentcommitsdays=0 \
+            lfs fetch --include="$lfs_path" --exclude='' origin "$RELEASE_CODE_COMMIT"
 
           git config --local credential.helper 'cache --timeout=300'
           cleanup_credential() {
