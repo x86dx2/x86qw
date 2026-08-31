@@ -54,7 +54,7 @@ jobs:
         with:
           ref: ${{ inputs.release_code_commit }}
           lfs: false
-          fetch-depth: 1
+          fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
@@ -142,6 +142,38 @@ jobs:
             --catalog candidate/catalog.json \
             --expected-release "$EXPECTED_VERSION" \
             | tee "$RUNNER_TEMP/mirror-verification.json"
+      - name: Fast-forward public GitLab source mirror
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+        run: |
+          set -euo pipefail
+          test -n "$GITLAB_TOKEN"
+          gitlab_url="https://gitlab.com/x86dx2/x86qw.git"
+          gitlab_main="$(git ls-remote "$gitlab_url" refs/heads/main | awk 'NR == 1 {print $1}')"
+          [[ "$gitlab_main" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags "$gitlab_url" "$gitlab_main"
+          git merge-base --is-ancestor "$gitlab_main" "$RELEASE_CODE_COMMIT"
+
+          git config --local credential.helper 'cache --timeout=300'
+          cleanup_credential() {
+            printf 'protocol=https\nhost=gitlab.com\nusername=oauth2\n\n' \
+              | git credential reject >/dev/null 2>&1 || true
+          }
+          trap cleanup_credential EXIT
+          printf 'protocol=https\nhost=gitlab.com\nusername=oauth2\npassword=%s\n\n' \
+            "$GITLAB_TOKEN" | git credential approve
+          git push "$gitlab_url" "$RELEASE_CODE_COMMIT:refs/heads/main"
+          cleanup_credential
+          trap - EXIT
+
+          published="$(git ls-remote "$gitlab_url" refs/heads/main | awk 'NR == 1 {print $1}')"
+          test "$published" = "$RELEASE_CODE_COMMIT"
+          jq -n \
+            --arg previous "$gitlab_main" \
+            --arg published "$published" \
+            '{format: 1, project: "x86qw", status: "fast-forwarded", previous: $previous, published: $published}' \
+            > "$RUNNER_TEMP/gitlab-source-mirror.json"
       - name: Preserve publication evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -150,6 +182,7 @@ jobs:
             ${{ runner.temp }}/candidate-provenance.json
             ${{ runner.temp }}/gitlab-publication.json
             ${{ runner.temp }}/mirror-verification.json
+            ${{ runner.temp }}/gitlab-source-mirror.json
           if-no-files-found: error
           retention-days: 90
           overwrite: false
