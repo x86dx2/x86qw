@@ -238,6 +238,44 @@ jobs:
             --catalog candidate/catalog.json \
             --expected-key-id "$EXPECTED_KEY_ID" \
             > "$RUNNER_TEMP/timestamp-renewal.json"
+      - name: Prove monotonic TUF promotion
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p public-tuf/metadata
+          python3 - <<'PY'
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          url = (
+              "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?preflight="
+              + os.environ["GITHUB_RUN_ID"]
+              + "-"
+              + os.environ["GITHUB_RUN_ATTEMPT"]
+          )
+          request = urllib.request.Request(
+              url,
+              headers={
+                  "Cache-Control": "no-cache",
+                  "User-Agent": "x86qw-tuf-promotion-preflight/1",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              if response.status != 200:
+                  raise SystemExit(f"public timestamp HTTP {response.status}")
+              payload = response.read(64 * 1024 + 1)
+          if not payload or len(payload) > 64 * 1024:
+              raise SystemExit("public timestamp excede o limite")
+          Path("public-tuf/metadata/timestamp.json").write_bytes(payload)
+          PY
+          python3 maintenance/tools/verify_tuf_release_source.py \
+            --source-repository source-tuf \
+            --release-projection site/public/api/v1/trust \
+            --public-repository public-tuf \
+            --renewed-repository renewal/repository
       - name: Verify every declared installer mirror before deployment
         run: |
           set -euo pipefail

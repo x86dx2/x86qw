@@ -33,7 +33,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 concurrency:
@@ -42,12 +42,12 @@ concurrency:
 
 jobs:
   publish:
-    name: Verify candidate and publish only missing GitLab bytes
+    name: Verify candidate and publish immutable GitHub and GitLab bytes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: release
     permissions:
-      contents: read
+      contents: write
       actions: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -124,6 +124,15 @@ jobs:
           if manifest.get("commit") != sys.argv[1] or manifest.get("version") != sys.argv[2]:
               raise SystemExit("candidate identity differs from requested patch")
           PY
+      - name: Publish only the missing immutable GitHub installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 maintenance/tools/publish_github_candidate.py \
+            --candidate candidate \
+            --installer-only \
+            --publish | tee "$RUNNER_TEMP/github-publication.json"
       - name: Publish only the missing immutable GitLab installer
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -235,6 +244,7 @@ jobs:
           name: patch-mirror-${{ inputs.expected_version }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/candidate-provenance.json
+            ${{ runner.temp }}/github-publication.json
             ${{ runner.temp }}/gitlab-publication.json
             ${{ runner.temp }}/mirror-verification.json
             ${{ runner.temp }}/gitlab-source-mirror.json

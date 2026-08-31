@@ -126,10 +126,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", source)
         self.assertIn("environment: release", source)
         self.assertIn("actions: read", source)
-        self.assertIn("contents: read", source)
+        self.assertIn("contents: write", source)
         self.assertIn("verify_external_handoff.py", source)
         self.assertIn("--workflow .github/workflows/release.yml", source)
         self.assertIn("release_candidate.py verify candidate", source)
+        self.assertIn("publish_github_candidate.py", source)
+        self.assertIn("--installer-only", source)
         self.assertIn("publish_gitlab_candidate.py", source)
         self.assertIn("--publish", source)
         self.assertIn("verify_release_mirrors.py", source)
@@ -153,6 +155,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("git credential approve", source)
         self.assertIn("git credential reject", source)
         self.assertIn('"$RELEASE_CODE_COMMIT:refs/heads/main"', source)
+        self.assertIn("github-publication.json", source)
+        self.assertNotIn("--clobber", source)
+        self.assertLess(
+            source.index("publish_github_candidate.py"),
+            source.index("publish_gitlab_candidate.py"),
+        )
+        self.assertLess(
+            source.index("publish_gitlab_candidate.py"),
+            source.index("verify_release_mirrors.py"),
+        )
         self.assertNotIn("oauth2:${GITLAB_TOKEN}", source)
         self.assertNotIn("curl ", source)
         self.assertNotIn("--clobber", source)
@@ -717,6 +729,30 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("--signed-repository", metadata_step)
         self.assertNotIn("--previous-repository", metadata_step)
         self.assertNotIn("--output release-work/trust", metadata_step)
+
+    def test_tuf_handoff_binds_the_exact_release_projection_before_upload(self):
+        source = (ROOT / ".github/workflows/tuf-metadata-handoff.yml").read_text(
+            encoding="utf-8",
+        )
+        binding = source.split("      - name: Bind signed TUF to release projection", 1)[1]
+        binding = binding.split("      - name: Authenticate signed TUF", 1)[0]
+        self.assertIn("maintenance/tools/verify_tuf_release_source.py", binding)
+        self.assertIn("--source-repository signed-tuf", binding)
+        self.assertIn("--release-projection site/public/api/v1/trust", binding)
+
+    def test_projection_repair_rejects_public_tuf_equivocation_before_deploy(self):
+        source = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(
+            encoding="utf-8",
+        )
+        gate = source.split("      - name: Prove monotonic TUF promotion", 1)[1]
+        gate = gate.split("      - name: Verify every declared installer mirror", 1)[0]
+        self.assertIn("verify_tuf_release_source.py", gate)
+        self.assertIn("--public-repository", gate)
+        self.assertIn("--renewed-repository renewal/repository", gate)
+        self.assertLess(
+            source.index("      - name: Prove monotonic TUF promotion"),
+            source.index("      - name: Deploy the projection repair"),
+        )
 
     def test_metadata_last_verifies_the_external_tuf_artifact_provenance(self):
         source = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
