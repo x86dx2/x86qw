@@ -2265,7 +2265,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(installed, rendered)
         self.assertLess(rendered.index(cache), rendered.index(installed))
 
-    def test_component_install_uses_transient_activity_and_one_persistent_summary(self):
+    def test_component_install_keeps_each_activity_status_and_one_summary(self):
         class TtyBuffer(io.StringIO):
             def isatty(self):
                 return True
@@ -2327,9 +2327,9 @@ class InstallerTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Instalando 2 componentes x86QW", rendered)
-        self.assertIn("\r", rendered)
-        self.assertIn("[1/2] Processando pacote", rendered)
-        self.assertIn("[2/2] Processando pacote", rendered)
+        self.assertNotIn("\r", rendered)
+        self.assertEqual(1, rendered.count("· [1/2] Processando pacote\n"))
+        self.assertEqual(1, rendered.count("· [2/2] Processando pacote\n"))
         self.assertNotIn("[INFO] [1/2] Preparando", rendered)
         self.assertNotIn("KTX x86QW atualizado", rendered)
         self.assertNotIn("Mapas selecionados nQuake atualizado", rendered)
