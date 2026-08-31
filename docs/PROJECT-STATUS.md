@@ -73,7 +73,7 @@ documento.
 
 ## Versões públicas
 
-A versão-fonte current em `dist/installer/VERSION` é `1.0.10`. A release pública
+A versão-fonte current em `dist/installer/VERSION` é `1.0.11`. A release pública
 `0.7.13` é a baseline histórica preservada para a futura audiência externa;
 `1.0.0` é a release owner-only publicada e verificada.
 
@@ -267,7 +267,7 @@ eles não são a autoridade do deployment corrente.
 
 ## Próxima ação
 
-Fonte current `1.0.10`; `1.0.9`, `1.0.8`, `1.0.7`, `1.0.6`, `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1`, `1.0.0` e `0.7.13`
+Fonte current `1.0.11`; `1.0.10`, `1.0.9`, `1.0.8`, `1.0.7`, `1.0.6`, `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1`, `1.0.0` e `0.7.13`
 históricas conforme seus papéis no catálogo. F1–F3 e o conserto de `host`
 ficam em 1.0.x. Manter a lease TUF fora da janela de 6 h. Migração histórica,
 outras plataformas e QWLeague não bloqueiam esse fluxo owner-only.

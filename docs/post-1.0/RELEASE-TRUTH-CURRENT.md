@@ -36,7 +36,7 @@ semente offline versionada usada pela projeção estática e pelos testes. Ela n
 
 | Autoridade | Valor na fotografia de 2026-08-28 |
 | --- | --- |
-| source | baseline current `1.0.10` em `dist/installer/VERSION` |
+| source | baseline current `1.0.11` em `dist/installer/VERSION` |
 | candidate/release | `x86qw-installer-1.0.0`, commit `e12ed081b968f820f47200e4be954a4f444056a1`, audiência `owner-only` |
 | deployment | site, bootstraps, product, catálogo, trust e release-truth convergentes |
 | development | `main` verde no Validate `33135951867`; candidato exato preservado pelo receipt e pela evidência M3 |
