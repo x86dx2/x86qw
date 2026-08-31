@@ -206,17 +206,10 @@ class Console:
         return "\n".join(confirmation_lines)
 
     def activity(self, current: int, total: int) -> None:
-        if self.verbose:
-            self.info(f"[{current}/{total}] Processando pacote")
-            return
-        if not sys.stdout.isatty():
-            return
         print(
-            f"\r\033[2K{self.paint('⠋', '36')} "
-            f"[{current}/{total}] Processando pacote",
-            end="", flush=True,
+            f"{self.paint('[INFO]', '36')} [{current}/{total}] Processando pacote",
+            flush=True,
         )
-        self._activity_visible = True
 
     def activity_done(self) -> None:
         if not self._activity_visible:
