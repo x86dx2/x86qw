@@ -111,6 +111,11 @@ jobs:
         env:
           TUF_METADATA_BUNDLE_B64: ${{ inputs.metadata_bundle_b64 }}
         run: python3 maintenance/tools/prepare_tuf_handoff.py --output signed-tuf
+      - name: Bind signed TUF to release projection
+        run: |
+          python3 maintenance/tools/verify_tuf_release_source.py \
+            --source-repository signed-tuf \
+            --release-projection site/public/api/v1/trust
       - name: Authenticate signed TUF against exact candidate catalog
         env:
           PYTHONDONTWRITEBYTECODE: "1"

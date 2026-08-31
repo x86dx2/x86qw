@@ -11,12 +11,37 @@ from maintenance.tools.publish_github_candidate import (
     _asset_plan,
     _execute_gh,
     _expected_assets,
+    _expected_installer_asset,
     _github_latest,
     _release_create_command,
 )
 
 
 class PublishGithubCandidateTests(unittest.TestCase):
+    def test_installer_only_scope_requires_exact_manifest_bound_installer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = Path(temporary)
+            installer = candidate / "installer" / "x86qw-installer-1.0.11.zip"
+            installer.parent.mkdir()
+            installer.write_bytes(b"immutable installer")
+            manifest = {
+                "artifacts": {
+                    "installer/x86qw-installer-1.0.11.zip": {
+                        "size": installer.stat().st_size,
+                        "sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
+                    },
+                    "runtime/native-smoke/macos-arm64/x86qw-native-smoke": {
+                        "size": 1,
+                        "sha256": "0" * 64,
+                    },
+                }
+            }
+
+            expected = _expected_installer_asset(candidate, manifest, "1.0.11")
+
+            self.assertEqual({"x86qw-installer-1.0.11.zip"}, set(expected))
+            self.assertEqual(installer, expected[installer.name]["path"])
+
     def test_expected_assets_include_all_candidate_zips_and_bound_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = Path(temporary)

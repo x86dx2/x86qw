@@ -142,6 +142,30 @@ def _expected_assets(candidate: Path, manifest: Mapping[str, object]) -> dict[st
     return expected
 
 
+def _expected_installer_asset(
+    candidate: Path,
+    manifest: Mapping[str, object],
+    version: str,
+) -> dict[str, dict[str, object]]:
+    """Return the one manifest-bound installer used by the patch mirror."""
+
+    raw_artifacts = manifest.get("artifacts")
+    if not isinstance(raw_artifacts, dict):
+        raise PublisherError("manifest do candidato não possui artifacts")
+    relative = _safe_relative(f"installer/x86qw-installer-{version}.zip")
+    raw_facts = raw_artifacts.get(relative.as_posix())
+    if not isinstance(raw_facts, dict):
+        raise PublisherError(f"instalador {version} ausente do manifest do candidato")
+    size = raw_facts.get("size")
+    sha256 = raw_facts.get("sha256")
+    if type(size) is not int or size < 0 or not isinstance(sha256, str) or HEX64.fullmatch(sha256) is None:
+        raise PublisherError("pin do instalador candidato inválido")
+    actual = _file_identity(candidate.joinpath(*relative.parts))
+    if actual["size"] != size or actual["digest"] != f"sha256:{sha256}":
+        raise PublisherError("instalador candidato diverge do manifest")
+    return {relative.name: actual}
+
+
 def _asset_identity(value: Mapping[str, object]) -> tuple[object, object]:
     return value.get("size"), value.get("digest")
 
@@ -341,6 +365,7 @@ def publish_candidate(
     candidate: Path,
     repository: str,
     publish: bool = False,
+    installer_only: bool = False,
     runner: GhRunner = _execute_gh,
 ) -> dict[str, object]:
     repository = _safe_repository(repository)
@@ -358,7 +383,11 @@ def publish_candidate(
     except (TypeError, VersionError) as error:
         raise PublisherError("versão do candidato inválida") from error
     record = _catalog_record(candidate, version)
-    expected = _expected_assets(candidate, manifest)
+    expected = (
+        _expected_installer_asset(candidate, manifest, version)
+        if installer_only
+        else _expected_assets(candidate, manifest)
+    )
     tag = f"x86qw-installer-{version}"
     prerelease = parsed_version.is_prerelease
     latest = _github_latest(mirror_latest=record["mirror_latest"] is True, prerelease=prerelease)
@@ -372,6 +401,7 @@ def publish_candidate(
             "release": tag,
             "assets": sorted(expected),
             "latest": latest,
+            "scope": "installer-only" if installer_only else "complete",
         }
 
     ref_endpoint = _endpoint(repository, f"git/ref/tags/{quote(tag, safe='')}")
@@ -443,6 +473,7 @@ def publish_candidate(
         "release": tag,
         "assets": sorted(expected),
         "latest": latest,
+        "scope": "installer-only" if installer_only else "complete",
     }
 
 
@@ -451,12 +482,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", "x86dx2/x86qw"))
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--installer-only", action="store_true")
     options = parser.parse_args(arguments)
     try:
         result = publish_candidate(
             candidate=options.candidate,
             repository=options.repository,
             publish=options.publish,
+            installer_only=options.installer_only,
         )
     except (OSError, PublisherError) as error:
         print(f"[ERRO] {error}", file=sys.stderr)
