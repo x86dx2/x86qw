@@ -101,13 +101,13 @@
     }
   ],
   "installer": {
-    "distribution_path": "installer/packages/1.0.9/x86qw-installer-1.0.9.zip",
-    "filename": "x86qw-installer-1.0.9.zip",
-    "sha256": "940f6b4aa98e29a5717553a254828009c5568ecabc8dcc7f16234da6b53f3ebb",
-    "size": 622473,
+    "distribution_path": "installer/packages/1.0.10/x86qw-installer-1.0.10.zip",
+    "filename": "x86qw-installer-1.0.10.zip",
+    "sha256": "f5e18c3c4b7d288de38b6bc4f7b7ef86cfd081d6e689fdaa8cd70d4f9de2523b",
+    "size": 622444,
     "urls": [
-      "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.9/x86qw-installer-1.0.9.zip",
-      "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/1.0.9/x86qw-installer-1.0.9.zip"
+      "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.10/x86qw-installer-1.0.10.zip",
+      "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/1.0.10/x86qw-installer-1.0.10.zip"
     ]
   },
   "package_count": 29,
@@ -372,5 +372,5 @@
       ]
     }
   ],
-  "version": "1.0.9"
+  "version": "1.0.10"
 }
