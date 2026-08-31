@@ -45,6 +45,14 @@ HISTORICAL_071_SHA256 = "a0946ffcc8a4e1181dbc55ea08caf54691b18b12e901d12069eb206
 
 
 class ArchiveBootstrapTests(unittest.TestCase):
+    def test_powershell_enables_utf8_before_rendering_unicode_interface(self):
+        source = POWERSHELL_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertLess(
+            source.index("[Console]::OutputEncoding = $Utf8Encoding"),
+            source.index("Preparando interface do instalador..."),
+        )
+
     def test_embedded_archive_assignment_accepts_lf_and_crlf(self):
         payload = b"canonical archive helper\n"
         encoded = base64.b64encode(payload).decode("ascii")
@@ -327,7 +335,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
         )
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
-    def test_unix_bootstrap_opens_with_project_identity_before_download(self):
+    def test_unix_bootstrap_opens_with_three_stage_installer_interface(self):
         version = "9.9.4"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -348,18 +356,23 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 text=True,
             )
         self.assertEqual(0, completed.returncode, completed.stderr)
-        lines = [line for line in completed.stdout.splitlines() if line]
-        self.assertEqual("[X] x86QW", lines[0])
-        self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
-        self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
-        self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
-        self.assertIn(f"==> Baixando o instalador x86QW {version}", completed.stdout)
+        self.assertIn("\033[38;2;136;146;176mPreparando interface do instalador...", completed.stdout)
+        self.assertIn("\033[38;2;255;77;77m\033[1m\n  [X] Instalador x86QW", completed.stdout)
+        self.assertIn("  Cinco jogos. Um menu. Uma partida.", completed.stdout)
+        self.assertIn("Plano de instalação", completed.stdout)
+        self.assertIn("Sistema:", completed.stdout)
+        self.assertIn("Método de instalação:", completed.stdout)
+        self.assertIn(f"Versão solicitada:\033[0m {version}", completed.stdout)
+        self.assertIn("[1/3] Preparando ambiente", completed.stdout)
+        self.assertIn("[2/3] Instalando x86QW", completed.stdout)
+        self.assertIn("[3/3] Finalizando configuração", completed.stdout)
+        self.assertLess(completed.stdout.index("[X] Instalador x86QW"), completed.stdout.index("baixando instalador"))
         self.assertIn(
             f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
             completed.stdout,
         )
-        self.assertIn("==> Extraindo e verificando o instalador x86QW", completed.stdout)
-        self.assertIn("==> Iniciando a instalação x86QW", completed.stdout)
+        self.assertIn("\033[38;2;0;229;204m✓\033[0m Instalador extraído e verificado", completed.stdout)
+        self.assertIn("\033[38;2;90;100;128m·\033[0m Iniciando configuração", completed.stdout)
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_unix_bootstrap_preserves_unicode_arguments_and_installer_exit(self):
@@ -492,7 +505,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
         shutil.which("pwsh") or shutil.which("powershell"),
         "PowerShell indisponivel neste runner",
     )
-    def test_powershell_bootstrap_opens_with_project_identity_before_download(self):
+    def test_powershell_bootstrap_opens_with_three_stage_installer_interface(self):
         version = "9.9.3"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -516,18 +529,23 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 encoding="utf-8",
             )
         self.assertEqual(0, completed.returncode, completed.stderr)
-        lines = [line for line in completed.stdout.splitlines() if line]
-        self.assertEqual("[X] x86QW", lines[0])
-        self.assertEqual("    Cinco jogos. Um menu. Uma partida.", lines[1])
-        self.assertEqual(f"    qw.x86.com.br | instalador {version}", lines[2])
-        self.assertLess(completed.stdout.index("[X] x86QW"), completed.stdout.index("baixando instalador"))
-        self.assertIn(f"==> Baixando o instalador x86QW {version}", completed.stdout)
+        self.assertIn("Preparando interface do instalador...", completed.stdout)
+        self.assertIn("[X] Instalador x86QW", completed.stdout)
+        self.assertIn("  Cinco jogos. Um menu. Uma partida.", completed.stdout)
+        self.assertIn("Plano de instalação", completed.stdout)
+        self.assertIn("Sistema:", completed.stdout)
+        self.assertIn("Método de instalação:", completed.stdout)
+        self.assertIn(f"Versão solicitada: {version}", completed.stdout)
+        self.assertIn("[1/3] Preparando ambiente", completed.stdout)
+        self.assertIn("[2/3] Instalando x86QW", completed.stdout)
+        self.assertIn("[3/3] Finalizando configuração", completed.stdout)
+        self.assertLess(completed.stdout.index("[X] Instalador x86QW"), completed.stdout.index("baixando instalador"))
         self.assertIn(
             f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
             completed.stdout,
         )
-        self.assertIn("==> Extraindo e verificando o instalador x86QW", completed.stdout)
-        self.assertIn("==> Iniciando a instalacao x86QW", completed.stdout)
+        self.assertIn("✓ Instalador extraído e verificado", completed.stdout)
+        self.assertIn("· Iniciando configuração", completed.stdout)
 
     @unittest.skipUnless(
         shutil.which("pwsh") or shutil.which("powershell"),

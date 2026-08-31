@@ -11,6 +11,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+ACCENT = "38;2;255;77;77"
+INFO = "38;2;136;146;176"
+SUCCESS = "38;2;0;229;204"
+WARNING = "38;2;255;176;32"
+ERROR = "38;2;230;57;70"
+MUTED = "38;2;90;100;128"
+
+
 @dataclass(frozen=True)
 class UpdatePlanRow:
     kind: str
@@ -66,15 +74,48 @@ class Console:
         self._activity_visible = False
 
     def paint(self, text: str, code: str) -> str:
-        if text == "[OK]" and not self.verbose:
-            text = "✔︎"
+        labels = {
+            "[OK]": "✓",
+            "[INFO]": "·",
+            "[ATENÇÃO]": "!",
+            "[ERRO]": "✗",
+            "==>": "·",
+        }
+        palette = {
+            "1;36": f"{ACCENT}m\033[1",
+            "1": f"{ACCENT}m\033[1",
+            "36": MUTED,
+            "32": SUCCESS,
+            "33": WARNING,
+            "31": ERROR,
+            "2": MUTED,
+        }
+        text = labels.get(text, text)
+        code = palette.get(code, code)
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
+    def bold_color(self, text: str, code: str) -> str:
+        if not self.color:
+            return text
+        return f"\033[{code}m\033[1m{text}\033[0m"
+
     def banner(self, action: str, target: Path) -> None:
-        version = f" {self._version()}" if self._version is not None else ""
-        title = self.paint(f"x86-qw{version}", "1;36")
-        print(f"\n{title} · instalador QuakeWorld", flush=True)
-        print(f"Ação: {action}  |  Destino: {target}", flush=True)
+        if os.environ.get("X86QW_BOOTSTRAP_UI") == "1":
+            return
+        version = self._version() if self._version is not None else ""
+        print(self.paint("Preparando interface do instalador...", INFO), flush=True)
+        print(self.bold_color("\n  [X] Instalador x86QW", ACCENT), flush=True)
+        print(self.paint("  Cinco jogos. Um menu. Uma partida.", INFO), flush=True)
+        identity = "  qw.x86.com.br"
+        if version:
+            identity += f" | instalador {version}"
+        print(self.paint(identity, MUTED), flush=True)
+        print(flush=True)
+        self.key_value("Ação", action)
+        self.key_value("Destino", str(target))
+
+    def key_value(self, key: str, value: str) -> None:
+        print(f"{self.paint(key + ':', MUTED)} {value}", flush=True)
 
     def section(self, title: str) -> None:
         self.activity_done()
@@ -105,7 +146,7 @@ class Console:
 
     def error(self, message: str) -> None:
         self.activity_done()
-        label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "[ERRO]"
+        label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "✗"
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
     def update_plan(self, rows: list[UpdatePlanRow], action: str) -> str:
@@ -192,7 +233,7 @@ class Console:
         self._cached_bytes = 0
         noun = "pacote" if count == 1 else "pacotes"
         adjective = "validado" if count == 1 else "validados"
-        check = self.paint("✔︎", "32")
+        check = self.paint("✓", SUCCESS)
         print(
             f"{check} {count} {noun} no cache · {format_bytes_compact(size)} {adjective}",
             flush=True,
@@ -208,7 +249,7 @@ class Console:
             self._cached_bytes += size
             return
         amount = format_bytes_compact(size)
-        check = self.paint("✔︎", "32")
+        check = self.paint("✓", SUCCESS)
         line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
         terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
         if len(line) <= terminal_width:

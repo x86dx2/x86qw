@@ -431,6 +431,10 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("labels: 'P0'", monitor)
         self.assertIn("listWorkflowRuns", monitor)
         self.assertIn("monitor gap", monitor)
+        self.assertIn(
+            "if: success() && github.event_name == 'schedule'",
+            monitor,
+        )
 
     def test_public_projection_and_timestamp_recovery_verify_all_mirrors_first(self):
         projection = (ROOT / ".github/workflows/site-projection-repair.yml").read_text(

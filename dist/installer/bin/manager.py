@@ -2019,6 +2019,7 @@ class Installer:
             breadcrumb="x86QW › Instalação › Versão",
             subtitle="Mais recente primeiro. Use a busca para localizar uma versão.",
             searchable=True,
+            presentation="wizard",
         )
         if selected is None:
             raise InstallerError("Nenhuma versão foi selecionada.")
@@ -2045,6 +2046,7 @@ class Installer:
             ),
             breadcrumb="x86QW › Instalação › Canal",
             invalid_message="Opção inválida. Digite 1 para stable ou 2 para nightly.",
+            presentation="wizard",
         )
         if channel is None:
             raise InstallerError("Nenhum canal foi selecionado.")
@@ -2079,6 +2081,7 @@ class Installer:
             ),
             default=False,
             invalid_message="Resposta inválida. Digite s para sim ou n para não.",
+            presentation="wizard",
         ))
 
     def choose_install_content(self) -> list[str] | None:
@@ -2101,6 +2104,7 @@ class Installer:
             breadcrumb="x86QW › Instalação › Conteúdo",
             default=0,
             invalid_message="Opção inválida. Digite 1 para recomendado ou 2 para avançado.",
+            presentation="wizard",
         )
         if path is None:
             raise InstallerError("Nenhum conteúdo foi selecionado.")
@@ -2133,6 +2137,7 @@ class Installer:
                 ),
                 breadcrumb="x86QW › Instalação › Avançado",
                 invalid_message="Opção inválida. Digite 1 a 4.",
+                presentation="wizard",
             )
             if choice is None:
                 raise InstallerError("Nenhum conteúdo foi selecionado.")
@@ -4997,6 +5002,7 @@ class Installer:
                 subtitle=summary,
                 description="aplicar as alterações apresentadas",
                 default=False,
+                presentation="wizard" if action == "install" else "menu",
             )
         except navigation.MenuCancelled as error:
             raise InstallerError(
@@ -8730,12 +8736,14 @@ def parse_arguments(arguments: list[str], project_root: Path) -> argparse.Namesp
 
 def choose_public_target(suggested: Path | None = None) -> Path:
     suggested = suggested or Path.home() / "Games" / "x86qw"
-    print("\nOnde deseja instalar o x86QW?")
-    print(f"Sugestão: {suggested}")
-    print("Pressione Enter para aceitar a sugestão ou informe outro diretório.")
     try:
-        answer = input("Diretório de instalação: ").strip()
-    except EOFError as error:
+        answer = navigation.prompt_text(
+            "Onde deseja instalar o x86QW?",
+            default=str(suggested),
+            description="Pressione Enter para aceitar ou informe outro diretório.",
+            presentation="wizard",
+        )
+    except (EOFError, navigation.MenuCancelled) as error:
         raise InstallerError(
             "Não foi possível ler o diretório de instalação. "
             "Execute em um terminal interativo ou informe o caminho na linha de comando."

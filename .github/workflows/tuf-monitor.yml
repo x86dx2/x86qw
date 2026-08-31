@@ -34,7 +34,10 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python maintenance/tools/monitor_public_tuf.py --root maintenance/trust/root.json --warning-hours 72
       - name: Fail closed if the monitor itself went stale
-        if: success()
+        # A manual run is the explicit recovery path after a cadence incident:
+        # the authenticated lease check above must pass, then this run becomes
+        # the fresh successful baseline consumed by the next scheduled run.
+        if: success() && github.event_name == 'schedule'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
