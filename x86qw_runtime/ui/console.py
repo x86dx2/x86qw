@@ -74,6 +74,24 @@ class Console:
         self._activity_visible = False
 
     def paint(self, text: str, code: str) -> str:
+        labels = {
+            "[OK]": "✓",
+            "[INFO]": "·",
+            "[ATENÇÃO]": "!",
+            "[ERRO]": "✗",
+            "==>": "·",
+        }
+        palette = {
+            "1;36": f"{ACCENT}m\033[1",
+            "1": f"{ACCENT}m\033[1",
+            "36": MUTED,
+            "32": SUCCESS,
+            "33": WARNING,
+            "31": ERROR,
+            "2": MUTED,
+        }
+        text = labels.get(text, text)
+        code = palette.get(code, code)
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
     def bold_color(self, text: str, code: str) -> str:
@@ -102,36 +120,33 @@ class Console:
     def section(self, title: str) -> None:
         self.activity_done()
         self.flush_download_summary()
-        print(f"\n{self.bold_color(title, ACCENT)}", flush=True)
+        print(f"\n{self.paint(title, '1;36')}", flush=True)
 
     def heading(self, title: str) -> None:
         self.activity_done()
         self.flush_download_summary()
-        print(f"\n{self.bold_color(title, ACCENT)}", flush=True)
+        print(f"\n{self.paint('==>', '1;36')} {self.paint(title, '1')}", flush=True)
 
     def info(self, message: str) -> None:
         self.activity_done()
-        print(f"{self.paint('·', MUTED)} {message}", flush=True)
+        print(f"{self.paint('[INFO]', '36')} {message}", flush=True)
 
     def success(self, message: str) -> None:
         self.activity_done()
         self.flush_download_summary()
-        print(f"{self.paint('✓', SUCCESS)} {message}", flush=True)
+        print(f"{self.paint('[OK]', '32')} {message}", flush=True)
 
     def warning(self, message: str) -> None:
         self.activity_done()
-        print(f"{self.paint('!', WARNING)} {message}", flush=True)
+        print(f"{self.paint('[ATENÇÃO]', '33')} {message}", flush=True)
 
     def detail(self, message: str) -> None:
         if self.verbose:
-            print(self.paint(f"  {message}", MUTED), flush=True)
+            print(self.paint(f"       {message}", "2"), flush=True)
 
     def error(self, message: str) -> None:
         self.activity_done()
-        label = (
-            f"\033[{ERROR}m✗\033[0m"
-            if self.color and sys.stderr.isatty() else "✗"
-        )
+        label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "✗"
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
     def update_plan(self, rows: list[UpdatePlanRow], action: str) -> str:
