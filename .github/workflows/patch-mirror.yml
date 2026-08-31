@@ -163,10 +163,14 @@ jobs:
           expected_size="$(sed -n 's/^size \([0-9][0-9]*\)$/\1/p' "$RUNNER_TEMP/expected-installer-pointer")"
           test "$(sha256sum "$candidate_installer" | awk '{print $1}')" = "$expected_sha"
           test "$(stat -c %s "$candidate_installer")" = "$expected_size"
-          git -c lfs.fetchrecentalways=false \
-            -c lfs.fetchrecentrefsdays=0 \
-            -c lfs.fetchrecentcommitsdays=0 \
-            lfs fetch --include="$lfs_path" --exclude='' origin "$RELEASE_CODE_COMMIT"
+          local_media="$(git lfs env | sed -n 's/^LocalMediaDir=//p')"
+          test -n "$local_media"
+          lfs_object="$local_media/${expected_sha:0:2}/${expected_sha:2:2}/$expected_sha"
+          mkdir -p "$(dirname "$lfs_object")"
+          cp "$candidate_installer" "$lfs_object"
+          test "$(sha256sum "$lfs_object" | awk '{print $1}')" = "$expected_sha"
+          test "$(stat -c %s "$lfs_object")" = "$expected_size"
+          git remote add public-gitlab "$gitlab_url"
 
           git config --local credential.helper 'cache --timeout=300'
           cleanup_credential() {
@@ -176,7 +180,8 @@ jobs:
           trap cleanup_credential EXIT
           printf 'protocol=https\nhost=gitlab.com\nusername=oauth2\npassword=%s\n\n' \
             "$GITLAB_TOKEN" | git credential approve
-          git push "$gitlab_url" "$RELEASE_CODE_COMMIT:refs/heads/main"
+          git lfs push --object-id public-gitlab "$expected_sha"
+          git push public-gitlab "$RELEASE_CODE_COMMIT:refs/heads/main"
           cleanup_credential
           trap - EXIT
 
