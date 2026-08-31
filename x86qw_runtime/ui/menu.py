@@ -45,6 +45,8 @@ _ACCENT = "1;36"
 _MUTED = "2"
 _SEARCH = "1;33"
 _OK = "1;32"
+_WIZARD_PROMPT = "38;5;209"
+_WIZARD_DETAIL = "38;5;138"
 
 
 def configure(*, no_color: bool = False) -> None:
@@ -56,6 +58,18 @@ def _paint(value: str, code: str) -> str:
     if not code or _NO_COLOR or not _isatty(sys.stdout):
         return value
     return f"\033[{code}m{value}\033[0m"
+
+
+def _wizard_color(value: str, code: str, reset: str = "39") -> str:
+    if _NO_COLOR or not _isatty(sys.stdout):
+        return value
+    return f"\033[{code}m{value}\033[{reset}m"
+
+
+def _wizard_dim(value: str) -> str:
+    if _NO_COLOR or not _isatty(sys.stdout):
+        return value
+    return f"\033[2m{value}\033[22m"
 
 
 def _isatty(stream: object) -> bool:
@@ -665,6 +679,277 @@ def _select_navigation(
         _restore_cursor()
 
 
+def _wizard_frame(
+    title: str,
+    options: tuple[MenuOption, ...],
+    matches: list[int],
+    selected: int,
+    *,
+    query: str,
+    searching: bool,
+    searchable: bool,
+    allow_back: bool,
+    numeric_buffer: str,
+) -> str:
+    connector = _wizard_color("│", "36")
+    muted_connector = _wizard_color("│", "90")
+    lines = [muted_connector]
+    lines.append(
+        f"{_wizard_color('◆', '36')}  "
+        f"{_wizard_color(title, _WIZARD_PROMPT)}"
+    )
+    if searching or query:
+        field = query + ("█" if searching else "")
+        lines.append(f"{connector}  {_wizard_color('/', '90')} {field}")
+    if numeric_buffer:
+        lines.append(
+            f"{connector}  {_wizard_dim('Ir para o item:')} {numeric_buffer}█"
+        )
+    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 8)
+    selectable = _selectable_positions(options, matches)
+    if selected not in selectable and selectable:
+        selected = selectable[0]
+    start = max(0, selected - row_budget // 2)
+    end = min(len(matches), start + row_budget)
+    start = max(0, end - row_budget)
+    for position in range(start, end):
+        option = options[matches[position]]
+        if not option.enabled:
+            label = _wizard_dim(f"○ {option.label}")
+            detail = option.disabled_reason or option.description
+        elif position == selected:
+            label = f"{_wizard_color('●', '32')} {option.label}"
+            detail = option.description
+        else:
+            label = f"{_wizard_dim('○')} {_wizard_dim(option.label)}"
+            detail = ""
+        if detail:
+            label += " " + _wizard_dim(
+                f"({_wizard_color(detail, _WIZARD_DETAIL)})"
+            )
+        lines.append(f"{connector}  {label}")
+    if len(matches) > end - start:
+        lines.append(f"{connector}  {_wizard_dim(f'{start + 1}–{end} de {len(matches)}')}")
+    if searching:
+        footer = (
+            f"{_wizard_dim('Digite')} para buscar • "
+            f"{_wizard_dim('Enter:')} aplicar • {_wizard_dim('Esc:')} limpar"
+        )
+    elif numeric_buffer:
+        footer = (
+            f"{_wizard_dim('Digite')} o número completo • "
+            f"{_wizard_dim('Enter:')} confirmar • {_wizard_dim('Esc:')} limpar"
+        )
+    else:
+        footer = (
+            f"{_wizard_dim('↑/↓')} para navegar • "
+            f"{_wizard_dim('Enter:')} confirmar"
+        )
+        if searchable:
+            footer += f" • {_wizard_dim('/:')} buscar"
+        if allow_back:
+            footer += f" • {_wizard_dim('←:')} voltar"
+    lines.extend((f"{connector}  {footer}", _wizard_color("└", "36")))
+    return "\n".join(lines) + "\n"
+
+
+def _wizard_collapse(title: str, option: MenuOption) -> str:
+    return (
+        f"{_wizard_color('◇', '32')}  "
+        f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
+        f"{_wizard_color('│', '90')}  {_wizard_dim(option.label)}\n"
+    )
+
+
+def _select_wizard(
+    title: str,
+    options: tuple[MenuOption, ...],
+    *,
+    default: int,
+    searchable: bool,
+    allow_back: bool,
+    key_reader: Callable[[], str],
+) -> str | None:
+    query = ""
+    searching = False
+    numeric_buffer = ""
+    matches = _matching(options, query)
+    if not any(option.enabled for option in options):
+        raise ValueError("menu has no enabled options")
+    selected = _default_position(options, matches, default)
+    previous_lines = 0
+    if _isatty(sys.stdout):
+        sys.stdout.write(_HIDE_CURSOR)
+    try:
+        while True:
+            frame = _wizard_frame(
+                title, options, matches, selected, query=query,
+                searching=searching, searchable=searchable,
+                allow_back=allow_back,
+                numeric_buffer=numeric_buffer,
+            )
+            if previous_lines:
+                sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+            sys.stdout.write(frame)
+            sys.stdout.flush()
+            previous_lines = frame.count("\n")
+            key = key_reader()
+            if key == "interrupt":
+                raise KeyboardInterrupt
+            if searching:
+                if key == "enter":
+                    searching = False
+                elif key == "escape":
+                    query = ""
+                    searching = False
+                elif key == "backspace":
+                    query = query[:-1]
+                elif len(key) == 1 and key.isprintable():
+                    query += key
+                matches = _matching(options, query)
+                selected = _default_position(options, matches, 0)
+                continue
+            selectable = _selectable_positions(options, matches)
+            if numeric_buffer:
+                if key.isdigit():
+                    candidate = numeric_buffer + key
+                    if int(candidate) <= len(matches):
+                        numeric_buffer = candidate
+                elif key == "backspace":
+                    numeric_buffer = numeric_buffer[:-1]
+                elif key in ("enter", "right"):
+                    position = int(numeric_buffer) - 1
+                    if 0 <= position < len(matches) and options[matches[position]].enabled:
+                        option = options[matches[position]]
+                        sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                        sys.stdout.write(_wizard_collapse(title, option))
+                        sys.stdout.flush()
+                        return option.key
+                    numeric_buffer = ""
+                elif key == "escape":
+                    numeric_buffer = ""
+                else:
+                    numeric_buffer = ""
+                continue
+            if key in {"up", "down", "k", "j", "home", "end", "pageup", "pagedown"}:
+                selected = _move_selection(
+                    selected, selectable, key,
+                    page=max(1, _row_budget() // 2),
+                )
+            elif key in ("enter", "right") and selectable:
+                option = options[matches[selected]]
+                sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                sys.stdout.write(_wizard_collapse(title, option))
+                sys.stdout.flush()
+                return option.key
+            elif key == "left":
+                if allow_back:
+                    return None
+                raise MenuCancelled(title)
+            elif key in ("escape", "q"):
+                raise MenuExit(title)
+            elif key == "/" and searchable:
+                searching = True
+            elif key.isdigit() and key != "0":
+                if len(matches) > 9:
+                    numeric_buffer = key
+                else:
+                    position = int(key) - 1
+                    if position < len(matches) and options[matches[position]].enabled:
+                        option = options[matches[position]]
+                        sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                        sys.stdout.write(_wizard_collapse(title, option))
+                        sys.stdout.flush()
+                        return option.key
+    finally:
+        _restore_cursor()
+
+
+def _wizard_text_frame(title: str, value: str, description: str) -> str:
+    connector = _wizard_color("│", "36")
+    lines = [
+        _wizard_color("│", "90"),
+        f"{_wizard_color('◆', '36')}  {_wizard_color(title, _WIZARD_PROMPT)}",
+        f"{connector}  {value}█",
+    ]
+    if description:
+        lines.append(f"{connector}  {_wizard_dim(description)}")
+    lines.append(_wizard_color("└", "36"))
+    return "\n".join(lines) + "\n"
+
+
+def _prompt_text_wizard(
+    title: str,
+    *,
+    default: str,
+    description: str,
+    key_reader: Callable[[], str],
+) -> str:
+    value = default
+    previous_lines = 0
+    if _isatty(sys.stdout):
+        sys.stdout.write(_HIDE_CURSOR)
+    try:
+        while True:
+            frame = _wizard_text_frame(title, value, description)
+            if previous_lines:
+                sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+            sys.stdout.write(frame)
+            sys.stdout.flush()
+            previous_lines = frame.count("\n")
+            key = key_reader()
+            if key == "interrupt":
+                raise KeyboardInterrupt
+            if key == "enter":
+                answer = value or default
+                sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                sys.stdout.write(
+                    f"{_wizard_color('◇', '32')}  "
+                    f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
+                    f"{_wizard_color('│', '90')}  {_wizard_dim(answer)}\n"
+                )
+                sys.stdout.flush()
+                return answer
+            if key in ("escape", "q"):
+                raise MenuExit(title)
+            if key == "backspace":
+                value = value[:-1]
+            elif len(key) == 1 and key.isprintable():
+                value += key
+    finally:
+        _restore_cursor()
+
+
+def prompt_text(
+    title: str,
+    *,
+    default: str = "",
+    description: str = "",
+    interactive: bool | None = None,
+    key_reader: Callable[[], str] | None = None,
+    input_fn: Callable[[str], str] | None = None,
+    presentation: str = "menu",
+) -> str:
+    navigation = supports_navigation() if interactive is None else interactive
+    if presentation not in {"menu", "wizard"}:
+        raise ValueError("presentation must be menu or wizard")
+    if navigation and presentation == "wizard":
+        return _prompt_text_wizard(
+            title, default=default, description=description,
+            key_reader=key_reader or read_key,
+        )
+    print(f"\n{title}")
+    if default:
+        print(f"Sugestão: {default}")
+    if description:
+        print(description)
+    try:
+        answer = (input_fn or input)("Diretório de instalação: ").strip()
+    except EOFError as error:
+        raise MenuCancelled(title) from error
+    return answer or default
+
+
 def _select_fallback(
     title: str,
     options: tuple[MenuOption, ...],
@@ -781,11 +1066,19 @@ def select_one(
     interactive: bool | None = None,
     key_reader: Callable[[], str] | None = None,
     input_fn: Callable[[str], str] | None = None,
+    presentation: str = "menu",
 ) -> str | None:
     entries = tuple(options)
     if not entries or len({option.key for option in entries}) != len(entries):
         raise ValueError("menu options must be non-empty and have unique keys")
     navigation = supports_navigation() if interactive is None else interactive
+    if presentation not in {"menu", "wizard"}:
+        raise ValueError("presentation must be menu or wizard")
+    if navigation and presentation == "wizard":
+        return _select_wizard(
+            title, entries, default=default, searchable=searchable,
+            allow_back=allow_back, key_reader=key_reader or read_key,
+        )
     if navigation:
         return _select_navigation(
             title, entries, breadcrumb=breadcrumb, subtitle=subtitle,
@@ -1048,6 +1341,7 @@ def confirm(
     interactive: bool | None = None,
     input_fn: Callable[[str], str] | None = None,
     allow_back: bool = False,
+    presentation: str = "menu",
 ) -> bool | None:
     result = select_one(
         title,
@@ -1067,6 +1361,7 @@ def confirm(
         interactive=interactive,
         input_fn=input_fn or input,
         allow_back=allow_back,
+        presentation=presentation,
     )
     if result is None:
         return None

@@ -121,6 +121,89 @@ class MenuTests(unittest.TestCase):
         self.assertNotIn("\033[2m ·", rendered)
         self.assertNotIn("\n    competitivo", rendered)
 
+    def test_installer_wizard_uses_prompt_symbols_and_collapses_the_choice(self):
+        output = TtyStringIO()
+        with mock.patch.object(menu, "_NO_COLOR", False):
+            with mock.patch.object(menu.sys, "stdout", output):
+                selected = menu.select_one(
+                    "Qual conteúdo deseja instalar?",
+                    (
+                        menu.MenuOption(
+                            "recommended", "Recomendado",
+                            "KTX, mapas e configuração para jogar agora",
+                        ),
+                        menu.MenuOption(
+                            "advanced", "Avançado",
+                            "essencial, completo ou personalizado",
+                        ),
+                    ),
+                    interactive=True,
+                    key_reader=lambda: "enter",
+                    presentation="wizard",
+                )
+
+        self.assertEqual("recommended", selected)
+        rendered = output.getvalue()
+        self.assertIn(
+            "\033[36m◆\033[39m  \033[38;5;209mQual conteúdo deseja instalar?\033[39m",
+            rendered,
+        )
+        self.assertIn("\033[32m●\033[39m Recomendado", rendered)
+        self.assertIn("\033[2m○\033[22m \033[2mAvançado\033[22m", rendered)
+        self.assertIn(
+            "\033[2m↑/↓\033[22m para navegar • \033[2mEnter:\033[22m confirmar",
+            rendered,
+        )
+        self.assertIn(
+            "\033[32m◇\033[39m  \033[38;5;209mQual conteúdo deseja instalar?\033[39m",
+            rendered,
+        )
+        self.assertIn("\033[2mRecomendado\033[22m", rendered)
+
+    def test_installer_wizard_preserves_multi_digit_shortcuts(self):
+        answers = iter(("1", "2", "enter"))
+        options = tuple(
+            menu.MenuOption(f"release-{index}", f"Release {index}")
+            for index in range(1, 13)
+        )
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            selected = menu.select_one(
+                "Qual versão deseja instalar?",
+                options,
+                interactive=True,
+                key_reader=lambda: next(answers),
+                presentation="wizard",
+            )
+
+        self.assertEqual("release-12", selected)
+
+    def test_installer_wizard_text_prompt_accepts_default_and_collapses(self):
+        output = TtyStringIO()
+        with mock.patch.object(menu, "_NO_COLOR", False):
+            with mock.patch.object(menu.sys, "stdout", output):
+                answer = menu.prompt_text(
+                    "Onde deseja instalar o x86QW?",
+                    default="/home/jogador/Games/x86qw",
+                    description="Enter aceita a sugestão",
+                    interactive=True,
+                    key_reader=lambda: "enter",
+                    presentation="wizard",
+                )
+
+        self.assertEqual("/home/jogador/Games/x86qw", answer)
+        rendered = output.getvalue()
+        self.assertIn(
+            "\033[36m◆\033[39m  \033[38;5;209mOnde deseja instalar o x86QW?\033[39m",
+            rendered,
+        )
+        self.assertIn("/home/jogador/Games/x86qw█", rendered)
+        self.assertIn(
+            "\033[32m◇\033[39m  \033[38;5;209mOnde deseja instalar o x86QW?\033[39m",
+            rendered,
+        )
+        self.assertIn("\033[2m/home/jogador/Games/x86qw\033[22m", rendered)
+
     def test_navigation_numbers_every_item_and_documents_both_horizontal_arrows(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
