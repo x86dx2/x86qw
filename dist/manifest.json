@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-08-29T01:22:23Z",
+  "captured_at": "2026-08-31T16:26:48Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4621,10 +4621,17 @@
     },
     "installer/packages/1.0.8/x86qw-installer-1.0.8.zip": {
       "component": "installer",
-      "consumer": "bootstrap:installer",
+      "consumer": "archive:installer-history",
       "sha256": "54a84e6bdda22b6703065dde47c429b6887d4262c05ba18c92961bd6b50a5944",
       "size": 620679,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.8/x86qw-installer-1.0.8.zip"
+    },
+    "installer/packages/1.0.9/x86qw-installer-1.0.9.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "940f6b4aa98e29a5717553a254828009c5568ecabc8dcc7f16234da6b53f3ebb",
+      "size": 622473,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.9/x86qw-installer-1.0.9.zip"
     },
     "mods/final-arena/1.20/upstream/farena12.zip": {
       "component": "final-arena",
