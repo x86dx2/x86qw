@@ -146,6 +146,7 @@ jobs:
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           RELEASE_CODE_COMMIT: ${{ inputs.release_code_commit }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
         run: |
           set -euo pipefail
           test -n "$GITLAB_TOKEN"
@@ -154,6 +155,12 @@ jobs:
           [[ "$gitlab_main" =~ ^[0-9a-f]{40}$ ]]
           git fetch --no-tags "$gitlab_url" "$gitlab_main"
           git merge-base --is-ancestor "$gitlab_main" "$RELEASE_CODE_COMMIT"
+
+          lfs_path="dist/installer/packages/$EXPECTED_VERSION/x86qw-installer-$EXPECTED_VERSION.zip"
+          candidate_installer="candidate/installer/x86qw-installer-$EXPECTED_VERSION.zip"
+          git show "$RELEASE_CODE_COMMIT:$lfs_path" > "$RUNNER_TEMP/expected-installer-pointer"
+          git lfs clean -- "$lfs_path" < "$candidate_installer" > "$RUNNER_TEMP/actual-installer-pointer"
+          cmp --silent "$RUNNER_TEMP/expected-installer-pointer" "$RUNNER_TEMP/actual-installer-pointer"
 
           git config --local credential.helper 'cache --timeout=300'
           cleanup_credential() {

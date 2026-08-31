@@ -138,6 +138,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("< VERSION", source)
         self.assertIn("Fast-forward public GitLab source mirror", source)
         self.assertIn("git merge-base --is-ancestor", source)
+        self.assertIn("git lfs clean", source)
+        self.assertIn("cmp --silent", source)
         self.assertIn("git credential approve", source)
         self.assertIn("git credential reject", source)
         self.assertIn('"$RELEASE_CODE_COMMIT:refs/heads/main"', source)
