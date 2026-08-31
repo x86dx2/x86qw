@@ -2202,7 +2202,7 @@ class InstallerTests(unittest.TestCase):
             confirmation = install_qw.console.update_plan(rows, "install")
 
         rendered = output.getvalue()
-        self.assertIn("==> Plano: instalar 4 pacotes", rendered)
+        self.assertIn("Plano: instalar 4 pacotes", rendered)
         self.assertIn("ezQuake macOS stable", rendered)
         self.assertIn("3 componentes x86QW", rendered)
         self.assertNotIn("KTX x86QW", rendered)
@@ -2247,7 +2247,7 @@ class InstallerTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertNotIn("KTX 1.47", rendered)
         self.assertNotIn("Mapas e4cb23", rendered)
-        self.assertIn("✔︎ 2 pacotes no cache · 22.0MB validados", rendered)
+        self.assertIn("✓ 2 pacotes no cache · 22.0MB validados", rendered)
         self.assertIn("Instalando componentes", rendered)
 
     def test_cached_summary_is_flushed_before_the_related_success(self):
@@ -2259,8 +2259,8 @@ class InstallerTests(unittest.TestCase):
             reporter.success("ezQuake 3.6.9 instalado")
 
         rendered = output.getvalue()
-        cache = "✔︎ 1 pacote no cache · 8.6MB validado"
-        installed = "✔︎ ezQuake 3.6.9 instalado"
+        cache = "✓ 1 pacote no cache · 8.6MB validado"
+        installed = "✓ ezQuake 3.6.9 instalado"
         self.assertIn(cache, rendered)
         self.assertIn(installed, rendered)
         self.assertLess(rendered.index(cache), rendered.index(installed))
@@ -2326,7 +2326,7 @@ class InstallerTests(unittest.TestCase):
                 installer.install_components(["ktx", "nquake-maps"])
 
         rendered = output.getvalue()
-        self.assertIn("==> Instalando 2 componentes x86QW", rendered)
+        self.assertIn("Instalando 2 componentes x86QW", rendered)
         self.assertIn("\r", rendered)
         self.assertIn("[1/2] Processando pacote", rendered)
         self.assertIn("[2/2] Processando pacote", rendered)
@@ -2334,7 +2334,7 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn("KTX x86QW atualizado", rendered)
         self.assertNotIn("Mapas selecionados nQuake atualizado", rendered)
         self.assertNotIn("Configuração inicial criada", rendered)
-        self.assertEqual(1, rendered.count("✔︎ 2 componentes instalados · 5 arquivos"))
+        self.assertEqual(1, rendered.count("✓ 2 componentes instalados · 5 arquivos"))
 
     def test_installation_verification_reports_one_summary_without_item_repetition(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2367,9 +2367,9 @@ class InstallerTests(unittest.TestCase):
                 installer.verify_installation()
 
         rendered = output.getvalue()
-        self.assertIn("==> Verificando instalação", rendered)
+        self.assertIn("Verificando instalação", rendered)
         self.assertEqual(1, rendered.count(
-            "✔︎ ezQuake + 2 componentes íntegros · 123 arquivos"
+            "✓ ezQuake + 2 componentes íntegros · 123 arquivos"
         ))
 
     def test_verify_command_does_not_wrap_the_verifier_in_duplicate_messages(self):
@@ -2388,7 +2388,7 @@ class InstallerTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertEqual(0, result)
         self.assertEqual(1, rendered.count(
-            "✔︎ ezQuake + 21 componentes íntegros · 737 arquivos"
+            "✓ ezQuake + 21 componentes íntegros · 737 arquivos"
         ))
         self.assertNotIn("Verificação da instalação", rendered)
         self.assertNotIn("Verificação concluída sem problemas", rendered)
@@ -2437,7 +2437,7 @@ class InstallerTests(unittest.TestCase):
                     pass
 
             self.assertEqual([], mutation_started)
-            self.assertIn("==> Plano: instalar 2 pacotes", output.getvalue())
+            self.assertIn("Plano: instalar 2 pacotes", output.getvalue())
             self.assertIn("ezQuake Linux x86_64 stable", output.getvalue())
             self.assertIn("KTX x86QW", output.getvalue())
             self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
@@ -2602,6 +2602,25 @@ class InstallerTests(unittest.TestCase):
                 "test/file.zip", "file.zip", expected_size=5,
                 expected_sha256=install_qw.hashlib.sha256(b"local").hexdigest(),
             ))
+
+    def test_online_target_uses_the_installer_wizard_in_a_tty(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        suggested = Path("/tmp/x86qw-wizard-target")
+        output = TtyBuffer()
+        with mock.patch.object(
+            install_qw.navigation, "supports_navigation", return_value=True,
+        ), mock.patch.object(
+            install_qw.navigation, "read_key", return_value="enter",
+        ), mock.patch.object(
+            install_qw.navigation, "_NO_COLOR", False,
+        ), mock.patch.object(install_qw.sys, "stdout", output):
+            self.assertEqual(suggested, install_qw.choose_public_target(suggested))
+
+        self.assertIn("\033[36m◆\033[39m", output.getvalue())
+        self.assertIn("Onde deseja instalar o x86QW?", output.getvalue())
 
     def test_online_install_preserves_a_self_contained_cli(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -3478,7 +3497,7 @@ class InstallerTests(unittest.TestCase):
                     self.assertEqual(0, install_qw.main(["update", str(target)]))
         self.assertEqual(1, installer.update.call_count)
         self.assertTrue(installer.update.call_args.kwargs["dry_run"])
-        self.assertIn("==> Plano: atualizar 1 pacote desatualizado", output.getvalue())
+        self.assertIn("Plano: atualizar 1 pacote desatualizado", output.getvalue())
         self.assertIn("Configuração base nQuake", output.getvalue())
         self.assertIn("1 -> 2 (15.4KB)", output.getvalue())
         self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
@@ -5448,6 +5467,30 @@ class InstallerTests(unittest.TestCase):
                         self.assertEqual(["ktx"], installer.choose_install_content())
             selected.assert_called_once_with("recommended")
 
+    def test_interactive_install_content_uses_the_wizard_presentation(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, _, _ = self.make_installer(Path(temporary))
+            output = TtyBuffer()
+            with mock.patch.object(
+                installer, "select_components_profile", return_value=["ktx"],
+            ), mock.patch.object(
+                install_qw.navigation, "supports_navigation", return_value=True,
+            ), mock.patch.object(
+                install_qw.navigation, "read_key", return_value="enter",
+            ), mock.patch.object(
+                install_qw.navigation, "_NO_COLOR", False,
+            ), mock.patch.object(install_qw.sys, "stdout", output):
+                self.assertEqual(["ktx"], installer.choose_install_content())
+
+        rendered = output.getvalue()
+        self.assertIn("\033[36m◆\033[39m", rendered)
+        self.assertIn("Qual conteúdo deseja instalar?", rendered)
+        self.assertIn("\033[32m●\033[39m Recomendado", rendered)
+
     def test_client_only_requires_advanced_confirmation_of_the_consequence(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
@@ -5488,6 +5531,44 @@ class InstallerTests(unittest.TestCase):
             install_qw.console.detail("visível")
         self.assertNotIn("oculto", output.getvalue())
         self.assertIn("visível", output.getvalue())
+
+    def test_console_uses_installer_palette_and_reference_status_symbols(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        output = TtyBuffer()
+        errors = TtyBuffer()
+        reporter = install_qw.Console(version=lambda: "9.9.9")
+        with mock.patch.object(install_qw.sys, "stdout", output), \
+                mock.patch.object(install_qw.sys, "stderr", errors), \
+                mock.patch.dict(install_qw.os.environ, {}, clear=True):
+            reporter.configure(verbose=False, no_color=False)
+            reporter.banner("instalar", Path("/tmp/x86qw"))
+            reporter.section("Plano de instalação")
+            reporter.info("Preparando ambiente")
+            reporter.success("Pronto")
+            reporter.warning("Atenção")
+            reporter.error("Falhou")
+
+        rendered = output.getvalue()
+        self.assertIn("\033[38;2;255;77;77m\033[1m\n  [X] Instalador x86QW\033[0m", rendered)
+        self.assertIn("\033[38;2;136;146;176m  Cinco jogos. Um menu. Uma partida.\033[0m", rendered)
+        self.assertIn("\033[38;2;255;77;77m\033[1mPlano de instalação\033[0m", rendered)
+        self.assertIn("\033[38;2;90;100;128m·\033[0m Preparando ambiente", rendered)
+        self.assertIn("\033[38;2;0;229;204m✓\033[0m Pronto", rendered)
+        self.assertIn("\033[38;2;255;176;32m!\033[0m Atenção", rendered)
+        self.assertIn("\033[38;2;230;57;70m✗\033[0m Falhou", errors.getvalue())
+
+    def test_bootstrap_handoff_does_not_repeat_the_installer_banner(self):
+        output = io.StringIO()
+        reporter = install_qw.Console(version=lambda: "9.9.9")
+        with contextlib.redirect_stdout(output), mock.patch.dict(
+            install_qw.os.environ, {"X86QW_BOOTSTRAP_UI": "1"}, clear=False,
+        ):
+            reporter.banner("instalar", Path("/tmp/x86qw"))
+
+        self.assertEqual("", output.getvalue())
 
     def test_cache_is_owned_and_cleanup_removes_only_it(self):
         self.assertEqual("x86qw", install_qw.CACHE_DIR_NAME)
