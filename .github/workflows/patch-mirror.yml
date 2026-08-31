@@ -156,20 +156,9 @@ jobs:
           git fetch --no-tags "$gitlab_url" "$gitlab_main"
           git merge-base --is-ancestor "$gitlab_main" "$RELEASE_CODE_COMMIT"
 
-          lfs_path="dist/installer/packages/$EXPECTED_VERSION/x86qw-installer-$EXPECTED_VERSION.zip"
           candidate_installer="candidate/installer/x86qw-installer-$EXPECTED_VERSION.zip"
-          git show "$RELEASE_CODE_COMMIT:$lfs_path" > "$RUNNER_TEMP/expected-installer-pointer"
-          expected_sha="$(sed -n 's/^oid sha256:\([0-9a-f]\{64\}\)$/\1/p' "$RUNNER_TEMP/expected-installer-pointer")"
-          expected_size="$(sed -n 's/^size \([0-9][0-9]*\)$/\1/p' "$RUNNER_TEMP/expected-installer-pointer")"
-          test "$(sha256sum "$candidate_installer" | awk '{print $1}')" = "$expected_sha"
-          test "$(stat -c %s "$candidate_installer")" = "$expected_size"
           local_media="$(git lfs env | sed -n 's/^LocalMediaDir=//p')"
           test -n "$local_media"
-          lfs_object="$local_media/${expected_sha:0:2}/${expected_sha:2:2}/$expected_sha"
-          mkdir -p "$(dirname "$lfs_object")"
-          cp "$candidate_installer" "$lfs_object"
-          test "$(sha256sum "$lfs_object" | awk '{print $1}')" = "$expected_sha"
-          test "$(stat -c %s "$lfs_object")" = "$expected_size"
           git remote add public-gitlab "$gitlab_url"
 
           git config --local credential.helper 'cache --timeout=300'
@@ -180,17 +169,65 @@ jobs:
           trap cleanup_credential EXIT
           printf 'protocol=https\nhost=gitlab.com\nusername=oauth2\npassword=%s\n\n' \
             "$GITLAB_TOKEN" | git credential approve
-          git lfs push --object-id public-gitlab "$expected_sha"
+
+          mapfile -t delta_lfs_paths < <(
+            git diff --diff-filter=AM --name-only \
+              "$gitlab_main" "$RELEASE_CODE_COMMIT" -- \
+              'dist/installer/packages/*/*.zip'
+          )
+          test "${#delta_lfs_paths[@]}" -gt 0
+          current_found=false
+          published_lfs=()
+          for delta_path in "${delta_lfs_paths[@]}"; do
+            delta_version="$(basename "$(dirname "$delta_path")")"
+            delta_filename="$(basename "$delta_path")"
+            delta_pointer="$RUNNER_TEMP/$delta_version-$delta_filename.pointer"
+            git show "$RELEASE_CODE_COMMIT:$delta_path" > "$delta_pointer"
+            delta_sha="$(sed -n 's/^oid sha256:\([0-9a-f]\{64\}\)$/\1/p' "$delta_pointer")"
+            delta_size="$(sed -n 's/^size \([0-9][0-9]*\)$/\1/p' "$delta_pointer")"
+            [[ "$delta_sha" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$delta_size" =~ ^[1-9][0-9]*$ ]]
+
+            if test "$delta_version" = "$EXPECTED_VERSION"; then
+              source_installer="$candidate_installer"
+              current_found=true
+            else
+              source_installer="$RUNNER_TEMP/$delta_version-$delta_filename"
+              package_url="https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-installer/$delta_version/$delta_filename"
+              python3 - "$package_url" "$source_installer" <<'PY'
+          import shutil
+          import sys
+          import urllib.request
+
+          request = urllib.request.Request(sys.argv[1], headers={"User-Agent": "x86qw-patch-mirror"})
+          with urllib.request.urlopen(request, timeout=60) as response, open(sys.argv[2], "wb") as output:
+              shutil.copyfileobj(response, output)
+          PY
+            fi
+
+            test "$(sha256sum "$source_installer" | awk '{print $1}')" = "$delta_sha"
+            test "$(stat -c %s "$source_installer")" = "$delta_size"
+            lfs_object="$local_media/${delta_sha:0:2}/${delta_sha:2:2}/$delta_sha"
+            mkdir -p "$(dirname "$lfs_object")"
+            cp "$source_installer" "$lfs_object"
+            test "$(sha256sum "$lfs_object" | awk '{print $1}')" = "$delta_sha"
+            test "$(stat -c %s "$lfs_object")" = "$delta_size"
+            git lfs push --object-id public-gitlab "$delta_sha"
+            published_lfs+=("$delta_sha")
+          done
+          test "$current_found" = true
           git push public-gitlab "$RELEASE_CODE_COMMIT:refs/heads/main"
           cleanup_credential
           trap - EXIT
 
           published="$(git ls-remote "$gitlab_url" refs/heads/main | awk 'NR == 1 {print $1}')"
           test "$published" = "$RELEASE_CODE_COMMIT"
+          lfs_json="$(printf '%s\n' "${published_lfs[@]}" | jq -R . | jq -s .)"
           jq -n \
             --arg previous "$gitlab_main" \
             --arg published "$published" \
-            '{format: 1, project: "x86qw", status: "fast-forwarded", previous: $previous, published: $published}' \
+            --argjson lfs_objects "$lfs_json" \
+            '{format: 1, project: "x86qw", status: "fast-forwarded", previous: $previous, published: $published, lfs_objects: $lfs_objects}' \
             > "$RUNNER_TEMP/gitlab-source-mirror.json"
       - name: Preserve publication evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
