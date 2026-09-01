@@ -209,8 +209,8 @@ class Console:
         self, current: int, total: int, message: str = "Processando pacote",
     ) -> None:
         # Progress contains only validated public package metadata, never credentials.
-        # lgtm[py/clear-text-logging-sensitive-data]
         print(
+            # lgtm[py/clear-text-logging-sensitive-data]
             f"{self.paint('[INFO]', '36')} [{current}/{total}] {message}",
             flush=True,
         )
