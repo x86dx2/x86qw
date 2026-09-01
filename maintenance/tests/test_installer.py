@@ -4,6 +4,7 @@ import io
 import json
 import os
 import plistlib
+import re
 import shlex
 import socket
 import struct
@@ -2777,7 +2778,7 @@ class InstallerTests(unittest.TestCase):
         ), mock.patch.object(install_qw.sys, "stdout", output):
             self.assertEqual(suggested, install_qw.choose_public_target(suggested))
 
-        self.assertIn("\033[36m◆\033[39m", output.getvalue())
+        self.assertIn("\033[38;2;0;229;204m◆\033[39m", output.getvalue())
         self.assertIn("Onde deseja instalar o x86QW?", output.getvalue())
 
     def test_online_install_preserves_a_self_contained_cli(self):
@@ -5845,9 +5846,9 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(["ktx"], installer.choose_install_content())
 
         rendered = output.getvalue()
-        self.assertIn("\033[36m◆\033[39m", rendered)
+        self.assertIn("\033[38;2;0;229;204m◆\033[39m", rendered)
         self.assertIn("Qual conteúdo deseja instalar?", rendered)
-        self.assertIn("\033[32m●\033[39m Recomendado", rendered)
+        self.assertIn("\033[38;2;0;229;204m●\033[39m Recomendado", rendered)
 
     def test_custom_install_plan_lists_exactly_the_selected_components(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -6031,6 +6032,31 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("\033[38;2;0;229;204m✓\033[0m Pronto", rendered)
         self.assertIn("\033[38;2;255;176;32m!\033[0m Atenção", rendered)
         self.assertIn("\033[38;2;230;57;70m✗\033[0m Falhou", errors.getvalue())
+
+    def test_console_banner_uses_live_tty_width_instead_of_stale_columns(self):
+        class LiveWidthBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+            def fileno(self):
+                return 91
+
+        output = LiveWidthBuffer()
+        reporter = install_qw.Console(version=lambda: "9.9.9")
+        with mock.patch.object(install_qw.sys, "stdout", output), \
+                mock.patch.object(
+                    install_qw.os, "get_terminal_size",
+                    return_value=os.terminal_size((132, 24)),
+                ) as live_size, \
+                mock.patch.dict(install_qw.os.environ, {"COLUMNS": "80"}, clear=True):
+            reporter.configure(verbose=False, no_color=False)
+            reporter.banner("instalar", Path("/tmp/x86qw"))
+
+        plain = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", output.getvalue())
+        first_logo_line = next(line for line in plain.splitlines() if "⣀⣤⣶⣶" in line)
+        expected_padding = ((132 - 78) // 2) + 18
+        self.assertEqual(expected_padding, len(first_logo_line) - len(first_logo_line.lstrip()))
+        live_size.assert_called_with(91)
 
     def test_bootstrap_handoff_does_not_repeat_the_installer_banner(self):
         output = io.StringIO()

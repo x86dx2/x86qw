@@ -2,10 +2,10 @@
 param([object[]]$BootstrapArguments)
 
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "1.0.14"
+$InstallerVersion = "1.0.15"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "a9c87e27ab14ab64c57a22046e01947e1956225b52075b1e637f2f5f1bf7d7ee"
-$InstallerSize = "645118"
+$InstallerSha256 = "96da6125cece00d6cc8189258b18595264a537ee1db3645738b01ba22604c39b"
+$InstallerSize = "645293"
 $InstallerConnectTimeoutSeconds = 15
 $InstallerTransferTimeoutSeconds = 120
 $InstallerRetryMaxSeconds = 180
@@ -39,13 +39,28 @@ $VersionLabel = "Vers${TildeA}o"
 $ExtractedLabel = "extra${AcuteI}do"
 $Configuration = "configura${Ccedilla}${TildeA}o"
 $LogoWidth = 78
-$ParsedColumns = 0
-if ([int]::TryParse($env:COLUMNS, [ref]$ParsedColumns) -and $ParsedColumns -gt 0) {
-  $TerminalWidth = $ParsedColumns
-} elseif (-not [Console]::IsOutputRedirected) {
-  $TerminalWidth = [Console]::WindowWidth
-} else {
-  $TerminalWidth = $LogoWidth
+$TerminalWidth = 0
+if (-not [Console]::IsOutputRedirected) {
+  try {
+    $TerminalWidth = [int]$Host.UI.RawUI.WindowSize.Width
+  } catch {
+    $TerminalWidth = 0
+  }
+  if ($TerminalWidth -le 0) {
+    try {
+      $TerminalWidth = [Console]::WindowWidth
+    } catch {
+      $TerminalWidth = 0
+    }
+  }
+}
+if ($TerminalWidth -le 0) {
+  $ParsedColumns = 0
+  if ([int]::TryParse($env:COLUMNS, [ref]$ParsedColumns) -and $ParsedColumns -gt 0) {
+    $TerminalWidth = $ParsedColumns
+  } else {
+    $TerminalWidth = $LogoWidth
+  }
 }
 $OuterWidth = [Math]::Max(0, [Math]::Floor(($TerminalWidth - $LogoWidth) / 2))
 $BrandOuterPadding = " " * $OuterWidth
