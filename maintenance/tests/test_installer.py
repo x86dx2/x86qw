@@ -2283,10 +2283,12 @@ class InstallerTests(unittest.TestCase):
                 "ktx": {
                     "package": "ktx", "version": "1.47+x86qw.19",
                     "origin_url": "https://example.invalid/ktx.zip",
+                    "size": 2_500_000,
                 },
                 "nquake-maps": {
                     "package": "nquake-maps", "version": "e4cb23d40aa2",
                     "origin_url": "https://example.invalid/maps.zip",
+                    "size": 20_500_000,
                 },
             }
             output = TtyBuffer()
@@ -2328,13 +2330,68 @@ class InstallerTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("Instalando 2 componentes x86QW", rendered)
         self.assertNotIn("\r", rendered)
-        self.assertEqual(1, rendered.count("· [1/2] Processando pacote\n"))
-        self.assertEqual(1, rendered.count("· [2/2] Processando pacote\n"))
+        self.assertEqual(1, rendered.count(
+            "· [1/2] Instalando KTX x86QW · versão 1.47+x86qw.19 · 2.5MB\n"
+        ))
+        self.assertEqual(1, rendered.count(
+            "· [2/2] Instalando Mapas selecionados nQuake "
+            "· versão e4cb23d40aa2 · 20.5MB\n"
+        ))
+        self.assertNotIn("Processando pacote", rendered)
         self.assertNotIn("[INFO] [1/2] Preparando", rendered)
         self.assertNotIn("KTX x86QW atualizado", rendered)
         self.assertNotIn("Mapas selecionados nQuake atualizado", rendered)
         self.assertNotIn("Configuração inicial criada", rendered)
         self.assertEqual(1, rendered.count("✓ 2 componentes instalados · 5 arquivos"))
+
+    def test_component_verification_identifies_name_version_and_file_count(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            managed = target / "qw/ktx.cfg"
+            managed.parent.mkdir(parents=True)
+            managed.write_bytes(b"ktx\n")
+            receipt, inventory = (
+                target / relative for relative in installer.component_metadata("ktx")
+            )
+            receipt.parent.mkdir(parents=True)
+            installer.write_inventory_record(
+                inventory, [("qw/ktx.cfg", install_qw.file_hash(managed))],
+            )
+            installer.write_component_receipt(
+                "ktx", "1.47+x86qw.19", "https://example.invalid/ktx.zip",
+                inventory, receipt,
+            )
+            output = io.StringIO()
+
+            with contextlib.redirect_stdout(output):
+                count = installer.verify_component("ktx", progress=(1, 21))
+
+        self.assertEqual(1, count)
+        self.assertIn(
+            "· [1/21] Verificando KTX x86QW · versão 1.47+x86qw.19 "
+            "· 1 arquivo\n",
+            output.getvalue(),
+        )
+
+    def test_client_verification_identifies_platform_channel_and_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            spec = install_qw.PLATFORMS["linux"]
+            self.write_ezquake_fixture(
+                installer, target, spec, "stable", payload=b"ezquake\n",
+            )
+            output = io.StringIO()
+
+            with mock.patch.object(installer, "check_runtime"), \
+                    contextlib.redirect_stdout(output):
+                count = installer.verify_ezquake_variants(report_details=False)
+
+        self.assertEqual(1, count)
+        self.assertIn(
+            "· Verificando ezQuake Linux x86_64 stable · versão 3.6.9 "
+            "· executável e arquivos\n",
+            output.getvalue(),
+        )
 
     def test_installation_verification_reports_one_summary_without_item_repetition(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -2368,6 +2425,12 @@ class InstallerTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Verificando instalação", rendered)
+        self.assertIn("· Conferindo os arquivos originais do Quake", rendered)
+        self.assertIn("· Conferindo o cliente ezQuake instalado", rendered)
+        self.assertIn("· Conferindo 2 componentes x86QW instalados", rendered)
+        self.assertIn("· Conferindo mapas e presets gerenciados", rendered)
+        self.assertIn("· Conferindo suporte aos jogos instalados", rendered)
+        self.assertIn("· Conferindo a ordem de carregamento dos pacotes", rendered)
         self.assertEqual(1, rendered.count(
             "✓ ezQuake + 2 componentes íntegros · 123 arquivos"
         ))
