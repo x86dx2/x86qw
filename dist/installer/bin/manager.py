@@ -61,6 +61,7 @@ from x86qw_runtime.ui.console import (
     UpdatePlanRow,
     format_bytes,
     format_bytes_compact,
+    terminal_label,
 )
 from x86qw_runtime.ui.json_output import make_json_output, render_json_output
 
@@ -4043,10 +4044,26 @@ class Installer:
                 self.cleanup_stage()
                 self.stage = None
 
-    def verify_component(self, component: str, *, report_details: bool = True) -> int:
+    def verify_component(
+        self,
+        component: str,
+        *,
+        report_details: bool = True,
+        progress: tuple[int, int] | None = None,
+    ) -> int:
         present, entries, receipt = self.validate_component_pair(component)
         if not present:
             return 0
+        assert receipt is not None
+        if progress is not None:
+            current, total = progress
+            label = terminal_label(str(self.components[component]["label"]))
+            console.activity(
+                current,
+                total,
+                f"Verificando {label} · versão {receipt['selection']} "
+                f"· {file_count(len(entries))}",
+            )
         for name, expected in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
             if not managed.is_file() or managed.is_symlink():
@@ -4071,7 +4088,6 @@ class Installer:
                 with managed.open("rb") as source:
                     if source.read(4) != b"PACK":
                         raise InstallerError(f"PAK gerenciado inválido: {managed}")
-        assert receipt is not None
         if report_details:
             console.success(
                 f"Componente {component} íntegro "
@@ -5818,8 +5834,18 @@ class Installer:
             self.release_play_support_profiles(selected, results)
             for index, identifier in enumerate(selected, 1):
                 component = self.components[identifier]
-                console.activity(index, len(selected))
                 package = self.component_package_record(identifier)
+                size = package_size(package)
+                size_label = (
+                    format_bytes_compact(size) if size is not None
+                    else "tamanho não informado"
+                )
+                console.activity(
+                    index,
+                    len(selected),
+                    f"Instalando {terminal_label(str(component['label']))} "
+                    f"· versão {package['version']} · {size_label}",
+                )
                 prepared = self.prepare_component_sources(package)
                 if prepared is None:
                     artifact = self.download_component_package(package)
@@ -6525,6 +6551,10 @@ class Installer:
                 runtime = self.target / spec.runtime(channel)
                 if not lexists(runtime):
                     raise InstallerError(f"missing ezQuake runtime: {runtime}")
+                console.info(
+                    f"Verificando ezQuake {spec.label} {channel} "
+                    f"· versão {receipt['selection']} · executável e arquivos"
+                )
                 self.check_runtime(spec, channel, receipt)
                 macos_action = (
                     self.macos_runtime_action(
@@ -6554,7 +6584,9 @@ class Installer:
         if report_details is None:
             report_details = console.verbose
         console.heading("Verificando instalação")
+        console.info("Conferindo os arquivos originais do Quake")
         self.check_paks()
+        console.info("Conferindo o cliente ezQuake instalado")
         runtime_count = self.verify_ezquake_variants(report_details=report_details)
         if runtime_count == 0:
             raise InstallerError(f"Nenhum ezQuake gerenciado foi encontrado em {self.target}. Execute install primeiro.")
@@ -6574,17 +6606,28 @@ class Installer:
                 )
         if not installed:
             console.info("Nenhum componente x86QW está instalado.")
+        else:
+            noun = "componente" if len(installed) == 1 else "componentes"
+            adjective = "instalado" if len(installed) == 1 else "instalados"
+            console.info(
+                f"Conferindo {len(installed)} {noun} x86QW {adjective}"
+            )
         managed_file_count = 0
-        for identifier in installed:
+        for index, identifier in enumerate(installed, 1):
             managed_file_count += self.verify_component(
-                identifier, report_details=report_details,
+                identifier,
+                report_details=report_details,
+                progress=(index, len(installed)),
             )
         if lexists(self.target / "id1/gpl_maps.pk3"):
             raise InstallerError("shareware gpl_maps.pk3 must not be installed with registered PAKs")
+        console.info("Conferindo mapas e presets gerenciados")
         self.verify_component("maps", report_details=report_details)
         self.verify_component("presets", report_details=report_details)
+        console.info("Conferindo suporte aos jogos instalados")
         player = self.play_support_player()
         player.verify_local_play_support(player.available_local_games())
+        console.info("Conferindo a ordem de carregamento dos pacotes")
         self.verify_qw_package_order(report_details=report_details)
         if report_details:
             self.report_nquake_startup_state(installed)

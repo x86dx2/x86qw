@@ -205,9 +205,11 @@ class Console:
             confirmation_lines.append(component_label)
         return "\n".join(confirmation_lines)
 
-    def activity(self, current: int, total: int) -> None:
+    def activity(
+        self, current: int, total: int, message: str = "Processando pacote",
+    ) -> None:
         print(
-            f"{self.paint('[INFO]', '36')} [{current}/{total}] Processando pacote",
+            f"{self.paint('[INFO]', '36')} [{current}/{total}] {message}",
             flush=True,
         )
 
