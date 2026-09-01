@@ -4,8 +4,8 @@ Este projeto monta uma instalação autocontida em `quake-world`. O mesmo instal
 
 Requisito: Python 3.10 ou mais recente.
 
-O bundle da árvore-fonte é a baseline `1.0.14`, com o catálogo current apontando
-para esse instalador e 21 componentes registrados. A `1.0.13`, a `1.0.12`, a `1.0.11`, a `1.0.10`, a `1.0.9`, a `1.0.8`, a `1.0.7`, a `1.0.6`, a `1.0.5`, a `1.0.4`, a `1.0.3`, a `1.0.2`, a `1.0.1`, a `0.7.13` e a `1.0.0`
+O bundle da árvore-fonte é a baseline `1.0.15`, com o catálogo current apontando
+para esse instalador e 21 componentes registrados. A `1.0.14`, a `1.0.13`, a `1.0.12`, a `1.0.11`, a `1.0.10`, a `1.0.9`, a `1.0.8`, a `1.0.7`, a `1.0.6`, a `1.0.5`, a `1.0.4`, a `1.0.3`, a `1.0.2`, a `1.0.1`, a `0.7.13` e a `1.0.0`
 owner-only permanecem históricas e imutáveis. A audiência continua
 `owner-only`: disponibilidade do artefato e GitHub Latest não autorizam
 usuários externos nem transformam as plataformas preview em suporte. Essa

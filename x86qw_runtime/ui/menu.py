@@ -5,12 +5,15 @@ from __future__ import annotations
 
 import os
 import select
-import shutil
 import sys
 import textwrap
 import unicodedata
 from dataclasses import dataclass
 from typing import Callable, Iterable
+
+from x86qw_runtime.ui.console import (
+    ACCENT, ERROR, INFO, MUTED, SUCCESS, WARNING, terminal_size,
+)
 
 
 @dataclass(frozen=True)
@@ -40,13 +43,13 @@ _ESCAPE_SEQUENCE_LIMIT = 16
 _CLEAR = "\033[2J\033[H"
 _HIDE_CURSOR = "\033[?25l"
 _SHOW_CURSOR = "\033[?25h"
-_TITLE = "1"
-_ACCENT = "1;36"
-_MUTED = "2"
-_SEARCH = "1;33"
-_OK = "1;32"
-_WIZARD_PROMPT = "38;5;209"
-_WIZARD_DETAIL = "38;5;138"
+_TITLE = f"{ACCENT}m\033[1"
+_ACCENT = f"{SUCCESS}m\033[1"
+_MUTED = MUTED
+_SEARCH = f"{WARNING}m\033[1"
+_OK = f"{SUCCESS}m\033[1"
+_WIZARD_PROMPT = ACCENT
+_WIZARD_DETAIL = MUTED
 
 
 def configure(*, no_color: bool = False) -> None:
@@ -382,17 +385,17 @@ def _row_window(lengths: list[int], selected: int, budget: int) -> tuple[int, in
 
 
 def _chrome_width() -> int:
-    return max(20, min(shutil.get_terminal_size((88, 24)).columns, 110))
+    return max(20, min(terminal_size((88, 24)).columns, 110))
 
 
 def _row_budget() -> int:
-    lines = shutil.get_terminal_size((88, 24)).lines
+    lines = terminal_size((88, 24)).lines
     reserved = 8 if lines < 22 else 11
     return max(3, lines - reserved)
 
 
 def _compact_chrome() -> bool:
-    return shutil.get_terminal_size((88, 24)).lines < 22
+    return terminal_size((88, 24)).lines < 22
 
 
 def _begin_frame() -> None:
@@ -436,7 +439,7 @@ def _render_header(
         _emit_text(breadcrumb, width, _MUTED)
         if not _compact_chrome():
             print(_rule(width))
-    _emit_text(title, width, _TITLE if not _isatty(sys.stdout) or _NO_COLOR else _ACCENT)
+    _emit_text(title, width, _TITLE)
     if subtitle:
         _emit_text(subtitle, width)
     if searchable:
@@ -691,21 +694,21 @@ def _wizard_frame(
     allow_back: bool,
     numeric_buffer: str,
 ) -> str:
-    connector = _wizard_color("│", "36")
-    muted_connector = _wizard_color("│", "90")
+    connector = _wizard_color("│", INFO)
+    muted_connector = _wizard_color("│", MUTED)
     lines = [muted_connector]
     lines.append(
-        f"{_wizard_color('◆', '36')}  "
+        f"{_wizard_color('◆', SUCCESS)}  "
         f"{_wizard_color(title, _WIZARD_PROMPT)}"
     )
     if searching or query:
         field = query + ("█" if searching else "")
-        lines.append(f"{connector}  {_wizard_color('/', '90')} {field}")
+        lines.append(f"{connector}  {_wizard_color('/', MUTED)} {field}")
     if numeric_buffer:
         lines.append(
             f"{connector}  {_wizard_dim('Ir para o item:')} {numeric_buffer}█"
         )
-    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 8)
+    row_budget = max(3, terminal_size((88, 24)).lines - 8)
     selectable = _selectable_positions(options, matches)
     if selected not in selectable and selectable:
         selected = selectable[0]
@@ -718,7 +721,7 @@ def _wizard_frame(
             label = _wizard_dim(f"○ {option.label}")
             detail = option.disabled_reason or option.description
         elif position == selected:
-            label = f"{_wizard_color('●', '32')} {option.label}"
+            label = f"{_wizard_color('●', SUCCESS)} {option.label}"
             detail = option.description
         else:
             label = f"{_wizard_dim('○')} {_wizard_dim(option.label)}"
@@ -749,15 +752,15 @@ def _wizard_frame(
             footer += f" • {_wizard_dim('/:')} buscar"
         if allow_back:
             footer += f" • {_wizard_dim('←:')} voltar"
-    lines.extend((f"{connector}  {footer}", _wizard_color("└", "36")))
+    lines.extend((f"{connector}  {footer}", _wizard_color("└", INFO)))
     return "\n".join(lines) + "\n"
 
 
 def _wizard_collapse(title: str, option: MenuOption) -> str:
     return (
-        f"{_wizard_color('◇', '32')}  "
+        f"{_wizard_color('◇', SUCCESS)}  "
         f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
-        f"{_wizard_color('│', '90')}  {_wizard_dim(option.label)}\n"
+        f"{_wizard_color('│', MUTED)}  {_wizard_dim(option.label)}\n"
     )
 
 
@@ -775,21 +778,21 @@ def _wizard_multiple_frame(
     numeric_buffer: str,
     validation_message: str,
 ) -> str:
-    connector = _wizard_color("│", "36")
-    muted_connector = _wizard_color("│", "90")
+    connector = _wizard_color("│", INFO)
+    muted_connector = _wizard_color("│", MUTED)
     lines = [muted_connector]
     lines.append(
-        f"{_wizard_color('◆', '36')}  "
+        f"{_wizard_color('◆', SUCCESS)}  "
         f"{_wizard_color(title, _WIZARD_PROMPT)}"
     )
     if searching or query:
         field = query + ("█" if searching else "")
-        lines.append(f"{connector}  {_wizard_color('/', '90')} {field}")
+        lines.append(f"{connector}  {_wizard_color('/', MUTED)} {field}")
     if numeric_buffer:
         lines.append(
             f"{connector}  {_wizard_dim('Marcar item:')} {numeric_buffer}█"
         )
-    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 9)
+    row_budget = max(3, terminal_size((88, 24)).lines - 9)
     selectable = _selectable_positions(options, matches)
     if selected not in selectable and selectable:
         selected = selectable[0]
@@ -803,7 +806,7 @@ def _wizard_multiple_frame(
             label = _wizard_dim(f"{marker} {option.label}")
             detail = option.disabled_reason or option.description
         elif position == selected:
-            label = f"{_wizard_color(marker, '32')} {option.label}"
+            label = f"{_wizard_color(marker, SUCCESS)} {option.label}"
             detail = option.description
         else:
             label = f"{_wizard_dim(marker)} {_wizard_dim(option.label)}"
@@ -818,7 +821,7 @@ def _wizard_multiple_frame(
             f"{connector}  {_wizard_dim(f'{start + 1}–{end} de {len(matches)}')}"
         )
     if validation_message:
-        lines.append(f"{connector}  {_wizard_color(validation_message, '31')}")
+        lines.append(f"{connector}  {_wizard_color(validation_message, ERROR)}")
     if searching:
         footer = (
             f"{_wizard_dim('Digite')} para buscar • "
@@ -842,16 +845,16 @@ def _wizard_multiple_frame(
             footer += f" • {_wizard_dim('/:')} buscar"
         if allow_back:
             footer += f" • {_wizard_dim('←:')} voltar"
-    lines.extend((f"{connector}  {footer}", _wizard_color("└", "36")))
+    lines.extend((f"{connector}  {footer}", _wizard_color("└", INFO)))
     return "\n".join(lines) + "\n"
 
 
 def _wizard_multiple_collapse(title: str, count: int) -> str:
     noun = "componente selecionado" if count == 1 else "componentes selecionados"
     return (
-        f"{_wizard_color('◇', '32')}  "
+        f"{_wizard_color('◇', SUCCESS)}  "
         f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
-        f"{_wizard_color('│', '90')}  {_wizard_dim(f'{count} {noun}')}\n"
+        f"{_wizard_color('│', MUTED)}  {_wizard_dim(f'{count} {noun}')}\n"
     )
 
 
@@ -960,15 +963,15 @@ def _select_wizard(
 
 
 def _wizard_text_frame(title: str, value: str, description: str) -> str:
-    connector = _wizard_color("│", "36")
+    connector = _wizard_color("│", INFO)
     lines = [
-        _wizard_color("│", "90"),
-        f"{_wizard_color('◆', '36')}  {_wizard_color(title, _WIZARD_PROMPT)}",
+        _wizard_color("│", MUTED),
+        f"{_wizard_color('◆', SUCCESS)}  {_wizard_color(title, _WIZARD_PROMPT)}",
         f"{connector}  {value}█",
     ]
     if description:
         lines.append(f"{connector}  {_wizard_dim(description)}")
-    lines.append(_wizard_color("└", "36"))
+    lines.append(_wizard_color("└", INFO))
     return "\n".join(lines) + "\n"
 
 
@@ -998,9 +1001,9 @@ def _prompt_text_wizard(
                 answer = value or default
                 sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
                 sys.stdout.write(
-                    f"{_wizard_color('◇', '32')}  "
+                    f"{_wizard_color('◇', SUCCESS)}  "
                     f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
-                    f"{_wizard_color('│', '90')}  {_wizard_dim(answer)}\n"
+                    f"{_wizard_color('│', MUTED)}  {_wizard_dim(answer)}\n"
                 )
                 sys.stdout.flush()
                 return answer

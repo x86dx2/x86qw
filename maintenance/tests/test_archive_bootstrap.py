@@ -6,8 +6,10 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -17,7 +19,9 @@ from pathlib import Path
 from unittest import mock
 
 if os.name != "nt":
+    import fcntl
     import pty
+    import termios
 
 from maintenance.tools import build_installer_bundle
 from x86qw_runtime.io import atomic as atomic_io
@@ -668,6 +672,68 @@ class ArchiveBootstrapTests(unittest.TestCase):
             output,
         )
 
+    @unittest.skipIf(os.name == "nt", "geometria PTY POSIX requer ioctl")
+    @unittest.skipUnless(
+        shutil.which("pwsh") or shutil.which("powershell"),
+        "PowerShell indisponivel neste runner",
+    )
+    def test_powershell_banner_uses_live_terminal_width_instead_of_stale_columns(self):
+        version = "9.9.2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, runner = self._prepare_powershell_bootstrap(root, version, bundle)
+            returncode, output = self._run_with_terminal(
+                [
+                    self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(runner), str(bootstrap), "--help",
+                ],
+                {
+                    **os.environ,
+                    "COLUMNS": "80",
+                    "TERM": "xterm-256color",
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                columns=132,
+            )
+
+        plain = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", output)
+        plain = plain.replace("\x1b=", "").replace("\x1b>", "").replace("\r", "")
+        first_logo_line = next(line for line in plain.splitlines() if "⣀⣤⣶⣶" in line)
+        expected_padding = ((132 - 78) // 2) + 18
+        self.assertEqual(0, returncode, output)
+        self.assertEqual(expected_padding, len(first_logo_line) - len(first_logo_line.lstrip()))
+
+    @unittest.skipIf(os.name == "nt", "geometria PTY POSIX requer ioctl")
+    def test_unix_banner_uses_live_terminal_width_instead_of_stale_columns(self):
+        version = "9.9.2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, binaries = self._prepare_unix_bootstrap(root, version, bundle)
+            returncode, output = self._run_with_terminal(
+                [str(bootstrap), "--help"],
+                {
+                    **os.environ,
+                    "PATH": os.fspath(binaries),
+                    "COLUMNS": "80",
+                    "TERM": "xterm-256color",
+                    "TMPDIR": os.fspath(root),
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                columns=132,
+            )
+
+        plain = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", output).replace("\r", "")
+        first_logo_line = next(line for line in plain.splitlines() if "⢀⣤⣶⣶" in line)
+        expected_padding = ((132 - 78) // 2) + 18
+        self.assertEqual(0, returncode, output)
+        self.assertEqual(expected_padding, len(first_logo_line) - len(first_logo_line.lstrip()))
+
     @unittest.skipUnless(
         shutil.which("pwsh") or shutil.which("powershell"),
         "PowerShell indisponivel neste runner",
@@ -818,7 +884,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
         binaries = root / "bin"
         binaries.mkdir()
         (binaries / "python3").symlink_to(sys.executable)
-        for command in ("mktemp", "rm"):
+        for command in ("mktemp", "rm", "stty"):
             executable = shutil.which(command)
             self.assertIsNotNone(executable, command)
             (binaries / command).symlink_to(executable)
@@ -838,8 +904,21 @@ class ArchiveBootstrapTests(unittest.TestCase):
         return executable
 
     @staticmethod
-    def _run_with_terminal(arguments: list[str], environment: dict[str, str]) -> tuple[int, str]:
+    def _run_with_terminal(
+        arguments: list[str], environment: dict[str, str], *, columns: int | None = None,
+    ) -> tuple[int, str]:
         master, slave = pty.openpty()
+        if columns is not None:
+            fcntl.ioctl(
+                slave,
+                termios.TIOCSWINSZ,
+                struct.pack("HHHH", 24, columns, 0, 0),
+            )
+
+        def attach_terminal() -> None:
+            os.setsid()
+            fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
         try:
             completed = subprocess.Popen(
                 arguments,
@@ -848,6 +927,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 stdout=slave,
                 stderr=slave,
                 close_fds=True,
+                preexec_fn=attach_terminal,
             )
         finally:
             os.close(slave)

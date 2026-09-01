@@ -68,6 +68,17 @@ def terminal_label(value: str) -> str:
     return "".join(character if character.isprintable() else "?" for character in value)[:96]
 
 
+def terminal_size(fallback: tuple[int, int] = (100, 24)) -> os.terminal_size:
+    """Prefer live TTY geometry over inherited COLUMNS/LINES values."""
+
+    if sys.stdout.isatty():
+        try:
+            return os.get_terminal_size(sys.stdout.fileno())
+        except (AttributeError, OSError, ValueError):
+            pass
+    return shutil.get_terminal_size(fallback)
+
+
 def _table_lines(
     headers: tuple[str, ...], rows: list[tuple[str, ...]],
 ) -> list[str]:
@@ -138,7 +149,7 @@ class Console:
         if os.environ.get("X86QW_BOOTSTRAP_UI") == "1":
             return
         version = self._version() if self._version is not None else ""
-        terminal_width = shutil.get_terminal_size(
+        terminal_width = terminal_size(
             (INSTALLER_LOGO_WIDTH, 24),
         ).columns
         outer_padding = " " * max(0, (terminal_width - INSTALLER_LOGO_WIDTH) // 2)
@@ -308,7 +319,7 @@ class Console:
         name_width = max(map(len, names))
         installed_width = max(map(len, installed))
         available_width = max(map(len, available))
-        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
+        terminal_width = max(40, min(terminal_size((100, 24)).columns, 120))
         for row in display_rows:
             size = f" ({format_bytes_compact(row.size)})" if row.size is not None else ""
             line = (
@@ -373,7 +384,7 @@ class Console:
         amount = format_bytes_compact(size)
         check = self.paint("✓", SUCCESS)
         line = f"{check} {label:<48} {status:>10}  {amount:>9}/{amount}"
-        terminal_width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 120))
+        terminal_width = max(40, min(terminal_size((100, 24)).columns, 120))
         if len(line) <= terminal_width:
             print(line, flush=True)
         else:
@@ -408,4 +419,5 @@ class Console:
 
 __all__ = (
     "Console", "UpdatePlanRow", "format_bytes", "format_bytes_compact", "terminal_label",
+    "terminal_size",
 )

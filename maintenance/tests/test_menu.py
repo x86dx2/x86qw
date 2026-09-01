@@ -114,8 +114,15 @@ class MenuTests(unittest.TestCase):
                 )
         self.assertEqual("duel", selected)
         rendered = output.getvalue()
-        self.assertIn("\033[1;36m▸ 1) Duel             · 2 jogadores \033[0m", rendered)
-        self.assertIn("\033[2m  < competitivo\033[0m", rendered)
+        self.assertIn(
+            "\033[38;2;255;77;77m\033[1mModo\033[0m",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;0;229;204m\033[1m▸ 1) Duel             · 2 jogadores \033[0m",
+            rendered,
+        )
+        self.assertIn("\033[38;2;90;100;128m  < competitivo\033[0m", rendered)
         self.assertIn(" · 1+ jogadores", rendered)
         self.assertNotIn("\033[0m · 2 jogadores", rendered)
         self.assertNotIn("\033[2m ·", rendered)
@@ -145,17 +152,19 @@ class MenuTests(unittest.TestCase):
         self.assertEqual("recommended", selected)
         rendered = output.getvalue()
         self.assertIn(
-            "\033[36m◆\033[39m  \033[38;5;209mQual conteúdo deseja instalar?\033[39m",
+            "\033[38;2;0;229;204m◆\033[39m  "
+            "\033[38;2;255;77;77mQual conteúdo deseja instalar?\033[39m",
             rendered,
         )
-        self.assertIn("\033[32m●\033[39m Recomendado", rendered)
+        self.assertIn("\033[38;2;0;229;204m●\033[39m Recomendado", rendered)
         self.assertIn("\033[2m○\033[22m \033[2mAvançado\033[22m", rendered)
         self.assertIn(
             "\033[2m↑/↓\033[22m para navegar • \033[2mEnter:\033[22m confirmar",
             rendered,
         )
         self.assertIn(
-            "\033[32m◇\033[39m  \033[38;5;209mQual conteúdo deseja instalar?\033[39m",
+            "\033[38;2;0;229;204m◇\033[39m  "
+            "\033[38;2;255;77;77mQual conteúdo deseja instalar?\033[39m",
             rendered,
         )
         self.assertIn("\033[2mRecomendado\033[22m", rendered)
@@ -194,12 +203,14 @@ class MenuTests(unittest.TestCase):
         self.assertEqual("/home/jogador/Games/x86qw", answer)
         rendered = output.getvalue()
         self.assertIn(
-            "\033[36m◆\033[39m  \033[38;5;209mOnde deseja instalar o x86QW?\033[39m",
+            "\033[38;2;0;229;204m◆\033[39m  "
+            "\033[38;2;255;77;77mOnde deseja instalar o x86QW?\033[39m",
             rendered,
         )
         self.assertIn("/home/jogador/Games/x86qw█", rendered)
         self.assertIn(
-            "\033[32m◇\033[39m  \033[38;5;209mOnde deseja instalar o x86QW?\033[39m",
+            "\033[38;2;0;229;204m◇\033[39m  "
+            "\033[38;2;255;77;77mOnde deseja instalar o x86QW?\033[39m",
             rendered,
         )
         self.assertIn("\033[2m/home/jogador/Games/x86qw\033[22m", rendered)
@@ -391,7 +402,7 @@ class MenuTests(unittest.TestCase):
     def test_narrow_terminal_wraps_rows_and_footer_within_width(self):
         output = io.StringIO()
         with mock.patch.object(
-            menu.shutil, "get_terminal_size", return_value=os.terminal_size((32, 24)),
+            menu, "terminal_size", return_value=os.terminal_size((32, 24)),
         ), contextlib.redirect_stdout(output):
             menu.select_one(
                 "Modo", self.options, interactive=True, key_reader=lambda: "enter",
@@ -411,7 +422,7 @@ class MenuTests(unittest.TestCase):
             "--bot-skill 4 --map dm6 --ruleset x86qw"
         )
         with mock.patch.object(
-            menu.shutil, "get_terminal_size", return_value=os.terminal_size((32, 24)),
+            menu, "terminal_size", return_value=os.terminal_size((32, 24)),
         ), contextlib.redirect_stdout(output):
             menu.select_one(
                 "Iniciar esta partida agora mesmo?",
@@ -465,7 +476,7 @@ class MenuTests(unittest.TestCase):
         )
         output = io.StringIO()
         with mock.patch.object(
-            menu.shutil, "get_terminal_size", return_value=os.terminal_size((32, 18)),
+            menu, "terminal_size", return_value=os.terminal_size((32, 18)),
         ), contextlib.redirect_stdout(output):
             menu.select_one(
                 "Opções", options, interactive=True,
@@ -516,10 +527,10 @@ class MenuTests(unittest.TestCase):
 
         self.assertEqual(("duel", "race"), selected)
         rendered = output.getvalue()
-        self.assertIn("\033[36m◆\033[39m", rendered)
+        self.assertIn("\033[38;2;0;229;204m◆\033[39m", rendered)
         self.assertIn("[✓]", rendered)
         self.assertIn("Duel", rendered)
-        self.assertIn("\033[32m◇\033[39m", rendered)
+        self.assertIn("\033[38;2;0;229;204m◇\033[39m", rendered)
         self.assertIn("2 componentes selecionados", rendered)
 
     def test_installer_wizard_multiple_selection_explains_an_empty_confirmation(self):

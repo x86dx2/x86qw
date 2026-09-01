@@ -2,10 +2,10 @@
 set -euo pipefail
 
 x86qw_install_main() {
-INSTALLER_VERSION="1.0.14"
+INSTALLER_VERSION="1.0.15"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
-INSTALLER_SHA256="a9c87e27ab14ab64c57a22046e01947e1956225b52075b1e637f2f5f1bf7d7ee"
-INSTALLER_SIZE="645118"
+INSTALLER_SHA256="96da6125cece00d6cc8189258b18595264a537ee1db3645738b01ba22604c39b"
+INSTALLER_SIZE="645293"
 DOWNLOAD_BUDGET_SECONDS="180"
 DOWNLOAD_TRANSFER_SECONDS="120"
 DOWNLOAD_ATTEMPTS="3"
@@ -26,9 +26,10 @@ ui_section() { printf '\n%b%b%s%b\n' "$ACCENT" "$BOLD" "$1" "$NC"; }
 ui_key_value() { printf '%b%s:%b %s\n' "$MUTED" "$1" "$NC" "$2"; }
 
 LOGO_WIDTH=78
-terminal_width=${COLUMNS:-0}
+terminal_size=$(stty size </dev/tty 2>/dev/null || true)
+terminal_width=${terminal_size##* }
 if [[ ! "$terminal_width" =~ ^[0-9]+$ ]] || (( terminal_width <= 0 )); then
-  terminal_width=$(tput cols 2>/dev/null || printf '%s' "$LOGO_WIDTH")
+  terminal_width=${COLUMNS:-$LOGO_WIDTH}
 fi
 outer_width=$(( (terminal_width - LOGO_WIDTH) / 2 ))
 (( outer_width < 0 )) && outer_width=0
