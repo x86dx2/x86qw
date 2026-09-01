@@ -102,10 +102,31 @@ def verify_monotonic_promotion(
             "timestamp TUF em produção não corresponde byte a byte ao handoff da mesma versão"
         )
     if public_version > source_version:
-        raise ReleaseSourceError(
-            "handoff TUF faria rollback da produção "
-            f"(produção v{public_version}, handoff v{source_version})"
-        )
+        if public_version != renewed_version:
+            raise ReleaseSourceError(
+                "handoff TUF faria rollback da produção "
+                f"(produção v{public_version}, handoff v{source_version}, "
+                f"renovação v{renewed_version})"
+            )
+        if _signed_identity(public) != _signed_identity(renewed):
+            raise ReleaseSourceError(
+                "equivocação TUF em produção: timestamp da versão "
+                f"{public_version} diverge da renovação"
+            )
+        if public_bytes != _renewed_bytes:
+            raise ReleaseSourceError(
+                "timestamp TUF em produção não corresponde byte a byte à "
+                "renovação da mesma versão"
+            )
+        return {
+            "format": 1,
+            "project": "x86qw",
+            "status": "safe-converged-redeployment",
+            "public_timestamp_version": public_version,
+            "source_timestamp_version": source_version,
+            "renewed_timestamp_version": renewed_version,
+            "source_timestamp_sha256": binding["timestamp_sha256"],
+        }
     if renewed_version != source_version + 1:
         raise ReleaseSourceError(
             "renovação TUF precisa ser exatamente N+1 "
