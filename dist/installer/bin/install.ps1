@@ -2,10 +2,10 @@
 param([object[]]$BootstrapArguments)
 
 $ErrorActionPreference = "Stop"
-$InstallerVersion = "1.0.12"
+$InstallerVersion = "1.0.13"
 $InstallerFile = "x86qw-installer-$InstallerVersion.zip"
-$InstallerSha256 = "9e73aa9ef0ad84ef079aee33d326c037ffe521ca9002d189ee6932d7023c2b8c"
-$InstallerSize = "622866"
+$InstallerSha256 = "304e5b79efe3b1ae78d8dce6710b4cb0cea5c0b95f4bf975170fc8208e47e559"
+$InstallerSize = "645089"
 $InstallerConnectTimeoutSeconds = 15
 $InstallerTransferTimeoutSeconds = 120
 $InstallerRetryMaxSeconds = 180
@@ -38,6 +38,17 @@ $Method = "M${AcuteE}todo"
 $VersionLabel = "Vers${TildeA}o"
 $ExtractedLabel = "extra${AcuteI}do"
 $Configuration = "configura${Ccedilla}${TildeA}o"
+$LogoWidth = 78
+$ParsedColumns = 0
+if ([int]::TryParse($env:COLUMNS, [ref]$ParsedColumns) -and $ParsedColumns -gt 0) {
+  $TerminalWidth = $ParsedColumns
+} elseif (-not [Console]::IsOutputRedirected) {
+  $TerminalWidth = [Console]::WindowWidth
+} else {
+  $TerminalWidth = $LogoWidth
+}
+$OuterWidth = [Math]::Max(0, [Math]::Floor(($TerminalWidth - $LogoWidth) / 2))
+$BrandOuterPadding = " " * $OuterWidth
 
 function Write-X86QWInfo([string]$Message) {
   Write-Host "${Muted}${MiddleDot}${Reset} $Message"
@@ -52,12 +63,19 @@ function Write-X86QWSection([string]$Title) {
 function Write-X86QWKeyValue([string]$Key, [string]$Value) {
   Write-Host "${Muted}${Key}: ${Value}${Reset}"
 }
+function Format-X86QWBrandTitle([string]$Text) {
+  $InnerWidth = [Math]::Max(0, [Math]::Floor(($LogoWidth - $Text.Length) / 2))
+  return $BrandOuterPadding + (" " * $InnerWidth) + $Text
+}
 
+$LogoBase64 = "ICAgICAgICAgICAgICAgICAg4qKA4qOk4qO24qO24qO/4qO/4qO24qO24qOk4qGAICAgIOKjgOKjpOKjtuKjtuKjv+Kjt+KjtuKjtuKhhCAgICDio6Dio6Tio7bio7bio7/io7/io7bio7bio6TioYAgICDio7bio7bio7bio7bioYQgIOKioOKjtuKjtuKjtuKjtiAgIOKjsOKjtuKjtuKjtuKjtgogICAgICAgICAgICAgICAgIOKjsOKjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+KjtyAg4qKg4qO+4qO/4qO/4qO/4qO/4qO/4qO/4qO/4qO/4qGHICDio6Dio77io7/io7/io7/io7/io7/io7/io7/io7/io7/io7/io4YgIOKjv+Kjv+Kjv+Kjv+KhhyDiooDio7/io7/io7/io7/ioYcg4qKg4qO/4qO/4qO/4qO/4qCPCiAgICDiorDio7/io7/io7/io7fioYAg4qOw4qO+4qO/4qO/4qO/4qCC4qO/4qO/4qO/4qO/4qGPIOKiuOKjv+Kjv+Kjv+KjvyDio7Dio7/io7/io7/iob/ioovio4Dio4Ag4qCI4qCJ4qCBIOKjvOKjv+Kjv+Kjv+Kjv+Kgn+KgiSDioIniorvio7/io7/io7/io7/ioYYg4qO/4qO/4qO/4qO/4qGHIOKjvuKjv+Kjv+Kjv+Kjv+Kjv+Khh+KigOKjvuKjv+Kjv+Kjv+KhnwogICAgIOKiu+Kjv+Kjv+Kjv+Kjt+KjvuKjv+Kjv+Kjv+Kgn+KggSDioLnio7/io7/io7/io7/io77io7/io7/io7/iob/ioIPiooDio7/io7/io7/io7/io7/io7/io7/io7/io7bioYAg4qKw4qO/4qO/4qO/4qO/4qCHICAgIOKiuOKjv+Kjv+Kjv+Kjv+KhhyDio7/io7/io7/io7/ioYfio7jio7/io7/io7/io7/io7/io7/ioYfio7zio7/io7/io7/iob8KICAgICAg4qK74qO/4qO/4qO/4qO/4qO/4qG/4qCDICDio6Dio77io7/io7/io7/io7/io7/io7/io7/io7/io6Yg4qK44qO/4qO/4qO/4qO/4qG/4qCf4qK/4qO/4qO/4qO/4qO/IOKjv+Kjv+Kjv+Kjv+KjvyAgICAg4qK44qO/4qO/4qO/4qO/4qGHIOKjv+Kjv+Kjv+Kjv+Kjt+Kjv+Kjv+Kjv+Kgh+Kjv+Kjv+Kjv+Kjt+Kjv+Kjv+Kjv+Kjv+KggQogICAgIOKigOKjtOKjv+Kjv+Kjv+Kjv+Kjv+KhhCAg4qKw4qO/4qO/4qO/4qO/4qCBIOKiiOKjv+Kjv+Kjv+KjvyDiorjio7/io7/io7/io7/ioIEg4qK44qO/4qO/4qO/4qO/IOKjv+Kjv+Kjv+Kjv+KjvyAgICDioqDio7/io7/io7/io7/iob8gIOKiueKjv+Kjv+Kjv+Kjv+Kjv+Kjv+KhjyDio7/io7/io7/io7/io7/io7/io7/ioIcKICAgIOKjsOKjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+KhhCDiorjio7/io7/io7/io7/io6Tio6Tio77io7/io7/io7/iob8g4qC44qO/4qO/4qO/4qO/4qOE4qOk4qO+4qO/4qO/4qO/4qCPIOKguOKjv+Kjv+Kjv+Kjv+Kjt+KjpOKjpOKjtuKjv+Kjv+Kjv+Kjv+Khn+KggSAg4qK44qO/4qO/4qO/4qO/4qO/4qG/ICDio7/io7/io7/io7/io7/io7/ioY8KICDioqDio77io7/io7/io7/ioJ/ioIHioJjio7/io7/io7/io7/ioYTioIjioLvio7/io7/io7/io7/io7/io7/io7/io7/ioJ/ioIEgIOKgmeKiv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Khv+KgiyAgIOKgmOKiv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kjv+Kgn+KgiyAgICDiorjio7/io7/io7/io7/io7/ioIEgIOKiv+Kjv+Kjv+Kjv+Kjv+KhnwogIOKgiOKgieKgieKgieKgiSAgIOKgieKgieKgieKgieKggSAg4qCI4qCJ4qCb4qCb4qCb4qCJ4qCJICAgICAgIOKgieKgmeKgm+Kgm+KgieKggSAgICAgICDioIjioInioJvioJvio7/io7/io7/io7/io4QgICAgIOKgiOKgieKgieKgieKgieKggSAgIOKgiOKgieKgieKgieKgieKggQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICDioJjioL/ioL/ioL/ioL/ioIY="
+$Logo = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($LogoBase64))
+foreach ($Line in ($Logo -split "`r?`n")) {
+  Write-Host "${Accent}${Bold}${BrandOuterPadding}${Line}${Reset}"
+}
+Write-Host ""
+Write-Host "${Muted}$(Format-X86QWBrandTitle "qw.x86.com.br | instalador $InstallerVersion")${Reset}"
 Write-Host "${Info}Preparando interface do instalador...${Reset}"
-Write-Host "${Accent}${Bold}"
-Write-Host "  [X] Instalador x86QW"
-Write-Host "${Reset}${Info}  Cinco jogos. Um menu. Uma partida.${Reset}"
-Write-Host "${Muted}  qw.x86.com.br | instalador $InstallerVersion${Reset}"
 Write-Host ""
 Write-X86QWSuccess "Sistema detectado: windows"
 Write-X86QWSection "Plano de $Installation"

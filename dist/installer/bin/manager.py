@@ -251,6 +251,8 @@ DEVELOPMENT_RUNTIME_CATALOG = Path("maintenance/inventory/runtimes.json")
 RUNTIME_CAPABILITY_CATALOG = "_x86qw/capabilities.json"
 RUNTIME_RUNTIME_CATALOG = "_x86qw/runtimes.json"
 CLI_ARCHIVE_NAME = "x86qw.pyz"
+DESKTOP_ICON_MEMBER = "_x86qw/assets/x86qw.ico"
+DEVELOPMENT_DESKTOP_ICON = Path("dist/installer/assets/x86qw.ico")
 PUBLIC_CATALOG = Path("site/public/api/v1/catalog.json")
 DEVELOPMENT_ID1_DIR = Path("dist/game-data/id1")
 CORE_ID1_PACKAGE = "x86qw-core-id1"
@@ -4521,6 +4523,7 @@ class Installer:
                     breadcrumb="x86QW › Instalação › Perfil personalizado",
                     subtitle="Marque com Espaço e pressione Enter para concluir.",
                     searchable=True,
+                    presentation="wizard",
                 )
             except (EOFError, navigation.MenuCancelled, ValueError) as error:
                 raise InstallerError("Nenhum componente x86QW foi selecionado.") from error
@@ -4992,11 +4995,19 @@ class Installer:
             if action == "install"
             else "ou use --yes para confirmar o plano automaticamente."
         )
+        installation_confirmation = action == "install"
         if not navigation.supports_navigation():
             while True:
                 try:
+                    default_accept = installation_confirmation
+                    prompt = "[Y/n]" if default_accept else "[y/n]"
+                    question = (
+                        "Deseja iniciar a instalação?"
+                        if installation_confirmation
+                        else f"Deseja executar o plano de {action}?"
+                    )
                     answer = input(
-                        f"\n==> Deseja executar o plano de {action}? [y/n] "
+                        f"\n==> {question} {prompt} "
                     ).strip().lower()
                 except EOFError as error:
                     raise InstallerError(
@@ -5005,18 +5016,32 @@ class Installer:
                     ) from error
                 if answer in ("y", "yes", "s", "sim"):
                     return True
+                if not answer and default_accept:
+                    return True
                 if answer in ("n", "no", "nao", "não", ""):
                     console.info("Operação cancelada; nenhum arquivo do jogo foi alterado.")
                     return False
                 console.warning("Resposta inválida. Digite y para prosseguir ou n para cancelar.")
         try:
             accepted = navigation.confirm(
-                "Deseja executar este plano?",
-                breadcrumb=f"x86QW › {action.capitalize()} › Confirmação",
+                (
+                    "Deseja iniciar esta instalação?"
+                    if installation_confirmation
+                    else "Deseja executar este plano?"
+                ),
+                breadcrumb=(
+                    "x86QW › Instalação › Confirmação"
+                    if installation_confirmation
+                    else f"x86QW › {action.capitalize()} › Confirmação"
+                ),
                 subtitle=summary,
-                description="aplicar as alterações apresentadas",
-                default=False,
-                presentation="wizard" if action == "install" else "menu",
+                description=(
+                    "instalar os itens apresentados"
+                    if installation_confirmation
+                    else "aplicar as alterações apresentadas"
+                ),
+                default=installation_confirmation,
+                presentation="wizard" if installation_confirmation else "menu",
             )
         except navigation.MenuCancelled as error:
             raise InstallerError(
@@ -7570,6 +7595,7 @@ class Installer:
             metadata_result = self.remove_empty_metadata_transaction()
             if metadata_result is not None:
                 mutation_results.append(metadata_result)
+        self.remove_shell_integration()
         if cli_present:
             console.success("CLI permanente x86QW removida.")
         console.success(f"Componentes gerenciados removidos de {self.target}.")
@@ -7609,6 +7635,7 @@ class Installer:
             if owned_stage and cleanup_stage:
                 self.cleanup_stage()
                 self.stage = None
+        self.remove_shell_integration()
         if selected:
             console.success("CLI permanente x86QW removida.")
 
@@ -7683,6 +7710,7 @@ class Installer:
                     "A remoção total falhou; instalação e caches anteriores foram restaurados."
                 ) from error
             finalize_mutation(result)
+        self.remove_shell_integration()
         if preserve_operation_lock and lexists(self.target):
             console.info(
                 "Conteúdo da instalação removido; o diretório do lock será "
@@ -7750,15 +7778,44 @@ class Installer:
             "Cliente", f"ezQuake {self.spec.label} {self.channel}",
             "não instalado", self.selected_version, "Instalar",
             self.app_expected_size or None,
+            (
+                ("Cliente", "ezQuake"),
+                ("Plataforma", self.spec.label),
+                ("Arquitetura", self.spec.architecture),
+                ("Canal", self.channel),
+                ("Caminho", str(self.target / self.spec.runtime(self.channel))),
+            ),
         )]
         for identifier in selected or ():
             package = self.component_package_record(identifier)
+            origin = (
+                "Escolhido"
+                if self.selected_component_profile == "custom"
+                and identifier in self.requested_components
+                else "Dependência"
+                if self.selected_component_profile == "custom"
+                else ""
+            )
             plan_rows.append(UpdatePlanRow(
                 "Componente", str(self.components[identifier]["label"]),
                 "não instalado", str(package["version"]), "Instalar",
                 package_size(package),
+                (("Pacote", identifier),)
+                + ((("Origem", origin),) if origin else ()),
             ))
-        plan_summary = console.update_plan(plan_rows, "install")
+        profile_label = {
+            "complete": "Completo",
+            "recommended": "Recomendado",
+            "essential": "Essencial",
+            "custom": "Personalizado",
+            "none": "Somente cliente",
+        }.get(self.selected_component_profile, self.selected_component_profile)
+        plan_summary = console.update_plan(
+            plan_rows,
+            "install",
+            destination=str(self.target),
+            profile=profile_label,
+        )
         if not self.confirm_update_plan(
             "install", assume_yes=self._non_interactive_install,
             summary=plan_summary,
@@ -8374,9 +8431,16 @@ class Installer:
             return
         identity = self.installer_bundle_identity()
         cli_version = str(identity["version"])
-        launchers = (
-            ("x86qw.sh", 0o755),
-            ("x86qw.cmd", 0o644),
+        launcher_modes = {
+            "x86qw.sh": 0o755,
+            "x86qw.cmd": 0o644,
+        }
+        launcher_name = Path(public_launcher_name()).name
+        if launcher_name not in launcher_modes:
+            raise InstallerError(f"Launcher público desconhecido: {launcher_name}")
+        launchers = ((launcher_name, launcher_modes[launcher_name]),)
+        obsolete_launchers = tuple(
+            name for name in launcher_modes if name != launcher_name
         )
         rendered_launchers: dict[str, tuple[str, int]] = {}
         for name, mode in launchers:
@@ -8401,13 +8465,25 @@ class Installer:
         if embedded != identity:
             raise InstallerError("A identidade do aplicativo x86QW diverge do recibo do bundle.")
         application_digest = file_hash(application)
+        if ZIPAPP_PATH is not None:
+            icon_payload = read_archive_member(ZIPAPP_PATH, DESKTOP_ICON_MEMBER)
+        else:
+            icon_source = INSTALLER_ROOT / DEVELOPMENT_DESKTOP_ICON
+            try:
+                icon_payload = read_bounded_regular_file(
+                    icon_source, maximum_size=4 * 1024 * 1024,
+                )
+            except OSError as error:
+                raise InstallerError(f"Ícone do x86QW ausente ou inválido: {icon_source}") from error
+        if len(icon_payload) < 6 or icon_payload[:4] != b"\x00\x00\x01\x00":
+            raise InstallerError("Ícone do x86QW ausente ou inválido.")
 
         metadata_root = self.target / METADATA_DIR
         cli_root = metadata_root / "cli"
         if lexists(cli_root) and (not cli_root.is_dir() or cli_root.is_symlink()):
             raise InstallerError(f"Diretório da CLI instalada inválido: {cli_root}")
         self.cli_receipt_path()
-        for name, _ in launchers:
+        for name in launcher_modes:
             destination = self.target / name
             if lexists(destination) and (
                 not destination.is_file() or destination.is_symlink()
@@ -8427,6 +8503,9 @@ class Installer:
             if file_hash(prepared_application) != application_digest:
                 raise InstallerError("A cópia preparada da CLI diverge do bundle validado.")
             self.write_cli_receipt_record(prepared_cli / "receipt", identity)
+            prepared_icon = prepared_cli / "x86qw.ico"
+            prepared_icon.write_bytes(icon_payload)
+            host_adapter.apply_mode(prepared_icon, 0o644)
 
             prepared_launchers: dict[str, Path] = {}
             launcher_stage = self.stage / "launchers"
@@ -8459,6 +8538,21 @@ class Installer:
                     rollback=self._rollback_runtime_payload,
                 ),
             ]
+            for name in obsolete_launchers:
+                destination = self.target / name
+                steps.append(MutationStep(
+                    key=f"obsolete-launcher:{name}",
+                    description=f"Remover o launcher incompatível {name}",
+                    observe=lambda destination=destination: (
+                        self._mutation_path_observation(destination)
+                    ),
+                    apply=lambda destination=destination, name=name: (
+                        self._apply_managed_path_removal(
+                            destination, label=f"launcher incompatível {name}",
+                        )
+                    ),
+                    rollback=self._rollback_runtime_payload,
+                ))
             for name, _ in launchers:
                 prepared = prepared_launchers[name]
                 destination = self.target / name
@@ -8473,6 +8567,33 @@ class Installer:
                         self._apply_runtime_payload(prepared, destination)
                     ),
                     rollback=self._rollback_runtime_payload,
+                ))
+            launcher_destination = self.target / launcher_name
+            icon_destination = cli_root / "x86qw.ico"
+            if launcher_name == "x86qw.cmd":
+                steps.append(MutationStep(
+                    key="windows-shortcuts",
+                    description="Criar atalhos do x86QW no Menu Iniciar e na Área de Trabalho",
+                    observe=lambda: tuple(
+                        self._mutation_path_observation(path)
+                        for path in host_adapter.windows_shortcut_paths()
+                    ),
+                    apply=lambda: host_adapter.install_windows_shortcuts(
+                        launcher_destination, icon_destination,
+                    ),
+                    rollback=host_adapter.rollback_windows_shortcuts,
+                ))
+            else:
+                steps.append(MutationStep(
+                    key="user-command",
+                    description="Disponibilizar o comando x86qw no PATH do usuário",
+                    observe=lambda: self._mutation_path_observation(
+                        host_adapter.user_command_path(),
+                    ),
+                    apply=lambda: host_adapter.install_user_command_link(
+                        launcher_destination,
+                    ),
+                    rollback=host_adapter.rollback_user_command_link,
                 ))
             plan = MutationPlan(
                 identifier=f"cli:{cli_version}",
@@ -8496,9 +8617,16 @@ class Installer:
                     raise InstallerError("O recibo instalado da CLI diverge do bundle publicado.")
                 if file_hash(cli_root / CLI_ARCHIVE_NAME) != application_digest:
                     raise InstallerError("O aplicativo instalado da CLI diverge do bundle publicado.")
+                if (cli_root / "x86qw.ico").read_bytes() != icon_payload:
+                    raise InstallerError("O ícone instalado diverge do bundle publicado.")
                 for name, (rendered, _) in rendered_launchers.items():
                     if (self.target / name).read_text(encoding="utf-8") != rendered:
                         raise InstallerError(f"O launcher instalado diverge do modelo: {name}")
+                for name in obsolete_launchers:
+                    if lexists(self.target / name):
+                        raise InstallerError(
+                            f"O launcher incompatível permaneceu instalado: {name}"
+                        )
             except BaseException as error:
                 try:
                     rollback_mutation(result)
@@ -8511,9 +8639,33 @@ class Installer:
         if mutation_results is not None:
             mutation_results.append(result)
 
-        shell_launcher = self.target / "x86qw.sh"
-        console.success(f"CLI permanente instalada: {shell_launcher} (versão {cli_version})")
+        launcher = self.target / launcher_name
+        console.success(f"CLI permanente instalada: {launcher} (versão {cli_version})")
+        if launcher_name == "x86qw.cmd":
+            console.success("Atalhos criados no Menu Iniciar e na Área de Trabalho.")
+        else:
+            command = host_adapter.user_command_path()
+            console.success(f"Comando disponível: {command}")
+            path_entries = {
+                Path(entry).expanduser().resolve(strict=False)
+                for entry in os.environ.get("PATH", "").split(os.pathsep)
+                if entry
+            }
+            if command.parent.resolve(strict=False) not in path_entries:
+                console.warning(
+                    f"Adicione {command.parent} ao PATH para executar 'x86qw' em qualquer pasta."
+                )
         console.info(OWNER_ONLY_FIRST_RUN)
+
+    def remove_shell_integration(self) -> None:
+        launcher_name = Path(public_launcher_name()).name
+        launcher = self.target / launcher_name
+        if launcher_name == "x86qw.cmd":
+            host_adapter.remove_windows_shortcuts(
+                launcher, self.target / METADATA_DIR / "cli/x86qw.ico",
+            )
+        else:
+            host_adapter.remove_user_command_link(launcher)
 
 
 def platform_argument(value: str) -> str:

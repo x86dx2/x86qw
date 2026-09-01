@@ -18,6 +18,20 @@ WARNING = "38;2;255;176;32"
 ERROR = "38;2;230;57;70"
 MUTED = "38;2;90;100;128"
 
+INSTALLER_LOGO = (
+    "                  ⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀    ⣀⣤⣶⣶⣿⣷⣶⣶⡄    ⣠⣤⣶⣶⣿⣿⣶⣶⣤⡀   ⣶⣶⣶⣶⡄  ⢠⣶⣶⣶⣶   ⣰⣶⣶⣶⣶",
+    "                 ⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷  ⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡇  ⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆  ⣿⣿⣿⣿⡇ ⢀⣿⣿⣿⣿⣿⡇ ⢠⣿⣿⣿⣿⠏",
+    "    ⢰⣿⣿⣿⣷⡀ ⣰⣾⣿⣿⣿⠂⣿⣿⣿⣿⡏ ⢸⣿⣿⣿⣿ ⣰⣿⣿⣿⡿⢋⣀⣀ ⠈⠉⠁ ⣼⣿⣿⣿⣿⠟⠉ ⠉⢻⣿⣿⣿⣿⡆ ⣿⣿⣿⣿⡇ ⣾⣿⣿⣿⣿⣿⡇⢀⣾⣿⣿⣿⡟",
+    "     ⢻⣿⣿⣿⣷⣾⣿⣿⣿⠟⠁ ⠹⣿⣿⣿⣿⣾⣿⣿⣿⡿⠃⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⡀ ⢰⣿⣿⣿⣿⠇    ⢸⣿⣿⣿⣿⡇ ⣿⣿⣿⣿⡇⣸⣿⣿⣿⣿⣿⣿⡇⣼⣿⣿⣿⡿",
+    "      ⢻⣿⣿⣿⣿⣿⡿⠃  ⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣦ ⢸⣿⣿⣿⣿⡿⠟⢿⣿⣿⣿⣿ ⣿⣿⣿⣿⣿     ⢸⣿⣿⣿⣿⡇ ⣿⣿⣿⣿⣷⣿⣿⣿⠇⣿⣿⣿⣷⣿⣿⣿⣿⠁",
+    "     ⢀⣴⣿⣿⣿⣿⣿⡄  ⢰⣿⣿⣿⣿⠁ ⢈⣿⣿⣿⣿ ⢸⣿⣿⣿⣿⠁ ⢸⣿⣿⣿⣿ ⣿⣿⣿⣿⣿    ⢠⣿⣿⣿⣿⡿  ⢹⣿⣿⣿⣿⣿⣿⡏ ⣿⣿⣿⣿⣿⣿⣿⠇",
+    "    ⣰⣿⣿⣿⣿⣿⣿⣿⣿⡄ ⢸⣿⣿⣿⣿⣤⣤⣾⣿⣿⣿⡿ ⠸⣿⣿⣿⣿⣄⣤⣾⣿⣿⣿⠏ ⠸⣿⣿⣿⣿⣷⣤⣤⣶⣿⣿⣿⣿⡟⠁  ⢸⣿⣿⣿⣿⣿⡿  ⣿⣿⣿⣿⣿⣿⡏",
+    "  ⢠⣾⣿⣿⣿⠟⠁⠘⣿⣿⣿⣿⡄⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⠟⠁  ⠙⢿⣿⣿⣿⣿⣿⣿⡿⠋   ⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋    ⢸⣿⣿⣿⣿⣿⠁  ⢿⣿⣿⣿⣿⡟",
+    "  ⠈⠉⠉⠉⠉   ⠉⠉⠉⠉⠁  ⠈⠉⠛⠛⠛⠉⠉       ⠉⠙⠛⠛⠉⠁       ⠈⠉⠛⠛⣿⣿⣿⣿⣄     ⠈⠉⠉⠉⠉⠁   ⠈⠉⠉⠉⠉⠁",
+    "                                                ⠘⠿⠿⠿⠿⠆",
+)
+INSTALLER_LOGO_WIDTH = max(map(len, INSTALLER_LOGO))
+
 
 @dataclass(frozen=True)
 class UpdatePlanRow:
@@ -27,6 +41,7 @@ class UpdatePlanRow:
     available: str
     action: str
     size: int | None = None
+    details: tuple[tuple[str, str], ...] = ()
 
 
 def format_bytes(size: int) -> str:
@@ -51,6 +66,26 @@ def terminal_label(value: str) -> str:
     """Keep public package identities on one bounded terminal line."""
 
     return "".join(character if character.isprintable() else "?" for character in value)[:96]
+
+
+def _table_lines(
+    headers: tuple[str, ...], rows: list[tuple[str, ...]],
+) -> list[str]:
+    widths = [
+        max(len(headers[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headers))
+    ]
+
+    def render(row: tuple[str, ...]) -> str:
+        return "  " + " | ".join(
+            value.ljust(widths[index]) for index, value in enumerate(row)
+        ).rstrip()
+
+    return [
+        render(headers),
+        "  " + "-+-".join("-" * width for width in widths),
+        *(render(row) for row in rows),
+    ]
 
 
 class Console:
@@ -103,16 +138,21 @@ class Console:
         if os.environ.get("X86QW_BOOTSTRAP_UI") == "1":
             return
         version = self._version() if self._version is not None else ""
-        print(self.paint("Preparando interface do instalador...", INFO), flush=True)
-        print(self.bold_color("\n  [X] Instalador x86QW", ACCENT), flush=True)
-        print(self.paint("  Cinco jogos. Um menu. Uma partida.", INFO), flush=True)
-        identity = "  qw.x86.com.br"
+        terminal_width = shutil.get_terminal_size(
+            (INSTALLER_LOGO_WIDTH, 24),
+        ).columns
+        outer_padding = " " * max(0, (terminal_width - INSTALLER_LOGO_WIDTH) // 2)
+        for line in INSTALLER_LOGO:
+            print(self.bold_color(outer_padding + line, ACCENT), flush=True)
+        print(flush=True)
+        identity = "qw.x86.com.br"
         if version:
             identity += f" | instalador {version}"
+        identity = outer_padding + identity.center(INSTALLER_LOGO_WIDTH).rstrip()
         print(self.paint(identity, MUTED), flush=True)
         print(flush=True)
-        self.key_value("Ação", action)
-        self.key_value("Destino", str(target))
+        print(self.paint("Preparando interface do instalador...", INFO), flush=True)
+        print(flush=True)
 
     def key_value(self, key: str, value: str) -> None:
         print(f"{self.paint(key + ':', MUTED)} {value}", flush=True)
@@ -126,6 +166,19 @@ class Console:
         self.activity_done()
         self.flush_download_summary()
         print(f"\n{self.paint('==>', '1;36')} {self.paint(title, '1')}", flush=True)
+
+    def plan_section(self, title: str) -> None:
+        print(self.paint(title, "1"), flush=True)
+
+    def plan_table(self, lines: list[str]) -> None:
+        connector = self.paint("│", MUTED)
+        for index, line in enumerate(lines):
+            content = line[2:] if line.startswith("  ") else line
+            if index == 0:
+                content = self.paint(content, SUCCESS)
+            elif index == 1:
+                content = self.paint(content, MUTED)
+            print(f"{connector} {content}", flush=True)
 
     def info(self, message: str) -> None:
         self.activity_done()
@@ -149,7 +202,14 @@ class Console:
         label = self.paint("[ERRO]", "31") if self.color and sys.stderr.isatty() else "✗"
         print(f"{label} {message}", file=sys.stderr, flush=True)
 
-    def update_plan(self, rows: list[UpdatePlanRow], action: str) -> str:
+    def update_plan(
+        self,
+        rows: list[UpdatePlanRow],
+        action: str,
+        *,
+        destination: str = "",
+        profile: str = "",
+    ) -> str:
         noun = "pacote" if len(rows) == 1 else "pacotes"
         action_label = {
             "install": "instalar", "update": "atualizar",
@@ -163,9 +223,85 @@ class Console:
         title = f"Plano: {action_label} {len(rows)} {noun}{suffix}"
         self.heading(title + size_suffix)
         confirmation_lines = [title + size_suffix]
-        component_rows = [row for row in rows if row.kind.casefold() == "componente"]
-        grouped_install = action == "install" and len(component_rows) > 1
-        display_rows = [row for row in rows if row not in component_rows] if grouped_install else rows
+        if action == "install":
+            if destination:
+                destination_line = f"Destino: {destination}"
+                self.key_value("Destino", destination)
+                confirmation_lines.append(destination_line)
+            if profile:
+                profile_line = f"Perfil: {profile}"
+                self.key_value("Perfil", profile)
+                confirmation_lines.append(profile_line)
+
+            client_rows = [row for row in rows if row.kind.casefold() != "componente"]
+            if client_rows:
+                self.plan_section("Cliente")
+                confirmation_lines.append("Cliente")
+                client_table = []
+                client_paths = []
+                for row in client_rows:
+                    details = dict(row.details)
+                    client_table.append((
+                        details.get("Cliente", row.item),
+                        details.get("Plataforma", "—"),
+                        details.get("Arquitetura", "—"),
+                        details.get("Canal", "—"),
+                        row.available,
+                        format_bytes_compact(row.size) if row.size is not None else "—",
+                    ))
+                    if details.get("Caminho"):
+                        client_paths.append(details["Caminho"])
+                client_lines = _table_lines(
+                    ("Cliente", "Plataforma", "Arquitetura", "Canal", "Versão", "Tamanho"),
+                    client_table,
+                )
+                self.plan_table(client_lines)
+                confirmation_lines.extend(client_lines)
+                for path in client_paths:
+                    path_line = f"Caminho do cliente: {path}"
+                    self.key_value("Caminho do cliente", path)
+                    confirmation_lines.append(path_line)
+
+            component_rows = [
+                row for row in rows if row.kind.casefold() == "componente"
+            ]
+            if component_rows:
+                component_size = sum(row.size or 0 for row in component_rows)
+                component_heading = (
+                    f"Módulos x86QW · {len(component_rows)}"
+                    + (
+                        f" · {format_bytes_compact(component_size)}"
+                        if component_size else ""
+                    )
+                )
+                self.plan_section(component_heading)
+                confirmation_lines.append(component_heading)
+                show_origin = any(dict(row.details).get("Origem") for row in component_rows)
+                headers = ("#", "Módulo", "Versão", "Tamanho") + (
+                    ("Origem",) if show_origin else ()
+                )
+                component_table = []
+                for index, row in enumerate(component_rows, 1):
+                    details = dict(row.details)
+                    package = details.get("Pacote")
+                    package_version = (
+                        f"{package}@{row.available}" if package else row.available
+                    )
+                    values = (
+                        str(index),
+                        row.item,
+                        package_version,
+                        format_bytes_compact(row.size) if row.size is not None else "—",
+                    )
+                    if show_origin:
+                        values += (details.get("Origem", "—"),)
+                    component_table.append(values)
+                component_lines = _table_lines(headers, component_table)
+                self.plan_table(component_lines)
+                confirmation_lines.extend(component_lines)
+            return "\n".join(confirmation_lines)
+
+        display_rows = rows
         names = [row.item for row in rows]
         installed = [row.installed for row in rows]
         available = [row.available for row in rows]
@@ -196,13 +332,6 @@ class Console:
             if row.size is not None:
                 detail += f" · {format_bytes_compact(row.size)}"
             confirmation_lines.append(detail)
-        if grouped_install:
-            component_size = sum(row.size or 0 for row in component_rows)
-            component_label = f"{len(component_rows)} componentes x86QW"
-            if component_size:
-                component_label += f" · {format_bytes_compact(component_size)}"
-            print(component_label, flush=True)
-            confirmation_lines.append(component_label)
         return "\n".join(confirmation_lines)
 
     def activity(self, current: int, total: int) -> None:

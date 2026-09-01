@@ -500,6 +500,75 @@ class MenuTests(unittest.TestCase):
             )
         self.assertEqual(("duel", "ctf"), selected)
 
+    def test_installer_wizard_multiple_selection_collapses_into_the_linear_flow(self):
+        keys = iter((" ", "down", " ", "enter"))
+        output = TtyStringIO()
+
+        with mock.patch.object(menu, "_NO_COLOR", False):
+            with mock.patch.object(menu.sys, "stdout", output):
+                selected = menu.select_many(
+                    "Quais componentes deseja instalar?",
+                    self.options,
+                    interactive=True,
+                    key_reader=lambda: next(keys),
+                    presentation="wizard",
+                )
+
+        self.assertEqual(("duel", "race"), selected)
+        rendered = output.getvalue()
+        self.assertIn("\033[36m◆\033[39m", rendered)
+        self.assertIn("[✓]", rendered)
+        self.assertIn("Duel", rendered)
+        self.assertIn("\033[32m◇\033[39m", rendered)
+        self.assertIn("2 componentes selecionados", rendered)
+
+    def test_installer_wizard_multiple_selection_explains_an_empty_confirmation(self):
+        keys = iter(("enter", " ", "enter"))
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            selected = menu.select_many(
+                "Quais componentes deseja instalar?",
+                self.options,
+                interactive=True,
+                key_reader=lambda: next(keys),
+                presentation="wizard",
+            )
+
+        self.assertEqual(("duel",), selected)
+        self.assertIn("Selecione ao menos um componente", output.getvalue())
+
+    def test_installer_wizard_multiple_selection_can_mark_every_item(self):
+        keys = iter(("a", "enter"))
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            selected = menu.select_many(
+                "Quais componentes deseja instalar?",
+                self.options,
+                interactive=True,
+                key_reader=lambda: next(keys),
+                presentation="wizard",
+            )
+
+        self.assertEqual(("duel", "race", "ctf"), selected)
+        self.assertIn("A: marcar tudo", output.getvalue())
+
+    def test_installer_wizard_multiple_selection_can_clear_every_item(self):
+        keys = iter(("d", "down", " ", "enter"))
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            selected = menu.select_many(
+                "Quais componentes deseja instalar?",
+                self.options,
+                selected=("duel", "race", "ctf"),
+                interactive=True,
+                key_reader=lambda: next(keys),
+                presentation="wizard",
+            )
+
+        self.assertEqual(("race",), selected)
+
     def test_navigation_home_jumps_to_the_first_enabled_option(self):
         keys = iter(("end", "home", "enter"))
         with contextlib.redirect_stdout(io.StringIO()):

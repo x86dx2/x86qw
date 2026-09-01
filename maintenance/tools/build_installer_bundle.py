@@ -92,6 +92,7 @@ GENERATED_RUNTIME_SOURCES = frozenset({
 })
 STATIC_RUNTIME_SOURCE_PREFIXES = (
     "dist/installer/bin/",
+    "dist/installer/assets/",
     "dist/mods/ktx/",
     "maintenance/trust/",
     "x86qw_runtime/",

@@ -28,6 +28,61 @@ class HostPlatformError(InstallerError):
     """A native host location could not be resolved safely."""
 
 
+@dataclass(frozen=True)
+class UserCommandRollback:
+    path: Path
+    installed_identity: tuple[int, int]
+    previous_target: str | None
+    created_directories: tuple[tuple[Path, tuple[int, int]], ...]
+
+
+@dataclass(frozen=True)
+class WindowsShortcutRollback:
+    entries: tuple[tuple[Path, str, bytes | None], ...]
+    created_directories: tuple[Path, ...]
+
+
+WINDOWS_SHORTCUT_SCRIPT = r'''param(
+  [ValidateSet("install", "remove")][string]$Mode,
+  [string]$Launcher,
+  [string]$Icon,
+  [string]$StartMenuShortcut,
+  [string]$DesktopShortcut
+)
+$ErrorActionPreference = "Stop"
+$Shell = New-Object -ComObject WScript.Shell
+$LauncherFull = [IO.Path]::GetFullPath($Launcher)
+foreach ($Path in @($StartMenuShortcut, $DesktopShortcut)) {
+  if ($Mode -eq "remove") {
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+      $Existing = $Shell.CreateShortcut($Path)
+      if ([IO.Path]::GetFullPath($Existing.TargetPath) -eq $LauncherFull) {
+        Remove-Item -LiteralPath $Path -Force
+      }
+    }
+    continue
+  }
+  if (Test-Path -LiteralPath $Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+      throw "O caminho do atalho nao e um arquivo: $Path"
+    }
+    $Existing = $Shell.CreateShortcut($Path)
+    if ([IO.Path]::GetFullPath($Existing.TargetPath) -ne $LauncherFull) {
+      throw "Um atalho nao gerenciado ja ocupa: $Path"
+    }
+  }
+  $Parent = Split-Path -Parent $Path
+  [IO.Directory]::CreateDirectory($Parent) | Out-Null
+  $Shortcut = $Shell.CreateShortcut($Path)
+  $Shortcut.TargetPath = $LauncherFull
+  $Shortcut.WorkingDirectory = [IO.Path]::GetDirectoryName($LauncherFull)
+  $Shortcut.IconLocation = "$Icon,0"
+  $Shortcut.Description = "x86QW - QuakeWorld"
+  $Shortcut.Save()
+}
+'''
+
+
 def system() -> str:
     return platform.system()
 
@@ -44,6 +99,231 @@ def supports_posix_permissions(*, os_name: str | None = None) -> bool:
     """Return whether native chmod/access bits are meaningful on this host."""
 
     return (os.name if os_name is None else os_name) != "nt"
+
+
+def user_command_path(*, home: Path | None = None) -> Path:
+    """Return the owner-scoped POSIX command location used by x86QW."""
+
+    return (Path.home() if home is None else Path(home)) / ".local/bin/x86qw"
+
+
+def _path_identity(path: Path) -> tuple[int, int]:
+    metadata = path.lstat()
+    return int(metadata.st_dev), int(metadata.st_ino)
+
+
+def _resolved_link_target(path: Path) -> Path:
+    target = Path(os.readlink(path))
+    if not target.is_absolute():
+        target = path.parent / target
+    return target.resolve(strict=False)
+
+
+def install_user_command_link(
+    launcher: Path,
+    *,
+    command: Path | None = None,
+) -> UserCommandRollback:
+    """Atomically publish the owner-scoped ``x86qw`` command."""
+
+    launcher = Path(launcher).resolve(strict=True)
+    command = user_command_path() if command is None else Path(command)
+    created: list[tuple[Path, tuple[int, int]]] = []
+    missing: list[Path] = []
+    current = command.parent
+    while not current.exists():
+        missing.append(current)
+        if current == current.parent:
+            raise HostPlatformError(f"Diretório do comando x86qw inválido: {current}")
+        current = current.parent
+    if not current.is_dir() or current.is_symlink():
+        raise HostPlatformError(f"Diretório do comando x86qw inválido: {current}")
+    try:
+        for directory in reversed(missing):
+            directory.mkdir(mode=0o755)
+            created.append((directory, _path_identity(directory)))
+        previous_target: str | None = None
+        if os.path.lexists(command):
+            if not command.is_symlink():
+                raise HostPlatformError(
+                    f"Um comando não gerenciado já ocupa {command}."
+                )
+            if _resolved_link_target(command) != launcher:
+                raise HostPlatformError(
+                    f"Um link não gerenciado já ocupa {command}."
+                )
+            previous_target = os.readlink(command)
+        temporary = command.parent / f".x86qw-command.{token_hex(8)}"
+        try:
+            temporary.symlink_to(launcher)
+            temporary.replace(command)
+        finally:
+            if os.path.lexists(temporary):
+                temporary.unlink()
+        return UserCommandRollback(
+            command,
+            _path_identity(command),
+            previous_target,
+            tuple(created),
+        )
+    except BaseException:
+        for directory, identity in reversed(created):
+            if directory.exists() and _path_identity(directory) == identity:
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+        raise
+
+
+def rollback_user_command_link(token: UserCommandRollback) -> None:
+    if os.path.lexists(token.path):
+        if not token.path.is_symlink() or _path_identity(token.path) != token.installed_identity:
+            raise HostPlatformError(
+                f"O comando x86qw mudou e foi preservado: {token.path}"
+            )
+        token.path.unlink()
+    if token.previous_target is not None:
+        token.path.symlink_to(token.previous_target)
+    for directory, identity in reversed(token.created_directories):
+        if directory.exists() and _path_identity(directory) == identity:
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
+
+def remove_user_command_link(launcher: Path, *, command: Path | None = None) -> bool:
+    launcher = Path(launcher).resolve(strict=False)
+    command = user_command_path() if command is None else Path(command)
+    if not os.path.lexists(command) or not command.is_symlink():
+        return False
+    if _resolved_link_target(command) != launcher:
+        return False
+    command.unlink()
+    return True
+
+
+def windows_shortcut_paths(
+    *, environment: Mapping[str, str] | None = None,
+) -> tuple[Path, Path]:
+    environment = os.environ if environment is None else environment
+    appdata = environment.get("APPDATA")
+    profile = environment.get("USERPROFILE")
+    if not appdata or not profile:
+        raise HostPlatformError("APPDATA e USERPROFILE são necessários para criar atalhos.")
+    return (
+        Path(appdata) / "Microsoft/Windows/Start Menu/Programs/x86QW.lnk",
+        Path(profile) / "Desktop/x86QW.lnk",
+    )
+
+
+def _run_windows_shortcut_script(
+    mode: str,
+    launcher: Path,
+    icon: Path,
+    shortcuts: tuple[Path, Path],
+) -> None:
+    powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+    if powershell is None:
+        raise HostPlatformError("Windows PowerShell não está disponível para criar atalhos.")
+    with tempfile.TemporaryDirectory(prefix="x86qw-shortcut.") as temporary:
+        script = Path(temporary) / "shortcut.ps1"
+        script.write_text(WINDOWS_SHORTCUT_SCRIPT, encoding="utf-8-sig", newline="\r\n")
+        command = [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy", "Bypass",
+            "-File", os.fspath(script),
+            "-Mode", mode,
+            "-Launcher", os.fspath(launcher),
+            "-Icon", os.fspath(icon),
+            "-StartMenuShortcut", os.fspath(shortcuts[0]),
+            "-DesktopShortcut", os.fspath(shortcuts[1]),
+        ]
+        completed = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+        )
+    if completed.returncode != 0:
+        stderr = completed.stderr
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="replace")
+        detail = str(stderr).strip() or f"código {completed.returncode}"
+        raise HostPlatformError(f"Não foi possível configurar os atalhos do Windows: {detail}")
+
+
+def install_windows_shortcuts(
+    launcher: Path,
+    icon: Path,
+    *,
+    shortcuts: tuple[Path, Path] | None = None,
+) -> WindowsShortcutRollback:
+    launcher = Path(launcher).resolve(strict=True)
+    icon = Path(icon).resolve(strict=True)
+    shortcuts = windows_shortcut_paths() if shortcuts is None else shortcuts
+    previous: list[tuple[Path, bytes | None]] = []
+    created_directories: list[Path] = []
+    for shortcut in shortcuts:
+        if os.path.lexists(shortcut):
+            if shortcut.is_symlink() or not shortcut.is_file():
+                raise HostPlatformError(f"Caminho de atalho inválido: {shortcut}")
+            previous.append((shortcut, shortcut.read_bytes()))
+        else:
+            previous.append((shortcut, None))
+            if not shortcut.parent.exists():
+                created_directories.append(shortcut.parent)
+    try:
+        _run_windows_shortcut_script("install", launcher, icon, shortcuts)
+        entries: list[tuple[Path, str, bytes | None]] = []
+        for shortcut, payload in previous:
+            if shortcut.is_symlink() or not shortcut.is_file():
+                raise HostPlatformError(f"Atalho do Windows não foi criado: {shortcut}")
+            entries.append((shortcut, hashlib.sha256(shortcut.read_bytes()).hexdigest(), payload))
+        return WindowsShortcutRollback(tuple(entries), tuple(created_directories))
+    except BaseException:
+        for shortcut, payload in previous:
+            if payload is None:
+                if os.path.lexists(shortcut) and shortcut.is_file() and not shortcut.is_symlink():
+                    shortcut.unlink()
+            else:
+                shortcut.parent.mkdir(parents=True, exist_ok=True)
+                shortcut.write_bytes(payload)
+        raise
+
+
+def rollback_windows_shortcuts(token: WindowsShortcutRollback) -> None:
+    for shortcut, installed_sha256, previous in token.entries:
+        if os.path.lexists(shortcut):
+            if shortcut.is_symlink() or not shortcut.is_file():
+                raise HostPlatformError(f"Atalho alterado foi preservado: {shortcut}")
+            if hashlib.sha256(shortcut.read_bytes()).hexdigest() != installed_sha256:
+                raise HostPlatformError(f"Atalho alterado foi preservado: {shortcut}")
+            shortcut.unlink()
+        if previous is not None:
+            shortcut.parent.mkdir(parents=True, exist_ok=True)
+            shortcut.write_bytes(previous)
+
+
+def remove_windows_shortcuts(
+    launcher: Path,
+    icon: Path,
+    *,
+    shortcuts: tuple[Path, Path] | None = None,
+) -> None:
+    shortcuts = windows_shortcut_paths() if shortcuts is None else shortcuts
+    if not any(os.path.lexists(shortcut) for shortcut in shortcuts):
+        return
+    _run_windows_shortcut_script(
+        "remove",
+        Path(launcher).resolve(strict=False),
+        Path(icon).resolve(strict=False),
+        shortcuts,
+    )
 
 
 def apply_mode(
