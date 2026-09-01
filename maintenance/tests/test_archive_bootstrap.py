@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import errno
 import hashlib
 import io
 import json
@@ -14,6 +15,9 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
+
+if os.name != "nt":
+    import pty
 
 from maintenance.tools import build_installer_bundle
 from x86qw_runtime.io import atomic as atomic_io
@@ -394,6 +398,45 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertIn("\033[38;2;90;100;128m·\033[0m Iniciando configuração", completed.stdout)
 
     @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
+    def test_unix_bootstrap_hides_native_curl_meter_like_powershell(self):
+        version = "9.9.1"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, binaries = self._prepare_unix_bootstrap(root, version, bundle)
+            curl = binaries / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "silent=0\n"
+                "for argument in \"$@\"; do\n"
+                "  [ \"$argument\" = \"--silent\" ] && silent=1\n"
+                "done\n"
+                "[ \"$silent\" = 1 ] || printf '%s\\n' 'CURL_NATIVE_PROGRESS' >&2\n"
+                "exec /bin/cat \"$X86QW_TEST_BUNDLE\"\n",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            completed = subprocess.run(
+                [str(bootstrap), "--help"],
+                env={
+                    "PATH": os.fspath(binaries),
+                    "TMPDIR": os.fspath(root),
+                    "COLUMNS": "100",
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertNotIn("CURL_NATIVE_PROGRESS", completed.stderr)
+        self.assertIn(f"x86QW: baixando instalador {version}...", completed.stdout)
+        self.assertNotIn("(tentativa", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "bootstrap Unix e exercitado nos runners POSIX")
     def test_unix_bootstrap_preserves_unicode_arguments_and_installer_exit(self):
         version = "9.9.9"
         prefix = f"x86qw-installer-{version}"
@@ -559,7 +602,13 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertNotIn("[X] Instalador x86QW", completed.stdout)
         self.assertNotIn("Cinco jogos. Um menu. Uma partida.", completed.stdout)
         self.assertIn("Plano de instalação", completed.stdout)
-        self.assertIn("Sistema:", completed.stdout)
+        expected_os = (
+            "windows" if os.name == "nt"
+            else "macos" if sys.platform == "darwin"
+            else "linux"
+        )
+        self.assertIn(f"Sistema detectado: {expected_os}", completed.stdout)
+        self.assertIn(f"Sistema: {expected_os}", completed.stdout)
         self.assertIn("Método de instalação:", completed.stdout)
         self.assertIn(f"Versão solicitada: {version}", completed.stdout)
         self.assertIn("[1/3] Preparando ambiente", completed.stdout)
@@ -575,6 +624,49 @@ class ArchiveBootstrapTests(unittest.TestCase):
         )
         self.assertIn("✓ Instalador extraído e verificado", completed.stdout)
         self.assertIn("· Iniciando configuração", completed.stdout)
+
+    @unittest.skipIf(os.name == "nt", "paridade POSIX requer pseudo-terminal")
+    @unittest.skipUnless(
+        shutil.which("pwsh") or shutil.which("powershell"),
+        "PowerShell indisponivel neste runner",
+    )
+    def test_powershell_bootstrap_matches_shell_host_and_key_value_palette(self):
+        version = "9.9.2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, runner = self._prepare_powershell_bootstrap(
+                root, version, bundle, force_color=True,
+            )
+            returncode, output = self._run_with_terminal(
+                [
+                    self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(runner), str(bootstrap), "--help",
+                ],
+                {
+                    **os.environ,
+                    "COLUMNS": "100",
+                    "TERM": "xterm-256color",
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+            )
+
+        expected_os = "macos" if sys.platform == "darwin" else "linux"
+        self.assertEqual(0, returncode, output)
+        self.assertIn(
+            f"\033[38;2;0;229;204m✓\033[0m Sistema detectado: {expected_os}",
+            output,
+        )
+        self.assertIn(
+            f"\033[38;2;90;100;128mSistema:\033[0m {expected_os}",
+            output,
+        )
+        self.assertIn(
+            "\033[38;2;90;100;128mMétodo de instalação:\033[0m pacote verificado",
+            output,
+        )
 
     @unittest.skipUnless(
         shutil.which("pwsh") or shutil.which("powershell"),
@@ -745,8 +837,40 @@ class ArchiveBootstrapTests(unittest.TestCase):
             raise AssertionError("PowerShell indisponivel")
         return executable
 
+    @staticmethod
+    def _run_with_terminal(arguments: list[str], environment: dict[str, str]) -> tuple[int, str]:
+        master, slave = pty.openpty()
+        try:
+            completed = subprocess.Popen(
+                arguments,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=slave,
+                stderr=slave,
+                close_fds=True,
+            )
+        finally:
+            os.close(slave)
+
+        chunks: list[bytes] = []
+        try:
+            while True:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError as error:
+                    if error.errno == errno.EIO:
+                        break
+                    raise
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        finally:
+            os.close(master)
+
+        return completed.wait(timeout=30), b"".join(chunks).decode("utf-8", errors="replace")
+
     def _prepare_powershell_bootstrap(
-        self, root: Path, version: str, bundle: Path,
+        self, root: Path, version: str, bundle: Path, *, force_color: bool = False,
     ) -> tuple[Path, Path]:
         escaped_python = sys.executable.replace("'", "''")
         source = POWERSHELL_BOOTSTRAP.read_text(encoding="utf-8")
@@ -780,16 +904,30 @@ class ArchiveBootstrapTests(unittest.TestCase):
             + controlled_downloader
             + source[downloader_end + len("\n'@"):]
         )
+        if force_color:
+            source = source.replace(
+                "$UseColor = $Host.UI.SupportsVirtualTerminal -and "
+                "-not [Console]::IsOutputRedirected",
+                "$UseColor = $true",
+                1,
+            )
         bootstrap = root / "install.ps1"
         bootstrap.write_text(source, encoding="utf-8")
         runner = root / "run-bootstrap.ps1"
+        force_ansi = (
+            "if (Get-Variable -Name PSStyle -ErrorAction SilentlyContinue) {\n"
+            "  $PSStyle.OutputRendering = 'Ansi'\n"
+            "}\n"
+            if force_color else ""
+        )
         runner.write_text(
             "param(\n"
             "  [string]$Bootstrap,\n"
             "  [Parameter(ValueFromRemainingArguments=$true)][string[]]$Forward\n"
             ")\n"
-            "& $Bootstrap @Forward\n"
-            "exit $global:LASTEXITCODE\n",
+            + force_ansi
+            + "& $Bootstrap @Forward\n"
+            + "exit $global:LASTEXITCODE\n",
             encoding="utf-8",
         )
         return bootstrap, runner

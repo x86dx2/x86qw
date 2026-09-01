@@ -316,6 +316,7 @@ PY
 downloaded=0
 budget_exhausted=0
 ui_section "[2/3] Instalando x86QW"
+printf 'x86QW: baixando instalador %s...\n' "$INSTALLER_VERSION"
 for url in "${INSTALLER_URLS[@]}"; do
   attempt=1
   while (( attempt <= DOWNLOAD_ATTEMPTS )); do
@@ -323,10 +324,12 @@ for url in "${INSTALLER_URLS[@]}"; do
       budget_exhausted=1
       break 2
     fi
+    if (( attempt > 1 )); then
+      printf 'x86QW: baixando instalador %s (tentativa %d/%d)...\n' \
+        "$INSTALLER_VERSION" "$attempt" "$DOWNLOAD_ATTEMPTS"
+    fi
     rm -f "$archive" "$headers"
-    printf 'x86QW: baixando instalador %s (tentativa %d/%d)...\n' \
-      "$INSTALLER_VERSION" "$attempt" "$DOWNLOAD_ATTEMPTS"
-    if curl --disable --fail --location \
+    if curl --disable --fail --location --silent --show-error \
       --proto '=https' --proto-redir '=https' \
       --connect-timeout 15 --max-time "$remaining_seconds" \
       --dump-header "$headers" \
