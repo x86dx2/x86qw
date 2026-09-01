@@ -205,13 +205,9 @@ class Console:
             confirmation_lines.append(component_label)
         return "\n".join(confirmation_lines)
 
-    def activity(
-        self, current: int, total: int, message: str = "Processando pacote",
-    ) -> None:
-        # Progress contains only validated public package metadata, never credentials.
+    def activity(self, current: int, total: int) -> None:
         print(
-            # lgtm[py/clear-text-logging-sensitive-data]
-            f"{self.paint('[INFO]', '36')} [{current}/{total}] {message}",
+            f"{self.paint('[INFO]', '36')} [{current}/{total}] Processando pacote",
             flush=True,
         )
 

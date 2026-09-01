@@ -4058,11 +4058,9 @@ class Installer:
         if progress is not None:
             current, total = progress
             label = terminal_label(str(self.components[component]["label"]))
-            console.activity(
-                current,
-                total,
-                f"Verificando {label} · versão {receipt['selection']} "
-                f"· {file_count(len(entries))}",
+            console.info(
+                f"[{current}/{total}] Verificando {label} "
+                f"· versão {receipt['selection']} · {file_count(len(entries))}"
             )
         for name, expected in entries:
             managed = self.target.joinpath(*PurePosixPath(name).parts)
@@ -5840,9 +5838,8 @@ class Installer:
                     format_bytes_compact(size) if size is not None
                     else "tamanho não informado"
                 )
-                console.activity(
-                    index,
-                    len(selected),
+                console.info(
+                    f"[{index}/{len(selected)}] "
                     f"Instalando {terminal_label(str(component['label']))} "
                     f"· versão {package['version']} · {size_label}",
                 )
