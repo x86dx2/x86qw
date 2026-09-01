@@ -193,6 +193,73 @@ class VerifyTufReleaseSourceTests(unittest.TestCase):
             self.assertEqual(33, result["source_timestamp_version"])
             self.assertEqual(34, result["renewed_timestamp_version"])
 
+    def test_accepts_redeploy_when_public_already_matches_the_exact_renewal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            source = workspace / "source"
+            projection = workspace / "projection"
+            public = workspace / "public"
+            renewed = workspace / "renewed"
+            write_timestamp(
+                source / "metadata/timestamp.json",
+                version=39,
+                expires="2026-10-02T20:25:22Z",
+            )
+            projected = projection / "metadata/timestamp.json"
+            projected.parent.mkdir(parents=True, exist_ok=True)
+            projected.write_bytes((source / "metadata/timestamp.json").read_bytes())
+            write_timestamp(
+                renewed / "metadata/timestamp.json",
+                version=40,
+                expires="2026-10-02T21:06:36Z",
+            )
+            public_timestamp = public / "metadata/timestamp.json"
+            public_timestamp.parent.mkdir(parents=True, exist_ok=True)
+            public_timestamp.write_bytes(
+                (renewed / "metadata/timestamp.json").read_bytes()
+            )
+
+            completed = self.run_promotion_gate(source, projection, public, renewed)
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual("safe-converged-redeployment", result["status"])
+            self.assertEqual(40, result["public_timestamp_version"])
+            self.assertEqual(39, result["source_timestamp_version"])
+            self.assertEqual(40, result["renewed_timestamp_version"])
+
+    def test_rejects_redeploy_when_public_diverges_from_same_version_renewal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            source = workspace / "source"
+            projection = workspace / "projection"
+            public = workspace / "public"
+            renewed = workspace / "renewed"
+            write_timestamp(
+                source / "metadata/timestamp.json",
+                version=39,
+                expires="2026-10-02T20:25:22Z",
+            )
+            projected = projection / "metadata/timestamp.json"
+            projected.parent.mkdir(parents=True, exist_ok=True)
+            projected.write_bytes((source / "metadata/timestamp.json").read_bytes())
+            write_timestamp(
+                public / "metadata/timestamp.json",
+                version=40,
+                expires="2026-10-02T21:06:35Z",
+            )
+            write_timestamp(
+                renewed / "metadata/timestamp.json",
+                version=40,
+                expires="2026-10-02T21:06:36Z",
+            )
+
+            completed = self.run_promotion_gate(source, projection, public, renewed)
+
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("equivocação", completed.stderr)
+            self.assertIn("renovação", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
