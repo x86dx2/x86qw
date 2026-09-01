@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-01T19:13:36Z",
+  "captured_at": "2026-09-01T20:23:21Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -4600,10 +4600,17 @@
     },
     "installer/packages/1.0.13/x86qw-installer-1.0.13.zip": {
       "component": "installer",
-      "consumer": "bootstrap:installer",
+      "consumer": "archive:installer-history",
       "sha256": "304e5b79efe3b1ae78d8dce6710b4cb0cea5c0b95f4bf975170fc8208e47e559",
       "size": 645089,
       "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.13/x86qw-installer-1.0.13.zip"
+    },
+    "installer/packages/1.0.14/x86qw-installer-1.0.14.zip": {
+      "component": "installer",
+      "consumer": "bootstrap:installer",
+      "sha256": "a9c87e27ab14ab64c57a22046e01947e1956225b52075b1e637f2f5f1bf7d7ee",
+      "size": 645118,
+      "url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-installer-1.0.14/x86qw-installer-1.0.14.zip"
     },
     "installer/packages/1.0.2/x86qw-installer-1.0.2.zip": {
       "component": "installer",

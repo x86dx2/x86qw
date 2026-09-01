@@ -8466,7 +8466,10 @@ class Installer:
             raise InstallerError("A identidade do aplicativo x86QW diverge do recibo do bundle.")
         application_digest = file_hash(application)
         if ZIPAPP_PATH is not None:
-            icon_payload = read_archive_member(ZIPAPP_PATH, DESKTOP_ICON_MEMBER)
+            icon_plan = scan_archive(
+                ZIPAPP_PATH, required_members=(DESKTOP_ICON_MEMBER,),
+            )
+            icon_payload = read_archive_member(icon_plan, DESKTOP_ICON_MEMBER)
         else:
             icon_source = INSTALLER_ROOT / DEVELOPMENT_DESKTOP_ICON
             try:

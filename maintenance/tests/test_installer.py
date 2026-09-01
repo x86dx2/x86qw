@@ -2897,6 +2897,37 @@ class InstallerTests(unittest.TestCase):
                 self.assertFalse((target / obsolete_name).exists())
 
     @unittest.skipIf(os.name == "nt", "integração POSIX exercitada em host POSIX")
+    def test_packaged_online_cli_reads_the_embedded_icon_through_an_archive_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "destino"
+            target.mkdir()
+            bundle = root / "bundle"
+            bundle.mkdir()
+            application = bundle / "x86qw.pyz"
+            application.write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+
+            with self.isolated_shell_integration(root), mock.patch.object(
+                install_qw, "ZIPAPP_PATH", application,
+            ), mock.patch.object(
+                installer, "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), contextlib.redirect_stdout(io.StringIO()):
+                installer.install_online_cli()
+
+            self.assertEqual(
+                b"\x00\x00\x01\x00",
+                (target / ".x86qw/cli/x86qw.ico").read_bytes()[:4],
+            )
+            self.assertTrue((root / "user-bin/x86qw").is_symlink())
+
+    @unittest.skipIf(os.name == "nt", "integração POSIX exercitada em host POSIX")
     def test_online_cli_publishes_and_uninstalls_the_user_path_command(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
