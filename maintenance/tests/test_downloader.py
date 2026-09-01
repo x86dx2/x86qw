@@ -292,7 +292,7 @@ ALLOWED_EMBEDDED_NETWORK_COMMANDS = {
 UNIX_BOOTSTRAP_ALLOWANCES = {
     "curl": (
         r"^\s*command -v curl >/dev/null 2>&1 \|\| fail \"curl não foi encontrado\.\"\s*$",
-        r"^\s*if curl --disable --fail --location \\\s*$",
+        r"^\s*if curl --disable --fail --location --silent --show-error \\\s*$",
     ),
 }
 POWERSHELL_BOOTSTRAP_ALLOWANCES = {

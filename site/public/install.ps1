@@ -61,7 +61,7 @@ function Write-X86QWSection([string]$Title) {
   Write-Host "${Accent}${Bold}${Title}${Reset}"
 }
 function Write-X86QWKeyValue([string]$Key, [string]$Value) {
-  Write-Host "${Muted}${Key}: ${Value}${Reset}"
+  Write-Host "${Muted}${Key}:${Reset} $Value"
 }
 function Format-X86QWBrandTitle([string]$Text) {
   $InnerWidth = [Math]::Max(0, [Math]::Floor(($LogoWidth - $Text.Length) / 2))
@@ -77,9 +77,24 @@ Write-Host ""
 Write-Host "${Muted}$(Format-X86QWBrandTitle "qw.x86.com.br | instalador $InstallerVersion")${Reset}"
 Write-Host "${Info}Preparando interface do instalador...${Reset}"
 Write-Host ""
-Write-X86QWSuccess "Sistema detectado: windows"
+$DetectedOs = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [System.Runtime.InteropServices.OSPlatform]::OSX
+  )) {
+  "macos"
+} elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [System.Runtime.InteropServices.OSPlatform]::Linux
+  )) {
+  "linux"
+} elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [System.Runtime.InteropServices.OSPlatform]::Windows
+  )) {
+  "windows"
+} else {
+  "desconhecido"
+}
+Write-X86QWSuccess "Sistema detectado: $DetectedOs"
 Write-X86QWSection "Plano de $Installation"
-Write-X86QWKeyValue "Sistema" "windows"
+Write-X86QWKeyValue "Sistema" "$DetectedOs"
 Write-X86QWKeyValue "$Method de $Installation" "pacote verificado"
 Write-X86QWKeyValue "$VersionLabel solicitada" "$InstallerVersion"
 Write-X86QWSection "[1/3] Preparando ambiente"
