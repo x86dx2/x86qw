@@ -371,6 +371,9 @@ class DistributionTests(unittest.TestCase):
             path = root / "manifest.json"
             write_manifest(path, manifest)
             loaded = load_manifest(path)
+            icon = root / "installer/assets/x86qw.ico"
+            icon.parent.mkdir(parents=True)
+            icon.write_bytes(b"project icon")
             self.assertEqual(1, verify_distribution(root, loaded))
             (root / ".DS_Store").write_bytes(b"Finder metadata")
             self.assertEqual(1, verify_distribution(root, loaded))

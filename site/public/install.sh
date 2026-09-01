@@ -2,10 +2,10 @@
 set -euo pipefail
 
 x86qw_install_main() {
-INSTALLER_VERSION="1.0.12"
+INSTALLER_VERSION="1.0.13"
 INSTALLER_FILE="x86qw-installer-${INSTALLER_VERSION}.zip"
-INSTALLER_SHA256="9e73aa9ef0ad84ef079aee33d326c037ffe521ca9002d189ee6932d7023c2b8c"
-INSTALLER_SIZE="622866"
+INSTALLER_SHA256="304e5b79efe3b1ae78d8dce6710b4cb0cea5c0b95f4bf975170fc8208e47e559"
+INSTALLER_SIZE="645089"
 DOWNLOAD_BUDGET_SECONDS="180"
 DOWNLOAD_TRANSFER_SECONDS="120"
 DOWNLOAD_ATTEMPTS="3"
@@ -25,16 +25,47 @@ ui_success() { printf '%b✓%b %s\n' "$SUCCESS" "$NC" "$*"; }
 ui_section() { printf '\n%b%b%s%b\n' "$ACCENT" "$BOLD" "$1" "$NC"; }
 ui_key_value() { printf '%b%s:%b %s\n' "$MUTED" "$1" "$NC" "$2"; }
 
+LOGO_WIDTH=78
+terminal_width=${COLUMNS:-0}
+if [[ ! "$terminal_width" =~ ^[0-9]+$ ]] || (( terminal_width <= 0 )); then
+  terminal_width=$(tput cols 2>/dev/null || printf '%s' "$LOGO_WIDTH")
+fi
+outer_width=$(( (terminal_width - LOGO_WIDTH) / 2 ))
+(( outer_width < 0 )) && outer_width=0
+printf -v BRAND_OUTER_PADDING '%*s' "$outer_width" ''
+
+brand_title() {
+  local text=$1
+  local inner_width=$(( (LOGO_WIDTH - ${#text}) / 2 ))
+  (( inner_width < 0 )) && inner_width=0
+  printf '%s%*s%s' "$BRAND_OUTER_PADDING" "$inner_width" '' "$text"
+}
+
 case "${OSTYPE:-}" in
   darwin*) detected_os="macos" ;;
   linux*) detected_os="linux" ;;
   *) detected_os="desconhecido" ;;
 esac
 
+printf '%b%b' "$ACCENT" "$BOLD"
+while IFS= read -r logo_line; do
+  printf '%s%s\n' "$BRAND_OUTER_PADDING" "$logo_line"
+done <<'LOGO'
+                  ⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀    ⣀⣤⣶⣶⣿⣷⣶⣶⡄    ⣠⣤⣶⣶⣿⣿⣶⣶⣤⡀   ⣶⣶⣶⣶⡄  ⢠⣶⣶⣶⣶   ⣰⣶⣶⣶⣶
+                 ⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷  ⢠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡇  ⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆  ⣿⣿⣿⣿⡇ ⢀⣿⣿⣿⣿⣿⡇ ⢠⣿⣿⣿⣿⠏
+    ⢰⣿⣿⣿⣷⡀ ⣰⣾⣿⣿⣿⠂⣿⣿⣿⣿⡏ ⢸⣿⣿⣿⣿ ⣰⣿⣿⣿⡿⢋⣀⣀ ⠈⠉⠁ ⣼⣿⣿⣿⣿⠟⠉ ⠉⢻⣿⣿⣿⣿⡆ ⣿⣿⣿⣿⡇ ⣾⣿⣿⣿⣿⣿⡇⢀⣾⣿⣿⣿⡟
+     ⢻⣿⣿⣿⣷⣾⣿⣿⣿⠟⠁ ⠹⣿⣿⣿⣿⣾⣿⣿⣿⡿⠃⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⡀ ⢰⣿⣿⣿⣿⠇    ⢸⣿⣿⣿⣿⡇ ⣿⣿⣿⣿⡇⣸⣿⣿⣿⣿⣿⣿⡇⣼⣿⣿⣿⡿
+      ⢻⣿⣿⣿⣿⣿⡿⠃  ⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣦ ⢸⣿⣿⣿⣿⡿⠟⢿⣿⣿⣿⣿ ⣿⣿⣿⣿⣿     ⢸⣿⣿⣿⣿⡇ ⣿⣿⣿⣿⣷⣿⣿⣿⠇⣿⣿⣿⣷⣿⣿⣿⣿⠁
+     ⢀⣴⣿⣿⣿⣿⣿⡄  ⢰⣿⣿⣿⣿⠁ ⢈⣿⣿⣿⣿ ⢸⣿⣿⣿⣿⠁ ⢸⣿⣿⣿⣿ ⣿⣿⣿⣿⣿    ⢠⣿⣿⣿⣿⡿  ⢹⣿⣿⣿⣿⣿⣿⡏ ⣿⣿⣿⣿⣿⣿⣿⠇
+    ⣰⣿⣿⣿⣿⣿⣿⣿⣿⡄ ⢸⣿⣿⣿⣿⣤⣤⣾⣿⣿⣿⡿ ⠸⣿⣿⣿⣿⣄⣤⣾⣿⣿⣿⠏ ⠸⣿⣿⣿⣿⣷⣤⣤⣶⣿⣿⣿⣿⡟⠁  ⢸⣿⣿⣿⣿⣿⡿  ⣿⣿⣿⣿⣿⣿⡏
+  ⢠⣾⣿⣿⣿⠟⠁⠘⣿⣿⣿⣿⡄⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⠟⠁  ⠙⢿⣿⣿⣿⣿⣿⣿⡿⠋   ⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋    ⢸⣿⣿⣿⣿⣿⠁  ⢿⣿⣿⣿⣿⡟
+  ⠈⠉⠉⠉⠉   ⠉⠉⠉⠉⠁  ⠈⠉⠛⠛⠛⠉⠉       ⠉⠙⠛⠛⠉⠁       ⠈⠉⠛⠛⣿⣿⣿⣿⣄     ⠈⠉⠉⠉⠉⠁   ⠈⠉⠉⠉⠉⠁
+                                                ⠘⠿⠿⠿⠿⠆
+LOGO
+printf '%b\n' "$NC"
+printf '%b%s%b\n\n' "$MUTED" "$(brand_title "qw.x86.com.br | instalador $INSTALLER_VERSION")" "$NC"
 printf '%bPreparando interface do instalador...%b\n' "$INFO" "$NC"
-printf '%b%b\n  [X] Instalador x86QW\n%b' "$ACCENT" "$BOLD" "$NC"
-printf '%b  Cinco jogos. Um menu. Uma partida.%b\n' "$INFO" "$NC"
-printf '%b  qw.x86.com.br | instalador %s%b\n\n' "$MUTED" "$INSTALLER_VERSION" "$NC"
+printf '\n'
 ui_success "Sistema detectado: $detected_os"
 ui_section "Plano de instalação"
 ui_key_value "Sistema" "$detected_os"

@@ -38,6 +38,7 @@ SUPERVISOR_READINESS_PATH = ROOT / "x86qw_runtime/supervisor/readiness.py"
 SUPERVISOR_CORE_PATH = ROOT / "x86qw_runtime/supervisor/core.py"
 POSIX_GUARDIAN_PATH = ROOT / "x86qw_runtime/supervisor/posix_guardian.py"
 MACOS_PLATFORM_PATH = ROOT / "x86qw_runtime/platform/macos.py"
+HOST_PLATFORM_PATH = ROOT / "x86qw_runtime/platform/host.py"
 PYTHON_RUNTIME_PATH = ROOT / "x86qw_runtime/platform/python_runtime.py"
 POWERSHELL_BOOTSTRAP_PATHS = frozenset({
     ROOT / "dist/installer/bin/install.ps1",
@@ -198,6 +199,9 @@ ALLOWED_DYNAMIC_PROCESS_CALLS = {
     }),
     MACOS_PLATFORM_PATH: frozenset({
         ("subprocess.run", "_run_codesign", "arguments"),
+    }),
+    HOST_PLATFORM_PATH: frozenset({
+        ("subprocess.run", "_run_windows_shortcut_script", "command"),
     }),
     ROOT / "maintenance/tools/check_committed_diff.py": frozenset({
         ("subprocess.run", "main", "command"),

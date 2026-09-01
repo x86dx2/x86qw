@@ -761,6 +761,100 @@ def _wizard_collapse(title: str, option: MenuOption) -> str:
     )
 
 
+def _wizard_multiple_frame(
+    title: str,
+    options: tuple[MenuOption, ...],
+    matches: list[int],
+    selected: int,
+    checked: set[str],
+    *,
+    query: str,
+    searching: bool,
+    searchable: bool,
+    allow_back: bool,
+    numeric_buffer: str,
+    validation_message: str,
+) -> str:
+    connector = _wizard_color("│", "36")
+    muted_connector = _wizard_color("│", "90")
+    lines = [muted_connector]
+    lines.append(
+        f"{_wizard_color('◆', '36')}  "
+        f"{_wizard_color(title, _WIZARD_PROMPT)}"
+    )
+    if searching or query:
+        field = query + ("█" if searching else "")
+        lines.append(f"{connector}  {_wizard_color('/', '90')} {field}")
+    if numeric_buffer:
+        lines.append(
+            f"{connector}  {_wizard_dim('Marcar item:')} {numeric_buffer}█"
+        )
+    row_budget = max(3, shutil.get_terminal_size((88, 24)).lines - 9)
+    selectable = _selectable_positions(options, matches)
+    if selected not in selectable and selectable:
+        selected = selectable[0]
+    start = max(0, selected - row_budget // 2)
+    end = min(len(matches), start + row_budget)
+    start = max(0, end - row_budget)
+    for position in range(start, end):
+        option = options[matches[position]]
+        marker = "[✓]" if option.key in checked else "[ ]"
+        if not option.enabled:
+            label = _wizard_dim(f"{marker} {option.label}")
+            detail = option.disabled_reason or option.description
+        elif position == selected:
+            label = f"{_wizard_color(marker, '32')} {option.label}"
+            detail = option.description
+        else:
+            label = f"{_wizard_dim(marker)} {_wizard_dim(option.label)}"
+            detail = ""
+        if detail:
+            label += " " + _wizard_dim(
+                f"({_wizard_color(detail, _WIZARD_DETAIL)})"
+            )
+        lines.append(f"{connector}  {label}")
+    if len(matches) > end - start:
+        lines.append(
+            f"{connector}  {_wizard_dim(f'{start + 1}–{end} de {len(matches)}')}"
+        )
+    if validation_message:
+        lines.append(f"{connector}  {_wizard_color(validation_message, '31')}")
+    if searching:
+        footer = (
+            f"{_wizard_dim('Digite')} para buscar • "
+            f"{_wizard_dim('Enter:')} aplicar • {_wizard_dim('Esc:')} limpar"
+        )
+    elif numeric_buffer:
+        footer = (
+            f"{_wizard_dim('Digite')} o número completo • "
+            f"{_wizard_dim('Espaço/Enter:')} marcar • {_wizard_dim('Esc:')} limpar"
+        )
+    else:
+        footer = (
+            f"{_wizard_dim('↑/↓')} para navegar • "
+            f"{_wizard_dim('Espaço:')} marcar • {_wizard_dim('Enter:')} concluir"
+        )
+        footer += (
+            f" • {_wizard_dim('A:')} marcar tudo"
+            f" • {_wizard_dim('D:')} desmarcar tudo"
+        )
+        if searchable:
+            footer += f" • {_wizard_dim('/:')} buscar"
+        if allow_back:
+            footer += f" • {_wizard_dim('←:')} voltar"
+    lines.extend((f"{connector}  {footer}", _wizard_color("└", "36")))
+    return "\n".join(lines) + "\n"
+
+
+def _wizard_multiple_collapse(title: str, count: int) -> str:
+    noun = "componente selecionado" if count == 1 else "componentes selecionados"
+    return (
+        f"{_wizard_color('◇', '32')}  "
+        f"{_wizard_color(title, _WIZARD_PROMPT)}\n"
+        f"{_wizard_color('│', '90')}  {_wizard_dim(f'{count} {noun}')}\n"
+    )
+
+
 def _select_wizard(
     title: str,
     options: tuple[MenuOption, ...],
@@ -1140,7 +1234,10 @@ def _render_multiple(
     elif numeric_buffer:
         footer = ["Digite o número completo", "Espaço/Enter marcar", "Esc limpar número"]
     else:
-        footer = ["↑↓ navegar", "Espaço marcar", "→/Enter concluir"]
+        footer = [
+            "↑↓ navegar", "Espaço marcar", "→/Enter concluir",
+            "A marcar tudo", "D desmarcar tudo",
+        ]
         if searchable:
             footer.append("/ buscar")
         footer.append("← voltar" if allow_back else "← cancelar")
@@ -1165,6 +1262,7 @@ def select_many(
     interactive: bool | None = None,
     key_reader: Callable[[], str] | None = None,
     input_fn: Callable[[str], str] | None = None,
+    presentation: str = "menu",
 ) -> tuple[str, ...] | None:
     entries = tuple(options)
     if not entries or len({option.key for option in entries}) != len(entries):
@@ -1175,6 +1273,8 @@ def select_many(
     enabled_keys = {option.key for option in enabled}
     checked = {key for key in selected if key in enabled_keys}
     navigation = supports_navigation() if interactive is None else interactive
+    if presentation not in {"menu", "wizard"}:
+        raise ValueError("presentation must be menu or wizard")
     if not navigation:
         reader = input_fn or input
         while True:
@@ -1254,14 +1354,31 @@ def select_many(
     matches = _matching(entries, query)
     position = _default_position(entries, matches, 0)
     reader = key_reader or read_key
+    previous_lines = 0
+    validation_message = ""
+    if presentation == "wizard" and _isatty(sys.stdout):
+        sys.stdout.write(_HIDE_CURSOR)
     try:
         while True:
-            _render_multiple(
-                title=title, options=entries, matches=matches, selected=position,
-                checked=checked, breadcrumb=breadcrumb, subtitle=subtitle,
-                query=query, searching=searching, searchable=searchable,
-                allow_back=allow_back, numeric_buffer=numeric_buffer,
-            )
+            if presentation == "wizard":
+                frame = _wizard_multiple_frame(
+                    title, entries, matches, position, checked,
+                    query=query, searching=searching, searchable=searchable,
+                    allow_back=allow_back, numeric_buffer=numeric_buffer,
+                    validation_message=validation_message,
+                )
+                if previous_lines:
+                    sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                sys.stdout.write(frame)
+                sys.stdout.flush()
+                previous_lines = frame.count("\n")
+            else:
+                _render_multiple(
+                    title=title, options=entries, matches=matches, selected=position,
+                    checked=checked, breadcrumb=breadcrumb, subtitle=subtitle,
+                    query=query, searching=searching, searchable=searchable,
+                    allow_back=allow_back, numeric_buffer=numeric_buffer,
+                )
             key = reader()
             if key == "interrupt":
                 raise KeyboardInterrupt
@@ -1277,6 +1394,7 @@ def select_many(
                     query += key
                 matches = _matching(entries, query)
                 position = _default_position(entries, matches, 0)
+                validation_message = ""
                 continue
             selectable = _selectable_positions(entries, matches)
             if numeric_buffer:
@@ -1292,6 +1410,7 @@ def select_many(
                         option = entries[matches[shortcut]]
                         if option.enabled:
                             checked.symmetric_difference_update({option.key})
+                    validation_message = ""
                     numeric_buffer = ""
                 elif key == "escape":
                     numeric_buffer = ""
@@ -1305,10 +1424,22 @@ def select_many(
             elif key == " " and selectable:
                 option_key = entries[matches[position]].key
                 checked.symmetric_difference_update({option_key})
+                validation_message = ""
+            elif key.casefold() == "a":
+                checked = set(enabled_keys)
+                validation_message = ""
+            elif key.casefold() == "d":
+                checked.clear()
+                validation_message = ""
             elif key in ("enter", "right"):
                 result = tuple(option.key for option in enabled if option.key in checked)
                 if result or allow_empty:
+                    if presentation == "wizard":
+                        sys.stdout.write(f"\033[999D\033[{previous_lines}A\033[J")
+                        sys.stdout.write(_wizard_multiple_collapse(title, len(result)))
+                        sys.stdout.flush()
                     return result
+                validation_message = "Selecione ao menos um componente."
             elif key == "left":
                 if allow_back:
                     return None
@@ -1326,6 +1457,7 @@ def select_many(
                         option = entries[matches[shortcut]]
                         if option.enabled:
                             checked.symmetric_difference_update({option.key})
+                            validation_message = ""
     finally:
         _restore_cursor()
 

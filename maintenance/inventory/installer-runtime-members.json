@@ -51,6 +51,7 @@
     {"member": "x86qw_runtime/versioning.py", "source": "x86qw_runtime/versioning.py", "consumer": "manager e builder", "contract": "validação e ordenação de versões"},
     {"member": "x86qw_runtime/trust.py", "source": "x86qw_runtime/trust.py", "consumer": "manager.py", "contract": "verificação TUF bounded do catálogo público"},
     {"member": "_x86qw/trust/root.json", "source": "maintenance/trust/root.json", "consumer": "manager.py", "contract": "âncora root TUF pública do catálogo autenticado"},
+    {"member": "_x86qw/assets/x86qw.ico", "source": "dist/installer/assets/x86qw.ico", "consumer": "manager.py e atalhos Windows", "contract": "ícone nativo do launcher x86QW"},
     {"member": "x86qw_runtime/io/__init__.py", "source": "x86qw_runtime/io/__init__.py", "consumer": "importador Python", "contract": "pacote de I/O canônico"},
     {"member": "x86qw_runtime/io/atomic.py", "source": "x86qw_runtime/io/atomic.py", "consumer": "manager, state, receipts e sessions", "contract": "escrita e promoção atômica"},
     {"member": "x86qw_runtime/io/archive.py", "source": "x86qw_runtime/io/archive.py", "consumer": "manager.py", "contract": "scan e extração segura de arquivos"},

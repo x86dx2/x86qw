@@ -348,6 +348,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 env={
                     "PATH": os.fspath(binaries),
                     "TMPDIR": os.fspath(root),
+                    "COLUMNS": "100",
                     "X86QW_TEST_BUNDLE": os.fspath(bundle),
                     "PYTHONIOENCODING": "utf-8",
                 },
@@ -357,8 +358,23 @@ class ArchiveBootstrapTests(unittest.TestCase):
             )
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertIn("\033[38;2;136;146;176mPreparando interface do instalador...", completed.stdout)
-        self.assertIn("\033[38;2;255;77;77m\033[1m\n  [X] Instalador x86QW", completed.stdout)
-        self.assertIn("  Cinco jogos. Um menu. Uma partida.", completed.stdout)
+        self.assertIn(
+            "\033[38;2;255;77;77m\033[1m"
+            "                             ⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀",
+            completed.stdout,
+        )
+        self.assertNotIn("Q U A K E W O R L D", completed.stdout)
+        self.assertIn(
+            "\033[38;2;90;100;128m"
+            "                                  qw.x86.com.br | instalador 9.9.4",
+            completed.stdout,
+        )
+        self.assertLess(
+            completed.stdout.index("⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀"),
+            completed.stdout.index("Preparando interface do instalador..."),
+        )
+        self.assertNotIn("[X] Instalador x86QW", completed.stdout)
+        self.assertNotIn("Cinco jogos. Um menu. Uma partida.", completed.stdout)
         self.assertIn("Plano de instalação", completed.stdout)
         self.assertIn("Sistema:", completed.stdout)
         self.assertIn("Método de instalação:", completed.stdout)
@@ -366,7 +382,10 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertIn("[1/3] Preparando ambiente", completed.stdout)
         self.assertIn("[2/3] Instalando x86QW", completed.stdout)
         self.assertIn("[3/3] Finalizando configuração", completed.stdout)
-        self.assertLess(completed.stdout.index("[X] Instalador x86QW"), completed.stdout.index("baixando instalador"))
+        self.assertLess(
+            completed.stdout.index("qw.x86.com.br | instalador"),
+            completed.stdout.index("baixando instalador"),
+        )
         self.assertIn(
             f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
             completed.stdout,
@@ -520,6 +539,7 @@ class ArchiveBootstrapTests(unittest.TestCase):
                 ],
                 env={
                     **os.environ,
+                    "COLUMNS": "100",
                     "X86QW_TEST_BUNDLE": os.fspath(bundle),
                     "PYTHONIOENCODING": "utf-8",
                 },
@@ -530,8 +550,14 @@ class ArchiveBootstrapTests(unittest.TestCase):
             )
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertIn("Preparando interface do instalador...", completed.stdout)
-        self.assertIn("[X] Instalador x86QW", completed.stdout)
-        self.assertIn("  Cinco jogos. Um menu. Uma partida.", completed.stdout)
+        self.assertIn("                             ⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀", completed.stdout)
+        self.assertNotIn("Q U A K E W O R L D", completed.stdout)
+        self.assertIn(
+            "                                  qw.x86.com.br | instalador 9.9.3",
+            completed.stdout,
+        )
+        self.assertNotIn("[X] Instalador x86QW", completed.stdout)
+        self.assertNotIn("Cinco jogos. Um menu. Uma partida.", completed.stdout)
         self.assertIn("Plano de instalação", completed.stdout)
         self.assertIn("Sistema:", completed.stdout)
         self.assertIn("Método de instalação:", completed.stdout)
@@ -539,7 +565,10 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertIn("[1/3] Preparando ambiente", completed.stdout)
         self.assertIn("[2/3] Instalando x86QW", completed.stdout)
         self.assertIn("[3/3] Finalizando configuração", completed.stdout)
-        self.assertLess(completed.stdout.index("[X] Instalador x86QW"), completed.stdout.index("baixando instalador"))
+        self.assertLess(
+            completed.stdout.index("qw.x86.com.br | instalador"),
+            completed.stdout.index("baixando instalador"),
+        )
         self.assertIn(
             f"Instalador x86QW {version}  Baixado  {bundle_size}B/{bundle_size}B",
             completed.stdout,

@@ -77,6 +77,36 @@ class InstallerTests(unittest.TestCase):
         ):
             yield
 
+    @contextlib.contextmanager
+    def isolated_shell_integration(self, root: Path):
+        command = root / "user-bin/x86qw"
+        shortcuts = (
+            root / "start-menu/x86QW.lnk",
+            root / "desktop/x86QW.lnk",
+        )
+
+        def run_powershell(arguments, **_kwargs):
+            mode = arguments[arguments.index("-Mode") + 1]
+            for switch in ("-StartMenuShortcut", "-DesktopShortcut"):
+                shortcut = Path(arguments[arguments.index(switch) + 1])
+                if mode == "install":
+                    shortcut.parent.mkdir(parents=True, exist_ok=True)
+                    shortcut.write_bytes(b"windows shortcut")
+                elif shortcut.exists():
+                    shortcut.unlink()
+            return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+        with mock.patch.object(
+            install_qw.host_adapter, "user_command_path", return_value=command,
+        ), mock.patch.object(
+            install_qw.host_adapter, "windows_shortcut_paths", return_value=shortcuts,
+        ), mock.patch.object(
+            install_qw.host_adapter.shutil, "which", return_value="powershell.exe",
+        ), mock.patch.object(
+            install_qw.host_adapter.subprocess, "run", side_effect=run_powershell,
+        ):
+            yield command, shortcuts
+
     def test_parser_derives_public_actions_from_the_capabilities_catalog(self):
         with mock.patch.object(
             install_qw,
@@ -2177,7 +2207,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("x86QW Package Manifest com nome longo", rendered)
         self.assertIn("Baixado | 123.5KB/123.5KB", rendered)
 
-    def test_complete_install_plan_groups_components_for_confirmation(self):
+    def test_complete_install_plan_lists_every_component_for_confirmation(self):
         rows = [
             install_qw.UpdatePlanRow(
                 "Cliente", "ezQuake macOS stable", "não instalado", "3.6.9",
@@ -2204,15 +2234,78 @@ class InstallerTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("Plano: instalar 4 pacotes", rendered)
         self.assertIn("ezQuake macOS stable", rendered)
-        self.assertIn("3 componentes x86QW", rendered)
-        self.assertNotIn("KTX x86QW", rendered)
-        self.assertNotIn("Mapas selecionados nQuake", rendered)
-        self.assertNotIn("QRP alta resolução", rendered)
-        self.assertEqual(
-            "Plano: instalar 4 pacotes · 435.7MB\n"
-            "ezQuake macOS stable: não instalado -> 3.6.9 · 8.6MB\n"
-            "3 componentes x86QW · 427.1MB",
-            confirmation,
+        self.assertIn("KTX x86QW", rendered)
+        self.assertIn("Mapas selecionados nQuake", rendered)
+        self.assertIn("QRP alta resolução", rendered)
+        self.assertNotIn("3 componentes x86QW", rendered)
+        self.assertRegex(rendered, r"Módulo\s+\|\s+Versão\s+\|\s+Tamanho")
+        self.assertNotIn("Situação:", rendered)
+        self.assertNotIn("Registro:", rendered)
+        self.assertIn("KTX x86QW", confirmation)
+        self.assertIn("Mapas selecionados nQuake", confirmation)
+        self.assertIn("QRP alta resolução", confirmation)
+
+    def test_install_plan_table_uses_established_palette_and_layout(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        rows = [
+            install_qw.UpdatePlanRow(
+                "Cliente", "ezQuake macOS stable", "não instalado", "3.6.9",
+                "Instalar", 8_600_000,
+                details=(
+                    ("Cliente", "ezQuake"),
+                    ("Plataforma", "macOS"),
+                    ("Arquitetura", "universal"),
+                    ("Canal", "stable"),
+                    ("Caminho", "/tmp/x86qw/ezQuake Stable.app"),
+                ),
+            ),
+            install_qw.UpdatePlanRow(
+                "Componente", "KTX x86QW", "não instalado",
+                "1.47+x86qw.19", "Instalar", 2_500_000,
+            ),
+        ]
+        output = TtyBuffer()
+        reporter = install_qw.Console()
+
+        with mock.patch.object(install_qw.sys, "stdout", output), \
+                mock.patch.dict(install_qw.os.environ, {}, clear=True):
+            reporter.configure(verbose=False, no_color=False)
+            reporter.update_plan(
+                rows,
+                "install",
+                destination="/tmp/x86qw",
+                profile="Completo",
+            )
+
+        rendered = output.getvalue()
+        self.assertIn(
+            "\033[38;2;90;100;128mDestino:\033[0m /tmp/x86qw",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;255;77;77m\033[1mCliente\033[0m",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;90;100;128m│\033[0m "
+            "\033[38;2;0;229;204mCliente",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;90;100;128m│\033[0m "
+            "\033[38;2;90;100;128m--------",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;255;77;77m\033[1mMódulos x86QW · 1 · 2.5MB\033[0m",
+            rendered,
+        )
+        self.assertIn(
+            "\033[38;2;90;100;128m│\033[0m 1 | KTX x86QW",
+            rendered,
         )
 
     def test_profile_selection_defers_component_versions_to_verbose_output(self):
@@ -2501,7 +2594,9 @@ class InstallerTests(unittest.TestCase):
 
             self.assertEqual([], mutation_started)
             self.assertIn("Plano: instalar 2 pacotes", output.getvalue())
-            self.assertIn("ezQuake Linux x86_64 stable", output.getvalue())
+            self.assertIn("ezQuake", output.getvalue())
+            self.assertIn("Linux x86_64", output.getvalue())
+            self.assertIn("stable", output.getvalue())
             self.assertIn("KTX x86QW", output.getvalue())
             self.assertIn("nenhum arquivo do jogo foi alterado", output.getvalue())
 
@@ -2700,23 +2795,30 @@ class InstallerTests(unittest.TestCase):
                 (bundle / name).write_bytes((ROOT / "dist/installer/bin" / name).read_bytes())
             installer = install_qw.Installer(ROOT, target, online_only=True)
             installer.project_root = bundle
-            with contextlib.redirect_stdout(io.StringIO()):
+            with self.isolated_shell_integration(Path(temporary)), \
+                    contextlib.redirect_stdout(io.StringIO()):
                 with mock.patch.object(
                     installer, "installer_bundle_identity",
                     return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
                 ):
                     installer.install_online_cli()
             self.assertEqual(
-                [target / ".x86qw/cli/receipt", target / ".x86qw/cli/x86qw.pyz"],
+                [
+                    target / ".x86qw/cli/receipt",
+                    target / ".x86qw/cli/x86qw.ico",
+                    target / ".x86qw/cli/x86qw.pyz",
+                ],
                 sorted(path for path in (target / ".x86qw/cli").rglob("*") if path.is_file()),
             )
-            self.assertTrue((target / "x86qw.cmd").is_file())
-            installed_shell = (target / "x86qw.sh").read_text(encoding="utf-8")
-            installed_batch = (target / "x86qw.cmd").read_text(encoding="utf-8")
-            self.assertNotIn("@X86QW_PYTHON@", installed_shell)
-            self.assertNotIn("@X86QW_PYTHON@", installed_batch)
-            self.assertIn(os.fspath(Path(sys.executable)), installed_shell)
-            self.assertIn(os.fspath(Path(sys.executable)).replace("%", "%%"), installed_batch)
+            launcher_name = "x86qw.cmd" if os.name == "nt" else "x86qw.sh"
+            obsolete_name = "x86qw.sh" if os.name == "nt" else "x86qw.cmd"
+            installed_launcher = (target / launcher_name).read_text(encoding="utf-8")
+            self.assertNotIn("@X86QW_PYTHON@", installed_launcher)
+            executable = os.fspath(Path(sys.executable))
+            if os.name == "nt":
+                executable = executable.replace("%", "%%")
+            self.assertIn(executable, installed_launcher)
+            self.assertFalse((target / obsolete_name).exists())
             self.assertFalse((target / "x86qw").exists())
             self.assertEqual("1.0.6", installer.installed_cli_version())
             if os.name == "nt":
@@ -2762,6 +2864,160 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(0, play.returncode, play.stderr)
             self.assertIn("Abre os mods locais", play.stdout)
 
+    def test_online_cli_installs_only_the_launcher_for_the_host(self):
+        cases = (
+            ("./x86qw.sh", "x86qw.sh", "x86qw.cmd"),
+            ("x86qw.cmd", "x86qw.cmd", "x86qw.sh"),
+        )
+        for public_name, expected_name, obsolete_name in cases:
+            with self.subTest(public_name=public_name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                target = root / "destino"
+                target.mkdir()
+                (target / obsolete_name).write_text("launcher antigo\n", encoding="utf-8")
+                bundle = root / "bundle"
+                bundle.mkdir()
+                (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+                for name in ("x86qw.sh", "x86qw.cmd"):
+                    (bundle / name).write_bytes(
+                        (ROOT / "dist/installer/bin" / name).read_bytes()
+                    )
+                installer = install_qw.Installer(ROOT, target, online_only=True)
+                installer.project_root = bundle
+
+                with self.isolated_shell_integration(root), mock.patch.object(
+                    installer, "installer_bundle_identity",
+                    return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+                ), mock.patch.object(
+                    install_qw, "public_launcher_name", return_value=public_name,
+                ), contextlib.redirect_stdout(io.StringIO()):
+                    installer.install_online_cli()
+
+                self.assertTrue((target / expected_name).is_file())
+                self.assertFalse((target / obsolete_name).exists())
+
+    @unittest.skipIf(os.name == "nt", "integração POSIX exercitada em host POSIX")
+    def test_online_cli_publishes_and_uninstalls_the_user_path_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            target = root / "destino"
+            target.mkdir()
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            command = home / ".local/bin/x86qw"
+
+            with mock.patch.object(
+                installer, "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.dict(os.environ, {"HOME": os.fspath(home)}, clear=False), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                installer.install_online_cli()
+                self.assertTrue(command.is_symlink())
+                self.assertEqual((target / "x86qw.sh").resolve(), command.resolve())
+                installer.uninstall()
+
+            self.assertFalse(command.exists())
+            self.assertFalse(command.is_symlink())
+
+    def test_online_cli_publishes_and_uninstalls_windows_shortcuts_with_the_project_icon(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "Users/Nelson"
+            appdata = profile / "AppData/Roaming"
+            target = root / "Games/x86qw"
+            target.mkdir(parents=True)
+            bundle = root / "bundle"
+            bundle.mkdir()
+            (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                (bundle / name).write_bytes(
+                    (ROOT / "dist/installer/bin" / name).read_bytes()
+                )
+            installer = install_qw.Installer(ROOT, target, online_only=True)
+            installer.project_root = bundle
+            start_menu = (
+                appdata / "Microsoft/Windows/Start Menu/Programs/x86QW.lnk"
+            )
+            desktop = profile / "Desktop/x86QW.lnk"
+
+            def create_shortcuts(command, **_kwargs):
+                mode = command[command.index("-Mode") + 1]
+                for argument in ("-StartMenuShortcut", "-DesktopShortcut"):
+                    path = Path(command[command.index(argument) + 1])
+                    if mode == "install":
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(b"windows shortcut")
+                    elif path.exists():
+                        path.unlink()
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with mock.patch.object(
+                installer, "installer_bundle_identity",
+                return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
+            ), mock.patch.object(
+                install_qw, "public_launcher_name", return_value="x86qw.cmd",
+            ), mock.patch.object(
+                install_qw.host_adapter.shutil, "which", return_value="powershell.exe",
+            ), mock.patch.object(
+                install_qw.host_adapter.subprocess, "run", side_effect=create_shortcuts,
+            ), mock.patch.dict(os.environ, {
+                "APPDATA": os.fspath(appdata),
+                "USERPROFILE": os.fspath(profile),
+            }, clear=False), contextlib.redirect_stdout(io.StringIO()):
+                installer.install_online_cli()
+                self.assertTrue(start_menu.is_file())
+                self.assertTrue(desktop.is_file())
+                icon = target / ".x86qw/cli/x86qw.ico"
+                self.assertTrue(icon.is_file())
+                self.assertEqual(b"\x00\x00\x01\x00", icon.read_bytes()[:4])
+                installer.uninstall()
+
+            self.assertFalse(start_menu.exists())
+            self.assertFalse(desktop.exists())
+            self.assertFalse((target / ".x86qw/cli").exists())
+
+    def test_project_icon_assets_cover_supported_desktop_formats(self):
+        assets = ROOT / "dist/installer/assets"
+        required = (
+            "x86qw.svg", "x86qw.ico", "x86qw.icns",
+            *(f"x86qw-{size}.png" for size in (16, 32, 48, 128, 256, 512)),
+        )
+        for name in required:
+            self.assertTrue((assets / name).is_file(), name)
+
+        svg = (assets / "x86qw.svg").read_text(encoding="utf-8")
+        self.assertIn('viewBox="0 0 512 512"', svg)
+        self.assertIn("#FF4D4D", svg)
+        self.assertIn("#00E5CC", svg)
+
+        ico = (assets / "x86qw.ico").read_bytes()
+        self.assertEqual(b"\x00\x00\x01\x00", ico[:4])
+        self.assertGreaterEqual(struct.unpack_from("<H", ico, 4)[0], 6)
+
+        icns = (assets / "x86qw.icns").read_bytes()
+        self.assertEqual(b"icns", icns[:4])
+        self.assertEqual(len(icns), struct.unpack_from(">I", icns, 4)[0])
+
+        for size in (16, 32, 48, 128, 256, 512):
+            with self.subTest(size=size):
+                png = (assets / f"x86qw-{size}.png").read_bytes()
+                self.assertEqual(b"\x89PNG\r\n\x1a\n", png[:8])
+                self.assertEqual((size, size), struct.unpack_from(">II", png, 16))
+
+        with zipfile.ZipFile(io.BytesIO(zipapp_bytes("9.9.9"))) as application:
+            self.assertIn("_x86qw/assets/x86qw.ico", application.namelist())
+            embedded = application.read("_x86qw/assets/x86qw.ico")
+        self.assertEqual(ico, embedded)
+
     def test_online_cli_validates_launcher_templates_before_mutation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -2770,10 +3026,14 @@ class InstallerTests(unittest.TestCase):
             bundle = root / "bundle"
             bundle.mkdir()
             (bundle / "x86qw.pyz").write_bytes(zipapp_bytes("1.0.6"))
-            (bundle / "x86qw.sh").write_text("#!/bin/sh\nsem marcador\n", encoding="utf-8")
-            (bundle / "x86qw.cmd").write_bytes(
-                (ROOT / "dist/installer/bin/x86qw.cmd").read_bytes()
-            )
+            active_name = "x86qw.cmd" if os.name == "nt" else "x86qw.sh"
+            for name in ("x86qw.sh", "x86qw.cmd"):
+                if name == active_name:
+                    (bundle / name).write_text("sem marcador\n", encoding="utf-8")
+                else:
+                    (bundle / name).write_bytes(
+                        (ROOT / "dist/installer/bin" / name).read_bytes()
+                    )
             installer = install_qw.Installer(ROOT, target, online_only=True)
             installer.project_root = bundle
             with mock.patch.object(
@@ -2786,7 +3046,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((target / "x86qw.sh").exists())
             self.assertFalse((target / "x86qw.cmd").exists())
 
-    def test_online_cli_rolls_back_every_generation_file_when_batch_launcher_fails(self):
+    def test_online_cli_rolls_back_every_generation_file_when_active_launcher_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = root / "destino"
@@ -2822,17 +3082,19 @@ class InstallerTests(unittest.TestCase):
             installer.project_root = bundle
             apply_payload = installer._apply_runtime_payload
 
-            def fail_batch_launcher(prepared, destination):
-                if destination == target / "x86qw.cmd":
-                    raise OSError("simulated batch launcher promotion failure")
+            active_name = "x86qw.cmd" if os.name == "nt" else "x86qw.sh"
+
+            def fail_active_launcher(prepared, destination):
+                if destination == target / active_name:
+                    raise OSError("simulated active launcher promotion failure")
                 return apply_payload(prepared, destination)
 
-            with mock.patch.object(
+            with self.isolated_shell_integration(root), mock.patch.object(
                 installer,
                 "installer_bundle_identity",
                 return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
             ), mock.patch.object(
-                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+                installer, "_apply_runtime_payload", side_effect=fail_active_launcher,
             ):
                 with self.assertRaises(install_qw.InstallerError):
                     installer.install_online_cli()
@@ -2873,7 +3135,7 @@ class InstallerTests(unittest.TestCase):
             installer = install_qw.Installer(ROOT, target, online_only=True)
             installer.project_root = bundle
 
-            with mock.patch.object(
+            with self.isolated_shell_integration(root), mock.patch.object(
                 installer,
                 "installer_bundle_identity",
                 return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
@@ -2905,9 +3167,11 @@ class InstallerTests(unittest.TestCase):
             installer.project_root = bundle
             apply_payload = installer._apply_runtime_payload
 
-            def fail_batch_launcher(prepared, destination):
-                if destination == target / "x86qw.cmd":
-                    raise OSError("simulated batch launcher promotion failure")
+            active_name = "x86qw.cmd" if os.name == "nt" else "x86qw.sh"
+
+            def fail_active_launcher(prepared, destination):
+                if destination == target / active_name:
+                    raise OSError("simulated active launcher promotion failure")
                 return apply_payload(prepared, destination)
 
             with mock.patch.object(
@@ -2915,7 +3179,7 @@ class InstallerTests(unittest.TestCase):
                 "installer_bundle_identity",
                 return_value={"format": 1, "project": "x86qw", "version": "1.0.6"},
             ), mock.patch.object(
-                installer, "_apply_runtime_payload", side_effect=fail_batch_launcher,
+                installer, "_apply_runtime_payload", side_effect=fail_active_launcher,
             ):
                 with self.assertRaises(install_qw.InstallerError):
                     installer.install_online_cli()
@@ -5554,6 +5818,99 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("Qual conteúdo deseja instalar?", rendered)
         self.assertIn("\033[32m●\033[39m Recomendado", rendered)
 
+    def test_custom_install_plan_lists_exactly_the_selected_components(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            installer, target, _ = self.make_installer(Path(temporary))
+            installer._public_catalog = json.loads(
+                (ROOT / "site/public/api/v1/catalog.json").read_text(encoding="utf-8")
+            )
+
+            def select_platform(_requested=None):
+                installer.spec = install_qw.PLATFORMS["linux"]
+
+            def choose_channel(_requested=None):
+                installer.channel = "stable"
+
+            def choose_release(_requested=None):
+                installer.selected_version = "3.6.9"
+                installer.app_expected_size = 8_600_000
+                installer.app_archive_name = "ezQuake-linux-x86_64.zip"
+
+            installer.select_platform = mock.Mock(side_effect=select_platform)
+            installer.choose_channel = mock.Mock(side_effect=choose_channel)
+            installer.choose_release = mock.Mock(side_effect=choose_release)
+            output = io.StringIO()
+
+            with mock.patch.object(
+                install_qw.navigation, "supports_navigation", return_value=False,
+            ), mock.patch(
+                "builtins.input", side_effect=("2", "3", "2", "n"),
+            ), contextlib.redirect_stdout(output):
+                installer.install()
+
+        rendered = output.getvalue()
+        plan = rendered[rendered.index("Plano: instalar 3 pacotes"):]
+        self.assertIn(f"Destino: {target}", plan)
+        self.assertIn("Perfil: Personalizado", plan)
+        self.assertRegex(
+            plan,
+            r"Cliente\s+\|\s+Plataforma\s+\|\s+Arquitetura\s+\|\s+Canal"
+            r"\s+\|\s+Versão\s+\|\s+Tamanho",
+        )
+        self.assertRegex(
+            plan,
+            r"ezQuake\s+\|\s+Linux x86_64\s+\|\s+x86_64\s+\|\s+stable"
+            r"\s+\|\s+3\.6\.9\s+\|\s+8\.6MB",
+        )
+        self.assertIn(
+            f"Caminho do cliente: {target / 'ezquake-stable-x86_64.AppImage'}",
+            plan,
+        )
+        self.assertRegex(
+            plan, r"Módulo\s+\|\s+Versão\s+\|\s+Tamanho\s+\|\s+Origem",
+        )
+        self.assertIn("Base e inicialização do cliente x86QW", plan)
+        self.assertIn("Interface e recursos visuais nQuake", plan)
+        self.assertIn("nquake-visual-core@e4cb23d40aa2", plan)
+        self.assertIn("Dependência", plan)
+        self.assertIn("Escolhido", plan)
+        self.assertNotIn("Situação:", plan)
+        self.assertNotIn("Pacote:", plan)
+        self.assertNotIn("Arquivo:", plan)
+        self.assertNotIn("Caminho base:", plan)
+        self.assertNotIn("Registro:", plan)
+        self.assertNotIn("KTX x86QW", plan)
+
+    def test_install_plan_accepts_the_default_confirmation_in_fallback_mode(self):
+        with mock.patch.object(
+            install_qw.navigation, "supports_navigation", return_value=False,
+        ), mock.patch("builtins.input", return_value="") as prompt:
+            accepted = install_qw.Installer.confirm_update_plan(
+                "install", assume_yes=False,
+            )
+
+        self.assertTrue(accepted)
+        self.assertIn("Deseja iniciar a instalação?", prompt.call_args.args[0])
+        self.assertIn("[Y/n]", prompt.call_args.args[0])
+        self.assertNotIn("executar", prompt.call_args.args[0].casefold())
+
+    def test_install_plan_opens_with_yes_selected_in_the_wizard(self):
+        output = io.StringIO()
+        with mock.patch.object(
+            install_qw.navigation, "supports_navigation", return_value=True,
+        ), mock.patch.object(
+            install_qw.navigation, "read_key", return_value="enter",
+        ), contextlib.redirect_stdout(output):
+            accepted = install_qw.Installer.confirm_update_plan(
+                "install", assume_yes=False, summary="Plano personalizado",
+            )
+
+        self.assertTrue(accepted)
+        self.assertIn("Deseja iniciar esta instalação?", output.getvalue())
+        self.assertIn("Sim", output.getvalue())
+        self.assertIn("instalar os itens apresentados", output.getvalue())
+        self.assertNotIn("executar este plano", output.getvalue().casefold())
+
     def test_client_only_requires_advanced_confirmation_of_the_consequence(self):
         with tempfile.TemporaryDirectory() as temporary:
             installer, _, _ = self.make_installer(Path(temporary))
@@ -5605,6 +5962,10 @@ class InstallerTests(unittest.TestCase):
         reporter = install_qw.Console(version=lambda: "9.9.9")
         with mock.patch.object(install_qw.sys, "stdout", output), \
                 mock.patch.object(install_qw.sys, "stderr", errors), \
+                mock.patch.object(
+                    install_qw.shutil, "get_terminal_size",
+                    return_value=os.terminal_size((100, 24)),
+                ), \
                 mock.patch.dict(install_qw.os.environ, {}, clear=True):
             reporter.configure(verbose=False, no_color=False)
             reporter.banner("instalar", Path("/tmp/x86qw"))
@@ -5615,8 +5976,25 @@ class InstallerTests(unittest.TestCase):
             reporter.error("Falhou")
 
         rendered = output.getvalue()
-        self.assertIn("\033[38;2;255;77;77m\033[1m\n  [X] Instalador x86QW\033[0m", rendered)
-        self.assertIn("\033[38;2;136;146;176m  Cinco jogos. Um menu. Uma partida.\033[0m", rendered)
+        self.assertIn(
+            "\033[38;2;255;77;77m\033[1m"
+            "                             ⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀",
+            rendered,
+        )
+        self.assertNotIn("Q U A K E W O R L D", rendered)
+        self.assertIn(
+            "\033[38;2;90;100;128m"
+            "                                  qw.x86.com.br | instalador 9.9.9\033[0m",
+            rendered,
+        )
+        self.assertLess(
+            rendered.index("⢀⣤⣶⣶⣿⣿⣶⣶⣤⡀"),
+            rendered.index("Preparando interface do instalador..."),
+        )
+        self.assertNotIn("[X] Instalador x86QW", rendered)
+        self.assertNotIn("Ação:", rendered)
+        self.assertNotIn("Destino:", rendered)
+        self.assertNotIn("Cinco jogos. Um menu. Uma partida.", rendered)
         self.assertIn("\033[38;2;255;77;77m\033[1mPlano de instalação\033[0m", rendered)
         self.assertIn("\033[38;2;90;100;128m·\033[0m Preparando ambiente", rendered)
         self.assertIn("\033[38;2;0;229;204m✓\033[0m Pronto", rendered)
