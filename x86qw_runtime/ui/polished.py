@@ -1,74 +1,91 @@
-"""Responsive terminal presentation layered over the canonical x86QW menu.
+"""Polished terminal renderers for the canonical x86QW menu engine.
 
-The canonical engine remains responsible for input decoding, search semantics and
-compact fallbacks.  This adapter adds a modern command center for game menus and
-a scrollback-preserving guided flow for installation, without new dependencies.
+The public navigation API, state machine, key decoding, search semantics and
+fallbacks remain owned by :mod:`x86qw_runtime.ui.menu`.  This module only swaps
+its private presentation functions, preserving one canonical module and one
+exception set across every installer and gameplay entrypoint.
 """
 
 from __future__ import annotations
 
-import importlib
 import os
 import re
-import sys
 import textwrap
 import unicodedata
-from collections.abc import Callable, Iterable
 from typing import Any
 
-from x86qw_runtime.ui.console import (
-    ACCENT, ERROR, INFO, MUTED, SUCCESS, WARNING, terminal_size,
-)
 
-
-_legacy = importlib.import_module(f"{__package__}.menu")
-MenuOption = _legacy.MenuOption
-MenuCancelled = _legacy.MenuCancelled
-MenuExit = _legacy.MenuExit
-
-_NO_COLOR = False
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-_CLEAR = "\033[2J\033[H"
-_HIDE_CURSOR = "\033[?25l"
-_SHOW_CURSOR = "\033[?25h"
 _MIN_WIDTH = 54
 _SPLIT_WIDTH = 88
 _MAX_WIDTH = 118
+_MENU: Any = None
+_ORIGINALS: dict[str, Any] = {}
+_PATCH_NAMES = (
+    "_render_navigation",
+    "_wizard_frame",
+    "_wizard_multiple_frame",
+    "_wizard_text_frame",
+    "_wizard_collapse",
+    "_wizard_multiple_collapse",
+)
 
 
-def configure(*, no_color: bool = False) -> None:
-    global _NO_COLOR
-    _NO_COLOR = no_color or "NO_COLOR" in os.environ
-    _legacy.configure(no_color=no_color)
+def install(menu: Any) -> None:
+    """Install the presentation layer into the canonical menu module.
+
+    Installation is idempotent and reload-safe.  The original renderers are
+    retained on the target module so a reloaded adapter cannot accidentally
+    capture its own functions as fallbacks.
+    """
+
+    global _MENU, _ORIGINALS
+    _MENU = menu
+    current = getattr(menu, "_x86qw_polished_originals", None)
+    renderer = getattr(menu, "_render_navigation")
+    if renderer.__module__ == __name__ and isinstance(current, dict):
+        _ORIGINALS = current
+    else:
+        _ORIGINALS = {name: getattr(menu, name) for name in _PATCH_NAMES}
+        setattr(menu, "_x86qw_polished_originals", _ORIGINALS)
+
+    menu._render_navigation = _render_navigation
+    menu._wizard_frame = _wizard_frame
+    menu._wizard_multiple_frame = _wizard_multiple_frame
+    menu._wizard_text_frame = _wizard_text_frame
+    menu._wizard_collapse = _wizard_collapse
+    menu._wizard_multiple_collapse = _wizard_multiple_collapse
+    setattr(menu, "_x86qw_polished_ui", True)
 
 
-def supports_navigation() -> bool:
-    return bool(_legacy.supports_navigation())
+def _terminal() -> os.terminal_size:
+    return _MENU.terminal_size((96, 28))
 
 
-def read_key() -> str:
-    return str(_legacy.read_key())
+def _width() -> int:
+    return max(20, min(_terminal().columns, _MAX_WIDTH))
 
 
-def _isatty(stream: object) -> bool:
-    checker = getattr(stream, "isatty", None)
-    return bool(checker is not None and checker())
+def _classic() -> bool:
+    return os.environ.get("X86QW_CLASSIC_UI") == "1" or _width() < _MIN_WIDTH
 
 
-def _paint(value: str, code: str, *, bold: bool = False, dim: bool = False) -> str:
-    if _NO_COLOR or not _isatty(sys.stdout):
-        return value
-    attributes = [code]
-    if bold:
-        attributes.append("1")
-    if dim:
-        attributes.append("2")
-    return f"\033[{';'.join(attributes)}m{value}\033[0m"
+def _tone(value: str, name: str) -> str:
+    code = getattr(_MENU, name, "")
+    return _MENU._paint(value, code) if code else value
+
+
+def _wizard(value: str, color_name: str) -> str:
+    return _MENU._wizard_color(value, getattr(_MENU, color_name))
+
+
+def _plain(value: str) -> str:
+    return _ANSI.sub("", value)
 
 
 def _cells(value: str) -> int:
     width = 0
-    for character in _ANSI.sub("", value):
+    for character in _plain(value):
         if unicodedata.combining(character):
             continue
         width += 2 if unicodedata.east_asian_width(character) in {"W", "F"} else 1
@@ -76,12 +93,13 @@ def _cells(value: str) -> int:
 
 
 def _clip(value: str, width: int) -> str:
-    plain = _ANSI.sub("", value)
-    if _cells(plain) <= width:
-        return plain
+    if width <= 0:
+        return ""
+    if _cells(value) <= width:
+        return value
     result: list[str] = []
     used = 0
-    for character in plain:
+    for character in _plain(value):
         size = 0 if unicodedata.combining(character) else (
             2 if unicodedata.east_asian_width(character) in {"W", "F"} else 1
         )
@@ -99,630 +117,487 @@ def _pad(value: str, width: int) -> str:
 def _wrap(value: str, width: int) -> list[str]:
     lines: list[str] = []
     for source in value.splitlines() or [""]:
-        lines.extend(textwrap.wrap(
-            source, width=max(8, width), break_long_words=False,
-            break_on_hyphens=False,
-        ) or [""])
+        lines.extend(
+            textwrap.wrap(
+                source,
+                width=max(8, width),
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
+            or [""]
+        )
     return lines
-
-
-def _width() -> int:
-    return max(20, min(terminal_size((96, 28)).columns, _MAX_WIDTH))
-
-
-def _enabled(interactive: bool) -> bool:
-    return (
-        interactive and _isatty(sys.stdout) and _width() >= _MIN_WIDTH
-        and os.environ.get("X86QW_CLASSIC_UI") != "1"
-    )
-
-
-def _key(value: str) -> str:
-    return _paint(f"[{value}]", INFO, bold=True)
-
-
-def _rule(width: int) -> str:
-    return _paint("─" * width, MUTED)
 
 
 def _brand(surface: str, width: int) -> str:
-    left = f"X86QW  /  {surface}"
-    right = "● PRONTO"
-    gap = max(2, width - _cells(left) - _cells(right))
+    left_plain = f"X86QW  /  {surface}"
+    right_plain = "● PRONTO"
+    gap = max(2, width - _cells(left_plain) - _cells(right_plain))
     return (
-        _paint("X86QW", ACCENT, bold=True)
-        + _paint(f"  /  {surface}", INFO, bold=True)
+        _tone("X86QW", "_TITLE")
+        + _tone(f"  /  {surface}", "_SEARCH")
         + " " * gap
-        + _paint("●", SUCCESS, bold=True)
-        + _paint(" PRONTO", MUTED)
+        + _tone("●", "_OK")
+        + _tone(" PRONTO", "_MUTED")
     )
 
 
-def _panel(title: str, body: list[str], width: int, height: int) -> list[str]:
-    inner = width - 2
+def _rule(width: int) -> str:
+    return _tone("─" * max(1, width), "_MUTED")
+
+
+def _key(value: str) -> str:
+    return _tone(f"[{value}]", "_SEARCH")
+
+
+def _panel(
+    title: str,
+    rows: list[tuple[str, str]],
+    width: int,
+    height: int,
+) -> list[str]:
+    inner = max(8, width - 2)
     label = f" {title.upper()} "
     top = "╭─" + label + "─" * max(0, inner - len(label) - 1) + "╮"
-    lines = [_paint(top, MUTED)]
+    output = [_tone(_clip(top, width), "_MUTED")]
     for index in range(height):
-        value = body[index] if index < len(body) else ""
-        plain = _clip(value, inner - 2)
-        # Keep emphasis when clipping was unnecessary.
-        rendered = (
-            value
-            if value != _ANSI.sub("", value) and plain == _ANSI.sub("", value)
-            else plain
+        value, tone = rows[index] if index < len(rows) else ("", "")
+        value = _clip(value, inner - 2)
+        rendered = _tone(value, tone) if tone else value
+        output.append(
+            _tone("│", "_MUTED")
+            + " "
+            + _pad(rendered, inner - 2)
+            + " "
+            + _tone("│", "_MUTED")
         )
-        lines.append(
-            _paint("│", MUTED) + " " + _pad(rendered, inner - 2)
-            + " " + _paint("│", MUTED)
-        )
-    lines.append(_paint("╰" + "─" * inner + "╯", MUTED))
-    return lines
+    output.append(_tone("╰" + "─" * inner + "╯", "_MUTED"))
+    return output
 
 
-def _window(length: int, selected: int, capacity: int) -> tuple[int, int]:
-    if length <= capacity:
-        return 0, length
-    start = max(0, selected - capacity // 2)
-    end = min(length, start + capacity)
-    return max(0, end - capacity), end
+def _window(lengths: list[int], selected: int, budget: int) -> tuple[int, int]:
+    if not lengths:
+        return 0, 0
+    return _MENU._row_window(lengths, selected, max(1, budget))
 
 
 def _option_rows(
-    options: tuple[MenuOption, ...], matches: list[int], selected: int,
-    *, width: int, capacity: int,
-) -> list[str]:
-    start, end = _window(len(matches), selected, capacity)
-    rows: list[str] = []
+    options: tuple[Any, ...],
+    matches: list[int],
+    selected: int,
+    *,
+    width: int,
+    capacity: int,
+) -> list[tuple[str, str]]:
     previous_group = ""
-    for position in range(start, end):
-        option = options[matches[position]]
+    blocks: list[list[tuple[str, str]]] = []
+    lengths: list[int] = []
+    for position, option_index in enumerate(matches):
+        option = options[option_index]
+        block: list[tuple[str, str]] = []
         if option.group and option.group != previous_group:
-            rows.append(_paint(_clip(option.group.upper(), width), MUTED, bold=True))
+            block.append((option.group.upper(), "_MUTED"))
             previous_group = option.group
         marker = "▌" if position == selected else " "
-        label = option.label + (" · indisponível" if not option.enabled else "")
-        value = _clip(f"{marker} {position + 1:>2}  {label}", width)
+        suffix = " · indisponível" if not option.enabled else ""
+        line = _clip(f"{marker} {position + 1:>2}  {option.label}{suffix}", width)
         if not option.enabled:
-            rows.append(_paint(value, MUTED, dim=True))
+            tone = "_MUTED"
         elif position == selected:
-            rows.append(_paint(value, ACCENT, bold=True))
+            tone = "_TITLE"
         else:
-            rows.append(_paint(value, INFO))
+            tone = "_SEARCH"
+        block.append((line, tone))
+        blocks.append(block)
+        lengths.append(len(block))
+
+    start, end = _window(lengths, selected, capacity)
+    rows = [row for block in blocks[start:end] for row in block]
     if len(matches) > end - start:
-        rows.append(_paint(f"{start + 1}–{end} de {len(matches)}", MUTED))
+        rows.append((f"{start + 1}–{end} de {len(matches)}", "_MUTED"))
+    if not rows:
+        rows.append(("Nenhum resultado para esta busca.", "_MUTED"))
     return rows
 
 
-def _details(option: MenuOption | None, width: int) -> list[str]:
+def _detail_rows(option: Any | None, width: int) -> list[tuple[str, str]]:
     if option is None:
-        return [_paint("Nenhum resultado.", MUTED)]
-    rows = [_paint(_clip(option.label, width), ACCENT, bold=True)]
+        return [("Nenhum resultado.", "_MUTED")]
+    rows: list[tuple[str, str]] = [(option.label, "_TITLE")]
     if option.description:
-        rows.extend(_paint(line, INFO) for line in _wrap(option.description, width))
-    rows.append("")
+        rows.extend((line, "_SEARCH") for line in _wrap(option.description, width))
+    rows.append(("", ""))
     detail = option.detail or option.disabled_reason or "Pressione Enter para continuar."
-    rows.extend(_paint(line, MUTED) for line in _wrap(detail, width))
+    rows.extend((line, "_MUTED") for line in _wrap(detail, width))
     if option.aliases:
-        rows.append("")
-        rows.extend(_paint(line, MUTED) for line in _wrap(
-            "Atalhos: " + " · ".join(option.aliases[:4]), width,
-        ))
+        rows.append(("", ""))
+        rows.extend(
+            (line, "_MUTED")
+            for line in _wrap("Atalhos: " + " · ".join(option.aliases[:4]), width)
+        )
     return rows
 
 
-def _footer(*, searchable: bool, allow_back: bool, searching: bool) -> str:
+def _footer(
+    *,
+    searchable: bool,
+    allow_back: bool,
+    searching: bool,
+    numeric_buffer: str,
+) -> str:
     if searching:
         return f"{_key('digite')} buscar  {_key('enter')} aplicar  {_key('esc')} limpar"
+    if numeric_buffer:
+        return f"{_key('0–9')} completar  {_key('enter')} selecionar  {_key('esc')} limpar"
     items = [f"{_key('↑↓')} navegar", f"{_key('enter')} selecionar"]
     if searchable:
         items.append(f"{_key('/')} buscar")
-    if allow_back:
-        items.append(f"{_key('←')} voltar")
+    items.append(f"{_key('←')} {'voltar' if allow_back else 'cancelar'}")
     items.append(f"{_key('esc')} sair")
     return "  ".join(items)
 
 
-def _render_menu(
-    title: str, options: tuple[MenuOption, ...], matches: list[int], selected: int,
-    *, breadcrumb: str, subtitle: str, query: str, searching: bool,
-    searchable: bool, allow_back: bool, numeric_buffer: str,
+def _render_navigation(
+    *,
+    title: str,
+    options: tuple[Any, ...],
+    matches: list[int],
+    selected: int,
+    breadcrumb: str,
+    subtitle: str,
+    query: str,
+    searching: bool,
+    searchable: bool,
+    allow_back: bool,
+    numeric_buffer: str,
 ) -> None:
+    if _classic():
+        _ORIGINALS["_render_navigation"](
+            title=title,
+            options=options,
+            matches=matches,
+            selected=selected,
+            breadcrumb=breadcrumb,
+            subtitle=subtitle,
+            query=query,
+            searching=searching,
+            searchable=searchable,
+            allow_back=allow_back,
+            numeric_buffer=numeric_buffer,
+        )
+        return
+
     width = _width()
-    terminal_height = max(18, terminal_size((96, 28)).lines)
-    sys.stdout.write(_CLEAR)
-    if _isatty(sys.stdout):
-        sys.stdout.write(_HIDE_CURSOR)
+    terminal_height = max(18, _terminal().lines)
+    _MENU._begin_frame()
     print(_brand("CENTRAL X86QW", width))
     print(_rule(width))
     if breadcrumb:
         for line in _wrap(breadcrumb, width):
-            print(_paint(line, MUTED))
+            print(_tone(line, "_MUTED"))
     for line in _wrap(title, width):
-        print(_paint(line, ACCENT, bold=True))
+        print(_tone(line, "_TITLE"))
     if subtitle:
         for line in _wrap(subtitle, width):
-            print(_paint(line, INFO))
+            print(_tone(line, "_SEARCH"))
     if searching or query:
         cursor = "█" if searching else ""
-        print(_paint(_clip(f"⌕  {query}{cursor}", width), WARNING, bold=True))
+        print(_tone(_clip(f"⌕  {query}{cursor}", width), "_SEARCH"))
+    elif searchable:
+        print(_tone("⌕  / para buscar", "_MUTED"))
     if numeric_buffer:
-        print(_paint(f"IR PARA O ITEM: {numeric_buffer}█", WARNING, bold=True))
+        print(_tone(f"IR PARA O ITEM: {numeric_buffer}█", "_SEARCH"))
     print()
 
-    capacity = max(3, min(11, terminal_height - 13))
-    left_width = max(24, int(width * .47)) if width >= _SPLIT_WIDTH else width
-    right_width = width - left_width - 2 if width >= _SPLIT_WIDTH else width
-    option_rows = _option_rows(
-        options, matches, selected, width=left_width - 4, capacity=capacity,
-    )
-    active = options[matches[selected]] if matches else None
-    detail_rows = _details(active, right_width - 6)
+    capacity = max(4, min(12, terminal_height - 14))
     if width >= _SPLIT_WIDTH:
+        left_width = max(36, int(width * 0.47))
+        right_width = width - left_width - 2
+        option_rows = _option_rows(
+            options,
+            matches,
+            selected,
+            width=left_width - 4,
+            capacity=capacity,
+        )
+        active = options[matches[selected]] if matches else None
+        detail_rows = _detail_rows(active, right_width - 6)
         height = max(8, min(max(len(option_rows), len(detail_rows)), capacity + 2))
         left = _panel("opções", option_rows, left_width, height)
         right = _panel("detalhes", detail_rows, right_width, height)
         for left_line, right_line in zip(left, right):
             print(f"{left_line}  {right_line}")
     else:
+        option_rows = _option_rows(
+            options,
+            matches,
+            selected,
+            width=width - 4,
+            capacity=capacity,
+        )
         height = max(7, min(len(option_rows), capacity + 1))
         for line in _panel("opções", option_rows, width, height):
             print(line)
-        if active is not None:
+        if matches:
+            active = options[matches[selected]]
             summary = " · ".join(
                 item for item in (active.label, active.description, active.detail) if item
             )
-            print(_paint(_clip(summary, width), MUTED))
+            if summary:
+                print(_tone(_clip(summary, width), "_MUTED"))
+
     print()
     print(_rule(width))
-    print(_footer(
-        searchable=searchable, allow_back=allow_back, searching=searching,
-    ), flush=True)
+    print(
+        _footer(
+            searchable=searchable,
+            allow_back=allow_back,
+            searching=searching,
+            numeric_buffer=numeric_buffer,
+        ),
+        flush=True,
+    )
+
+
+def _wizard_header(title: str, width: int) -> list[str]:
+    lines = [_brand("INSTALAÇÃO GUIADA", width), _rule(width)]
+    wrapped = _wrap(title, max(10, width - 4))
+    lines.append(
+        f"{_wizard('◆', 'SUCCESS')}  "
+        f"{_MENU._wizard_color(wrapped[0], _MENU._WIZARD_PROMPT)}"
+    )
+    connector = _wizard("│", "INFO")
+    for continuation in wrapped[1:]:
+        lines.append(f"{connector}  {_MENU._wizard_color(continuation, _MENU._WIZARD_PROMPT)}")
+    return lines
+
+
+def _wizard_footer(parts: list[str]) -> str:
+    return _wizard("╰─", "INFO") + " " + "  ".join(
+        _MENU._wizard_dim(part) for part in parts
+    )
 
 
 def _wizard_frame(
-    title: str, options: tuple[MenuOption, ...], matches: list[int], selected: int,
-    *, subtitle: str, query: str, searching: bool, searchable: bool,
-    allow_back: bool, numeric_buffer: str = "", checked: set[str] | None = None,
-    validation: str = "",
+    title: str,
+    options: tuple[Any, ...],
+    matches: list[int],
+    selected: int,
+    *,
+    query: str,
+    searching: bool,
+    searchable: bool,
+    allow_back: bool,
+    numeric_buffer: str,
 ) -> str:
+    if _classic():
+        return _ORIGINALS["_wizard_frame"](
+            title,
+            options,
+            matches,
+            selected,
+            query=query,
+            searching=searching,
+            searchable=searchable,
+            allow_back=allow_back,
+            numeric_buffer=numeric_buffer,
+        )
+
     width = _width()
-    multiple = checked is not None
-    lines = [_brand("INSTALAÇÃO GUIADA", width), _rule(width)]
-    lines.extend(_paint(line, ACCENT, bold=True) for line in _wrap(f"◆  {title}", width))
-    if subtitle:
-        lines.extend(_paint(line, INFO) for line in _wrap(subtitle, width - 3))
+    connector = _wizard("│", "INFO")
+    lines = _wizard_header(title, width)
     if searching or query:
         cursor = "█" if searching else ""
-        lines.append(_paint(_clip(f"│  ⌕  {query}{cursor}", width), WARNING, bold=True))
+        lines.append(f"{connector}  {_wizard('⌕', 'WARNING')}  {query}{cursor}")
     if numeric_buffer:
-        label = "Marcar item" if multiple else "Ir para o item"
-        lines.append(_paint(f"│  {label}: {numeric_buffer}█", WARNING, bold=True))
-    lines.append(_paint("│", MUTED))
+        lines.append(
+            f"{connector}  {_MENU._wizard_dim('Ir para o item:')} {numeric_buffer}█"
+        )
+    lines.append(_wizard("│", "MUTED"))
 
-    capacity = max(3, min(10, terminal_size((96, 28)).lines - 11))
-    start, end = _window(len(matches), selected, capacity)
+    row_budget = max(3, min(10, _terminal().lines - 12))
+    selectable = _MENU._selectable_positions(options, matches)
+    if selected not in selectable and selectable:
+        selected = selectable[0]
+    start = max(0, selected - row_budget // 2)
+    end = min(len(matches), start + row_budget)
+    start = max(0, end - row_budget)
     for position in range(start, end):
         option = options[matches[position]]
-        if multiple:
-            marker = "■" if option.key in checked else "□"
-        else:
-            marker = "●" if position == selected else "○"
-        value = _clip(f"{marker}  {position + 1:>2}  {option.label}", width - 6)
         if not option.enabled:
-            value = _paint(value, MUTED, dim=True)
+            marker = _MENU._wizard_dim("○")
+            label = _MENU._wizard_dim(option.label)
+            detail = option.disabled_reason or option.description
         elif position == selected:
-            value = _paint(value, ACCENT, bold=True)
-        elif multiple and option.key in checked:
-            value = _paint(value, SUCCESS)
+            marker = _wizard("●", "SUCCESS")
+            label = _MENU._wizard_color(option.label, _MENU._WIZARD_PROMPT)
+            detail = option.description
         else:
-            value = _paint(value, MUTED)
-        lines.append(_paint("│", MUTED) + "  " + value)
+            marker = _MENU._wizard_dim("○")
+            label = _MENU._wizard_dim(option.label)
+            detail = ""
+        row = f"{connector}  {marker}  {position + 1:>2}  {label}"
+        if detail:
+            row += "  " + _MENU._wizard_dim(f"— {detail}")
+        lines.append(row)
     if len(matches) > end - start:
-        lines.append(_paint("│", MUTED) + "  " + _paint(
-            f"{start + 1}–{end} de {len(matches)}", MUTED,
-        ))
-    active = options[matches[selected]] if matches else None
-    if active is not None and (active.description or active.detail):
-        lines.append(_paint("│", MUTED))
-        for part in _wrap(active.description or active.detail, width - 6)[:2]:
-            lines.append(_paint("│", MUTED) + "  " + _paint(part, INFO))
-    if validation:
-        lines.append(_paint("│", MUTED) + "  " + _paint(validation, ERROR, bold=True))
+        lines.append(
+            f"{connector}  {_MENU._wizard_dim(f'{start + 1}–{end} de {len(matches)}')}"
+        )
+
     if searching:
-        footer = f"{_key('digite')} buscar  {_key('enter')} aplicar  {_key('esc')} limpar"
-    elif multiple:
-        footer = (
-            f"{_key('↑↓')} navegar  {_key('espaço')} marcar  {_key('enter')} concluir"
-            f"  {_key('a')} tudo  {_key('d')} limpar"
-        )
-        if searchable:
-            footer += f"  {_key('/')} buscar"
+        footer = ["digite: buscar", "enter: aplicar", "esc: limpar"]
+    elif numeric_buffer:
+        footer = ["0–9: completar", "enter: selecionar", "esc: limpar"]
     else:
-        footer = _footer(
-            searchable=searchable, allow_back=allow_back, searching=False,
-        )
-    lines.extend((_paint("│", MUTED), _paint("╰─ ", MUTED) + footer))
+        footer = ["↑↓: navegar", "enter: confirmar"]
+        if searchable:
+            footer.append("/: buscar")
+        if allow_back:
+            footer.append("←: voltar")
+    lines.append(_wizard("│", "MUTED"))
+    lines.append(_wizard_footer(footer))
     return "\n".join(lines) + "\n"
 
 
-def _erase(lines: int) -> None:
-    if lines:
-        sys.stdout.write(f"\033[999D\033[{lines}A\033[J")
-
-
-def _restore() -> None:
-    if _isatty(sys.stdout):
-        sys.stdout.write(_SHOW_CURSOR)
-        sys.stdout.flush()
-
-
-def _collapse(title: str, value: str) -> str:
-    return (
-        f"{_paint('✓', SUCCESS, bold=True)} {_paint(title, INFO)}\n"
-        f"  {_paint('╰─', MUTED)} {_paint(value, MUTED)}\n"
-    )
-
-
-def select_one(
+def _wizard_multiple_frame(
     title: str,
-    options: Iterable[MenuOption],
+    options: tuple[Any, ...],
+    matches: list[int],
+    selected: int,
+    checked: set[str],
     *,
-    breadcrumb: str = "",
-    subtitle: str = "",
-    default: int = 0,
-    searchable: bool = False,
-    allow_back: bool = False,
-    invalid_message: str = "Seleção inválida; tente novamente.",
-    interactive: bool | None = None,
-    key_reader: Callable[[], str] | None = None,
-    input_fn: Callable[[str], str] | None = None,
-    presentation: str = "menu",
-) -> str | None:
-    entries = tuple(options)
-    if not entries or len({option.key for option in entries}) != len(entries):
-        raise ValueError("menu options must be non-empty and have unique keys")
-    navigation = supports_navigation() if interactive is None else interactive
-    if presentation not in {"menu", "wizard"}:
-        raise ValueError("presentation must be menu or wizard")
-    if not _enabled(bool(navigation)):
-        return _legacy.select_one(
-            title, entries, breadcrumb=breadcrumb, subtitle=subtitle, default=default,
-            searchable=searchable, allow_back=allow_back,
-            invalid_message=invalid_message, interactive=interactive,
-            key_reader=key_reader, input_fn=input_fn, presentation=presentation,
-        )
-
-    query = ""
-    searching = False
-    numeric = ""
-    matches = _legacy._matching(entries, query)
-    if not any(option.enabled for option in entries):
-        raise ValueError("menu has no enabled options")
-    selected = _legacy._default_position(entries, matches, default)
-    reader = key_reader or read_key
-    previous = 0
-    if _isatty(sys.stdout):
-        sys.stdout.write(_HIDE_CURSOR)
-    try:
-        while True:
-            if presentation == "wizard":
-                frame = _wizard_frame(
-                    title, entries, matches, selected, subtitle=subtitle, query=query,
-                    searching=searching, searchable=searchable, allow_back=allow_back,
-                    numeric_buffer=numeric,
-                )
-                _erase(previous)
-                sys.stdout.write(frame)
-                sys.stdout.flush()
-                previous = frame.count("\n")
-            else:
-                _render_menu(
-                    title, entries, matches, selected, breadcrumb=breadcrumb,
-                    subtitle=subtitle, query=query, searching=searching,
-                    searchable=searchable, allow_back=allow_back,
-                    numeric_buffer=numeric,
-                )
-            key = reader()
-            if key == "interrupt":
-                raise KeyboardInterrupt
-            if searching:
-                if key == "enter":
-                    searching = False
-                elif key == "escape":
-                    query, searching = "", False
-                elif key == "backspace":
-                    query = query[:-1]
-                elif len(key) == 1 and key.isprintable():
-                    query += key
-                matches = _legacy._matching(entries, query)
-                selected = _legacy._default_position(entries, matches, 0)
-                continue
-            selectable = _legacy._selectable_positions(entries, matches)
-            if numeric:
-                if key.isdigit() and int(numeric + key) <= len(matches):
-                    numeric += key
-                elif key == "backspace":
-                    numeric = numeric[:-1]
-                elif key in ("enter", "right"):
-                    position = int(numeric) - 1
-                    if 0 <= position < len(matches) and entries[matches[position]].enabled:
-                        option = entries[matches[position]]
-                        if presentation == "wizard":
-                            _erase(previous)
-                            sys.stdout.write(_collapse(
-                                title,
-                                option.label + (
-                                    f" · {option.description}"
-                                    if option.description else ""
-                                ),
-                            ))
-                        return option.key
-                    numeric = ""
-                elif key == "escape":
-                    numeric = ""
-                else:
-                    numeric = ""
-                continue
-            if key in {"up", "down", "k", "j", "home", "end", "pageup", "pagedown"}:
-                selected = _legacy._move_selection(
-                    selected, selectable, key,
-                    page=max(1, terminal_size((96, 28)).lines // 3),
-                )
-            elif key in ("enter", "right") and selectable:
-                option = entries[matches[selected]]
-                if presentation == "wizard":
-                    _erase(previous)
-                    sys.stdout.write(_collapse(
-                        title,
-                        option.label + (
-                            f" · {option.description}" if option.description else ""
-                        ),
-                    ))
-                return option.key
-            elif key == "left":
-                if allow_back:
-                    return None
-                raise MenuCancelled(title)
-            elif key in ("escape", "q"):
-                raise MenuExit(title)
-            elif key == "/" and searchable:
-                searching = True
-            elif key.isdigit() and key != "0":
-                if len(matches) > 9:
-                    numeric = key
-                else:
-                    position = int(key) - 1
-                    if position < len(matches) and entries[matches[position]].enabled:
-                        option = entries[matches[position]]
-                        if presentation == "wizard":
-                            _erase(previous)
-                            sys.stdout.write(_collapse(title, option.label))
-                        return option.key
-    finally:
-        _restore()
-
-
-def select_many(
-    title: str,
-    options: Iterable[MenuOption],
-    *,
-    breadcrumb: str = "",
-    subtitle: str = "",
-    selected: Iterable[str] = (),
-    searchable: bool = False,
-    allow_back: bool = False,
-    allow_empty: bool = False,
-    interactive: bool | None = None,
-    key_reader: Callable[[], str] | None = None,
-    input_fn: Callable[[str], str] | None = None,
-    presentation: str = "menu",
-) -> tuple[str, ...] | None:
-    entries = tuple(options)
-    navigation = supports_navigation() if interactive is None else interactive
-    if presentation != "wizard" or not _enabled(bool(navigation)):
-        return _legacy.select_many(
-            title, entries, breadcrumb=breadcrumb, subtitle=subtitle,
-            selected=selected, searchable=searchable, allow_back=allow_back,
-            allow_empty=allow_empty, interactive=interactive, key_reader=key_reader,
-            input_fn=input_fn, presentation=presentation,
-        )
-    if not entries or len({option.key for option in entries}) != len(entries):
-        raise ValueError("menu options must be non-empty and have unique keys")
-    enabled = tuple(option for option in entries if option.enabled)
-    if not enabled:
-        raise ValueError("menu has no enabled options")
-    enabled_keys = {option.key for option in enabled}
-    checked = {key for key in selected if key in enabled_keys}
-    query = ""
-    searching = False
-    numeric = ""
-    validation = ""
-    matches = _legacy._matching(entries, query)
-    position = _legacy._default_position(entries, matches, 0)
-    reader = key_reader or read_key
-    previous = 0
-    sys.stdout.write(_HIDE_CURSOR)
-    try:
-        while True:
-            frame = _wizard_frame(
-                title, entries, matches, position, subtitle=subtitle, query=query,
-                searching=searching, searchable=searchable, allow_back=allow_back,
-                numeric_buffer=numeric, checked=checked, validation=validation,
-            )
-            _erase(previous)
-            sys.stdout.write(frame)
-            sys.stdout.flush()
-            previous = frame.count("\n")
-            key = reader()
-            if key == "interrupt":
-                raise KeyboardInterrupt
-            if searching:
-                if key == "enter":
-                    searching = False
-                elif key == "escape":
-                    query, searching = "", False
-                elif key == "backspace":
-                    query = query[:-1]
-                elif len(key) == 1 and key.isprintable():
-                    query += key
-                matches = _legacy._matching(entries, query)
-                position = _legacy._default_position(entries, matches, 0)
-                validation = ""
-                continue
-            selectable = _legacy._selectable_positions(entries, matches)
-            if numeric:
-                if key.isdigit() and int(numeric + key) <= len(matches):
-                    numeric += key
-                elif key == "backspace":
-                    numeric = numeric[:-1]
-                elif key in (" ", "enter"):
-                    shortcut = int(numeric) - 1
-                    if 0 <= shortcut < len(matches):
-                        option = entries[matches[shortcut]]
-                        if option.enabled:
-                            checked.symmetric_difference_update({option.key})
-                    numeric, validation = "", ""
-                elif key == "escape":
-                    numeric = ""
-                else:
-                    numeric = ""
-                continue
-            if key in {"up", "down", "k", "j", "home", "end", "pageup", "pagedown"}:
-                position = _legacy._move_selection(
-                    position, selectable, key,
-                    page=max(1, terminal_size((96, 28)).lines // 3),
-                )
-            elif key == " " and selectable:
-                checked.symmetric_difference_update({entries[matches[position]].key})
-                validation = ""
-            elif key.casefold() == "a":
-                checked, validation = set(enabled_keys), ""
-            elif key.casefold() == "d":
-                checked.clear()
-                validation = ""
-            elif key in ("enter", "right"):
-                result = tuple(option.key for option in enabled if option.key in checked)
-                if result or allow_empty:
-                    _erase(previous)
-                    noun = "componente" if len(result) == 1 else "componentes"
-                    sys.stdout.write(_collapse(title, f"{len(result)} {noun} selecionados"))
-                    return result
-                validation = "Selecione ao menos um componente."
-            elif key == "left":
-                if allow_back:
-                    return None
-                raise MenuCancelled(title)
-            elif key in ("escape", "q"):
-                raise MenuExit(title)
-            elif key == "/" and searchable:
-                searching = True
-            elif key.isdigit() and key != "0":
-                if len(matches) > 9:
-                    numeric = key
-                else:
-                    shortcut = int(key) - 1
-                    if shortcut < len(matches):
-                        option = entries[matches[shortcut]]
-                        if option.enabled:
-                            checked.symmetric_difference_update({option.key})
-                            validation = ""
-    finally:
-        _restore()
-
-
-def prompt_text(
-    title: str,
-    *,
-    default: str = "",
-    description: str = "",
-    interactive: bool | None = None,
-    key_reader: Callable[[], str] | None = None,
-    input_fn: Callable[[str], str] | None = None,
-    presentation: str = "menu",
+    query: str,
+    searching: bool,
+    searchable: bool,
+    allow_back: bool,
+    numeric_buffer: str,
+    validation_message: str,
 ) -> str:
-    navigation = supports_navigation() if interactive is None else interactive
-    if presentation != "wizard" or not _enabled(bool(navigation)):
-        return _legacy.prompt_text(
-            title, default=default, description=description, interactive=interactive,
-            key_reader=key_reader, input_fn=input_fn, presentation=presentation,
+    if _classic():
+        return _ORIGINALS["_wizard_multiple_frame"](
+            title,
+            options,
+            matches,
+            selected,
+            checked,
+            query=query,
+            searching=searching,
+            searchable=searchable,
+            allow_back=allow_back,
+            numeric_buffer=numeric_buffer,
+            validation_message=validation_message,
         )
-    value = default
-    reader = key_reader or read_key
-    previous = 0
-    sys.stdout.write(_HIDE_CURSOR)
-    try:
-        while True:
-            width = _width()
-            lines = [_brand("INSTALAÇÃO GUIADA", width), _rule(width)]
-            lines.extend(_paint(line, ACCENT, bold=True) for line in _wrap(f"◆  {title}", width))
-            lines.extend((
-                _paint("│", MUTED),
-                _paint("│", MUTED) + "  " + _paint(_clip(value + "█", width - 5), INFO, bold=True),
-            ))
-            if description:
-                lines.extend(
-                    _paint("│", MUTED) + "  " + _paint(part, MUTED)
-                    for part in _wrap(description, width - 5)
-                )
-            lines.append(_paint("╰─ ", MUTED) + f"{_key('enter')} confirmar  {_key('esc')} sair")
-            frame = "\n".join(lines) + "\n"
-            _erase(previous)
-            sys.stdout.write(frame)
-            sys.stdout.flush()
-            previous = frame.count("\n")
-            key = reader()
-            if key == "interrupt":
-                raise KeyboardInterrupt
-            if key == "enter":
-                answer = value or default
-                _erase(previous)
-                sys.stdout.write(_collapse(title, answer))
-                return answer
-            if key in ("escape", "q"):
-                raise MenuExit(title)
-            if key == "backspace":
-                value = value[:-1]
-            elif len(key) == 1 and key.isprintable():
-                value += key
-    finally:
-        _restore()
+
+    width = _width()
+    connector = _wizard("│", "INFO")
+    lines = _wizard_header(title, width)
+    if searching or query:
+        cursor = "█" if searching else ""
+        lines.append(f"{connector}  {_wizard('⌕', 'WARNING')}  {query}{cursor}")
+    if numeric_buffer:
+        lines.append(
+            f"{connector}  {_MENU._wizard_dim('Marcar item:')} {numeric_buffer}█"
+        )
+    lines.append(_wizard("│", "MUTED"))
+
+    row_budget = max(3, min(10, _terminal().lines - 13))
+    selectable = _MENU._selectable_positions(options, matches)
+    if selected not in selectable and selectable:
+        selected = selectable[0]
+    start = max(0, selected - row_budget // 2)
+    end = min(len(matches), start + row_budget)
+    start = max(0, end - row_budget)
+    for position in range(start, end):
+        option = options[matches[position]]
+        marker_text = "[✓]" if option.key in checked else "[ ]"
+        if not option.enabled:
+            marker = _MENU._wizard_dim(marker_text)
+            label = _MENU._wizard_dim(option.label)
+            detail = option.disabled_reason or option.description
+        elif position == selected:
+            marker = _wizard(marker_text, "SUCCESS")
+            label = _MENU._wizard_color(option.label, _MENU._WIZARD_PROMPT)
+            detail = option.description
+        elif option.key in checked:
+            marker = _wizard(marker_text, "SUCCESS")
+            label = _MENU._wizard_dim(option.label)
+            detail = ""
+        else:
+            marker = _MENU._wizard_dim(marker_text)
+            label = _MENU._wizard_dim(option.label)
+            detail = ""
+        row = f"{connector}  {marker}  {position + 1:>2}  {label}"
+        if detail:
+            row += "  " + _MENU._wizard_dim(f"— {detail}")
+        lines.append(row)
+    if len(matches) > end - start:
+        lines.append(
+            f"{connector}  {_MENU._wizard_dim(f'{start + 1}–{end} de {len(matches)}')}"
+        )
+    if validation_message:
+        lines.append(f"{connector}  {_wizard(validation_message, 'ERROR')}")
+
+    if searching:
+        footer = ["digite: buscar", "enter: aplicar", "esc: limpar"]
+    elif numeric_buffer:
+        footer = ["0–9: completar", "espaço/enter: marcar", "esc: limpar"]
+    else:
+        footer = [
+            "↑↓: navegar",
+            "espaço: marcar",
+            "enter: concluir",
+            "a: tudo",
+            "d: limpar",
+        ]
+        if searchable:
+            footer.append("/: buscar")
+        if allow_back:
+            footer.append("←: voltar")
+    lines.append(_wizard("│", "MUTED"))
+    lines.append(_wizard_footer(footer))
+    return "\n".join(lines) + "\n"
 
 
-def confirm(
-    title: str,
-    *,
-    breadcrumb: str = "",
-    subtitle: str = "",
-    description: str = "",
-    default: bool = False,
-    invalid_message: str = "Resposta inválida. Digite sim ou não.",
-    interactive: bool | None = None,
-    input_fn: Callable[[str], str] | None = None,
-    allow_back: bool = False,
-    presentation: str = "menu",
-) -> bool | None:
-    result = select_one(
-        title,
+def _wizard_text_frame(title: str, value: str, description: str) -> str:
+    if _classic():
+        return _ORIGINALS["_wizard_text_frame"](title, value, description)
+    width = _width()
+    connector = _wizard("│", "INFO")
+    lines = _wizard_header(title, width)
+    lines.extend(
         (
-            MenuOption(
-                "yes", "Sim", description or "confirmar esta escolha",
-                aliases=("s", "sim", "y", "yes"),
-            ),
-            MenuOption("no", "Não", "não executar esta ação", aliases=("n", "nao", "não", "no")),
-        ),
-        breadcrumb=breadcrumb, subtitle=subtitle, default=0 if default else 1,
-        invalid_message=invalid_message, interactive=interactive,
-        input_fn=input_fn, allow_back=allow_back, presentation=presentation,
+            _wizard("│", "MUTED"),
+            f"{connector}  {_MENU._wizard_color(_clip(value + '█', width - 5), _MENU._WIZARD_PROMPT)}",
+        )
     )
-    return None if result is None else result == "yes"
+    if description:
+        for part in _wrap(description, width - 5):
+            lines.append(f"{connector}  {_MENU._wizard_dim(part)}")
+    lines.append(_wizard_footer(["enter: confirmar", "esc: sair"]))
+    return "\n".join(lines) + "\n"
 
 
-def __getattr__(name: str) -> Any:
-    return getattr(_legacy, name)
+def _wizard_collapse(title: str, option: Any) -> str:
+    if _classic():
+        return _ORIGINALS["_wizard_collapse"](title, option)
+    summary = option.label + (f" · {option.description}" if option.description else "")
+    return (
+        f"{_wizard('◇', 'SUCCESS')}  "
+        f"{_MENU._wizard_color(title, _MENU._WIZARD_PROMPT)}\n"
+        f"{_wizard('╰─', 'MUTED')} {_MENU._wizard_dim(summary)}\n"
+    )
 
 
-__all__ = (
-    "MenuCancelled", "MenuExit", "MenuOption", "configure", "confirm",
-    "prompt_text", "read_key", "select_many", "select_one", "supports_navigation",
-)
+def _wizard_multiple_collapse(title: str, count: int) -> str:
+    if _classic():
+        return _ORIGINALS["_wizard_multiple_collapse"](title, count)
+    noun = "componente selecionado" if count == 1 else "componentes selecionados"
+    return (
+        f"{_wizard('◇', 'SUCCESS')}  "
+        f"{_MENU._wizard_color(title, _MENU._WIZARD_PROMPT)}\n"
+        f"{_wizard('╰─', 'MUTED')} {_MENU._wizard_dim(f'{count} {noun}')}\n"
+    )
+
+
+__all__ = ("install",)
