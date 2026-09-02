@@ -2955,6 +2955,15 @@ class InstallerTests(unittest.TestCase):
                 installer.install_online_cli()
                 self.assertTrue(command.is_symlink())
                 self.assertEqual((target / "x86qw.sh").resolve(), command.resolve())
+                version = subprocess.run(
+                    [os.fspath(command), "version"],
+                    text=True,
+                    encoding="utf-8",
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, version.returncode, version.stderr)
+                self.assertEqual("x86QW 1.0.6\n", version.stdout)
                 installer.uninstall()
 
             self.assertFalse(command.exists())

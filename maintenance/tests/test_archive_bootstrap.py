@@ -707,6 +707,51 @@ class ArchiveBootstrapTests(unittest.TestCase):
         self.assertEqual(expected_padding, len(first_logo_line) - len(first_logo_line.lstrip()))
 
     @unittest.skipIf(os.name == "nt", "geometria PTY POSIX requer ioctl")
+    @unittest.skipUnless(
+        shutil.which("pwsh") or shutil.which("powershell"),
+        "PowerShell indisponivel neste runner",
+    )
+    def test_powershell_banner_preserves_every_logo_column(self):
+        version = "9.9.2"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / f"x86qw-installer-{version}.zip"
+            self._write_installer_bundle(bundle, version, "raise SystemExit(0)\n")
+            bootstrap, runner = self._prepare_powershell_bootstrap(root, version, bundle)
+            _returncode, output = self._run_with_terminal(
+                [
+                    self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(runner), str(bootstrap), "--help",
+                ],
+                {
+                    **os.environ,
+                    "COLUMNS": "80",
+                    "TERM": "xterm-256color",
+                    "X86QW_TEST_BUNDLE": os.fspath(bundle),
+                    "PYTHONIOENCODING": "utf-8",
+                },
+                columns=132,
+            )
+
+        plain = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", output)
+        lines = plain.replace("\x1b=", "").replace("\x1b>", "").replace("\r", "").splitlines()
+        start = next(index for index, line in enumerate(lines) if "⢀⣤⣶⣶" in line)
+        end = next(index for index, line in enumerate(lines[start:], start) if "⠘⠿⠿⠿⠿⠆" in line)
+        outer_padding = (132 - 78) // 2
+        logo = [line[outer_padding:] for line in lines[start:end + 1]]
+        geometry = tuple(
+            (len(line) - len(line.lstrip()), len(line)) for line in logo
+        )
+
+        self.assertEqual(
+            (
+                (18, 78), (17, 78), (4, 77), (5, 76), (6, 76),
+                (5, 75), (4, 74), (2, 73), (2, 73), (48, 54),
+            ),
+            geometry,
+        )
+
+    @unittest.skipIf(os.name == "nt", "geometria PTY POSIX requer ioctl")
     def test_unix_banner_uses_live_terminal_width_instead_of_stale_columns(self):
         version = "9.9.2"
         with tempfile.TemporaryDirectory() as temporary:

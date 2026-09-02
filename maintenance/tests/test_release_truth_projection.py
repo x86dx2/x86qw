@@ -136,7 +136,7 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
         status = (ROOT / "docs/PROJECT-STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "docs/ROADMAP.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        release_note = (ROOT / "docs/releases/1.0.15.md").read_text(encoding="utf-8")
+        release_note = (ROOT / "docs/releases/1.0.16.md").read_text(encoding="utf-8")
         current_truth = (ROOT / "docs/post-1.0/RELEASE-TRUTH-CURRENT.md").read_text(
             encoding="utf-8"
         )
@@ -145,11 +145,11 @@ class ReleaseTruthProjectionTests(unittest.TestCase):
             (ROOT / "docs/PROJECT-STATUS.md", status),
             (ROOT / "docs/ROADMAP.md", roadmap),
             (ROOT / "README.md", readme),
-            (ROOT / "docs/releases/1.0.15.md", release_note),
+            (ROOT / "docs/releases/1.0.16.md", release_note),
             (ROOT / "docs/post-1.0/RELEASE-TRUTH-CURRENT.md", current_truth),
         ):
             with self.subTest(path=path):
-                self.assertIn("1.0.15", text)
+                self.assertIn("1.0.16", text)
                 self.assertIn("owner-only", text)
                 self.assertIn("external-public", text)
 

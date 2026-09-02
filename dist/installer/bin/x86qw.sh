@@ -1,7 +1,16 @@
 #!/bin/sh
 set -eu
 
-root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+launcher_path=$0
+while [ -L "$launcher_path" ]; do
+  launcher_dir=$(CDPATH='' cd -- "$(dirname -- "$launcher_path")" && pwd)
+  launcher_target=$(readlink "$launcher_path")
+  case "$launcher_target" in
+    /*) launcher_path=$launcher_target ;;
+    *) launcher_path=$launcher_dir/$launcher_target ;;
+  esac
+done
+root=$(CDPATH='' cd -- "$(dirname -- "$launcher_path")" && pwd)
 app="$root/.x86qw/cli/x86qw.pyz"
 persisted_python=@X86QW_PYTHON@
 unrendered_python='@X86QW_''PYTHON@'
