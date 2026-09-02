@@ -16,24 +16,36 @@ class PolishedUiTests(unittest.TestCase):
     def setUp(self) -> None:
         package = importlib.reload(importlib.import_module("x86qw_runtime.ui"))
         self.menu = package.menu
+        self.polished = package.polished
         self.menu.configure(no_color=True)
         self.options = (
             self.menu.MenuOption(
-                "play", "Jogar", "partida local", "escolha jogo, modo, mapa e bots",
+                "play",
+                "Jogar",
+                "partida local",
+                "escolha jogo, modo, mapa e bots",
                 group="Partida",
             ),
             self.menu.MenuOption(
-                "servers", "Servidores", "partidas públicas", "encontre um servidor compatível",
+                "servers",
+                "Servidores",
+                "partidas públicas",
+                "encontre um servidor compatível",
                 group="Online",
             ),
             self.menu.MenuOption(
-                "manage", "Gerenciar", "manutenção", "atualizações, reparo e diagnóstico",
+                "manage",
+                "Gerenciar",
+                "manutenção",
+                "atualizações, reparo e diagnóstico",
                 group="Sistema",
             ),
         )
 
-    def test_package_routes_runtime_navigation_through_the_polished_adapter(self) -> None:
-        self.assertEqual("x86qw_runtime.ui.polished", self.menu.__name__)
+    def test_package_preserves_the_canonical_module_and_installs_renderers(self) -> None:
+        self.assertEqual("x86qw_runtime.ui.menu", self.menu.__name__)
+        self.assertIs(self.menu._render_navigation, self.polished._render_navigation)
+        self.assertTrue(self.menu._x86qw_polished_ui)
 
     def test_wide_terminal_uses_a_contextual_two_pane_command_center(self) -> None:
         output = TtyStringIO()
@@ -89,7 +101,7 @@ class PolishedUiTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("INSTALAÇÃO GUIADA", rendered)
         self.assertIn("◆  Qual conteúdo deseja instalar?", rendered)
-        self.assertIn("✓ Qual conteúdo deseja instalar?", rendered)
+        self.assertIn("◇  Qual conteúdo deseja instalar?", rendered)
         self.assertIn("Recomendado · pronto para jogar", rendered)
 
     def test_multi_digit_shortcut_remains_available_in_polished_menus(self) -> None:
@@ -129,7 +141,7 @@ class PolishedUiTests(unittest.TestCase):
 
         self.assertEqual(("play", "servers"), selected)
         rendered = output.getvalue()
-        self.assertIn("■", rendered)
+        self.assertIn("[✓]", rendered)
         self.assertIn("2 componentes selecionados", rendered)
 
     def test_narrow_terminal_and_explicit_classic_mode_keep_the_canonical_ui(self) -> None:
