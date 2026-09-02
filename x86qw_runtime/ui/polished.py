@@ -12,6 +12,7 @@ import os
 import re
 import textwrap
 import unicodedata
+from inspect import Parameter, signature
 from typing import Any
 
 
@@ -129,17 +130,29 @@ def _wrap(value: str, width: int) -> list[str]:
     return lines
 
 
-def _brand(surface: str, width: int) -> str:
+def _brand(surface: str, width: int, *, status: str = "PRONTO") -> str:
     left_plain = f"X86QW  /  {surface}"
-    right_plain = "● PRONTO"
+    status_label = _clip(status.strip().upper() or "PRONTO", max(8, width // 3))
+    right_plain = f"● {status_label}"
     gap = max(2, width - _cells(left_plain) - _cells(right_plain))
     return (
         _tone("X86QW", "_TITLE")
         + _tone(f"  /  {surface}", "_SEARCH")
         + " " * gap
         + _tone("●", "_OK")
-        + _tone(" PRONTO", "_MUTED")
+        + _tone(f" {status_label}", "_MUTED")
     )
+
+
+def _call_original(name: str, **kwargs: Any) -> Any:
+    """Call a canonical renderer across additive presentation contracts."""
+
+    renderer = _ORIGINALS[name]
+    parameters = signature(renderer).parameters.values()
+    if any(parameter.kind is Parameter.VAR_KEYWORD for parameter in parameters):
+        return renderer(**kwargs)
+    accepted = signature(renderer).parameters
+    return renderer(**{key: value for key, value in kwargs.items() if key in accepted})
 
 
 def _rule(width: int) -> str:
@@ -244,12 +257,14 @@ def _footer(
     allow_back: bool,
     searching: bool,
     numeric_buffer: str,
+    action_label: str = "selecionar",
 ) -> str:
     if searching:
         return f"{_key('digite')} buscar  {_key('enter')} aplicar  {_key('esc')} limpar"
     if numeric_buffer:
         return f"{_key('0–9')} completar  {_key('enter')} selecionar  {_key('esc')} limpar"
-    items = [f"{_key('↑↓')} navegar", f"{_key('enter')} selecionar"]
+    action = action_label.strip() or "selecionar"
+    items = [f"{_key('↑↓')} navegar", f"{_key('enter')} {action}"]
     if searchable:
         items.append(f"{_key('/')} buscar")
     items.append(f"{_key('←')} {'voltar' if allow_back else 'cancelar'}")
@@ -270,9 +285,12 @@ def _render_navigation(
     searchable: bool,
     allow_back: bool,
     numeric_buffer: str,
+    status: str = "PRONTO",
+    action_label: str = "selecionar",
 ) -> None:
     if _classic():
-        _ORIGINALS["_render_navigation"](
+        _call_original(
+            "_render_navigation",
             title=title,
             options=options,
             matches=matches,
@@ -284,13 +302,15 @@ def _render_navigation(
             searchable=searchable,
             allow_back=allow_back,
             numeric_buffer=numeric_buffer,
+            status=status,
+            action_label=action_label,
         )
         return
 
     width = _width()
     terminal_height = max(18, _terminal().lines)
     _MENU._begin_frame()
-    print(_brand("CENTRAL X86QW", width))
+    print(_brand("CENTRAL X86QW", width, status=status))
     print(_rule(width))
     if breadcrumb:
         for line in _wrap(breadcrumb, width):
@@ -354,6 +374,7 @@ def _render_navigation(
             allow_back=allow_back,
             searching=searching,
             numeric_buffer=numeric_buffer,
+            action_label=action_label,
         ),
         flush=True,
     )

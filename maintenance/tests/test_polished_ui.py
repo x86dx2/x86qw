@@ -77,6 +77,54 @@ class PolishedUiTests(unittest.TestCase):
         )
         self.assertNotIn("\033[", control_free)
 
+    def test_navigation_accepts_additive_status_and_action_context(self) -> None:
+        output = TtyStringIO()
+        with mock.patch.object(
+            self.menu, "terminal_size", return_value=os.terminal_size((100, 30)),
+        ), mock.patch.object(self.menu.sys, "stdout", output):
+            self.polished._render_navigation(
+                title="O que deseja fazer?",
+                options=self.options,
+                matches=[0, 1, 2],
+                selected=0,
+                breadcrumb="x86QW › Início",
+                subtitle="",
+                query="",
+                searching=False,
+                searchable=True,
+                allow_back=False,
+                numeric_buffer="",
+                status="instalação pronta",
+                action_label="abrir",
+            )
+
+        rendered = output.getvalue()
+        self.assertIn("● INSTALAÇÃO PRONTA", rendered)
+        self.assertIn("[enter] abrir", rendered)
+
+    def test_classic_renderer_ignores_context_unknown_to_older_contract(self) -> None:
+        output = TtyStringIO()
+        with mock.patch.dict(os.environ, {"X86QW_CLASSIC_UI": "1"}), mock.patch.object(
+            self.menu, "terminal_size", return_value=os.terminal_size((100, 30)),
+        ), mock.patch.object(self.menu.sys, "stdout", output):
+            self.polished._render_navigation(
+                title="Modo",
+                options=self.options,
+                matches=[0, 1, 2],
+                selected=0,
+                breadcrumb="",
+                subtitle="",
+                query="",
+                searching=False,
+                searchable=False,
+                allow_back=False,
+                numeric_buffer="",
+                status="pronto",
+                action_label="abrir",
+            )
+
+        self.assertIn("Modo", output.getvalue())
+
     def test_installer_wizard_preserves_scrollback_and_collapses_the_choice(self) -> None:
         output = TtyStringIO()
         with mock.patch.object(
